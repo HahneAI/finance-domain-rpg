@@ -129,7 +129,7 @@ export default function App() {
           .sidebar { display: none !important; }
           .mobile-header { display: flex !important; }
           .mobile-bottom-nav { display: flex !important; }
-          .main-content { padding-bottom: 58px !important; }
+          .main-content { padding-bottom: 62px !important; }
         }
         @media (min-width: 768px) {
           .mobile-header { display: none !important; }
@@ -209,9 +209,10 @@ export default function App() {
           bottom: 0,
           left: 0,
           right: 0,
-          height: "52px",
-          background: "#111",
-          borderTop: "1px solid #222",
+          height: "56px",
+          background: "#151515",
+          borderTop: "1px solid #2e2e2e",
+          boxShadow: "0 -4px 20px rgba(0,0,0,0.85)",
           zIndex: 20,
         }}
       >
@@ -225,9 +226,9 @@ export default function App() {
               background: "transparent",
               border: "none",
               borderTop: topNav === item.key ? "2px solid #c8a84b" : "2px solid transparent",
-              color: topNav === item.key ? "#c8a84b" : "#555",
-              fontSize: "10px",
-              letterSpacing: "1px",
+              color: topNav === item.key ? "#c8a84b" : "#999",
+              fontSize: "11px",
+              letterSpacing: "1.5px",
               textTransform: "uppercase",
               fontFamily: "'Courier New',monospace",
               cursor: "pointer",

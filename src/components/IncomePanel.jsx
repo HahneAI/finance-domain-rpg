@@ -59,23 +59,26 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     </div>
 
     {/* SUMMARY */}
-    {view === "summary" && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+    {view === "summary" && <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
       <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "#c8a84b", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
-        <th style={{ textAlign: "left", padding: "8px 6px" }}>Month</th><th style={{ textAlign: "center", padding: "8px 6px" }}>Chks</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Take Home</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Your 401k</th><th style={{ textAlign: "right", padding: "8px 6px" }}>w/ Match</th><th style={{ textAlign: "center", padding: "8px 6px" }}>Status</th>
+        <th style={{ textAlign: "left", padding: "8px 6px", width: "4px", paddingLeft: 0 }}></th><th style={{ textAlign: "left", padding: "8px 6px" }}>Month</th><th style={{ textAlign: "center", padding: "8px 6px" }}>Chks</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Take Home</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Your 401k</th><th style={{ textAlign: "right", padding: "8px 6px" }}>w/ Match</th>
       </tr></thead>
-      <tbody>{mo.map(m => <tr key={m.name} style={{ borderBottom: "1px solid #1a1a1a" }} onMouseEnter={e => e.currentTarget.style.background = "#141414"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-        <td style={{ padding: "10px 6px", fontWeight: "bold" }}>{m.name}</td>
-        <td style={{ padding: "10px 6px", textAlign: "center", color: "#aaa" }}>{m.n}</td>
-        <td style={{ padding: "10px 6px", textAlign: "right" }}>{m.gross > 0 ? f(m.gross) : "—"}</td>
-        <td style={{ padding: "10px 6px", textAlign: "right", color: m.ex === m.n ? "#6dbf8a" : "#e8e0d0" }}>{m.net > 0 ? f(m.net) : "—"}</td>
-        <td style={{ padding: "10px 6px", textAlign: "right", color: m.k4E > 0 ? "#7a8bbf" : "#666" }}>{m.k4E > 0 ? f(m.k4E) : "—"}</td>
-        <td style={{ padding: "10px 6px", textAlign: "right", color: m.k4M > 0 ? "#c8a84b" : "#666" }}>{m.k4M > 0 ? f(m.k4E + m.k4M) : "—"}</td>
-        <td style={{ padding: "10px 6px", textAlign: "center" }}>{m.n === 0 ? "—" : m.tx === m.n ? <span style={{ fontSize: "9px", padding: "3px 7px", borderRadius: "3px", background: "#1e1e3a", color: "#7a8bbf", border: "1px solid #7a8bbf" }}>TAXED</span> : m.ex === m.n ? <span style={{ fontSize: "9px", padding: "3px 7px", borderRadius: "3px", background: "#1e4a30", color: "#6dbf8a", border: "1px solid #6dbf8a" }}>EXEMPT</span> : <span style={{ fontSize: "9px", padding: "3px 7px", borderRadius: "3px", background: "#3a3210", color: "#c8a84b", border: "1px solid #c8a84b" }}>MIXED</span>}</td>
-      </tr>)}</tbody>
+      <tbody>{mo.map(m => {
+        const statusColor = m.n === 0 ? "#2a2a2a" : m.tx === m.n ? "#7a8bbf" : m.ex === m.n ? "#6dbf8a" : "#c8a84b";
+        return <tr key={m.name} style={{ borderBottom: "1px solid #1a1a1a" }} onMouseEnter={e => e.currentTarget.style.background = "#141414"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+          <td style={{ padding: 0, width: "4px", backgroundColor: statusColor, borderRadius: "2px 0 0 2px" }}></td>
+          <td style={{ padding: "10px 6px", fontWeight: "bold" }}>{m.name}</td>
+          <td style={{ padding: "10px 6px", textAlign: "center", color: "#aaa" }}>{m.n}</td>
+          <td style={{ padding: "10px 6px", textAlign: "right" }}>{m.gross > 0 ? f(m.gross) : "—"}</td>
+          <td style={{ padding: "10px 6px", textAlign: "right", color: m.ex === m.n ? "#6dbf8a" : "#e8e0d0" }}>{m.net > 0 ? f(m.net) : "—"}</td>
+          <td style={{ padding: "10px 6px", textAlign: "right", color: m.k4E > 0 ? "#7a8bbf" : "#666" }}>{m.k4E > 0 ? f(m.k4E) : "—"}</td>
+          <td style={{ padding: "10px 6px", textAlign: "right", color: m.k4M > 0 ? "#c8a84b" : "#666" }}>{m.k4M > 0 ? f(m.k4E + m.k4M) : "—"}</td>
+        </tr>;
+      })}</tbody>
       <tfoot><tr style={{ borderTop: "2px solid #c8a84b", fontWeight: "bold", color: "#c8a84b" }}>
-        <td style={{ padding: "10px 6px" }}>TOTAL</td><td style={{ padding: "10px 6px", textAlign: "center", color: "#aaa" }}>{allWeeks.filter(w => w.active).length}</td><td style={{ padding: "10px 6px", textAlign: "right" }}>{f(yG)}</td><td style={{ padding: "10px 6px", textAlign: "right", color: "#6dbf8a" }}>{f(yN)}</td><td style={{ padding: "10px 6px", textAlign: "right", color: "#7a8bbf" }}>{f(yE)}</td><td style={{ padding: "10px 6px", textAlign: "right" }}>{f(yT)}</td><td></td>
+        <td style={{ padding: 0 }}></td><td style={{ padding: "10px 6px" }}>TOTAL</td><td style={{ padding: "10px 6px", textAlign: "center", color: "#aaa" }}>{allWeeks.filter(w => w.active).length}</td><td style={{ padding: "10px 6px", textAlign: "right" }}>{f(yG)}</td><td style={{ padding: "10px 6px", textAlign: "right", color: "#6dbf8a" }}>{f(yN)}</td><td style={{ padding: "10px 6px", textAlign: "right", color: "#7a8bbf" }}>{f(yE)}</td><td style={{ padding: "10px 6px", textAlign: "right" }}>{f(yT)}</td>
       </tr></tfoot>
-    </table>}
+    </table></div>}
 
     {/* MONTHLY */}
     {view === "monthly" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "14px" }}>

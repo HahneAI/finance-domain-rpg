@@ -2,11 +2,44 @@ import { useState, useMemo } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PHASE_WEIGHTS, WEEKS_REMAINING } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, calcEventImpact } from "./lib/finance.js";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
-import { NT } from "./components/ui.jsx";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { BenefitsPanel } from "./components/BenefitsPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
+
+const NAV_ITEMS = [
+  { key: "income",   label: "Income" },
+  { key: "budget",   label: "Budget" },
+  { key: "benefits", label: "Benefits" },
+  { key: "log",      label: "Log" },
+];
+
+function SidebarNavItem({ item, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "block",
+        width: "100%",
+        textAlign: "left",
+        padding: "12px 20px",
+        fontSize: "11px",
+        letterSpacing: "2px",
+        textTransform: "uppercase",
+        fontFamily: "'Courier New',monospace",
+        background: active ? "#1a1a1a" : "transparent",
+        color: active ? "#c8a84b" : "#666",
+        borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
+        border: "none",
+        borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
+        cursor: "pointer",
+        transition: "all 0.15s",
+      }}
+    >
+      {item.label}
+    </button>
+  );
+}
 
 export default function App() {
   const [config, setConfig] = useLocalStorage("life-rpg:config", DEFAULT_CONFIG);
@@ -57,50 +90,153 @@ export default function App() {
     };
   }, [logs, config, projectedAnnualNet, baseWeeklyUnallocated]);
 
+  const activePanel = (
+    <>
+      {topNav === "income" && <IncomePanel
+        allWeeks={allWeeks} config={config} setConfig={setConfig}
+        showExtra={showExtra} setShowExtra={setShowExtra}
+        taxDerived={taxDerived}
+        logNetLost={logTotals.netLost}
+        adjustedTakeHome={logTotals.adjustedTakeHome}
+        projectedAnnualNet={projectedAnnualNet}
+      />}
+      {topNav === "budget" && <BudgetPanel
+        expenses={expenses} setExpenses={setExpenses}
+        goals={goals} setGoals={setGoals}
+        adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
+        baseWeeklyUnallocated={baseWeeklyUnallocated}
+        logNetLost={logTotals.netLost}
+        weeklyIncome={weeklyIncome}
+      />}
+      {topNav === "benefits" && <BenefitsPanel
+        allWeeks={allWeeks} config={config}
+        logK401kLost={logTotals.k401kLost}
+        logK401kMatchLost={logTotals.k401kMatchLost}
+        logPTOHoursLost={logTotals.ptoHoursLost}
+      />}
+      {topNav === "log" && <LogPanel
+        logs={logs} setLogs={setLogs} config={config}
+        projectedAnnualNet={projectedAnnualNet}
+        baseWeeklyUnallocated={baseWeeklyUnallocated}
+      />}
+    </>
+  );
+
   return (
-    <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d", minHeight: "100vh", color: "#e8e0d0" }}>
-      <div style={{ borderBottom: "2px solid #c8a84b", padding: "14px 20px", background: "#0d0d0d", position: "sticky", top: 0, zIndex: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "10px" }}>
-          <div>
-            <div style={{ fontSize: "10px", letterSpacing: "4px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "2px" }}>DHL / P&G — Jackson MO</div>
-            <div style={{ fontSize: "19px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
-          </div>
-          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-            <NT label="Income" active={topNav === "income"} onClick={() => setTopNav("income")} />
-            <NT label="Budget" active={topNav === "budget"} onClick={() => setTopNav("budget")} />
-            <NT label="Benefits" active={topNav === "benefits"} onClick={() => setTopNav("benefits")} />
-            <NT label="Log" active={topNav === "log"} onClick={() => setTopNav("log")} />
-          </div>
+    <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d", minHeight: "100vh", color: "#e8e0d0", display: "flex" }}>
+      <style>{`
+        @media (max-width: 767px) {
+          .sidebar { display: none !important; }
+          .mobile-header { display: flex !important; }
+          .mobile-bottom-nav { display: flex !important; }
+          .main-content { padding-bottom: 62px !important; }
+        }
+        @media (min-width: 768px) {
+          .mobile-header { display: none !important; }
+          .mobile-bottom-nav { display: none !important; }
+        }
+      `}</style>
+
+      {/* ── Sidebar (desktop) ── */}
+      <div
+        className="sidebar"
+        style={{
+          width: "190px",
+          minWidth: "190px",
+          background: "#111",
+          borderRight: "1px solid #222",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          zIndex: 10,
+        }}
+      >
+        {/* Sidebar header */}
+        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #222" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "4px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
+          <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3" }}>2026 Financial Dashboard</div>
+        </div>
+
+        {/* Nav items */}
+        <nav style={{ marginTop: "8px", flex: 1 }}>
+          {NAV_ITEMS.map(item => (
+            <SidebarNavItem
+              key={item.key}
+              item={item}
+              active={topNav === item.key}
+              onClick={() => setTopNav(item.key)}
+            />
+          ))}
+        </nav>
+      </div>
+
+      {/* ── Main area ── */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+
+        {/* Mobile header (hidden on desktop) */}
+        <div
+          className="mobile-header"
+          style={{
+            display: "none",
+            borderBottom: "2px solid #c8a84b",
+            padding: "12px 16px",
+            background: "#0d0d0d",
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
+            flexDirection: "column",
+            gap: "2px",
+          }}
+        >
+          <div style={{ fontSize: "10px", letterSpacing: "4px", color: "#c8a84b", textTransform: "uppercase" }}>DHL / P&G — Jackson MO</div>
+          <div style={{ fontSize: "18px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
+        </div>
+
+        {/* Panel content */}
+        <div className="main-content" style={{ padding: "22px 20px", flex: 1 }}>
+          {activePanel}
         </div>
       </div>
-      <div style={{ padding: "22px 20px" }}>
-        {topNav === "income" && <IncomePanel
-          allWeeks={allWeeks} config={config} setConfig={setConfig}
-          showExtra={showExtra} setShowExtra={setShowExtra}
-          taxDerived={taxDerived}
-          logNetLost={logTotals.netLost}
-          adjustedTakeHome={logTotals.adjustedTakeHome}
-          projectedAnnualNet={projectedAnnualNet}
-        />}
-        {topNav === "budget" && <BudgetPanel
-          expenses={expenses} setExpenses={setExpenses}
-          goals={goals} setGoals={setGoals}
-          adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
-          baseWeeklyUnallocated={baseWeeklyUnallocated}
-          logNetLost={logTotals.netLost}
-          weeklyIncome={weeklyIncome}
-        />}
-        {topNav === "benefits" && <BenefitsPanel
-          allWeeks={allWeeks} config={config}
-          logK401kLost={logTotals.k401kLost}
-          logK401kMatchLost={logTotals.k401kMatchLost}
-          logPTOHoursLost={logTotals.ptoHoursLost}
-        />}
-        {topNav === "log" && <LogPanel
-          logs={logs} setLogs={setLogs} config={config}
-          projectedAnnualNet={projectedAnnualNet}
-          baseWeeklyUnallocated={baseWeeklyUnallocated}
-        />}
+
+      {/* ── Mobile bottom nav (hidden on desktop) ── */}
+      <div
+        className="mobile-bottom-nav"
+        style={{
+          display: "none",
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: "56px",
+          background: "#151515",
+          borderTop: "1px solid #2e2e2e",
+          boxShadow: "0 -4px 20px rgba(0,0,0,0.85)",
+          zIndex: 20,
+        }}
+      >
+        {NAV_ITEMS.map(item => (
+          <button
+            key={item.key}
+            onClick={() => setTopNav(item.key)}
+            style={{
+              flex: 1,
+              height: "100%",
+              background: "transparent",
+              border: "none",
+              borderTop: topNav === item.key ? "2px solid #c8a84b" : "2px solid transparent",
+              color: topNav === item.key ? "#c8a84b" : "#999",
+              fontSize: "11px",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              fontFamily: "'Courier New',monospace",
+              cursor: "pointer",
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
     </div>
   );

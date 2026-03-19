@@ -1,4 +1,4 @@
-import { FED_BRACKETS, PTO_RATE, PHASE_END_DATES } from "../constants/config.js";
+import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES } from "../constants/config.js";
 
 // ─────────────────────────────────────────────────────────────
 // PURE FUNCTIONS — all stateless, no component dependencies
@@ -70,9 +70,10 @@ export function projectedGross(isWeek2, cfg) {
 
 export function getPhaseIndex(weekEndDate) {
   const iso = toLocalIso(weekEndDate);
-  if (iso <= PHASE_END_DATES[0]) return 0;
-  if (iso <= PHASE_END_DATES[1]) return 1;
-  return 2;
+  if (iso <= QUARTER_BOUNDARIES[0]) return 0;
+  if (iso <= QUARTER_BOUNDARIES[1]) return 1;
+  if (iso <= QUARTER_BOUNDARIES[2]) return 2;
+  return 3;
 }
 
 export function getEffectiveAmount(expense, weekEndDate, phaseIdx) {
@@ -169,8 +170,8 @@ export function computeLoanPayoffDate(loan) {
 export function buildLoanHistory(loan) {
   const w = loanWeeklyAmount(loan);
   return [
-    { effectiveFrom: loanRunwayStartDate(loan), weekly: [w, w, w] },
-    { effectiveFrom: computeLoanPayoffDate(loan), weekly: [0, 0, 0] }
+    { effectiveFrom: loanRunwayStartDate(loan), weekly: [w, w, w, w] },
+    { effectiveFrom: computeLoanPayoffDate(loan), weekly: [0, 0, 0, 0] }
   ];
 }
 

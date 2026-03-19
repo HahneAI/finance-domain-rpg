@@ -13,9 +13,8 @@ export const DEFAULT_CONFIG = {
 export const FISCAL_YEAR_START = "2026-01-05"; // week 0 end date — first Monday of the fiscal year
 export const PTO_RATE = 19.65;
 export const WEEKS_REMAINING = 44;
-// Approximate phase weights out of 44 remaining weeks
-export const PHASE_WEIGHTS = [6, 13, 25]; // kept for reference
-export const PHASE_END_DATES = ["2026-04-27", "2026-07-27", "2027-01-04"];
+// Quarter end-of-period cutoff dates (Q1→Q2, Q2→Q3, Q3→Q4 boundaries)
+export const QUARTER_BOUNDARIES = ["2026-03-31", "2026-06-30", "2026-09-30"];
 
 export const FED_BRACKETS = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [Infinity, 0.24]];
 
@@ -23,21 +22,22 @@ export const FED_BRACKETS = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [Infi
 // STATIC DATA
 // ─────────────────────────────────────────────────────────────
 export const PHASES = [
-  { id: "p1", label: "Phase 1", description: "Now → Mid-April", color: "#7eb8c9" },
-  { id: "p2", label: "Phase 2", description: "Mid-April → July", color: "#c9a96e" },
-  { id: "p3", label: "Phase 3", description: "August → Year End", color: "#a96ec9" },
+  { id: "q1", label: "Jan–Mar", description: "Jan 1 → Mar 31", color: "#7eb8c9" },
+  { id: "q2", label: "Apr–Jun", description: "Apr 1 → Jun 30", color: "#c9a96e" },
+  { id: "q3", label: "Jul–Sep", description: "Jul 1 → Sep 30", color: "#a96ec9" },
+  { id: "q4", label: "Oct–Dec", description: "Oct 1 → Dec 31", color: "#6dbf8a" },
 ];
 
 export const INITIAL_EXPENSES = [
-  { id: "housing",   category: "Needs",      label: "Housing",              note: ["Staying w/ family", "Trailer split w/ brother (incl. electric + internet)", "Trailer split w/ brother (incl. electric + internet)"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [50, 125, 125] }] },
-  { id: "kids",      category: "Needs",      label: "Kids / Angel",         note: ["Extra support, pregnancy help", "Minimum child support baseline", "Minimum child support baseline"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [450, 350, 350] }] },
-  { id: "food",      category: "Needs",      label: "Food",                 note: ["", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [65, 65, 65] }] },
-  { id: "jesse",     category: "Needs",      label: "Jesse (Loan + Phone)", note: ["Loan $35 + phone $15 + extra", "Loan $35 + phone $15 + extra", "Loan paid off — phone only"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [100, 100, 60] }] },
-  { id: "nicotine",  category: "Lifestyle",  label: "Nicotine",             note: ["", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [35, 35, 35] }] },
-  { id: "rumble",    category: "Lifestyle",  label: "Rumble",               note: ["", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [2.50, 2.50, 2.50] }] },
-  { id: "walmart",   category: "Lifestyle",  label: "Walmart+",             note: ["", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [3.75, 3.75, 3.75] }] },
-  { id: "fireflood", category: "Lifestyle",  label: "Fireflood",            note: ["$70/mo", "$70/mo", "$70/mo"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [17.50, 17.50, 17.50] }] },
-  { id: "cashapp",   category: "Transfers",  label: "CashApp Transfer",     note: ["Direct deposit benefit trigger", "Direct deposit benefit trigger", "Direct deposit benefit trigger"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [125, 125, 125] }] },
+  { id: "housing",   category: "Needs",      label: "Housing",              note: ["Staying w/ family", "Trailer split w/ brother (incl. electric + internet)", "Trailer split w/ brother (incl. electric + internet)", "Trailer split w/ brother (incl. electric + internet)"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [50, 125, 125, 125] }] },
+  { id: "kids",      category: "Needs",      label: "Kids / Angel",         note: ["Extra support, pregnancy help", "Minimum child support baseline", "Minimum child support baseline", "Minimum child support baseline"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [450, 350, 350, 350] }] },
+  { id: "food",      category: "Needs",      label: "Food",                 note: ["", "", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [65, 65, 65, 65] }] },
+  { id: "jesse",     category: "Needs",      label: "Jesse (Loan + Phone)", note: ["Loan $35 + phone $15 + extra", "Loan $35 + phone $15 + extra", "Loan paid off — phone only", "Loan paid off — phone only"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [100, 100, 60, 60] }] },
+  { id: "nicotine",  category: "Lifestyle",  label: "Nicotine",             note: ["", "", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [35, 35, 35, 35] }] },
+  { id: "rumble",    category: "Lifestyle",  label: "Rumble",               note: ["", "", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [2.50, 2.50, 2.50, 2.50] }] },
+  { id: "walmart",   category: "Lifestyle",  label: "Walmart+",             note: ["", "", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [3.75, 3.75, 3.75, 3.75] }] },
+  { id: "fireflood", category: "Lifestyle",  label: "Fireflood",            note: ["$70/mo", "$70/mo", "$70/mo", "$70/mo"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [17.50, 17.50, 17.50, 17.50] }] },
+  { id: "cashapp",   category: "Transfers",  label: "CashApp Transfer",     note: ["Direct deposit benefit trigger", "Direct deposit benefit trigger", "Direct deposit benefit trigger", "Direct deposit benefit trigger"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [125, 125, 125, 125] }] },
 ];
 
 export const INITIAL_GOALS = [

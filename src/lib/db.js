@@ -39,9 +39,21 @@ export async function loadUserData() {
       return { ...exp, history: buildLoanHistory(exp.loanMeta) };
     }
     // Legacy regular expenses: promote weekly → history
-    if (exp.history?.length) return exp;
-    if (exp.weekly) { const { weekly, ...rest } = exp; return { ...rest, history: [{ effectiveFrom: PROJECT_START, weekly }] }; }
-    return exp;
+    let base = exp;
+    if (!exp.history?.length && exp.weekly) {
+      const { weekly, ...rest } = exp;
+      base = { ...rest, history: [{ effectiveFrom: PROJECT_START, weekly }] };
+    }
+    // Q4 migration: any history entry with 3-value weekly gets Q3 value copied into Q4
+    const migratedHistory = (base.history ?? []).map(entry => ({
+      ...entry,
+      weekly: entry.weekly?.length === 3 ? [...entry.weekly, entry.weekly[2]] : entry.weekly,
+    }));
+    // Q4 migration: note arrays of length 3 get Q3 value copied into Q4
+    const migratedNote = Array.isArray(base.note) && base.note.length === 3
+      ? [...base.note, base.note[2]]
+      : base.note;
+    return { ...base, history: migratedHistory, note: migratedNote };
   });
 
   return {

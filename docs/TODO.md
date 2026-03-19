@@ -2,19 +2,19 @@
 
 ## 1. Immediate Bug Fixes
 
-- [ ] Fix Cashflow tab in Budget panel — review layout, math, and display accuracy
-- [ ] Fix Goals display — verify weeks-to-completion math and progress rendering
+- [x] Fix Cashflow tab in Budget panel — review layout, math, and display accuracy
+- [x] Fix Goals display — verify weeks-to-completion math and progress rendering
 
 ---
 
 ## 2. Quarterly Phase Refactor
 
-- [ ] **Quarterly phase refactor** — replace the current 3 arbitrary phases with 4 clean calendar quarters; each quarter is 3 months and named by month range (e.g. "Jan–Mar") never "Quarter 1" or "Phase 1":
-  - [ ] **`config.js`** — replace `PHASE_END_DATES` (2 cutoffs) with 3 quarter boundaries (`2026-03-31`, `2026-06-30`, `2026-09-30`); replace `PHASES` array (3 entries) with 4 quarter definitions labeled `Jan–Mar`, `Apr–Jun`, `Jul–Sep`, `Oct–Dec` with assigned colors
-  - [ ] **`finance.js`** — update `getPhaseIndex` to return 0–3 for 4 quarters; update `buildLoanHistory` to emit `weekly: [w, w, w, w]` (4 values); `getEffectiveAmount` and all callers pick up the change automatically since they index by phase
-  - [ ] **`BudgetPanel.jsx`** — update all `[p1, p2, p3]` input sets to `[p1, p2, p3, p4]`; replace "Phase 1 Weekly" / "P1/wk" labels with the corresponding month-range label ("Jan–Mar /wk"); update phase selector tabs to show 4 quarter labels
-  - [ ] **`db.js`** — add migration on load: any expense history entry with a `weekly` array of length 3 gets a 4th value appended (copy the 3rd quarter value into Q4 as a safe default)
-  - [ ] **Visibility rule** — quarter labels appear only in Budget expense editing and anywhere a "current quarter" context tag is useful (e.g. cashflow, statements); do not surface in income, benefits, or log panels
+- [x] **Quarterly phase refactor** — replace the current 3 arbitrary phases with 4 clean calendar quarters; each quarter is 3 months and named by month range (e.g. "Jan–Mar") never "Quarter 1" or "Phase 1":
+  - [x] **`config.js`** — replaced `PHASE_END_DATES` with `QUARTER_BOUNDARIES` (`2026-03-31`, `2026-06-30`, `2026-09-30`); replaced `PHASES` with 4 quarter definitions labeled `Jan–Mar`, `Apr–Jun`, `Jul–Sep`, `Oct–Dec`
+  - [x] **`finance.js`** — updated `getPhaseIndex` to return 0–3 for 4 quarters; updated `buildLoanHistory` to emit `weekly: [w, w, w, w]`
+  - [x] **`BudgetPanel.jsx`** — updated all `[p1, p2, p3]` input sets to `[p1, p2, p3, p4]`; replaced "Phase N Weekly" / "P{N}/wk" labels with quarter month-range labels; phase selector tabs now show 4 quarter tabs
+  - [x] **`db.js`** — migration on load: history entries with `weekly.length === 3` get Q3 copied into Q4; note arrays of length 3 also extended
+  - [x] **Visibility rule** — quarter labels appear only in Budget expense editing; income, benefits, and log panels unaffected
 
 ---
 
@@ -113,4 +113,4 @@
 
 ---
 
-*Last updated: 2026-03-19*
+*Last updated: 2026-03-19 — Sections 1 & 2 complete*

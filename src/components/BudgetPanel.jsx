@@ -14,7 +14,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const [editId, setEditId] = useState(null);
   const [editVals, setEditVals] = useState({});
   const [addingExp, setAddingExp] = useState(false);
-  const [newExp, setNewExp] = useState({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", note: "" });
+  const [newExp, setNewExp] = useState({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", p4: "0", note: "" });
   const [delExpId, setDelExpId] = useState(null);
   // Loan CRUD state
   const [editLoanId, setEditLoanId] = useState(null);
@@ -50,15 +50,15 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const startEditExp = (exp) => {
     const latest = exp.history?.length
       ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b)
-      : { weekly: exp.weekly ?? [0, 0, 0] };
+      : { weekly: exp.weekly ?? [0, 0, 0, 0] };
     setEditId(exp.id);
-    setEditVals({ p1: latest.weekly[0], p2: latest.weekly[1], p3: latest.weekly[2] });
+    setEditVals({ p1: latest.weekly[0], p2: latest.weekly[1], p3: latest.weekly[2], p4: latest.weekly[3] ?? latest.weekly[2] ?? 0 });
   };
   const saveEditExp = (id) => {
-    const newWeekly = [parseFloat(editVals.p1) || 0, parseFloat(editVals.p2) || 0, parseFloat(editVals.p3) || 0];
+    const newWeekly = [parseFloat(editVals.p1) || 0, parseFloat(editVals.p2) || 0, parseFloat(editVals.p3) || 0, parseFloat(editVals.p4) || 0];
     setExpenses(prev => prev.map(e => {
       if (e.id !== id) return e;
-      const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0] }];
+      const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
       const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
       if (daysDiff <= 3) {
@@ -73,9 +73,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     setEditId(null);
   };
   const addExp = () => {
-    const p1 = parseFloat(newExp.p1) || 0, p2 = parseFloat(newExp.p2) || 0, p3 = parseFloat(newExp.p3) || 0;
-    setExpenses(prev => [...prev, { id: `exp_${Date.now()}`, category: newExp.category, label: newExp.label, note: [newExp.note, newExp.note, newExp.note], history: [{ effectiveFrom: TODAY_ISO, weekly: [p1, p2, p3] }] }]);
-    setAddingExp(false); setNewExp({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", note: "" });
+    const p1 = parseFloat(newExp.p1) || 0, p2 = parseFloat(newExp.p2) || 0, p3 = parseFloat(newExp.p3) || 0, p4 = parseFloat(newExp.p4) || 0;
+    setExpenses(prev => [...prev, { id: `exp_${Date.now()}`, category: newExp.category, label: newExp.label, note: [newExp.note, newExp.note, newExp.note, newExp.note], history: [{ effectiveFrom: TODAY_ISO, weekly: [p1, p2, p3, p4] }] }]);
+    setAddingExp(false); setNewExp({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", p4: "0", note: "" });
   };
   const deleteExp = (id) => { setExpenses(p => p.filter(e => e.id !== id)); setDelExpId(null); };
 
@@ -200,7 +200,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               {editId === exp.id ? <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 <span style={{ fontSize: "12px", flex: 1, minWidth: "120px" }}>{exp.label}</span>
                 <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
-                  {["p1", "p2", "p3"].map((k, i) => <div key={k} style={{ textAlign: "center" }}><div style={{ fontSize: "9px", color: PHASES[i].color, marginBottom: "2px" }}>P{i + 1}/wk</div><input type="number" value={editVals[k]} onChange={e => setEditVals(v => ({ ...v, [k]: e.target.value }))} style={{ ...iS, width: "65px" }} /></div>)}
+                  {["p1", "p2", "p3", "p4"].map((k, i) => <div key={k} style={{ textAlign: "center" }}><div style={{ fontSize: "9px", color: PHASES[i].color, marginBottom: "2px" }}>{PHASES[i].label}/wk</div><input type="number" value={editVals[k] ?? 0} onChange={e => setEditVals(v => ({ ...v, [k]: e.target.value }))} style={{ ...iS, width: "65px" }} /></div>)}
                   <button onClick={() => saveEditExp(exp.id)} style={{ background: "#6dbf8a", color: "#0a0a0a", border: "none", borderRadius: "3px", padding: "6px 10px", cursor: "pointer", fontSize: "10px", fontFamily: "'Courier New',monospace" }}>SAVE</button>
                   <button onClick={() => setEditId(null)} style={{ background: "#333", color: "#888", border: "none", borderRadius: "3px", padding: "6px 10px", cursor: "pointer", fontSize: "10px", fontFamily: "'Courier New',monospace" }}>✕</button>
                 </div>
@@ -271,14 +271,15 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
           <div><label style={lS}>Label</label><input type="text" value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Insurance" /></div>
           <div><label style={lS}>Category</label><select value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))} style={iS}><option>Needs</option><option>Lifestyle</option><option>Transfers</option></select></div>
-          <div><label style={lS}>Phase 1 Weekly ($)</label><input type="number" value={newExp.p1} onChange={e => setNewExp(v => ({ ...v, p1: e.target.value }))} style={iS} /></div>
-          <div><label style={lS}>Phase 2 Weekly ($)</label><input type="number" value={newExp.p2} onChange={e => setNewExp(v => ({ ...v, p2: e.target.value }))} style={iS} /></div>
-          <div><label style={lS}>Phase 3 Weekly ($)</label><input type="number" value={newExp.p3} onChange={e => setNewExp(v => ({ ...v, p3: e.target.value }))} style={iS} /></div>
-          <div><label style={lS}>Note (optional)</label><input type="text" value={newExp.note} onChange={e => setNewExp(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Short description" /></div>
+          <div><label style={{ ...lS, color: PHASES[0].color }}>Jan–Mar Weekly ($)</label><input type="number" value={newExp.p1} onChange={e => setNewExp(v => ({ ...v, p1: e.target.value }))} style={iS} /></div>
+          <div><label style={{ ...lS, color: PHASES[1].color }}>Apr–Jun Weekly ($)</label><input type="number" value={newExp.p2} onChange={e => setNewExp(v => ({ ...v, p2: e.target.value }))} style={iS} /></div>
+          <div><label style={{ ...lS, color: PHASES[2].color }}>Jul–Sep Weekly ($)</label><input type="number" value={newExp.p3} onChange={e => setNewExp(v => ({ ...v, p3: e.target.value }))} style={iS} /></div>
+          <div><label style={{ ...lS, color: PHASES[3].color }}>Oct–Dec Weekly ($)</label><input type="number" value={newExp.p4} onChange={e => setNewExp(v => ({ ...v, p4: e.target.value }))} style={iS} /></div>
+          <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note (optional)</label><input type="text" value={newExp.note} onChange={e => setNewExp(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Short description" /></div>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
           <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "#6dbf8a" : "#333", color: newExp.label ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>ADD</button>
-          <button onClick={() => { setAddingExp(false); setNewExp({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+          <button onClick={() => { setAddingExp(false); setNewExp({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", p4: "0", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
         </div>
       </div> : <button onClick={() => setAddingExp(true)} style={{ background: "#1a1a1a", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
     </div>}

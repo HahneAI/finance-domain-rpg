@@ -147,6 +147,15 @@ export function loanWeeklyAmount(loan) {
   return amt; // weekly
 }
 
+// One payment cycle before firstPaymentDate — when weekly set-aside begins
+export function loanRunwayStartDate(loan) {
+  const freq = loan.paymentFrequency ?? loan.payFrequency ?? "weekly";
+  const daysBack = DAYS_PER_FREQ[freq] ?? 7;
+  const d = new Date(loan.firstPaymentDate);
+  d.setDate(d.getDate() - Math.round(daysBack));
+  return toLocalIso(d);
+}
+
 export function computeLoanPayoffDate(loan) {
   const amt = loan.paymentAmount ?? loan.paymentPerCheck ?? 0;
   const freq = loan.paymentFrequency ?? loan.payFrequency ?? "weekly";
@@ -156,10 +165,11 @@ export function computeLoanPayoffDate(loan) {
   return toLocalIso(d);
 }
 
+// History is always derived from loanMeta — runway start → payoff
 export function buildLoanHistory(loan) {
   const w = loanWeeklyAmount(loan);
   return [
-    { effectiveFrom: loan.firstPaymentDate, weekly: [w, w, w] },
+    { effectiveFrom: loanRunwayStartDate(loan), weekly: [w, w, w] },
     { effectiveFrom: computeLoanPayoffDate(loan), weekly: [0, 0, 0] }
   ];
 }

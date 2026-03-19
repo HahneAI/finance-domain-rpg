@@ -5,6 +5,7 @@ import {
   INITIAL_GOALS,
   INITIAL_LOGS,
 } from "../constants/config.js";
+import { buildLoanHistory } from "./finance.js";
 
 /**
  * Load the single user row from Supabase.
@@ -28,10 +29,15 @@ export async function loadUserData() {
     };
   }
 
-  // Migrate legacy expenses: promote weekly → history if needed
+  // Migrate and normalize all expenses on load
   const PROJECT_START = "2026-01-27";
   const rawExpenses = data.expenses.length ? data.expenses : INITIAL_EXPENSES;
   const migratedExpenses = rawExpenses.map(exp => {
+    // Loans: always regenerate history from loanMeta so runway/payoff math stays fresh
+    if (exp.type === "loan" && exp.loanMeta) {
+      return { ...exp, history: buildLoanHistory(exp.loanMeta) };
+    }
+    // Legacy regular expenses: promote weekly → history
     if (exp.history?.length) return exp;
     if (exp.weekly) { const { weekly, ...rest } = exp; return { ...rest, history: [{ effectiveFrom: PROJECT_START, weekly }] }; }
     return exp;

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG } from "../constants/config.js";
-import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso } from "../lib/finance.js";
+import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso } from "../lib/finance.js";
 import { Card, VT, SmBtn, iS, lS } from "./ui.jsx";
 
 export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, futureWeeks }) {
@@ -209,6 +209,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             const payoffDate = meta ? computeLoanPayoffDate(meta) : null;
             const dropsOff = payoffDate && payoffDate <= fiscalYearEnd;
             const isPaidOff = payoffDate && payoffDate <= TODAY_ISO;
+            const inRunway = meta && !isPaidOff && TODAY_ISO < meta.firstPaymentDate;
+            const freq = meta ? (meta.paymentFrequency ?? meta.payFrequency ?? "weekly") : "weekly";
+            const freqLabel = { weekly: "week", biweekly: "2 wks", monthly: "month" }[freq] ?? freq;
             return <div key={exp.id} style={{ background: CATEGORY_BG[cat], border: "1px solid #1e1e1e", borderRadius: "6px", padding: "10px 12px", marginBottom: "6px" }}>
               {editLoanId === exp.id ? <LoanEditForm vals={editLoanVals} setVals={setEditLoanVals} onSave={() => saveEditLoan(exp.id)} onCancel={() => setEditLoanId(null)} iS={iS} lS={lS} /> :
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -216,10 +219,16 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <span style={{ fontSize: "13px" }}>{exp.label}</span>
                     <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
+                    {inRunway && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
                     {isPaidOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>✓ PAID OFF</span>}
-                    {!isPaidOff && dropsOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>drops off {payoffDate}</span>}
+                    {!isPaidOff && !inRunway && dropsOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>drops off {payoffDate}</span>}
                   </div>
-                  {meta && (() => { const freq = meta.paymentFrequency ?? meta.payFrequency ?? "weekly"; const freqLabel = { weekly: "week", biweekly: "2 wks", monthly: "month" }[freq] ?? freq; return <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{loanPaymentsRemaining(meta)} payments left · {f(meta.paymentAmount ?? meta.paymentPerCheck ?? 0)}/{freqLabel} · {f(meta.totalAmount)} total</div>; })()}
+                  {meta && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>
+                    {inRunway
+                      ? `saving toward ${meta.firstPaymentDate} · ${f(meta.paymentAmount ?? 0)}/${freqLabel} due`
+                      : `${loanPaymentsRemaining(meta)} payments left · ${f(meta.paymentAmount ?? meta.paymentPerCheck ?? 0)}/${freqLabel} · ${f(meta.totalAmount)} total`
+                    }
+                  </div>}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div style={{ textAlign: "right" }}>
@@ -458,9 +467,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           const isPaidOff = payoffDate <= TODAY_ISO;
           const weeklyAmt = currentEffective(exp, ap);
           const isEditing = editLoanId === exp.id;
+          const inRunway = !isPaidOff && TODAY_ISO < meta.firstPaymentDate;
           const weeksUntilPayoff = Math.max(Math.ceil((new Date(payoffDate) - new Date(TODAY_ISO)) / (7 * 24 * 60 * 60 * 1000)), 0);
+          const weeksUntilFirst = Math.max(Math.ceil((new Date(meta.firstPaymentDate) - new Date(TODAY_ISO)) / (7 * 24 * 60 * 60 * 1000)), 0);
+          const freqShort = { weekly: "wk", biweekly: "2wks", monthly: "mo" }[(meta.paymentFrequency ?? meta.payFrequency ?? "weekly")];
 
-          return <div key={exp.id} style={{ background: "#141414", border: `1px solid ${isPaidOff ? "#6dbf8a44" : "#c8a84b33"}`, borderRadius: "8px", padding: "16px", marginBottom: "12px" }}>
+          return <div key={exp.id} style={{ background: "#141414", border: `1px solid ${isPaidOff ? "#6dbf8a44" : inRunway ? "#7a8bbf44" : "#c8a84b33"}`, borderRadius: "8px", padding: "16px", marginBottom: "12px" }}>
             {isEditing ? <LoanEditForm vals={editLoanVals} setVals={setEditLoanVals} onSave={() => saveEditLoan(exp.id)} onCancel={() => setEditLoanId(null)} iS={iS} lS={lS} /> :
             <div>
               {/* Header */}
@@ -469,32 +481,36 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                     <span style={{ fontSize: "14px", fontWeight: "bold" }}>{exp.label}</span>
                     <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
+                    {inRunway && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
                     {isPaidOff && <span style={{ fontSize: "9px", background: "#6dbf8a22", color: "#6dbf8a", padding: "2px 6px", borderRadius: "2px" }}>✓ PAID OFF</span>}
                   </div>
                   {exp.note[0] && <div style={{ fontSize: "10px", color: "#666" }}>{exp.note[0]}</div>}
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "#555" : "#c8a84b" }}>{f2(weeklyAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "#555" : inRunway ? "#7a8bbf" : "#c8a84b" }}>{f2(weeklyAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
                   <div style={{ fontSize: "10px", color: "#666" }}>{f(meta.totalAmount)} total</div>
                 </div>
               </div>
 
-              {/* Progress bar */}
+              {/* Progress bar — during runway shows savings progress toward first payment */}
               <div style={{ marginBottom: "8px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#666", marginBottom: "4px" }}>
-                  <span>{paymentsMade} of {paymentsTotal} payments made</span>
-                  <span>{progressPct.toFixed(0)}%</span>
+                  {inRunway
+                    ? <span>saving toward first payment · {weeksUntilFirst} week{weeksUntilFirst !== 1 ? "s" : ""} away</span>
+                    : <span>{paymentsMade} of {paymentsTotal} payments made</span>
+                  }
+                  <span>{inRunway ? "pre-save" : `${progressPct.toFixed(0)}%`}</span>
                 </div>
                 <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${progressPct}%`, background: isPaidOff ? "#6dbf8a" : "#c8a84b", borderRadius: "3px", transition: "width 0.3s" }} />
+                  <div style={{ height: "100%", width: inRunway ? "100%" : `${progressPct}%`, background: isPaidOff ? "#6dbf8a" : inRunway ? "#7a8bbf" : "#c8a84b", borderRadius: "3px", transition: "width 0.3s", opacity: inRunway ? 0.5 : 1 }} />
                 </div>
               </div>
 
               {/* Stats row */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", fontSize: "11px", marginBottom: "10px" }}>
                 <div style={{ background: "#1a1a1a", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
-                  <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>PAYMENTS LEFT</div>
-                  <div style={{ color: isPaidOff ? "#6dbf8a" : "#e8e0d0", fontWeight: "bold" }}>{paymentsLeft}</div>
+                  <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>{inRunway ? "FIRST PAYMENT" : "PAYMENTS LEFT"}</div>
+                  <div style={{ color: inRunway ? "#7a8bbf" : isPaidOff ? "#6dbf8a" : "#e8e0d0", fontWeight: "bold", fontSize: "10px" }}>{inRunway ? meta.firstPaymentDate : paymentsLeft}</div>
                 </div>
                 <div style={{ background: "#1a1a1a", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
                   <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>PAYOFF DATE</div>
@@ -502,12 +518,17 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 </div>
                 <div style={{ background: "#1a1a1a", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
                   <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>TERM PAYMENT</div>
-                  <div style={{ color: "#e8e0d0", fontWeight: "bold", fontSize: "10px" }}>{f2(payAmt)} / {{ weekly: "wk", biweekly: "2wks", monthly: "mo" }[(meta.paymentFrequency ?? meta.payFrequency ?? "weekly")]}</div>
+                  <div style={{ color: "#e8e0d0", fontWeight: "bold", fontSize: "10px" }}>{f2(payAmt)} / {freqShort}</div>
                 </div>
               </div>
 
+              {/* Runway banner */}
+              {inRunway && <div style={{ background: "#1a1a2d", border: "1px solid #7a8bbf44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "#7a8bbf" }}>
+                Setting aside {f2(weeklyAmt)}/wk — {weeksUntilFirst} check{weeksUntilFirst !== 1 ? "s" : ""} until first {f2(payAmt)}/{freqShort} payment on {meta.firstPaymentDate}
+              </div>}
+
               {/* Drop-off banner */}
-              {!isPaidOff && dropsThisYear && <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "#6dbf8a" }}>
+              {!isPaidOff && !inRunway && dropsThisYear && <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "#6dbf8a" }}>
                 ✓ Drops off in {weeksUntilPayoff} weeks — goals auto-improve after payoff
               </div>}
 

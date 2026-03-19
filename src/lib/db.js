@@ -4,6 +4,7 @@ import {
   INITIAL_EXPENSES,
   INITIAL_GOALS,
   INITIAL_LOGS,
+  FISCAL_YEAR_START,
 } from "../constants/config.js";
 import { buildLoanHistory } from "./finance.js";
 
@@ -30,7 +31,7 @@ export async function loadUserData() {
   }
 
   // Migrate and normalize all expenses on load
-  const PROJECT_START = "2026-01-27";
+  const PROJECT_START = FISCAL_YEAR_START;
   const rawExpenses = data.expenses.length ? data.expenses : INITIAL_EXPENSES;
   const migratedExpenses = rawExpenses.map(exp => {
     // Loans: always regenerate history from loanMeta so runway/payoff math stays fresh

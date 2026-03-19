@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { PHASES, CATEGORY_COLORS, CATEGORY_BG } from "../constants/config.js";
+import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
 import { Card, VT, SmBtn, iS, lS } from "./ui.jsx";
 
@@ -58,7 +58,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     const newWeekly = [parseFloat(editVals.p1) || 0, parseFloat(editVals.p2) || 0, parseFloat(editVals.p3) || 0];
     setExpenses(prev => prev.map(e => {
       if (e.id !== id) return e;
-      const existing = e.history ?? [{ effectiveFrom: "2026-01-27", weekly: e.weekly ?? [0, 0, 0] }];
+      const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0] }];
       const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
       if (daysDiff <= 3) {

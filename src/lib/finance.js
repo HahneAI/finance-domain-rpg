@@ -205,6 +205,9 @@ export function calcEventImpact(event, cfg) {
     const ptoH = event.ptoHours || 0, normalH = normalShifts * cfg.shiftHours;
     const normalOT = Math.max(normalH - cfg.otThreshold, 0), actualOT = Math.max(normalH - ptoH - cfg.otThreshold, 0);
     grossLost = ptoH * (cfg.baseRate - PTO_RATE) + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
+  } else if (event.type === "missed_unapproved") {
+    // Same gross/PTO math as partial — hours missed × base rate; bucket hit tracked separately
+    grossLost = (event.hoursLost || 0) * cfg.baseRate; hoursLostForPTO = event.hoursLost || 0;
   } else if (event.type === "partial") {
     grossLost = (event.hoursLost || 0) * cfg.baseRate; hoursLostForPTO = event.hoursLost || 0;
   } else if (event.type === "bonus") {
@@ -215,6 +218,7 @@ export function calcEventImpact(event, cfg) {
   const affectsK401 = weekDate && weekDate >= new Date(cfg.k401StartDate);
   return {
     grossLost, grossGained, netLost, netGained, baseGross, hoursLostForPTO,
+    bucketHoursDeducted: event.type === "missed_unapproved" ? (event.hoursLost || 0) : 0,
     k401kLost: affectsK401 ? grossLost * cfg.k401Rate : 0,
     k401kMatchLost: affectsK401 ? grossLost * cfg.k401MatchRate : 0,
     k401kGained: affectsK401 ? grossGained * cfg.k401Rate : 0,

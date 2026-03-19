@@ -3,16 +3,39 @@
 ## Bug Fixes & Polish
 
 - [ ] **Event log rework** — form UX improvements and math fixes:
-  - [ ] Pass `futureWeeks` into LogPanel and replace hardcoded `WEEKS_REMAINING = 44` so weekly unallocated and goals impact stay accurate as weeks pass
-  - [ ] Pass live `goals` prop into LogPanel instead of using `INITIAL_GOALS` so "Goals at risk" reflects actual edited goal targets
-  - [ ] Auto-derive `weekIdx` and `weekRotation` from the selected `weekEnd` date by matching against `allWeeks` — remove both manual inputs from the form
-  - [ ] Add inline edit on existing log entries (not just delete)
+  - [x] Pass `futureWeeks` into LogPanel and replace hardcoded `WEEKS_REMAINING = 44` so weekly unallocated and goals impact stay accurate as weeks pass
+  - [x] Pass live `goals` prop into LogPanel instead of using `INITIAL_GOALS` so "Goals at risk" reflects actual edited goal targets
+  - [x] Auto-derive `weekIdx` and `weekRotation` from the selected `weekEnd` date by matching against `allWeeks` — remove both manual inputs from the form
+  - [ ] Add inline edit on existing log entries (not just delete) — expands in-card, pre-fills all fields, same conditional form logic as add, one open at a time
+  - [ ] Date-level event selection — currently events are logged per pay week; add ability to select specific calendar days within that week so financial impact (gross lost, PTO used, attendance hit) is calculated against the actual shift days missed rather than estimating at the shift count level
+  - [ ] New event type: **Missed Work — Unapproved** — distinct from `missed_unpaid`; fields: hours missed this shift (input as "X of {config.shiftHours}", e.g. "X of 12"), missed days, worked days, note; feeds gross loss calc AND attendance bucket tracker
+  - [ ] **Attendance bucket model** — DHL/P&G policy formula, tracked month-by-month from the event log:
+
+    **Monthly unapproved hours missed (M) → bucket effect:**
+    - `M = 0` → bucket += 18 (perfect attendance bonus)
+    - `0 < M ≤ 12` → bucket -= M, then bucket += 12 (reduced bonus)
+    - `12 < M ≤ 24` → bucket -= M, then bucket += 6 (minimal bonus)
+    - `M > 24` → bucket -= M, bonus = 0 (no intake)
+
+    **Rules:**
+    - Unapproved missed time: deducts hours + reduces monthly bonus tier
+    - Unpaid approved absence: does NOT hit bucket, but DOES reduce PTO accrual
+    - PTO usage: does NOT hit bucket, and still accrues PTO hours while on PTO
+    - PTO used to cover an unapproved absence: saves the bucket hit (mark as exception on event)
+
+    **Build tasks:**
+    - [ ] Aggregate unapproved hours per calendar month from the event log to determine each month's bonus tier
+    - [ ] Running bucket total: start from current known balance, apply monthly net (bonus - deductions) for each past month, project forward
+    - [ ] Dashboard indicator in Log or Benefits panel: current bucket level, hours until next tier drop, months until bucket goes critical, "safe / caution / critical" status band
+    - [ ] Hook into existing bucket cap already in the app
+
+  - [ ] **PTO accrual accuracy audit** — verify full chain: 1hr per 20 worked; unpaid approved reduces accrual; unapproved reduces accrual AND hits bucket; PTO usage does NOT reduce accrual (accrual continues while on PTO); paternity leave projection in Benefits reflects all logged events
 - [ ] Fix Cashflow tab in Budget panel — review layout, math, and display accuracy
 - [ ] Fix Goals display — verify weeks-to-completion math and progress rendering
 
 ## Features In Progress
 
-- [ ] **Yearly week countdown** — app knows current week of the fiscal year; trickles down to:
+- [x] **Fiscal week awareness** — app knows current week of the fiscal year (Week X of 52); `today` state ticks at midnight and cascades reactively through all panels; `FISCAL_YEAR_START` centralized constant; week badge in header, log, benefits, budget phase all in sync
   - [ ] Goals needing to be marked complete when funded
   - [ ] Confirmation of days worked vs. projected schedule each week
   - [ ] Goal timeline surplus math — swap flat `weeklyIncome` average for actual per-week `computeNet()` so taxed vs. non-taxed weeks produce accurate surplus and goal sequencing reflects real pay variation

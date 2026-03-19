@@ -10,6 +10,7 @@ export const DEFAULT_CONFIG = {
   taxedWeeks: [7, 8, 19, 20, 21, 22, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
 };
 
+export const FISCAL_YEAR_START = "2026-01-05"; // week 0 end date — first Monday of the fiscal year
 export const PTO_RATE = 19.65;
 export const WEEKS_REMAINING = 44;
 // Approximate phase weights out of 44 remaining weeks
@@ -28,15 +29,15 @@ export const PHASES = [
 ];
 
 export const INITIAL_EXPENSES = [
-  { id: "housing",   category: "Needs",      label: "Housing",              note: ["Staying w/ family", "Trailer split w/ brother (incl. electric + internet)", "Trailer split w/ brother (incl. electric + internet)"], history: [{ effectiveFrom: "2026-01-27", weekly: [50, 125, 125] }] },
-  { id: "kids",      category: "Needs",      label: "Kids / Angel",         note: ["Extra support, pregnancy help", "Minimum child support baseline", "Minimum child support baseline"], history: [{ effectiveFrom: "2026-01-27", weekly: [450, 350, 350] }] },
-  { id: "food",      category: "Needs",      label: "Food",                 note: ["", "", ""], history: [{ effectiveFrom: "2026-01-27", weekly: [65, 65, 65] }] },
-  { id: "jesse",     category: "Needs",      label: "Jesse (Loan + Phone)", note: ["Loan $35 + phone $15 + extra", "Loan $35 + phone $15 + extra", "Loan paid off — phone only"], history: [{ effectiveFrom: "2026-01-27", weekly: [100, 100, 60] }] },
-  { id: "nicotine",  category: "Lifestyle",  label: "Nicotine",             note: ["", "", ""], history: [{ effectiveFrom: "2026-01-27", weekly: [35, 35, 35] }] },
-  { id: "rumble",    category: "Lifestyle",  label: "Rumble",               note: ["", "", ""], history: [{ effectiveFrom: "2026-01-27", weekly: [2.50, 2.50, 2.50] }] },
-  { id: "walmart",   category: "Lifestyle",  label: "Walmart+",             note: ["", "", ""], history: [{ effectiveFrom: "2026-01-27", weekly: [3.75, 3.75, 3.75] }] },
-  { id: "fireflood", category: "Lifestyle",  label: "Fireflood",            note: ["$70/mo", "$70/mo", "$70/mo"], history: [{ effectiveFrom: "2026-01-27", weekly: [17.50, 17.50, 17.50] }] },
-  { id: "cashapp",   category: "Transfers",  label: "CashApp Transfer",     note: ["Direct deposit benefit trigger", "Direct deposit benefit trigger", "Direct deposit benefit trigger"], history: [{ effectiveFrom: "2026-01-27", weekly: [125, 125, 125] }] },
+  { id: "housing",   category: "Needs",      label: "Housing",              note: ["Staying w/ family", "Trailer split w/ brother (incl. electric + internet)", "Trailer split w/ brother (incl. electric + internet)"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [50, 125, 125] }] },
+  { id: "kids",      category: "Needs",      label: "Kids / Angel",         note: ["Extra support, pregnancy help", "Minimum child support baseline", "Minimum child support baseline"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [450, 350, 350] }] },
+  { id: "food",      category: "Needs",      label: "Food",                 note: ["", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [65, 65, 65] }] },
+  { id: "jesse",     category: "Needs",      label: "Jesse (Loan + Phone)", note: ["Loan $35 + phone $15 + extra", "Loan $35 + phone $15 + extra", "Loan paid off — phone only"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [100, 100, 60] }] },
+  { id: "nicotine",  category: "Lifestyle",  label: "Nicotine",             note: ["", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [35, 35, 35] }] },
+  { id: "rumble",    category: "Lifestyle",  label: "Rumble",               note: ["", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [2.50, 2.50, 2.50] }] },
+  { id: "walmart",   category: "Lifestyle",  label: "Walmart+",             note: ["", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [3.75, 3.75, 3.75] }] },
+  { id: "fireflood", category: "Lifestyle",  label: "Fireflood",            note: ["$70/mo", "$70/mo", "$70/mo"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [17.50, 17.50, 17.50] }] },
+  { id: "cashapp",   category: "Transfers",  label: "CashApp Transfer",     note: ["Direct deposit benefit trigger", "Direct deposit benefit trigger", "Direct deposit benefit trigger"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [125, 125, 125] }] },
 ];
 
 export const INITIAL_GOALS = [
@@ -57,11 +58,12 @@ export const INITIAL_LOGS = [{
 }];
 
 export const EVENT_TYPES = {
-  missed_unpaid: { label: "Missed Shift (Unpaid)", color: "#e8856a", icon: "✕" },
-  pto: { label: "PTO Used", color: "#7a8bbf", icon: "◷" },
-  partial: { label: "Partial Shift", color: "#c8a84b", icon: "◑" },
-  bonus: { label: "Bonus / Extra Pay", color: "#6dbf8a", icon: "+" },
-  other_loss: { label: "Other Income Loss", color: "#888", icon: "−" },
+  missed_unpaid:     { label: "Missed Shift (Unpaid/Approved)", color: "#e8856a", icon: "✕" },
+  missed_unapproved: { label: "Missed Work (Unapproved)",       color: "#e8622a", icon: "⚠" },
+  pto:               { label: "PTO Used",                       color: "#7a8bbf", icon: "◷" },
+  partial:           { label: "Partial Shift",                  color: "#c8a84b", icon: "◑" },
+  bonus:             { label: "Bonus / Extra Pay",              color: "#6dbf8a", icon: "+" },
+  other_loss:        { label: "Other Income Loss",              color: "#888",    icon: "−" },
 };
 
 export const CATEGORY_COLORS = { Needs: "#e8856a", Lifestyle: "#7a8bbf", Transfers: "#888" };

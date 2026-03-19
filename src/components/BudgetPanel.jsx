@@ -45,6 +45,16 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     setExpenses(prev => prev.map(e => {
       if (e.id !== id) return e;
       const existing = e.history ?? [{ effectiveFrom: "2026-01-27", weekly: e.weekly ?? [0, 0, 0] }];
+      const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
+      const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
+      if (daysDiff <= 3) {
+        // Within 3 days: update existing entry and refresh its date to today
+        return { ...e, history: existing.map(entry =>
+          entry.effectiveFrom === latest.effectiveFrom
+            ? { effectiveFrom: TODAY_ISO, weekly: newWeekly }
+            : entry
+        )};
+      }
       return { ...e, history: [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }] };
     }));
     setEditId(null);

@@ -80,7 +80,7 @@ export function getEffectiveAmount(expense, weekEndDate, phaseIdx) {
   const iso = toLocalIso(weekEndDate);
   let best = null;
   for (const entry of expense.history) {
-    if (entry.effectiveFrom <= iso && (best === null || entry.effectiveFrom > best.effectiveFrom))
+    if (entry.effectiveFrom <= iso && (best === null || entry.effectiveFrom >= best.effectiveFrom))
       best = entry;
   }
   return best?.weekly[phaseIdx] ?? 0;

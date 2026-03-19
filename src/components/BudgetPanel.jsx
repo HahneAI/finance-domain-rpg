@@ -306,12 +306,25 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Weekly Take-Home</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(weeklyIncome)}</div></div><div style={{ fontSize: "10px", color: "#555", textAlign: "right" }}>Live from<br />income engine</div></div>
       </div>
-      {[{ label: "Checking Needs", cat: "Needs", desc: "Housing, kids, food, Jesse" }, { label: "Credit Builder", cat: "Lifestyle", desc: "Nicotine, Rumble, Walmart+, Fireflood" }, { label: "CashApp Transfer", cat: "Transfers", desc: "Direct deposit perks — not spent" }].map(row => {
-        const tot = regularExpenses.filter(e => e.category === row.cat).reduce((s, e) => s + currentEffective(e, ap), 0);
-        return <div key={row.cat} style={{ background: CATEGORY_BG[row.cat], border: "1px solid #222", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS[row.cat], marginBottom: "4px" }}>{row.label}</div><div style={{ fontSize: "10px", color: "#666" }}>{row.desc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS[row.cat] }}>{f2(tot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((tot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
-        </div>;
-      })}
+      {(() => {
+        const checkingTot = regularExpenses.filter(e => e.category !== "Transfers").reduce((s, e) => s + currentEffective(e, ap), 0);
+        const checkingDesc = regularExpenses.filter(e => e.category !== "Transfers").map(e => e.label).join(", ");
+        const loansTot = loans.reduce((s, e) => s + currentEffective(e, ap), 0);
+        const loansDesc = loans.map(e => e.label).join(", ");
+        const transferTot = regularExpenses.filter(e => e.category === "Transfers").reduce((s, e) => s + currentEffective(e, ap), 0);
+        const transferDesc = regularExpenses.filter(e => e.category === "Transfers").map(e => e.label).join(", ");
+        return <>
+          <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid #222", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "#666" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((checkingTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
+          </div>
+          {loans.length > 0 && <div style={{ background: "#1a1a14", border: "1px solid #222", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "#c8a84b", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "#666" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "#c8a84b" }}>{f2(loansTot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((loansTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
+          </div>}
+          <div style={{ background: CATEGORY_BG["Transfers"], border: "1px solid #222", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Transfers"], marginBottom: "4px" }}>CashApp Transfer</div><div style={{ fontSize: "10px", color: "#666" }}>{transferDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Transfers"] }}>{f2(transferTot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((transferTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
+          </div>
+        </>;
+      })()}
       <div style={{ background: wr >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wr >= 0 ? "#6dbf8a" : "#e8856a"}`, borderRadius: "6px", padding: "14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wr >= 0 ? "#6dbf8a" : "#e8856a", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "#666" }}>See Goals view for event-adjusted timeline</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wr >= 0 ? "#6dbf8a" : "#e8856a" }}>{f2(wr)}</div><div style={{ fontSize: "10px", color: "#666" }}>{f(wr * 52 / 12)}/mo</div></div></div>
       </div>
@@ -364,13 +377,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 </div>
                 <div style={{ textAlign: "right", marginLeft: "12px" }}>
                   <div style={{ fontSize: "18px", fontWeight: "bold", color: g.color }}>{f(g.target)}</div>
-                  <div style={{ fontSize: "10px", color: ok ? "#6dbf8a" : "#e8856a" }}>{ok ? `~wk ${Math.ceil(g.eW)}` : "Stretch goal"}</div>
+                  <div style={{ fontSize: "10px", color: ok ? "#6dbf8a" : "#e8856a" }}>{ok ? `~wk ${Math.ceil(g.eW)}` : `~wk ${Math.ceil(g.sW + g.wN)}`}</div>
                 </div>
               </div>
               <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}><div style={{ position: "relative", left: `${Math.min((g.sW / weeksLeft) * 100, 100)}%`, width: `${Math.min((g.wN / weeksLeft) * 100, 100 - (g.sW / weeksLeft) * 100)}%`, height: "100%", background: g.color, borderRadius: "3px", opacity: ok ? 1 : 0.4 }} /></div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#555", marginBottom: "10px" }}><span>Now</span><span>Week {weeksLeft}</span></div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
-                <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: g.color }}>{f2(adjustedWeeklyAvg)}/wk</span> · {f2(g.wN)} weeks to fund</div>
+                <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: g.color }}>{f2(adjustedWeeklyAvg)}/wk</span> · {g.wN.toFixed(1)} weeks to fund</div>
                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
                   <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>

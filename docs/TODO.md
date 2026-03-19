@@ -1,46 +1,49 @@
 # TODO — Life RPG Finance Dashboard
 
-## Bug Fixes & Polish
+## 1. Immediate Bug Fixes
 
-- [ ] **Event log rework** — form UX improvements and math fixes:
-  - [x] Pass `futureWeeks` into LogPanel and replace hardcoded `WEEKS_REMAINING = 44` so weekly unallocated and goals impact stay accurate as weeks pass
-  - [x] Pass live `goals` prop into LogPanel instead of using `INITIAL_GOALS` so "Goals at risk" reflects actual edited goal targets
-  - [x] Auto-derive `weekIdx` and `weekRotation` from the selected `weekEnd` date by matching against `allWeeks` — remove both manual inputs from the form
-  - [ ] Add inline edit on existing log entries (not just delete) — expands in-card, pre-fills all fields, same conditional form logic as add, one open at a time
-  - [ ] Date-level event selection — currently events are logged per pay week; add ability to select specific calendar days within that week so financial impact (gross lost, PTO used, attendance hit) is calculated against the actual shift days missed rather than estimating at the shift count level
-  - [ ] New event type: **Missed Work — Unapproved** — distinct from `missed_unpaid`; fields: hours missed this shift (input as "X of {config.shiftHours}", e.g. "X of 12"), missed days, worked days, note; feeds gross loss calc AND attendance bucket tracker
-  - [ ] **Attendance bucket model** — DHL/P&G policy formula, tracked month-by-month from the event log:
-
-    **Monthly unapproved hours missed (M) → bucket effect:**
-    - `M = 0` → bucket += 18 (perfect attendance bonus)
-    - `0 < M ≤ 12` → bucket -= M, then bucket += 12 (reduced bonus)
-    - `12 < M ≤ 24` → bucket -= M, then bucket += 6 (minimal bonus)
-    - `M > 24` → bucket -= M, bonus = 0 (no intake)
-
-    **Rules:**
-    - Unapproved missed time: deducts hours + reduces monthly bonus tier
-    - Unpaid approved absence: does NOT hit bucket, but DOES reduce PTO accrual
-    - PTO usage: does NOT hit bucket, and still accrues PTO hours while on PTO
-    - PTO used to cover an unapproved absence: saves the bucket hit (mark as exception on event)
-
-    **Build tasks:**
-    - [ ] Aggregate unapproved hours per calendar month from the event log to determine each month's bonus tier
-    - [ ] Running bucket total: start from current known balance, apply monthly net (bonus - deductions) for each past month, project forward
-    - [ ] Dashboard indicator in Log or Benefits panel: current bucket level, hours until next tier drop, months until bucket goes critical, "safe / caution / critical" status band
-    - [ ] Hook into existing bucket cap already in the app
-
-  - [ ] **PTO accrual accuracy audit** — verify full chain: 1hr per 20 worked; unpaid approved reduces accrual; unapproved reduces accrual AND hits bucket; PTO usage does NOT reduce accrual (accrual continues while on PTO); paternity leave projection in Benefits reflects all logged events
 - [ ] Fix Cashflow tab in Budget panel — review layout, math, and display accuracy
 - [ ] Fix Goals display — verify weeks-to-completion math and progress rendering
 
-## Features In Progress
+---
 
-- [x] **Fiscal week awareness** — app knows current week of the fiscal year (Week X of 52); `today` state ticks at midnight and cascades reactively through all panels; `FISCAL_YEAR_START` centralized constant; week badge in header, log, benefits, budget phase all in sync
-  - [ ] Goals needing to be marked complete when funded
-  - [ ] Confirmation of days worked vs. projected schedule each week
-  - [ ] Goal timeline surplus math — swap flat `weeklyIncome` average for actual per-week `computeNet()` so taxed vs. non-taxed weeks produce accurate surplus and goal sequencing reflects real pay variation
+## 2. Quarterly Phase Refactor
 
-## Upcoming Features
+- [ ] **Quarterly phase refactor** — replace the current 3 arbitrary phases with 4 clean calendar quarters; each quarter is 3 months and named by month range (e.g. "Jan–Mar") never "Quarter 1" or "Phase 1":
+  - [ ] **`config.js`** — replace `PHASE_END_DATES` (2 cutoffs) with 3 quarter boundaries (`2026-03-31`, `2026-06-30`, `2026-09-30`); replace `PHASES` array (3 entries) with 4 quarter definitions labeled `Jan–Mar`, `Apr–Jun`, `Jul–Sep`, `Oct–Dec` with assigned colors
+  - [ ] **`finance.js`** — update `getPhaseIndex` to return 0–3 for 4 quarters; update `buildLoanHistory` to emit `weekly: [w, w, w, w]` (4 values); `getEffectiveAmount` and all callers pick up the change automatically since they index by phase
+  - [ ] **`BudgetPanel.jsx`** — update all `[p1, p2, p3]` input sets to `[p1, p2, p3, p4]`; replace "Phase 1 Weekly" / "P1/wk" labels with the corresponding month-range label ("Jan–Mar /wk"); update phase selector tabs to show 4 quarter labels
+  - [ ] **`db.js`** — add migration on load: any expense history entry with a `weekly` array of length 3 gets a 4th value appended (copy the 3rd quarter value into Q4 as a safe default)
+  - [ ] **Visibility rule** — quarter labels appear only in Budget expense editing and anywhere a "current quarter" context tag is useful (e.g. cashflow, statements); do not surface in income, benefits, or log panels
+
+---
+
+## 3. Attendance Bucket Model
+
+- [ ] **Attendance bucket model** — DHL/P&G policy formula, tracked month-by-month from the event log:
+
+  **Monthly unapproved hours missed (M) → bucket effect:**
+  - `M = 0` → bucket += 18 (perfect attendance bonus)
+  - `0 < M ≤ 12` → bucket -= M, then bucket += 12 (reduced bonus)
+  - `12 < M ≤ 24` → bucket -= M, then bucket += 6 (minimal bonus)
+  - `M > 24` → bucket -= M, bonus = 0 (no intake)
+
+  **Rules:**
+  - Unapproved missed time: deducts hours + reduces monthly bonus tier
+  - Unpaid approved absence: does NOT hit bucket, but DOES reduce PTO accrual
+  - PTO usage: does NOT hit bucket, and still accrues PTO hours while on PTO
+  - PTO used to cover an unapproved absence: saves the bucket hit (mark as exception on event)
+
+  **Build tasks:**
+  - [ ] Aggregate unapproved hours per calendar month from the event log to determine each month's bonus tier
+  - [ ] Running bucket total: start from current known balance, apply monthly net (bonus - deductions) for each past month, project forward
+  - [ ] Dashboard indicator in Log or Benefits panel: current bucket level, hours until next tier drop, months until bucket goes critical, "safe / caution / critical" status band
+  - [ ] Hook into existing bucket cap already in the app
+  - [ ] **Wire attendance bonus into BenefitsPanel** — the static "$200/month · 7 payouts · $1,400 max" section needs to react to the event log; foundation is in place (`logTotals.bucketHours` now aggregated in App.jsx and available to pass down), but the full monthly aggregation model (tier logic above) must be built first before the projected bonus payout can be reduced accurately
+
+---
+
+## 4. Setup Wizard
 
 - [ ] **Setup Wizard** — onboard new / demo users by capturing all income-affecting variables:
   - [ ] Rigid vs. flexible schedule detection (live logging of worked days if non-set schedule)
@@ -56,12 +59,18 @@
     - [ ] **Annual Tax Strategy** — federal standard deduction, MO flat rate, target amount owed at filing
     - [ ] Each section should explain in plain English what the field affects and where to find the value (e.g. "check your paystub" or "your offer letter")
 
-- [ ] **Quarterly phase refactor** — replace the current 3 arbitrary phases with 4 clean calendar quarters; each quarter is 3 months and named by month range (e.g. "Jan–Mar") never "Quarter 1" or "Phase 1":
-  - [ ] **`config.js`** — replace `PHASE_END_DATES` (2 cutoffs) with 3 quarter boundaries (`2026-03-31`, `2026-06-30`, `2026-09-30`); replace `PHASES` array (3 entries) with 4 quarter definitions labeled `Jan–Mar`, `Apr–Jun`, `Jul–Sep`, `Oct–Dec` with assigned colors
-  - [ ] **`finance.js`** — update `getPhaseIndex` to return 0–3 for 4 quarters; update `buildLoanHistory` to emit `weekly: [w, w, w, w]` (4 values); `getEffectiveAmount` and all callers pick up the change automatically since they index by phase
-  - [ ] **`BudgetPanel.jsx`** — update all `[p1, p2, p3]` input sets to `[p1, p2, p3, p4]`; replace "Phase 1 Weekly" / "P1/wk" labels with the corresponding month-range label ("Jan–Mar /wk"); update phase selector tabs to show 4 quarter labels
-  - [ ] **`db.js`** — add migration on load: any expense history entry with a `weekly` array of length 3 gets a 4th value appended (copy the 3rd quarter value into Q4 as a safe default)
-  - [ ] **Visibility rule** — quarter labels appear only in Budget expense editing and anywhere a "current quarter" context tag is useful (e.g. cashflow, statements); do not surface in income, benefits, or log panels
+---
+
+## 5. Post-Auth Roadmap
+
+### Fiscal Week Features
+
+- [x] **Fiscal week awareness** — app knows current week of the fiscal year (Week X of 52); `today` state ticks at midnight and cascades reactively through all panels; `FISCAL_YEAR_START` centralized constant; week badge in header, log, benefits, budget phase all in sync
+  - [ ] Goals needing to be marked complete when funded
+  - [ ] Confirmation of days worked vs. projected schedule each week
+  - [ ] Goal timeline surplus math — swap flat `weeklyIncome` average for actual per-week `computeNet()` so taxed vs. non-taxed weeks produce accurate surplus and goal sequencing reflects real pay variation
+
+### Theoretical Tab
 
 - [ ] **Theoretical Tab** — new page for quick "what if" income scenarios:
   - [ ] Job change / income change
@@ -69,7 +78,11 @@
   - [ ] Second job income layering
   - [ ] Output: "Here's how everything could hypothetically look if..."
 
+### Calendar Tab
+
 - [ ] **Calendar Tab** — visual calendar mapping all expense due dates, loan payment dates, and goal milestones
+
+### Statements Tab
 
 - [ ] **Statements Tab** — personal finance statements for download and AI-powered insights:
   - [ ] Statement periods: monthly, quarterly, and yearly snapshots generated from live app data
@@ -86,4 +99,18 @@
 
 ---
 
-*Last updated: 2026-03-18*
+## Completed
+
+### Event Log Rework
+
+- [x] Pass `futureWeeks` into LogPanel and replace hardcoded `WEEKS_REMAINING = 44` so weekly unallocated and goals impact stay accurate as weeks pass
+- [x] Pass live `goals` prop into LogPanel instead of using `INITIAL_GOALS` so "Goals at risk" reflects actual edited goal targets
+- [x] Auto-derive `weekIdx` and `weekRotation` from the selected `weekEnd` date by matching against `allWeeks` — remove both manual inputs from the form
+- [x] Add inline edit on existing log entries (not just delete) — expands in-card, pre-fills all fields, same conditional form logic as add, one open at a time
+- [x] Date-level event selection — pay week dropdown replaces freeform date; 7-day pill picker selects specific days missed within the week; shiftsLost, weekendShifts, and hoursLost all auto-computed from selected days rather than estimated
+- [x] New event type: **Missed Work — Unapproved** — distinct from `missed_unpaid`; day picker drives hoursLost (days × shiftHours); feeds gross loss calc AND attendance bucket tracker (`bucketHoursDeducted` in calcEventImpact, aggregated in logTotals)
+- [x] **PTO accrual accuracy audit** — verified: 1hr/20 worked ✓; unpaid approved reduces accrual (`hoursLostForPTO = shiftsLost × shiftHours`) ✓; unapproved reduces accrual AND hits bucket ✓; PTO usage does NOT reduce accrual (`hoursLostForPTO = 0` for PTO events) ✓; paternity leave projection in Benefits uses `adjP = ptoBs - logPTOHoursLost / 20` ✓
+
+---
+
+*Last updated: 2026-03-19*

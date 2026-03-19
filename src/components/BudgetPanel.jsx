@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
 import { Card, VT, SmBtn, iS, lS } from "./ui.jsx";
@@ -138,6 +138,23 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   };
 
   const weeksLeft = futureWeeks?.length ?? 44;
+
+  // Goal timeline — computed at component level so useEffect can read it
+  const tl = useMemo(
+    () => computeGoalTimeline(activeGoals, futureWeeks ?? [], weeklyIncome, expenses, logNetLost, logNetGained ?? 0),
+    [activeGoals, futureWeeks, weeklyIncome, expenses, logNetLost, logNetGained]
+  );
+
+  // Auto-set dueWeek (fiscal week) on goals that have a projection but no stored due date
+  useEffect(() => {
+    if (!currentWeek) return;
+    const needsUpdate = tl.filter(g => g.eW !== null && !g.dueWeek);
+    if (!needsUpdate.length) return;
+    setGoals(prev => prev.map(goal => {
+      const match = needsUpdate.find(g => g.id === goal.id);
+      return match ? { ...goal, dueWeek: currentWeek.idx + Math.ceil(match.eW) } : goal;
+    }));
+  }, [tl, currentWeek, setGoals]);
 
   return (<div>
     {/* Phase tabs */}
@@ -332,7 +349,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
     {/* GOALS */}
     {view === "goals" && (() => {
-      const tl = computeGoalTimeline(activeGoals, futureWeeks ?? [], weeklyIncome, expenses, logNetLost, logNetGained ?? 0);
+      const nowIdx = currentWeek?.idx ?? 0;
       const totG = goals.reduce((s, g) => !g.completed ? s + g.target : s, 0);
       const projS = adjustedWeeklyAvg * weeksLeft;
       const lastGoalEW = tl.length ? (tl[tl.length - 1].eW ?? weeksLeft + 1) : 0;
@@ -377,11 +394,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 </div>
                 <div style={{ textAlign: "right", marginLeft: "12px" }}>
                   <div style={{ fontSize: "18px", fontWeight: "bold", color: g.color }}>{f(g.target)}</div>
-                  <div style={{ fontSize: "10px", color: ok ? "#6dbf8a" : "#e8856a" }}>{ok ? `~wk ${Math.ceil(g.eW)}` : `~wk ${Math.ceil(g.sW + g.wN)}`}</div>
+                  <div style={{ fontSize: "10px", color: ok ? "#6dbf8a" : "#e8856a" }}>{ok ? `Wk ${nowIdx + Math.ceil(g.eW)} of 52` : `Wk ${nowIdx + Math.ceil(g.sW + g.wN)} of 52`}</div>
+                  {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "#e8856a", background: "#2d1a1a", padding: "2px 6px", borderRadius: "3px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                 </div>
               </div>
               <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}><div style={{ position: "relative", left: `${Math.min((g.sW / weeksLeft) * 100, 100)}%`, width: `${Math.min((g.wN / weeksLeft) * 100, 100 - (g.sW / weeksLeft) * 100)}%`, height: "100%", background: g.color, borderRadius: "3px", opacity: ok ? 1 : 0.4 }} /></div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#555", marginBottom: "10px" }}><span>Now</span><span>Week {weeksLeft}</span></div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#555", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
                 <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: g.color }}>{f2(adjustedWeeklyAvg)}/wk</span> · {g.wN.toFixed(1)} weeks to fund</div>
                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
@@ -446,6 +464,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             <div style={{ color: "#888" }}>Adj. projected savings</div><div style={{ textAlign: "right", color: "#6dbf8a" }}>{f(projS)}</div>
             <div style={{ color: "#888" }}>Active goals total</div><div style={{ textAlign: "right", color: "#c8a84b" }}>{f(totG)}</div>
             <div style={{ color: "#888" }}>Surplus after all goals</div><div style={{ textAlign: "right", color: projS - totG >= 0 ? "#6dbf8a" : "#e8856a" }}>{f(projS - totG)}</div>
+          </div>
+          <div style={{ borderTop: "1px solid #6dbf8a33", marginTop: "12px", paddingTop: "12px", display: "flex", alignItems: "center", gap: "12px" }}>
+            <button onClick={() => setGoals(prev => prev.map(({ dueWeek, ...rest }) => rest))} style={{ background: "transparent", color: "#6dbf8a66", border: "1px solid #6dbf8a33", borderRadius: "3px", padding: "5px 10px", fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", whiteSpace: "nowrap" }}>Reset Timelines</button>
+            <div style={{ fontSize: "9px", color: "#444" }}>Clears stored due dates — re-anchors all projections to current week</div>
           </div>
         </div>
       </div>;

@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
-import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PHASE_WEIGHTS, WEEKS_REMAINING } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, calcEventImpact } from "./lib/finance.js";
-import { useLocalStorage } from "./hooks/useLocalStorage.js";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
+import { buildYear, computeNet, fedTax, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso } from "./lib/finance.js";
+import { loadUserData, saveUserData } from "./lib/db.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { BenefitsPanel } from "./components/BenefitsPanel.jsx";
@@ -41,11 +41,12 @@ function SidebarNavItem({ item, active, onClick }) {
 }
 
 export default function App() {
-  const [config, setConfig] = useLocalStorage("life-rpg:config", DEFAULT_CONFIG);
-  const [showExtra, setShowExtra] = useLocalStorage("life-rpg:showExtra", true);
-  const [logs, setLogs] = useLocalStorage("life-rpg:logs", INITIAL_LOGS);
-  const [expenses, setExpenses] = useLocalStorage("life-rpg:expenses", INITIAL_EXPENSES);
-  const [goals, setGoals] = useLocalStorage("life-rpg:goals", INITIAL_GOALS);
+  const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [showExtra, setShowExtra] = useState(true);
+  const [logs, setLogs] = useState(INITIAL_LOGS);
+  const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
+  const [goals, setGoals] = useState(INITIAL_GOALS);
   const [topNav, setTopNav] = useState("income");
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -54,8 +55,63 @@ export default function App() {
     setDrawerOpen(false);
   };
 
+  // ── Load from Supabase on mount ──
+  useEffect(() => {
+    loadUserData().then((data) => {
+      setConfig(data.config);
+      setShowExtra(data.showExtra);
+      setLogs(data.logs);
+      setExpenses(data.expenses);
+      setGoals(data.goals);
+      setLoading(false);
+    });
+  }, []);
+
+  // ── Debounced save to Supabase (800ms) ──
+  const saveTimer = useRef(null);
+  useEffect(() => {
+    if (loading) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveUserData({ config, expenses, goals, logs, showExtra });
+    }, 800);
+    return () => clearTimeout(saveTimer.current);
+  }, [config, expenses, goals, logs, showExtra, loading]);
+
+  // ── today: reactive date string — ticks at midnight so everything auto-advances ──
+  const [today, setToday] = useState(() => toLocalIso(new Date()));
+  useEffect(() => {
+    const scheduleNextTick = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0);
+      const msUntilMidnight = midnight - now;
+      return setTimeout(() => {
+        setToday(toLocalIso(new Date()));
+        timerId.current = scheduleNextTick();
+      }, msUntilMidnight);
+    };
+    const timerId = { current: scheduleNextTick() };
+    return () => clearTimeout(timerId.current);
+  }, []);
+
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config), [config]);
+
+  // ── Future active weeks: today onward, used for spend/goal simulation ──
+  const futureWeeks = useMemo(() => {
+    return allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) >= today);
+  }, [allWeeks, today]);
+
+  // ── Current week: first active week whose end date >= today ──
+  const currentWeek = useMemo(() => {
+    return allWeeks.find(w => w.active && toLocalIso(w.weekEnd) >= today) ?? null;
+  }, [allWeeks, today]);
+
+  // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
+  const currentWeekNumber = currentWeek
+    ? { num: currentWeek.idx, total: 52 }
+    : null;
 
   // ── Tax derived values ──
   const taxDerived = useMemo(() => {
@@ -63,8 +119,8 @@ export default function App() {
     const fAGI = Math.max(tt - config.fedStdDeduction, 0);
     const fL = fedTax(fAGI), mL = tt * config.moFlatRate;
     const ficaT = allWeeks.filter(w => w.active).reduce((s, w) => s + w.grossPay * config.ficaRate, 0);
-    const fWB = allWeeks.filter(w => w.active && w.taxedBySchedule).reduce((s, w) => s + w.taxableGross * (w.rotation === "Week 2" ? config.w2FedRate : config.w1FedRate), 0);
-    const mWB = allWeeks.filter(w => w.active && w.taxedBySchedule).reduce((s, w) => s + w.taxableGross * (w.rotation === "Week 2" ? config.w2StateRate : config.w1StateRate), 0);
+    const fWB = allWeeks.filter(w => w.active && w.taxedBySchedule).reduce((s, w) => s + w.taxableGross * (w.rotation === "6-Day" ? config.w2FedRate : config.w1FedRate), 0);
+    const mWB = allWeeks.filter(w => w.active && w.taxedBySchedule).reduce((s, w) => s + w.taxableGross * (w.rotation === "6-Day" ? config.w2StateRate : config.w1StateRate), 0);
     const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - config.targetOwedAtFiling, 0);
     const twC = allWeeks.filter(w => w.active && w.taxedBySchedule).length;
     return { fedAGI: fAGI, fedLiability: fL, moLiability: mL, ficaTotal: ficaT, fedWithheldBase: fWB, moWithheldBase: mWB, fedGap: fG, moGap: mG, totalGap: tG, targetExtraTotal: tET, taxedWeekCount: twC, extraPerCheck: twC > 0 ? tET / twC : 0 };
@@ -77,23 +133,43 @@ export default function App() {
 
   const weeklyIncome = projectedAnnualNet / 52;
 
-  // ── Weighted average phase spend from current expenses ──
-  const baseWeeklyUnallocated = useMemo(() => {
-    const spend = i => expenses.filter(e => e.category !== "Transfers").reduce((s, e) => s + e.weekly[i], 0);
-    const wAvgSpend = (spend(0) * PHASE_WEIGHTS[0] + spend(1) * PHASE_WEIGHTS[1] + spend(2) * PHASE_WEIGHTS[2]) / WEEKS_REMAINING;
-    return weeklyIncome - wAvgSpend;
-  }, [expenses, weeklyIncome]);
+  // ── Week-by-week remaining spend using history-aware amounts ──
+  const remainingSpend = useMemo(() => computeRemainingSpend(expenses, futureWeeks), [expenses, futureWeeks]);
+  const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
   // ── Event log cascade ──
   const logTotals = useMemo(() => {
-    let nL = 0, nG = 0, k4L = 0, k4ML = 0, ptoL = 0;
-    logs.forEach(e => { const i = calcEventImpact(e, config); nL += i.netLost; nG += i.netGained; k4L += i.k401kLost; k4ML += i.k401kMatchLost; ptoL += i.hoursLostForPTO; });
+    let nL = 0, nG = 0, k4L = 0, k4ML = 0, k4G = 0, k4MG = 0, ptoL = 0, bucket = 0;
+    logs.forEach(e => {
+      const i = calcEventImpact(e, config);
+      nL += i.netLost; nG += i.netGained;
+      k4L += i.k401kLost; k4ML += i.k401kMatchLost;
+      k4G += i.k401kGained; k4MG += i.k401kMatchGained;
+      ptoL += i.hoursLostForPTO; bucket += i.bucketHoursDeducted;
+    });
     return {
-      netLost: nL, netGained: nG, k401kLost: k4L, k401kMatchLost: k4ML, ptoHoursLost: ptoL,
+      netLost: nL, netGained: nG,
+      k401kLost: k4L, k401kMatchLost: k4ML,
+      k401kGained: k4G, k401kMatchGained: k4MG,
+      ptoHoursLost: ptoL, bucketHours: bucket,
       adjustedTakeHome: projectedAnnualNet - nL + nG,
-      adjustedWeeklyAvg: baseWeeklyUnallocated - (nL / WEEKS_REMAINING) + (nG / WEEKS_REMAINING)
+      adjustedWeeklyAvg: baseWeeklyUnallocated - (nL / (futureWeeks.length || 1)) + (nG / (futureWeeks.length || 1))
     };
-  }, [logs, config, projectedAnnualNet, baseWeeklyUnallocated]);
+  }, [logs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks]);
+
+  // ── Attendance bucket model ──
+  const bucketModel = useMemo(() => computeBucketModel(logs, config), [logs, config]);
+
+  if (loading) {
+    return (
+      <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d",
+        minHeight: "100vh", color: "#c8a84b", display: "flex",
+        alignItems: "center", justifyContent: "center", fontSize: "14px",
+        letterSpacing: "4px" }}>
+        LOADING...
+      </div>
+    );
+  }
 
   const activePanel = (
     <>
@@ -102,8 +178,10 @@ export default function App() {
         showExtra={showExtra} setShowExtra={setShowExtra}
         taxDerived={taxDerived}
         logNetLost={logTotals.netLost}
+        logNetGained={logTotals.netGained}
         adjustedTakeHome={logTotals.adjustedTakeHome}
         projectedAnnualNet={projectedAnnualNet}
+        currentWeek={currentWeek}
       />}
       {topNav === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
@@ -111,18 +189,31 @@ export default function App() {
         adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         logNetLost={logTotals.netLost}
+        logNetGained={logTotals.netGained}
         weeklyIncome={weeklyIncome}
+        futureWeeks={futureWeeks}
+        currentWeek={currentWeek}
+        today={today}
       />}
       {topNav === "benefits" && <BenefitsPanel
         allWeeks={allWeeks} config={config}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
+        logK401kGained={logTotals.k401kGained}
+        logK401kMatchGained={logTotals.k401kMatchGained}
         logPTOHoursLost={logTotals.ptoHoursLost}
+        currentWeek={currentWeek}
+        bucketModel={bucketModel}
       />}
       {topNav === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
+        futureWeeks={futureWeeks}
+        allWeeks={allWeeks}
+        currentWeek={currentWeek}
+        goals={goals}
+        bucketModel={bucketModel}
       />}
     </>
   );
@@ -177,7 +268,8 @@ export default function App() {
       >
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #222" }}>
           <div style={{ fontSize: "10px", letterSpacing: "4px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
-          <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3" }}>2026 Financial Dashboard</div>
+          <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
+          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
         </div>
         <nav style={{ marginTop: "8px", flex: 1 }}>
           {NAV_ITEMS.map(item => (
@@ -206,8 +298,11 @@ export default function App() {
             justifyContent: "space-between",
           }}
         >
-          <div>
-            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "1px" }}>DHL / P&G — Jackson MO</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase" }}>DHL / P&G — Jackson MO</div>
+              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+            </div>
             <div style={{ fontSize: "16px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
           </div>
           {/* Hamburger button */}
@@ -227,6 +322,7 @@ export default function App() {
               justifyContent: "center",
               gap: "5px",
               flexShrink: 0,
+              marginLeft: "12px",
             }}
             aria-label="Open navigation"
           >

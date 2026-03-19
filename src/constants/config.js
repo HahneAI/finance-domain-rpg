@@ -8,12 +8,16 @@ export const DEFAULT_CONFIG = {
   firstActiveIdx: 7, w2FedRate: 0.1283, w2StateRate: 0.040, w1FedRate: 0.0784, w1StateRate: 0.0338,
   ficaRate: 0.0765, fedStdDeduction: 15000, moFlatRate: 0.047, targetOwedAtFiling: 1000,
   taxedWeeks: [7, 8, 19, 20, 21, 22, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
+  bucketStartBalance: 64,   // hours — new hire starting balance
+  bucketCap: 128,           // hours — overflow above this pays out as cash
+  bucketPayoutRate: 9.825,  // $/hr for overflow hours (PTO_RATE / 2 ≈ 9.825)
 };
 
+export const FISCAL_YEAR_START = "2026-01-05"; // week 0 end date — first Monday of the fiscal year
 export const PTO_RATE = 19.65;
 export const WEEKS_REMAINING = 44;
-// Approximate phase weights out of 44 remaining weeks
-export const PHASE_WEIGHTS = [6, 13, 25];
+// Quarter end-of-period cutoff dates (Q1→Q2, Q2→Q3, Q3→Q4 boundaries)
+export const QUARTER_BOUNDARIES = ["2026-03-31", "2026-06-30", "2026-09-30"];
 
 export const FED_BRACKETS = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [Infinity, 0.24]];
 
@@ -21,21 +25,22 @@ export const FED_BRACKETS = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [Infi
 // STATIC DATA
 // ─────────────────────────────────────────────────────────────
 export const PHASES = [
-  { id: "p1", label: "Phase 1", description: "Now → Mid-April", color: "#7eb8c9" },
-  { id: "p2", label: "Phase 2", description: "Mid-April → July", color: "#c9a96e" },
-  { id: "p3", label: "Phase 3", description: "August → Year End", color: "#a96ec9" },
+  { id: "q1", label: "Jan–Mar", description: "Jan 1 → Mar 31", color: "#7eb8c9" },
+  { id: "q2", label: "Apr–Jun", description: "Apr 1 → Jun 30", color: "#c9a96e" },
+  { id: "q3", label: "Jul–Sep", description: "Jul 1 → Sep 30", color: "#a96ec9" },
+  { id: "q4", label: "Oct–Dec", description: "Oct 1 → Dec 31", color: "#6dbf8a" },
 ];
 
 export const INITIAL_EXPENSES = [
-  { id: "housing", category: "Needs", label: "Housing", weekly: [50, 125, 125], note: ["Staying w/ family", "Trailer split w/ brother (incl. electric + internet)", "Trailer split w/ brother (incl. electric + internet)"] },
-  { id: "kids", category: "Needs", label: "Kids / Angel", weekly: [450, 350, 350], note: ["Extra support, pregnancy help", "Minimum child support baseline", "Minimum child support baseline"] },
-  { id: "food", category: "Needs", label: "Food", weekly: [65, 65, 65], note: ["", "", ""] },
-  { id: "jesse", category: "Needs", label: "Jesse (Loan + Phone)", weekly: [100, 100, 60], note: ["Loan $35 + phone $15 + extra", "Loan $35 + phone $15 + extra", "Loan paid off — phone only"] },
-  { id: "nicotine", category: "Lifestyle", label: "Nicotine", weekly: [35, 35, 35], note: ["", "", ""] },
-  { id: "rumble", category: "Lifestyle", label: "Rumble", weekly: [2.50, 2.50, 2.50], note: ["", "", ""] },
-  { id: "walmart", category: "Lifestyle", label: "Walmart+", weekly: [3.75, 3.75, 3.75], note: ["", "", ""] },
-  { id: "fireflood", category: "Lifestyle", label: "Fireflood", weekly: [17.50, 17.50, 17.50], note: ["$70/mo", "$70/mo", "$70/mo"] },
-  { id: "cashapp", category: "Transfers", label: "CashApp Transfer", weekly: [125, 125, 125], note: ["Direct deposit benefit trigger", "Direct deposit benefit trigger", "Direct deposit benefit trigger"] },
+  { id: "housing",   category: "Needs",      label: "Housing",              note: ["Staying w/ family", "Trailer split w/ brother (incl. electric + internet)", "Trailer split w/ brother (incl. electric + internet)", "Trailer split w/ brother (incl. electric + internet)"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [50, 125, 125, 125] }] },
+  { id: "kids",      category: "Needs",      label: "Kids / Angel",         note: ["Extra support, pregnancy help", "Minimum child support baseline", "Minimum child support baseline", "Minimum child support baseline"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [450, 350, 350, 350] }] },
+  { id: "food",      category: "Needs",      label: "Food",                 note: ["", "", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [65, 65, 65, 65] }] },
+  { id: "jesse",     category: "Needs",      label: "Jesse (Loan + Phone)", note: ["Loan $35 + phone $15 + extra", "Loan $35 + phone $15 + extra", "Loan paid off — phone only", "Loan paid off — phone only"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [100, 100, 60, 60] }] },
+  { id: "nicotine",  category: "Lifestyle",  label: "Nicotine",             note: ["", "", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [35, 35, 35, 35] }] },
+  { id: "rumble",    category: "Lifestyle",  label: "Rumble",               note: ["", "", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [2.50, 2.50, 2.50, 2.50] }] },
+  { id: "walmart",   category: "Lifestyle",  label: "Walmart+",             note: ["", "", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [3.75, 3.75, 3.75, 3.75] }] },
+  { id: "fireflood", category: "Lifestyle",  label: "Fireflood",            note: ["$70/mo", "$70/mo", "$70/mo", "$70/mo"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [17.50, 17.50, 17.50, 17.50] }] },
+  { id: "cashapp",   category: "Transfers",  label: "CashApp Transfer",     note: ["Direct deposit benefit trigger", "Direct deposit benefit trigger", "Direct deposit benefit trigger", "Direct deposit benefit trigger"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [125, 125, 125, 125] }] },
 ];
 
 export const INITIAL_GOALS = [
@@ -49,18 +54,19 @@ export const INITIAL_GOALS = [
 ];
 
 export const INITIAL_LOGS = [{
-  id: 1, weekEnd: "2026-03-16", weekIdx: 10, weekRotation: "Week 2",
+  id: 1, weekEnd: "2026-03-16", weekIdx: 10, weekRotation: "6-Day",
   type: "missed_unpaid", shiftsLost: 3, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0,
   workedDays: "Fri, Sat, Sun", missedDays: "Tue, Wed, Thu",
   note: "Worked Fri/Sat/Sun only (36h instead of 72h) — 3 days missed unpaid",
 }];
 
 export const EVENT_TYPES = {
-  missed_unpaid: { label: "Missed Shift (Unpaid)", color: "#e8856a", icon: "✕" },
-  pto: { label: "PTO Used", color: "#7a8bbf", icon: "◷" },
-  partial: { label: "Partial Shift", color: "#c8a84b", icon: "◑" },
-  bonus: { label: "Bonus / Extra Pay", color: "#6dbf8a", icon: "+" },
-  other_loss: { label: "Other Income Loss", color: "#888", icon: "−" },
+  missed_unpaid:     { label: "Missed Shift (Unpaid/Approved)", color: "#e8856a", icon: "✕" },
+  missed_unapproved: { label: "Missed Work (Unapproved)",       color: "#e8622a", icon: "⚠" },
+  pto:               { label: "PTO Used",                       color: "#7a8bbf", icon: "◷" },
+  partial:           { label: "Partial Shift",                  color: "#c8a84b", icon: "◑" },
+  bonus:             { label: "Bonus / Extra Pay",              color: "#6dbf8a", icon: "+" },
+  other_loss:        { label: "Other Income Loss",              color: "#888",    icon: "−" },
 };
 
 export const CATEGORY_COLORS = { Needs: "#e8856a", Lifestyle: "#7a8bbf", Transfers: "#888" };

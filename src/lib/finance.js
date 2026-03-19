@@ -1,8 +1,14 @@
-import { FED_BRACKETS, PTO_RATE } from "../constants/config.js";
+import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES } from "../constants/config.js";
 
 // ─────────────────────────────────────────────────────────────
 // PURE FUNCTIONS — all stateless, no component dependencies
 // ─────────────────────────────────────────────────────────────
+
+function toLocalIso(date) {
+  const y = date.getFullYear(), m = String(date.getMonth() + 1).padStart(2, "0"), d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+export { toLocalIso };
 
 export function fedTax(income) {
   let tax = 0, prev = 0;
@@ -31,7 +37,7 @@ export function buildYear(cfg) {
     const taxableGross = active ? grossPay - cfg.ltd - k401kEmployee : 0;
     const isTaxed = active && taxedSet.has(idx);
     weeks.push({
-      idx, weekEnd, weekStart, rotation: isWeek2 ? "Week 2" : "Week 1",
+      idx, weekEnd, weekStart, rotation: isWeek2 ? "6-Day" : "4-Day",
       workedDayNames: worked.map(w => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][w.getDay()]),
       totalHours, regularHours, overtimeHours, weekendHours,
       grossPay: active ? grossPay : 0, taxableGross, active, has401k, k401kEmployee, k401kEmployer, taxedBySchedule: isTaxed
@@ -45,7 +51,7 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
   if (!w.active) return 0;
   const fica = w.grossPay * cfg.ficaRate, ded = cfg.ltd + w.k401kEmployee;
   if (!w.taxedBySchedule) return w.grossPay - fica - ded;
-  const isW2 = w.rotation === "Week 2";
+  const isW2 = w.rotation === "6-Day";
   const fed = w.taxableGross * (isW2 ? cfg.w2FedRate : cfg.w1FedRate) + (showExtra ? extraPerCheck : 0);
   const st = w.taxableGross * (isW2 ? cfg.w2StateRate : cfg.w1StateRate);
   return w.grossPay - fed - st - fica - ded;
@@ -58,8 +64,229 @@ export function projectedGross(isWeek2, cfg) {
   return reg * cfg.baseRate + ot * cfg.baseRate * cfg.otMultiplier + wknd * cfg.diffRate;
 }
 
+// ─────────────────────────────────────────────────────────────
+// TIME-SERIES EXPENSE FUNCTIONS
+// ─────────────────────────────────────────────────────────────
+
+export function getPhaseIndex(weekEndDate) {
+  const iso = toLocalIso(weekEndDate);
+  if (iso <= QUARTER_BOUNDARIES[0]) return 0;
+  if (iso <= QUARTER_BOUNDARIES[1]) return 1;
+  if (iso <= QUARTER_BOUNDARIES[2]) return 2;
+  return 3;
+}
+
+export function getEffectiveAmount(expense, weekEndDate, phaseIdx) {
+  if (!expense.history?.length) return expense.weekly?.[phaseIdx] ?? 0;
+  const iso = toLocalIso(weekEndDate);
+  let best = null;
+  for (const entry of expense.history) {
+    if (entry.effectiveFrom <= iso && (best === null || entry.effectiveFrom >= best.effectiveFrom))
+      best = entry;
+  }
+  return best?.weekly[phaseIdx] ?? 0;
+}
+
+export function computeRemainingSpend(expenses, futureWeeks) {
+  if (!futureWeeks.length) return { totalRemainingSpend: 0, avgWeeklySpend: 0, weekCount: 0 };
+  const nonTransfer = expenses.filter(e => e.category !== "Transfers");
+  let total = 0;
+  for (const week of futureWeeks) {
+    const pi = getPhaseIndex(week.weekEnd);
+    for (const exp of nonTransfer) total += getEffectiveAmount(exp, week.weekEnd, pi);
+  }
+  return { totalRemainingSpend: total, avgWeeklySpend: total / futureWeeks.length, weekCount: futureWeeks.length };
+}
+
+export function computeGoalTimeline(activeGoals, futureWeeks, weeklyIncome, expenses, logNetLost, logNetGained) {
+  if (!futureWeeks.length || !activeGoals.length)
+    return activeGoals.map(g => ({ ...g, sW: 0, eW: 0, wN: 0 }));
+  const n = futureWeeks.length;
+  const perWeekLost = logNetLost / n, perWeekGain = (logNetGained ?? 0) / n;
+  const remaining = activeGoals.map(g => g.target);
+  const startWeek = activeGoals.map(() => null);
+  const endWeek = activeGoals.map(() => null);
+  let weekOffset = 0;
+  for (const week of futureWeeks) {
+    const pi = getPhaseIndex(week.weekEnd);
+    let spend = 0;
+    for (const exp of expenses.filter(e => e.category !== "Transfers"))
+      spend += getEffectiveAmount(exp, week.weekEnd, pi);
+    let surplus = weeklyIncome - spend - perWeekLost + perWeekGain;
+    if (surplus > 0) {
+      for (let i = 0; i < activeGoals.length; i++) {
+        if (remaining[i] <= 0 || surplus <= 0) continue;
+        if (startWeek[i] === null) startWeek[i] = weekOffset;
+        const fund = Math.min(surplus, remaining[i]);
+        remaining[i] -= fund;
+        surplus -= fund;
+        if (remaining[i] <= 0) endWeek[i] = weekOffset + fund / (fund + surplus + 0.0001);
+      }
+    }
+    weekOffset++;
+  }
+  return activeGoals.map((g, i) => {
+    const sw = startWeek[i] ?? 0, ew = endWeek[i] ?? null;
+    const wN = ew !== null ? ew - sw : remaining[i] / Math.max(weeklyIncome - 0.01, 0.01);
+    return { ...g, sW: sw, eW: ew, wN };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// LOAN FUNCTIONS
+// loanMeta shape: { totalAmount, paymentAmount, paymentFrequency, firstPaymentDate }
+// paymentFrequency: "weekly" | "biweekly" | "monthly"
+// ─────────────────────────────────────────────────────────────
+
+const DAYS_PER_FREQ = { weekly: 7, biweekly: 14, monthly: 30.4375 };
+
+export function loanWeeklyAmount(loan) {
+  const amt = loan.paymentAmount ?? loan.paymentPerCheck ?? 0; // backward compat
+  const freq = loan.paymentFrequency ?? loan.payFrequency ?? "weekly";
+  if (freq === "monthly") return amt * 12 / 52;
+  if (freq === "biweekly") return amt / 2;
+  return amt; // weekly
+}
+
+// One payment cycle before firstPaymentDate — when weekly set-aside begins
+export function loanRunwayStartDate(loan) {
+  const freq = loan.paymentFrequency ?? loan.payFrequency ?? "weekly";
+  const daysBack = DAYS_PER_FREQ[freq] ?? 7;
+  const d = new Date(loan.firstPaymentDate);
+  d.setDate(d.getDate() - Math.round(daysBack));
+  return toLocalIso(d);
+}
+
+export function computeLoanPayoffDate(loan) {
+  const amt = loan.paymentAmount ?? loan.paymentPerCheck ?? 0;
+  const freq = loan.paymentFrequency ?? loan.payFrequency ?? "weekly";
+  const paymentsTotal = amt > 0 ? Math.ceil(loan.totalAmount / amt) : 0;
+  const d = new Date(loan.firstPaymentDate);
+  d.setDate(d.getDate() + Math.round(paymentsTotal * (DAYS_PER_FREQ[freq] ?? 7)));
+  return toLocalIso(d);
+}
+
+// History is always derived from loanMeta — runway start → payoff
+export function buildLoanHistory(loan) {
+  const w = loanWeeklyAmount(loan);
+  return [
+    { effectiveFrom: loanRunwayStartDate(loan), weekly: [w, w, w, w] },
+    { effectiveFrom: computeLoanPayoffDate(loan), weekly: [0, 0, 0, 0] }
+  ];
+}
+
+export function loanPaymentsRemaining(loan) {
+  const today = toLocalIso(new Date());
+  const payoffDate = computeLoanPayoffDate(loan);
+  if (today >= payoffDate) return 0;
+  const amt = loan.paymentAmount ?? loan.paymentPerCheck ?? 0;
+  const freq = loan.paymentFrequency ?? loan.payFrequency ?? "weekly";
+  const total = amt > 0 ? Math.ceil(loan.totalAmount / amt) : 0;
+  if (today < loan.firstPaymentDate) return total;
+  const daysPerPayment = DAYS_PER_FREQ[freq] ?? 7;
+  const elapsed = Math.floor(
+    (new Date(today) - new Date(loan.firstPaymentDate)) / (daysPerPayment * 24 * 60 * 60 * 1000)
+  );
+  return Math.max(total - elapsed, 0);
+}
+
+// ─────────────────────────────────────────────────────────────
+// ATTENDANCE BUCKET MODEL
+// ─────────────────────────────────────────────────────────────
+
+function monthRange(startYYYYMM, endYYYYMM) {
+  const result = [];
+  let [y, m] = startYYYYMM.split("-").map(Number);
+  const [ey, em] = endYYYYMM.split("-").map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    result.push(`${y}-${String(m).padStart(2, "0")}`);
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return result;
+}
+
+function addOneMonth(yyyyMM) {
+  let [y, m] = yyyyMM.split("-").map(Number);
+  m++; if (m > 12) { m = 1; y++; }
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+function prevMonth(yyyyMM) {
+  let [y, m] = yyyyMM.split("-").map(Number);
+  m--; if (m < 1) { m = 12; y--; }
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+export function computeBucketModel(logs, cfg) {
+  const payoutRate = cfg.bucketPayoutRate ?? (PTO_RATE / 2);
+  const cap = cfg.bucketCap ?? 128;
+  let balance = cfg.bucketStartBalance ?? 64;
+
+  // Job start month: week 0 ends 2026-01-05; firstActiveIdx weeks of 7 days forward = first active week end
+  const weekZeroEnd = new Date(2026, 0, 5);
+  const firstWeekEnd = new Date(weekZeroEnd.getTime() + (cfg.firstActiveIdx ?? 7) * 7 * 86400000);
+  const firstWeekStart = new Date(firstWeekEnd.getTime() - 7 * 86400000);
+  const jobStartMonth = toLocalIso(firstWeekStart).slice(0, 7);
+
+  const today = toLocalIso(new Date());
+  const currentMonth = today.slice(0, 7);
+
+  // Group missed_unapproved hours by YYYY-MM from event.weekEnd
+  const hoursByMonth = {};
+  logs.forEach(e => {
+    if (e.type === "missed_unapproved" && e.weekEnd) {
+      const month = e.weekEnd.slice(0, 7);
+      hoursByMonth[month] = (hoursByMonth[month] || 0) + (e.hoursLost || 0);
+    }
+  });
+
+  // Completed months: job start through the month before current month
+  const lastCompleted = prevMonth(currentMonth);
+  const completedMonths = jobStartMonth <= lastCompleted ? monthRange(jobStartMonth, lastCompleted) : [];
+
+  const monthHistory = [];
+  for (const month of completedMonths) {
+    const M = hoursByMonth[month] || 0;
+    let bonus, deduction;
+    if (M === 0)       { bonus = 18; deduction = 0; }
+    else if (M <= 12)  { bonus = 12; deduction = M; }
+    else if (M <= 24)  { bonus = 6;  deduction = M; }
+    else               { bonus = 0;  deduction = M; }
+    const newBalance = balance + bonus - deduction;
+    const overflow = Math.max(0, newBalance - cap);
+    const closingBalance = Math.min(newBalance, cap);
+    monthHistory.push({ month, M, bonus, deduction, net: bonus - deduction, openingBalance: balance, closingBalance, overflow, payout: overflow * payoutRate });
+    balance = closingBalance;
+  }
+
+  // Current in-progress month
+  const currentBalance = balance;
+  const currentM = hoursByMonth[currentMonth] || 0;
+  const currentTier = currentM === 0 ? 1 : currentM <= 12 ? 2 : currentM <= 24 ? 3 : 4;
+  const hoursToNextTier = currentTier === 1 ? null : currentTier === 2 ? 12 - currentM : currentTier === 3 ? 24 - currentM : 0;
+  const status = currentBalance >= 48 ? "safe" : currentBalance >= 12 ? "caution" : "critical";
+
+  // Future months: next month through Dec 2026, assuming perfect attendance (M=0)
+  const nextMonth = addOneMonth(currentMonth);
+  const futureMonths = nextMonth <= "2026-12" ? monthRange(nextMonth, "2026-12") : [];
+  let projBalance = currentBalance;
+  const projectedHistory = [];
+  for (const month of futureMonths) {
+    const newBal = projBalance + 18;
+    const overflow = Math.max(0, newBal - cap);
+    const closingBal = Math.min(newBal, cap);
+    projectedHistory.push({ month, M: 0, bonus: 18, deduction: 0, net: 18, openingBalance: projBalance, closingBalance: closingBal, overflow, payout: overflow * payoutRate, projected: true });
+    projBalance = closingBal;
+  }
+
+  const realizedPayout  = monthHistory.reduce((s, r) => s + r.payout, 0);
+  const projectedPayout = projectedHistory.reduce((s, r) => s + r.payout, 0);
+
+  return { currentBalance, currentM, currentTier, hoursToNextTier, status, monthHistory, projectedHistory, realizedPayout, projectedPayout, totalProjectedBonus: realizedPayout + projectedPayout };
+}
+
 export function calcEventImpact(event, cfg) {
-  const isWeek2 = event.weekRotation === "Week 2";
+  const isWeek2 = event.weekRotation === "6-Day" || event.weekRotation === "Week 2"; // "Week 2" kept for backward compat with stored data
   const normalShifts = isWeek2 ? 6 : 4, normalWeekendShifts = isWeek2 ? 2 : 0;
   const baseGross = projectedGross(isWeek2, cfg);
   let grossLost = 0, grossGained = 0, hoursLostForPTO = 0;
@@ -74,16 +301,26 @@ export function calcEventImpact(event, cfg) {
     const ptoH = event.ptoHours || 0, normalH = normalShifts * cfg.shiftHours;
     const normalOT = Math.max(normalH - cfg.otThreshold, 0), actualOT = Math.max(normalH - ptoH - cfg.otThreshold, 0);
     grossLost = ptoH * (cfg.baseRate - PTO_RATE) + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
+  } else if (event.type === "missed_unapproved") {
+    // Same gross/PTO math as partial — hours missed × base rate; bucket hit tracked separately
+    grossLost = (event.hoursLost || 0) * cfg.baseRate; hoursLostForPTO = event.hoursLost || 0;
   } else if (event.type === "partial") {
     grossLost = (event.hoursLost || 0) * cfg.baseRate; hoursLostForPTO = event.hoursLost || 0;
   } else if (event.type === "bonus") {
     grossGained = event.amount || 0;
   } else if (event.type === "other_loss") { grossLost = event.amount || 0; }
-  const netLost = grossLost * (1 - cfg.ficaRate), netGained = grossGained * (1 - cfg.ficaRate);
+  // Net impact accounts for FICA always, plus withholding on taxed weeks
+  const isTaxedWeek = Array.isArray(cfg.taxedWeeks) && cfg.taxedWeeks.includes(Number(event.weekIdx));
+  const withholdingRate = isTaxedWeek
+    ? (isWeek2 ? cfg.w2FedRate + cfg.w2StateRate : cfg.w1FedRate + cfg.w1StateRate)
+    : 0;
+  const effectiveTaxRate = cfg.ficaRate + withholdingRate;
+  const netLost = grossLost * (1 - effectiveTaxRate), netGained = grossGained * (1 - effectiveTaxRate);
   const weekDate = event.weekEnd ? new Date(event.weekEnd) : null;
   const affectsK401 = weekDate && weekDate >= new Date(cfg.k401StartDate);
   return {
     grossLost, grossGained, netLost, netGained, baseGross, hoursLostForPTO,
+    bucketHoursDeducted: event.type === "missed_unapproved" ? (event.hoursLost || 0) : 0,
     k401kLost: affectsK401 ? grossLost * cfg.k401Rate : 0,
     k401kMatchLost: affectsK401 ? grossLost * cfg.k401MatchRate : 0,
     k401kGained: affectsK401 ? grossGained * cfg.k401Rate : 0,

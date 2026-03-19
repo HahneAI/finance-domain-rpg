@@ -103,9 +103,9 @@ export default function App() {
     return allWeeks.find(w => w.active && toLocalIso(w.weekEnd) >= today) ?? null;
   }, [allWeeks, today]);
 
-  // ── Fiscal week stamp: raw idx out of 52-week year ──
+  // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = currentWeek
-    ? { num: currentWeek.idx, total: allWeeks.length }
+    ? { num: currentWeek.idx, total: 52 }
     : null;
 
   // ── Tax derived values ──

@@ -190,6 +190,101 @@ export function loanPaymentsRemaining(loan) {
   return Math.max(total - elapsed, 0);
 }
 
+// ─────────────────────────────────────────────────────────────
+// ATTENDANCE BUCKET MODEL
+// ─────────────────────────────────────────────────────────────
+
+function monthRange(startYYYYMM, endYYYYMM) {
+  const result = [];
+  let [y, m] = startYYYYMM.split("-").map(Number);
+  const [ey, em] = endYYYYMM.split("-").map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    result.push(`${y}-${String(m).padStart(2, "0")}`);
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return result;
+}
+
+function addOneMonth(yyyyMM) {
+  let [y, m] = yyyyMM.split("-").map(Number);
+  m++; if (m > 12) { m = 1; y++; }
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+function prevMonth(yyyyMM) {
+  let [y, m] = yyyyMM.split("-").map(Number);
+  m--; if (m < 1) { m = 12; y--; }
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+export function computeBucketModel(logs, cfg) {
+  const payoutRate = cfg.bucketPayoutRate ?? (PTO_RATE / 2);
+  const cap = cfg.bucketCap ?? 128;
+  let balance = cfg.bucketStartBalance ?? 64;
+
+  // Job start month: week 0 ends 2026-01-05; firstActiveIdx weeks of 7 days forward = first active week end
+  const weekZeroEnd = new Date(2026, 0, 5);
+  const firstWeekEnd = new Date(weekZeroEnd.getTime() + (cfg.firstActiveIdx ?? 7) * 7 * 86400000);
+  const firstWeekStart = new Date(firstWeekEnd.getTime() - 7 * 86400000);
+  const jobStartMonth = toLocalIso(firstWeekStart).slice(0, 7);
+
+  const today = toLocalIso(new Date());
+  const currentMonth = today.slice(0, 7);
+
+  // Group missed_unapproved hours by YYYY-MM from event.weekEnd
+  const hoursByMonth = {};
+  logs.forEach(e => {
+    if (e.type === "missed_unapproved" && e.weekEnd) {
+      const month = e.weekEnd.slice(0, 7);
+      hoursByMonth[month] = (hoursByMonth[month] || 0) + (e.hoursLost || 0);
+    }
+  });
+
+  // Completed months: job start through the month before current month
+  const lastCompleted = prevMonth(currentMonth);
+  const completedMonths = jobStartMonth <= lastCompleted ? monthRange(jobStartMonth, lastCompleted) : [];
+
+  const monthHistory = [];
+  for (const month of completedMonths) {
+    const M = hoursByMonth[month] || 0;
+    let bonus, deduction;
+    if (M === 0)       { bonus = 18; deduction = 0; }
+    else if (M <= 12)  { bonus = 12; deduction = M; }
+    else if (M <= 24)  { bonus = 6;  deduction = M; }
+    else               { bonus = 0;  deduction = M; }
+    const newBalance = balance + bonus - deduction;
+    const overflow = Math.max(0, newBalance - cap);
+    const closingBalance = Math.min(newBalance, cap);
+    monthHistory.push({ month, M, bonus, deduction, net: bonus - deduction, openingBalance: balance, closingBalance, overflow, payout: overflow * payoutRate });
+    balance = closingBalance;
+  }
+
+  // Current in-progress month
+  const currentBalance = balance;
+  const currentM = hoursByMonth[currentMonth] || 0;
+  const currentTier = currentM === 0 ? 1 : currentM <= 12 ? 2 : currentM <= 24 ? 3 : 4;
+  const hoursToNextTier = currentTier === 1 ? null : currentTier === 2 ? 12 - currentM : currentTier === 3 ? 24 - currentM : 0;
+  const status = currentBalance >= 48 ? "safe" : currentBalance >= 12 ? "caution" : "critical";
+
+  // Future months: next month through Dec 2026, assuming perfect attendance (M=0)
+  const nextMonth = addOneMonth(currentMonth);
+  const futureMonths = nextMonth <= "2026-12" ? monthRange(nextMonth, "2026-12") : [];
+  let projBalance = currentBalance;
+  const projectedHistory = [];
+  for (const month of futureMonths) {
+    const newBal = projBalance + 18;
+    const overflow = Math.max(0, newBal - cap);
+    const closingBal = Math.min(newBal, cap);
+    projectedHistory.push({ month, M: 0, bonus: 18, deduction: 0, net: 18, openingBalance: projBalance, closingBalance: closingBal, overflow, payout: overflow * payoutRate, projected: true });
+    projBalance = closingBal;
+  }
+
+  const realizedPayout  = monthHistory.reduce((s, r) => s + r.payout, 0);
+  const projectedPayout = projectedHistory.reduce((s, r) => s + r.payout, 0);
+
+  return { currentBalance, currentM, currentTier, hoursToNextTier, status, monthHistory, projectedHistory, realizedPayout, projectedPayout, totalProjectedBonus: realizedPayout + projectedPayout };
+}
+
 export function calcEventImpact(event, cfg) {
   const isWeek2 = event.weekRotation === "6-Day" || event.weekRotation === "Week 2"; // "Week 2" kept for backward compat with stored data
   const normalShifts = isWeek2 ? 6 : 4, normalWeekendShifts = isWeek2 ? 2 : 0;

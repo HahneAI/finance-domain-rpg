@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, calcEventImpact, computeRemainingSpend, toLocalIso } from "./lib/finance.js";
+import { buildYear, computeNet, fedTax, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso } from "./lib/finance.js";
 import { loadUserData, saveUserData } from "./lib/db.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
@@ -152,6 +152,9 @@ export default function App() {
     };
   }, [logs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks]);
 
+  // ── Attendance bucket model ──
+  const bucketModel = useMemo(() => computeBucketModel(logs, config), [logs, config]);
+
   if (loading) {
     return (
       <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d",
@@ -195,6 +198,7 @@ export default function App() {
         logK401kMatchGained={logTotals.k401kMatchGained}
         logPTOHoursLost={logTotals.ptoHoursLost}
         currentWeek={currentWeek}
+        bucketModel={bucketModel}
       />}
       {topNav === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config}
@@ -204,6 +208,7 @@ export default function App() {
         allWeeks={allWeeks}
         currentWeek={currentWeek}
         goals={goals}
+        bucketModel={bucketModel}
       />}
     </>
   );

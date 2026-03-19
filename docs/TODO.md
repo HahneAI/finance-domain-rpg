@@ -20,7 +20,7 @@
 
 ## 3. Attendance Bucket Model
 
-- [ ] **Attendance bucket model** — DHL/P&G policy formula, tracked month-by-month from the event log:
+- [x] **Attendance bucket model** — DHL/P&G policy formula, tracked month-by-month from the event log:
 
   **Monthly unapproved hours missed (M) → bucket effect:**
   - `M = 0` → bucket += 18 (perfect attendance bonus)
@@ -35,11 +35,11 @@
   - PTO used to cover an unapproved absence: saves the bucket hit (mark as exception on event)
 
   **Build tasks:**
-  - [ ] Aggregate unapproved hours per calendar month from the event log to determine each month's bonus tier
-  - [ ] Running bucket total: start from current known balance, apply monthly net (bonus - deductions) for each past month, project forward
-  - [ ] Dashboard indicator in Log or Benefits panel: current bucket level, hours until next tier drop, months until bucket goes critical, "safe / caution / critical" status band
-  - [ ] Hook into existing bucket cap already in the app
-  - [ ] **Wire attendance bonus into BenefitsPanel** — the static "$200/month · 7 payouts · $1,400 max" section needs to react to the event log; foundation is in place (`logTotals.bucketHours` now aggregated in App.jsx and available to pass down), but the full monthly aggregation model (tier logic above) must be built first before the projected bonus payout can be reduced accurately
+  - [x] Aggregate unapproved hours per calendar month from the event log to determine each month's bonus tier
+  - [x] Running bucket total: start at 64h (new hire), cap at 128h; overflow pays out at `PTO_RATE / 2` ≈ $9.825/hr; apply monthly net (bonus − deductions) for each past month, project forward assuming perfect attendance
+  - [x] Dashboard indicator in both panels: current bucket level with balance bar, SAFE/CAUTION/CRITICAL status band, hours to next tier drop for current in-progress month; monthly history + projection table in BenefitsPanel; compact widget in LogPanel
+  - [x] `bucketStartBalance: 64`, `bucketCap: 128`, `bucketPayoutRate: 9.825` added to DEFAULT_CONFIG
+  - [x] **Wire attendance bonus into BenefitsPanel** — static "$200/month · 7 payouts · $1,400 max" replaced with dynamic `computeBucketModel()` output; realized + projected overflow payout shown as income line
 
 ---
 

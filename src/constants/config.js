@@ -8,6 +8,9 @@ export const DEFAULT_CONFIG = {
   firstActiveIdx: 7, w2FedRate: 0.1283, w2StateRate: 0.040, w1FedRate: 0.0784, w1StateRate: 0.0338,
   ficaRate: 0.0765, fedStdDeduction: 15000, moFlatRate: 0.047, targetOwedAtFiling: 1000,
   taxedWeeks: [7, 8, 19, 20, 21, 22, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
+  bucketStartBalance: 64,   // hours — new hire starting balance
+  bucketCap: 128,           // hours — overflow above this pays out as cash
+  bucketPayoutRate: 9.825,  // $/hr for overflow hours (PTO_RATE / 2 ≈ 9.825)
 };
 
 export const FISCAL_YEAR_START = "2026-01-05"; // week 0 end date — first Monday of the fiscal year

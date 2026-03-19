@@ -9,7 +9,9 @@ const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const normalizeDays = (v) =>
   Array.isArray(v) ? v : (v ? v.split(",").map(s => s.trim()).filter(Boolean) : []);
 
-export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals }) {
+const LOG_MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals, bucketModel }) {
   const blank = {
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
     shiftsLost: 0, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0,
@@ -243,6 +245,37 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       {tot.pto > 0   && <Card label="PTO Accrual Lost"   val={`${(tot.pto / 20).toFixed(1)} hrs`}     sub={`${tot.pto}h ÷ 20`}      color="#888" />}
       {tot.bucket > 0 && <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`}                     sub="Unapproved absences"     color="#e8622a" />}
     </div>}
+
+    {/* Compact bucket status widget */}
+    {bucketModel && (() => {
+      const bm = bucketModel;
+      const cap = config.bucketCap ?? 128;
+      const bandColor = bm.status === "safe" ? "#6dbf8a" : bm.status === "caution" ? "#c8a84b" : "#e8856a";
+      const pct = Math.min((bm.currentBalance / cap) * 100, 100);
+      const now = new Date();
+      const monthLabel = LOG_MONTH_SHORT[now.getMonth()];
+      return (
+        <div style={{ background: "#141414", border: `1px solid ${bandColor}33`, borderRadius: "6px", padding: "12px 14px", marginBottom: "14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "7px" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#555", textTransform: "uppercase" }}>Bucket Balance</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "12px", fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h <span style={{ fontSize: "10px", color: "#555" }}>/ {cap}h</span></span>
+              <span style={{ fontSize: "9px", background: bandColor + "22", color: bandColor, padding: "2px 7px", borderRadius: "3px", letterSpacing: "1.5px" }}>● {bm.status.toUpperCase()}</span>
+            </div>
+          </div>
+          <div style={{ height: "5px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "7px" }}>
+            <div style={{ height: "100%", width: `${pct}%`, background: bandColor, borderRadius: "3px" }} />
+          </div>
+          <div style={{ fontSize: "10px" }}>
+            <span style={{ color: "#666" }}>{monthLabel}: </span>
+            {bm.currentTier === 1 && <span style={{ color: "#6dbf8a" }}>Tier 1 · any unapproved absence changes tier · see Benefits for full breakdown</span>}
+            {bm.currentTier === 2 && <span style={{ color: "#c8a84b" }}>Tier 2 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
+            {bm.currentTier === 3 && <span style={{ color: "#e8856a" }}>Tier 3 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to worst tier</span>}
+            {bm.currentTier === 4 && <span style={{ color: "#e8856a" }}>Tier 4 · worst tier · {bm.currentM}h unapproved this month</span>}
+          </div>
+        </div>
+      );
+    })()}
 
     {/* Goals impact */}
     <div style={{ background: ok ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${ok ? "#6dbf8a" : "#e8856a"}`, borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>

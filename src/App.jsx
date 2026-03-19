@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PHASE_WEIGHTS, WEEKS_REMAINING } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, calcEventImpact } from "./lib/finance.js";
-import { useLocalStorage } from "./hooks/useLocalStorage.js";
+import { loadUserData, saveUserData } from "./lib/db.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { BenefitsPanel } from "./components/BenefitsPanel.jsx";
@@ -42,12 +42,36 @@ function SidebarNavItem({ item, active, onClick }) {
 }
 
 export default function App() {
-  const [config, setConfig] = useLocalStorage("life-rpg:config", DEFAULT_CONFIG);
-  const [showExtra, setShowExtra] = useLocalStorage("life-rpg:showExtra", true);
-  const [logs, setLogs] = useLocalStorage("life-rpg:logs", INITIAL_LOGS);
-  const [expenses, setExpenses] = useLocalStorage("life-rpg:expenses", INITIAL_EXPENSES);
-  const [goals, setGoals] = useLocalStorage("life-rpg:goals", INITIAL_GOALS);
+  const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [showExtra, setShowExtra] = useState(true);
+  const [logs, setLogs] = useState(INITIAL_LOGS);
+  const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
+  const [goals, setGoals] = useState(INITIAL_GOALS);
   const [topNav, setTopNav] = useState("income");
+
+  // ── Load from Supabase on mount ──
+  useEffect(() => {
+    loadUserData().then((data) => {
+      setConfig(data.config);
+      setShowExtra(data.showExtra);
+      setLogs(data.logs);
+      setExpenses(data.expenses);
+      setGoals(data.goals);
+      setLoading(false);
+    });
+  }, []);
+
+  // ── Debounced save to Supabase (800ms) ──
+  const saveTimer = useRef(null);
+  useEffect(() => {
+    if (loading) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveUserData({ config, expenses, goals, logs, showExtra });
+    }, 800);
+    return () => clearTimeout(saveTimer.current);
+  }, [config, expenses, goals, logs, showExtra, loading]);
 
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config), [config]);
@@ -89,6 +113,17 @@ export default function App() {
       adjustedWeeklyAvg: baseWeeklyUnallocated - (nL / WEEKS_REMAINING) + (nG / WEEKS_REMAINING)
     };
   }, [logs, config, projectedAnnualNet, baseWeeklyUnallocated]);
+
+  if (loading) {
+    return (
+      <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d",
+        minHeight: "100vh", color: "#c8a84b", display: "flex",
+        alignItems: "center", justifyContent: "center", fontSize: "14px",
+        letterSpacing: "4px" }}>
+        LOADING...
+      </div>
+    );
+  }
 
   const activePanel = (
     <>

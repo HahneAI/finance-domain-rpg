@@ -22,16 +22,15 @@ function SidebarNavItem({ item, active, onClick }) {
         display: "block",
         width: "100%",
         textAlign: "left",
-        padding: "12px 20px",
+        padding: "14px 20px",
         fontSize: "11px",
         letterSpacing: "2px",
         textTransform: "uppercase",
         fontFamily: "'Courier New',monospace",
         background: active ? "#1a1a1a" : "transparent",
-        color: active ? "#c8a84b" : "#666",
+        color: active ? "#c8a84b" : "#888",
         borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
         border: "none",
-        borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
         cursor: "pointer",
         transition: "all 0.15s",
       }}
@@ -49,6 +48,12 @@ export default function App() {
   const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
   const [goals, setGoals] = useState(INITIAL_GOALS);
   const [topNav, setTopNav] = useState("income");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const navigate = (key) => {
+    setTopNav(key);
+    setDrawerOpen(false);
+  };
 
   // ── Load from Supabase on mount ──
   useEffect(() => {
@@ -225,10 +230,27 @@ export default function App() {
         @media (min-width: 768px) {
           .mobile-header { display: none !important; }
           .mobile-bottom-nav { display: none !important; }
+          .mobile-drawer-overlay { display: none !important; }
+        }
+        .drawer-slide {
+          transform: translateX(-100%);
+          transition: transform 0.25s ease;
+        }
+        .drawer-slide.open {
+          transform: translateX(0);
+        }
+        .drawer-backdrop {
+          opacity: 0;
+          transition: opacity 0.25s ease;
+          pointer-events: none;
+        }
+        .drawer-backdrop.open {
+          opacity: 1;
+          pointer-events: auto;
         }
       `}</style>
 
-      {/* ── Sidebar (desktop) ── */}
+      {/* ── Desktop Sidebar ── */}
       <div
         className="sidebar"
         style={{
@@ -244,22 +266,14 @@ export default function App() {
           zIndex: 10,
         }}
       >
-        {/* Sidebar header */}
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #222" }}>
           <div style={{ fontSize: "10px", letterSpacing: "4px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
           <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
           {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
         </div>
-
-        {/* Nav items */}
         <nav style={{ marginTop: "8px", flex: 1 }}>
           {NAV_ITEMS.map(item => (
-            <SidebarNavItem
-              key={item.key}
-              item={item}
-              active={topNav === item.key}
-              onClick={() => setTopNav(item.key)}
-            />
+            <SidebarNavItem key={item.key} item={item} active={topNav === item.key} onClick={() => navigate(item.key)} />
           ))}
         </nav>
       </div>
@@ -267,35 +281,120 @@ export default function App() {
       {/* ── Main area ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
 
-        {/* Mobile header (hidden on desktop) */}
+        {/* Mobile header */}
         <div
           className="mobile-header"
           style={{
             display: "none",
             borderBottom: "2px solid #c8a84b",
-            padding: "12px 16px",
+            padding: "0 16px",
+            height: "56px",
             background: "#0d0d0d",
             position: "sticky",
             top: 0,
-            zIndex: 10,
-            flexDirection: "column",
-            gap: "2px",
+            zIndex: 30,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "4px", color: "#c8a84b", textTransform: "uppercase" }}>DHL / P&G — Jackson MO</div>
-            {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 7px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase" }}>DHL / P&G — Jackson MO</div>
+              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+            </div>
+            <div style={{ fontSize: "16px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
           </div>
-          <div style={{ fontSize: "18px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
+          {/* Hamburger button */}
+          <button
+            onClick={() => setDrawerOpen(true)}
+            style={{
+              background: "transparent",
+              border: "1px solid #333",
+              borderRadius: "4px",
+              color: "#c8a84b",
+              cursor: "pointer",
+              width: "44px",
+              height: "38px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "5px",
+              flexShrink: 0,
+              marginLeft: "12px",
+            }}
+            aria-label="Open navigation"
+          >
+            <span style={{ display: "block", width: "18px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "18px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "18px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
+          </button>
         </div>
 
         {/* Panel content */}
-        <div className="main-content" style={{ padding: "22px 20px", flex: 1 }}>
+        <div className="main-content" style={{ padding: "18px 16px", flex: 1 }}>
           {activePanel}
         </div>
       </div>
 
-      {/* ── Mobile bottom nav (hidden on desktop) ── */}
+      {/* ── Mobile drawer overlay (backdrop) ── */}
+      <div
+        className={`mobile-drawer-overlay drawer-backdrop${drawerOpen ? " open" : ""}`}
+        onClick={() => setDrawerOpen(false)}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.65)",
+          zIndex: 40,
+        }}
+      />
+
+      {/* ── Mobile drawer (slide-in sidebar) ── */}
+      <div
+        className={`mobile-drawer-overlay drawer-slide${drawerOpen ? " open" : ""}`}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "260px",
+          height: "100dvh",
+          background: "#111",
+          borderRight: "1px solid #2a2a2a",
+          zIndex: 50,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Drawer header */}
+        <div style={{ padding: "16px 18px", borderBottom: "1px solid #222", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
+          <div>
+            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G — Jackson MO</div>
+            <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
+          </div>
+          <button
+            onClick={() => setDrawerOpen(false)}
+            style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: "2px 4px", marginTop: "2px" }}
+            aria-label="Close navigation"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Drawer nav items */}
+        <nav style={{ marginTop: "12px", flex: 1 }}>
+          {NAV_ITEMS.map(item => (
+            <SidebarNavItem key={item.key} item={item} active={topNav === item.key} onClick={() => navigate(item.key)} />
+          ))}
+        </nav>
+
+        {/* Active section indicator at bottom */}
+        <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: "10px", color: "#555", letterSpacing: "1px", textTransform: "uppercase" }}>
+          Viewing: <span style={{ color: "#c8a84b" }}>{topNav}</span>
+        </div>
+      </div>
+
+      {/* ── Mobile bottom nav ── */}
       <div
         className="mobile-bottom-nav"
         style={{
@@ -314,7 +413,7 @@ export default function App() {
         {NAV_ITEMS.map(item => (
           <button
             key={item.key}
-            onClick={() => setTopNav(item.key)}
+            onClick={() => navigate(item.key)}
             style={{
               flex: 1,
               height: "100%",

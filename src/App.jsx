@@ -73,20 +73,35 @@ export default function App() {
     return () => clearTimeout(saveTimer.current);
   }, [config, expenses, goals, logs, showExtra, loading]);
 
+  // ── today: reactive date string — ticks at midnight so everything auto-advances ──
+  const [today, setToday] = useState(() => toLocalIso(new Date()));
+  useEffect(() => {
+    const scheduleNextTick = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0);
+      const msUntilMidnight = midnight - now;
+      return setTimeout(() => {
+        setToday(toLocalIso(new Date()));
+        timerId.current = scheduleNextTick();
+      }, msUntilMidnight);
+    };
+    const timerId = { current: scheduleNextTick() };
+    return () => clearTimeout(timerId.current);
+  }, []);
+
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config), [config]);
 
   // ── Future active weeks: today onward, used for spend/goal simulation ──
   const futureWeeks = useMemo(() => {
-    const today = toLocalIso(new Date());
     return allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) >= today);
-  }, [allWeeks]);
+  }, [allWeeks, today]);
 
   // ── Current week: first active week whose end date >= today ──
   const currentWeek = useMemo(() => {
-    const today = toLocalIso(new Date());
     return allWeeks.find(w => w.active && toLocalIso(w.weekEnd) >= today) ?? null;
-  }, [allWeeks]);
+  }, [allWeeks, today]);
 
   // ── Fiscal week stamp: raw idx out of 52-week year ──
   const currentWeekNumber = currentWeek
@@ -160,6 +175,7 @@ export default function App() {
         weeklyIncome={weeklyIncome}
         futureWeeks={futureWeeks}
         currentWeek={currentWeek}
+        today={today}
       />}
       {topNav === "benefits" && <BenefitsPanel
         allWeeks={allWeeks} config={config}

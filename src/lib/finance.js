@@ -213,7 +213,13 @@ export function calcEventImpact(event, cfg) {
   } else if (event.type === "bonus") {
     grossGained = event.amount || 0;
   } else if (event.type === "other_loss") { grossLost = event.amount || 0; }
-  const netLost = grossLost * (1 - cfg.ficaRate), netGained = grossGained * (1 - cfg.ficaRate);
+  // Net impact accounts for FICA always, plus withholding on taxed weeks
+  const isTaxedWeek = Array.isArray(cfg.taxedWeeks) && cfg.taxedWeeks.includes(Number(event.weekIdx));
+  const withholdingRate = isTaxedWeek
+    ? (isWeek2 ? cfg.w2FedRate + cfg.w2StateRate : cfg.w1FedRate + cfg.w1StateRate)
+    : 0;
+  const effectiveTaxRate = cfg.ficaRate + withholdingRate;
+  const netLost = grossLost * (1 - effectiveTaxRate), netGained = grossGained * (1 - effectiveTaxRate);
   const weekDate = event.weekEnd ? new Date(event.weekEnd) : null;
   const affectsK401 = weekDate && weekDate >= new Date(cfg.k401StartDate);
   return {

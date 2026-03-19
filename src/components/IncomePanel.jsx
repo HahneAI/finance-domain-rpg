@@ -3,7 +3,7 @@ import { MONTH_FULL } from "../constants/config.js";
 import { computeNet } from "../lib/finance.js";
 import { Card, VT, iS, lS } from "./ui.jsx";
 
-export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, logNetLost, adjustedTakeHome, projectedAnnualNet, currentWeek }) {
+export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, logNetLost, logNetGained, adjustedTakeHome, projectedAnnualNet, currentWeek }) {
   const [view, setView] = useState("summary");
   const [editCfg, setEditCfg] = useState(null);
   const { extraPerCheck, taxedWeekCount, fedLiability, moLiability, ficaTotal, fedWithheldBase, moWithheldBase, fedGap, moGap, totalGap, targetExtraTotal, fedAGI } = taxDerived;
@@ -46,8 +46,13 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       <Card label="Your 401k" val={f(yE)} color="#7a8bbf" />
       <Card label="401k w/ Match" val={f(yT)} color="#c8a84b" />
     </div>
-    {logNetLost > 0 && <div style={{ background: "#2d1a1a", border: "1px solid #e8856a55", borderRadius: "6px", padding: "11px 14px", marginBottom: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-      <div style={{ fontSize: "11px", color: "#888" }}>Event log: <span style={{ color: "#e8856a", fontWeight: "bold" }}>-{f(logNetLost)} net</span> · Adjusted take-home:</div>
+    {(logNetLost > 0 || logNetGained > 0) && <div style={{ background: logNetLost > logNetGained ? "#2d1a1a" : "#1a2d1e", border: `1px solid ${logNetLost > logNetGained ? "#e8856a55" : "#6dbf8a55"}`, borderRadius: "6px", padding: "11px 14px", marginBottom: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+      <div style={{ fontSize: "11px", color: "#888", display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <span>Event log:</span>
+        {logNetLost > 0 && <span style={{ color: "#e8856a", fontWeight: "bold" }}>-{f(logNetLost)} lost</span>}
+        {logNetGained > 0 && <span style={{ color: "#6dbf8a", fontWeight: "bold" }}>+{f(logNetGained)} gained</span>}
+        <span>· Adjusted take-home:</span>
+      </div>
       <div style={{ fontSize: "18px", fontWeight: "bold", color: "#c8a84b" }}>{f(adjustedTakeHome)}</div>
     </div>}
     <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px", padding: "10px 14px", background: "#141414", border: "1px solid #2a2a2a", borderRadius: "6px" }}>

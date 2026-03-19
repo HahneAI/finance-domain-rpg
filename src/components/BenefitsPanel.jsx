@@ -1,6 +1,6 @@
 import { Card } from "./ui.jsx";
 
-export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLost, logPTOHoursLost, currentWeek }) {
+export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLost, logK401kGained, logK401kMatchGained, logPTOHoursLost, currentWeek }) {
   const f = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const bE = allWeeks.reduce((s, w) => s + w.k401kEmployee, 0);
   const k401Active = currentWeek ? currentWeek.weekEnd >= new Date(config.k401StartDate) : false;
@@ -8,7 +8,8 @@ export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLos
     ? allWeeks.filter(w => w.active && w.weekEnd >= currentWeek.weekEnd && w.weekEnd < new Date(config.k401StartDate)).length
     : null;
   const bM = allWeeks.reduce((s, w) => s + w.k401kEmployer, 0);
-  const aE = Math.max(bE - logK401kLost, 0), aM = Math.max(bM - logK401kMatchLost, 0);
+  const aE = Math.max(bE - logK401kLost + (logK401kGained ?? 0), 0);
+  const aM = Math.max(bM - logK401kMatchLost + (logK401kMatchGained ?? 0), 0);
   const ptoBs = allWeeks.filter(w => w.active && w.weekEnd <= new Date(2026, 8, 14)).reduce((s, w) => s + w.totalHours, 0) / 20;
   const adjP = Math.max(ptoBs - logPTOHoursLost / 20, 0);
   const avail = adjP + 40;
@@ -27,9 +28,9 @@ export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLos
         <Card label="Base Employer Match" val={f(bM)} color="#6dbf8a" size="18px" />
         <Card label="Base Total Balance" val={f(bE + bM)} color="#c8a84b" size="18px" />
       </div>
-      {(logK401kLost > 0 || logK401kMatchLost > 0) && <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px", marginBottom: "14px" }}>
-        <Card label="Adj. Your Contributions" val={f(aE)} sub={`-${f(logK401kLost)} from events`} color="#7a8bbf" size="18px" />
-        <Card label="Adj. Employer Match" val={f(aM)} sub={`-${f(logK401kMatchLost)} from events`} color="#6dbf8a" size="18px" />
+      {(logK401kLost > 0 || logK401kMatchLost > 0 || logK401kGained > 0 || logK401kMatchGained > 0) && <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px", marginBottom: "14px" }}>
+        <Card label="Adj. Your Contributions" val={f(aE)} sub={[logK401kLost > 0 && `-${f(logK401kLost)} lost`, logK401kGained > 0 && `+${f(logK401kGained)} bonus`].filter(Boolean).join(" · ")} color="#7a8bbf" size="18px" />
+        <Card label="Adj. Employer Match" val={f(aM)} sub={[logK401kMatchLost > 0 && `-${f(logK401kMatchLost)} lost`, logK401kMatchGained > 0 && `+${f(logK401kMatchGained)} bonus`].filter(Boolean).join(" · ")} color="#6dbf8a" size="18px" />
         <Card label="Adj. Total Balance" val={f(aE + aM)} color="#c8a84b" size="18px" />
       </div>}
       <div style={{ padding: "12px 14px", background: "#3a3210", border: "1px solid #c8a84b44", borderRadius: "6px", fontSize: "11px", color: "#aaa", lineHeight: "1.8" }}>FHA: save <span style={{ color: "#c8a84b" }}>$3,000 cash</span> + borrow <span style={{ color: "#7a8bbf" }}>{f(aE)} from 401k</span> = <span style={{ color: "#6dbf8a" }}>~{f(aE + 3000)}+ toward FHA</span></div>

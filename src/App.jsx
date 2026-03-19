@@ -134,10 +134,19 @@ export default function App() {
 
   // ── Event log cascade ──
   const logTotals = useMemo(() => {
-    let nL = 0, nG = 0, k4L = 0, k4ML = 0, ptoL = 0;
-    logs.forEach(e => { const i = calcEventImpact(e, config); nL += i.netLost; nG += i.netGained; k4L += i.k401kLost; k4ML += i.k401kMatchLost; ptoL += i.hoursLostForPTO; });
+    let nL = 0, nG = 0, k4L = 0, k4ML = 0, k4G = 0, k4MG = 0, ptoL = 0, bucket = 0;
+    logs.forEach(e => {
+      const i = calcEventImpact(e, config);
+      nL += i.netLost; nG += i.netGained;
+      k4L += i.k401kLost; k4ML += i.k401kMatchLost;
+      k4G += i.k401kGained; k4MG += i.k401kMatchGained;
+      ptoL += i.hoursLostForPTO; bucket += i.bucketHoursDeducted;
+    });
     return {
-      netLost: nL, netGained: nG, k401kLost: k4L, k401kMatchLost: k4ML, ptoHoursLost: ptoL,
+      netLost: nL, netGained: nG,
+      k401kLost: k4L, k401kMatchLost: k4ML,
+      k401kGained: k4G, k401kMatchGained: k4MG,
+      ptoHoursLost: ptoL, bucketHours: bucket,
       adjustedTakeHome: projectedAnnualNet - nL + nG,
       adjustedWeeklyAvg: baseWeeklyUnallocated - (nL / (futureWeeks.length || 1)) + (nG / (futureWeeks.length || 1))
     };
@@ -161,6 +170,7 @@ export default function App() {
         showExtra={showExtra} setShowExtra={setShowExtra}
         taxDerived={taxDerived}
         logNetLost={logTotals.netLost}
+        logNetGained={logTotals.netGained}
         adjustedTakeHome={logTotals.adjustedTakeHome}
         projectedAnnualNet={projectedAnnualNet}
         currentWeek={currentWeek}
@@ -181,6 +191,8 @@ export default function App() {
         allWeeks={allWeeks} config={config}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
+        logK401kGained={logTotals.k401kGained}
+        logK401kMatchGained={logTotals.k401kMatchGained}
         logPTOHoursLost={logTotals.ptoHoursLost}
         currentWeek={currentWeek}
       />}

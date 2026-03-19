@@ -105,7 +105,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       </tr></thead>
       <tbody>{allWeeks.map(w => { const isCurrent = currentWeek && w.idx === currentWeek.idx; return <tr key={w.idx} style={{ borderBottom: "1px solid #161616", opacity: w.active ? 1 : 0.35, background: isCurrent ? "#1a2a14" : "transparent" }} onMouseEnter={e => { if (w.active) e.currentTarget.style.background = isCurrent ? "#1e3018" : "#141414"; }} onMouseLeave={e => e.currentTarget.style.background = isCurrent ? "#1a2a14" : "transparent"}>
         <td style={{ padding: "7px 4px" }}><span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>{isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "#6dbf8a", letterSpacing: "1px" }}>← now</span>}</td>
-        <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: w.rotation === "Week 2" ? "#c8a84b" : "#7a8bbf" }}>{w.rotation}</td>
+        <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: w.rotation === "6-Day" ? "#c8a84b" : "#7a8bbf" }}>{w.rotation}</td>
         <td style={{ padding: "7px 4px", textAlign: "center", color: "#888" }}>{w.active ? w.totalHours : "—"}</td>
         <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "#e8856a" : "#666" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
         <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "#c8a84b" : "#666" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>
@@ -129,7 +129,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         </tr></thead>
         <tbody>{wR.filter(w => w.has401k).map(w => <tr key={w.idx} style={{ borderBottom: "1px solid #161616" }} onMouseEnter={e => e.currentTarget.style.background = "#141414"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
           <td style={{ padding: "7px 4px" }}>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
-          <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: w.rotation === "Week 2" ? "#c8a84b" : "#7a8bbf" }}>{w.rotation}</td>
+          <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: w.rotation === "6-Day" ? "#c8a84b" : "#7a8bbf" }}>{w.rotation}</td>
           <td style={{ padding: "7px 4px", textAlign: "right" }}>{f2(w.grossPay)}</td>
           <td style={{ padding: "7px 4px", textAlign: "right", color: "#7a8bbf" }}>{f2(w.k401kEmployee)}</td>
           <td style={{ padding: "7px 4px", textAlign: "right", color: "#6dbf8a" }}>{f2(w.k401kEmployer)}</td>
@@ -234,7 +234,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         {[
           { section: "Pay Structure", rows: [{ l: "Base Hourly Rate", v: `$${config.baseRate}/hr` }, { l: "Shift Length", v: `${config.shiftHours}h` }, { l: "Weekend Differential", v: `+$${config.diffRate}/hr` }, { l: "OT Threshold", v: `${config.otThreshold}h/wk` }, { l: "OT Multiplier", v: `${config.otMultiplier}×` }] },
           { section: "Deductions", rows: [{ l: "LTD (weekly)", v: `$${config.ltd}` }, { l: "401k Employee", v: `${(config.k401Rate * 100).toFixed(0)}%` }, { l: "401k Employer Match", v: `${(config.k401MatchRate * 100).toFixed(0)}%` }, { l: "401k Start Date", v: config.k401StartDate }] },
-          { section: "Tax Rates (from paychecks)", rows: [{ l: "Week 2 Federal", v: `${(config.w2FedRate * 100).toFixed(2)}%` }, { l: "Week 2 MO State", v: `${(config.w2StateRate * 100).toFixed(2)}%` }, { l: "Week 1 Federal", v: `${(config.w1FedRate * 100).toFixed(2)}%` }, { l: "Week 1 MO State", v: `${(config.w1StateRate * 100).toFixed(2)}%` }, { l: "FICA", v: `${(config.ficaRate * 100).toFixed(2)}%` }] },
+          { section: "Tax Rates (from paychecks)", rows: [{ l: "6-Day Federal", v: `${(config.w2FedRate * 100).toFixed(2)}%` }, { l: "6-Day MO State", v: `${(config.w2StateRate * 100).toFixed(2)}%` }, { l: "4-Day Federal", v: `${(config.w1FedRate * 100).toFixed(2)}%` }, { l: "4-Day MO State", v: `${(config.w1StateRate * 100).toFixed(2)}%` }, { l: "FICA", v: `${(config.ficaRate * 100).toFixed(2)}%` }] },
           { section: "Annual Tax Strategy", rows: [{ l: "Federal Std Deduction", v: `$${config.fedStdDeduction.toLocaleString()}` }, { l: "MO Flat Rate", v: `${(config.moFlatRate * 100).toFixed(1)}%` }, { l: "Target Owed at Filing", v: `$${config.targetOwedAtFiling}` }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }] },
         ].map(g => <div key={g.section} style={{ marginBottom: "20px" }}>
           <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "10px" }}>{g.section}</div>
@@ -260,10 +260,10 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
             { l: "401k Match % (decimal)", f: "k401MatchRate", t: "number", s: "0.01" },
             { l: "401k Start Date", f: "k401StartDate", t: "date" },
             { l: "First Active Week Index", f: "firstActiveIdx", t: "number", s: "1" },
-            { l: "Week 2 Federal Rate", f: "w2FedRate", t: "number", s: "0.0001" },
-            { l: "Week 2 MO State Rate", f: "w2StateRate", t: "number", s: "0.0001" },
-            { l: "Week 1 Federal Rate", f: "w1FedRate", t: "number", s: "0.0001" },
-            { l: "Week 1 MO State Rate", f: "w1StateRate", t: "number", s: "0.0001" },
+            { l: "6-Day Federal Rate", f: "w2FedRate", t: "number", s: "0.0001" },
+            { l: "6-Day MO State Rate", f: "w2StateRate", t: "number", s: "0.0001" },
+            { l: "4-Day Federal Rate", f: "w1FedRate", t: "number", s: "0.0001" },
+            { l: "4-Day MO State Rate", f: "w1StateRate", t: "number", s: "0.0001" },
             { l: "FICA Rate", f: "ficaRate", t: "number", s: "0.0001" },
             { l: "Federal Std Deduction ($)", f: "fedStdDeduction", t: "number", s: "100" },
             { l: "MO Flat Rate", f: "moFlatRate", t: "number", s: "0.001" },

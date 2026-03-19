@@ -3,8 +3,18 @@ import { EVENT_TYPES, PTO_RATE } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { Card, iS, lS } from "./ui.jsx";
 
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// Normalize missedDays to array (handles legacy string format)
+const normalizeDays = (v) =>
+  Array.isArray(v) ? v : (v ? v.split(",").map(s => s.trim()).filter(Boolean) : []);
+
 export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals }) {
-  const blank = { weekEnd: "", weekIdx: "", weekRotation: "Week 2", type: "missed_unpaid", shiftsLost: 1, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0, workedDays: "", missedDays: "", note: "" };
+  const blank = {
+    weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
+    shiftsLost: 0, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0,
+    missedDays: [], note: ""
+  };
   const [adding, setAdding] = useState(false);
   const [nEv, setNEv] = useState(blank);
   const [editId, setEditId] = useState(null);
@@ -28,57 +38,185 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
   const totGoals = goals.filter(g => !g.completed).reduce((s, g) => s + g.target, 0);
   const ok = projS >= totGoals;
 
-  // ── Week resolution ──
+  // Active weeks for the dropdown (all active, sorted chronologically)
+  const activeWeeks = allWeeks.filter(w => w.active);
+
+  // Resolve a weekEnd ISO string → weekIdx + weekRotation
   const resolveWeek = (dateStr) => {
-    if (!dateStr) return { weekIdx: "", weekRotation: "Week 2" };
+    if (!dateStr) return { weekIdx: "", weekRotation: "6-Day" };
     const match = allWeeks.find(w => toLocalIso(w.weekEnd) === dateStr);
-    return match ? { weekIdx: match.idx, weekRotation: match.rotation } : { weekIdx: "", weekRotation: "Week 2" };
+    return match ? { weekIdx: match.idx, weekRotation: match.rotation } : { weekIdx: "", weekRotation: "6-Day" };
+  };
+
+  // Returns scheduled day names for a given weekEnd ISO string
+  const scheduledDaysFor = (weekEndStr) => {
+    const match = allWeeks.find(w => toLocalIso(w.weekEnd) === weekEndStr);
+    return match?.workedDayNames ?? [];
+  };
+
+  // ── Day picker state updater — drives shiftsLost, weekendShifts, hoursLost ──
+  const toggleDay = (day, vals, set) => {
+    const prev = normalizeDays(vals.missedDays);
+    const next = prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day];
+    const weekendShifts = next.filter(d => d === "Sat" || d === "Sun").length;
+    set(v => ({
+      ...v,
+      missedDays: next,
+      shiftsLost: next.length,
+      weekendShifts,
+      hoursLost: next.length * config.shiftHours,
+    }));
   };
 
   // ── Add handlers ──
-  const handleWeekEndChange = (dateStr) => setNEv(v => ({ ...v, weekEnd: dateStr, ...resolveWeek(dateStr) }));
+  const handleWeekEndChange = (dateStr) => setNEv(v => ({ ...v, weekEnd: dateStr, ...resolveWeek(dateStr), missedDays: [] }));
   const addLog = () => {
-    setLogs(p => [...p, { ...nEv, id: Date.now(), shiftsLost: parseInt(nEv.shiftsLost)||0, weekendShifts: parseInt(nEv.weekendShifts)||0, ptoHours: parseFloat(nEv.ptoHours)||0, hoursLost: parseFloat(nEv.hoursLost)||0, amount: parseFloat(nEv.amount)||0 }]);
+    setLogs(p => [...p, {
+      ...nEv, id: Date.now(),
+      shiftsLost: parseInt(nEv.shiftsLost) || 0,
+      weekendShifts: parseInt(nEv.weekendShifts) || 0,
+      ptoHours: parseFloat(nEv.ptoHours) || 0,
+      hoursLost: parseFloat(nEv.hoursLost) || 0,
+      amount: parseFloat(nEv.amount) || 0,
+    }]);
     setAdding(false); setNEv(blank);
   };
 
   // ── Edit handlers ──
-  const startEdit = (entry) => { setEditId(entry.id); setEditVals({ ...entry }); setCdel(null); setAdding(false); };
-  const handleEditWeekEndChange = (dateStr) => setEditVals(v => ({ ...v, weekEnd: dateStr, ...resolveWeek(dateStr) }));
+  const startEdit = (entry) => {
+    setEditId(entry.id);
+    setEditVals({ ...entry, missedDays: normalizeDays(entry.missedDays) });
+    setCdel(null); setAdding(false);
+  };
+  const handleEditWeekEndChange = (dateStr) => setEditVals(v => ({ ...v, weekEnd: dateStr, ...resolveWeek(dateStr), missedDays: [] }));
   const saveEdit = () => {
-    setLogs(p => p.map(e => e.id !== editId ? e : { ...editVals, id: editId, shiftsLost: parseInt(editVals.shiftsLost)||0, weekendShifts: parseInt(editVals.weekendShifts)||0, ptoHours: parseFloat(editVals.ptoHours)||0, hoursLost: parseFloat(editVals.hoursLost)||0, amount: parseFloat(editVals.amount)||0 }));
+    setLogs(p => p.map(e => e.id !== editId ? e : {
+      ...editVals, id: editId,
+      shiftsLost: parseInt(editVals.shiftsLost) || 0,
+      weekendShifts: parseInt(editVals.weekendShifts) || 0,
+      ptoHours: parseFloat(editVals.ptoHours) || 0,
+      hoursLost: parseFloat(editVals.hoursLost) || 0,
+      amount: parseFloat(editVals.amount) || 0,
+    }));
     setEditId(null);
   };
 
-  // ── Shared form fields renderer ──
-  const FormFields = ({ vals, set, onWeekEndChange }) => <>
-    <div><label style={lS}>Pay Week Ending</label><input type="date" value={vals.weekEnd} onChange={e => onWeekEndChange(e.target.value)} style={iS} /></div>
-    <div><label style={lS}>Week Rotation</label>
-      <div style={{ ...iS, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "default" }}>
-        <span style={{ color: vals.weekRotation === "Week 2" ? "#c8a84b" : "#7a8bbf" }}>{vals.weekEnd ? vals.weekRotation : "— pick a date"}</span>
-        {vals.weekIdx !== "" && <span style={{ fontSize: "10px", color: "#555" }}>wk {vals.weekIdx}</span>}
+  // ── Day picker component ──
+  const DayPicker = ({ vals, set }) => {
+    const scheduled = scheduledDaysFor(vals.weekEnd);
+    const missed = normalizeDays(vals.missedDays);
+    return (
+      <div>
+        <label style={lS}>Days Missed</label>
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "4px" }}>
+          {DAY_NAMES.map(day => {
+            const isScheduled = scheduled.includes(day);
+            const isMissed = missed.includes(day);
+            return (
+              <button key={day} type="button" onClick={() => toggleDay(day, vals, set)} style={{
+                padding: "6px 10px", borderRadius: "3px", fontSize: "10px", letterSpacing: "1px",
+                fontFamily: "'Courier New',monospace", cursor: "pointer",
+                border: isMissed ? "1px solid #e8856a" : isScheduled ? "1px solid #444" : "1px solid #222",
+                background: isMissed ? "#e8856a22" : isScheduled ? "#1a1a1a" : "#111",
+                color: isMissed ? "#e8856a" : isScheduled ? "#888" : "#2a2a2a",
+                fontWeight: isMissed ? "bold" : "normal",
+                textTransform: "uppercase",
+              }}>
+                {day}
+              </button>
+            );
+          })}
+        </div>
+        {missed.length > 0 && (
+          <div style={{ fontSize: "10px", color: "#666", marginTop: "6px" }}>
+            {missed.length} day(s) · {missed.length * config.shiftHours}h missed
+            {missed.some(d => d === "Sat" || d === "Sun") && ` · ${missed.filter(d => d === "Sat" || d === "Sun").length} wknd`}
+          </div>
+        )}
       </div>
+    );
+  };
+
+  // ── Week select dropdown ──
+  const WeekSelect = ({ vals, onWeekEndChange }) => (
+    <div style={{ gridColumn: "1 / -1" }}>
+      <label style={lS}>Pay Week</label>
+      <select value={vals.weekEnd} onChange={e => onWeekEndChange(e.target.value)} style={iS}>
+        <option value="">— select pay week —</option>
+        {activeWeeks.map(w => {
+          const endStr = toLocalIso(w.weekEnd);
+          const startFmt = w.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          const endFmt   = w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          return (
+            <option key={endStr} value={endStr}>
+              Wk {w.idx} · {startFmt} – {endFmt} ({w.rotation})
+            </option>
+          );
+        })}
+      </select>
+      {vals.weekEnd && (
+        <div style={{ fontSize: "10px", color: "#555", marginTop: "4px" }}>
+          {vals.weekRotation} · week {vals.weekIdx} of 52
+          {scheduledDaysFor(vals.weekEnd).length > 0 && ` · scheduled: ${scheduledDaysFor(vals.weekEnd).join(", ")}`}
+        </div>
+      )}
     </div>
-    <div><label style={lS}>Event Type</label>
-      <select value={vals.type} onChange={e => set(v => ({ ...v, type: e.target.value }))} style={iS}>
+  );
+
+  // ── Shared form fields ──
+  const FormFields = ({ vals, set, onWeekEndChange }) => <>
+    <WeekSelect vals={vals} onWeekEndChange={onWeekEndChange} />
+
+    <div style={{ gridColumn: "1 / -1" }}>
+      <label style={lS}>Event Type</label>
+      <select value={vals.type} onChange={e => set(v => ({ ...v, type: e.target.value, missedDays: [], shiftsLost: 0, weekendShifts: 0, hoursLost: 0 }))} style={iS}>
         {Object.entries(EVENT_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
       </select>
     </div>
-    {vals.type === "missed_unpaid" && <>
-      <div><label style={lS}>Shifts Lost</label><input type="number" min="1" max="6" value={vals.shiftsLost} onChange={e => set(v => ({ ...v, shiftsLost: e.target.value }))} style={iS} /></div>
-      <div><label style={lS}>Weekend Shifts Lost</label><input type="number" min="0" max="2" value={vals.weekendShifts} onChange={e => set(v => ({ ...v, weekendShifts: e.target.value }))} style={iS} /></div>
-      <div><label style={lS}>Days Missed</label><input type="text" placeholder="e.g. Tue, Wed, Thu" value={vals.missedDays} onChange={e => set(v => ({ ...v, missedDays: e.target.value }))} style={iS} /></div>
-      <div><label style={lS}>Days Worked</label><input type="text" placeholder="e.g. Fri, Sat, Sun" value={vals.workedDays} onChange={e => set(v => ({ ...v, workedDays: e.target.value }))} style={iS} /></div>
+
+    {/* missed_unpaid: day picker drives shiftsLost + weekendShifts */}
+    {vals.type === "missed_unpaid" && (
+      <div style={{ gridColumn: "1 / -1" }}>
+        <DayPicker vals={vals} set={set} />
+      </div>
+    )}
+
+    {/* missed_unapproved: day picker drives hoursLost; each selected day = 1 full shift */}
+    {vals.type === "missed_unapproved" && (
+      <div style={{ gridColumn: "1 / -1" }}>
+        <DayPicker vals={vals} set={set} />
+        <div style={{ marginTop: "8px", padding: "8px 10px", background: "#1e1210", border: "1px solid #e8622a44", borderRadius: "4px", fontSize: "10px", color: "#e8622a", lineHeight: "1.6" }}>
+          ⚠ Unapproved — hits attendance bucket ({normalizeDays(vals.missedDays).length * config.shiftHours}h deducted this entry)
+        </div>
+      </div>
+    )}
+
+    {vals.type === "pto" && (
+      <div><label style={lS}>PTO Hours (${PTO_RATE}/hr flat)</label>
+        <input type="number" min="0" value={vals.ptoHours} onChange={e => set(v => ({ ...v, ptoHours: e.target.value }))} style={iS} />
+      </div>
+    )}
+
+    {/* partial: hours input + optional day picker + info note */}
+    {vals.type === "partial" && <>
+      <div><label style={lS}>Hours Lost (of {config.shiftHours})</label>
+        <input type="number" min="0" max={config.shiftHours} step="0.5" value={vals.hoursLost} onChange={e => set(v => ({ ...v, hoursLost: e.target.value }))} style={iS} />
+      </div>
+      <div style={{ gridColumn: "1 / -1", padding: "8px 10px", background: "#141e14", border: "1px solid #6dbf8a44", borderRadius: "4px", fontSize: "10px", color: "#6dbf8a", lineHeight: "1.6" }}>
+        Partial shift (approved) — reduces pay and PTO accrual. Does not hit attendance bucket.
+      </div>
     </>}
-    {vals.type === "missed_unapproved" && <>
-      <div><label style={lS}>Hours Missed (of {config.shiftHours})</label><input type="number" min="0" max={config.shiftHours} step="0.5" value={vals.hoursLost} onChange={e => set(v => ({ ...v, hoursLost: e.target.value }))} style={iS} /></div>
-      <div><label style={lS}>Days Missed</label><input type="text" placeholder="e.g. Tue, Wed" value={vals.missedDays} onChange={e => set(v => ({ ...v, missedDays: e.target.value }))} style={iS} /></div>
-      <div><label style={lS}>Days Worked</label><input type="text" placeholder="e.g. Fri, Sat, Sun" value={vals.workedDays} onChange={e => set(v => ({ ...v, workedDays: e.target.value }))} style={iS} /></div>
-    </>}
-    {vals.type === "pto" && <div><label style={lS}>PTO Hours (${PTO_RATE}/hr flat)</label><input type="number" min="0" value={vals.ptoHours} onChange={e => set(v => ({ ...v, ptoHours: e.target.value }))} style={iS} /></div>}
-    {vals.type === "partial" && <div><label style={lS}>Hours Lost</label><input type="number" min="0" value={vals.hoursLost} onChange={e => set(v => ({ ...v, hoursLost: e.target.value }))} style={iS} /></div>}
-    {(vals.type === "bonus" || vals.type === "other_loss") && <div><label style={lS}>Amount ($)</label><input type="number" min="0" value={vals.amount} onChange={e => set(v => ({ ...v, amount: e.target.value }))} style={iS} /></div>}
-    <div style={{ gridColumn: "1 / -1" }}><label style={lS}>Note</label><input type="text" placeholder="Optional" value={vals.note} onChange={e => set(v => ({ ...v, note: e.target.value }))} style={iS} /></div>
+
+    {(vals.type === "bonus" || vals.type === "other_loss") && (
+      <div><label style={lS}>Amount ($)</label>
+        <input type="number" min="0" value={vals.amount} onChange={e => set(v => ({ ...v, amount: e.target.value }))} style={iS} />
+      </div>
+    )}
+
+    <div style={{ gridColumn: "1 / -1" }}>
+      <label style={lS}>Note</label>
+      <input type="text" placeholder="Optional" value={vals.note} onChange={e => set(v => ({ ...v, note: e.target.value }))} style={iS} />
+    </div>
   </>;
 
   return (<div>
@@ -133,12 +271,12 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
         <FormFields vals={nEv} set={setNEv} onWeekEndChange={handleWeekEndChange} />
       </div>
       <div style={{ display: "flex", gap: "8px" }}>
-        <button onClick={addLog} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>SAVE</button>
-        <button onClick={() => setAdding(false)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+        <button onClick={addLog} disabled={!nEv.weekEnd} style={{ background: nEv.weekEnd ? "#6dbf8a" : "#2a2a2a", color: nEv.weekEnd ? "#0d0d0d" : "#555", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: nEv.weekEnd ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>SAVE</button>
+        <button onClick={() => { setAdding(false); setNEv(blank); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
       </div>
     </div>}
 
-    {logs.length === 0 && <div style={{ textAlign: "center", padding: "40px", color: "#444", fontSize: "13px" }}>No events logged yet.</div>}
+    {logs.length === 0 && !adding && <div style={{ textAlign: "center", padding: "40px", color: "#444", fontSize: "13px" }}>No events logged yet.</div>}
 
     {/* Log entries */}
     {logs.map(entry => {
@@ -148,11 +286,11 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       const isUA = entry.type === "missed_unapproved";
       const ak   = entry.weekEnd && new Date(entry.weekEnd) >= new Date(config.k401StartDate);
       const isEditing = editId === entry.id;
+      const missedArr = normalizeDays(entry.missedDays);
 
       return <div key={entry.id} style={{ background: "#141414", border: `1px solid ${isEditing ? ev.color : ev.color + "33"}`, borderRadius: "8px", padding: "16px", marginBottom: "10px" }}>
 
         {isEditing ? (
-          /* ── Inline edit form ── */
           <>
             <div style={{ fontSize: "11px", letterSpacing: "2px", color: ev.color, textTransform: "uppercase", marginBottom: "14px" }}>Edit Event</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
@@ -164,7 +302,6 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
             </div>
           </>
         ) : (
-          /* ── Read view ── */
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
               <div style={{ flex: 1 }}>
@@ -175,7 +312,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
                   {ak   && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "3px" }}>401k</span>}
                 </div>
                 <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "2px" }}>Week ending {entry.weekEnd || "—"}</div>
-                {entry.missedDays && <div style={{ fontSize: "11px", color: "#777" }}>Missed: {entry.missedDays}{entry.workedDays ? ` · Worked: ${entry.workedDays}` : ""}</div>}
+                {missedArr.length > 0 && <div style={{ fontSize: "11px", color: "#777" }}>Missed: {missedArr.join(", ")}</div>}
                 {entry.note && <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>{entry.note}</div>}
               </div>
               <div style={{ textAlign: "right", marginLeft: "16px" }}>
@@ -190,7 +327,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
             <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: "10px", color: "#666" }}>
                 {entry.type === "missed_unpaid"     && `${entry.shiftsLost} shift(s) · ${entry.weekendShifts} wknd · ${entry.shiftsLost * config.shiftHours}h`}
-                {entry.type === "missed_unapproved" && `${entry.hoursLost}h of ${config.shiftHours}h shift · unapproved`}
+                {entry.type === "missed_unapproved" && `${entry.hoursLost}h unapproved`}
                 {entry.type === "pto"               && `${entry.ptoHours}h PTO @ $${PTO_RATE}`}
                 {entry.type === "partial"           && `${entry.hoursLost}h partial`}
                 {entry.type === "bonus"             && `+${f(entry.amount)} bonus`}
@@ -213,7 +350,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
     })}
 
     <div style={{ marginTop: "24px", padding: "12px", background: "#141414", borderRadius: "6px", fontSize: "10px", color: "#555", lineHeight: "2" }}>
-      Missed shift loss = projected gross − actual gross (full OT collapse). Unapproved absence = hours × base rate + bucket deduction. FICA {(config.ficaRate * 100).toFixed(2)}% always applied. 401k impact only on events after {config.k401StartDate}. PTO still accrues while on PTO.
+      Missed (approved) = projected − actual gross. Unapproved = hours × base rate + bucket hit. Partial (approved) = hours lost × base rate, no bucket deduction. PTO accrues while on PTO. FICA {(config.ficaRate * 100).toFixed(2)}% always applied. 401k impact on events after {config.k401StartDate}.
     </div>
   </div>);
 }

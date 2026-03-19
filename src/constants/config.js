@@ -51,7 +51,7 @@ export const INITIAL_GOALS = [
 ];
 
 export const INITIAL_LOGS = [{
-  id: 1, weekEnd: "2026-03-16", weekIdx: 10, weekRotation: "Week 2",
+  id: 1, weekEnd: "2026-03-16", weekIdx: 10, weekRotation: "6-Day",
   type: "missed_unpaid", shiftsLost: 3, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0,
   workedDays: "Fri, Sat, Sun", missedDays: "Tue, Wed, Thu",
   note: "Worked Fri/Sat/Sun only (36h instead of 72h) — 3 days missed unpaid",

@@ -37,7 +37,7 @@ export function buildYear(cfg) {
     const taxableGross = active ? grossPay - cfg.ltd - k401kEmployee : 0;
     const isTaxed = active && taxedSet.has(idx);
     weeks.push({
-      idx, weekEnd, weekStart, rotation: isWeek2 ? "Week 2" : "Week 1",
+      idx, weekEnd, weekStart, rotation: isWeek2 ? "6-Day" : "4-Day",
       workedDayNames: worked.map(w => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][w.getDay()]),
       totalHours, regularHours, overtimeHours, weekendHours,
       grossPay: active ? grossPay : 0, taxableGross, active, has401k, k401kEmployee, k401kEmployer, taxedBySchedule: isTaxed
@@ -51,7 +51,7 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
   if (!w.active) return 0;
   const fica = w.grossPay * cfg.ficaRate, ded = cfg.ltd + w.k401kEmployee;
   if (!w.taxedBySchedule) return w.grossPay - fica - ded;
-  const isW2 = w.rotation === "Week 2";
+  const isW2 = w.rotation === "6-Day";
   const fed = w.taxableGross * (isW2 ? cfg.w2FedRate : cfg.w1FedRate) + (showExtra ? extraPerCheck : 0);
   const st = w.taxableGross * (isW2 ? cfg.w2StateRate : cfg.w1StateRate);
   return w.grossPay - fed - st - fica - ded;
@@ -190,7 +190,7 @@ export function loanPaymentsRemaining(loan) {
 }
 
 export function calcEventImpact(event, cfg) {
-  const isWeek2 = event.weekRotation === "Week 2";
+  const isWeek2 = event.weekRotation === "6-Day" || event.weekRotation === "Week 2"; // "Week 2" kept for backward compat with stored data
   const normalShifts = isWeek2 ? 6 : 4, normalWeekendShifts = isWeek2 ? 2 : 0;
   const baseGross = projectedGross(isWeek2, cfg);
   let grossLost = 0, grossGained = 0, hoursLostForPTO = 0;

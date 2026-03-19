@@ -163,11 +163,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       {["overview", "breakdown", "cashflow", "goals", "loans"].map(v => <VT key={v} label={v} active={view === v} onClick={() => setView(v)} />)}
     </div>
 
-    {/* OVERVIEW — expense list + loans section */}
+    {/* OVERVIEW — expense list; loans rendered inside Needs */}
     {view === "overview" && <div>
       {cats.map(cat => {
         const cExp = regularExpenses.filter(e => e.category === cat);
-        const cTot = cExp.reduce((s, e) => s + currentEffective(e, ap), 0);
+        const loanItems = cat === "Needs" ? loans : [];
+        const cTot = cExp.reduce((s, e) => s + currentEffective(e, ap), 0)
+                   + loanItems.reduce((s, e) => s + currentEffective(e, ap), 0);
         return <div key={cat} style={{ marginBottom: "24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
             <div style={{ fontSize: "10px", letterSpacing: "3px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</div>
@@ -201,40 +203,38 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               </div>}
             </div>;
           })}
-        </div>;
-      })}
-
-      {/* Loans — rendered inline as expense rows, no separate category header */}
-      {loans.map(exp => {
-        const effAmt = currentEffective(exp, ap);
-        const meta = exp.loanMeta;
-        const payoffDate = meta ? computeLoanPayoffDate(meta) : null;
-        const dropsOff = payoffDate && payoffDate <= fiscalYearEnd;
-        const isPaidOff = payoffDate && payoffDate <= TODAY_ISO;
-        return <div key={exp.id} style={{ background: CATEGORY_BG["Needs"], border: "1px solid #1e1e1e", borderRadius: "6px", padding: "10px 12px", marginBottom: "6px" }}>
-          {editLoanId === exp.id ? <LoanEditForm vals={editLoanVals} setVals={setEditLoanVals} onSave={() => saveEditLoan(exp.id)} onCancel={() => setEditLoanId(null)} iS={iS} lS={lS} /> :
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "13px" }}>{exp.label}</span>
-                <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
-                {isPaidOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>✓ PAID OFF</span>}
-                {!isPaidOff && dropsOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>drops off {payoffDate}</span>}
-              </div>
-              {meta && (() => { const freq = meta.paymentFrequency ?? meta.payFrequency ?? "weekly"; const freqLabel = { weekly: "week", biweekly: "2 wks", monthly: "month" }[freq] ?? freq; return <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{loanPaymentsRemaining(meta)} payments left · {f(meta.paymentAmount ?? meta.paymentPerCheck ?? 0)}/{freqLabel} · {f(meta.totalAmount)} total</div>; })()}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "#555" : CATEGORY_COLORS["Needs"] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
-                <div style={{ fontSize: "10px", color: "#555" }}>{f(effAmt * 52 / 12)}/mo</div>
-              </div>
-              <SmBtn onClick={() => startEditLoan(exp)} c="#c8a84b">EDIT</SmBtn>
-              {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
-                <SmBtn onClick={() => deleteLoan(exp.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
-                <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
-              </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="#e8856a">✕</SmBtn>}
-            </div>
-          </div>}
+          {loanItems.map(exp => {
+            const effAmt = currentEffective(exp, ap);
+            const meta = exp.loanMeta;
+            const payoffDate = meta ? computeLoanPayoffDate(meta) : null;
+            const dropsOff = payoffDate && payoffDate <= fiscalYearEnd;
+            const isPaidOff = payoffDate && payoffDate <= TODAY_ISO;
+            return <div key={exp.id} style={{ background: CATEGORY_BG[cat], border: "1px solid #1e1e1e", borderRadius: "6px", padding: "10px 12px", marginBottom: "6px" }}>
+              {editLoanId === exp.id ? <LoanEditForm vals={editLoanVals} setVals={setEditLoanVals} onSave={() => saveEditLoan(exp.id)} onCancel={() => setEditLoanId(null)} iS={iS} lS={lS} /> :
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "13px" }}>{exp.label}</span>
+                    <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
+                    {isPaidOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>✓ PAID OFF</span>}
+                    {!isPaidOff && dropsOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>drops off {payoffDate}</span>}
+                  </div>
+                  {meta && (() => { const freq = meta.paymentFrequency ?? meta.payFrequency ?? "weekly"; const freqLabel = { weekly: "week", biweekly: "2 wks", monthly: "month" }[freq] ?? freq; return <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{loanPaymentsRemaining(meta)} payments left · {f(meta.paymentAmount ?? meta.paymentPerCheck ?? 0)}/{freqLabel} · {f(meta.totalAmount)} total</div>; })()}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "#555" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
+                    <div style={{ fontSize: "10px", color: "#555" }}>{f(effAmt * 52 / 12)}/mo</div>
+                  </div>
+                  <SmBtn onClick={() => startEditLoan(exp)} c="#c8a84b">EDIT</SmBtn>
+                  {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
+                    <SmBtn onClick={() => deleteLoan(exp.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
+                    <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
+                  </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="#e8856a">✕</SmBtn>}
+                </div>
+              </div>}
+            </div>;
+          })}
         </div>;
       })}
 

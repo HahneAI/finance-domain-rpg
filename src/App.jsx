@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PHASE_WEIGHTS, WEEKS_REMAINING } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, calcEventImpact } from "./lib/finance.js";
+import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
+import { buildYear, computeNet, fedTax, calcEventImpact, computeRemainingSpend, toLocalIso } from "./lib/finance.js";
 import { loadUserData, saveUserData } from "./lib/db.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
@@ -76,6 +76,12 @@ export default function App() {
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config), [config]);
 
+  // ── Future active weeks: today onward, used for spend/goal simulation ──
+  const futureWeeks = useMemo(() => {
+    const today = toLocalIso(new Date());
+    return allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) >= today);
+  }, [allWeeks]);
+
   // ── Tax derived values ──
   const taxDerived = useMemo(() => {
     const tt = allWeeks.filter(w => w.active).reduce((s, w) => s + w.taxableGross, 0);
@@ -96,12 +102,9 @@ export default function App() {
 
   const weeklyIncome = projectedAnnualNet / 52;
 
-  // ── Weighted average phase spend from current expenses ──
-  const baseWeeklyUnallocated = useMemo(() => {
-    const spend = i => expenses.filter(e => e.category !== "Transfers").reduce((s, e) => s + e.weekly[i], 0);
-    const wAvgSpend = (spend(0) * PHASE_WEIGHTS[0] + spend(1) * PHASE_WEIGHTS[1] + spend(2) * PHASE_WEIGHTS[2]) / WEEKS_REMAINING;
-    return weeklyIncome - wAvgSpend;
-  }, [expenses, weeklyIncome]);
+  // ── Week-by-week remaining spend using history-aware amounts ──
+  const remainingSpend = useMemo(() => computeRemainingSpend(expenses, futureWeeks), [expenses, futureWeeks]);
+  const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
   // ── Event log cascade ──
   const logTotals = useMemo(() => {
@@ -110,9 +113,9 @@ export default function App() {
     return {
       netLost: nL, netGained: nG, k401kLost: k4L, k401kMatchLost: k4ML, ptoHoursLost: ptoL,
       adjustedTakeHome: projectedAnnualNet - nL + nG,
-      adjustedWeeklyAvg: baseWeeklyUnallocated - (nL / WEEKS_REMAINING) + (nG / WEEKS_REMAINING)
+      adjustedWeeklyAvg: baseWeeklyUnallocated - (nL / (futureWeeks.length || 1)) + (nG / (futureWeeks.length || 1))
     };
-  }, [logs, config, projectedAnnualNet, baseWeeklyUnallocated]);
+  }, [logs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks]);
 
   if (loading) {
     return (
@@ -141,7 +144,9 @@ export default function App() {
         adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         logNetLost={logTotals.netLost}
+        logNetGained={logTotals.netGained}
         weeklyIncome={weeklyIncome}
+        futureWeeks={futureWeeks}
       />}
       {topNav === "benefits" && <BenefitsPanel
         allWeeks={allWeeks} config={config}

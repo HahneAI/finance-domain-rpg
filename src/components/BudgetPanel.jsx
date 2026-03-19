@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { PHASES, WEEKS_REMAINING, CATEGORY_COLORS, CATEGORY_BG } from "../constants/config.js";
+import { PHASES, CATEGORY_COLORS, CATEGORY_BG } from "../constants/config.js";
+import { getEffectiveAmount, computeGoalTimeline } from "../lib/finance.js";
 import { Card, VT, SmBtn, iS, lS } from "./ui.jsx";
 
-export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, weeklyIncome }) {
+export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, futureWeeks }) {
   const [ap, setAp] = useState(0);
   const [view, setView] = useState("overview");
   // Expense CRUD state
@@ -18,8 +19,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const [newGoal, setNewGoal] = useState({ label: "", target: "", color: "#c8a84b", note: "" });
   const [delGoalId, setDelGoalId] = useState(null);
 
+  // Today ISO string (local calendar date, not UTC)
+  const TODAY_ISO = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
+  // Resolve the current effective amount for an expense at the active phase
+  const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
+
   const ph = PHASES[ap];
-  const ts = expenses.filter(e => e.category !== "Transfers").reduce((s, e) => s + e.weekly[ap], 0);
+  const ts = expenses.filter(e => e.category !== "Transfers").reduce((s, e) => s + currentEffective(e, ap), 0);
   const wr = weeklyIncome - ts;
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(expenses.map(e => e.category))];
@@ -27,11 +33,25 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // Expense helpers
-  const startEditExp = (exp) => { setEditId(exp.id); setEditVals({ p1: exp.weekly[0], p2: exp.weekly[1], p3: exp.weekly[2] }); };
-  const saveEditExp = (id) => { setExpenses(p => p.map(e => e.id === id ? { ...e, weekly: [parseFloat(editVals.p1) || 0, parseFloat(editVals.p2) || 0, parseFloat(editVals.p3) || 0] } : e)); setEditId(null); };
+  const startEditExp = (exp) => {
+    const latest = exp.history?.length
+      ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b)
+      : { weekly: exp.weekly ?? [0, 0, 0] };
+    setEditId(exp.id);
+    setEditVals({ p1: latest.weekly[0], p2: latest.weekly[1], p3: latest.weekly[2] });
+  };
+  const saveEditExp = (id) => {
+    const newWeekly = [parseFloat(editVals.p1) || 0, parseFloat(editVals.p2) || 0, parseFloat(editVals.p3) || 0];
+    setExpenses(prev => prev.map(e => {
+      if (e.id !== id) return e;
+      const existing = e.history ?? [{ effectiveFrom: "2026-01-27", weekly: e.weekly ?? [0, 0, 0] }];
+      return { ...e, history: [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }] };
+    }));
+    setEditId(null);
+  };
   const addExp = () => {
     const p1 = parseFloat(newExp.p1) || 0, p2 = parseFloat(newExp.p2) || 0, p3 = parseFloat(newExp.p3) || 0;
-    setExpenses(p => [...p, { id: `exp_${Date.now()}`, category: newExp.category, label: newExp.label, weekly: [p1, p2, p3], note: [newExp.note, newExp.note, newExp.note] }]);
+    setExpenses(prev => [...prev, { id: `exp_${Date.now()}`, category: newExp.category, label: newExp.label, note: [newExp.note, newExp.note, newExp.note], history: [{ effectiveFrom: TODAY_ISO, weekly: [p1, p2, p3] }] }]);
     setAddingExp(false); setNewExp({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", note: "" });
   };
   const deleteExp = (id) => { setExpenses(p => p.filter(e => e.id !== id)); setDelExpId(null); };
@@ -58,6 +78,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       return arr;
     });
   };
+
+  const weeksLeft = futureWeeks?.length ?? 44;
 
   return (<div>
     {/* Phase tabs */}
@@ -88,32 +110,40 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     {view === "overview" && <div>
       {cats.map(cat => {
         const cExp = expenses.filter(e => e.category === cat);
-        const cTot = cExp.reduce((s, e) => s + e.weekly[ap], 0);
+        const cTot = cExp.reduce((s, e) => s + currentEffective(e, ap), 0);
         return <div key={cat} style={{ marginBottom: "24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
             <div style={{ fontSize: "10px", letterSpacing: "3px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</div>
             <div style={{ fontSize: "12px", color: CATEGORY_COLORS[cat] }}>{f2(cTot)}/wk</div>
           </div>
-          {cExp.map(exp => <div key={exp.id} style={{ background: CATEGORY_BG[cat], border: "1px solid #1e1e1e", borderRadius: "6px", padding: "10px 12px", marginBottom: "6px" }}>
-            {editId === exp.id ? <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "12px", flex: 1, minWidth: "120px" }}>{exp.label}</span>
-              <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
-                {["p1", "p2", "p3"].map((k, i) => <div key={k} style={{ textAlign: "center" }}><div style={{ fontSize: "9px", color: PHASES[i].color, marginBottom: "2px" }}>P{i + 1}/wk</div><input type="number" value={editVals[k]} onChange={e => setEditVals(v => ({ ...v, [k]: e.target.value }))} style={{ ...iS, width: "65px" }} /></div>)}
-                <button onClick={() => saveEditExp(exp.id)} style={{ background: "#6dbf8a", color: "#0a0a0a", border: "none", borderRadius: "3px", padding: "6px 10px", cursor: "pointer", fontSize: "10px", fontFamily: "'Courier New',monospace" }}>SAVE</button>
-                <button onClick={() => setEditId(null)} style={{ background: "#333", color: "#888", border: "none", borderRadius: "3px", padding: "6px 10px", cursor: "pointer", fontSize: "10px", fontFamily: "'Courier New',monospace" }}>✕</button>
-              </div>
-            </div> : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div><div style={{ fontSize: "13px" }}>{exp.label}</div>{exp.note[ap] && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{exp.note[ap]}</div>}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <div style={{ textAlign: "right" }}><div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(exp.weekly[ap])}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div><div style={{ fontSize: "10px", color: "#555" }}>{f(exp.weekly[ap] * 52 / 12)}/mo</div></div>
-                <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
-                {delExpId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
-                  <SmBtn onClick={() => deleteExp(exp.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
-                  <SmBtn onClick={() => setDelExpId(null)}>NO</SmBtn>
-                </div> : <SmBtn onClick={() => setDelExpId(exp.id)} c="#e8856a">✕</SmBtn>}
-              </div>
-            </div>}
-          </div>)}
+          {cExp.map(exp => {
+            const effAmt = currentEffective(exp, ap);
+            const latestEntry = exp.history?.length ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b) : null;
+            return <div key={exp.id} style={{ background: CATEGORY_BG[cat], border: "1px solid #1e1e1e", borderRadius: "6px", padding: "10px 12px", marginBottom: "6px" }}>
+              {editId === exp.id ? <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "12px", flex: 1, minWidth: "120px" }}>{exp.label}</span>
+                <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                  {["p1", "p2", "p3"].map((k, i) => <div key={k} style={{ textAlign: "center" }}><div style={{ fontSize: "9px", color: PHASES[i].color, marginBottom: "2px" }}>P{i + 1}/wk</div><input type="number" value={editVals[k]} onChange={e => setEditVals(v => ({ ...v, [k]: e.target.value }))} style={{ ...iS, width: "65px" }} /></div>)}
+                  <button onClick={() => saveEditExp(exp.id)} style={{ background: "#6dbf8a", color: "#0a0a0a", border: "none", borderRadius: "3px", padding: "6px 10px", cursor: "pointer", fontSize: "10px", fontFamily: "'Courier New',monospace" }}>SAVE</button>
+                  <button onClick={() => setEditId(null)} style={{ background: "#333", color: "#888", border: "none", borderRadius: "3px", padding: "6px 10px", cursor: "pointer", fontSize: "10px", fontFamily: "'Courier New',monospace" }}>✕</button>
+                </div>
+              </div> : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div><div style={{ fontSize: "13px" }}>{exp.label}</div>{exp.note[ap] && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{exp.note[ap]}</div>}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
+                    <div style={{ fontSize: "10px", color: "#555" }}>{f(effAmt * 52 / 12)}/mo</div>
+                    {latestEntry && <div style={{ fontSize: "9px", color: "#444", marginTop: "1px" }}>since {latestEntry.effectiveFrom}</div>}
+                  </div>
+                  <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
+                  {delExpId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
+                    <SmBtn onClick={() => deleteExp(exp.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
+                    <SmBtn onClick={() => setDelExpId(null)}>NO</SmBtn>
+                  </div> : <SmBtn onClick={() => setDelExpId(exp.id)} c="#e8856a">✕</SmBtn>}
+                </div>
+              </div>}
+            </div>;
+          })}
         </div>;
       })}
       {/* Add expense form */}
@@ -137,7 +167,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     {/* BREAKDOWN */}
     {view === "breakdown" && <div>
       {cats.filter(c => c !== "Transfers").map(cat => {
-        const cT = expenses.filter(e => e.category === cat).reduce((s, e) => s + e.weekly[ap], 0);
+        const cT = expenses.filter(e => e.category === cat).reduce((s, e) => s + currentEffective(e, ap), 0);
         const pct = (cT / weeklyIncome) * 100;
         return <div key={cat} style={{ marginBottom: "16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}><span style={{ fontSize: "11px", letterSpacing: "2px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</span><span>{f2(cT)}/wk · {pct.toFixed(1)}%</span></div>
@@ -148,12 +178,15 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#888", textTransform: "uppercase", marginBottom: "12px" }}>Annual Projection ({ph.label})</div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
         <thead><tr style={{ borderBottom: "1px solid #333", color: "#888", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Weekly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
-        <tbody>{expenses.map(exp => <tr key={exp.id} style={{ borderBottom: "1px solid #181818" }} onMouseEnter={e => e.currentTarget.style.background = "#141414"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-          <td style={{ padding: "8px 4px" }}><span style={{ fontSize: "10px", color: CATEGORY_COLORS[exp.category], marginRight: "6px" }}>▸</span>{exp.label}</td>
-          <td style={{ padding: "8px 4px", textAlign: "right", color: CATEGORY_COLORS[exp.category] }}>{f2(exp.weekly[ap])}</td>
-          <td style={{ padding: "8px 4px", textAlign: "right", color: "#888" }}>{f(exp.weekly[ap] * 52 / 12)}</td>
-          <td style={{ padding: "8px 4px", textAlign: "right", color: "#666" }}>{f(exp.weekly[ap] * 52)}</td>
-        </tr>)}</tbody>
+        <tbody>{expenses.map(exp => {
+          const amt = currentEffective(exp, ap);
+          return <tr key={exp.id} style={{ borderBottom: "1px solid #181818" }} onMouseEnter={e => e.currentTarget.style.background = "#141414"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            <td style={{ padding: "8px 4px" }}><span style={{ fontSize: "10px", color: CATEGORY_COLORS[exp.category], marginRight: "6px" }}>▸</span>{exp.label}</td>
+            <td style={{ padding: "8px 4px", textAlign: "right", color: CATEGORY_COLORS[exp.category] }}>{f2(amt)}</td>
+            <td style={{ padding: "8px 4px", textAlign: "right", color: "#888" }}>{f(amt * 52 / 12)}</td>
+            <td style={{ padding: "8px 4px", textAlign: "right", color: "#666" }}>{f(amt * 52)}</td>
+          </tr>;
+        })}</tbody>
         <tfoot>
           <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td style={{ padding: "10px 4px", color: "#c8a84b" }}>TRUE SPEND</td><td style={{ padding: "10px 4px", textAlign: "right", color: "#e8856a" }}>{f2(ts)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "#e8856a" }}>{f(ts * 52 / 12)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "#e8856a" }}>{f(ts * 52)}</td></tr>
           <tr style={{ fontWeight: "bold" }}><td style={{ padding: "6px 4px", color: "#6dbf8a" }}>REMAINING</td><td style={{ padding: "6px 4px", textAlign: "right", color: "#6dbf8a" }}>{f2(wr)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "#6dbf8a" }}>{f(wr * 52 / 12)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "#6dbf8a" }}>{f(wr * 52)}</td></tr>
@@ -167,7 +200,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Weekly Take-Home</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(weeklyIncome)}</div></div><div style={{ fontSize: "10px", color: "#555", textAlign: "right" }}>Live from<br />income engine</div></div>
       </div>
       {[{ label: "Checking Needs", cat: "Needs", desc: "Housing, kids, food, Jesse" }, { label: "Credit Builder", cat: "Lifestyle", desc: "Nicotine, Rumble, Walmart+, Fireflood" }, { label: "CashApp Transfer", cat: "Transfers", desc: "Direct deposit perks — not spent" }].map(row => {
-        const tot = expenses.filter(e => e.category === row.cat).reduce((s, e) => s + e.weekly[ap], 0);
+        const tot = expenses.filter(e => e.category === row.cat).reduce((s, e) => s + currentEffective(e, ap), 0);
         return <div key={row.cat} style={{ background: CATEGORY_BG[row.cat], border: "1px solid #222", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS[row.cat], marginBottom: "4px" }}>{row.label}</div><div style={{ fontSize: "10px", color: "#666" }}>{row.desc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS[row.cat] }}>{f2(tot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((tot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
         </div>;
@@ -179,21 +212,21 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
     {/* GOALS — full CRUD */}
     {view === "goals" && (() => {
-      let wb = 0;
-      const tl = activeGoals.map(g => { const wN = g.target / adjustedWeeklyAvg; const sW = wb; wb += wN; return { ...g, wN, sW, eW: wb }; });
+      const tl = computeGoalTimeline(activeGoals, futureWeeks ?? [], weeklyIncome, expenses, logNetLost, logNetGained ?? 0);
       const totG = goals.reduce((s, g) => !g.completed ? s + g.target : s, 0);
-      const projS = adjustedWeeklyAvg * WEEKS_REMAINING;
+      const projS = adjustedWeeklyAvg * weeksLeft;
+      const lastGoalEW = tl.length ? (tl[tl.length - 1].eW ?? weeksLeft + 1) : 0;
       return <div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px", marginBottom: "20px" }}>
           <Card label="Adj. Weekly Available" val={f2(adjustedWeeklyAvg)} color="#6dbf8a" />
           <Card label="Active Goals Total" val={f(totG)} color="#c8a84b" />
-          <Card label="Weeks to Complete All" val={`~${Math.ceil(wb)} wks`} color={projS >= totG ? "#6dbf8a" : "#e8856a"} />
+          <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projS >= totG ? "#6dbf8a" : "#e8856a"} />
         </div>
         {adjustedWeeklyAvg < baseWeeklyUnallocated && <div style={{ background: "#2d1a1a", border: "1px solid #e8856a44", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", fontSize: "11px", color: "#888" }}>Event log reduced avg by <span style={{ color: "#e8856a", fontWeight: "bold" }}>{f2(baseWeeklyUnallocated - adjustedWeeklyAvg)}/wk</span></div>}
 
         {/* Active goals */}
         {tl.map((g, i) => {
-          const ok = g.eW <= WEEKS_REMAINING;
+          const ok = g.eW !== null && g.eW <= weeksLeft;
           const isEditing = editGoalId === g.id;
           return <div key={g.id} style={{ background: "#141414", border: `1px solid ${g.color}33`, borderRadius: "8px", padding: "16px", marginBottom: "12px" }}>
             {isEditing ? <div>
@@ -228,8 +261,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   <div style={{ fontSize: "10px", color: ok ? "#6dbf8a" : "#e8856a" }}>{ok ? `~wk ${Math.ceil(g.eW)}` : "Stretch goal"}</div>
                 </div>
               </div>
-              <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}><div style={{ position: "relative", left: `${Math.min((g.sW / WEEKS_REMAINING) * 100, 100)}%`, width: `${Math.min((g.wN / WEEKS_REMAINING) * 100, 100 - (g.sW / WEEKS_REMAINING) * 100)}%`, height: "100%", background: g.color, borderRadius: "3px", opacity: ok ? 1 : 0.4 }} /></div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#555", marginBottom: "10px" }}><span>Now</span><span>Week {WEEKS_REMAINING}</span></div>
+              <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}><div style={{ position: "relative", left: `${Math.min((g.sW / weeksLeft) * 100, 100)}%`, width: `${Math.min((g.wN / weeksLeft) * 100, 100 - (g.sW / weeksLeft) * 100)}%`, height: "100%", background: g.color, borderRadius: "3px", opacity: ok ? 1 : 0.4 }} /></div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#555", marginBottom: "10px" }}><span>Now</span><span>Week {weeksLeft}</span></div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
                 <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: g.color }}>{f2(adjustedWeeklyAvg)}/wk</span> · {f2(g.wN)} weeks to fund</div>
                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
@@ -293,7 +326,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a", borderRadius: "8px", padding: "16px", marginTop: "8px" }}>
           <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#6dbf8a", textTransform: "uppercase", marginBottom: "10px" }}>Year-End Outlook</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12px" }}>
-            <div style={{ color: "#888" }}>Weeks remaining</div><div style={{ textAlign: "right" }}>{WEEKS_REMAINING}</div>
+            <div style={{ color: "#888" }}>Weeks remaining</div><div style={{ textAlign: "right" }}>{weeksLeft}</div>
             <div style={{ color: "#888" }}>Adj. projected savings</div><div style={{ textAlign: "right", color: "#6dbf8a" }}>{f(projS)}</div>
             <div style={{ color: "#888" }}>Active goals total</div><div style={{ textAlign: "right", color: "#c8a84b" }}>{f(totG)}</div>
             <div style={{ color: "#888" }}>Surplus after all goals</div><div style={{ textAlign: "right", color: projS - totG >= 0 ? "#6dbf8a" : "#e8856a" }}>{f(projS - totG)}</div>

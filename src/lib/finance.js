@@ -1,8 +1,14 @@
-import { FED_BRACKETS, PTO_RATE } from "../constants/config.js";
+import { FED_BRACKETS, PTO_RATE, PHASE_END_DATES } from "../constants/config.js";
 
 // ─────────────────────────────────────────────────────────────
 // PURE FUNCTIONS — all stateless, no component dependencies
 // ─────────────────────────────────────────────────────────────
+
+function toLocalIso(date) {
+  const y = date.getFullYear(), m = String(date.getMonth() + 1).padStart(2, "0"), d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+export { toLocalIso };
 
 export function fedTax(income) {
   let tax = 0, prev = 0;
@@ -56,6 +62,73 @@ export function projectedGross(isWeek2, cfg) {
   const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
   const wknd = isWeek2 ? 2 * cfg.shiftHours : 0;
   return reg * cfg.baseRate + ot * cfg.baseRate * cfg.otMultiplier + wknd * cfg.diffRate;
+}
+
+// ─────────────────────────────────────────────────────────────
+// TIME-SERIES EXPENSE FUNCTIONS
+// ─────────────────────────────────────────────────────────────
+
+export function getPhaseIndex(weekEndDate) {
+  const iso = toLocalIso(weekEndDate);
+  if (iso <= PHASE_END_DATES[0]) return 0;
+  if (iso <= PHASE_END_DATES[1]) return 1;
+  return 2;
+}
+
+export function getEffectiveAmount(expense, weekEndDate, phaseIdx) {
+  if (!expense.history?.length) return expense.weekly?.[phaseIdx] ?? 0;
+  const iso = toLocalIso(weekEndDate);
+  let best = null;
+  for (const entry of expense.history) {
+    if (entry.effectiveFrom <= iso && (best === null || entry.effectiveFrom > best.effectiveFrom))
+      best = entry;
+  }
+  return best?.weekly[phaseIdx] ?? 0;
+}
+
+export function computeRemainingSpend(expenses, futureWeeks) {
+  if (!futureWeeks.length) return { totalRemainingSpend: 0, avgWeeklySpend: 0, weekCount: 0 };
+  const nonTransfer = expenses.filter(e => e.category !== "Transfers");
+  let total = 0;
+  for (const week of futureWeeks) {
+    const pi = getPhaseIndex(week.weekEnd);
+    for (const exp of nonTransfer) total += getEffectiveAmount(exp, week.weekEnd, pi);
+  }
+  return { totalRemainingSpend: total, avgWeeklySpend: total / futureWeeks.length, weekCount: futureWeeks.length };
+}
+
+export function computeGoalTimeline(activeGoals, futureWeeks, weeklyIncome, expenses, logNetLost, logNetGained) {
+  if (!futureWeeks.length || !activeGoals.length)
+    return activeGoals.map(g => ({ ...g, sW: 0, eW: 0, wN: 0 }));
+  const n = futureWeeks.length;
+  const perWeekLost = logNetLost / n, perWeekGain = (logNetGained ?? 0) / n;
+  const remaining = activeGoals.map(g => g.target);
+  const startWeek = activeGoals.map(() => null);
+  const endWeek = activeGoals.map(() => null);
+  let weekOffset = 0;
+  for (const week of futureWeeks) {
+    const pi = getPhaseIndex(week.weekEnd);
+    let spend = 0;
+    for (const exp of expenses.filter(e => e.category !== "Transfers"))
+      spend += getEffectiveAmount(exp, week.weekEnd, pi);
+    let surplus = weeklyIncome - spend - perWeekLost + perWeekGain;
+    if (surplus > 0) {
+      for (let i = 0; i < activeGoals.length; i++) {
+        if (remaining[i] <= 0 || surplus <= 0) continue;
+        if (startWeek[i] === null) startWeek[i] = weekOffset;
+        const fund = Math.min(surplus, remaining[i]);
+        remaining[i] -= fund;
+        surplus -= fund;
+        if (remaining[i] <= 0) endWeek[i] = weekOffset + fund / (fund + surplus + 0.0001);
+      }
+    }
+    weekOffset++;
+  }
+  return activeGoals.map((g, i) => {
+    const sw = startWeek[i] ?? 0, ew = endWeek[i] ?? null;
+    const wN = ew !== null ? ew - sw : remaining[i] / Math.max(weeklyIncome - 0.01, 0.01);
+    return { ...g, sW: sw, eW: ew, wN };
+  });
 }
 
 export function calcEventImpact(event, cfg) {

@@ -28,9 +28,18 @@ export async function loadUserData() {
     };
   }
 
+  // Migrate legacy expenses: promote weekly → history if needed
+  const PROJECT_START = "2026-01-27";
+  const rawExpenses = data.expenses.length ? data.expenses : INITIAL_EXPENSES;
+  const migratedExpenses = rawExpenses.map(exp => {
+    if (exp.history?.length) return exp;
+    if (exp.weekly) { const { weekly, ...rest } = exp; return { ...rest, history: [{ effectiveFrom: PROJECT_START, weekly }] }; }
+    return exp;
+  });
+
   return {
     config:    Object.keys(data.config).length   ? data.config   : DEFAULT_CONFIG,
-    expenses:  data.expenses.length              ? data.expenses  : INITIAL_EXPENSES,
+    expenses:  migratedExpenses,
     goals:     data.goals.length                 ? data.goals     : INITIAL_GOALS,
     logs:      data.logs.length                  ? data.logs      : INITIAL_LOGS,
     showExtra: data.show_extra,

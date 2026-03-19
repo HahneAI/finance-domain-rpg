@@ -204,44 +204,39 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         </div>;
       })}
 
-      {/* Loans section in overview */}
-      {loans.length > 0 && <div style={{ marginBottom: "24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase" }}>Loans</div>
-          <div style={{ fontSize: "12px", color: "#c8a84b" }}>{f2(loans.reduce((s, e) => s + currentEffective(e, ap), 0))}/wk</div>
-        </div>
-        {loans.map(exp => {
-          const effAmt = currentEffective(exp, ap);
-          const meta = exp.loanMeta;
-          const payoffDate = meta ? computeLoanPayoffDate(meta) : null;
-          const dropsOff = payoffDate && payoffDate <= fiscalYearEnd;
-          const isPaidOff = payoffDate && payoffDate <= TODAY_ISO;
-          return <div key={exp.id} style={{ background: "#1a1a14", border: "1px solid #c8a84b33", borderRadius: "6px", padding: "10px 12px", marginBottom: "6px" }}>
-            {editLoanId === exp.id ? <LoanEditForm vals={editLoanVals} setVals={setEditLoanVals} onSave={() => saveEditLoan(exp.id)} onCancel={() => setEditLoanId(null)} iS={iS} lS={lS} /> :
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span style={{ fontSize: "13px" }}>{exp.label}</span>
-                  <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
-                  {isPaidOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>✓ PAID OFF</span>}
-                  {!isPaidOff && dropsOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>drops off {payoffDate}</span>}
-                </div>
-                {meta && (() => { const freq = meta.paymentFrequency ?? meta.payFrequency ?? "weekly"; const freqLabel = { weekly: "week", biweekly: "2 wks", monthly: "month" }[freq] ?? freq; return <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{loanPaymentsRemaining(meta)} payments left · {f(meta.paymentAmount ?? meta.paymentPerCheck ?? 0)}/{freqLabel} · {f(meta.totalAmount)} total</div>; })()}
+      {/* Loans — rendered inline as expense rows, no separate category header */}
+      {loans.map(exp => {
+        const effAmt = currentEffective(exp, ap);
+        const meta = exp.loanMeta;
+        const payoffDate = meta ? computeLoanPayoffDate(meta) : null;
+        const dropsOff = payoffDate && payoffDate <= fiscalYearEnd;
+        const isPaidOff = payoffDate && payoffDate <= TODAY_ISO;
+        return <div key={exp.id} style={{ background: CATEGORY_BG["Needs"], border: "1px solid #1e1e1e", borderRadius: "6px", padding: "10px 12px", marginBottom: "6px" }}>
+          {editLoanId === exp.id ? <LoanEditForm vals={editLoanVals} setVals={setEditLoanVals} onSave={() => saveEditLoan(exp.id)} onCancel={() => setEditLoanId(null)} iS={iS} lS={lS} /> :
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "13px" }}>{exp.label}</span>
+                <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
+                {isPaidOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>✓ PAID OFF</span>}
+                {!isPaidOff && dropsOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>drops off {payoffDate}</span>}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "#555" : "#c8a84b" }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
-                </div>
-                <SmBtn onClick={() => startEditLoan(exp)} c="#c8a84b">EDIT</SmBtn>
-                {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
-                  <SmBtn onClick={() => deleteLoan(exp.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
-                  <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
-                </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="#e8856a">✕</SmBtn>}
+              {meta && (() => { const freq = meta.paymentFrequency ?? meta.payFrequency ?? "weekly"; const freqLabel = { weekly: "week", biweekly: "2 wks", monthly: "month" }[freq] ?? freq; return <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{loanPaymentsRemaining(meta)} payments left · {f(meta.paymentAmount ?? meta.paymentPerCheck ?? 0)}/{freqLabel} · {f(meta.totalAmount)} total</div>; })()}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "#555" : CATEGORY_COLORS["Needs"] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
+                <div style={{ fontSize: "10px", color: "#555" }}>{f(effAmt * 52 / 12)}/mo</div>
               </div>
-            </div>}
-          </div>;
-        })}
-      </div>}
+              <SmBtn onClick={() => startEditLoan(exp)} c="#c8a84b">EDIT</SmBtn>
+              {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
+                <SmBtn onClick={() => deleteLoan(exp.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
+                <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
+              </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="#e8856a">✕</SmBtn>}
+            </div>
+          </div>}
+        </div>;
+      })}
 
       {/* Add expense form */}
       {addingExp ? <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
@@ -271,14 +266,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden" }}><div style={{ height: "100%", width: `${pct}%`, background: CATEGORY_COLORS[cat], borderRadius: "3px" }} /></div>
         </div>;
       })}
-      {loans.length > 0 && (() => {
-        const loanTot = loans.reduce((s, e) => s + currentEffective(e, ap), 0);
-        const pct = (loanTot / weeklyIncome) * 100;
-        return <div style={{ marginBottom: "16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}><span style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase" }}>Loans</span><span>{f2(loanTot)}/wk · {pct.toFixed(1)}%</span></div>
-          <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden" }}><div style={{ height: "100%", width: `${pct}%`, background: "#c8a84b", borderRadius: "3px" }} /></div>
-        </div>;
-      })()}
       <div style={{ height: "1px", background: "#222", margin: "20px 0" }} />
       <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#888", textTransform: "uppercase", marginBottom: "12px" }}>Annual Projection ({ph.label})</div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
@@ -315,12 +302,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS[row.cat], marginBottom: "4px" }}>{row.label}</div><div style={{ fontSize: "10px", color: "#666" }}>{row.desc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS[row.cat] }}>{f2(tot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((tot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
         </div>;
       })}
-      {loans.length > 0 && (() => {
-        const tot = loans.reduce((s, e) => s + currentEffective(e, ap), 0);
-        return <div style={{ background: "#1a1a14", border: "1px solid #c8a84b33", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "#c8a84b", marginBottom: "4px" }}>Loan Payments</div><div style={{ fontSize: "10px", color: "#666" }}>{loans.length} active loan{loans.length > 1 ? "s" : ""}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "#c8a84b" }}>{f2(tot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((tot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
-        </div>;
-      })()}
       <div style={{ background: wr >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wr >= 0 ? "#6dbf8a" : "#e8856a"}`, borderRadius: "6px", padding: "14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wr >= 0 ? "#6dbf8a" : "#e8856a", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "#666" }}>See Goals view for event-adjusted timeline</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wr >= 0 ? "#6dbf8a" : "#e8856a" }}>{f2(wr)}</div><div style={{ fontSize: "10px", color: "#666" }}>{f(wr * 52 / 12)}/mo</div></div></div>
       </div>

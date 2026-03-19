@@ -2,7 +2,11 @@
 
 ## Bug Fixes & Polish
 
-- [ ] Revisit event logging form — rework UI and ensure overhead expense totals and splits auto-update correctly after each logged event
+- [ ] **Event log rework** — form UX improvements and math fixes:
+  - [ ] Pass `futureWeeks` into LogPanel and replace hardcoded `WEEKS_REMAINING = 44` so weekly unallocated and goals impact stay accurate as weeks pass
+  - [ ] Pass live `goals` prop into LogPanel instead of using `INITIAL_GOALS` so "Goals at risk" reflects actual edited goal targets
+  - [ ] Auto-derive `weekIdx` and `weekRotation` from the selected `weekEnd` date by matching against `allWeeks` — remove both manual inputs from the form
+  - [ ] Add inline edit on existing log entries (not just delete)
 - [ ] Fix Cashflow tab in Budget panel — review layout, math, and display accuracy
 - [ ] Fix Goals display — verify weeks-to-completion math and progress rendering
 

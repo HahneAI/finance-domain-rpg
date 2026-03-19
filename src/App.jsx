@@ -82,6 +82,19 @@ export default function App() {
     return allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) >= today);
   }, [allWeeks]);
 
+  // ── Current week: first active week whose end date >= today ──
+  const currentWeek = useMemo(() => {
+    const today = toLocalIso(new Date());
+    return allWeeks.find(w => w.active && toLocalIso(w.weekEnd) >= today) ?? null;
+  }, [allWeeks]);
+
+  // ── Current week number among active weeks (1-based) ──
+  const currentWeekNumber = useMemo(() => {
+    if (!currentWeek) return null;
+    const activeWeeks = allWeeks.filter(w => w.active);
+    return { num: activeWeeks.findIndex(w => w.idx === currentWeek.idx) + 1, total: activeWeeks.length };
+  }, [allWeeks, currentWeek]);
+
   // ── Tax derived values ──
   const taxDerived = useMemo(() => {
     const tt = allWeeks.filter(w => w.active).reduce((s, w) => s + w.taxableGross, 0);
@@ -137,6 +150,7 @@ export default function App() {
         logNetLost={logTotals.netLost}
         adjustedTakeHome={logTotals.adjustedTakeHome}
         projectedAnnualNet={projectedAnnualNet}
+        currentWeek={currentWeek}
       />}
       {topNav === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
@@ -147,17 +161,23 @@ export default function App() {
         logNetGained={logTotals.netGained}
         weeklyIncome={weeklyIncome}
         futureWeeks={futureWeeks}
+        currentWeek={currentWeek}
       />}
       {topNav === "benefits" && <BenefitsPanel
         allWeeks={allWeeks} config={config}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
         logPTOHoursLost={logTotals.ptoHoursLost}
+        currentWeek={currentWeek}
       />}
       {topNav === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
+        futureWeeks={futureWeeks}
+        allWeeks={allWeeks}
+        currentWeek={currentWeek}
+        goals={goals}
       />}
     </>
   );
@@ -196,7 +216,8 @@ export default function App() {
         {/* Sidebar header */}
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #222" }}>
           <div style={{ fontSize: "10px", letterSpacing: "4px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
-          <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3" }}>2026 Financial Dashboard</div>
+          <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
+          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
         </div>
 
         {/* Nav items */}
@@ -230,7 +251,10 @@ export default function App() {
             gap: "2px",
           }}
         >
-          <div style={{ fontSize: "10px", letterSpacing: "4px", color: "#c8a84b", textTransform: "uppercase" }}>DHL / P&G — Jackson MO</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "4px", color: "#c8a84b", textTransform: "uppercase" }}>DHL / P&G — Jackson MO</div>
+            {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 7px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+          </div>
           <div style={{ fontSize: "18px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
         </div>
 

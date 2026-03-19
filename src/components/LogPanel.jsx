@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { WEEKS_REMAINING, INITIAL_GOALS, EVENT_TYPES, PTO_RATE } from "../constants/config.js";
-import { calcEventImpact } from "../lib/finance.js";
+import { EVENT_TYPES, PTO_RATE } from "../constants/config.js";
+import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { Card, iS, lS } from "./ui.jsx";
 
-export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated }) {
+export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals }) {
   const [adding, setAdding] = useState(false);
   const blank = { weekEnd: "", weekIdx: "", weekRotation: "Week 2", type: "missed_unpaid", shiftsLost: 1, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0, workedDays: "", missedDays: "", note: "" };
   const [nEv, setNEv] = useState(blank);
@@ -11,15 +11,40 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
   const f = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const f0 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
+  const weeksLeft = futureWeeks.length || 1;
   const tot = logs.reduce((a, e) => { const i = calcEventImpact(e, config); a.gL += i.grossLost; a.gG += i.grossGained; a.nL += i.netLost; a.nG += i.netGained; a.k4 += i.k401kLost; a.pto += i.hoursLostForPTO; return a; }, { gL: 0, gG: 0, nL: 0, nG: 0, k4: 0, pto: 0 });
   const adjTH = projectedAnnualNet - tot.nL + tot.nG;
-  const adjWA = baseWeeklyUnallocated - (tot.nL / WEEKS_REMAINING) + (tot.nG / WEEKS_REMAINING);
-  const projS = adjWA * WEEKS_REMAINING;
-  const totGoals = INITIAL_GOALS.reduce((s, g) => s + g.target, 0);
+  const adjWA = baseWeeklyUnallocated - (tot.nL / weeksLeft) + (tot.nG / weeksLeft);
+  const projS = adjWA * weeksLeft;
+  const totGoals = goals.filter(g => !g.completed).reduce((s, g) => s + g.target, 0);
   const ok = projS >= totGoals;
-  const addLog = () => { setLogs(p => [...p, { ...nEv, id: Date.now(), weekIdx: parseInt(nEv.weekIdx) || 0, shiftsLost: parseInt(nEv.shiftsLost) || 0, weekendShifts: parseInt(nEv.weekendShifts) || 0, ptoHours: parseFloat(nEv.ptoHours) || 0, hoursLost: parseFloat(nEv.hoursLost) || 0, amount: parseFloat(nEv.amount) || 0 }]); setAdding(false); setNEv(blank); };
+
+  // Auto-detect week metadata from a selected date
+  const resolveWeek = (dateStr) => {
+    if (!dateStr) return { weekIdx: "", weekRotation: "Week 2" };
+    const match = allWeeks.find(w => toLocalIso(w.weekEnd) === dateStr);
+    if (!match) return { weekIdx: "", weekRotation: "Week 2" };
+    return { weekIdx: match.idx, weekRotation: match.rotation };
+  };
+
+  const handleWeekEndChange = (dateStr) => {
+    const resolved = resolveWeek(dateStr);
+    setNEv(v => ({ ...v, weekEnd: dateStr, ...resolved }));
+  };
+
+  const addLog = () => { setLogs(p => [...p, { ...nEv, id: Date.now(), shiftsLost: parseInt(nEv.shiftsLost) || 0, weekendShifts: parseInt(nEv.weekendShifts) || 0, ptoHours: parseFloat(nEv.ptoHours) || 0, hoursLost: parseFloat(nEv.hoursLost) || 0, amount: parseFloat(nEv.amount) || 0 }]); setAdding(false); setNEv(blank); };
 
   return (<div>
+    {/* Current week indicator */}
+    {currentWeek && <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+      <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#555", textTransform: "uppercase" }}>Current fiscal week</div>
+      <div style={{ display: "flex", gap: "16px", alignItems: "center", fontSize: "11px" }}>
+        <span style={{ color: "#c8a84b", fontWeight: "bold" }}>Week ending {currentWeek.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+        <span style={{ color: "#666" }}>{currentWeek.rotation}</span>
+        <span style={{ color: "#555" }}>idx {currentWeek.idx}</span>
+        <span style={{ color: "#555" }}>{weeksLeft} weeks remaining</span>
+      </div>
+    </div>}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "10px", marginBottom: "14px" }}>
       <Card label="Total Gross Lost" val={f(tot.gL)} color="#e8856a" />
       <Card label="Total Net Lost" val={f(tot.nL)} color="#e8856a" />
@@ -43,8 +68,8 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
     {adding && <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
       <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "16px" }}>New Event</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-        <div><label style={lS}>Pay Week Ending</label><input type="date" value={nEv.weekEnd} onChange={e => setNEv(v => ({ ...v, weekEnd: e.target.value }))} style={iS} /></div>
-        <div><label style={lS}>Week Rotation</label><select value={nEv.weekRotation} onChange={e => setNEv(v => ({ ...v, weekRotation: e.target.value }))} style={iS}><option>Week 2</option><option>Week 1</option></select></div>
+        <div><label style={lS}>Pay Week Ending</label><input type="date" value={nEv.weekEnd} onChange={e => handleWeekEndChange(e.target.value)} style={iS} /></div>
+        <div><label style={lS}>Week Rotation</label><div style={{ ...iS, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "default" }}><span style={{ color: nEv.weekRotation === "Week 2" ? "#c8a84b" : "#7a8bbf" }}>{nEv.weekEnd ? nEv.weekRotation : "— pick a date"}</span>{nEv.weekIdx !== "" && <span style={{ fontSize: "10px", color: "#555" }}>idx {nEv.weekIdx}</span>}</div></div>
         <div><label style={lS}>Event Type</label><select value={nEv.type} onChange={e => setNEv(v => ({ ...v, type: e.target.value }))} style={iS}>{Object.entries(EVENT_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></div>
         {nEv.type === "missed_unpaid" && <>
           <div><label style={lS}>Shifts Lost</label><input type="number" min="1" max="6" value={nEv.shiftsLost} onChange={e => setNEv(v => ({ ...v, shiftsLost: e.target.value }))} style={iS} /></div>

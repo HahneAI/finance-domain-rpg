@@ -1,14 +1,25 @@
 import { Card } from "./ui.jsx";
 
-export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLost, logPTOHoursLost }) {
+export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLost, logPTOHoursLost, currentWeek }) {
   const f = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const bE = allWeeks.reduce((s, w) => s + w.k401kEmployee, 0);
+  const k401Active = currentWeek ? currentWeek.weekEnd >= new Date(config.k401StartDate) : false;
+  const weeksUntil401k = !k401Active && currentWeek
+    ? allWeeks.filter(w => w.active && w.weekEnd >= currentWeek.weekEnd && w.weekEnd < new Date(config.k401StartDate)).length
+    : null;
   const bM = allWeeks.reduce((s, w) => s + w.k401kEmployer, 0);
   const aE = Math.max(bE - logK401kLost, 0), aM = Math.max(bM - logK401kMatchLost, 0);
   const ptoBs = allWeeks.filter(w => w.active && w.weekEnd <= new Date(2026, 8, 14)).reduce((s, w) => s + w.totalHours, 0) / 20;
   const adjP = Math.max(ptoBs - logPTOHoursLost / 20, 0);
   const avail = adjP + 40;
   return (<div>
+    {/* 401k status banner */}
+    {currentWeek && <div style={{ background: k401Active ? "#1a3a20" : "#1e1e2a", border: `1px solid ${k401Active ? "#6dbf8a44" : "#7a8bbf44"}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+      <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#555", textTransform: "uppercase" }}>401k Status</div>
+      {k401Active
+        ? <div style={{ fontSize: "11px", color: "#6dbf8a", fontWeight: "bold" }}>Active — contributions running since {config.k401StartDate}</div>
+        : <div style={{ fontSize: "11px", color: "#7a8bbf" }}><strong style={{ color: "#e8e0d0" }}>{weeksUntil401k} week{weeksUntil401k !== 1 ? "s" : ""}</strong> until enrollment ({config.k401StartDate})</div>}
+    </div>}
     <div style={{ marginBottom: "24px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "12px" }}>401k Projections</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px", marginBottom: "14px" }}>

@@ -88,12 +88,10 @@ export default function App() {
     return allWeeks.find(w => w.active && toLocalIso(w.weekEnd) >= today) ?? null;
   }, [allWeeks]);
 
-  // ── Current week number among active weeks (1-based) ──
-  const currentWeekNumber = useMemo(() => {
-    if (!currentWeek) return null;
-    const activeWeeks = allWeeks.filter(w => w.active);
-    return { num: activeWeeks.findIndex(w => w.idx === currentWeek.idx) + 1, total: activeWeeks.length };
-  }, [allWeeks, currentWeek]);
+  // ── Fiscal week stamp: raw idx out of 52-week year ──
+  const currentWeekNumber = currentWeek
+    ? { num: currentWeek.idx, total: allWeeks.length }
+    : null;
 
   // ── Tax derived values ──
   const taxDerived = useMemo(() => {

@@ -41,8 +41,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       <div style={{ display: "flex", gap: "16px", alignItems: "center", fontSize: "11px" }}>
         <span style={{ color: "#c8a84b", fontWeight: "bold" }}>Week ending {currentWeek.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
         <span style={{ color: "#666" }}>{currentWeek.rotation}</span>
-        <span style={{ color: "#555" }}>idx {currentWeek.idx}</span>
-        <span style={{ color: "#555" }}>{weeksLeft} weeks remaining</span>
+        <span style={{ color: "#6dbf8a", fontWeight: "bold" }}>Week {currentWeek.idx} of 52</span>
       </div>
     </div>}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "10px", marginBottom: "14px" }}>

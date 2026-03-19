@@ -113,4 +113,4 @@
 
 ---
 
-*Last updated: 2026-03-19 — Sections 1 & 2 complete*
+*Last updated: 2026-03-19 — Sections 1, 2 & 3 complete*

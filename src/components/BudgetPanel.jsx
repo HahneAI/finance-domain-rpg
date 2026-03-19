@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG } from "../constants/config.js";
-import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, toLocalIso } from "../lib/finance.js";
+import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso } from "../lib/finance.js";
 import { Card, VT, SmBtn, iS, lS } from "./ui.jsx";
 
 export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, futureWeeks }) {
@@ -19,7 +19,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const [editLoanId, setEditLoanId] = useState(null);
   const [editLoanVals, setEditLoanVals] = useState({});
   const [addingLoan, setAddingLoan] = useState(false);
-  const [newLoan, setNewLoan] = useState({ label: "", totalAmount: "", paymentPerCheck: "", firstPaymentDate: TODAY_ISO, payFrequency: "weekly", note: "" });
+  const [newLoan, setNewLoan] = useState({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" });
   const [delLoanId, setDelLoanId] = useState(null);
   // Goal CRUD state
   const [editGoalId, setEditGoalId] = useState(null);
@@ -86,9 +86,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const saveEditLoan = (id) => {
     const meta = {
       totalAmount: parseFloat(editLoanVals.totalAmount) || 0,
-      paymentPerCheck: parseFloat(editLoanVals.paymentPerCheck) || 0,
+      paymentAmount: parseFloat(editLoanVals.paymentAmount) || 0,
+      paymentFrequency: editLoanVals.paymentFrequency || "monthly",
       firstPaymentDate: editLoanVals.firstPaymentDate || TODAY_ISO,
-      payFrequency: editLoanVals.payFrequency || "weekly",
     };
     setExpenses(prev => prev.map(e => {
       if (e.id !== id) return e;
@@ -99,9 +99,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const addLoan = () => {
     const meta = {
       totalAmount: parseFloat(newLoan.totalAmount) || 0,
-      paymentPerCheck: parseFloat(newLoan.paymentPerCheck) || 0,
+      paymentAmount: parseFloat(newLoan.paymentAmount) || 0,
+      paymentFrequency: newLoan.paymentFrequency || "monthly",
       firstPaymentDate: newLoan.firstPaymentDate || TODAY_ISO,
-      payFrequency: newLoan.payFrequency || "weekly",
     };
     setExpenses(prev => [...prev, {
       id: `loan_${Date.now()}`, type: "loan", category: "Loans",
@@ -109,7 +109,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       loanMeta: meta, history: buildLoanHistory(meta)
     }]);
     setAddingLoan(false);
-    setNewLoan({ label: "", totalAmount: "", paymentPerCheck: "", firstPaymentDate: TODAY_ISO, payFrequency: "weekly", note: "" });
+    setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" });
   };
   const deleteLoan = (id) => { setExpenses(p => p.filter(e => e.id !== id)); setDelLoanId(null); };
 
@@ -226,7 +226,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   {isPaidOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>✓ PAID OFF</span>}
                   {!isPaidOff && dropsOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>drops off {payoffDate}</span>}
                 </div>
-                {meta && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{loanPaymentsRemaining(meta)} payments left · {f(meta.totalAmount)} total</div>}
+                {meta && (() => { const freq = meta.paymentFrequency ?? meta.payFrequency ?? "weekly"; const freqLabel = { weekly: "week", biweekly: "2 wks", monthly: "month" }[freq] ?? freq; return <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{loanPaymentsRemaining(meta)} payments left · {f(meta.paymentAmount ?? meta.paymentPerCheck ?? 0)}/{freqLabel} · {f(meta.totalAmount)} total</div>; })()}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <div style={{ textAlign: "right" }}>
@@ -468,7 +468,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           const meta = exp.loanMeta;
           if (!meta) return null;
           const payoffDate = computeLoanPayoffDate(meta);
-          const paymentsTotal = Math.ceil(meta.totalAmount / meta.paymentPerCheck);
+          const payAmt = meta.paymentAmount ?? meta.paymentPerCheck ?? 0;
+          const paymentsTotal = payAmt > 0 ? Math.ceil(meta.totalAmount / payAmt) : 0;
           const paymentsLeft = loanPaymentsRemaining(meta);
           const paymentsMade = paymentsTotal - paymentsLeft;
           const progressPct = paymentsTotal > 0 ? Math.min((paymentsMade / paymentsTotal) * 100, 100) : 0;
@@ -519,8 +520,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   <div style={{ color: dropsThisYear ? "#6dbf8a" : "#e8e0d0", fontWeight: "bold", fontSize: "10px" }}>{payoffDate}</div>
                 </div>
                 <div style={{ background: "#1a1a1a", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
-                  <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>CADENCE</div>
-                  <div style={{ color: "#e8e0d0", fontWeight: "bold", textTransform: "uppercase", fontSize: "10px" }}>{meta.payFrequency}</div>
+                  <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>TERM PAYMENT</div>
+                  <div style={{ color: "#e8e0d0", fontWeight: "bold", fontSize: "10px" }}>{f2(payAmt)} / {{ weekly: "wk", biweekly: "2wks", monthly: "mo" }[(meta.paymentFrequency ?? meta.payFrequency ?? "weekly")]}</div>
                 </div>
               </div>
 
@@ -543,33 +544,44 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
         {/* Add loan form */}
         {addingLoan ? <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "4px" }}>New Loan</div>
-          <div style={{ fontSize: "10px", color: "#555", marginBottom: "16px" }}>Pay cadence auto-detected: <span style={{ color: "#7eb8c9" }}>Weekly</span></div>
+          <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "16px" }}>New Loan</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Loan Name</label><input type="text" value={newLoan.label} onChange={e => setNewLoan(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Note" /></div>
-            <div><label style={lS}>Total Amount Owed ($)</label><input type="number" value={newLoan.totalAmount} onChange={e => setNewLoan(v => ({ ...v, totalAmount: e.target.value }))} style={iS} placeholder="2400" /></div>
-            <div><label style={lS}>Payment Per Check ($)</label><input type="number" value={newLoan.paymentPerCheck} onChange={e => setNewLoan(v => ({ ...v, paymentPerCheck: e.target.value }))} style={iS} placeholder="100" /></div>
+            <div style={{ gridColumn: "1/-1" }}><label style={lS}>Total Amount Owed ($)</label><input type="number" value={newLoan.totalAmount} onChange={e => setNewLoan(v => ({ ...v, totalAmount: e.target.value }))} style={iS} placeholder="2400" /></div>
+            <div style={{ gridColumn: "1/-1" }}>
+              <label style={lS}>Term Payment</label>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <span style={{ color: "#666", fontSize: "13px" }}>$</span>
+                <input type="number" value={newLoan.paymentAmount} onChange={e => setNewLoan(v => ({ ...v, paymentAmount: e.target.value }))} style={{ ...iS, flex: 1 }} placeholder="150" />
+                <span style={{ color: "#666", fontSize: "12px", whiteSpace: "nowrap" }}>every</span>
+                <select value={newLoan.paymentFrequency} onChange={e => setNewLoan(v => ({ ...v, paymentFrequency: e.target.value }))} style={{ ...iS, flex: 1 }}>
+                  <option value="monthly">Month</option>
+                  <option value="biweekly">Two Weeks</option>
+                  <option value="weekly">Week</option>
+                </select>
+              </div>
+            </div>
             <div><label style={lS}>First Payment Date</label><input type="date" value={newLoan.firstPaymentDate} onChange={e => setNewLoan(v => ({ ...v, firstPaymentDate: e.target.value }))} style={iS} /></div>
-            <div><label style={lS}>Pay Frequency</label><select value={newLoan.payFrequency} onChange={e => setNewLoan(v => ({ ...v, payFrequency: e.target.value }))} style={iS}><option value="weekly">Weekly</option><option value="biweekly">Bi-Weekly</option></select></div>
-            <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note (optional)</label><input type="text" value={newLoan.note} onChange={e => setNewLoan(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="e.g. Jesse's loan" /></div>
+            <div><label style={lS}>Note (optional)</label><input type="text" value={newLoan.note} onChange={e => setNewLoan(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="e.g. Jesse's loan" /></div>
           </div>
-          {newLoan.totalAmount && newLoan.paymentPerCheck && newLoan.firstPaymentDate && (() => {
-            const meta = { totalAmount: parseFloat(newLoan.totalAmount) || 0, paymentPerCheck: parseFloat(newLoan.paymentPerCheck) || 0, firstPaymentDate: newLoan.firstPaymentDate, payFrequency: newLoan.payFrequency };
-            if (meta.totalAmount <= 0 || meta.paymentPerCheck <= 0) return null;
+          {newLoan.totalAmount && newLoan.paymentAmount && newLoan.firstPaymentDate && (() => {
+            const meta = { totalAmount: parseFloat(newLoan.totalAmount) || 0, paymentAmount: parseFloat(newLoan.paymentAmount) || 0, paymentFrequency: newLoan.paymentFrequency, firstPaymentDate: newLoan.firstPaymentDate };
+            if (meta.totalAmount <= 0 || meta.paymentAmount <= 0) return null;
             const payoff = computeLoanPayoffDate(meta);
-            const total = Math.ceil(meta.totalAmount / meta.paymentPerCheck);
-            const weeklyAmt = meta.payFrequency === "biweekly" ? meta.paymentPerCheck / 2 : meta.paymentPerCheck;
+            const total = Math.ceil(meta.totalAmount / meta.paymentAmount);
+            const weeklyAmt = loanWeeklyAmount(meta);
+            const freqLabel = { weekly: "week", biweekly: "2 weeks", monthly: "month" }[meta.paymentFrequency];
             return <div style={{ background: "#1a1a14", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px", fontSize: "11px" }}>
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-                <span style={{ color: "#666" }}>Weekly cost: <span style={{ color: "#c8a84b", fontWeight: "bold" }}>{f2(weeklyAmt)}</span></span>
-                <span style={{ color: "#666" }}>Payments: <span style={{ color: "#e8e0d0" }}>{total}</span></span>
+                <span style={{ color: "#666" }}>Weekly cost: <span style={{ color: "#c8a84b", fontWeight: "bold" }}>{f2(weeklyAmt)}/wk</span></span>
+                <span style={{ color: "#666" }}>{total} payments ({freqLabel})</span>
                 <span style={{ color: "#666" }}>Payoff: <span style={{ color: payoff <= fiscalYearEnd ? "#6dbf8a" : "#e8e0d0" }}>{payoff}</span></span>
               </div>
             </div>;
           })()}
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentPerCheck} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentPerCheck) ? "#6dbf8a" : "#333", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentPerCheck) ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentPerCheck) ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>ADD LOAN</button>
-            <button onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentPerCheck: "", firstPaymentDate: TODAY_ISO, payFrequency: "weekly", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+            <button onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "#6dbf8a" : "#333", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>ADD LOAN</button>
+            <button onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
           </div>
         </div> : <button onClick={() => setAddingLoan(true)} style={{ background: "#1a1a14", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", marginBottom: "16px" }}>+ ADD LOAN</button>}
       </div>;
@@ -583,11 +595,22 @@ function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
     <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "12px" }}>Edit Loan</div>
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
       <div style={{ gridColumn: "1/-1" }}><label style={lS}>Loan Name</label><input type="text" value={vals.label ?? ""} onChange={e => setVals(v => ({ ...v, label: e.target.value }))} style={iS} /></div>
-      <div><label style={lS}>Total Amount ($)</label><input type="number" value={vals.totalAmount ?? ""} onChange={e => setVals(v => ({ ...v, totalAmount: e.target.value }))} style={iS} /></div>
-      <div><label style={lS}>Payment Per Check ($)</label><input type="number" value={vals.paymentPerCheck ?? ""} onChange={e => setVals(v => ({ ...v, paymentPerCheck: e.target.value }))} style={iS} /></div>
+      <div style={{ gridColumn: "1/-1" }}><label style={lS}>Total Amount ($)</label><input type="number" value={vals.totalAmount ?? ""} onChange={e => setVals(v => ({ ...v, totalAmount: e.target.value }))} style={iS} /></div>
+      <div style={{ gridColumn: "1/-1" }}>
+        <label style={lS}>Term Payment</label>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <span style={{ color: "#666", fontSize: "13px" }}>$</span>
+          <input type="number" value={vals.paymentAmount ?? vals.paymentPerCheck ?? ""} onChange={e => setVals(v => ({ ...v, paymentAmount: e.target.value }))} style={{ ...iS, flex: 1 }} placeholder="150" />
+          <span style={{ color: "#666", fontSize: "12px", whiteSpace: "nowrap" }}>every</span>
+          <select value={vals.paymentFrequency ?? vals.payFrequency ?? "monthly"} onChange={e => setVals(v => ({ ...v, paymentFrequency: e.target.value }))} style={{ ...iS, flex: 1 }}>
+            <option value="monthly">Month</option>
+            <option value="biweekly">Two Weeks</option>
+            <option value="weekly">Week</option>
+          </select>
+        </div>
+      </div>
       <div><label style={lS}>First Payment Date</label><input type="date" value={vals.firstPaymentDate ?? ""} onChange={e => setVals(v => ({ ...v, firstPaymentDate: e.target.value }))} style={iS} /></div>
-      <div><label style={lS}>Pay Frequency</label><select value={vals.payFrequency ?? "weekly"} onChange={e => setVals(v => ({ ...v, payFrequency: e.target.value }))} style={iS}><option value="weekly">Weekly</option><option value="biweekly">Bi-Weekly</option></select></div>
-      <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={vals.note ?? ""} onChange={e => setVals(v => ({ ...v, note: e.target.value }))} style={iS} /></div>
+      <div><label style={lS}>Note</label><input type="text" value={vals.note ?? ""} onChange={e => setVals(v => ({ ...v, note: e.target.value }))} style={iS} /></div>
     </div>
     <div style={{ display: "flex", gap: "8px" }}>
       <button onClick={onSave} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>SAVE</button>

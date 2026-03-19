@@ -133,22 +133,33 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyIncome, expe
 
 // ─────────────────────────────────────────────────────────────
 // LOAN FUNCTIONS
+// loanMeta shape: { totalAmount, paymentAmount, paymentFrequency, firstPaymentDate }
+// paymentFrequency: "weekly" | "biweekly" | "monthly"
 // ─────────────────────────────────────────────────────────────
 
+const DAYS_PER_FREQ = { weekly: 7, biweekly: 14, monthly: 30.4375 };
+
+export function loanWeeklyAmount(loan) {
+  const amt = loan.paymentAmount ?? loan.paymentPerCheck ?? 0; // backward compat
+  const freq = loan.paymentFrequency ?? loan.payFrequency ?? "weekly";
+  if (freq === "monthly") return amt * 12 / 52;
+  if (freq === "biweekly") return amt / 2;
+  return amt; // weekly
+}
+
 export function computeLoanPayoffDate(loan) {
-  const weeksPerPayment = loan.payFrequency === "biweekly" ? 2 : 1;
-  const paymentsTotal = Math.ceil(loan.totalAmount / loan.paymentPerCheck);
+  const amt = loan.paymentAmount ?? loan.paymentPerCheck ?? 0;
+  const freq = loan.paymentFrequency ?? loan.payFrequency ?? "weekly";
+  const paymentsTotal = amt > 0 ? Math.ceil(loan.totalAmount / amt) : 0;
   const d = new Date(loan.firstPaymentDate);
-  d.setDate(d.getDate() + paymentsTotal * 7 * weeksPerPayment);
+  d.setDate(d.getDate() + Math.round(paymentsTotal * (DAYS_PER_FREQ[freq] ?? 7)));
   return toLocalIso(d);
 }
 
 export function buildLoanHistory(loan) {
-  const weeklyAmt = loan.payFrequency === "biweekly"
-    ? loan.paymentPerCheck / 2
-    : loan.paymentPerCheck;
+  const w = loanWeeklyAmount(loan);
   return [
-    { effectiveFrom: loan.firstPaymentDate, weekly: [weeklyAmt, weeklyAmt, weeklyAmt] },
+    { effectiveFrom: loan.firstPaymentDate, weekly: [w, w, w] },
     { effectiveFrom: computeLoanPayoffDate(loan), weekly: [0, 0, 0] }
   ];
 }
@@ -157,11 +168,13 @@ export function loanPaymentsRemaining(loan) {
   const today = toLocalIso(new Date());
   const payoffDate = computeLoanPayoffDate(loan);
   if (today >= payoffDate) return 0;
-  const total = Math.ceil(loan.totalAmount / loan.paymentPerCheck);
+  const amt = loan.paymentAmount ?? loan.paymentPerCheck ?? 0;
+  const freq = loan.paymentFrequency ?? loan.payFrequency ?? "weekly";
+  const total = amt > 0 ? Math.ceil(loan.totalAmount / amt) : 0;
   if (today < loan.firstPaymentDate) return total;
-  const weeksPerPayment = loan.payFrequency === "biweekly" ? 2 : 1;
+  const daysPerPayment = DAYS_PER_FREQ[freq] ?? 7;
   const elapsed = Math.floor(
-    (new Date(today) - new Date(loan.firstPaymentDate)) / (7 * 24 * 60 * 60 * 1000 * weeksPerPayment)
+    (new Date(today) - new Date(loan.firstPaymentDate)) / (daysPerPayment * 24 * 60 * 60 * 1000)
   );
   return Math.max(total - elapsed, 0);
 }

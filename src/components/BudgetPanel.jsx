@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG } from "../constants/config.js";
-import { getEffectiveAmount, computeGoalTimeline } from "../lib/finance.js";
+import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, toLocalIso } from "../lib/finance.js";
 import { Card, VT, SmBtn, iS, lS } from "./ui.jsx";
 
 export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, futureWeeks }) {
+  // Today ISO string (local calendar date, not UTC) — must be first, used in state initializers
+  const TODAY_ISO = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
+
   const [ap, setAp] = useState(0);
   const [view, setView] = useState("overview");
   // Expense CRUD state
@@ -12,25 +15,35 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const [addingExp, setAddingExp] = useState(false);
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", note: "" });
   const [delExpId, setDelExpId] = useState(null);
+  // Loan CRUD state
+  const [editLoanId, setEditLoanId] = useState(null);
+  const [editLoanVals, setEditLoanVals] = useState({});
+  const [addingLoan, setAddingLoan] = useState(false);
+  const [newLoan, setNewLoan] = useState({ label: "", totalAmount: "", paymentPerCheck: "", firstPaymentDate: TODAY_ISO, payFrequency: "weekly", note: "" });
+  const [delLoanId, setDelLoanId] = useState(null);
   // Goal CRUD state
   const [editGoalId, setEditGoalId] = useState(null);
   const [editGoalVals, setEditGoalVals] = useState({});
   const [addingGoal, setAddingGoal] = useState(false);
   const [newGoal, setNewGoal] = useState({ label: "", target: "", color: "#c8a84b", note: "" });
   const [delGoalId, setDelGoalId] = useState(null);
-
-  // Today ISO string (local calendar date, not UTC)
-  const TODAY_ISO = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
   // Resolve the current effective amount for an expense at the active phase
   const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
+
+  // Split loans from regular expenses for display purposes
+  const loans = expenses.filter(e => e.type === "loan");
+  const regularExpenses = expenses.filter(e => e.type !== "loan");
 
   const ph = PHASES[ap];
   const ts = expenses.filter(e => e.category !== "Transfers").reduce((s, e) => s + currentEffective(e, ap), 0);
   const wr = weeklyIncome - ts;
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
-  const cats = [...new Set(expenses.map(e => e.category))];
+  const cats = [...new Set(regularExpenses.map(e => e.category))];
   const f = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Fiscal year end for drop-off detection
+  const fiscalYearEnd = futureWeeks?.length ? toLocalIso(futureWeeks[futureWeeks.length - 1].weekEnd) : "2027-01-04";
 
   // Expense helpers
   const startEditExp = (exp) => {
@@ -48,7 +61,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
       if (daysDiff <= 3) {
-        // Within 3 days: update existing entry and refresh its date to today
         return { ...e, history: existing.map(entry =>
           entry.effectiveFrom === latest.effectiveFrom
             ? { effectiveFrom: TODAY_ISO, weekly: newWeekly }
@@ -65,6 +77,41 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     setAddingExp(false); setNewExp({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", note: "" });
   };
   const deleteExp = (id) => { setExpenses(p => p.filter(e => e.id !== id)); setDelExpId(null); };
+
+  // Loan helpers
+  const startEditLoan = (exp) => {
+    setEditLoanId(exp.id);
+    setEditLoanVals({ label: exp.label, note: exp.note[0] ?? "", ...exp.loanMeta });
+  };
+  const saveEditLoan = (id) => {
+    const meta = {
+      totalAmount: parseFloat(editLoanVals.totalAmount) || 0,
+      paymentPerCheck: parseFloat(editLoanVals.paymentPerCheck) || 0,
+      firstPaymentDate: editLoanVals.firstPaymentDate || TODAY_ISO,
+      payFrequency: editLoanVals.payFrequency || "weekly",
+    };
+    setExpenses(prev => prev.map(e => {
+      if (e.id !== id) return e;
+      return { ...e, label: editLoanVals.label, note: [editLoanVals.note, editLoanVals.note, editLoanVals.note], loanMeta: meta, history: buildLoanHistory(meta) };
+    }));
+    setEditLoanId(null);
+  };
+  const addLoan = () => {
+    const meta = {
+      totalAmount: parseFloat(newLoan.totalAmount) || 0,
+      paymentPerCheck: parseFloat(newLoan.paymentPerCheck) || 0,
+      firstPaymentDate: newLoan.firstPaymentDate || TODAY_ISO,
+      payFrequency: newLoan.payFrequency || "weekly",
+    };
+    setExpenses(prev => [...prev, {
+      id: `loan_${Date.now()}`, type: "loan", category: "Loans",
+      label: newLoan.label, note: [newLoan.note, newLoan.note, newLoan.note],
+      loanMeta: meta, history: buildLoanHistory(meta)
+    }]);
+    setAddingLoan(false);
+    setNewLoan({ label: "", totalAmount: "", paymentPerCheck: "", firstPaymentDate: TODAY_ISO, payFrequency: "weekly", note: "" });
+  };
+  const deleteLoan = (id) => { setExpenses(p => p.filter(e => e.id !== id)); setDelLoanId(null); };
 
   // Goal helpers
   const activeGoals = goals.filter(g => !g.completed);
@@ -113,13 +160,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     </div>
     {/* View tabs */}
     <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
-      {["overview", "breakdown", "cashflow", "goals"].map(v => <VT key={v} label={v} active={view === v} onClick={() => setView(v)} />)}
+      {["overview", "breakdown", "cashflow", "goals", "loans"].map(v => <VT key={v} label={v} active={view === v} onClick={() => setView(v)} />)}
     </div>
 
-    {/* OVERVIEW — expense list + add/delete */}
+    {/* OVERVIEW — expense list + loans section */}
     {view === "overview" && <div>
       {cats.map(cat => {
-        const cExp = expenses.filter(e => e.category === cat);
+        const cExp = regularExpenses.filter(e => e.category === cat);
         const cTot = cExp.reduce((s, e) => s + currentEffective(e, ap), 0);
         return <div key={cat} style={{ marginBottom: "24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
@@ -156,6 +203,46 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           })}
         </div>;
       })}
+
+      {/* Loans section in overview */}
+      {loans.length > 0 && <div style={{ marginBottom: "24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase" }}>Loans</div>
+          <div style={{ fontSize: "12px", color: "#c8a84b" }}>{f2(loans.reduce((s, e) => s + currentEffective(e, ap), 0))}/wk</div>
+        </div>
+        {loans.map(exp => {
+          const effAmt = currentEffective(exp, ap);
+          const meta = exp.loanMeta;
+          const payoffDate = meta ? computeLoanPayoffDate(meta) : null;
+          const dropsOff = payoffDate && payoffDate <= fiscalYearEnd;
+          const isPaidOff = payoffDate && payoffDate <= TODAY_ISO;
+          return <div key={exp.id} style={{ background: "#1a1a14", border: "1px solid #c8a84b33", borderRadius: "6px", padding: "10px 12px", marginBottom: "6px" }}>
+            {editLoanId === exp.id ? <LoanEditForm vals={editLoanVals} setVals={setEditLoanVals} onSave={() => saveEditLoan(exp.id)} onCancel={() => setEditLoanId(null)} iS={iS} lS={lS} /> :
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "13px" }}>{exp.label}</span>
+                  <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
+                  {isPaidOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>✓ PAID OFF</span>}
+                  {!isPaidOff && dropsOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>drops off {payoffDate}</span>}
+                </div>
+                {meta && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{loanPaymentsRemaining(meta)} payments left · {f(meta.totalAmount)} total</div>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "#555" : "#c8a84b" }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
+                </div>
+                <SmBtn onClick={() => startEditLoan(exp)} c="#c8a84b">EDIT</SmBtn>
+                {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
+                  <SmBtn onClick={() => deleteLoan(exp.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
+                  <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
+                </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="#e8856a">✕</SmBtn>}
+              </div>
+            </div>}
+          </div>;
+        })}
+      </div>}
+
       {/* Add expense form */}
       {addingExp ? <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
         <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "16px" }}>New Expense Line</div>
@@ -177,22 +264,35 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     {/* BREAKDOWN */}
     {view === "breakdown" && <div>
       {cats.filter(c => c !== "Transfers").map(cat => {
-        const cT = expenses.filter(e => e.category === cat).reduce((s, e) => s + currentEffective(e, ap), 0);
+        const cT = regularExpenses.filter(e => e.category === cat).reduce((s, e) => s + currentEffective(e, ap), 0);
         const pct = (cT / weeklyIncome) * 100;
         return <div key={cat} style={{ marginBottom: "16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}><span style={{ fontSize: "11px", letterSpacing: "2px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</span><span>{f2(cT)}/wk · {pct.toFixed(1)}%</span></div>
           <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden" }}><div style={{ height: "100%", width: `${pct}%`, background: CATEGORY_COLORS[cat], borderRadius: "3px" }} /></div>
         </div>;
       })}
+      {loans.length > 0 && (() => {
+        const loanTot = loans.reduce((s, e) => s + currentEffective(e, ap), 0);
+        const pct = (loanTot / weeklyIncome) * 100;
+        return <div style={{ marginBottom: "16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}><span style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase" }}>Loans</span><span>{f2(loanTot)}/wk · {pct.toFixed(1)}%</span></div>
+          <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden" }}><div style={{ height: "100%", width: `${pct}%`, background: "#c8a84b", borderRadius: "3px" }} /></div>
+        </div>;
+      })()}
       <div style={{ height: "1px", background: "#222", margin: "20px 0" }} />
       <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#888", textTransform: "uppercase", marginBottom: "12px" }}>Annual Projection ({ph.label})</div>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
         <thead><tr style={{ borderBottom: "1px solid #333", color: "#888", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Weekly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
         <tbody>{expenses.map(exp => {
           const amt = currentEffective(exp, ap);
+          const isLoan = exp.type === "loan";
           return <tr key={exp.id} style={{ borderBottom: "1px solid #181818" }} onMouseEnter={e => e.currentTarget.style.background = "#141414"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            <td style={{ padding: "8px 4px" }}><span style={{ fontSize: "10px", color: CATEGORY_COLORS[exp.category], marginRight: "6px" }}>▸</span>{exp.label}</td>
-            <td style={{ padding: "8px 4px", textAlign: "right", color: CATEGORY_COLORS[exp.category] }}>{f2(amt)}</td>
+            <td style={{ padding: "8px 4px" }}>
+              <span style={{ fontSize: "10px", color: isLoan ? "#c8a84b" : CATEGORY_COLORS[exp.category], marginRight: "6px" }}>▸</span>
+              {exp.label}
+              {isLoan && <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "1px 4px", borderRadius: "2px", marginLeft: "5px" }}>LOAN</span>}
+            </td>
+            <td style={{ padding: "8px 4px", textAlign: "right", color: isLoan ? "#c8a84b" : CATEGORY_COLORS[exp.category] }}>{f2(amt)}</td>
             <td style={{ padding: "8px 4px", textAlign: "right", color: "#888" }}>{f(amt * 52 / 12)}</td>
             <td style={{ padding: "8px 4px", textAlign: "right", color: "#666" }}>{f(amt * 52)}</td>
           </tr>;
@@ -210,17 +310,23 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Weekly Take-Home</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(weeklyIncome)}</div></div><div style={{ fontSize: "10px", color: "#555", textAlign: "right" }}>Live from<br />income engine</div></div>
       </div>
       {[{ label: "Checking Needs", cat: "Needs", desc: "Housing, kids, food, Jesse" }, { label: "Credit Builder", cat: "Lifestyle", desc: "Nicotine, Rumble, Walmart+, Fireflood" }, { label: "CashApp Transfer", cat: "Transfers", desc: "Direct deposit perks — not spent" }].map(row => {
-        const tot = expenses.filter(e => e.category === row.cat).reduce((s, e) => s + currentEffective(e, ap), 0);
+        const tot = regularExpenses.filter(e => e.category === row.cat).reduce((s, e) => s + currentEffective(e, ap), 0);
         return <div key={row.cat} style={{ background: CATEGORY_BG[row.cat], border: "1px solid #222", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS[row.cat], marginBottom: "4px" }}>{row.label}</div><div style={{ fontSize: "10px", color: "#666" }}>{row.desc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS[row.cat] }}>{f2(tot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((tot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
         </div>;
       })}
+      {loans.length > 0 && (() => {
+        const tot = loans.reduce((s, e) => s + currentEffective(e, ap), 0);
+        return <div style={{ background: "#1a1a14", border: "1px solid #c8a84b33", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "#c8a84b", marginBottom: "4px" }}>Loan Payments</div><div style={{ fontSize: "10px", color: "#666" }}>{loans.length} active loan{loans.length > 1 ? "s" : ""}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "#c8a84b" }}>{f2(tot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((tot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
+        </div>;
+      })()}
       <div style={{ background: wr >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wr >= 0 ? "#6dbf8a" : "#e8856a"}`, borderRadius: "6px", padding: "14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wr >= 0 ? "#6dbf8a" : "#e8856a", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "#666" }}>See Goals view for event-adjusted timeline</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wr >= 0 ? "#6dbf8a" : "#e8856a" }}>{f2(wr)}</div><div style={{ fontSize: "10px", color: "#666" }}>{f(wr * 52 / 12)}/mo</div></div></div>
       </div>
     </div>}
 
-    {/* GOALS — full CRUD */}
+    {/* GOALS */}
     {view === "goals" && (() => {
       const tl = computeGoalTimeline(activeGoals, futureWeeks ?? [], weeklyIncome, expenses, logNetLost, logNetGained ?? 0);
       const totG = goals.reduce((s, g) => !g.completed ? s + g.target : s, 0);
@@ -234,7 +340,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         </div>
         {adjustedWeeklyAvg < baseWeeklyUnallocated && <div style={{ background: "#2d1a1a", border: "1px solid #e8856a44", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", fontSize: "11px", color: "#888" }}>Event log reduced avg by <span style={{ color: "#e8856a", fontWeight: "bold" }}>{f2(baseWeeklyUnallocated - adjustedWeeklyAvg)}/wk</span></div>}
 
-        {/* Active goals */}
         {tl.map((g, i) => {
           const ok = g.eW !== null && g.eW <= weeksLeft;
           const isEditing = editGoalId === g.id;
@@ -290,7 +395,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           </div>;
         })}
 
-        {/* Add goal form */}
         {addingGoal ? <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
           <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "16px" }}>New Goal</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
@@ -311,7 +415,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           </div>
         </div> : <button onClick={() => setAddingGoal(true)} style={{ background: "#1a1a1a", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", marginBottom: "16px" }}>+ ADD GOAL</button>}
 
-        {/* Completed goals */}
         {completedGoals.length > 0 && <div style={{ marginTop: "8px" }}>
           <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#444", textTransform: "uppercase", marginBottom: "10px" }}>Completed ({completedGoals.length})</div>
           {completedGoals.map(g => <div key={g.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: "8px", padding: "12px 16px", marginBottom: "8px", opacity: 0.6 }}>
@@ -332,7 +435,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           </div>)}
         </div>}
 
-        {/* Year-end outlook */}
         <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a", borderRadius: "8px", padding: "16px", marginTop: "8px" }}>
           <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#6dbf8a", textTransform: "uppercase", marginBottom: "10px" }}>Year-End Outlook</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12px" }}>
@@ -344,5 +446,152 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         </div>
       </div>;
     })()}
+
+    {/* LOANS TAB */}
+    {view === "loans" && (() => {
+      const totalOwed = loans.reduce((s, e) => s + (e.loanMeta?.totalAmount ?? 0), 0);
+      const weeklyCommitted = loans.reduce((s, e) => s + currentEffective(e, ap), 0);
+      const allPayoffDates = loans.map(e => e.loanMeta ? computeLoanPayoffDate(e.loanMeta) : null).filter(Boolean);
+      const debtFreeDate = allPayoffDates.length ? allPayoffDates.reduce((a, b) => a > b ? a : b) : null;
+      const weeksToDebtFree = debtFreeDate ? Math.max(Math.ceil((new Date(debtFreeDate) - new Date(TODAY_ISO)) / (7 * 24 * 60 * 60 * 1000)), 0) : 0;
+
+      return <div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px", marginBottom: "20px" }}>
+          <Card label="Total Loan Balance" val={f(totalOwed)} color="#c8a84b" />
+          <Card label="Weekly Committed" val={f2(weeklyCommitted)} color="#e8856a" />
+          <Card label="Debt-Free In" val={debtFreeDate ? `${weeksToDebtFree} wks` : "—"} color={debtFreeDate && debtFreeDate <= fiscalYearEnd ? "#6dbf8a" : "#c8a84b"} />
+        </div>
+
+        {loans.length === 0 && <div style={{ textAlign: "center", padding: "40px 20px", color: "#444", fontSize: "12px", letterSpacing: "1px" }}>No active loans. Add one below.</div>}
+
+        {loans.map(exp => {
+          const meta = exp.loanMeta;
+          if (!meta) return null;
+          const payoffDate = computeLoanPayoffDate(meta);
+          const paymentsTotal = Math.ceil(meta.totalAmount / meta.paymentPerCheck);
+          const paymentsLeft = loanPaymentsRemaining(meta);
+          const paymentsMade = paymentsTotal - paymentsLeft;
+          const progressPct = paymentsTotal > 0 ? Math.min((paymentsMade / paymentsTotal) * 100, 100) : 0;
+          const dropsThisYear = payoffDate <= fiscalYearEnd;
+          const isPaidOff = payoffDate <= TODAY_ISO;
+          const weeklyAmt = currentEffective(exp, ap);
+          const isEditing = editLoanId === exp.id;
+          const weeksUntilPayoff = Math.max(Math.ceil((new Date(payoffDate) - new Date(TODAY_ISO)) / (7 * 24 * 60 * 60 * 1000)), 0);
+
+          return <div key={exp.id} style={{ background: "#141414", border: `1px solid ${isPaidOff ? "#6dbf8a44" : "#c8a84b33"}`, borderRadius: "8px", padding: "16px", marginBottom: "12px" }}>
+            {isEditing ? <LoanEditForm vals={editLoanVals} setVals={setEditLoanVals} onSave={() => saveEditLoan(exp.id)} onCancel={() => setEditLoanId(null)} iS={iS} lS={lS} /> :
+            <div>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: "bold" }}>{exp.label}</span>
+                    <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
+                    {isPaidOff && <span style={{ fontSize: "9px", background: "#6dbf8a22", color: "#6dbf8a", padding: "2px 6px", borderRadius: "2px" }}>✓ PAID OFF</span>}
+                  </div>
+                  {exp.note[0] && <div style={{ fontSize: "10px", color: "#666" }}>{exp.note[0]}</div>}
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "#555" : "#c8a84b" }}>{f2(weeklyAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
+                  <div style={{ fontSize: "10px", color: "#666" }}>{f(meta.totalAmount)} total</div>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ marginBottom: "8px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#666", marginBottom: "4px" }}>
+                  <span>{paymentsMade} of {paymentsTotal} payments made</span>
+                  <span>{progressPct.toFixed(0)}%</span>
+                </div>
+                <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${progressPct}%`, background: isPaidOff ? "#6dbf8a" : "#c8a84b", borderRadius: "3px", transition: "width 0.3s" }} />
+                </div>
+              </div>
+
+              {/* Stats row */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", fontSize: "11px", marginBottom: "10px" }}>
+                <div style={{ background: "#1a1a1a", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
+                  <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>PAYMENTS LEFT</div>
+                  <div style={{ color: isPaidOff ? "#6dbf8a" : "#e8e0d0", fontWeight: "bold" }}>{paymentsLeft}</div>
+                </div>
+                <div style={{ background: "#1a1a1a", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
+                  <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>PAYOFF DATE</div>
+                  <div style={{ color: dropsThisYear ? "#6dbf8a" : "#e8e0d0", fontWeight: "bold", fontSize: "10px" }}>{payoffDate}</div>
+                </div>
+                <div style={{ background: "#1a1a1a", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
+                  <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>CADENCE</div>
+                  <div style={{ color: "#e8e0d0", fontWeight: "bold", textTransform: "uppercase", fontSize: "10px" }}>{meta.payFrequency}</div>
+                </div>
+              </div>
+
+              {/* Drop-off banner */}
+              {!isPaidOff && dropsThisYear && <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "#6dbf8a" }}>
+                ✓ Drops off in {weeksUntilPayoff} weeks — goals auto-improve after payoff
+              </div>}
+
+              {/* Actions */}
+              <div style={{ display: "flex", gap: "6px", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
+                <SmBtn onClick={() => startEditLoan(exp)} c="#c8a84b">EDIT</SmBtn>
+                {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
+                  <SmBtn onClick={() => deleteLoan(exp.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
+                  <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
+                </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="#e8856a">✕</SmBtn>}
+              </div>
+            </div>}
+          </div>;
+        })}
+
+        {/* Add loan form */}
+        {addingLoan ? <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
+          <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "4px" }}>New Loan</div>
+          <div style={{ fontSize: "10px", color: "#555", marginBottom: "16px" }}>Pay cadence auto-detected: <span style={{ color: "#7eb8c9" }}>Weekly</span></div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div style={{ gridColumn: "1/-1" }}><label style={lS}>Loan Name</label><input type="text" value={newLoan.label} onChange={e => setNewLoan(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Note" /></div>
+            <div><label style={lS}>Total Amount Owed ($)</label><input type="number" value={newLoan.totalAmount} onChange={e => setNewLoan(v => ({ ...v, totalAmount: e.target.value }))} style={iS} placeholder="2400" /></div>
+            <div><label style={lS}>Payment Per Check ($)</label><input type="number" value={newLoan.paymentPerCheck} onChange={e => setNewLoan(v => ({ ...v, paymentPerCheck: e.target.value }))} style={iS} placeholder="100" /></div>
+            <div><label style={lS}>First Payment Date</label><input type="date" value={newLoan.firstPaymentDate} onChange={e => setNewLoan(v => ({ ...v, firstPaymentDate: e.target.value }))} style={iS} /></div>
+            <div><label style={lS}>Pay Frequency</label><select value={newLoan.payFrequency} onChange={e => setNewLoan(v => ({ ...v, payFrequency: e.target.value }))} style={iS}><option value="weekly">Weekly</option><option value="biweekly">Bi-Weekly</option></select></div>
+            <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note (optional)</label><input type="text" value={newLoan.note} onChange={e => setNewLoan(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="e.g. Jesse's loan" /></div>
+          </div>
+          {newLoan.totalAmount && newLoan.paymentPerCheck && newLoan.firstPaymentDate && (() => {
+            const meta = { totalAmount: parseFloat(newLoan.totalAmount) || 0, paymentPerCheck: parseFloat(newLoan.paymentPerCheck) || 0, firstPaymentDate: newLoan.firstPaymentDate, payFrequency: newLoan.payFrequency };
+            if (meta.totalAmount <= 0 || meta.paymentPerCheck <= 0) return null;
+            const payoff = computeLoanPayoffDate(meta);
+            const total = Math.ceil(meta.totalAmount / meta.paymentPerCheck);
+            const weeklyAmt = meta.payFrequency === "biweekly" ? meta.paymentPerCheck / 2 : meta.paymentPerCheck;
+            return <div style={{ background: "#1a1a14", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px", fontSize: "11px" }}>
+              <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
+                <span style={{ color: "#666" }}>Weekly cost: <span style={{ color: "#c8a84b", fontWeight: "bold" }}>{f2(weeklyAmt)}</span></span>
+                <span style={{ color: "#666" }}>Payments: <span style={{ color: "#e8e0d0" }}>{total}</span></span>
+                <span style={{ color: "#666" }}>Payoff: <span style={{ color: payoff <= fiscalYearEnd ? "#6dbf8a" : "#e8e0d0" }}>{payoff}</span></span>
+              </div>
+            </div>;
+          })()}
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentPerCheck} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentPerCheck) ? "#6dbf8a" : "#333", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentPerCheck) ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentPerCheck) ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>ADD LOAN</button>
+            <button onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentPerCheck: "", firstPaymentDate: TODAY_ISO, payFrequency: "weekly", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+          </div>
+        </div> : <button onClick={() => setAddingLoan(true)} style={{ background: "#1a1a14", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", marginBottom: "16px" }}>+ ADD LOAN</button>}
+      </div>;
+    })()}
   </div>);
+}
+
+// Shared loan edit form (used in both overview and loans tab)
+function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
+  return <div>
+    <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "12px" }}>Edit Loan</div>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+      <div style={{ gridColumn: "1/-1" }}><label style={lS}>Loan Name</label><input type="text" value={vals.label ?? ""} onChange={e => setVals(v => ({ ...v, label: e.target.value }))} style={iS} /></div>
+      <div><label style={lS}>Total Amount ($)</label><input type="number" value={vals.totalAmount ?? ""} onChange={e => setVals(v => ({ ...v, totalAmount: e.target.value }))} style={iS} /></div>
+      <div><label style={lS}>Payment Per Check ($)</label><input type="number" value={vals.paymentPerCheck ?? ""} onChange={e => setVals(v => ({ ...v, paymentPerCheck: e.target.value }))} style={iS} /></div>
+      <div><label style={lS}>First Payment Date</label><input type="date" value={vals.firstPaymentDate ?? ""} onChange={e => setVals(v => ({ ...v, firstPaymentDate: e.target.value }))} style={iS} /></div>
+      <div><label style={lS}>Pay Frequency</label><select value={vals.payFrequency ?? "weekly"} onChange={e => setVals(v => ({ ...v, payFrequency: e.target.value }))} style={iS}><option value="weekly">Weekly</option><option value="biweekly">Bi-Weekly</option></select></div>
+      <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={vals.note ?? ""} onChange={e => setVals(v => ({ ...v, note: e.target.value }))} style={iS} /></div>
+    </div>
+    <div style={{ display: "flex", gap: "8px" }}>
+      <button onClick={onSave} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>SAVE</button>
+      <button onClick={onCancel} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+    </div>
+  </div>;
 }

@@ -131,6 +131,41 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyIncome, expe
   });
 }
 
+// ─────────────────────────────────────────────────────────────
+// LOAN FUNCTIONS
+// ─────────────────────────────────────────────────────────────
+
+export function computeLoanPayoffDate(loan) {
+  const weeksPerPayment = loan.payFrequency === "biweekly" ? 2 : 1;
+  const paymentsTotal = Math.ceil(loan.totalAmount / loan.paymentPerCheck);
+  const d = new Date(loan.firstPaymentDate);
+  d.setDate(d.getDate() + paymentsTotal * 7 * weeksPerPayment);
+  return toLocalIso(d);
+}
+
+export function buildLoanHistory(loan) {
+  const weeklyAmt = loan.payFrequency === "biweekly"
+    ? loan.paymentPerCheck / 2
+    : loan.paymentPerCheck;
+  return [
+    { effectiveFrom: loan.firstPaymentDate, weekly: [weeklyAmt, weeklyAmt, weeklyAmt] },
+    { effectiveFrom: computeLoanPayoffDate(loan), weekly: [0, 0, 0] }
+  ];
+}
+
+export function loanPaymentsRemaining(loan) {
+  const today = toLocalIso(new Date());
+  const payoffDate = computeLoanPayoffDate(loan);
+  if (today >= payoffDate) return 0;
+  const total = Math.ceil(loan.totalAmount / loan.paymentPerCheck);
+  if (today < loan.firstPaymentDate) return total;
+  const weeksPerPayment = loan.payFrequency === "biweekly" ? 2 : 1;
+  const elapsed = Math.floor(
+    (new Date(today) - new Date(loan.firstPaymentDate)) / (7 * 24 * 60 * 60 * 1000 * weeksPerPayment)
+  );
+  return Math.max(total - elapsed, 0);
+}
+
 export function calcEventImpact(event, cfg) {
   const isWeek2 = event.weekRotation === "Week 2";
   const normalShifts = isWeek2 ? 6 : 4, normalWeekendShifts = isWeek2 ? 2 : 0;

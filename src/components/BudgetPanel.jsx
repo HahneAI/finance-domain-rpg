@@ -138,9 +138,14 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const deleteGoal = (id) => { setGoals(p => p.filter(g => g.id !== id)); setDelGoalId(null); };
   const toggleComplete = (id) => setGoals(p => p.map(g => g.id === id ? { ...g, completed: !g.completed } : g));
   const [fundingId, setFundingId] = useState(null);
+  const [showCompleted, setShowCompleted] = useState(false);
   const handleMarkDone = (id) => {
     setFundingId(id);
-    setTimeout(() => { toggleComplete(id); setFundingId(null); }, 1800);
+    setTimeout(() => {
+      setGoals(p => p.map(g => g.id === id ? { ...g, completed: true, completedAt: new Date().toISOString() } : g));
+      setFundingId(null);
+      setShowCompleted(true);
+    }, 1800);
   };
   const moveGoal = (id, dir) => {
     setGoals(prev => {
@@ -466,24 +471,48 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           </div>
         </div> : <button onClick={() => setAddingGoal(true)} style={{ background: "#1a1a1a", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", marginBottom: "16px" }}>+ ADD GOAL</button>}
 
-        {completedGoals.length > 0 && <div style={{ marginTop: "8px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#444", textTransform: "uppercase", marginBottom: "10px" }}>Completed ({completedGoals.length})</div>
-          {completedGoals.map(g => <div key={g.id} style={{ background: "#111", border: "1px solid #1e1e1e", borderRadius: "8px", padding: "12px 16px", marginBottom: "8px", opacity: 0.6 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontSize: "12px", color: "#444", textDecoration: "line-through" }}>{g.label}</span>
-                <span style={{ fontSize: "10px", background: "#6dbf8a22", color: "#6dbf8a", padding: "2px 6px", borderRadius: "3px" }}>✓</span>
-              </div>
-              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                <span style={{ fontSize: "14px", fontWeight: "bold", color: "#444" }}>{f(g.target)}</span>
-                <SmBtn onClick={() => toggleComplete(g.id)} c="#888">UNDO</SmBtn>
-                {delGoalId === g.id ? <div style={{ display: "flex", gap: "4px" }}>
-                  <SmBtn onClick={() => deleteGoal(g.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
-                  <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
-                </div> : <SmBtn onClick={() => setDelGoalId(g.id)} c="#e8856a">✕</SmBtn>}
-              </div>
+        {completedGoals.length > 0 && <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden" }}>
+          {/* Toggle header */}
+          <button onClick={() => setShowCompleted(v => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "10px", color: showCompleted ? "#6dbf8a" : "#555", transition: "color 0.2s" }}>{showCompleted ? "▼" : "▶"}</span>
+              <span style={{ fontSize: "10px", letterSpacing: "3px", color: "#555", textTransform: "uppercase" }}>Funded History</span>
+              <span style={{ fontSize: "10px", background: "#6dbf8a18", color: "#6dbf8a", padding: "2px 8px", borderRadius: "3px", letterSpacing: "1px" }}>{completedGoals.length}</span>
             </div>
-          </div>)}
+            <span style={{ fontSize: "11px", fontWeight: "bold", color: "#444" }}>{f(completedGoals.reduce((s, g) => s + g.target, 0))}</span>
+          </button>
+
+          {showCompleted && <>
+            {completedGoals.map((g, i) => {
+              const dateFunded = g.completedAt
+                ? new Date(g.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                : null;
+              return <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", borderLeft: `3px solid ${g.color}55`, background: "#0e0e0e", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: g.note ? "3px" : 0 }}>
+                    <span style={{ fontSize: "11px", color: "#3a3a3a", textDecoration: "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
+                    <span style={{ fontSize: "9px", background: "#6dbf8a18", color: "#6dbf8a88", padding: "1px 5px", borderRadius: "3px", flexShrink: 0 }}>✓ FUNDED</span>
+                  </div>
+                  {g.note && <div style={{ fontSize: "9px", color: "#2e2e2e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.note}</div>}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                  {dateFunded && <span style={{ fontSize: "9px", color: "#333", letterSpacing: "1px" }}>{dateFunded}</span>}
+                  <span style={{ fontSize: "13px", fontWeight: "bold", color: "#383838", minWidth: "60px", textAlign: "right" }}>{f(g.target)}</span>
+                  <SmBtn onClick={() => toggleComplete(g.id)} c="#555">UNDO</SmBtn>
+                  {delGoalId === g.id
+                    ? <div style={{ display: "flex", gap: "4px" }}>
+                        <SmBtn onClick={() => deleteGoal(g.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
+                        <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
+                      </div>
+                    : <SmBtn onClick={() => setDelGoalId(g.id)} c="#333">✕</SmBtn>}
+                </div>
+              </div>;
+            })}
+            <div style={{ background: "#0d0d0d", borderTop: "1px solid #1a1a1a", padding: "9px 14px 9px 17px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "9px", letterSpacing: "2px", color: "#2e2e2e", textTransform: "uppercase" }}>{completedGoals.length} goal{completedGoals.length !== 1 ? "s" : ""} funded</span>
+              <span style={{ fontSize: "12px", fontWeight: "bold", color: "#6dbf8a55" }}>{f(completedGoals.reduce((s, g) => s + g.target, 0))}</span>
+            </div>
+          </>}
         </div>}
 
         <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a", borderRadius: "8px", padding: "16px", marginTop: "8px" }}>

@@ -98,11 +98,14 @@ export function computeRemainingSpend(expenses, futureWeeks) {
   return { totalRemainingSpend: total, avgWeeklySpend: total / futureWeeks.length, weekCount: futureWeeks.length };
 }
 
-export function computeGoalTimeline(activeGoals, futureWeeks, weeklyIncome, expenses, logNetLost, logNetGained) {
+export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expenses, logNetLost, logNetGained, futureEventDeductions = {}) {
   if (!futureWeeks.length || !activeGoals.length)
     return activeGoals.map(g => ({ ...g, sW: 0, eW: 0, wN: 0 }));
   const n = futureWeeks.length;
-  const perWeekLost = logNetLost / n, perWeekGain = (logNetGained ?? 0) / n;
+  const avgNet = weeklyNets.length ? weeklyNets.reduce((a, b) => a + b, 0) / weeklyNets.length : 0;
+  // ── Past-event smear: exclude future-week deductions (handled per-week below) ──
+  const futureDeductionTotal = Object.values(futureEventDeductions).reduce((a, b) => a + b, 0);
+  const perWeekLost = (logNetLost - futureDeductionTotal) / n, perWeekGain = (logNetGained ?? 0) / n;
   const remaining = activeGoals.map(g => g.target);
   const startWeek = activeGoals.map(() => null);
   const endWeek = activeGoals.map(() => null);
@@ -112,7 +115,9 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyIncome, expe
     let spend = 0;
     for (const exp of expenses.filter(e => e.category !== "Transfers"))
       spend += getEffectiveAmount(exp, week.weekEnd, pi);
-    let surplus = weeklyIncome - spend - perWeekLost + perWeekGain;
+    // ── Targeted deduction: current/future-week events hit their specific week ──
+    const weekDeduction = futureEventDeductions[week.idx] ?? 0;
+    let surplus = (weeklyNets[weekOffset] ?? 0) - weekDeduction - spend - perWeekLost + perWeekGain;
     if (surplus > 0) {
       for (let i = 0; i < activeGoals.length; i++) {
         if (remaining[i] <= 0 || surplus <= 0) continue;
@@ -127,7 +132,7 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyIncome, expe
   }
   return activeGoals.map((g, i) => {
     const sw = startWeek[i] ?? 0, ew = endWeek[i] ?? null;
-    const wN = ew !== null ? ew - sw : remaining[i] / Math.max(weeklyIncome - 0.01, 0.01);
+    const wN = ew !== null ? ew - sw : remaining[i] / Math.max(avgNet - 0.01, 0.01);
     return { ...g, sW: sw, eW: ew, wN };
   });
 }

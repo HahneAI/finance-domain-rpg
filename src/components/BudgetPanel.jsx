@@ -3,7 +3,7 @@ import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../cons
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
 import { Card, VT, SmBtn, iS, lS } from "./ui.jsx";
 
-export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, futureWeeks, currentWeek, today }) {
+export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, futureWeeks, futureWeekNets, futureEventDeductions, currentWeek, today }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
 
@@ -141,8 +141,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
   // Goal timeline — computed at component level so useEffect can read it
   const tl = useMemo(
-    () => computeGoalTimeline(activeGoals, futureWeeks ?? [], weeklyIncome, expenses, logNetLost, logNetGained ?? 0),
-    [activeGoals, futureWeeks, weeklyIncome, expenses, logNetLost, logNetGained]
+    () => computeGoalTimeline(activeGoals, futureWeeks ?? [], futureWeekNets ?? [], expenses, logNetLost, logNetGained ?? 0, futureEventDeductions ?? {}),
+    [activeGoals, futureWeeks, futureWeekNets, expenses, logNetLost, logNetGained, futureEventDeductions]
   );
 
   // Auto-set dueWeek (fiscal week) on goals that have a projection but no stored due date

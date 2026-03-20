@@ -115,6 +115,15 @@ export default function App() {
     return allWeeks.find(w => w.active && toLocalIso(w.weekEnd) >= today) ?? null;
   }, [allWeeks, today]);
 
+  // confirmDismissed: session-only flag; set when user clicks "Skip for now"
+  // confirmForced: set when user explicitly clicks the badge button — bypasses the
+  //   payPeriodEndDay DOW gate so the modal always opens on demand regardless of
+  //   what day of the week it is. Cleared after confirm or dismiss.
+  // IMPORTANT: both must be declared BEFORE the confirmTriggerWeek useMemo below
+  //   because that memo reads confirmForced in its body and dep array.
+  const [confirmDismissed, setConfirmDismissed] = useState(false);
+  const [confirmForced, setConfirmForced] = useState(false);
+
   // ── Week confirmation modal trigger ──
   // Surfaces the most-recent unconfirmed past week.
   // Normal path: only shows on/after payPeriodEndDay (DOW gate prevents early pop-ups).
@@ -145,13 +154,6 @@ export default function App() {
     const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
     return pastWeeks.filter(w => !weekConfirmations[w.idx]).length;
   }, [allWeeks, today, weekConfirmations]);
-
-  // confirmDismissed: session-only flag; set when user clicks "Skip for now"
-  // confirmForced: set when user explicitly clicks the badge button — bypasses the
-  //   payPeriodEndDay DOW gate so the modal always opens on demand regardless of
-  //   what day of the week it is. Cleared after confirm or dismiss.
-  const [confirmDismissed, setConfirmDismissed] = useState(false);
-  const [confirmForced, setConfirmForced] = useState(false);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = currentWeek

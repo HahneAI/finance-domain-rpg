@@ -6,6 +6,7 @@ import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { BenefitsPanel } from "./components/BenefitsPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
+import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -107,6 +108,20 @@ export default function App() {
   const currentWeek = useMemo(() => {
     return allWeeks.find(w => w.active && toLocalIso(w.weekEnd) >= today) ?? null;
   }, [allWeeks, today]);
+
+  // ── Week confirmation modal trigger ──
+  // Surfaces the most-recent unconfirmed past week when today is on/after payPeriodEndDay.
+  const confirmTriggerWeek = useMemo(() => {
+    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
+    if (!pastWeeks.length) return null;
+    const recent = pastWeeks[pastWeeks.length - 1];
+    const todayDOW = new Date(today).getDay(); // 0=Sun … 6=Sat
+    const endDay = config.payPeriodEndDay ?? 0;
+    if (todayDOW < endDay) return null;
+    if (config.confirmations?.[recent.idx]) return null;
+    return recent;
+  }, [allWeeks, today, config]);
+  const [confirmDismissed, setConfirmDismissed] = useState(false);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = currentWeek
@@ -475,6 +490,22 @@ export default function App() {
           </button>
         ))}
       </div>
+
+      {/* ── Weekly work confirmation modal ── */}
+      {confirmTriggerWeek && !confirmDismissed && (
+        <WeekConfirmModal
+          week={confirmTriggerWeek}
+          config={config}
+          onConfirm={(confirmation, logEntry) => {
+            setConfig(c => ({
+              ...c,
+              confirmations: { ...(c.confirmations ?? {}), [confirmTriggerWeek.idx]: confirmation },
+            }));
+            if (logEntry) setLogs(p => [...p, logEntry]);
+          }}
+          onDismiss={() => setConfirmDismissed(true)}
+        />
+      )}
     </div>
   );
 }

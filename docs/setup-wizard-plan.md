@@ -70,6 +70,9 @@ No fields. Just a Start button.
 |-------|-------|-------|
 | Job start date | date picker | Used to derive firstActiveIdx |
 | Pay week rotation | Week 1 / Week 2 picker | "Which week type does your first paycheck fall on?" |
+| Pay period end day | Day-of-week picker (Sun–Sat) | Which day your pay week closes; used to trigger the weekly work confirmation modal (`config.payPeriodEndDay`, 0=Sun default) |
+
+Plain-English note (pay period end day): "This tells the app when to prompt you to confirm what you actually worked each week. Typically Sunday if your work week runs Monday–Sunday."
 
 Plain-English note: "Week 1 vs Week 2 affects how your federal taxes are withheld each paycheck. Check your first paystub — if you were taxed more, that was likely Week 2."
 

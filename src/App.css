@@ -161,6 +161,27 @@
   }
 }
 
+/* ── Goal funded celebration ─────────────────────────────────────────────────── */
+@keyframes goalFundedGlow {
+  0%   { box-shadow: 0 0 0 0 rgba(109,191,138,0); border-color: rgba(109,191,138,0.2); }
+  25%  { box-shadow: 0 0 24px 8px rgba(109,191,138,0.4), inset 0 0 24px rgba(109,191,138,0.06); border-color: #6dbf8a; }
+  65%  { box-shadow: 0 0 10px 3px rgba(109,191,138,0.2); border-color: rgba(109,191,138,0.55); }
+  100% { box-shadow: 0 0 0 0 rgba(109,191,138,0); border-color: rgba(109,191,138,0.3); }
+}
+
+@keyframes goalStampIn {
+  0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.35) rotate(-18deg); }
+  55%  { opacity: 1; transform: translate(-50%,-50%) scale(1.1) rotate(-4deg); }
+  75%  { transform: translate(-50%,-50%) scale(0.96) rotate(-6deg); }
+  100% { opacity: 1; transform: translate(-50%,-50%) scale(1) rotate(-5deg); }
+}
+
+@keyframes goalParticle {
+  0%   { opacity: 1; transform: translate(0,0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--dx),var(--dy)) scale(0.2); }
+}
+/* ─────────────────────────────────────────────────────────────────────────────── */
+
 .ticks {
   position: relative;
   width: 100%;

@@ -3,6 +3,18 @@ import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../cons
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
 import { Card, VT, SmBtn, iS, lS } from "./ui.jsx";
 
+// 12 particles evenly distributed around 360°, two distance rings, cycling symbols
+const BURST_PARTICLES = Array.from({ length: 12 }, (_, i) => {
+  const angle = (i / 12) * Math.PI * 2;
+  const r = i % 2 === 0 ? 60 : 88;
+  return {
+    dx: Math.round(Math.cos(angle) * r),
+    dy: Math.round(Math.sin(angle) * r),
+    symbol: ['$', '✓', '▪', '+', '◆', '▸', '$', '✓', '▪', '+', '◆', '▸'][i],
+    delay: `${(i % 4) * 0.04}s`,
+  };
+});
+
 export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, futureWeeks, futureWeekNets, futureEventDeductions, currentWeek, today }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
@@ -125,6 +137,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   };
   const deleteGoal = (id) => { setGoals(p => p.filter(g => g.id !== id)); setDelGoalId(null); };
   const toggleComplete = (id) => setGoals(p => p.map(g => g.id === id ? { ...g, completed: !g.completed } : g));
+  const [fundingId, setFundingId] = useState(null);
+  const handleMarkDone = (id) => {
+    setFundingId(id);
+    setTimeout(() => { toggleComplete(id); setFundingId(null); }, 1800);
+  };
   const moveGoal = (id, dir) => {
     setGoals(prev => {
       const idx = prev.findIndex(g => g.id === id);
@@ -365,7 +382,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         {tl.map((g, i) => {
           const ok = g.eW !== null && g.eW <= weeksLeft;
           const isEditing = editGoalId === g.id;
-          return <div key={g.id} style={{ background: "#141414", border: `1px solid ${g.color}33`, borderRadius: "8px", padding: "16px", marginBottom: "12px" }}>
+          const celebrating = fundingId === g.id;
+          return <div key={g.id} style={{ background: "#141414", border: `1px solid ${celebrating ? "#6dbf8a" : g.color + "33"}`, borderRadius: "8px", padding: "16px", marginBottom: "12px", position: "relative", overflow: "visible", animation: celebrating ? "goalFundedGlow 1.8s ease-out forwards" : undefined }}>
             {isEditing ? <div>
               <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "12px" }}>Editing Goal</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
@@ -399,7 +417,17 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "#e8856a", background: "#2d1a1a", padding: "2px 6px", borderRadius: "3px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                 </div>
               </div>
-              <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}><div style={{ position: "relative", left: `${Math.min((g.sW / weeksLeft) * 100, 100)}%`, width: `${Math.min((g.wN / weeksLeft) * 100, 100 - (g.sW / weeksLeft) * 100)}%`, height: "100%", background: g.color, borderRadius: "3px", opacity: ok ? 1 : 0.4 }} /></div>
+              <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}><div style={{ position: "relative", left: celebrating ? 0 : `${Math.min((g.sW / weeksLeft) * 100, 100)}%`, width: celebrating ? "100%" : `${Math.min((g.wN / weeksLeft) * 100, 100 - (g.sW / weeksLeft) * 100)}%`, height: "100%", background: celebrating ? "#6dbf8a" : g.color, borderRadius: "3px", opacity: celebrating ? 1 : (ok ? 1 : 0.4), transition: "all 0.4s ease-out" }} /></div>
+              {celebrating && <>
+                <div style={{ position: "absolute", top: "50%", left: "50%", pointerEvents: "none", zIndex: 10 }}>
+                  {BURST_PARTICLES.map((p, pi) => (
+                    <span key={pi} style={{ position: "absolute", fontSize: "13px", color: g.color, "--dx": `${p.dx}px`, "--dy": `${p.dy}px`, animation: `goalParticle 0.85s cubic-bezier(0.25,0.46,0.45,0.94) ${p.delay} forwards`, transform: "translate(-50%,-50%)", userSelect: "none" }}>{p.symbol}</span>
+                  ))}
+                </div>
+                <div style={{ position: "absolute", top: "50%", left: "50%", pointerEvents: "none", zIndex: 11, animation: "goalStampIn 0.45s cubic-bezier(0.175,0.885,0.32,1.275) 0.1s both" }}>
+                  <div style={{ border: "3px solid #6dbf8a", borderRadius: "4px", padding: "8px 20px", fontSize: "20px", fontWeight: "bold", letterSpacing: "7px", color: "#6dbf8a", fontFamily: "'Courier New',monospace", textTransform: "uppercase", background: "rgba(13,13,13,0.93)", whiteSpace: "nowrap", textShadow: "0 0 14px rgba(109,191,138,0.65)" }}>FUNDED</div>
+                </div>
+              </>}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#555", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
                 <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: g.color }}>{f2(adjustedWeeklyAvg)}/wk</span> · {g.wN.toFixed(1)} weeks to fund</div>
@@ -407,7 +435,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
                   <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
                   <SmBtn onClick={() => startEditGoal(g)} c="#c8a84b">EDIT</SmBtn>
-                  <SmBtn onClick={() => toggleComplete(g.id)} c="#6dbf8a">✓ DONE</SmBtn>
+                  <SmBtn onClick={() => !celebrating && handleMarkDone(g.id)} c="#6dbf8a">✓ DONE</SmBtn>
                   {delGoalId === g.id ? <div style={{ display: "flex", gap: "4px" }}>
                     <SmBtn onClick={() => deleteGoal(g.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
                     <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>

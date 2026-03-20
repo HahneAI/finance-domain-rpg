@@ -133,6 +133,11 @@ export default function App() {
 
   const weeklyIncome = projectedAnnualNet / 52;
 
+  const futureWeekNets = useMemo(
+    () => futureWeeks.map(w => computeNet(w, config, taxDerived.extraPerCheck, showExtra)),
+    [futureWeeks, config, taxDerived, showExtra]
+  );
+
   // ── Week-by-week remaining spend using history-aware amounts ──
   const remainingSpend = useMemo(() => computeRemainingSpend(expenses, futureWeeks), [expenses, futureWeeks]);
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
@@ -192,6 +197,7 @@ export default function App() {
         logNetGained={logTotals.netGained}
         weeklyIncome={weeklyIncome}
         futureWeeks={futureWeeks}
+        futureWeekNets={futureWeekNets}
         currentWeek={currentWeek}
         today={today}
       />}

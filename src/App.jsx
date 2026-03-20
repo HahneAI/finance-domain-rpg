@@ -165,8 +165,30 @@ export default function App() {
   // ── Attendance bucket model ──
   const bucketModel = useMemo(() => computeBucketModel(logs, config), [logs, config]);
 
-  // ── Per-week targeted deductions for current/future-week events ──
-  // Past events are smeared via logNetLost; current/future events hit their specific week.
+  // ── Per-week targeted deductions for current/future-week events ──────────────────
+  // Shape: { [weekIdx: number]: netLost (dollars) }
+  //
+  // WHY TWO PATHS EXIST:
+  //   Past events (weekEnd < today) → smeared evenly across remaining weeks via
+  //   logNetLost in computeGoalTimeline. The money is already gone; a uniform
+  //   budget reduction across the rest of the year is the right model.
+  //
+  //   Current/future events (weekEnd >= today) → land on their specific week in the
+  //   goals loop so the timeline shows the actual dip at the right week rather than
+  //   hiding it in a per-week average.
+  //
+  // HOW IT'S BUILT:
+  //   calcEventImpact() is re-run here (not cached from logTotals) to get the
+  //   week-aware netLost: rotation (6-Day/4-Day) sets the shift count and
+  //   withholding tier; weekIdx checked against cfg.taxedWeeks sets whether
+  //   fed+state rates apply. Result is indexed by Number(weekIdx) to match week.idx.
+  //
+  // REUSE:
+  //   Any feature that needs to know "how much net pay is lost on a specific future
+  //   week due to logged events" can read this map directly — e.g. a cash-flow
+  //   waterfall chart, a per-week surplus sparkline, or a "next paycheck" estimate
+  //   that accounts for already-logged partial shifts.
+  // ─────────────────────────────────────────────────────────────────────────────────
   const futureEventDeductions = useMemo(() => {
     const map = {};
     logs.forEach(e => {

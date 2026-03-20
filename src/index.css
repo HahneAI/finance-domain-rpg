@@ -53,11 +53,24 @@
 html, body {
   margin: 0;
   background: #0d0d0d;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safe area utility used by bottom nav and main content padding */
+:root {
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
 }
 
 #root {
   width: 100%;
   max-width: 100%;
+  overflow-x: hidden;
   margin: 0;
   text-align: left;
   border: none;
@@ -65,6 +78,10 @@ html, body {
   min-height: 100svh;
   display: block;
   box-sizing: border-box;
+}
+
+@media (max-width: 480px) {
+  :root { font-size: 14px; }
 }
 
 h1,

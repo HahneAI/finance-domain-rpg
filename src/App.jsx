@@ -311,11 +311,15 @@ export default function App() {
   return (
     <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d", minHeight: "100vh", color: "#e8e0d0", display: "flex" }}>
       <style>{`
+        html, body, #root { max-width: 100vw; overflow-x: hidden; }
+        *, *::before, *::after { box-sizing: border-box; }
         @media (max-width: 767px) {
           .sidebar { display: none !important; }
           .mobile-header { display: flex !important; }
           .mobile-bottom-nav { display: flex !important; }
-          .main-content { padding-bottom: 62px !important; }
+          .main-content {
+            padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px)) !important;
+          }
         }
         @media (min-width: 768px) {
           .mobile-header { display: none !important; }
@@ -337,6 +341,12 @@ export default function App() {
         .drawer-backdrop.open {
           opacity: 1;
           pointer-events: auto;
+        }
+        /* Scrollable table containers — momentum scroll on iOS */
+        .scroll-x {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          max-width: 100%;
         }
       `}</style>
 
@@ -385,8 +395,10 @@ export default function App() {
           style={{
             display: "none",
             borderBottom: "2px solid #c8a84b",
-            padding: "0 16px",
-            height: "56px",
+            padding: "0 max(16px, env(safe-area-inset-left, 16px))",
+            paddingRight: "max(16px, env(safe-area-inset-right, 16px))",
+            height: "calc(56px + env(safe-area-inset-top, 0px))",
+            paddingTop: "env(safe-area-inset-top, 0px)",
             background: "#0d0d0d",
             position: "sticky",
             top: 0,
@@ -507,7 +519,8 @@ export default function App() {
           bottom: 0,
           left: 0,
           right: 0,
-          height: "56px",
+          height: "calc(56px + env(safe-area-inset-bottom, 0px))",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
           background: "#151515",
           borderTop: "1px solid #2e2e2e",
           boxShadow: "0 -4px 20px rgba(0,0,0,0.85)",

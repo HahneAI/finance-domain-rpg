@@ -50,6 +50,7 @@ export default function App() {
   const [goals, setGoals] = useState(INITIAL_GOALS);
   const [topNav, setTopNav] = useState("income");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [weekConfirmations, setWeekConfirmations] = useState({});
 
   const navigate = (key) => {
     setTopNav(key);
@@ -64,6 +65,7 @@ export default function App() {
       setLogs(data.logs);
       setExpenses(data.expenses);
       setGoals(data.goals);
+      setWeekConfirmations(data.weekConfirmations ?? {});
       setLoading(false);
     });
   }, []);
@@ -74,10 +76,10 @@ export default function App() {
     if (loading) return;
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      saveUserData({ config, expenses, goals, logs, showExtra });
+      saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations });
     }, 800);
     return () => clearTimeout(saveTimer.current);
-  }, [config, expenses, goals, logs, showExtra, loading]);
+  }, [config, expenses, goals, logs, showExtra, weekConfirmations, loading]);
 
   // ── today: reactive date string — ticks at midnight so everything auto-advances ──
   const [today, setToday] = useState(() => toLocalIso(new Date()));
@@ -118,9 +120,16 @@ export default function App() {
     const todayDOW = new Date(today).getDay(); // 0=Sun … 6=Sat
     const endDay = config.payPeriodEndDay ?? 0;
     if (todayDOW < endDay) return null;
-    if (config.confirmations?.[recent.idx]) return null;
+    if (weekConfirmations[recent.idx]) return null;
     return recent;
-  }, [allWeeks, today, config]);
+  }, [allWeeks, today, config, weekConfirmations]);
+
+  // Count of all past active weeks that have no confirmation record yet
+  const unconfirmedCount = useMemo(() => {
+    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
+    return pastWeeks.filter(w => !weekConfirmations[w.idx]).length;
+  }, [allWeeks, today, weekConfirmations]);
+
   const [confirmDismissed, setConfirmDismissed] = useState(false);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
@@ -328,6 +337,11 @@ export default function App() {
           <div style={{ fontSize: "10px", letterSpacing: "4px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
           <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
           {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
+          {unconfirmedCount > 0 && (
+            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", fontFamily: "'Courier New',monospace", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
+              ◷ {unconfirmedCount} {unconfirmedCount === 1 ? "week" : "weeks"} to confirm
+            </button>
+          )}
         </div>
         <nav style={{ marginTop: "8px", flex: 1 }}>
           {NAV_ITEMS.map(item => (
@@ -363,6 +377,12 @@ export default function App() {
             </div>
             <div style={{ fontSize: "16px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
           </div>
+          {/* Unconfirmed weeks badge */}
+          {unconfirmedCount > 0 && (
+            <button onClick={() => setConfirmDismissed(false)} style={{ background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "4px 9px", fontSize: "9px", letterSpacing: "1.5px", fontFamily: "'Courier New',monospace", cursor: "pointer", textTransform: "uppercase", flexShrink: 0, marginLeft: "8px" }}>
+              ◷ {unconfirmedCount}
+            </button>
+          )}
           {/* Hamburger button */}
           <button
             onClick={() => setDrawerOpen(true)}
@@ -497,10 +517,7 @@ export default function App() {
           week={confirmTriggerWeek}
           config={config}
           onConfirm={(confirmation, logEntry) => {
-            setConfig(c => ({
-              ...c,
-              confirmations: { ...(c.confirmations ?? {}), [confirmTriggerWeek.idx]: confirmation },
-            }));
+            setWeekConfirmations(c => ({ ...c, [confirmTriggerWeek.idx]: confirmation }));
             if (logEntry) setLogs(p => [...p, logEntry]);
           }}
           onDismiss={() => setConfirmDismissed(true)}

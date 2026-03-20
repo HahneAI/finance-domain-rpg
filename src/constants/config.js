@@ -12,7 +12,6 @@ export const DEFAULT_CONFIG = {
   bucketCap: 128,           // hours — overflow above this pays out as cash
   bucketPayoutRate: 9.825,  // $/hr for overflow hours (PTO_RATE / 2 ≈ 9.825)
   payPeriodEndDay: 0,       // day-of-week pay period closes: 0=Sun, 1=Mon, ..., 6=Sat
-  confirmations: {},        // { [weekIdx]: { confirmedAt, dayToggles, scheduledDays, missedScheduledDays, eventId } }
 };
 
 export const FISCAL_YEAR_START = "2026-01-05"; // week 0 end date — first Monday of the fiscal year

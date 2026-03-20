@@ -165,6 +165,20 @@ export default function App() {
   // ── Attendance bucket model ──
   const bucketModel = useMemo(() => computeBucketModel(logs, config), [logs, config]);
 
+  // ── Per-week targeted deductions for current/future-week events ──
+  // Past events are smeared via logNetLost; current/future events hit their specific week.
+  const futureEventDeductions = useMemo(() => {
+    const map = {};
+    logs.forEach(e => {
+      if (!e.weekEnd || e.weekEnd < today) return;
+      const impact = calcEventImpact(e, config);
+      if (!impact.netLost) return;
+      const idx = Number(e.weekIdx);
+      map[idx] = (map[idx] || 0) + impact.netLost;
+    });
+    return map;
+  }, [logs, config, today]);
+
   if (loading) {
     return (
       <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d",
@@ -198,6 +212,7 @@ export default function App() {
         weeklyIncome={weeklyIncome}
         futureWeeks={futureWeeks}
         futureWeekNets={futureWeekNets}
+        futureEventDeductions={futureEventDeductions}
         currentWeek={currentWeek}
         today={today}
       />}

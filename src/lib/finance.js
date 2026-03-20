@@ -98,12 +98,14 @@ export function computeRemainingSpend(expenses, futureWeeks) {
   return { totalRemainingSpend: total, avgWeeklySpend: total / futureWeeks.length, weekCount: futureWeeks.length };
 }
 
-export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expenses, logNetLost, logNetGained) {
+export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expenses, logNetLost, logNetGained, futureEventDeductions = {}) {
   if (!futureWeeks.length || !activeGoals.length)
     return activeGoals.map(g => ({ ...g, sW: 0, eW: 0, wN: 0 }));
   const n = futureWeeks.length;
   const avgNet = weeklyNets.length ? weeklyNets.reduce((a, b) => a + b, 0) / weeklyNets.length : 0;
-  const perWeekLost = logNetLost / n, perWeekGain = (logNetGained ?? 0) / n;
+  // ── Past-event smear: exclude future-week deductions (handled per-week below) ──
+  const futureDeductionTotal = Object.values(futureEventDeductions).reduce((a, b) => a + b, 0);
+  const perWeekLost = (logNetLost - futureDeductionTotal) / n, perWeekGain = (logNetGained ?? 0) / n;
   const remaining = activeGoals.map(g => g.target);
   const startWeek = activeGoals.map(() => null);
   const endWeek = activeGoals.map(() => null);
@@ -113,7 +115,9 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
     let spend = 0;
     for (const exp of expenses.filter(e => e.category !== "Transfers"))
       spend += getEffectiveAmount(exp, week.weekEnd, pi);
-    let surplus = (weeklyNets[weekOffset] ?? 0) - spend - perWeekLost + perWeekGain;
+    // ── Targeted deduction: current/future-week events hit their specific week ──
+    const weekDeduction = futureEventDeductions[week.idx] ?? 0;
+    let surplus = (weeklyNets[weekOffset] ?? 0) - weekDeduction - spend - perWeekLost + perWeekGain;
     if (surplus > 0) {
       for (let i = 0; i < activeGoals.length; i++) {
         if (remaining[i] <= 0 || surplus <= 0) continue;

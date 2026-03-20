@@ -3,15 +3,16 @@ import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../cons
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
 import { Card, VT, SmBtn, iS, lS } from "./ui.jsx";
 
+// TODO: tune — total particle count (12); must divide evenly into rings below
 // 12 particles evenly distributed around 360°, two distance rings, cycling symbols
 const BURST_PARTICLES = Array.from({ length: 12 }, (_, i) => {
   const angle = (i / 12) * Math.PI * 2;
-  const r = i % 2 === 0 ? 60 : 88;
+  const r = i % 2 === 0 ? 60 : 88; // TODO: tune — inner ring (60px) and outer ring (88px) radii
   return {
     dx: Math.round(Math.cos(angle) * r),
     dy: Math.round(Math.sin(angle) * r),
-    symbol: ['$', '✓', '▪', '+', '◆', '▸', '$', '✓', '▪', '+', '◆', '▸'][i],
-    delay: `${(i % 4) * 0.04}s`,
+    symbol: ['$', '✓', '▪', '+', '◆', '▸', '$', '✓', '▪', '+', '◆', '▸'][i], // TODO: tune — particle symbols; swap for other chars
+    delay: `${(i % 4) * 0.04}s`, // TODO: tune — stagger step (0.04s); raise for more wave-like spread
   };
 });
 
@@ -141,6 +142,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const [showCompleted, setShowCompleted] = useState(false);
   const handleMarkDone = (id) => {
     setFundingId(id);
+    // TODO: tune — total celebration window (1800ms); must be >= longest CSS animation
     setTimeout(() => {
       setGoals(p => p.map(g => g.id === id ? { ...g, completed: true, completedAt: new Date().toISOString() } : g));
       setFundingId(null);
@@ -388,6 +390,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           const ok = g.eW !== null && g.eW <= weeksLeft;
           const isEditing = editGoalId === g.id;
           const celebrating = fundingId === g.id;
+          // TODO: tune — card glow animation duration (1.8s) and easing (ease-out)
           return <div key={g.id} style={{ background: "#141414", border: `1px solid ${celebrating ? "#6dbf8a" : g.color + "33"}`, borderRadius: "8px", padding: "16px", marginBottom: "12px", position: "relative", overflow: "visible", animation: celebrating ? "goalFundedGlow 1.8s ease-out forwards" : undefined }}>
             {isEditing ? <div>
               <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "12px" }}>Editing Goal</div>
@@ -422,14 +425,19 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "#e8856a", background: "#2d1a1a", padding: "2px 6px", borderRadius: "3px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                 </div>
               </div>
+              {/* TODO: tune — progress bar fill transition duration (0.4s) and easing (ease-out) */}
               <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}><div style={{ position: "relative", left: celebrating ? 0 : `${Math.min((g.sW / weeksLeft) * 100, 100)}%`, width: celebrating ? "100%" : `${Math.min((g.wN / weeksLeft) * 100, 100 - (g.sW / weeksLeft) * 100)}%`, height: "100%", background: celebrating ? "#6dbf8a" : g.color, borderRadius: "3px", opacity: celebrating ? 1 : (ok ? 1 : 0.4), transition: "all 0.4s ease-out" }} /></div>
               {celebrating && <>
+                {/* TODO: tune — particle burst container; adjust top/left to reposition burst origin */}
                 <div style={{ position: "absolute", top: "50%", left: "50%", pointerEvents: "none", zIndex: 10 }}>
+                  {/* TODO: tune — particle fontSize (13px), animation duration (0.85s), cubic-bezier easing */}
                   {BURST_PARTICLES.map((p, pi) => (
                     <span key={pi} style={{ position: "absolute", fontSize: "13px", color: g.color, "--dx": `${p.dx}px`, "--dy": `${p.dy}px`, animation: `goalParticle 0.85s cubic-bezier(0.25,0.46,0.45,0.94) ${p.delay} forwards`, transform: "translate(-50%,-50%)", userSelect: "none" }}>{p.symbol}</span>
                   ))}
                 </div>
+                {/* TODO: tune — stamp entrance duration (0.45s), bounce easing, entrance delay (0.1s) */}
                 <div style={{ position: "absolute", top: "50%", left: "50%", pointerEvents: "none", zIndex: 11, animation: "goalStampIn 0.45s cubic-bezier(0.175,0.885,0.32,1.275) 0.1s both" }}>
+                  {/* TODO: tune — stamp border width (3px), fontSize (20px), letterSpacing (7px), textShadow glow radius (14px) */}
                   <div style={{ border: "3px solid #6dbf8a", borderRadius: "4px", padding: "8px 20px", fontSize: "20px", fontWeight: "bold", letterSpacing: "7px", color: "#6dbf8a", fontFamily: "'Courier New',monospace", textTransform: "uppercase", background: "rgba(13,13,13,0.93)", whiteSpace: "nowrap", textShadow: "0 0 14px rgba(109,191,138,0.65)" }}>FUNDED</div>
                 </div>
               </>}

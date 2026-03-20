@@ -163,21 +163,31 @@
 
 /* ── Goal funded celebration ─────────────────────────────────────────────────── */
 @keyframes goalFundedGlow {
+  /* TODO: tune — 0% border-color sets the "before" state, 25% is peak bloom */
   0%   { box-shadow: 0 0 0 0 rgba(109,191,138,0); border-color: rgba(109,191,138,0.2); }
+  /* TODO: tune — spread radius (24px 8px), inset glow opacity (0.06), peak border */
   25%  { box-shadow: 0 0 24px 8px rgba(109,191,138,0.4), inset 0 0 24px rgba(109,191,138,0.06); border-color: #6dbf8a; }
+  /* TODO: tune — mid-fade point (65%), trailing glow size (10px 3px) */
   65%  { box-shadow: 0 0 10px 3px rgba(109,191,138,0.2); border-color: rgba(109,191,138,0.55); }
+  /* TODO: tune — final resting border opacity (0.3) */
   100% { box-shadow: 0 0 0 0 rgba(109,191,138,0); border-color: rgba(109,191,138,0.3); }
 }
 
 @keyframes goalStampIn {
+  /* TODO: tune — entry scale (0.35), entry rotation (-18deg) */
   0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.35) rotate(-18deg); }
+  /* TODO: tune — overshoot scale (1.1) and rotation at 55% */
   55%  { opacity: 1; transform: translate(-50%,-50%) scale(1.1) rotate(-4deg); }
+  /* TODO: tune — settle-back scale (0.96) at 75% */
   75%  { transform: translate(-50%,-50%) scale(0.96) rotate(-6deg); }
+  /* TODO: tune — final resting rotation (-5deg); adjust for more/less tilt */
   100% { opacity: 1; transform: translate(-50%,-50%) scale(1) rotate(-5deg); }
 }
 
 @keyframes goalParticle {
+  /* TODO: tune — start state; scale(1) = full size at launch */
   0%   { opacity: 1; transform: translate(0,0) scale(1); }
+  /* TODO: tune — end scale (0.2); raise for larger faded-out particles */
   100% { opacity: 0; transform: translate(var(--dx),var(--dy)) scale(0.2); }
 }
 /* ─────────────────────────────────────────────────────────────────────────────── */

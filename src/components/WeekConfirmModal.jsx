@@ -1,13 +1,45 @@
+/**
+ * WeekConfirmModal — Two-layer weekly check-in modal
+ *
+ * Layer 1 — Day grid:
+ *   Shows Mon–Sun as rows. Each day has one of three toggle states:
+ *     true  = worked   (scheduled days default here)
+ *     false = missed   (scheduled days only)
+ *     null  = off      (unscheduled days default here; can be toggled to pickup)
+ *
+ *   Net shift delta = pickupDays.length − missedScheduledDays.length
+ *     = 0 → same total hours (even if different days) → confirm clean, skip Layer 2
+ *     < 0 → fewer shifts than scheduled → Layer 2 pre-filled as missed event
+ *     > 0 → extra shifts worked → Layer 2 pre-filled as bonus event
+ *
+ * Layer 2 — Full event log form (same fields as LogPanel's event creation):
+ *   Lets the user log what caused the schedule difference.
+ *   Pre-fills type/days/amounts from the delta, but all fields are editable.
+ *   Calls onConfirm(confirmation, logEntry) on "Log & Confirm".
+ *
+ * Props:
+ *   week    — week object from buildYear(): { idx, weekStart, weekEnd, workedDayNames, rotation }
+ *   config  — user config (shiftHours, baseRate, payPeriodEndDay, etc.)
+ *   onConfirm(confirmation, logEntry|null) — called on confirm; logEntry is null for net-zero
+ *   onDismiss() — session-only skip; badge persists in sidebar until confirmed
+ */
 import { useState } from "react";
 import { EVENT_TYPES } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
 
+// Canonical day ordering — must match LogPanel's DayPicker to keep missedDays arrays consistent
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const fmtDate = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+// Formats absolute dollar amounts for display (no sign, always 2 decimal places)
 const f2 = n => `$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+/**
+ * Given the week's Monday (weekStart), returns an array of 7 Date objects
+ * aligned to DAY_NAMES order: [Mon, Tue, Wed, Thu, Fri, Sat, Sun].
+ * Used to display the calendar date under each day label in Layer 1.
+ */
 function weekDayDates(weekStart) {
   return DAY_NAMES.map((_, i) => {
     const d = new Date(weekStart);
@@ -17,6 +49,9 @@ function weekDayDates(weekStart) {
 }
 
 // ── Shared DayPicker (matches LogPanel's style exactly) ──────────────────────
+// Used in Layer 2 for missed_unpaid / missed_unapproved event types.
+// Only scheduled days are interactive — unscheduled days render as disabled stubs
+// so the form stays consistent with what LogPanel shows for the same week.
 function DayPicker({ scheduledDays, missedDays, onToggle }) {
   return (
     <div>
@@ -73,6 +108,12 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
   };
 
   // ── Layer 2 event form helpers ────────────────────────────────────────────
+
+  // Toggles a day in/out of eventVals.missedDays and keeps the derived counts
+  // (shiftsLost, weekendShifts, hoursLost) in sync.
+  // NOTE: switching between missed_unpaid and missed_unapproved via changeEventType
+  //   resets missedDays to [] — this is intentional (type implies different context)
+  //   but means day selections don't survive a type change.
   const toggleMissedDay = (day) => {
     setEventVals(v => {
       const prev = Array.isArray(v.missedDays) ? v.missedDays : [];
@@ -82,14 +123,30 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
     });
   };
 
+  // Resets all type-specific numeric fields when the event type selector changes.
+  // This prevents stale "shiftsLost" from a missed type leaking into a bonus type, etc.
   const changeEventType = (type) => {
     setEventVals(v => ({ ...v, type, missedDays: [], shiftsLost: 0, weekendShifts: 0, hoursLost: 0, ptoHours: 0, amount: 0 }));
   };
 
   // ── Impact preview for Layer 2 ────────────────────────────────────────────
+  // Re-runs calcEventImpact live as the user edits the form so they see the
+  // projected net change before committing. Guard on weekEnd to avoid calling
+  // calcEventImpact with an empty event object before Layer 2 is initialized.
   const previewImpact = eventVals.weekEnd ? calcEventImpact(eventVals, config) : null;
 
   // ── Layer 1 save ──────────────────────────────────────────────────────────
+  // Called when user clicks "Confirm Week" or "Next →".
+  //
+  // Net-zero path (delta === 0):
+  //   Missed days exactly offset by pickup days → same total hours worked.
+  //   Saves confirmation record immediately with eventId: null (no log entry needed).
+  //
+  // Non-zero path (deficit or surplus):
+  //   Initializes the Layer 2 event form with smart pre-fills:
+  //     Deficit → type: "missed_unpaid", missedDays pre-selected, hours computed
+  //     Surplus → type: "bonus", amount pre-filled as gross pickup estimate
+  //   User can change any field before confirming. Goes to Layer 2.
   const handleSave = () => {
     if (netShiftDelta === 0) {
       // Net-zero: same total hours regardless of which days — confirm clean
@@ -110,7 +167,8 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       shiftsLost: isDeficit ? missedScheduledDays.length : 0,
       weekendShifts: isDeficit ? missedScheduledDays.filter(d => d === "Sat" || d === "Sun").length : 0,
       hoursLost: isDeficit ? missedScheduledDays.length * config.shiftHours : 0,
-      // Pickup surplus: estimate gross from extra shifts (user can adjust)
+      // Surplus: estimate gross (pre-tax) from pickup shifts so the amount field
+      // has a useful starting value. User should verify the actual payout.
       amount: !isDeficit ? pickupDays.length * config.shiftHours * config.baseRate : 0,
       ptoHours: 0,
       note: "",
@@ -119,15 +177,20 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
   };
 
   // ── Layer 2 confirm ───────────────────────────────────────────────────────
+  // Builds the final log entry from eventVals, coercing all numeric fields to
+  // proper number types (inputs return strings; || 0 guards empty strings).
+  // The resulting logEntry is the same shape as entries created by LogPanel —
+  // it will be appended to `logs` by App.jsx's onConfirm handler and
+  // processed by calcEventImpact for all downstream math.
   const handleConfirmLayer2 = () => {
     const logEntry = {
       ...eventVals,
       id: Date.now(),
-      shiftsLost: parseInt(eventVals.shiftsLost) || 0,
+      shiftsLost:   parseInt(eventVals.shiftsLost)   || 0,
       weekendShifts: parseInt(eventVals.weekendShifts) || 0,
-      ptoHours: parseFloat(eventVals.ptoHours) || 0,
-      hoursLost: parseFloat(eventVals.hoursLost) || 0,
-      amount: parseFloat(eventVals.amount) || 0,
+      ptoHours:     parseFloat(eventVals.ptoHours)   || 0,
+      hoursLost:    parseFloat(eventVals.hoursLost)  || 0,
+      amount:       parseFloat(eventVals.amount)     || 0,
     };
     onConfirm({
       confirmedAt: new Date().toISOString(),
@@ -170,6 +233,11 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
         </div>
 
         {/* ────────────────── LAYER 1 — Day grid ────────────────── */}
+        {/* Each row is a day of the week. Visual state per toggle value:
+              true  (worked):  green "Worked" pill active
+              false (missed):  coral "Missed" pill active
+              null  (off):     greyed "+ Pickup" button (unscheduled days only)
+        */}
         {layer === 1 && (
           <>
             <div style={{ overflowY: "auto", flex: 1 }}>
@@ -244,7 +312,9 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                 );
               })}
 
-              {/* Net summary row */}
+              {/* Net summary row — only shown when at least one day is non-default.
+                  Shows the running delta so the user can see the impact before saving.
+                  "Net hours unchanged" copy is intentionally calm — it's good news. */}
               {(missedScheduledDays.length > 0 || pickupDays.length > 0) && (
                 <div style={{ margin: "10px 20px", padding: "10px 14px", background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: "6px", fontSize: "10px" }}>
                   {missedScheduledDays.length > 0 && (
@@ -291,11 +361,15 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
         )}
 
         {/* ────────────────── LAYER 2 — Full event form ────────────────── */}
+        {/* Identical in structure to LogPanel's event creation form. Pre-filled from
+            the Layer 1 day grid but fully editable. All numeric inputs store as strings
+            in eventVals; handleConfirmLayer2() coerces to numbers before adding to logs.
+        */}
         {layer === 2 && (
           <>
             <div style={{ overflowY: "auto", flex: 1, padding: "18px 20px" }}>
 
-              {/* Net delta summary */}
+              {/* Net delta summary — non-interactive; reminds user why they're here */}
               <div style={{
                 marginBottom: "16px", padding: "10px 14px",
                 background: netShiftDelta < 0 ? "#2d1a1a" : "#1a2d1e",
@@ -368,7 +442,11 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                 <input type="text" value={eventVals.note ?? ""} onChange={e => setEventVals(v => ({ ...v, note: e.target.value }))} style={{ ...iS, marginTop: "4px" }} placeholder="Optional" />
               </div>
 
-              {/* Pay impact preview */}
+              {/* Pay impact preview — live; recalculates on every field edit.
+                  Shows projected week gross, estimated actual, and net change.
+                  Hidden when calcEventImpact returns no impact (e.g. note-only events).
+                  The "estimated actual" line derives from baseGross ± gross impact —
+                  this is a rough estimate since tax withholding varies by week type. */}
               {previewImpact && (previewImpact.netLost > 0 || previewImpact.netGained > 0) && (
                 <div style={{ padding: "10px 14px", background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: "6px", fontSize: "11px" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "2px", color: "#555", textTransform: "uppercase", marginBottom: "8px" }}>Pay impact</div>

@@ -13,9 +13,18 @@ import { buildLoanHistory } from "./finance.js";
  * Falls back to app defaults if the row is empty or missing.
  */
 export async function loadUserData() {
+  // Select core fields first — week_confirmations is fetched separately so a missing
+  // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra, week_confirmations")
+    .select("config, expenses, goals, logs, show_extra")
+    .eq("user_id", USER_ID)
+    .single();
+
+  // Fetch week_confirmations independently; gracefully returns {} if column missing.
+  const { data: wcData } = await supabase
+    .from("user_data")
+    .select("week_confirmations")
     .eq("user_id", USER_ID)
     .single();
 
@@ -63,7 +72,7 @@ export async function loadUserData() {
     goals:     data.goals.length                 ? data.goals     : INITIAL_GOALS,
     logs:      data.logs.length                  ? data.logs      : INITIAL_LOGS,
     showExtra:          data.show_extra,
-    weekConfirmations:  data.week_confirmations ?? {},
+    weekConfirmations:  wcData?.week_confirmations ?? {},
   };
 }
 

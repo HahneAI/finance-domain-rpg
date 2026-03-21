@@ -40,7 +40,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
   }).filter(m => m.wks.length > 0);
 
   return (<div>
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px", marginBottom: "14px" }}>
+    <div className="stat-grid">
       <Card label="Gross (Year)" val={f(yG)} />
       <Card label="Projected Net" val={f(yN)} color="#6dbf8a" />
       <Card label="Your 401k" val={f(yE)} color="#7a8bbf" />
@@ -59,12 +59,12 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       <div style={{ fontSize: "11px", color: "#888", flex: 1 }}>Extra withholding <span style={{ color: "#c8a84b", fontWeight: "bold" }}>{f2(extraPerCheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
       <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "3px", cursor: "pointer", background: showExtra ? "#3a3210" : "#1a1a1a", color: showExtra ? "#c8a84b" : "#aaa", border: "1px solid " + (showExtra ? "#c8a84b" : "#333"), textTransform: "uppercase", fontFamily: "'Courier New',monospace" }}>{showExtra ? "ON" : "OFF"}</button>
     </div>
-    <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
+    <div className="tab-scroll-row" style={{ marginBottom: "20px" }}>
       {["summary", "monthly", "weekly", "401k", "tax schedule", "config"].map(v => <VT key={v} label={v} active={view === v} onClick={() => setView(v)} />)}
     </div>
 
     {/* SUMMARY */}
-    {view === "summary" && <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+    {view === "summary" && <div className="record-table" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
       <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "#c8a84b", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
         <th style={{ textAlign: "left", padding: "8px 6px", width: "4px", paddingLeft: 0 }}></th><th style={{ textAlign: "left", padding: "8px 6px" }}>Month</th><th style={{ textAlign: "center", padding: "8px 6px" }}>Chks</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Take Home</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Your 401k</th><th style={{ textAlign: "right", padding: "8px 6px" }}>w/ Match</th>
       </tr></thead>
@@ -72,16 +72,16 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         const statusColor = m.n === 0 ? "#2a2a2a" : m.tx === m.n ? "#7a8bbf" : m.ex === m.n ? "#6dbf8a" : "#c8a84b";
         return <tr key={m.name} style={{ borderBottom: "1px solid #1a1a1a" }} onMouseEnter={e => e.currentTarget.style.background = "#141414"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
           <td style={{ padding: 0, width: "4px", backgroundColor: statusColor, borderRadius: "2px 0 0 2px" }}></td>
-          <td style={{ padding: "10px 6px", fontWeight: "bold" }}>{m.name}</td>
-          <td style={{ padding: "10px 6px", textAlign: "center", color: "#aaa" }}>{m.n}</td>
-          <td style={{ padding: "10px 6px", textAlign: "right" }}>{m.gross > 0 ? f(m.gross) : "—"}</td>
-          <td style={{ padding: "10px 6px", textAlign: "right", color: m.ex === m.n ? "#6dbf8a" : "#e8e0d0" }}>{m.net > 0 ? f(m.net) : "—"}</td>
-          <td style={{ padding: "10px 6px", textAlign: "right", color: m.k4E > 0 ? "#7a8bbf" : "#666" }}>{m.k4E > 0 ? f(m.k4E) : "—"}</td>
-          <td style={{ padding: "10px 6px", textAlign: "right", color: m.k4M > 0 ? "#c8a84b" : "#666" }}>{m.k4M > 0 ? f(m.k4E + m.k4M) : "—"}</td>
+          <td data-label="Month" style={{ padding: "10px 6px", fontWeight: "bold" }}>{m.name}</td>
+          <td data-label="Chks" style={{ padding: "10px 6px", textAlign: "center", color: "#aaa" }}>{m.n}</td>
+          <td data-label="Gross" style={{ padding: "10px 6px", textAlign: "right" }}>{m.gross > 0 ? f(m.gross) : "—"}</td>
+          <td data-label="Take Home" style={{ padding: "10px 6px", textAlign: "right", color: m.ex === m.n ? "#6dbf8a" : "#e8e0d0" }}>{m.net > 0 ? f(m.net) : "—"}</td>
+          <td data-label="Your 401k" style={{ padding: "10px 6px", textAlign: "right", color: m.k4E > 0 ? "#7a8bbf" : "#666" }}>{m.k4E > 0 ? f(m.k4E) : "—"}</td>
+          <td data-label="w/ Match" style={{ padding: "10px 6px", textAlign: "right", color: m.k4M > 0 ? "#c8a84b" : "#666" }}>{m.k4M > 0 ? f(m.k4E + m.k4M) : "—"}</td>
         </tr>;
       })}</tbody>
       <tfoot><tr style={{ borderTop: "2px solid #c8a84b", fontWeight: "bold", color: "#c8a84b" }}>
-        <td style={{ padding: 0 }}></td><td style={{ padding: "10px 6px" }}>TOTAL</td><td style={{ padding: "10px 6px", textAlign: "center", color: "#aaa" }}>{allWeeks.filter(w => w.active).length}</td><td style={{ padding: "10px 6px", textAlign: "right" }}>{f(yG)}</td><td style={{ padding: "10px 6px", textAlign: "right", color: "#6dbf8a" }}>{f(yN)}</td><td style={{ padding: "10px 6px", textAlign: "right", color: "#7a8bbf" }}>{f(yE)}</td><td style={{ padding: "10px 6px", textAlign: "right" }}>{f(yT)}</td>
+        <td style={{ padding: 0 }}></td><td data-label="Month" style={{ padding: "10px 6px" }}>TOTAL</td><td data-label="Chks" style={{ padding: "10px 6px", textAlign: "center", color: "#aaa" }}>{allWeeks.filter(w => w.active).length}</td><td data-label="Gross" style={{ padding: "10px 6px", textAlign: "right" }}>{f(yG)}</td><td data-label="Take Home" style={{ padding: "10px 6px", textAlign: "right", color: "#6dbf8a" }}>{f(yN)}</td><td data-label="Your 401k" style={{ padding: "10px 6px", textAlign: "right", color: "#7a8bbf" }}>{f(yE)}</td><td data-label="w/ Match" style={{ padding: "10px 6px", textAlign: "right" }}>{f(yT)}</td>
       </tr></tfoot>
     </table></div>}
 
@@ -104,20 +104,20 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     </div>}
 
     {/* WEEKLY */}
-    {view === "weekly" && <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
+    {view === "weekly" && <div className="record-table" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
       <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "#c8a84b", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
         <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Hrs</th><th style={{ textAlign: "center", padding: "8px 4px" }}>OT</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Wknd</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>401k</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
       </tr></thead>
       <tbody>{allWeeks.map(w => { const isCurrent = currentWeek && w.idx === currentWeek.idx; return <tr key={w.idx} style={{ borderBottom: "1px solid #161616", opacity: w.active ? 1 : 0.35, background: isCurrent ? "#1a2a14" : "transparent" }} onMouseEnter={e => { if (w.active) e.currentTarget.style.background = isCurrent ? "#1e3018" : "#141414"; }} onMouseLeave={e => e.currentTarget.style.background = isCurrent ? "#1a2a14" : "transparent"}>
-        <td style={{ padding: "7px 4px" }}><span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>{isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "#6dbf8a", letterSpacing: "1px" }}>← now</span>}</td>
-        <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: w.rotation === "6-Day" ? "#c8a84b" : "#7a8bbf" }}>{w.rotation}</td>
-        <td style={{ padding: "7px 4px", textAlign: "center", color: "#888" }}>{w.active ? w.totalHours : "—"}</td>
-        <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "#e8856a" : "#666" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
-        <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "#c8a84b" : "#666" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>
-        <td style={{ padding: "7px 4px", textAlign: "right" }}>{w.active ? f2(w.grossPay) : "—"}</td>
-        <td style={{ padding: "7px 4px", textAlign: "right", color: w.has401k ? "#7a8bbf" : "#666" }}>{w.has401k ? f2(w.k401kEmployee) : "—"}</td>
-        <td style={{ padding: "7px 4px", textAlign: "right", color: w.active ? (w.taxedBySchedule ? "#e8e0d0" : "#6dbf8a") : "#666" }}>{w.active ? f2(gN(w)) : "—"}</td>
-        <td style={{ padding: "7px 4px", textAlign: "center" }}>{w.active && <span style={{ fontSize: "8px", padding: "2px 6px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule) }}>{w.taxedBySchedule ? "TX" : "EX"}</span>}</td>
+        <td data-label="Wk End" style={{ padding: "7px 4px" }}><span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>{isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "#6dbf8a", letterSpacing: "1px" }}>← now</span>}</td>
+        <td data-label="Rot" style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: w.rotation === "6-Day" ? "#c8a84b" : "#7a8bbf" }}>{w.rotation}</td>
+        <td data-label="Hrs" style={{ padding: "7px 4px", textAlign: "center", color: "#888" }}>{w.active ? w.totalHours : "—"}</td>
+        <td data-label="OT" style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "#e8856a" : "#666" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
+        <td data-label="Wknd" style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "#c8a84b" : "#666" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>
+        <td data-label="Gross" style={{ padding: "7px 4px", textAlign: "right" }}>{w.active ? f2(w.grossPay) : "—"}</td>
+        <td data-label="401k" style={{ padding: "7px 4px", textAlign: "right", color: w.has401k ? "#7a8bbf" : "#666" }}>{w.has401k ? f2(w.k401kEmployee) : "—"}</td>
+        <td data-label="Take Home" style={{ padding: "7px 4px", textAlign: "right", color: w.active ? (w.taxedBySchedule ? "#e8e0d0" : "#6dbf8a") : "#666" }}>{w.active ? f2(gN(w)) : "—"}</td>
+        <td data-label="Status" style={{ padding: "7px 4px", textAlign: "center" }}>{w.active && <span style={{ fontSize: "8px", padding: "2px 6px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule) }}>{w.taxedBySchedule ? "TX" : "EX"}</span>}</td>
       </tr>; })}</tbody>
     </table></div>}
 
@@ -128,25 +128,25 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         <Card label="Employer Match" val={f(allWeeks.reduce((s, w) => s + w.k401kEmployer, 0))} sub={`${(config.k401MatchRate * 100).toFixed(0)}% match`} color="#6dbf8a" size="22px" />
         <Card label="Total 401k Balance" val={f(yT)} sub="Projected year-end 2026" color="#c8a84b" size="22px" />
       </div>
-      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "480px" }}>
+      <div className="record-table" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "480px" }}>
         <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "#c8a84b", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
           <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Your {(config.k401Rate * 100).toFixed(0)}%</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Match</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Wk Total</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Running</th>
         </tr></thead>
         <tbody>{wR.filter(w => w.has401k).map(w => <tr key={w.idx} style={{ borderBottom: "1px solid #161616" }} onMouseEnter={e => e.currentTarget.style.background = "#141414"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-          <td style={{ padding: "7px 4px" }}>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
-          <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: w.rotation === "6-Day" ? "#c8a84b" : "#7a8bbf" }}>{w.rotation}</td>
-          <td style={{ padding: "7px 4px", textAlign: "right" }}>{f2(w.grossPay)}</td>
-          <td style={{ padding: "7px 4px", textAlign: "right", color: "#7a8bbf" }}>{f2(w.k401kEmployee)}</td>
-          <td style={{ padding: "7px 4px", textAlign: "right", color: "#6dbf8a" }}>{f2(w.k401kEmployer)}</td>
-          <td style={{ padding: "7px 4px", textAlign: "right" }}>{f2(w.k401kEmployee + w.k401kEmployer)}</td>
-          <td style={{ padding: "7px 4px", textAlign: "right", color: "#c8a84b", fontWeight: "bold" }}>{f2(w.rE + w.rM)}</td>
+          <td data-label="Wk End" style={{ padding: "7px 4px" }}>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
+          <td data-label="Rot" style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: w.rotation === "6-Day" ? "#c8a84b" : "#7a8bbf" }}>{w.rotation}</td>
+          <td data-label="Gross" style={{ padding: "7px 4px", textAlign: "right" }}>{f2(w.grossPay)}</td>
+          <td data-label="Your %" style={{ padding: "7px 4px", textAlign: "right", color: "#7a8bbf" }}>{f2(w.k401kEmployee)}</td>
+          <td data-label="Match" style={{ padding: "7px 4px", textAlign: "right", color: "#6dbf8a" }}>{f2(w.k401kEmployer)}</td>
+          <td data-label="Wk Total" style={{ padding: "7px 4px", textAlign: "right" }}>{f2(w.k401kEmployee + w.k401kEmployer)}</td>
+          <td data-label="Running" style={{ padding: "7px 4px", textAlign: "right", color: "#c8a84b", fontWeight: "bold" }}>{f2(w.rE + w.rM)}</td>
         </tr>)}</tbody>
         <tfoot><tr style={{ borderTop: "2px solid #c8a84b", fontWeight: "bold", color: "#c8a84b" }}>
-          <td colSpan={3} style={{ padding: "10px 4px" }}>YEAR-END TOTAL</td>
-          <td style={{ padding: "10px 4px", textAlign: "right", color: "#7a8bbf" }}>{f(yE)}</td>
-          <td style={{ padding: "10px 4px", textAlign: "right", color: "#6dbf8a" }}>{f(allWeeks.reduce((s, w) => s + w.k401kEmployer, 0))}</td>
-          <td style={{ padding: "10px 4px", textAlign: "right" }}>{f(yT)}</td>
-          <td style={{ padding: "10px 4px", textAlign: "right" }}>{f(yT)}</td>
+          <td data-label="Wk End" colSpan={3} style={{ padding: "10px 4px" }}>YEAR-END TOTAL</td>
+          <td data-label="Your %" style={{ padding: "10px 4px", textAlign: "right", color: "#7a8bbf" }}>{f(yE)}</td>
+          <td data-label="Match" style={{ padding: "10px 4px", textAlign: "right", color: "#6dbf8a" }}>{f(allWeeks.reduce((s, w) => s + w.k401kEmployer, 0))}</td>
+          <td data-label="Wk Total" style={{ padding: "10px 4px", textAlign: "right" }}>{f(yT)}</td>
+          <td data-label="Running" style={{ padding: "10px 4px", textAlign: "right" }}>{f(yT)}</td>
         </tr></tfoot>
       </table></div>
     </div>}

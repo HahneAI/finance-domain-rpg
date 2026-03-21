@@ -89,7 +89,7 @@ export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLos
           </div>
 
           {/* Month table */}
-          <div style={{ background: "#141414", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "10px" }}>
+          <div className="record-table" style={{ background: "#141414", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "10px" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid #222", color: "#555", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase" }}>
@@ -103,27 +103,27 @@ export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLos
               <tbody>
                 {bm.monthHistory.map(row => (
                   <tr key={row.month} style={{ borderBottom: "1px solid #181818" }}>
-                    <td style={{ padding: "7px 12px", color: "#e8e0d0" }}>{fmtMonth(row.month)}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: row.M > 0 ? "#e8856a" : "#444" }}>{row.M > 0 ? `${row.M}h` : "—"}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: row.net >= 0 ? "#6dbf8a" : "#e8856a" }}>{row.net >= 0 ? "+" : ""}{row.net}h</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#888" }}>{row.closingBalance}h</td>
-                    <td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "#c8a84b" : "#444" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td>
+                    <td data-label="Month" style={{ padding: "7px 12px", color: "#e8e0d0" }}>{fmtMonth(row.month)}</td>
+                    <td data-label="Unappr." style={{ padding: "7px 8px", textAlign: "right", color: row.M > 0 ? "#e8856a" : "#444" }}>{row.M > 0 ? `${row.M}h` : "—"}</td>
+                    <td data-label="Net" style={{ padding: "7px 8px", textAlign: "right", color: row.net >= 0 ? "#6dbf8a" : "#e8856a" }}>{row.net >= 0 ? "+" : ""}{row.net}h</td>
+                    <td data-label="Balance" style={{ padding: "7px 8px", textAlign: "right", color: "#888" }}>{row.closingBalance}h</td>
+                    <td data-label="Payout" style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "#c8a84b" : "#444" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td>
                   </tr>
                 ))}
                 <tr style={{ borderBottom: "1px solid #252525", background: "#1a1a1a" }}>
-                  <td style={{ padding: "7px 12px", color: "#c8a84b" }}>{fmtMonth(currentMonthStr)} <span style={{ fontSize: "9px", color: "#555" }}>in progress</span></td>
-                  <td style={{ padding: "7px 8px", textAlign: "right", color: bm.currentM > 0 ? "#e8856a" : "#444" }}>{bm.currentM > 0 ? `${bm.currentM}h` : "—"}</td>
-                  <td style={{ padding: "7px 8px", textAlign: "right", color: "#444" }}>—</td>
-                  <td style={{ padding: "7px 8px", textAlign: "right", color: "#666" }}>{bm.currentBalance}h</td>
-                  <td style={{ padding: "7px 12px", textAlign: "right", color: "#444" }}>—</td>
+                  <td data-label="Month" style={{ padding: "7px 12px", color: "#c8a84b" }}>{fmtMonth(currentMonthStr)} <span style={{ fontSize: "9px", color: "#555" }}>in progress</span></td>
+                  <td data-label="Unappr." style={{ padding: "7px 8px", textAlign: "right", color: bm.currentM > 0 ? "#e8856a" : "#444" }}>{bm.currentM > 0 ? `${bm.currentM}h` : "—"}</td>
+                  <td data-label="Net" style={{ padding: "7px 8px", textAlign: "right", color: "#444" }}>—</td>
+                  <td data-label="Balance" style={{ padding: "7px 8px", textAlign: "right", color: "#666" }}>{bm.currentBalance}h</td>
+                  <td data-label="Payout" style={{ padding: "7px 12px", textAlign: "right", color: "#444" }}>—</td>
                 </tr>
                 {bm.projectedHistory.map(row => (
                   <tr key={row.month} style={{ borderBottom: "1px solid #181818", opacity: 0.45 }}>
-                    <td style={{ padding: "7px 12px", color: "#666", fontStyle: "italic" }}>{fmtMonth(row.month)}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#444" }}>—</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#555" }}>+{row.net}h</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#555" }}>{row.closingBalance}h</td>
-                    <td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "#8a6e20" : "#444" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td>
+                    <td data-label="Month" style={{ padding: "7px 12px", color: "#666", fontStyle: "italic" }}>{fmtMonth(row.month)}</td>
+                    <td data-label="Unappr." style={{ padding: "7px 8px", textAlign: "right", color: "#444" }}>—</td>
+                    <td data-label="Net" style={{ padding: "7px 8px", textAlign: "right", color: "#555" }}>+{row.net}h</td>
+                    <td data-label="Balance" style={{ padding: "7px 8px", textAlign: "right", color: "#555" }}>{row.closingBalance}h</td>
+                    <td data-label="Payout" style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "#8a6e20" : "#444" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td>
                   </tr>
                 ))}
               </tbody>

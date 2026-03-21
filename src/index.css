@@ -147,3 +147,85 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+/* ─────────────────────────────────────────────────────────────
+   STYLE A — TERMINAL HARDENED
+   ───────────────────────────────────────────────────────────── */
+
+/* Scrollable tab row — single line, no wrap, momentum scroll, no visible scrollbar */
+.tab-scroll-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 2px;
+}
+.tab-scroll-row::-webkit-scrollbar { display: none; }
+.tab-scroll-row > * {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+
+/* Responsive stat grid — 1-col mobile, 2-col 480px+, 4-col 768px+ */
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+@media (min-width: 480px) { .stat-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 768px) { .stat-grid { grid-template-columns: repeat(4, 1fr); } }
+
+/* Record table — collapses data tables to stacked label/value cards on mobile */
+@media (max-width: 599px) {
+  .record-table { overflow-x: visible !important; }
+  .record-table table {
+    display: block;
+    width: 100%;
+    min-width: unset !important;
+  }
+  .record-table thead { display: none; }
+  .record-table tbody,
+  .record-table tfoot { display: block; }
+  .record-table tr {
+    display: block;
+    background: #141414;
+    border: 1px solid #2a2a2a;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+  }
+  .record-table tfoot tr {
+    background: #1a1a1a;
+    border-color: #c8a84b44;
+  }
+  /* Status-bar column (first <td> with no data-label): hide on mobile */
+  .record-table td:not([data-label]) { display: none; }
+  .record-table td[data-label] {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 3px 0;
+    text-align: right !important;
+    border: none !important;
+  }
+  .record-table td[data-label]::before {
+    content: attr(data-label);
+    color: #FFD700;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    text-align: left;
+    flex-shrink: 0;
+    margin-right: 8px;
+    font-family: 'Courier New', monospace;
+  }
+}
+
+/* Tap feedback — brief opacity dip on all interactive elements, no rounded iOS flash */
+button:active {
+  opacity: 0.7;
+  transition: opacity 0.1s ease-out;
+}

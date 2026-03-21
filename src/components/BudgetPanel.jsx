@@ -182,11 +182,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
   return (<div>
     {/* Phase tabs */}
-    <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+    <div className="tab-scroll-row" style={{ marginBottom: "20px" }}>
       {PHASES.map((p, i) => { const isCurrent = i === currentPhaseIdx; return <button key={p.id} onClick={() => setAp(i)} style={{ flex: 1, padding: "10px", borderRadius: "6px", cursor: "pointer", background: ap === i ? p.color : "#141414", color: ap === i ? "#0a0a0a" : "#666", border: "2px solid " + (ap === i ? p.color : isCurrent ? p.color + "55" : "#222"), fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", fontFamily: "'Courier New',monospace", position: "relative" }}>{isCurrent && ap !== i && <span style={{ position: "absolute", top: "5px", right: "6px", width: "6px", height: "6px", borderRadius: "50%", background: p.color }} />}{p.label}<br /><span style={{ fontSize: "9px", fontWeight: "normal" }}>{p.description}</span>{isCurrent && <span style={{ display: "block", fontSize: "8px", marginTop: "2px", opacity: ap === i ? 0.7 : 0.9 }}>● now</span>}</button>; })}
     </div>
     {/* Summary cards */}
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px", marginBottom: "16px" }}>
+    <div className="stat-grid">
       <Card label="Weekly Income" val={f2(weeklyIncome)} color="#7eb8c9" />
       <Card label="Weekly Spend" val={f2(ts)} color="#e8856a" />
       <Card label="Weekly Left" val={f2(wr)} color={wr >= 0 ? "#6dbf8a" : "#e8856a"} />
@@ -201,7 +201,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden" }}><div style={{ height: "100%", borderRadius: "4px", width: `${sp}%`, background: sp > 90 ? "#e8856a" : sp > 70 ? "#c8a84b" : "#6dbf8a", transition: "width 0.3s" }} /></div>
     </div>
     {/* View tabs */}
-    <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
+    <div className="tab-scroll-row" style={{ marginBottom: "20px" }}>
       {["overview", "breakdown", "cashflow", "goals", "loans"].map(v => <VT key={v} label={v} active={view === v} onClick={() => setView(v)} />)}
     </div>
 
@@ -322,27 +322,27 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       })}
       <div style={{ height: "1px", background: "#222", margin: "20px 0" }} />
       <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#888", textTransform: "uppercase", marginBottom: "12px" }}>Annual Projection ({ph.label})</div>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+      <div className="record-table"><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
         <thead><tr style={{ borderBottom: "1px solid #333", color: "#888", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Weekly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
         <tbody>{expenses.map(exp => {
           const amt = currentEffective(exp, ap);
           const isLoan = exp.type === "loan";
           return <tr key={exp.id} style={{ borderBottom: "1px solid #181818" }} onMouseEnter={e => e.currentTarget.style.background = "#141414"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            <td style={{ padding: "8px 4px" }}>
+            <td data-label="Expense" style={{ padding: "8px 4px" }}>
               <span style={{ fontSize: "10px", color: isLoan ? "#c8a84b" : CATEGORY_COLORS[exp.category], marginRight: "6px" }}>▸</span>
               {exp.label}
               {isLoan && <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "1px 4px", borderRadius: "2px", marginLeft: "5px" }}>LOAN</span>}
             </td>
-            <td style={{ padding: "8px 4px", textAlign: "right", color: isLoan ? "#c8a84b" : CATEGORY_COLORS[exp.category] }}>{f2(amt)}</td>
-            <td style={{ padding: "8px 4px", textAlign: "right", color: "#888" }}>{f(amt * 52 / 12)}</td>
-            <td style={{ padding: "8px 4px", textAlign: "right", color: "#666" }}>{f(amt * 52)}</td>
+            <td data-label="Weekly" style={{ padding: "8px 4px", textAlign: "right", color: isLoan ? "#c8a84b" : CATEGORY_COLORS[exp.category] }}>{f2(amt)}</td>
+            <td data-label="Monthly" style={{ padding: "8px 4px", textAlign: "right", color: "#888" }}>{f(amt * 52 / 12)}</td>
+            <td data-label="Annual" style={{ padding: "8px 4px", textAlign: "right", color: "#666" }}>{f(amt * 52)}</td>
           </tr>;
         })}</tbody>
         <tfoot>
-          <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td style={{ padding: "10px 4px", color: "#c8a84b" }}>TRUE SPEND</td><td style={{ padding: "10px 4px", textAlign: "right", color: "#e8856a" }}>{f2(ts)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "#e8856a" }}>{f(ts * 52 / 12)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "#e8856a" }}>{f(ts * 52)}</td></tr>
-          <tr style={{ fontWeight: "bold" }}><td style={{ padding: "6px 4px", color: "#6dbf8a" }}>REMAINING</td><td style={{ padding: "6px 4px", textAlign: "right", color: "#6dbf8a" }}>{f2(wr)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "#6dbf8a" }}>{f(wr * 52 / 12)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "#6dbf8a" }}>{f(wr * 52)}</td></tr>
+          <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td data-label="Expense" style={{ padding: "10px 4px", color: "#c8a84b" }}>TRUE SPEND</td><td data-label="Weekly" style={{ padding: "10px 4px", textAlign: "right", color: "#e8856a" }}>{f2(ts)}</td><td data-label="Monthly" style={{ padding: "10px 4px", textAlign: "right", color: "#e8856a" }}>{f(ts * 52 / 12)}</td><td data-label="Annual" style={{ padding: "10px 4px", textAlign: "right", color: "#e8856a" }}>{f(ts * 52)}</td></tr>
+          <tr style={{ fontWeight: "bold" }}><td data-label="Expense" style={{ padding: "6px 4px", color: "#6dbf8a" }}>REMAINING</td><td data-label="Weekly" style={{ padding: "6px 4px", textAlign: "right", color: "#6dbf8a" }}>{f2(wr)}</td><td data-label="Monthly" style={{ padding: "6px 4px", textAlign: "right", color: "#6dbf8a" }}>{f(wr * 52 / 12)}</td><td data-label="Annual" style={{ padding: "6px 4px", textAlign: "right", color: "#6dbf8a" }}>{f(wr * 52)}</td></tr>
         </tfoot>
-      </table>
+      </table></div>
     </div>}
 
     {/* CASHFLOW */}

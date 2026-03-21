@@ -2,6 +2,8 @@ import { useState } from "react";
 import { EVENT_TYPES, PTO_RATE } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { Card, iS, lS } from "./ui.jsx";
+import { BottomSheet } from "./BottomSheet.jsx";
+import { NumberKeypad, NumDisplay } from "./NumberKeypad.jsx";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -22,6 +24,10 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
   const [editId, setEditId] = useState(null);
   const [editVals, setEditVals] = useState({});
   const [cdel, setCdel] = useState(null);
+  // Bottom sheet / keypad state
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [activeKeypad, setActiveKeypad] = useState(null); // field name or null
+  const [keypадValue, setKeypадValue] = useState("");
 
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const f0 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -75,32 +81,60 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
   const addLog = () => {
     setLogs(p => [...p, {
       ...nEv, id: Date.now(),
-      shiftsLost: parseInt(nEv.shiftsLost) || 0,
+      shiftsLost:    parseInt(nEv.shiftsLost) || 0,
       weekendShifts: parseInt(nEv.weekendShifts) || 0,
-      ptoHours: parseFloat(nEv.ptoHours) || 0,
+      ptoHours:      parseFloat(nEv.ptoHours) || 0,
       hoursLost: parseFloat(nEv.hoursLost) || 0,
       amount: parseFloat(nEv.amount) || 0,
     }]);
-    setAdding(false); setNEv(blank);
+    closeSheet();
+  };
+
+  // ── Sheet close ──
+  const closeSheet = () => {
+    setSheetOpen(false);
+    setAdding(false);
+    setEditId(null);
+    setNEv(blank);
+    setActiveKeypad(null);
+    setKeypадValue("");
+  };
+
+  // ── Keypad change — routes to the active form (add or edit) ──
+  const handleKeypадChange = (newVal) => {
+    setKeypадValue(newVal);
+    const num = newVal;
+    if (adding) {
+      setNEv(v => ({ ...v, [activeKeypad]: num }));
+    } else if (editId !== null) {
+      setEditVals(v => ({ ...v, [activeKeypad]: num }));
+    }
+  };
+
+  const closeKeypad = () => {
+    setActiveKeypad(null);
+    setKeypадValue("");
   };
 
   // ── Edit handlers ──
   const startEdit = (entry) => {
     setEditId(entry.id);
     setEditVals({ ...entry, missedDays: normalizeDays(entry.missedDays) });
-    setCdel(null); setAdding(false);
+    setCdel(null);
+    setAdding(false);
+    setSheetOpen(true);
   };
   const handleEditWeekEndChange = (dateStr) => setEditVals(v => ({ ...v, weekEnd: dateStr, ...resolveWeek(dateStr), missedDays: [] }));
   const saveEdit = () => {
     setLogs(p => p.map(e => e.id !== editId ? e : {
       ...editVals, id: editId,
-      shiftsLost: parseInt(editVals.shiftsLost) || 0,
+      shiftsLost:    parseInt(editVals.shiftsLost) || 0,
       weekendShifts: parseInt(editVals.weekendShifts) || 0,
-      ptoHours: parseFloat(editVals.ptoHours) || 0,
-      hoursLost: parseFloat(editVals.hoursLost) || 0,
-      amount: parseFloat(editVals.amount) || 0,
+      ptoHours:      parseFloat(editVals.ptoHours) || 0,
+      hoursLost:     parseFloat(editVals.hoursLost) || 0,
+      amount:        parseFloat(editVals.amount) || 0,
     }));
-    setEditId(null);
+    closeSheet();
   };
 
   // ── Day picker component ──
@@ -171,7 +205,11 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
 
     <div style={{ gridColumn: "1 / -1" }}>
       <label style={lS}>Event Type</label>
-      <select value={vals.type} onChange={e => set(v => ({ ...v, type: e.target.value, missedDays: [], shiftsLost: 0, weekendShifts: 0, hoursLost: 0 }))} style={iS}>
+      <select
+        value={vals.type}
+        onChange={e => set(v => ({ ...v, type: e.target.value, missedDays: [], shiftsLost: 0, weekendShifts: 0, hoursLost: 0 }))}
+        style={{ ...iS, fontSize: "16px" }}
+      >
         {Object.entries(EVENT_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
       </select>
     </div>
@@ -194,15 +232,33 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
     )}
 
     {vals.type === "pto" && (
-      <div><label style={lS}>PTO Hours (${PTO_RATE}/hr flat)</label>
-        <input type="number" min="0" value={vals.ptoHours} onChange={e => set(v => ({ ...v, ptoHours: e.target.value }))} style={iS} />
+      <div>
+        <label style={lS}>PTO Hours (${PTO_RATE}/hr flat)</label>
+        <NumDisplay
+          value={String(vals.ptoHours || "")}
+          prefix=""
+          active={activeKeypad === "ptoHours"}
+          onPress={() => {
+            setKeypадValue(String(vals.ptoHours || ""));
+            setActiveKeypad("ptoHours");
+          }}
+        />
       </div>
     )}
 
     {/* partial: hours input + optional day picker + info note */}
     {vals.type === "partial" && <>
-      <div><label style={lS}>Hours Lost (of {config.shiftHours})</label>
-        <input type="number" min="0" max={config.shiftHours} step="0.5" value={vals.hoursLost} onChange={e => set(v => ({ ...v, hoursLost: e.target.value }))} style={iS} />
+      <div>
+        <label style={lS}>Hours Lost (of {config.shiftHours})</label>
+        <NumDisplay
+          value={String(vals.hoursLost || "")}
+          prefix=""
+          active={activeKeypad === "hoursLost"}
+          onPress={() => {
+            setKeypадValue(String(vals.hoursLost || ""));
+            setActiveKeypad("hoursLost");
+          }}
+        />
       </div>
       <div style={{ gridColumn: "1 / -1", padding: "8px 10px", background: "#141e14", border: "1px solid #6dbf8a44", borderRadius: "4px", fontSize: "10px", color: "#6dbf8a", lineHeight: "1.6" }}>
         Partial shift (approved) — reduces pay and PTO accrual. Does not hit attendance bucket.
@@ -210,14 +266,28 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
     </>}
 
     {(vals.type === "bonus" || vals.type === "other_loss") && (
-      <div><label style={lS}>Amount ($)</label>
-        <input type="number" min="0" value={vals.amount} onChange={e => set(v => ({ ...v, amount: e.target.value }))} style={iS} />
+      <div>
+        <label style={lS}>Amount ($)</label>
+        <NumDisplay
+          value={String(vals.amount || "")}
+          active={activeKeypad === "amount"}
+          onPress={() => {
+            setKeypадValue(String(vals.amount || ""));
+            setActiveKeypad("amount");
+          }}
+        />
       </div>
     )}
 
     <div style={{ gridColumn: "1 / -1" }}>
       <label style={lS}>Note</label>
-      <input type="text" placeholder="Optional" value={vals.note} onChange={e => set(v => ({ ...v, note: e.target.value }))} style={iS} />
+      <input
+        type="text"
+        placeholder="Optional"
+        value={vals.note}
+        onChange={e => set(v => ({ ...v, note: e.target.value }))}
+        style={{ ...iS, fontSize: "16px" }}
+      />
     </div>
   </>;
 
@@ -294,96 +364,132 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
     {/* Log header + add button */}
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#888", textTransform: "uppercase" }}>Event Log ({logs.length})</div>
-      <button onClick={() => { setAdding(true); setEditId(null); }} style={{ background: "#c8a84b", color: "#0d0d0d", border: "none", borderRadius: "4px", padding: "6px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>+ LOG EVENT</button>
+      <button
+        onClick={() => { setAdding(true); setEditId(null); setNEv(blank); setSheetOpen(true); }}
+        style={{ background: "#c8a84b", color: "#0d0d0d", border: "none", borderRadius: "4px", padding: "6px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold", minHeight: "44px" }}
+      >
+        + LOG EVENT
+      </button>
     </div>
-
-    {/* Add form */}
-    {adding && <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
-      <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "16px" }}>New Event</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-        <FormFields vals={nEv} set={setNEv} onWeekEndChange={handleWeekEndChange} />
-      </div>
-      <div style={{ display: "flex", gap: "8px" }}>
-        <button onClick={addLog} disabled={!nEv.weekEnd} style={{ background: nEv.weekEnd ? "#6dbf8a" : "#2a2a2a", color: nEv.weekEnd ? "#0d0d0d" : "#555", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: nEv.weekEnd ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>SAVE</button>
-        <button onClick={() => { setAdding(false); setNEv(blank); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
-      </div>
-    </div>}
 
     {logs.length === 0 && !adding && <div style={{ textAlign: "center", padding: "40px", color: "#444", fontSize: "13px" }}>No events logged yet.</div>}
 
     {/* Log entries */}
     {logs.map(entry => {
-      const imp  = calcEventImpact(entry, config);
-      const ev   = EVENT_TYPES[entry.type] ?? { label: entry.type, color: "#888", icon: "?" };
-      const isB  = entry.type === "bonus";
-      const isUA = entry.type === "missed_unapproved";
-      const ak   = entry.weekEnd && new Date(entry.weekEnd) >= new Date(config.k401StartDate);
-      const isEditing = editId === entry.id;
+      const imp     = calcEventImpact(entry, config);
+      const ev      = EVENT_TYPES[entry.type] ?? { label: entry.type, color: "#888", icon: "?" };
+      const isB     = entry.type === "bonus";
+      const isUA    = entry.type === "missed_unapproved";
+      const ak      = entry.weekEnd && new Date(entry.weekEnd) >= new Date(config.k401StartDate);
       const missedArr = normalizeDays(entry.missedDays);
 
-      return <div key={entry.id} style={{ background: "#141414", border: `1px solid ${isEditing ? ev.color : ev.color + "33"}`, borderRadius: "8px", padding: "16px", marginBottom: "10px" }}>
-
-        {isEditing ? (
-          <>
-            <div style={{ fontSize: "11px", letterSpacing: "2px", color: ev.color, textTransform: "uppercase", marginBottom: "14px" }}>Edit Event</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-              <FormFields vals={editVals} set={setEditVals} onWeekEndChange={handleEditWeekEndChange} />
+      return <div key={entry.id} style={{ background: "#141414", border: `1px solid ${ev.color + "33"}`, borderRadius: "8px", padding: "16px", marginBottom: "10px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "12px", background: ev.color + "22", color: ev.color, padding: "2px 8px", borderRadius: "3px" }}>{ev.icon} {ev.label}</span>
+              <span style={{ fontSize: "11px", color: "#777" }}>{entry.weekRotation}</span>
+              {isUA && <span style={{ fontSize: "9px", background: "#e8622a22", color: "#e8622a", padding: "2px 6px", borderRadius: "3px", fontWeight: "bold" }}>⚠ BUCKET HIT</span>}
+              {ak   && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "3px" }}>401k</span>}
             </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={saveEdit} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>SAVE</button>
-              <button onClick={() => setEditId(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "12px", background: ev.color + "22", color: ev.color, padding: "2px 8px", borderRadius: "3px" }}>{ev.icon} {ev.label}</span>
-                  <span style={{ fontSize: "11px", color: "#777" }}>{entry.weekRotation}</span>
-                  {isUA && <span style={{ fontSize: "9px", background: "#e8622a22", color: "#e8622a", padding: "2px 6px", borderRadius: "3px", fontWeight: "bold" }}>⚠ BUCKET HIT</span>}
-                  {ak   && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "3px" }}>401k</span>}
-                </div>
-                <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "2px" }}>Week ending {entry.weekEnd || "—"}</div>
-                {missedArr.length > 0 && <div style={{ fontSize: "11px", color: "#777" }}>Missed: {missedArr.join(", ")}</div>}
-                {entry.note && <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>{entry.note}</div>}
-              </div>
-              <div style={{ textAlign: "right", marginLeft: "16px" }}>
-                <div style={{ fontSize: "18px", fontWeight: "bold", color: isB ? "#6dbf8a" : "#e8856a" }}>{isB ? "+" : "-"}{f(isB ? imp.grossGained : imp.grossLost)}</div>
-                <div style={{ fontSize: "10px", color: "#666" }}>gross · proj {f(imp.baseGross)}</div>
-                <div style={{ fontSize: "13px", color: isB ? "#6dbf8a" : "#e8856a", marginTop: "2px" }}>{isB ? "+" : "-"}{f(isB ? imp.netGained : imp.netLost)} net</div>
-                {ak && imp.k401kLost > 0 && <div style={{ fontSize: "10px", color: "#7a8bbf", marginTop: "2px" }}>-{f(imp.k401kLost)} 401k</div>}
-                {imp.hoursLostForPTO > 0 && <div style={{ fontSize: "10px", color: "#888", marginTop: "2px" }}>-{(imp.hoursLostForPTO / 20).toFixed(2)} PTO accrual</div>}
-                {isUA && <div style={{ fontSize: "10px", color: "#e8622a", marginTop: "2px" }}>-{imp.bucketHoursDeducted}h bucket</div>}
-              </div>
-            </div>
-            <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: "10px", color: "#666" }}>
-                {entry.type === "missed_unpaid"     && `${entry.shiftsLost} shift(s) · ${entry.weekendShifts} wknd · ${entry.shiftsLost * config.shiftHours}h`}
-                {entry.type === "missed_unapproved" && `${entry.hoursLost}h unapproved`}
-                {entry.type === "pto"               && `${entry.ptoHours}h PTO @ $${PTO_RATE}`}
-                {entry.type === "partial"           && `${entry.hoursLost}h partial`}
-                {entry.type === "bonus"             && `+${f(entry.amount)} bonus`}
-                {entry.type === "other_loss"        && `-${f(entry.amount)} other`}
-              </div>
-              <div style={{ display: "flex", gap: "6px" }}>
-                <button onClick={() => startEdit(entry)} style={{ background: "transparent", border: "1px solid #444", color: "#999", borderRadius: "3px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>EDIT</button>
-                {cdel === entry.id
-                  ? <>
-                      <button onClick={() => { setLogs(p => p.filter(e => e.id !== entry.id)); setCdel(null); }} style={{ background: "#e8856a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CONFIRM</button>
-                      <button onClick={() => setCdel(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
-                    </>
-                  : <button onClick={() => setCdel(entry.id)} style={{ background: "transparent", border: "1px solid #333", color: "#555", borderRadius: "3px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>DELETE</button>
-                }
-              </div>
-            </div>
-          </>
-        )}
+            <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "2px" }}>Week ending {entry.weekEnd || "—"}</div>
+            {missedArr.length > 0 && <div style={{ fontSize: "11px", color: "#777" }}>Missed: {missedArr.join(", ")}</div>}
+            {entry.note && <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>{entry.note}</div>}
+          </div>
+          <div style={{ textAlign: "right", marginLeft: "16px" }}>
+            <div style={{ fontSize: "18px", fontWeight: "bold", color: isB ? "#6dbf8a" : "#e8856a" }}>{isB ? "+" : "-"}{f(isB ? imp.grossGained : imp.grossLost)}</div>
+            <div style={{ fontSize: "10px", color: "#666" }}>gross · proj {f(imp.baseGross)}</div>
+            <div style={{ fontSize: "13px", color: isB ? "#6dbf8a" : "#e8856a", marginTop: "2px" }}>{isB ? "+" : "-"}{f(isB ? imp.netGained : imp.netLost)} net</div>
+            {ak && imp.k401kLost > 0 && <div style={{ fontSize: "10px", color: "#7a8bbf", marginTop: "2px" }}>-{f(imp.k401kLost)} 401k</div>}
+            {imp.hoursLostForPTO > 0 && <div style={{ fontSize: "10px", color: "#888", marginTop: "2px" }}>-{(imp.hoursLostForPTO / 20).toFixed(2)} PTO accrual</div>}
+            {isUA && <div style={{ fontSize: "10px", color: "#e8622a", marginTop: "2px" }}>-{imp.bucketHoursDeducted}h bucket</div>}
+          </div>
+        </div>
+        <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: "10px", color: "#666" }}>
+            {entry.type === "missed_unpaid"     && `${entry.shiftsLost} shift(s) · ${entry.weekendShifts} wknd · ${entry.shiftsLost * config.shiftHours}h`}
+            {entry.type === "missed_unapproved" && `${entry.hoursLost}h unapproved`}
+            {entry.type === "pto"               && `${entry.ptoHours}h PTO @ $${PTO_RATE}`}
+            {entry.type === "partial"           && `${entry.hoursLost}h partial`}
+            {entry.type === "bonus"             && `+${f(entry.amount)} bonus`}
+            {entry.type === "other_loss"        && `-${f(entry.amount)} other`}
+          </div>
+          <div style={{ display: "flex", gap: "6px" }}>
+            <button
+              onClick={() => startEdit(entry)}
+              style={{ background: "transparent", border: "1px solid #444", color: "#999", borderRadius: "3px", padding: "8px 14px", fontSize: "10px", cursor: "pointer", fontFamily: "'Courier New',monospace", minHeight: "44px" }}
+            >EDIT</button>
+            {cdel === entry.id
+              ? <>
+                  <button onClick={() => { setLogs(p => p.filter(e => e.id !== entry.id)); setCdel(null); }} style={{ background: "#e8856a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "8px 14px", fontSize: "10px", cursor: "pointer", fontFamily: "'Courier New',monospace", minHeight: "44px" }}>CONFIRM</button>
+                  <button onClick={() => setCdel(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 14px", fontSize: "10px", cursor: "pointer", fontFamily: "'Courier New',monospace", minHeight: "44px" }}>CANCEL</button>
+                </>
+              : <button onClick={() => setCdel(entry.id)} style={{ background: "transparent", border: "1px solid #333", color: "#555", borderRadius: "3px", padding: "8px 14px", fontSize: "10px", cursor: "pointer", fontFamily: "'Courier New',monospace", minHeight: "44px" }}>DELETE</button>
+            }
+          </div>
+        </div>
       </div>;
     })}
 
     <div style={{ marginTop: "24px", padding: "12px", background: "#141414", borderRadius: "6px", fontSize: "10px", color: "#555", lineHeight: "2" }}>
       Missed (approved) = projected − actual gross. Unapproved = hours × base rate + bucket hit. Partial (approved) = hours lost × base rate, no bucket deduction. PTO accrues while on PTO. FICA {(config.ficaRate * 100).toFixed(2)}% always applied. 401k impact on events after {config.k401StartDate}.
     </div>
+
+    {/* ── Bottom sheet for add/edit event ── */}
+    <BottomSheet
+      open={sheetOpen}
+      onClose={closeSheet}
+      title={adding ? "LOG EVENT" : "EDIT EVENT"}
+    >
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+        <FormFields
+          vals={adding ? nEv : editVals}
+          set={adding ? setNEv : setEditVals}
+          onWeekEndChange={adding ? handleWeekEndChange : handleEditWeekEndChange}
+        />
+      </div>
+      <div style={{ display: "flex", gap: "8px" }}>
+        {adding ? (
+          <>
+            <button
+              onClick={addLog}
+              disabled={!nEv.weekEnd}
+              style={{ background: nEv.weekEnd ? "#6dbf8a" : "#2a2a2a", color: nEv.weekEnd ? "#0d0d0d" : "#555", border: "none", borderRadius: "6px", padding: "14px 20px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: nEv.weekEnd ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold", flex: 1, minHeight: "52px" }}
+            >
+              SAVE EVENT
+            </button>
+            <button
+              onClick={closeSheet}
+              style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "6px", padding: "14px 20px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", minHeight: "52px" }}
+            >
+              CANCEL
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={saveEdit}
+              style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "6px", padding: "14px 20px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold", flex: 1, minHeight: "52px" }}
+            >
+              SAVE CHANGES
+            </button>
+            <button
+              onClick={closeSheet}
+              style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "6px", padding: "14px 20px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", minHeight: "52px" }}
+            >
+              CANCEL
+            </button>
+          </>
+        )}
+      </div>
+    </BottomSheet>
+
+    {/* ── Number keypad overlay ── */}
+    <NumberKeypad
+      visible={activeKeypad !== null}
+      value={keypадValue}
+      onChange={handleKeypадChange}
+      onClose={closeKeypad}
+    />
   </div>);
 }

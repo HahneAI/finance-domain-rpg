@@ -192,6 +192,23 @@
 }
 /* ─────────────────────────────────────────────────────────────────────────────── */
 
+/* ── Panel slide transitions (iOS-style tab switching) ───────────────────────── */
+@keyframes panelSlideInRight {
+  from { transform: translateX(30px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes panelSlideInLeft {
+  from { transform: translateX(-30px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+.panel-enter-right {
+  animation: panelSlideInRight 250ms ease-out both;
+}
+.panel-enter-left {
+  animation: panelSlideInLeft 250ms ease-out both;
+}
+/* ─────────────────────────────────────────────────────────────────────────────── */
+
 .ticks {
   position: relative;
   width: 100%;

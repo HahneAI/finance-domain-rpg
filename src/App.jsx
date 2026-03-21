@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import "./App.css";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso } from "./lib/finance.js";
 import { loadUserData, saveUserData } from "./lib/db.js";
@@ -9,10 +10,57 @@ import { LogPanel } from "./components/LogPanel.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 
 const NAV_ITEMS = [
-  { key: "income",   label: "Income" },
-  { key: "budget",   label: "Budget" },
-  { key: "benefits", label: "Benefits" },
-  { key: "log",      label: "Log" },
+  {
+    key: "income",
+    label: "Income",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="2" y="13" width="3" height="5" rx="1" fill="currentColor" opacity="0.5"/>
+        <rect x="7" y="9"  width="3" height="9" rx="1" fill="currentColor" opacity="0.75"/>
+        <rect x="12" y="5" width="3" height="13" rx="1" fill="currentColor"/>
+        <path d="M15 3 L17 1 L19 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        <line x1="17" y1="1" x2="17" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    key: "budget",
+    label: "Budget",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="1" y="4" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+        <line x1="1" y1="8" x2="19" y2="8" stroke="currentColor" strokeWidth="1.5"/>
+        <rect x="3" y="10" width="5" height="2" rx="1" fill="currentColor" opacity="0.6"/>
+        <rect x="10" y="10" width="7" height="2" rx="1" fill="currentColor" opacity="0.35"/>
+      </svg>
+    ),
+  },
+  {
+    key: "benefits",
+    label: "Benefits",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M10 17 C10 17 2 13 2 7.5 C2 5 4 3 6.5 3 C8 3 9.2 3.8 10 5 C10.8 3.8 12 3 13.5 3 C16 3 18 5 18 7.5 C18 13 10 17 10 17Z" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+        <line x1="10" y1="7" x2="10" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <line x1="7.5" y1="9.5" x2="12.5" y2="9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    key: "log",
+    label: "Log",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="3" y="2" width="14" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+        <circle cx="6" cy="7"  r="1" fill="currentColor"/>
+        <circle cx="6" cy="11" r="1" fill="currentColor"/>
+        <circle cx="6" cy="15" r="1" fill="currentColor"/>
+        <line x1="9" y1="7"  x2="15" y2="7"  stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <line x1="9" y1="11" x2="15" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <line x1="9" y1="15" x2="13" y2="15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
 ];
 
 function SidebarNavItem({ item, active, onClick }) {
@@ -56,7 +104,16 @@ export default function App() {
   // Keyed by weekIdx (number) so lookup is O(1) in confirmTriggerWeek.
   const [weekConfirmations, setWeekConfirmations] = useState({});
 
+  // Track which direction the last tab-switch happened so the entering panel
+  // can play the correct slide animation (panelSlideInRight or panelSlideInLeft).
+  const slideDir = useRef(null);
+
   const navigate = (key) => {
+    const oldIdx = NAV_ITEMS.findIndex((n) => n.key === topNav);
+    const newIdx = NAV_ITEMS.findIndex((n) => n.key === key);
+    if (oldIdx !== newIdx) {
+      slideDir.current = newIdx > oldIdx ? "right" : "left";
+    }
     setTopNav(key);
     setDrawerOpen(false);
   };
@@ -321,12 +378,19 @@ export default function App() {
           .sidebar { display: none !important; }
           .mobile-header { display: flex !important; }
           .mobile-bottom-nav { display: flex !important; }
-          /* DEBUG SAFE AREA: padding-bottom = nav height (62px) + home indicator.
-             On iPhone 17 home indicator adds ~34px. If content is cut off at the
-             bottom, this calc is the first place to check. The 62px = 56px nav +
-             ~6px visual buffer. Increase if bottom content feels too close to nav. */
+          /* Full-height native panel: scroll happens inside .main-content, not the window.
+             Header height = 56px + safe-area-top. Bottom nav height = 56px + safe-area-bottom.
+             This makes each panel an independent scroll container — native app pattern. */
           .main-content {
-            padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px)) !important;
+            height: calc(
+              100dvh
+              - calc(56px + env(safe-area-inset-top, 0px))
+              - calc(56px + env(safe-area-inset-bottom, 0px))
+            ) !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            padding: 0 !important;
+            overscroll-behavior-y: contain;
           }
         }
         @media (min-width: 768px) {
@@ -463,9 +527,16 @@ export default function App() {
           </button>
         </div>
 
-        {/* Panel content */}
-        <div className="main-content" style={{ padding: "18px 16px", flex: 1 }}>
-          {activePanel}
+        {/* Panel content — on mobile this is the scroll container (height-constrained) */}
+        <div className="main-content" style={{ flex: 1 }}>
+          {/* key={topNav} forces remount so the CSS animation re-fires on every tab switch */}
+          <div
+            key={topNav}
+            className={slideDir.current ? `panel-enter-${slideDir.current}` : ""}
+            style={{ padding: "18px 16px", minHeight: "100%" }}
+          >
+            {activePanel}
+          </div>
         </div>
       </div>
 
@@ -542,27 +613,46 @@ export default function App() {
           zIndex: 20,
         }}
       >
-        {NAV_ITEMS.map(item => (
-          <button
-            key={item.key}
-            onClick={() => navigate(item.key)}
-            style={{
-              flex: 1,
-              height: "100%",
-              background: "transparent",
-              border: "none",
-              borderTop: topNav === item.key ? "2px solid #c8a84b" : "2px solid transparent",
-              color: topNav === item.key ? "#c8a84b" : "#999",
-              fontSize: "11px",
-              letterSpacing: "1.5px",
-              textTransform: "uppercase",
-              fontFamily: "'Courier New',monospace",
-              cursor: "pointer",
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
+        {NAV_ITEMS.map(item => {
+          const active = topNav === item.key;
+          return (
+            <button
+              key={item.key}
+              onClick={() => navigate(item.key)}
+              style={{
+                flex: 1,
+                height: "100%",
+                background: "transparent",
+                border: "none",
+                borderTop: active ? "2px solid #c8a84b" : "2px solid transparent",
+                color: active ? "#c8a84b" : "#666",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "3px",
+                cursor: "pointer",
+                padding: "6px 4px",
+                minWidth: "44px",
+                fontFamily: "'Courier New',monospace",
+                transition: "color 0.15s",
+              }}
+              aria-label={item.label}
+            >
+              <span style={{ display: "flex", lineHeight: 1, opacity: active ? 1 : 0.7 }}>
+                {item.icon}
+              </span>
+              <span style={{
+                fontSize: "9px",
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+                lineHeight: 1,
+              }}>
+                {item.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Weekly work confirmation modal ──

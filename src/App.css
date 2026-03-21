@@ -192,6 +192,20 @@
 }
 /* ─────────────────────────────────────────────────────────────────────────────── */
 
+/* ── Mobile card-first layout ────────────────────────────────────────────────── */
+
+/* Hide scrollbar on swipe decks while keeping scroll behaviour.
+   Applied via className="swipe-deck" on the SwipeDeck component.
+   -webkit-overflow-scrolling: touch is set inline for iOS momentum. */
+.swipe-deck::-webkit-scrollbar { display: none; }
+.swipe-deck { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* Accordion max-height is animated inline; this is a fallback guard so the
+   body never shows a half-pixel border when fully collapsed. */
+.accordion-closed { max-height: 0; overflow: hidden; }
+
+/* ─────────────────────────────────────────────────────────────────────────────── */
+
 .ticks {
   position: relative;
   width: 100%;

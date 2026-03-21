@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
 import { Card, VT, SmBtn, iS, lS } from "./ui.jsx";
+import { HeroCard, CategoryRow, SwipeDeck, SwipeCard } from "./MobileCards.jsx";
 
 // TODO: tune — total particle count (12); must divide evenly into rings below
 // 12 particles evenly distributed around 360°, two distance rings, cycling symbols
@@ -22,7 +23,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
   const currentPhaseIdx = useMemo(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0, [currentWeek]);
   const [ap, setAp] = useState(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0);
-  const [view, setView] = useState("overview");
+  const [view, setView] = useState("breakdown");
   // Expense CRUD state
   const [editId, setEditId] = useState(null);
   const [editVals, setEditVals] = useState({});
@@ -181,42 +182,33 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   }, [tl, currentWeek, setGoals]);
 
   return (<div>
+
+    {/* ── Hero Card — Weekly Left: the number your eye goes to first ── */}
+    <HeroCard
+      label="WEEKLY LEFT"
+      value={f2(wr)}
+      color={wr >= 0 ? "#6dbf8a" : "#e8856a"}
+      sub={`${f2(weeklyIncome)} income · ${f2(ts)} spend · ${sp.toFixed(1)}%`}
+    />
+
     {/* Phase tabs */}
-    <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+    <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
       {PHASES.map((p, i) => { const isCurrent = i === currentPhaseIdx; return <button key={p.id} onClick={() => setAp(i)} style={{ flex: 1, padding: "10px", borderRadius: "6px", cursor: "pointer", background: ap === i ? p.color : "#141414", color: ap === i ? "#0a0a0a" : "#666", border: "2px solid " + (ap === i ? p.color : isCurrent ? p.color + "55" : "#222"), fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", fontFamily: "'Courier New',monospace", position: "relative" }}>{isCurrent && ap !== i && <span style={{ position: "absolute", top: "5px", right: "6px", width: "6px", height: "6px", borderRadius: "50%", background: p.color }} />}{p.label}<br /><span style={{ fontSize: "9px", fontWeight: "normal" }}>{p.description}</span>{isCurrent && <span style={{ display: "block", fontSize: "8px", marginTop: "2px", opacity: ap === i ? 0.7 : 0.9 }}>● now</span>}</button>; })}
     </div>
-    {/* Summary cards */}
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px", marginBottom: "16px" }}>
-      <Card label="Weekly Income" val={f2(weeklyIncome)} color="#7eb8c9" />
-      <Card label="Weekly Spend" val={f2(ts)} color="#e8856a" />
-      <Card label="Weekly Left" val={f2(wr)} color={wr >= 0 ? "#6dbf8a" : "#e8856a"} />
-    </div>
+
     {logNetLost > 0 && <div style={{ background: "#1a1a2d", border: "1px solid #7a8bbf44", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
       <span style={{ color: "#888" }}>Adj. weekly unallocated (after events):</span>
       <span style={{ fontWeight: "bold", color: "#c8a84b" }}>{f2(adjustedWeeklyAvg)}/wk</span>
     </div>}
-    {/* Spend bar */}
-    <div style={{ marginBottom: "20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#666", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "#e8856a" : "#6dbf8a" }}>{sp.toFixed(1)}%</span></div>
-      <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden" }}><div style={{ height: "100%", borderRadius: "4px", width: `${sp}%`, background: sp > 90 ? "#e8856a" : sp > 70 ? "#c8a84b" : "#6dbf8a", transition: "width 0.3s" }} /></div>
-    </div>
-    {/* View tabs */}
-    <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
-      {["overview", "breakdown", "cashflow", "goals", "loans"].map(v => <VT key={v} label={v} active={view === v} onClick={() => setView(v)} />)}
-    </div>
 
-    {/* OVERVIEW — expense list; loans rendered inside Needs */}
-    {view === "overview" && <div>
-      {cats.map(cat => {
-        const cExp = regularExpenses.filter(e => e.category === cat);
-        const loanItems = cat === "Needs" ? loans : [];
-        const cTot = cExp.reduce((s, e) => s + currentEffective(e, ap), 0)
-                   + loanItems.reduce((s, e) => s + currentEffective(e, ap), 0);
-        return <div key={cat} style={{ marginBottom: "24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "3px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</div>
-            <div style={{ fontSize: "12px", color: CATEGORY_COLORS[cat] }}>{f2(cTot)}/wk</div>
-          </div>
+    {/* ── Category rows — label left, value right, tap to expand ── */}
+    {cats.map(cat => {
+      const cExp = regularExpenses.filter(e => e.category === cat);
+      const loanItems = cat === "Needs" ? loans : [];
+      const cTot = cExp.reduce((s, e) => s + currentEffective(e, ap), 0)
+                 + loanItems.reduce((s, e) => s + currentEffective(e, ap), 0);
+      return (
+        <CategoryRow key={cat} label={cat} value={`${f2(cTot)}/wk`} color={CATEGORY_COLORS[cat]}>
           {cExp.map(exp => {
             const effAmt = currentEffective(exp, ap);
             const latestEntry = exp.history?.length ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b) : null;
@@ -288,27 +280,157 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               </div>}
             </div>;
           })}
-        </div>;
-      })}
+          {/* Add expense button — only show in last category so it's not repeated */}
+          {cat === cats[cats.length - 1] && (addingExp
+            ? <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginTop: "10px" }}>
+                <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "16px" }}>New Expense Line</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                  <div><label style={lS}>Label</label><input type="text" value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Insurance" /></div>
+                  <div><label style={lS}>Category</label><select value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))} style={iS}><option>Needs</option><option>Lifestyle</option><option>Transfers</option></select></div>
+                  <div><label style={{ ...lS, color: PHASES[0].color }}>Jan–Mar Weekly ($)</label><input type="number" value={newExp.p1} onChange={e => setNewExp(v => ({ ...v, p1: e.target.value }))} style={iS} /></div>
+                  <div><label style={{ ...lS, color: PHASES[1].color }}>Apr–Jun Weekly ($)</label><input type="number" value={newExp.p2} onChange={e => setNewExp(v => ({ ...v, p2: e.target.value }))} style={iS} /></div>
+                  <div><label style={{ ...lS, color: PHASES[2].color }}>Jul–Sep Weekly ($)</label><input type="number" value={newExp.p3} onChange={e => setNewExp(v => ({ ...v, p3: e.target.value }))} style={iS} /></div>
+                  <div><label style={{ ...lS, color: PHASES[3].color }}>Oct–Dec Weekly ($)</label><input type="number" value={newExp.p4} onChange={e => setNewExp(v => ({ ...v, p4: e.target.value }))} style={iS} /></div>
+                  <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note (optional)</label><input type="text" value={newExp.note} onChange={e => setNewExp(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Short description" /></div>
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "#6dbf8a" : "#333", color: newExp.label ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>ADD</button>
+                  <button onClick={() => { setAddingExp(false); setNewExp({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", p4: "0", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+                </div>
+              </div>
+            : <button onClick={() => setAddingExp(true)} style={{ background: "transparent", color: "#555", border: "1px dashed #2a2a2a", borderRadius: "6px", padding: "8px 12px", width: "100%", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", marginTop: "6px" }}>+ ADD EXPENSE LINE</button>
+          )}
+        </CategoryRow>
+      );
+    })}
 
-      {/* Add expense form */}
-      {addingExp ? <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
-        <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "16px" }}>New Expense Line</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-          <div><label style={lS}>Label</label><input type="text" value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Insurance" /></div>
-          <div><label style={lS}>Category</label><select value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))} style={iS}><option>Needs</option><option>Lifestyle</option><option>Transfers</option></select></div>
-          <div><label style={{ ...lS, color: PHASES[0].color }}>Jan–Mar Weekly ($)</label><input type="number" value={newExp.p1} onChange={e => setNewExp(v => ({ ...v, p1: e.target.value }))} style={iS} /></div>
-          <div><label style={{ ...lS, color: PHASES[1].color }}>Apr–Jun Weekly ($)</label><input type="number" value={newExp.p2} onChange={e => setNewExp(v => ({ ...v, p2: e.target.value }))} style={iS} /></div>
-          <div><label style={{ ...lS, color: PHASES[2].color }}>Jul–Sep Weekly ($)</label><input type="number" value={newExp.p3} onChange={e => setNewExp(v => ({ ...v, p3: e.target.value }))} style={iS} /></div>
-          <div><label style={{ ...lS, color: PHASES[3].color }}>Oct–Dec Weekly ($)</label><input type="number" value={newExp.p4} onChange={e => setNewExp(v => ({ ...v, p4: e.target.value }))} style={iS} /></div>
-          <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note (optional)</label><input type="text" value={newExp.note} onChange={e => setNewExp(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Short description" /></div>
-        </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "#6dbf8a" : "#333", color: newExp.label ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>ADD</button>
-          <button onClick={() => { setAddingExp(false); setNewExp({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", p4: "0", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
-        </div>
-      </div> : <button onClick={() => setAddingExp(true)} style={{ background: "#1a1a1a", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
-    </div>}
+    {/* ── Goals swipe deck — name, progress bar, amounts, estimated weeks ── */}
+    {activeGoals.length > 0 && (() => {
+      const nowIdx = currentWeek?.idx ?? 0;
+      return (
+        <SwipeDeck
+          title="GOALS"
+          action={<SmBtn onClick={() => setView("goals")} c="#c8a84b">MANAGE ▸</SmBtn>}
+        >
+          {tl.map((g, i) => {
+            const ok = g.eW !== null && g.eW <= weeksLeft;
+            const celebrating = fundingId === g.id;
+            const pctStart = Math.min((g.sW / weeksLeft) * 100, 100);
+            const pctFill  = Math.min((g.wN / weeksLeft) * 100, 100 - pctStart);
+            const weeksEst = ok ? Math.ceil(g.eW) : null;
+            const fundWk   = ok ? nowIdx + weeksEst : null;
+            return (
+              <SwipeCard key={g.id} color={celebrating ? "#6dbf8a44" : g.color + "44"}>
+                {/* Name + rank */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "9px", background: g.color + "22", color: g.color, padding: "2px 6px", borderRadius: "3px", display: "inline-block", marginBottom: "5px" }}>#{i + 1}</div>
+                    <div style={{ fontSize: "14px", fontWeight: "bold", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.label}</div>
+                    {g.note && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{g.note}</div>}
+                  </div>
+                </div>
+                {/* Dollar amounts */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "20px", fontWeight: "bold", color: g.color, fontFamily: "'Courier New',monospace" }}>{f(g.target)}</span>
+                  <span style={{ fontSize: "11px", color: "#555" }}>{f2(adjustedWeeklyAvg)}/wk</span>
+                </div>
+                {/* Progress bar */}
+                <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}>
+                  <div style={{ position: "relative", left: celebrating ? 0 : `${pctStart}%`, width: celebrating ? "100%" : `${pctFill}%`, height: "100%", background: celebrating ? "#6dbf8a" : g.color, borderRadius: "3px", opacity: celebrating ? 1 : (ok ? 1 : 0.4), transition: "all 0.4s ease-out" }} />
+                </div>
+                {/* Estimated weeks */}
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#555", marginTop: "4px" }}>
+                  <span>Wk {nowIdx}</span>
+                  <span style={{ color: ok ? "#6dbf8a" : "#e8856a", fontWeight: "bold" }}>
+                    {ok ? `~${g.wN.toFixed(1)} wks · Wk ${fundWk}` : "underfunded"}
+                  </span>
+                </div>
+                {/* Actions */}
+                <div style={{ display: "flex", gap: "6px", marginTop: "10px", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
+                  <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
+                  <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
+                  <SmBtn onClick={() => { startEditGoal(g); setView("goals"); }} c="#c8a84b">EDIT</SmBtn>
+                  <SmBtn onClick={() => !celebrating && handleMarkDone(g.id)} c="#6dbf8a">✓ DONE</SmBtn>
+                </div>
+                {/* Celebration overlay */}
+                {celebrating && (
+                  <div style={{ position: "absolute", top: "50%", left: "50%", pointerEvents: "none", zIndex: 11, animation: "goalStampIn 0.45s cubic-bezier(0.175,0.885,0.32,1.275) 0.1s both" }}>
+                    <div style={{ border: "3px solid #6dbf8a", borderRadius: "4px", padding: "8px 20px", fontSize: "20px", fontWeight: "bold", letterSpacing: "7px", color: "#6dbf8a", fontFamily: "'Courier New',monospace", textTransform: "uppercase", background: "rgba(13,13,13,0.93)", whiteSpace: "nowrap", textShadow: "0 0 14px rgba(109,191,138,0.65)" }}>FUNDED</div>
+                  </div>
+                )}
+              </SwipeCard>
+            );
+          })}
+        </SwipeDeck>
+      );
+    })()}
+
+    {/* ── Loans swipe deck ── */}
+    {loans.length > 0 && (() => {
+      return (
+        <SwipeDeck
+          title="LOANS"
+          action={<SmBtn onClick={() => setView("loans")} c="#c8a84b">MANAGE ▸</SmBtn>}
+        >
+          {loans.map(exp => {
+            const meta = exp.loanMeta;
+            if (!meta) return null;
+            const payoffDate = computeLoanPayoffDate(meta);
+            const payAmt = meta.paymentAmount ?? meta.paymentPerCheck ?? 0;
+            const paymentsTotal = payAmt > 0 ? Math.ceil(meta.totalAmount / payAmt) : 0;
+            const paymentsLeft = loanPaymentsRemaining(meta);
+            const paymentsMade = paymentsTotal - paymentsLeft;
+            const progressPct = paymentsTotal > 0 ? Math.min((paymentsMade / paymentsTotal) * 100, 100) : 0;
+            const isPaidOff = payoffDate <= TODAY_ISO;
+            const inRunway = !isPaidOff && TODAY_ISO < meta.firstPaymentDate;
+            const weeklyAmt = currentEffective(exp, ap);
+            const dropsThisYear = payoffDate <= fiscalYearEnd;
+            const freqShort = { weekly: "wk", biweekly: "2wks", monthly: "mo" }[(meta.paymentFrequency ?? meta.payFrequency ?? "weekly")];
+            return (
+              <SwipeCard key={exp.id} color={isPaidOff ? "#6dbf8a44" : inRunway ? "#7a8bbf44" : "#c8a84b33"}>
+                {/* Name + status */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{exp.label}</div>
+                    <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "1px 5px", borderRadius: "2px" }}>LOAN</span>
+                      {inRunway && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "1px 5px", borderRadius: "2px" }}>SAVING</span>}
+                      {isPaidOff && <span style={{ fontSize: "9px", background: "#6dbf8a22", color: "#6dbf8a", padding: "1px 5px", borderRadius: "2px" }}>✓ PAID OFF</span>}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0, marginLeft: "8px" }}>
+                    <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "#555" : inRunway ? "#7a8bbf" : "#c8a84b", fontFamily: "'Courier New',monospace" }}>{f2(weeklyAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
+                  </div>
+                </div>
+                {/* Progress bar */}
+                <div style={{ marginBottom: "6px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#666", marginBottom: "3px" }}>
+                    <span>{inRunway ? "saving" : `${paymentsMade}/${paymentsTotal} payments`}</span>
+                    <span>{inRunway ? "pre-pay" : `${progressPct.toFixed(0)}%`}</span>
+                  </div>
+                  <div style={{ height: "5px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: inRunway ? "100%" : `${progressPct}%`, background: isPaidOff ? "#6dbf8a" : inRunway ? "#7a8bbf" : "#c8a84b", borderRadius: "3px", opacity: inRunway ? 0.4 : 1 }} />
+                  </div>
+                </div>
+                {/* Key numbers */}
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#666" }}>
+                  <span>{f(meta.totalAmount)} total</span>
+                  <span style={{ color: dropsThisYear ? "#6dbf8a" : "#888" }}>payoff {payoffDate}</span>
+                </div>
+                <div style={{ fontSize: "10px", color: "#555", marginTop: "3px" }}>
+                  {payAmt > 0 && `${f2(payAmt)}/${freqShort} term · ${paymentsLeft} left`}
+                </div>
+              </SwipeCard>
+            );
+          })}
+        </SwipeDeck>
+      );
+    })()}
+
+    {/* ── View tabs — detailed analysis and editing ── */}
+    <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
+      {["breakdown", "cashflow", "goals", "loans"].map(v => <VT key={v} label={v} active={view === v} onClick={() => setView(v)} />)}
+    </div>
 
     {/* BREAKDOWN */}
     {view === "breakdown" && <div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { MONTH_FULL } from "../constants/config.js";
 import { computeNet } from "../lib/finance.js";
 import { Card, VT, iS, lS } from "./ui.jsx";
+import { HeroCard, CategoryRow } from "./MobileCards.jsx";
 
 export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, logNetLost, logNetGained, adjustedTakeHome, projectedAnnualNet, currentWeek }) {
   const [view, setView] = useState("summary");
@@ -40,12 +41,57 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
   }).filter(m => m.wks.length > 0);
 
   return (<div>
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px", marginBottom: "14px" }}>
-      <Card label="Gross (Year)" val={f(yG)} />
-      <Card label="Projected Net" val={f(yN)} color="#6dbf8a" />
-      <Card label="Your 401k" val={f(yE)} color="#7a8bbf" />
-      <Card label="401k w/ Match" val={f(yT)} color="#c8a84b" />
-    </div>
+
+    {/* ── Hero Card — Projected Net: the number your eye goes to first ── */}
+    <HeroCard
+      label="PROJECTED NET"
+      value={f(yN)}
+      color="#6dbf8a"
+      sub={`${f(yG)} gross · ${f(yE)} your 401k · ${f(yT)} w/ match`}
+    />
+
+    {/* ── Category rows — tap to expand details ── */}
+    <CategoryRow label="Annual Breakdown" value={f(yN)} color="#6dbf8a">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px" }}>
+        <Card label="Gross (Year)" val={f(yG)} />
+        <Card label="Projected Net" val={f(yN)} color="#6dbf8a" />
+        <Card label="Your 401k" val={f(yE)} color="#7a8bbf" />
+        <Card label="401k w/ Match" val={f(yT)} color="#c8a84b" />
+      </div>
+    </CategoryRow>
+
+    <CategoryRow label="Tax Overview" value={`${f(fedLiability + moLiability)} liability`} color="#e8856a">
+      <div style={{ fontSize: "12px", lineHeight: "1.9" }}>
+        {[
+          { l: "Federal liability", v: f(fedLiability), c: "#e8856a" },
+          { l: "Missouri liability", v: f(moLiability), c: "#e8856a" },
+          { l: "FICA (7.65% always)", v: f(ficaTotal), c: "#888" },
+          { l: "Fed withheld (taxed wks)", v: f(fedWithheldBase), c: "#6dbf8a" },
+          { l: "MO withheld (taxed wks)", v: f(moWithheldBase), c: "#6dbf8a" },
+          { l: "Total gap", v: f(totalGap), c: "#c8a84b" },
+        ].map(r => (
+          <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid #1e1e1e" }}>
+            <span style={{ color: "#777" }}>{r.l}</span>
+            <span style={{ fontWeight: "bold", color: r.c }}>{r.v}</span>
+          </div>
+        ))}
+      </div>
+    </CategoryRow>
+
+    <CategoryRow
+      label="Extra Withholding"
+      value={`${f2(extraPerCheck)}/chk`}
+      color={showExtra ? "#c8a84b" : "#555"}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <div style={{ fontSize: "11px", color: "#888", flex: 1 }}>
+          Extra <span style={{ color: "#c8a84b", fontWeight: "bold" }}>{f2(extraPerCheck)}/check</span> on {taxedWeekCount} taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing
+        </div>
+        <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "8px 14px", minHeight: "44px", borderRadius: "3px", cursor: "pointer", background: showExtra ? "#3a3210" : "#1a1a1a", color: showExtra ? "#c8a84b" : "#aaa", border: "1px solid " + (showExtra ? "#c8a84b" : "#333"), textTransform: "uppercase", fontFamily: "'Courier New',monospace" }}>{showExtra ? "ON" : "OFF"}</button>
+      </div>
+    </CategoryRow>
+
+    {/* Event log banner — only shown when events exist */}
     {(logNetLost > 0 || logNetGained > 0) && <div style={{ background: logNetLost > logNetGained ? "#2d1a1a" : "#1a2d1e", border: `1px solid ${logNetLost > logNetGained ? "#e8856a55" : "#6dbf8a55"}`, borderRadius: "6px", padding: "11px 14px", marginBottom: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
       <div style={{ fontSize: "11px", color: "#888", display: "flex", gap: "10px", flexWrap: "wrap" }}>
         <span>Event log:</span>
@@ -55,11 +101,9 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       </div>
       <div style={{ fontSize: "18px", fontWeight: "bold", color: "#c8a84b" }}>{f(adjustedTakeHome)}</div>
     </div>}
-    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px", padding: "10px 14px", background: "#141414", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
-      <div style={{ fontSize: "11px", color: "#888", flex: 1 }}>Extra withholding <span style={{ color: "#c8a84b", fontWeight: "bold" }}>{f2(extraPerCheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
-      <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "3px", cursor: "pointer", background: showExtra ? "#3a3210" : "#1a1a1a", color: showExtra ? "#c8a84b" : "#aaa", border: "1px solid " + (showExtra ? "#c8a84b" : "#333"), textTransform: "uppercase", fontFamily: "'Courier New',monospace" }}>{showExtra ? "ON" : "OFF"}</button>
-    </div>
-    <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
+
+    {/* ── View tabs — detailed breakdowns and auditing ── */}
+    <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap", marginTop: "16px" }}>
       {["summary", "monthly", "weekly", "401k", "tax schedule", "config"].map(v => <VT key={v} label={v} active={view === v} onClick={() => setView(v)} />)}
     </div>
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { EVENT_TYPES, PTO_RATE } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { Card, iS, lS } from "./ui.jsx";
+import { HeroCard, CategoryRow } from "./MobileCards.jsx";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -223,30 +224,40 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
 
   return (<div>
 
-    {/* Current week indicator */}
-    {currentWeek && <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-      <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#555", textTransform: "uppercase" }}>Current fiscal week</div>
-      <div style={{ display: "flex", gap: "16px", alignItems: "center", fontSize: "11px" }}>
-        <span style={{ color: "#c8a84b", fontWeight: "bold" }}>Week ending {currentWeek.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-        <span style={{ color: "#666" }}>{currentWeek.rotation}</span>
-        <span style={{ color: "#6dbf8a", fontWeight: "bold" }}>Week {currentWeek.idx} of 52</span>
-      </div>
-    </div>}
+    {/* ── Hero Card — Adjusted Take-Home: the bottom line after all events ── */}
+    <HeroCard
+      label="ADJUSTED TAKE-HOME"
+      value={f0(adjTH)}
+      color={tot.nL > tot.nG ? "#e8856a" : "#6dbf8a"}
+      sub={currentWeek
+        ? `Wk ${currentWeek.idx}/52 · ends ${currentWeek.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · ${currentWeek.rotation}`
+        : undefined}
+    />
 
-    {/* Summary cards */}
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "10px", marginBottom: "14px" }}>
-      <Card label="Total Gross Lost" val={f(tot.gL)} color="#e8856a" />
-      <Card label="Total Net Lost"   val={f(tot.nL)} color="#e8856a" />
-      <Card label="Adjusted Take-Home"    val={f0(adjTH)} color="#6dbf8a" />
-      <Card label="Adj. Weekly Unalloc." val={f(adjWA)}  color={adjWA > 0 ? "#6dbf8a" : "#e8856a"} />
-    </div>
-    {(tot.k4 > 0 || tot.bucket > 0) && <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px", marginBottom: "14px" }}>
-      {tot.k4 > 0    && <Card label="401k Lost"          val={f(tot.k4)}                              sub="Events after May 15"     color="#7a8bbf" />}
-      {tot.pto > 0   && <Card label="PTO Accrual Lost"   val={`${(tot.pto / 20).toFixed(1)} hrs`}     sub={`${tot.pto}h ÷ 20`}      color="#888" />}
-      {tot.bucket > 0 && <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`}                     sub="Unapproved absences"     color="#e8622a" />}
-    </div>}
+    {/* ── Category rows — impact summary, tap to expand ── */}
+    {(tot.nL > 0 || tot.nG > 0) && (
+      <CategoryRow
+        label="Event Impact"
+        value={tot.nL > 0 ? `-${f(tot.nL)} net` : `+${f(tot.nG)} net`}
+        color={tot.nL > tot.nG ? "#e8856a" : "#6dbf8a"}
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "10px" }}>
+          <Card label="Total Gross Lost" val={f(tot.gL)} color="#e8856a" />
+          <Card label="Total Net Lost"   val={f(tot.nL)} color="#e8856a" />
+          <Card label="Adj. Take-Home"   val={f0(adjTH)} color="#6dbf8a" />
+          <Card label="Adj. Weekly Unalloc." val={f(adjWA)} color={adjWA > 0 ? "#6dbf8a" : "#e8856a"} />
+        </div>
+        {(tot.k4 > 0 || tot.pto > 0 || tot.bucket > 0) && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px", marginTop: "10px" }}>
+            {tot.k4 > 0     && <Card label="401k Lost"           val={f(tot.k4)}                          sub="Events after May 15"   color="#7a8bbf" />}
+            {tot.pto > 0    && <Card label="PTO Accrual Lost"    val={`${(tot.pto / 20).toFixed(1)} hrs`} sub={`${tot.pto}h ÷ 20`}    color="#888" />}
+            {tot.bucket > 0 && <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`}                   sub="Unapproved absences"   color="#e8622a" />}
+          </div>
+        )}
+      </CategoryRow>
+    )}
 
-    {/* Compact bucket status widget */}
+    {/* ── Bucket status row ── */}
     {bucketModel && (() => {
       const bm = bucketModel;
       const cap = config.bucketCap ?? 128;
@@ -255,33 +266,39 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       const now = new Date();
       const monthLabel = LOG_MONTH_SHORT[now.getMonth()];
       return (
-        <div style={{ background: "#141414", border: `1px solid ${bandColor}33`, borderRadius: "6px", padding: "12px 14px", marginBottom: "14px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "7px" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#555", textTransform: "uppercase" }}>Bucket Balance</div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "12px", fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h <span style={{ fontSize: "10px", color: "#555" }}>/ {cap}h</span></span>
+        <CategoryRow
+          label="Bucket Status"
+          value={`${bm.currentBalance}/${cap}h`}
+          color={bandColor}
+        >
+          <div style={{ marginBottom: "8px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
               <span style={{ fontSize: "9px", background: bandColor + "22", color: bandColor, padding: "2px 7px", borderRadius: "3px", letterSpacing: "1.5px" }}>● {bm.status.toUpperCase()}</span>
+              <span style={{ fontSize: "12px", fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h / {cap}h</span>
+            </div>
+            <div style={{ height: "5px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${pct}%`, background: bandColor, borderRadius: "3px" }} />
             </div>
           </div>
-          <div style={{ height: "5px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "7px" }}>
-            <div style={{ height: "100%", width: `${pct}%`, background: bandColor, borderRadius: "3px" }} />
-          </div>
-          <div style={{ fontSize: "10px" }}>
+          <div style={{ fontSize: "11px" }}>
             <span style={{ color: "#666" }}>{monthLabel}: </span>
             {bm.currentTier === 1 && <span style={{ color: "#6dbf8a" }}>Tier 1 · any unapproved absence changes tier · see Benefits for full breakdown</span>}
             {bm.currentTier === 2 && <span style={{ color: "#c8a84b" }}>Tier 2 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
             {bm.currentTier === 3 && <span style={{ color: "#e8856a" }}>Tier 3 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to worst tier</span>}
             {bm.currentTier === 4 && <span style={{ color: "#e8856a" }}>Tier 4 · worst tier · {bm.currentM}h unapproved this month</span>}
           </div>
-        </div>
+        </CategoryRow>
       );
     })()}
 
-    {/* Goals impact */}
-    <div style={{ background: ok ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${ok ? "#6dbf8a" : "#e8856a"}`, borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
+    {/* ── Goals impact row ── */}
+    <CategoryRow
+      label="Goals Impact"
+      value={ok ? "On Track" : "At Risk"}
+      color={ok ? "#6dbf8a" : "#e8856a"}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
         <div>
-          <div style={{ fontSize: "10px", letterSpacing: "2px", color: ok ? "#6dbf8a" : "#e8856a", textTransform: "uppercase", marginBottom: "4px" }}>Goals Impact</div>
           <div style={{ fontSize: "12px", color: "#aaa" }}>Adj. savings: <span style={{ color: "#c8a84b", fontWeight: "bold" }}>{f0(projS)}</span> · Goals: <span style={{ color: "#c8a84b" }}>{f0(totGoals)}</span></div>
         </div>
         <div style={{ textAlign: "right" }}>
@@ -289,7 +306,9 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
           <div style={{ fontSize: "11px", color: "#666" }}>{Math.ceil(totGoals / adjWA)} wks to fund all goals</div>
         </div>
       </div>
-    </div>
+    </CategoryRow>
+
+    <div style={{ marginBottom: "12px" }} />
 
     {/* Log header + add button */}
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>

@@ -3,8 +3,60 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>life-rpg</title>
+
+    <!--
+      DEBUG VIEWPORT: viewport-fit=cover is required for env(safe-area-inset-*)
+      to return non-zero values on iPhone (Dynamic Island, home indicator).
+      Removing "viewport-fit=cover" will make --safe-area-* CSS vars read as 0px
+      and the bottom nav will overlap the home indicator on iPhone 17.
+      "initial-scale=1.0" prevents iOS from applying a default zoom.
+      Do NOT add "user-scalable=no" — it breaks accessibility and is ignored in
+      iOS 10+ anyway.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!--
+      DEBUG PWA / THEME: theme-color sets the browser chrome color on Android Chrome
+      and tints the status bar. On iOS, status bar color is controlled separately by
+      apple-mobile-web-app-status-bar-style below.
+    -->
+    <meta name="theme-color" content="#0d0d0d" />
+
+    <!--
+      DEBUG iOS PWA: these three tags control standalone (installed) behavior on iOS.
+      apple-mobile-web-app-capable: "yes" enables Add to Home Screen as a webapp.
+      apple-mobile-web-app-status-bar-style: "black-translucent" makes the status bar
+        overlay the app content (content starts at y=0, not below the status bar).
+        This is why we need env(safe-area-inset-top) padding — without it, content
+        would be hidden behind the status bar / Dynamic Island.
+        Alternative: "black" renders the status bar opaque above the app.
+      apple-mobile-web-app-title: the label shown under the icon on iOS home screen.
+    -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Finance RPG" />
+
+    <!-- DEBUG Android PWA: equivalent of apple-mobile-web-app-capable for Android Chrome -->
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!--
+      DEBUG ICONS: apple-touch-icon is used for the home screen icon on iOS.
+      Must be a PNG, 180×180px recommended for iPhone retina displays.
+      If this is missing, iOS will screenshot the page and use that as the icon.
+      Android reads icons from manifest.json instead (see /manifest.json).
+    -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!--
+      DEBUG PWA MANIFEST: links to /public/manifest.json which defines the PWA
+      install metadata. vite-plugin-pwa also emits dist/manifest.webmanifest at
+      build time — both should have matching content. If the PWA install prompt
+      doesn't appear on Android, check: (1) HTTPS, (2) this link tag is present,
+      (3) manifest has start_url, name, and at least one 192x192 icon.
+    -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <title>2026 Financial Dashboard</title>
   </head>
   <body>
     <div id="root"></div>

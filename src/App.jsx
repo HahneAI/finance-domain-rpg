@@ -311,17 +311,43 @@ export default function App() {
   return (
     <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d", minHeight: "100vh", color: "#e8e0d0", display: "flex" }}>
       <style>{`
+        /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
+           but injecting it here as well catches any future SSR or shadow-DOM edge
+           cases where the external stylesheet might not apply in time. */
+        html, body, #root { max-width: 100vw; overflow-x: hidden; }
+
+        /* DEBUG: global box-sizing reset — ensures padding/border are included in
+           element width calculations. Without this, an element with width:100% and
+           padding:16px would be 100%+32px wide and cause horizontal scroll. */
+        *, *::before, *::after { box-sizing: border-box; }
+
+        /* DEBUG MOBILE BREAKPOINT: 767px is the cutover between mobile and desktop.
+           Below 767px: sidebar hides, mobile-header + mobile-bottom-nav show.
+           Above 768px: sidebar shows, mobile chrome hides.
+           If you change this breakpoint, also update the drawer width (260px in JSX)
+           and the desktop sidebar width (190px) so nothing overlaps. */
         @media (max-width: 767px) {
           .sidebar { display: none !important; }
           .mobile-header { display: flex !important; }
           .mobile-bottom-nav { display: flex !important; }
-          .main-content { padding-bottom: 62px !important; }
+          /* DEBUG SAFE AREA: padding-bottom = nav height (62px) + home indicator.
+             On iPhone 17 home indicator adds ~34px. If content is cut off at the
+             bottom, this calc is the first place to check. The 62px = 56px nav +
+             ~6px visual buffer. Increase if bottom content feels too close to nav. */
+          .main-content {
+            padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px)) !important;
+          }
         }
         @media (min-width: 768px) {
           .mobile-header { display: none !important; }
           .mobile-bottom-nav { display: none !important; }
+          /* DEBUG: overlay also hides on desktop so a half-open drawer doesn't
+             ghost behind the sidebar if the user resizes the window. */
           .mobile-drawer-overlay { display: none !important; }
         }
+        /* DEBUG DRAWER: translateX(-100%) hides the drawer fully off-screen left.
+           The .open class moves it to x=0. If the drawer flickers on load,
+           add will-change:transform to force GPU compositing. */
         .drawer-slide {
           transform: translateX(-100%);
           transition: transform 0.25s ease;
@@ -337,6 +363,15 @@ export default function App() {
         .drawer-backdrop.open {
           opacity: 1;
           pointer-events: auto;
+        }
+        /* DEBUG: .scroll-x is a utility class for any container that needs
+           internal horizontal scrolling without leaking to the page.
+           -webkit-overflow-scrolling:touch enables momentum (inertial) scroll
+           on iOS — without it, scrolling feels sticky and non-native. */
+        .scroll-x {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          max-width: 100%;
         }
       `}</style>
 
@@ -385,8 +420,10 @@ export default function App() {
           style={{
             display: "none",
             borderBottom: "2px solid #c8a84b",
-            padding: "0 16px",
-            height: "56px",
+            padding: "0 max(16px, env(safe-area-inset-left, 16px))",
+            paddingRight: "max(16px, env(safe-area-inset-right, 16px))",
+            height: "calc(56px + env(safe-area-inset-top, 0px))",
+            paddingTop: "env(safe-area-inset-top, 0px)",
             background: "#0d0d0d",
             position: "sticky",
             top: 0,
@@ -507,7 +544,8 @@ export default function App() {
           bottom: 0,
           left: 0,
           right: 0,
-          height: "56px",
+          height: "calc(56px + env(safe-area-inset-bottom, 0px))",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
           background: "#151515",
           borderTop: "1px solid #2e2e2e",
           boxShadow: "0 -4px 20px rgba(0,0,0,0.85)",

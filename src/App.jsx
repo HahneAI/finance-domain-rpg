@@ -7,6 +7,7 @@ import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { BenefitsPanel } from "./components/BenefitsPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
+import { HomePanel } from "./components/HomePanel.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -48,7 +49,9 @@ export default function App() {
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
   const [goals, setGoals] = useState(INITIAL_GOALS);
-  const [topNav, setTopNav] = useState("income");
+  // viewStack: push on navigate, pop on back. Last item = current view.
+  // "home" is always the base — never popped below depth 1.
+  const [viewStack, setViewStack] = useState(["home"]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Persisted to Supabase week_confirmations JSONB column.
   // Shape: { [weekIdx]: { confirmedAt, dayToggles, scheduledDays, missedScheduledDays,
@@ -56,8 +59,25 @@ export default function App() {
   // Keyed by weekIdx (number) so lookup is O(1) in confirmTriggerWeek.
   const [weekConfirmations, setWeekConfirmations] = useState({});
 
+  const currentView = viewStack[viewStack.length - 1];
+  const canGoBack = viewStack.length > 1;
+
+  // Push a panel onto the stack (used by tiles and within-panel navigation)
   const navigate = (key) => {
-    setTopNav(key);
+    setViewStack(prev => [...prev, key]);
+    setDrawerOpen(false);
+  };
+
+  // Pop back one level (back arrow)
+  const navigateBack = () => {
+    setViewStack(prev => prev.length > 1 ? prev.slice(0, -1) : prev);
+    setDrawerOpen(false);
+  };
+
+  // Direct jump: always lands as ["home", key] — used by sidebar/drawer/bottom-nav
+  // so switching panels never nests indefinitely.
+  const navigateDirect = (key) => {
+    setViewStack(key === "home" ? ["home"] : ["home", key]);
     setDrawerOpen(false);
   };
 
@@ -252,7 +272,17 @@ export default function App() {
 
   const activePanel = (
     <>
-      {topNav === "income" && <IncomePanel
+      {currentView === "home" && <HomePanel
+        navigate={navigate}
+        weeklyIncome={weeklyIncome}
+        adjustedTakeHome={logTotals.adjustedTakeHome}
+        adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
+        remainingSpend={remainingSpend}
+        goals={goals}
+        futureWeekNets={futureWeekNets}
+        currentWeek={currentWeek}
+      />}
+      {currentView === "income" && <IncomePanel
         allWeeks={allWeeks} config={config} setConfig={setConfig}
         showExtra={showExtra} setShowExtra={setShowExtra}
         taxDerived={taxDerived}
@@ -262,7 +292,7 @@ export default function App() {
         projectedAnnualNet={projectedAnnualNet}
         currentWeek={currentWeek}
       />}
-      {topNav === "budget" && <BudgetPanel
+      {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
         goals={goals} setGoals={setGoals}
         adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
@@ -276,7 +306,7 @@ export default function App() {
         currentWeek={currentWeek}
         today={today}
       />}
-      {topNav === "benefits" && <BenefitsPanel
+      {currentView === "benefits" && <BenefitsPanel
         allWeeks={allWeeks} config={config}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
@@ -286,7 +316,7 @@ export default function App() {
         currentWeek={currentWeek}
         bucketModel={bucketModel}
       />}
-      {topNav === "log" && <LogPanel
+      {currentView === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
@@ -395,8 +425,9 @@ export default function App() {
           )}
         </div>
         <nav style={{ marginTop: "8px", flex: 1 }}>
+          <SidebarNavItem item={{ key: "home", label: "Home" }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
           {NAV_ITEMS.map(item => (
-            <SidebarNavItem key={item.key} item={item} active={topNav === item.key} onClick={() => navigate(item.key)} />
+            <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
         </nav>
       </div>
@@ -423,44 +454,86 @@ export default function App() {
             justifyContent: "space-between",
           }}
         >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase" }}>DHL / P&G — Jackson MO</div>
-              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
-            </div>
-            <div style={{ fontSize: "16px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
-          </div>
-          {/* Unconfirmed weeks badge (mobile) — clears dismiss so modal re-opens */}
-          {unconfirmedCount > 0 && (
-            <button onClick={() => setConfirmDismissed(false)} style={{ background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "4px 9px", fontSize: "9px", letterSpacing: "1.5px", fontFamily: "'Courier New',monospace", cursor: "pointer", textTransform: "uppercase", flexShrink: 0, marginLeft: "8px" }}>
-              ◷ {unconfirmedCount}
-            </button>
+          {canGoBack ? (
+            /* ── Detail view: back arrow + panel name ── */
+            <>
+              <button
+                onClick={navigateBack}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#c8a84b",
+                  cursor: "pointer",
+                  fontFamily: "'Courier New',monospace",
+                  fontSize: "11px",
+                  letterSpacing: "2px",
+                  textTransform: "uppercase",
+                  padding: "0 16px 0 0",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  flexShrink: 0,
+                  minWidth: "44px",
+                  minHeight: "44px",
+                }}
+                aria-label="Back to home"
+              >
+                ← Back
+              </button>
+              <div style={{
+                flex: 1,
+                fontSize: "12px",
+                fontWeight: "bold",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                color: "#e8e0d0",
+              }}>
+                {currentView}
+              </div>
+            </>
+          ) : (
+            /* ── Home: title + optional badge + hamburger ── */
+            <>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase" }}>DHL / P&G — Jackson MO</div>
+                  {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+                </div>
+                <div style={{ fontSize: "16px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
+              </div>
+              {/* Unconfirmed weeks badge (mobile) — clears dismiss so modal re-opens */}
+              {unconfirmedCount > 0 && (
+                <button onClick={() => setConfirmDismissed(false)} style={{ background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "4px 9px", fontSize: "9px", letterSpacing: "1.5px", fontFamily: "'Courier New',monospace", cursor: "pointer", textTransform: "uppercase", flexShrink: 0, marginLeft: "8px" }}>
+                  ◷ {unconfirmedCount}
+                </button>
+              )}
+              {/* Hamburger button */}
+              <button
+                onClick={() => setDrawerOpen(true)}
+                style={{
+                  background: "transparent",
+                  border: "1px solid #333",
+                  borderRadius: "4px",
+                  color: "#c8a84b",
+                  cursor: "pointer",
+                  width: "44px",
+                  height: "38px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "5px",
+                  flexShrink: 0,
+                  marginLeft: "12px",
+                }}
+                aria-label="Open navigation"
+              >
+                <span style={{ display: "block", width: "18px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
+                <span style={{ display: "block", width: "18px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
+                <span style={{ display: "block", width: "18px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
+              </button>
+            </>
           )}
-          {/* Hamburger button */}
-          <button
-            onClick={() => setDrawerOpen(true)}
-            style={{
-              background: "transparent",
-              border: "1px solid #333",
-              borderRadius: "4px",
-              color: "#c8a84b",
-              cursor: "pointer",
-              width: "44px",
-              height: "38px",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "5px",
-              flexShrink: 0,
-              marginLeft: "12px",
-            }}
-            aria-label="Open navigation"
-          >
-            <span style={{ display: "block", width: "18px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
-            <span style={{ display: "block", width: "18px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
-            <span style={{ display: "block", width: "18px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
-          </button>
         </div>
 
         {/* Panel content */}
@@ -514,56 +587,59 @@ export default function App() {
 
         {/* Drawer nav items */}
         <nav style={{ marginTop: "12px", flex: 1 }}>
+          <SidebarNavItem item={{ key: "home", label: "Home" }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
           {NAV_ITEMS.map(item => (
-            <SidebarNavItem key={item.key} item={item} active={topNav === item.key} onClick={() => navigate(item.key)} />
+            <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
         </nav>
 
         {/* Active section indicator at bottom */}
         <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: "10px", color: "#555", letterSpacing: "1px", textTransform: "uppercase" }}>
-          Viewing: <span style={{ color: "#c8a84b" }}>{topNav}</span>
+          Viewing: <span style={{ color: "#c8a84b" }}>{currentView}</span>
         </div>
       </div>
 
-      {/* ── Mobile bottom nav ── */}
-      <div
-        className="mobile-bottom-nav"
-        style={{
-          display: "none",
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: "calc(56px + env(safe-area-inset-bottom, 0px))",
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
-          background: "#151515",
-          borderTop: "1px solid #2e2e2e",
-          boxShadow: "0 -4px 20px rgba(0,0,0,0.85)",
-          zIndex: 20,
-        }}
-      >
-        {NAV_ITEMS.map(item => (
-          <button
-            key={item.key}
-            onClick={() => navigate(item.key)}
-            style={{
-              flex: 1,
-              height: "100%",
-              background: "transparent",
-              border: "none",
-              borderTop: topNav === item.key ? "2px solid #c8a84b" : "2px solid transparent",
-              color: topNav === item.key ? "#c8a84b" : "#999",
-              fontSize: "11px",
-              letterSpacing: "1.5px",
-              textTransform: "uppercase",
-              fontFamily: "'Courier New',monospace",
-              cursor: "pointer",
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      {/* ── Mobile bottom nav — hidden on home screen (tiles replace it) ── */}
+      {currentView !== "home" && (
+        <div
+          className="mobile-bottom-nav"
+          style={{
+            display: "none",
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: "calc(56px + env(safe-area-inset-bottom, 0px))",
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+            background: "#151515",
+            borderTop: "1px solid #2e2e2e",
+            boxShadow: "0 -4px 20px rgba(0,0,0,0.85)",
+            zIndex: 20,
+          }}
+        >
+          {NAV_ITEMS.map(item => (
+            <button
+              key={item.key}
+              onClick={() => navigateDirect(item.key)}
+              style={{
+                flex: 1,
+                height: "100%",
+                background: "transparent",
+                border: "none",
+                borderTop: currentView === item.key ? "2px solid #c8a84b" : "2px solid transparent",
+                color: currentView === item.key ? "#c8a84b" : "#999",
+                fontSize: "11px",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+                fontFamily: "'Courier New',monospace",
+                cursor: "pointer",
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Weekly work confirmation modal ──
           Shows when: unconfirmed past week exists AND confirmDismissed is false.

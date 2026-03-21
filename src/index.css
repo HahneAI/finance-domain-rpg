@@ -53,20 +53,37 @@
 html, body {
   margin: 0;
   background: #0d0d0d;
+  /* DEBUG: overflow-x hidden is the primary iOS horizontal scroll kill-switch.
+     If horizontal scroll returns, check this is NOT being overridden by a child
+     element using position:fixed or transform — those create new stacking contexts
+     that bypass parent overflow:hidden on iOS Safari. */
   overflow-x: hidden;
+  /* DEBUG: contain prevents rubber-band bounce from revealing content beyond
+     the page edge. 'none' would re-enable native iOS overscroll. */
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+  /* DEBUG: removes the grey tap flash on iOS — purely cosmetic. */
   -webkit-tap-highlight-color: transparent;
 }
 
 /* Safe area utility used by bottom nav and main content padding */
 :root {
+  /* DEBUG: env() safe-area-inset-* are only non-zero on real devices with a
+     notch / Dynamic Island / home indicator. They read as 0px in browser DevTools
+     unless you enable "viewport-fit=cover" in the device emulator settings AND
+     the page meta viewport includes viewport-fit=cover (set in index.html).
+     iPhone 17 expected values: top ~59px, bottom ~34px, left/right ~0px. */
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-top: env(safe-area-inset-top, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
   --safe-area-right: env(safe-area-inset-right, 0px);
 }
 
+/* DEBUG: #root must match html/body overflow-x:hidden — belt-and-suspenders.
+   If a panel component breaks out of this width, the horizontal scroll returns.
+   min-height: 100svh uses "small viewport height" (excludes browser chrome bars)
+   which is the correct unit for mobile — avoids content jumping when Chrome's
+   address bar shows/hides. Use 100dvh only for fixed-position overlays. */
 #root {
   width: 100%;
   max-width: 100%;
@@ -80,6 +97,9 @@ html, body {
   box-sizing: border-box;
 }
 
+/* DEBUG: At 480px and below the :root font-size drops from 16px to 14px.
+   This affects rem units globally. If any component uses rem and looks too
+   small on iPhone SE (375px), this breakpoint is the cause. */
 @media (max-width: 480px) {
   :root { font-size: 14px; }
 }

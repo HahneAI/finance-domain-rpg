@@ -115,36 +115,27 @@ export default function App() {
     return allWeeks.find(w => w.active && toLocalIso(w.weekEnd) >= today) ?? null;
   }, [allWeeks, today]);
 
-  // confirmDismissed: session-only flag; set when user clicks "Skip for now"
-  // confirmForced: set when user explicitly clicks the badge button — bypasses the
-  //   payPeriodEndDay DOW gate so the modal always opens on demand regardless of
-  //   what day of the week it is. Cleared after confirm or dismiss.
-  // IMPORTANT: both must be declared BEFORE the confirmTriggerWeek useMemo below
-  //   because that memo reads confirmForced in its body and dep array.
+  // confirmDismissed: session-only flag; set when user clicks "Skip for now".
+  // Cleared by badge click so the modal re-opens. Resets to false on page reload.
   const [confirmDismissed, setConfirmDismissed] = useState(false);
-  const [confirmForced, setConfirmForced] = useState(false);
 
   // ── Week confirmation modal trigger ──
-  // Surfaces the most-recent unconfirmed past week.
-  // Normal path: only shows on/after payPeriodEndDay (DOW gate prevents early pop-ups).
-  // Forced path: badge click sets confirmForced=true, bypassing the DOW gate so the
-  //   user can always manually open the modal from the badge regardless of day.
-  // NOTE: todayDOW < endDay comparison has a wrapping edge case — if payPeriodEndDay
-  //   is set to 6 (Saturday), days 0-5 are all gated, so the auto-trigger only fires
-  //   on Saturday. If the user misses that Saturday window, the badge is their escape.
+  // Surfaces the most-recent UNCONFIRMED past week.
+  // The previous version grabbed the last past week and bailed if it was confirmed —
+  // meaning older unconfirmed weeks were silently skipped (the bug behind badge=3, modal=hidden).
+  // Fix: filter to unconfirmed weeks first, then take the most recent one.
+  //
+  // DOW gate removed from auto-trigger: with payPeriodEndDay=0 (default) the gate was
+  // a no-op anyway (0=Sun, todayDOW is always >= 0). Removing it simplifies reasoning.
+  // confirmForced (badge click) still kept to surface the modal on demand in case the
+  // user dismisses and wants to return to it without waiting for state to change.
   const confirmTriggerWeek = useMemo(() => {
     const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
-    if (!pastWeeks.length) return null;
-    const recent = pastWeeks[pastWeeks.length - 1];
-    // Only apply DOW gate when not force-opened via badge click
-    if (!confirmForced) {
-      const todayDOW = new Date(today).getDay(); // 0=Sun … 6=Sat
-      const endDay = config.payPeriodEndDay ?? 0;
-      if (todayDOW < endDay) return null;
-    }
-    if (weekConfirmations[recent.idx]) return null;
-    return recent;
-  }, [allWeeks, today, config, weekConfirmations, confirmForced]);
+    // Find most recent week that has NOT been confirmed yet
+    const unconfirmedWeeks = pastWeeks.filter(w => !weekConfirmations[w.idx]);
+    if (!unconfirmedWeeks.length) return null;
+    return unconfirmedWeeks[unconfirmedWeeks.length - 1]; // most recent unconfirmed
+  }, [allWeeks, today, weekConfirmations]);
 
   // Total count of all past active weeks lacking a confirmation record.
   // Used for the persistent badge in sidebar and mobile header.
@@ -396,10 +387,9 @@ export default function App() {
           <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
           {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
-              lacks a confirmation. Clicking sets confirmForced=true so the modal
-              opens even if today is before payPeriodEndDay (bypasses DOW gate). */}
+              lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
-            <button onClick={() => { setConfirmForced(true); setConfirmDismissed(false); }} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", fontFamily: "'Courier New',monospace", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
+            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", fontFamily: "'Courier New',monospace", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
               ◷ {unconfirmedCount} {unconfirmedCount === 1 ? "week" : "weeks"} to confirm
             </button>
           )}
@@ -440,9 +430,9 @@ export default function App() {
             </div>
             <div style={{ fontSize: "16px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
           </div>
-          {/* Unconfirmed weeks badge (mobile) — same force-open behavior as sidebar */}
+          {/* Unconfirmed weeks badge (mobile) — clears dismiss so modal re-opens */}
           {unconfirmedCount > 0 && (
-            <button onClick={() => { setConfirmForced(true); setConfirmDismissed(false); }} style={{ background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "4px 9px", fontSize: "9px", letterSpacing: "1.5px", fontFamily: "'Courier New',monospace", cursor: "pointer", textTransform: "uppercase", flexShrink: 0, marginLeft: "8px" }}>
+            <button onClick={() => setConfirmDismissed(false)} style={{ background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "4px 9px", fontSize: "9px", letterSpacing: "1.5px", fontFamily: "'Courier New',monospace", cursor: "pointer", textTransform: "uppercase", flexShrink: 0, marginLeft: "8px" }}>
               ◷ {unconfirmedCount}
             </button>
           )}
@@ -576,11 +566,10 @@ export default function App() {
       </div>
 
       {/* ── Weekly work confirmation modal ──
-          Shows when: a past unconfirmed week exists AND the user hasn't dismissed
-          this session AND (today is on/after payPeriodEndDay OR confirmForced=true).
-          onConfirm: writes confirmation record to weekConfirmations, appends log entry
-            if an event was created in Layer 2, resets the forced flag.
-          onDismiss: session-only skip — badge will still show for any unconfirmed weeks.
+          Shows when: unconfirmed past week exists AND confirmDismissed is false.
+          confirmDismissed resets to false on reload, so the modal auto-pops each session
+          until all past weeks are confirmed. Badge click also clears it if user dismissed.
+          onDismiss: session-only skip — badge persists and re-opens modal on next click.
       */}
       {confirmTriggerWeek && !confirmDismissed && (
         <WeekConfirmModal
@@ -589,9 +578,8 @@ export default function App() {
           onConfirm={(confirmation, logEntry) => {
             setWeekConfirmations(c => ({ ...c, [confirmTriggerWeek.idx]: confirmation }));
             if (logEntry) setLogs(p => [...p, logEntry]);
-            setConfirmForced(false); // clear force flag after successful confirm
           }}
-          onDismiss={() => { setConfirmDismissed(true); setConfirmForced(false); }}
+          onDismiss={() => setConfirmDismissed(true)}
         />
       )}
     </div>

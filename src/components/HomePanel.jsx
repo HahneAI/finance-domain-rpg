@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { MetricCard } from "./ui.jsx";
 
 const fmt$ = (n) => {
   if (n == null || isNaN(n)) return "$—";
@@ -11,80 +11,6 @@ const fmt$ = (n) => {
 
 const fmtPct = (n) => `${Math.round(n * 100)}%`;
 
-// Status → color tokens (10-15% opacity tint backgrounds)
-const STATUS_COLORS = {
-  green: { bg: "rgba(109,191,138,0.12)", border: "rgba(109,191,138,0.22)", val: "var(--color-green)" },
-  gold:  { bg: "rgba(200,168,75,0.12)",  border: "rgba(200,168,75,0.22)",  val: "var(--color-gold)" },
-  red:   { bg: "rgba(232,133,106,0.12)", border: "rgba(232,133,106,0.22)", val: "var(--color-red)" },
-};
-
-function Tile({ title, value, sub, status, span, onClick }) {
-  const [pressed, setPressed] = useState(false);
-  const c = STATUS_COLORS[status] ?? STATUS_COLORS.gold;
-
-  return (
-    <button
-      onPointerDown={() => setPressed(true)}
-      onPointerUp={() => setPressed(false)}
-      onPointerLeave={() => setPressed(false)}
-      onClick={onClick}
-      style={{
-        gridColumn: span === 2 ? "span 2" : "span 1",
-        background: c.bg,
-        border: `1px solid ${c.border}`,
-        borderRadius: "10px",
-        padding: "16px",
-        textAlign: "left",
-        cursor: "pointer",
-       
-        color: "inherit",
-        transform: pressed ? "scale(0.97)" : "scale(1)",
-        transition: "transform 80ms ease",
-        minHeight: "88px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "4px",
-        // Ensure minimum 44×44px tap target even if content is small
-        minWidth: 0,
-      }}
-    >
-      {/* Title — small caps at top */}
-      <div style={{
-        fontSize: "9px",
-        letterSpacing: "2px",
-        textTransform: "uppercase",
-        color: "#999",
-        marginBottom: "2px",
-      }}>
-        {title}
-      </div>
-
-      {/* Hero number */}
-      <div style={{
-        fontSize: "30px",
-        fontWeight: "bold",
-        color: c.val,
-        lineHeight: 1,
-        fontVariantNumeric: "tabular-nums",
-        letterSpacing: "-0.5px",
-        fontFamily: "'DM Serif Display', Georgia, serif",
-      }}>
-        {value}
-      </div>
-
-      {/* Status / sub line — pushes to bottom */}
-      <div style={{
-        fontSize: "10px",
-        color: "#888",
-        letterSpacing: "0.5px",
-        marginTop: "auto",
-        paddingTop: "6px",
-      }}>
-        {sub}
-      </div>
-    </button>
-  );
-}
 
 export function HomePanel({
   navigate,
@@ -206,13 +132,14 @@ export function HomePanel({
         gap: "10px",
       }}>
         {tiles.map(tile => (
-          <Tile
+          <MetricCard
             key={tile.title}
-            title={tile.title}
-            value={tile.value}
+            label={tile.title}
+            val={tile.value}
             sub={tile.sub}
             status={tile.status}
             span={tile.span}
+            size="30px"
             onClick={() => navigate(tile.key)}
           />
         ))}

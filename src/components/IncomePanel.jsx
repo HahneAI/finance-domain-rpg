@@ -41,16 +41,16 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
   }).filter(m => m.wks.length > 0);
 
   return (<div>
-    <div style={{ background: "#111", border: "1px solid #222", borderRadius: "8px", padding: "16px", marginBottom: "20px" }}>
+    <div style={{ background: "#111", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "16px", marginBottom: "20px" }}>
       <SH>Year Summary</SH>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px", marginBottom: (logNetLost > 0 || logNetGained > 0) ? "14px" : "0" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: (logNetLost > 0 || logNetGained > 0) ? "14px" : "0" }}>
         <Card label="Gross (Year)" val={f(yG)} />
         <Card label="Projected Net" val={f(yN)} color="var(--color-green)" />
         <Card label="Your 401k" val={f(yE)} color="#7a8bbf" />
         <Card label="401k w/ Match" val={f(yT)} color="var(--color-gold)" />
       </div>
       {(logNetLost > 0 || logNetGained > 0) && <div style={{ background: logNetLost > logNetGained ? "#2d1a1a" : "#1a2d1e", border: `1px solid ${logNetLost > logNetGained ? "rgba(224,92,92,0.33)" : "rgba(76,175,125,0.33)"}`, borderRadius: "6px", padding: "11px 14px", marginTop: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-        <div style={{ fontSize: "11px", color: "#888", display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <span>Event log:</span>
           {logNetLost > 0 && <span style={{ color: "var(--color-red)", fontWeight: "bold" }}>-{f(logNetLost)} lost</span>}
           {logNetGained > 0 && <span style={{ color: "var(--color-green)", fontWeight: "bold" }}>+{f(logNetGained)} gained</span>}
@@ -65,7 +65,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
 
     {/* SUMMARY — subtabs */}
     {view === "summary" && <div style={{ display: "flex", gap: "6px", marginBottom: "18px", flexWrap: "wrap" }}>
-      {["overview", "monthly", "weekly", "tax schedule"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "#2a2318" : "transparent", color: subview === v ? "var(--color-gold)" : "#555", border: "1px solid " + (subview === v ? "rgba(201,168,76,0.4)" : "#2a2a2a"), borderRadius: "3px", cursor: "pointer", }}>{v}</button>)}
+      {["overview", "monthly", "weekly", "tax schedule"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "#2a2318" : "transparent", color: subview === v ? "var(--color-gold)" : "#555", border: "1px solid " + (subview === v ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{v}</button>)}
     </div>}
 
     {/* OVERVIEW */}
@@ -74,8 +74,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         <th style={{ textAlign: "left", padding: "8px 6px", width: "4px", paddingLeft: 0 }}></th><th style={{ textAlign: "left", padding: "8px 6px" }}>Month</th><th style={{ textAlign: "center", padding: "8px 6px" }}>Chks</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Take Home</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Your 401k</th><th style={{ textAlign: "right", padding: "8px 6px" }}>w/ Match</th>
       </tr></thead>
       <tbody>{mo.map(m => {
-        const statusColor = m.n === 0 ? "#2a2a2a" : m.tx === m.n ? "#7a8bbf" : m.ex === m.n ? "var(--color-green)" : "var(--color-gold)";
-        return <tr key={m.name} style={{ borderBottom: "1px solid #1a1a1a" }} onMouseEnter={e => e.currentTarget.style.background = "#141414"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+        const statusColor = m.n === 0 ? "var(--color-border-subtle)" : m.tx === m.n ? "#7a8bbf" : m.ex === m.n ? "var(--color-green)" : "var(--color-gold)";
+        return <tr key={m.name} style={{ borderBottom: "1px solid #1a1a1a" }} onMouseEnter={e => e.currentTarget.style.background = "var(--color-bg-surface)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
           <td style={{ padding: 0, width: "4px", backgroundColor: statusColor, borderRadius: "2px 0 0 2px" }}></td>
           <td style={{ padding: "10px 6px", fontWeight: "bold" }}>{m.name}</td>
           <td style={{ padding: "10px 6px", textAlign: "center", color: "#aaa" }}>{m.n}</td>
@@ -92,10 +92,10 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
 
     {/* MONTHLY */}
     {view === "summary" && subview === "monthly" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "14px" }}>
-      {mo.filter(m => m.n > 0).map(m => <div key={m.name} style={{ background: "#141414", border: "1px solid #222", borderRadius: "8px", padding: "16px" }}>
+      {mo.filter(m => m.n > 0).map(m => <div key={m.name} style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-gold)" }}>{m.name}</div>
-          <span style={{ fontSize: "9px", padding: "3px 7px", borderRadius: "3px", background: m.ex === m.n ? "#1e4a30" : m.tx === m.n ? "#1e1e3a" : "#3a3210", color: m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)", border: "1px solid " + (m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)") }}>{m.ex === m.n ? "EXEMPT" : m.tx === m.n ? "TAXED" : "MIXED"}</span>
+          <span style={{ fontSize: "9px", padding: "3px 7px", borderRadius: "12px", background: m.ex === m.n ? "#1e4a30" : m.tx === m.n ? "#1e1e3a" : "#3a3210", color: m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)", border: "1px solid " + (m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)") }}>{m.ex === m.n ? "EXEMPT" : m.tx === m.n ? "TAXED" : "MIXED"}</span>
         </div>
         {m.wks.map(w => <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #1e1e1e" }}>
           <div><div style={{ fontSize: "11px", color: "#777" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div><div style={{ fontSize: "10px", color: "#999" }}>{w.rotation} · {w.totalHours}h{w.has401k ? " · 401k✓" : ""}</div></div>
@@ -113,10 +113,10 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
         <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Hrs</th><th style={{ textAlign: "center", padding: "8px 4px" }}>OT</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Wknd</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>401k</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
       </tr></thead>
-      <tbody>{allWeeks.map(w => { const isCurrent = currentWeek && w.idx === currentWeek.idx; return <tr key={w.idx} style={{ borderBottom: "1px solid #161616", opacity: w.active ? 1 : 0.35, background: isCurrent ? "#1a2a14" : "transparent" }} onMouseEnter={e => { if (w.active) e.currentTarget.style.background = isCurrent ? "#1e3018" : "#141414"; }} onMouseLeave={e => e.currentTarget.style.background = isCurrent ? "#1a2a14" : "transparent"}>
+      <tbody>{allWeeks.map(w => { const isCurrent = currentWeek && w.idx === currentWeek.idx; return <tr key={w.idx} style={{ borderBottom: "1px solid #161616", opacity: w.active ? 1 : 0.35, background: isCurrent ? "#1a2a14" : "transparent" }} onMouseEnter={e => { if (w.active) e.currentTarget.style.background = isCurrent ? "#1e3018" : "var(--color-bg-surface)"; }} onMouseLeave={e => e.currentTarget.style.background = isCurrent ? "#1a2a14" : "transparent"}>
         <td style={{ padding: "7px 4px" }}><span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>{isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}</td>
         <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: w.rotation === "6-Day" ? "var(--color-gold)" : "#7a8bbf" }}>{w.rotation}</td>
-        <td style={{ padding: "7px 4px", textAlign: "center", color: "#888" }}>{w.active ? w.totalHours : "—"}</td>
+        <td style={{ padding: "7px 4px", textAlign: "center", color: "var(--color-text-secondary)" }}>{w.active ? w.totalHours : "—"}</td>
         <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "var(--color-red)" : "#666" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
         <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "var(--color-gold)" : "#666" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>
         <td style={{ padding: "7px 4px", textAlign: "right" }}>{w.active ? f2(w.grossPay) : "—"}</td>
@@ -137,7 +137,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
           <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Your {(config.k401Rate * 100).toFixed(0)}%</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Match</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Wk Total</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Running</th>
         </tr></thead>
-        <tbody>{wR.filter(w => w.has401k).map(w => <tr key={w.idx} style={{ borderBottom: "1px solid #161616" }} onMouseEnter={e => e.currentTarget.style.background = "#141414"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+        <tbody>{wR.filter(w => w.has401k).map(w => <tr key={w.idx} style={{ borderBottom: "1px solid #161616" }} onMouseEnter={e => e.currentTarget.style.background = "var(--color-bg-surface)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
           <td style={{ padding: "7px 4px" }}>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
           <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: w.rotation === "6-Day" ? "var(--color-gold)" : "#7a8bbf" }}>{w.rotation}</td>
           <td style={{ padding: "7px 4px", textAlign: "right" }}>{f2(w.grossPay)}</td>
@@ -159,9 +159,9 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     {/* TAX SCHEDULE — debt overview + per-week toggle */}
     {view === "summary" && subview === "tax schedule" && <div>
       {/* Extra withholding quick-toggle */}
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", padding: "10px 14px", background: "#141414", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
-        <div style={{ fontSize: "11px", color: "#888", flex: 1 }}>Apply extra withholding <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerCheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
-        <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "3px", cursor: "pointer", background: showExtra ? "#3a3210" : "var(--color-bg-surface)", color: showExtra ? "var(--color-gold)" : "#aaa", border: "1px solid " + (showExtra ? "var(--color-gold)" : "#333"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</button>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", padding: "10px 14px", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flex: 1 }}>Apply extra withholding <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerCheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
+        <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "#3a3210" : "var(--color-bg-surface)", color: showExtra ? "var(--color-gold)" : "#aaa", border: "1px solid " + (showExtra ? "var(--color-gold)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</button>
       </div>
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "12px", marginBottom: "20px" }}>
@@ -171,7 +171,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       </div>
 
       {/* Tax gap analysis */}
-      <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
+      <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
         <SH>Tax Gap Analysis</SH>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "13px" }}>
           {[{ l: "Fed withheld (taxed weeks)", v: f(fedWithheldBase), c: "var(--color-green)" }, { l: "MO withheld (taxed weeks)", v: f(moWithheldBase), c: "var(--color-green)" }, { l: "Federal gap", v: f(fedGap), c: "var(--color-red)" }, { l: "Missouri gap", v: f(moGap), c: "var(--color-red)" }, { l: "Total income tax gap", v: f(totalGap), c: "var(--color-red)" }, { l: "Target owed at filing", v: f(config.targetOwedAtFiling), c: "var(--color-gold)" }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "#777" }}>{r.l}</span><span style={{ fontWeight: "bold", color: r.c }}>{r.v}</span></div>)}
@@ -179,7 +179,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       </div>
 
       {/* Extra withholding plan */}
-      <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "20px", marginBottom: "28px" }}>
+      <div style={{ background: "var(--color-bg-surface)", border: "1px solid #c8a84b", borderRadius: "8px", padding: "20px", marginBottom: "28px" }}>
         <SH>Extra Withholding Plan</SH>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: "12px", marginBottom: "16px" }}>
           {[{ l: "Extra Needed", v: f(targetExtraTotal), c: "var(--color-red)" }, { l: "Taxed Checks", v: taxedWeekCount, c: "var(--color-text-primary)" }, { l: "Extra Per Check", v: f2(extraPerCheck), c: "var(--color-gold)" }].map(c => <div key={c.l} style={{ textAlign: "center", padding: "12px", background: "var(--color-bg-base)", borderRadius: "6px" }}><div style={{ fontSize: "9px", letterSpacing: "2px", color: "#aaa", textTransform: "uppercase", marginBottom: "6px" }}>{c.l}</div><div style={{ fontSize: "20px", fontWeight: "bold", color: c.c }}>{c.v}</div></div>)}
@@ -200,14 +200,14 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "8px" }}>{m.name}</div>
         {m.wks.map(w => {
           const taxed = config.taxedWeeks.includes(w.idx);
-          return <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#141414", border: `1px solid ${taxed ? "#7a8bbf22" : "rgba(76,175,125,0.13)"}`, borderRadius: "6px", marginBottom: "6px" }}>
+          return <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--color-bg-surface)", border: `1px solid ${taxed ? "#7a8bbf22" : "rgba(76,175,125,0.13)"}`, borderRadius: "6px", marginBottom: "6px" }}>
             <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
               <div>
                 <div style={{ fontSize: "12px", fontWeight: "bold" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
-                <div style={{ fontSize: "10px", color: "#555" }}>{w.rotation} · {w.totalHours}h · idx {w.idx}{w.has401k ? " · 401k✓" : ""}</div>
+                <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{w.rotation} · {w.totalHours}h · idx {w.idx}{w.has401k ? " · 401k✓" : ""}</div>
               </div>
               <div>
-                <div style={{ fontSize: "12px", color: "#888" }}>{f2(w.grossPay)} gross</div>
+                <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{f2(w.grossPay)} gross</div>
                 <div style={{ fontSize: "11px", color: taxed ? "var(--color-text-primary)" : "var(--color-green)" }}>{f2(gN(w))} net</div>
               </div>
             </div>
@@ -217,16 +217,16 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
                 padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
                 border: "none", cursor: taxed ? "default" : "pointer",
                 background: taxed ? "#1e1e3a" : "transparent",
-                color: taxed ? "#7a8bbf" : "#333",
+                color: taxed ? "#7a8bbf" : "var(--color-border-subtle)",
                 fontWeight: taxed ? "bold" : "normal",
                 transition: "all 0.12s",
               }}>Taxed</button>
-              <div style={{ width: "1px", background: "#2a2a2a" }} />
+              <div style={{ width: "1px", background: "var(--color-border-subtle)" }} />
               <button onClick={() => taxed && toggleWeek(w.idx)} style={{
                 padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
                 border: "none", cursor: !taxed ? "default" : "pointer",
                 background: !taxed ? "#1e4a30" : "transparent",
-                color: !taxed ? "var(--color-green)" : "#333",
+                color: !taxed ? "var(--color-green)" : "var(--color-border-subtle)",
                 fontWeight: !taxed ? "bold" : "normal",
                 transition: "all 0.12s",
               }}>Exempt</button>
@@ -234,7 +234,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
           </div>;
         })}
       </div>)}
-      <div style={{ padding: "12px", background: "#141414", borderRadius: "6px", fontSize: "10px", color: "#444", lineHeight: "1.9" }}>
+      <div style={{ padding: "12px", background: "var(--color-bg-surface)", borderRadius: "6px", fontSize: "10px", color: "#444", lineHeight: "1.9" }}>
         Toggling a week instantly recalculates projected net, tax gap, extra withholding per check, and all downstream totals.
       </div>
     </div>}
@@ -243,7 +243,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     {view === "config" && <div>
       {editCfg === null ? <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#888", textTransform: "uppercase" }}>Income & Schedule Configuration</div>
+          <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>Income & Schedule Configuration</div>
           <button onClick={() => setEditCfg({ ...config })} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "4px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>EDIT CONFIG</button>
         </div>
         {[
@@ -253,14 +253,14 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
           { section: "Annual Tax Strategy", rows: [{ l: "Federal Std Deduction", v: `$${config.fedStdDeduction.toLocaleString()}` }, { l: "MO Flat Rate", v: `${(config.moFlatRate * 100).toFixed(1)}%` }, { l: "Target Owed at Filing", v: `$${config.targetOwedAtFiling}` }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }] },
         ].map(g => <div key={g.section} style={{ marginBottom: "20px" }}>
           <SH>{g.section}</SH>
-          {g.rows.map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #1a1a1a" }}><span style={{ fontSize: "12px", color: "#888" }}>{r.l}</span><span style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-text-primary)" }}>{r.v}</span></div>)}
+          {g.rows.map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #1a1a1a" }}><span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{r.l}</span><span style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-text-primary)" }}>{r.v}</span></div>)}
         </div>)}
       </div> : <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <SH>Editing — recalculates on save</SH>
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={() => { setConfig(prev => ({ ...editCfg, taxedWeeks: prev.taxedWeeks })); setEditCfg(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "3px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE & RECALCULATE</button>
-            <button onClick={() => setEditCfg(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
+            <button onClick={() => { setConfig(prev => ({ ...editCfg, taxedWeeks: prev.taxedWeeks })); setEditCfg(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE & RECALCULATE</button>
+            <button onClick={() => setEditCfg(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>

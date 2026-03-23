@@ -77,9 +77,9 @@ function SidebarNavItem({ item, active, onClick }) {
         fontSize: "11px",
         letterSpacing: "2px",
         textTransform: "uppercase",
-        fontFamily: "'Courier New',monospace",
-        background: active ? "#1a1a1a" : "transparent",
-        color: active ? "#c8a84b" : "#888",
+       
+        background: active ? "var(--color-bg-surface)" : "transparent",
+        color: active ? "var(--color-gold)" : "#888",
         borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
         border: "none",
         cursor: "pointer",
@@ -310,8 +310,8 @@ export default function App() {
 
   if (loading) {
     return (
-      <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d",
-        minHeight: "100vh", color: "#c8a84b", display: "flex",
+      <div style={{ background: "var(--color-bg-base)",
+        minHeight: "100vh", color: "var(--color-gold)", display: "flex",
         alignItems: "center", justifyContent: "center", fontSize: "14px",
         letterSpacing: "4px" }}>
         LOADING...
@@ -379,7 +379,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d", minHeight: "100vh", color: "#e8e0d0", display: "flex" }}>
+    <div style={{ background: "var(--color-bg-base)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
       <style>{`
         /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
            but injecting it here as well catches any future SSR or shadow-DOM edge
@@ -449,7 +449,7 @@ export default function App() {
         style={{
           width: "190px",
           minWidth: "190px",
-          background: "#111",
+          background: "var(--color-bg-surface)",
           borderRight: "1px solid #222",
           position: "sticky",
           top: 0,
@@ -460,13 +460,13 @@ export default function App() {
         }}
       >
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #222" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "4px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
+          <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
           <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
-          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
+          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
-            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", fontFamily: "'Courier New',monospace", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
+            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-red)", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
               ◷ {unconfirmedCount} {unconfirmedCount === 1 ? "week" : "weeks"} to confirm
             </button>
           )}
@@ -492,7 +492,7 @@ export default function App() {
             paddingRight: "max(16px, env(safe-area-inset-right, 16px))",
             height: "calc(56px + env(safe-area-inset-top, 0px))",
             paddingTop: "env(safe-area-inset-top, 0px)",
-            background: "#0d0d0d",
+            background: "var(--color-bg-base)",
             position: "sticky",
             top: 0,
             zIndex: 30,
@@ -507,7 +507,7 @@ export default function App() {
             style={{
               background: "transparent",
               border: "none",
-              color: "#c8a84b",
+              color: "var(--color-gold)",
               cursor: "pointer",
               width: "44px",
               height: "44px",
@@ -520,16 +520,16 @@ export default function App() {
             }}
             aria-label="Open navigation"
           >
-            <span style={{ display: "block", width: "20px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
-            <span style={{ display: "block", width: "20px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
-            <span style={{ display: "block", width: "20px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-gold)", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-gold)", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-gold)", borderRadius: "1px" }} />
           </button>
 
           {/* ── Title block — center ── */}
           <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase" }}>DHL / P&G</div>
-              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>DHL / P&G</div>
+              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
             </div>
             <div style={{ fontSize: "14px", fontWeight: "bold" }}>Finance Dashboard</div>
           </div>
@@ -540,7 +540,7 @@ export default function App() {
             style={{
               background: "transparent",
               border: "none",
-              color: unconfirmedCount > 0 ? "#e8856a" : "#555",
+              color: unconfirmedCount > 0 ? "var(--color-red)" : "#555",
               cursor: "pointer",
               width: "44px",
               height: "44px",
@@ -560,8 +560,8 @@ export default function App() {
                 position: "absolute",
                 top: "6px",
                 right: "6px",
-                background: "#e8856a",
-                color: "#0d0d0d",
+                background: "var(--color-red)",
+                color: "var(--color-bg-base)",
                 borderRadius: "50%",
                 width: "16px",
                 height: "16px",
@@ -570,7 +570,7 @@ export default function App() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontFamily: "'Courier New',monospace",
+               
               }}>
                 {unconfirmedCount}
               </span>
@@ -605,7 +605,7 @@ export default function App() {
           left: 0,
           width: "260px",
           height: "100dvh",
-          background: "#111",
+          background: "var(--color-bg-surface)",
           borderRight: "1px solid #2a2a2a",
           zIndex: 50,
           display: "flex",
@@ -615,7 +615,7 @@ export default function App() {
         {/* Drawer header */}
         <div style={{ padding: "16px 18px", borderBottom: "1px solid #222", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
-            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G — Jackson MO</div>
+            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G — Jackson MO</div>
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
           </div>
           <button
@@ -637,7 +637,7 @@ export default function App() {
 
         {/* Active section indicator at bottom */}
         <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: "10px", color: "#555", letterSpacing: "1px", textTransform: "uppercase" }}>
-          Viewing: <span style={{ color: "#c8a84b" }}>{currentView}</span>
+          Viewing: <span style={{ color: "var(--color-gold)" }}>{currentView}</span>
         </div>
       </div>
 
@@ -652,12 +652,33 @@ export default function App() {
           right: 0,
           height: "calc(62px + env(safe-area-inset-bottom, 0px))",
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
-          background: "#111",
+          background: "var(--color-bg-surface)",
           borderTop: "1px solid #222",
           boxShadow: "0 -4px 24px rgba(0,0,0,0.9)",
           zIndex: 20,
+          // fixed creates a containing block — the absolute-positioned indicator
+          // is anchored to this bar, not the viewport.
         }}
       >
+        {/* Sliding tab indicator — 2px gold bar that moves to the active tab.
+            All tabs are flex:1 so each occupies 100%/n of the nav width.
+            We slide via `left` + CSS transition (no layout thrash; tab count is static). */}
+        {(() => {
+          const activeIdx = Math.max(BOTTOM_NAV.findIndex(i => i.key === currentView), 0);
+          const pct = 100 / BOTTOM_NAV.length;
+          return (
+            <div style={{
+              position: "absolute",
+              top: 0,
+              left: `${activeIdx * pct}%`,
+              width: `${pct}%`,
+              height: "2px",
+              background: "var(--color-gold)",
+              transition: "left 0.3s ease",
+              borderRadius: "0 0 1px 1px",
+            }} />
+          );
+        })()}
         {BOTTOM_NAV.map(item => {
           const active = currentView === item.key;
           return (
@@ -669,18 +690,18 @@ export default function App() {
                 height: "100%",
                 background: "transparent",
                 border: "none",
-                color: active ? "#c8a84b" : "#555",
+                color: active ? "var(--color-gold)" : "#555",
                 cursor: "pointer",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "3px",
-                fontFamily: "'Courier New',monospace",
                 fontSize: "9px",
                 letterSpacing: "1px",
                 textTransform: "uppercase",
                 paddingTop: "2px",
+                transition: "color 0.2s ease",
               }}
             >
               {item.icon}

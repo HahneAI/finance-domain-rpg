@@ -29,7 +29,7 @@ export const PHASES = [
   { id: "q1", label: "Jan–Mar", description: "Jan 1 → Mar 31", color: "#7eb8c9" },
   { id: "q2", label: "Apr–Jun", description: "Apr 1 → Jun 30", color: "#c9a96e" },
   { id: "q3", label: "Jul–Sep", description: "Jul 1 → Sep 30", color: "#a96ec9" },
-  { id: "q4", label: "Oct–Dec", description: "Oct 1 → Dec 31", color: "#6dbf8a" },
+  { id: "q4", label: "Oct–Dec", description: "Oct 1 → Dec 31", color: "var(--color-green)" },
 ];
 
 export const INITIAL_EXPENSES = [
@@ -45,13 +45,13 @@ export const INITIAL_EXPENSES = [
 ];
 
 export const INITIAL_GOALS = [
-  { id: "g1", label: "Tickets & Fines", target: 600, color: "#e8856a", note: "Traffic tickets — may be more than $600", completed: false },
+  { id: "g1", label: "Tickets & Fines", target: 600, color: "var(--color-red)", note: "Traffic tickets — may be more than $600", completed: false },
   { id: "g2", label: "SUV (Cash Purchase)", target: 3000, color: "#c9a96e", note: "Full cash buy of used vehicle", completed: false },
   { id: "g3", label: "Angel Emergency Fund", target: 1000, color: "#7eb8c9", note: "Safety net for Angel & baby", completed: false },
   { id: "g4", label: "New Phone", target: 1200, color: "#7a8bbf", note: "Personal device upgrade", completed: false },
   { id: "g5", label: "Laptop Repair", target: 300, color: "#a96ec9", note: "Dev/work laptop", completed: false },
-  { id: "g6", label: "Furniture & Equipment", target: 500, color: "#6dbf8a", note: "Trailer setup", completed: false },
-  { id: "g7", label: "FHA Down Payment", target: 3000, color: "#c8a84b", note: "Save $3k cash + 401k loan for remainder", completed: false },
+  { id: "g6", label: "Furniture & Equipment", target: 500, color: "var(--color-green)", note: "Trailer setup", completed: false },
+  { id: "g7", label: "FHA Down Payment", target: 3000, color: "var(--color-gold)", note: "Save $3k cash + 401k loan for remainder", completed: false },
 ];
 
 export const INITIAL_LOGS = [{
@@ -62,14 +62,14 @@ export const INITIAL_LOGS = [{
 }];
 
 export const EVENT_TYPES = {
-  missed_unpaid:     { label: "Missed Shift (Unpaid/Approved)", color: "#e8856a", icon: "✕" },
+  missed_unpaid:     { label: "Missed Shift (Unpaid/Approved)", color: "var(--color-red)", icon: "✕" },
   missed_unapproved: { label: "Missed Work (Unapproved)",       color: "#e8622a", icon: "⚠" },
   pto:               { label: "PTO Used",                       color: "#7a8bbf", icon: "◷" },
-  partial:           { label: "Partial Shift",                  color: "#c8a84b", icon: "◑" },
-  bonus:             { label: "Bonus / Extra Pay",              color: "#6dbf8a", icon: "+" },
+  partial:           { label: "Partial Shift",                  color: "var(--color-gold)", icon: "◑" },
+  bonus:             { label: "Bonus / Extra Pay",              color: "var(--color-green)", icon: "+" },
   other_loss:        { label: "Other Income Loss",              color: "#888",    icon: "−" },
 };
 
-export const CATEGORY_COLORS = { Needs: "#e8856a", Lifestyle: "#7a8bbf", Transfers: "#888" };
+export const CATEGORY_COLORS = { Needs: "var(--color-red)", Lifestyle: "#7a8bbf", Transfers: "#888" };
 export const CATEGORY_BG = { Needs: "#2a1a16", Lifestyle: "#1a1a2d", Transfers: "#1e1e1e" };
 export const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];

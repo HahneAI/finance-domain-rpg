@@ -1,6 +1,6 @@
 # Finance Dashboard — UI Implementation Status
 
-**DHL/P&G Finance RPG · Implementation confirmation through Priority 4**
+**DHL/P&G Finance RPG · Implementation confirmation through Priority 5**
 
 Mirror of `docs/finance-dashboard-ui-spec` — each section confirms what is
 actually live in the codebase, where it lives, and what (if anything) differs
@@ -156,13 +156,15 @@ Single component handles both static display and interactive tile modes.
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `label` | string | — | Uppercase label at top |
-| `val` | string/node | — | Hero number or value |
+| `val` | string/node | — | Hero number or value (displayed as-is when no `rawVal`) |
 | `sub` | string/node | — | Optional sublabel |
 | `color` | string | — | Explicit val color; overrides `status` |
 | `size` | string | `"22px"` | Font size of `val` |
 | `status` | `"green"\|"gold"\|"red"` | — | Tinted bg + matching val color |
 | `onClick` | function | — | Makes card a pressable button |
 | `span` | number | — | `2` = `gridColumn: "span 2"` |
+| `rawVal` | number | — | Raw $ number: drives countup animation on mount + flash on change |
+| `entranceIndex` | number | — | 0-based stagger index; adds `fadeSlideUp` entrance with delay |
 
 **Static mode** (no `onClick`):
 ```
@@ -184,8 +186,11 @@ padding: 16px 18px
 minHeight: 88px
 display: flex, flexDirection: column
 transform: scale(0.97) on pointer press (80ms ease)
+animation: fadeSlideUp 0.4s ease-out both  (when entranceIndex provided)
+animationDelay: min(entranceIndex × 80ms, 400ms)
   ├── label  — 10px, letterSpacing 2.5px, var(--color-text-secondary), uppercase, mb 2px
   ├── val    — size prop, DM Serif Display, bold, lineHeight 1, tabular-nums
+  │           transition: color 0.6s ease  (flash on rawVal change)
   └── sub    — 10px, var(--color-text-secondary), marginTop: auto (pushes to bottom)
 ```
 
@@ -376,20 +381,106 @@ SAVE/PRIMARY pattern:
 
 ---
 
-## What Is NOT Yet Implemented (Priorities 5–6)
+## Animations
 
-| Priority | Item | Status |
-|----------|------|--------|
-| 5 | Framer Motion install | ❌ Not started |
-| 5 | Number countup animation (hero metrics) | ❌ Not started |
-| 5 | Card entrance stagger (fade + slide up 8px) | ❌ Not started |
-| 5 | Value change flash (gold → normal, 600ms) | ❌ Not started |
-| 6 | Tab underline sliding indicator (layoutId) | ❌ Not started |
+**Status: ✅ Complete (Priority 5)**
 
-**Rule reminder (from spec):** No bounce, no spin, no scale pop. Finance apps
-feel calm and precise. Max animation duration 500ms (except countup at 1.2s).
+No animation library added — all animations use CSS keyframes + `requestAnimationFrame`. Zero new dependencies.
 
 ---
 
-*Generated against commit `9139387` — Priority #4 complete.*
+### fadeSlideUp (keyframe)
+
+**File:** `src/index.css` (end of file)
+
+```css
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+```
+
+Applied to MetricCard container when `entranceIndex` prop is provided.
+`fill-mode: both` keeps card invisible before delay fires (prevents flash of unstyled content).
+
+---
+
+### useCountUp (hook)
+
+**File:** `src/components/ui.jsx` — internal hook, not exported
+
+Animates a numeric value from `0 → target` over 1200ms using ease-out cubic via `requestAnimationFrame`. Restarts cleanly if `target` changes (handles live data refresh).
+
+```
+duration:   1200ms
+easing:     ease-out cubic  (1 - (1-t)³)
+trigger:    target prop change (including initial mount)
+output:     integer (Math.round)
+```
+
+Used by MetricCard when `rawVal` prop is provided. The hook value is formatted by MetricCard's internal `_fmt$` helper and displayed in place of the `val` string.
+
+**Tiles using countup** (HomePanel):
+
+| Tile | rawVal source |
+|------|--------------|
+| Take Home | `weeklyTakeHome` |
+| Weekly Left | `adjustedWeeklyAvg` |
+| Net Worth Trend | `annualSavings` |
+| Emergency Fund | `emergencyGoal.target` |
+| Next Week | `nextWeekNet ?? weeklyIncome` |
+| Budget Health | — (percent, no countup) |
+| Goals | — (fraction string, no countup) |
+
+---
+
+### Card entrance stagger
+
+**Implemented via:** `entranceIndex` prop on MetricCard + `fadeSlideUp` keyframe
+
+```
+per-card delay: min(entranceIndex × 80ms, 400ms)
+duration:       400ms
+easing:         ease-out
+fill-mode:      both
+```
+
+The 400ms cap prevents late cards (index ≥ 6) from lagging past the visible threshold.
+All 7 HomePanel tiles pass `entranceIndex={i}` (i = 0–6).
+
+---
+
+### Value flash
+
+**Implemented via:** React state in MetricCard + CSS `transition: color 0.6s ease`
+
+Triggers when `rawVal` changes after first render (skips mount). Sets val color to `var(--color-gold-bright)` for 150ms, then CSS transition eases it back to the status color over 600ms. No separate keyframe — pure state toggle + transition.
+
+```
+flash color:      var(--color-gold-bright)  (#f0c040)
+flash hold:       150ms
+fade back:        600ms  (CSS transition on val div)
+```
+
+---
+
+### Animation constraints (from spec, confirmed)
+
+- No bounce (`spring` with bounciness > 0)
+- No spin
+- No scale pop (scale-up on mount)
+- Press `scale(0.97)` is subtractive feedback — kept
+- All durations ≤ 500ms except countup (1.2s exception; it IS the display, not decoration)
+
+---
+
+## What Is NOT Yet Implemented (Priority 6)
+
+| Priority | Item | Status |
+|----------|------|--------|
+| 6 | Tab underline sliding indicator | ❌ Not started |
+
+---
+
+*Generated against commit `0c2435e` — Priority #5 complete.*
 *Spec source: `docs/finance-dashboard-ui-spec`*

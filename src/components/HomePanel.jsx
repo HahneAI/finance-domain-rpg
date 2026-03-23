@@ -35,10 +35,12 @@ export function HomePanel({
   const emergencyGoal = goals.find(g => g.label.toLowerCase().includes("emergency"));
 
   // ── Tile definitions in display order ──
+  // rawVal: raw number passed to MetricCard for countup + flash ($ tiles only)
   const tiles = [
     {
       title: "Take Home",
       value: fmt$(weeklyTakeHome),
+      rawVal: weeklyTakeHome,
       sub: "per week · all events applied",
       status: weeklyTakeHome > 0 ? "green" : "red",
       span: 2,
@@ -47,6 +49,7 @@ export function HomePanel({
     {
       title: "Weekly Left",
       value: fmt$(adjustedWeeklyAvg),
+      rawVal: adjustedWeeklyAvg,
       sub: "after all expenses",
       status: adjustedWeeklyAvg > 100 ? "green" : adjustedWeeklyAvg >= 0 ? "gold" : "red",
       span: 1,
@@ -55,6 +58,7 @@ export function HomePanel({
     {
       title: "Net Worth Trend",
       value: fmt$(annualSavings),
+      rawVal: annualSavings,
       sub: "projected annual savings",
       status: annualSavings > 5000 ? "green" : annualSavings >= 0 ? "gold" : "red",
       span: 1,
@@ -63,6 +67,7 @@ export function HomePanel({
     {
       title: "Budget Health",
       value: fmtPct(spendRatio),
+      // no rawVal — percent, not a dollar countup
       sub: `${fmt$(avgWeeklySpend)}/wk spend · ${fmt$(weeklyIncome)}/wk income`,
       status: spendRatio < 0.5 ? "green" : spendRatio < 0.75 ? "gold" : "red",
       span: 2,
@@ -71,6 +76,7 @@ export function HomePanel({
     {
       title: "Emergency Fund",
       value: emergencyGoal ? fmt$(emergencyGoal.target) : "—",
+      rawVal: emergencyGoal?.target ?? null,
       sub: emergencyGoal
         ? (emergencyGoal.completed ? "funded ✓" : `target · ${emergencyGoal.label}`)
         : "no emergency goal set",
@@ -81,6 +87,7 @@ export function HomePanel({
     {
       title: "Goals",
       value: `${completedGoals.length}/${goals.length}`,
+      // no rawVal — fraction string, not a $ value
       sub: completedGoals.length > 0
         ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
         : `${fmt$(totalGoalTarget)} total target`,
@@ -92,6 +99,7 @@ export function HomePanel({
     {
       title: "Next Week",
       value: nextWeekNet != null ? fmt$(nextWeekNet) : fmt$(weeklyIncome),
+      rawVal: nextWeekNet ?? weeklyIncome,
       sub: nextWeekNet != null
         ? (nextWeekNet < weeklyIncome * 0.80 ? "below avg · check log"
           : nextWeekNet < weeklyIncome * 0.95 ? "slightly below avg"
@@ -131,16 +139,18 @@ export function HomePanel({
         gridTemplateColumns: "1fr 1fr",
         gap: "12px",
       }}>
-        {tiles.map(tile => (
+        {tiles.map((tile, i) => (
           <MetricCard
             key={tile.title}
             label={tile.title}
             val={tile.value}
+            rawVal={tile.rawVal ?? undefined}
             sub={tile.sub}
             status={tile.status}
             span={tile.span}
             size="30px"
             onClick={() => navigate(tile.key)}
+            entranceIndex={i}
           />
         ))}
       </div>

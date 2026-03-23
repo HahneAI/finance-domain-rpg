@@ -117,7 +117,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
             return (
               <button key={day} type="button" onClick={() => toggleDay(day, vals, set)} style={{
                 padding: "6px 10px", borderRadius: "3px", fontSize: "10px", letterSpacing: "1px",
-                fontFamily: "'Courier New',monospace", cursor: "pointer",
+                cursor: "pointer",
                 border: isMissed ? "1px solid #e8856a" : isScheduled ? "1px solid #444" : "1px solid #222",
                 background: isMissed ? "#e8856a22" : isScheduled ? "#1a1a1a" : "#111",
                 color: isMissed ? "#e8856a" : isScheduled ? "#888" : "#2a2a2a",
@@ -294,7 +294,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
     {/* Log header + add button */}
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#888", textTransform: "uppercase" }}>Event Log ({logs.length})</div>
-      <button onClick={() => { setAdding(true); setEditId(null); }} style={{ background: "#c8a84b", color: "#0d0d0d", border: "none", borderRadius: "4px", padding: "6px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>+ LOG EVENT</button>
+      <button onClick={() => { setAdding(true); setEditId(null); }} style={{ background: "#c8a84b", color: "#0d0d0d", border: "none", borderRadius: "4px", padding: "6px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>+ LOG EVENT</button>
     </div>
 
     {/* Add form */}
@@ -304,8 +304,8 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
         <FormFields vals={nEv} set={setNEv} onWeekEndChange={handleWeekEndChange} />
       </div>
       <div style={{ display: "flex", gap: "8px" }}>
-        <button onClick={addLog} disabled={!nEv.weekEnd} style={{ background: nEv.weekEnd ? "#6dbf8a" : "#2a2a2a", color: nEv.weekEnd ? "#0d0d0d" : "#555", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: nEv.weekEnd ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>SAVE</button>
-        <button onClick={() => { setAdding(false); setNEv(blank); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+        <button onClick={addLog} disabled={!nEv.weekEnd} style={{ background: nEv.weekEnd ? "#6dbf8a" : "#2a2a2a", color: nEv.weekEnd ? "#0d0d0d" : "#555", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: nEv.weekEnd ? "pointer" : "default", fontWeight: "bold" }}>SAVE</button>
+        <button onClick={() => { setAdding(false); setNEv(blank); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
       </div>
     </div>}
 
@@ -330,8 +330,8 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
               <FormFields vals={editVals} set={setEditVals} onWeekEndChange={handleEditWeekEndChange} />
             </div>
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={saveEdit} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>SAVE</button>
-              <button onClick={() => setEditId(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+              <button onClick={saveEdit} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</button>
+              <button onClick={() => setEditId(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
             </div>
           </>
         ) : (
@@ -367,13 +367,13 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
                 {entry.type === "other_loss"        && `-${f(entry.amount)} other`}
               </div>
               <div style={{ display: "flex", gap: "6px" }}>
-                <button onClick={() => startEdit(entry)} style={{ background: "transparent", border: "1px solid #444", color: "#999", borderRadius: "3px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>EDIT</button>
+                <button onClick={() => startEdit(entry)} style={{ background: "transparent", border: "1px solid #444", color: "#999", borderRadius: "3px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>EDIT</button>
                 {cdel === entry.id
                   ? <>
-                      <button onClick={() => { setLogs(p => p.filter(e => e.id !== entry.id)); setCdel(null); }} style={{ background: "#e8856a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CONFIRM</button>
-                      <button onClick={() => setCdel(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+                      <button onClick={() => { setLogs(p => p.filter(e => e.id !== entry.id)); setCdel(null); }} style={{ background: "#e8856a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CONFIRM</button>
+                      <button onClick={() => setCdel(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CANCEL</button>
                     </>
-                  : <button onClick={() => setCdel(entry.id)} style={{ background: "transparent", border: "1px solid #333", color: "#555", borderRadius: "3px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>DELETE</button>
+                  : <button onClick={() => setCdel(entry.id)} style={{ background: "transparent", border: "1px solid #333", color: "#555", borderRadius: "3px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>DELETE</button>
                 }
               </div>
             </div>

@@ -77,7 +77,7 @@ function SidebarNavItem({ item, active, onClick }) {
         fontSize: "11px",
         letterSpacing: "2px",
         textTransform: "uppercase",
-        fontFamily: "'Courier New',monospace",
+       
         background: active ? "#1a1a1a" : "transparent",
         color: active ? "#c8a84b" : "#888",
         borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
@@ -310,7 +310,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d",
+      <div style={{ background: "#0d0d0d",
         minHeight: "100vh", color: "#c8a84b", display: "flex",
         alignItems: "center", justifyContent: "center", fontSize: "14px",
         letterSpacing: "4px" }}>
@@ -379,7 +379,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d", minHeight: "100vh", color: "#e8e0d0", display: "flex" }}>
+    <div style={{ background: "#0d0d0d", minHeight: "100vh", color: "#e8e0d0", display: "flex" }}>
       <style>{`
         /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
            but injecting it here as well catches any future SSR or shadow-DOM edge
@@ -466,7 +466,7 @@ export default function App() {
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
-            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", fontFamily: "'Courier New',monospace", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
+            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
               ◷ {unconfirmedCount} {unconfirmedCount === 1 ? "week" : "weeks"} to confirm
             </button>
           )}
@@ -570,7 +570,7 @@ export default function App() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontFamily: "'Courier New',monospace",
+               
               }}>
                 {unconfirmedCount}
               </span>
@@ -676,7 +676,7 @@ export default function App() {
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "3px",
-                fontFamily: "'Courier New',monospace",
+               
                 fontSize: "9px",
                 letterSpacing: "1px",
                 textTransform: "uppercase",

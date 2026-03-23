@@ -36,7 +36,7 @@ function Tile({ title, value, sub, status, span, onClick }) {
         padding: "16px",
         textAlign: "left",
         cursor: "pointer",
-        fontFamily: "'Courier New',monospace",
+       
         color: "inherit",
         transform: pressed ? "scale(0.97)" : "scale(1)",
         transition: "transform 80ms ease",
@@ -67,6 +67,7 @@ function Tile({ title, value, sub, status, span, onClick }) {
         lineHeight: 1,
         fontVariantNumeric: "tabular-nums",
         letterSpacing: "-0.5px",
+        fontFamily: "'DM Serif Display', Georgia, serif",
       }}>
         {value}
       </div>

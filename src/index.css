@@ -89,6 +89,8 @@
 html, body {
   margin: 0;
   background: #0d0d0d;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: #f0ede6;
   /* DEBUG: overflow-x hidden is the primary iOS horizontal scroll kill-switch.
      If horizontal scroll returns, check this is NOT being overridden by a child
      element using position:fixed or transform — those create new stacking contexts
@@ -182,4 +184,11 @@ code {
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
+}
+
+/* Data tables — JetBrains Mono per spec (only place monospace is allowed) */
+.data-table,
+.data-table td,
+.data-table th {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
 }

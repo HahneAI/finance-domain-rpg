@@ -65,11 +65,11 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
 
     {/* SUMMARY — subtabs */}
     {view === "summary" && <div style={{ display: "flex", gap: "6px", marginBottom: "18px", flexWrap: "wrap" }}>
-      {["overview", "monthly", "weekly", "tax schedule"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "#2a2318" : "transparent", color: subview === v ? "#c8a84b" : "#555", border: "1px solid " + (subview === v ? "#c8a84b66" : "#2a2a2a"), borderRadius: "3px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>{v}</button>)}
+      {["overview", "monthly", "weekly", "tax schedule"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "#2a2318" : "transparent", color: subview === v ? "#c8a84b" : "#555", border: "1px solid " + (subview === v ? "#c8a84b66" : "#2a2a2a"), borderRadius: "3px", cursor: "pointer", }}>{v}</button>)}
     </div>}
 
     {/* OVERVIEW */}
-    {view === "summary" && subview === "overview" && <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+    {view === "summary" && subview === "overview" && <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
       <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "#c8a84b", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
         <th style={{ textAlign: "left", padding: "8px 6px", width: "4px", paddingLeft: 0 }}></th><th style={{ textAlign: "left", padding: "8px 6px" }}>Month</th><th style={{ textAlign: "center", padding: "8px 6px" }}>Chks</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Take Home</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Your 401k</th><th style={{ textAlign: "right", padding: "8px 6px" }}>w/ Match</th>
       </tr></thead>
@@ -109,7 +109,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     </div>}
 
     {/* WEEKLY */}
-    {view === "summary" && subview === "weekly" && <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
+    {view === "summary" && subview === "weekly" && <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
       <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "#c8a84b", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
         <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Hrs</th><th style={{ textAlign: "center", padding: "8px 4px" }}>OT</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Wknd</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>401k</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
       </tr></thead>
@@ -133,7 +133,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         <Card label="Employer Match" val={f(allWeeks.reduce((s, w) => s + w.k401kEmployer, 0))} sub={`${(config.k401MatchRate * 100).toFixed(0)}% match`} color="#6dbf8a" size="22px" />
         <Card label="Total 401k Balance" val={f(yT)} sub="Projected year-end 2026" color="#c8a84b" size="22px" />
       </div>
-      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "480px" }}>
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "480px" }}>
         <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "#c8a84b", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
           <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Your {(config.k401Rate * 100).toFixed(0)}%</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Match</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Wk Total</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Running</th>
         </tr></thead>
@@ -161,7 +161,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       {/* Extra withholding quick-toggle */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", padding: "10px 14px", background: "#141414", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
         <div style={{ fontSize: "11px", color: "#888", flex: 1 }}>Apply extra withholding <span style={{ color: "#c8a84b", fontWeight: "bold" }}>{f2(extraPerCheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
-        <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "3px", cursor: "pointer", background: showExtra ? "#3a3210" : "#1a1a1a", color: showExtra ? "#c8a84b" : "#aaa", border: "1px solid " + (showExtra ? "#c8a84b" : "#333"), textTransform: "uppercase", fontFamily: "'Courier New',monospace", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</button>
+        <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "3px", cursor: "pointer", background: showExtra ? "#3a3210" : "#1a1a1a", color: showExtra ? "#c8a84b" : "#aaa", border: "1px solid " + (showExtra ? "#c8a84b" : "#333"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</button>
       </div>
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "12px", marginBottom: "20px" }}>
@@ -215,7 +215,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
             <div style={{ display: "flex", background: "#0d0d0d", border: "1px solid #2a2a2a", borderRadius: "5px", overflow: "hidden" }}>
               <button onClick={() => !taxed && toggleWeek(w.idx)} style={{
                 padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
-                border: "none", cursor: taxed ? "default" : "pointer", fontFamily: "'Courier New',monospace",
+                border: "none", cursor: taxed ? "default" : "pointer",
                 background: taxed ? "#1e1e3a" : "transparent",
                 color: taxed ? "#7a8bbf" : "#333",
                 fontWeight: taxed ? "bold" : "normal",
@@ -224,7 +224,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
               <div style={{ width: "1px", background: "#2a2a2a" }} />
               <button onClick={() => taxed && toggleWeek(w.idx)} style={{
                 padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
-                border: "none", cursor: !taxed ? "default" : "pointer", fontFamily: "'Courier New',monospace",
+                border: "none", cursor: !taxed ? "default" : "pointer",
                 background: !taxed ? "#1e4a30" : "transparent",
                 color: !taxed ? "#6dbf8a" : "#333",
                 fontWeight: !taxed ? "bold" : "normal",
@@ -244,7 +244,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       {editCfg === null ? <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#888", textTransform: "uppercase" }}>Income & Schedule Configuration</div>
-          <button onClick={() => setEditCfg({ ...config })} style={{ background: "#c8a84b", color: "#0d0d0d", border: "none", borderRadius: "4px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>EDIT CONFIG</button>
+          <button onClick={() => setEditCfg({ ...config })} style={{ background: "#c8a84b", color: "#0d0d0d", border: "none", borderRadius: "4px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>EDIT CONFIG</button>
         </div>
         {[
           { section: "Pay Structure", rows: [{ l: "Base Hourly Rate", v: `$${config.baseRate}/hr` }, { l: "Shift Length", v: `${config.shiftHours}h` }, { l: "Weekend Differential", v: `+$${config.diffRate}/hr` }, { l: "OT Threshold", v: `${config.otThreshold}h/wk` }, { l: "OT Multiplier", v: `${config.otMultiplier}×` }] },
@@ -259,8 +259,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <SH>Editing — recalculates on save</SH>
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={() => { setConfig(prev => ({ ...editCfg, taxedWeeks: prev.taxedWeeks })); setEditCfg(null); }} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>SAVE & RECALCULATE</button>
-            <button onClick={() => setEditCfg(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+            <button onClick={() => { setConfig(prev => ({ ...editCfg, taxedWeeks: prev.taxedWeeks })); setEditCfg(null); }} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE & RECALCULATE</button>
+            <button onClick={() => setEditCfg(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>

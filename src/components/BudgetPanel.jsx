@@ -183,7 +183,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   return (<div>
     {/* Phase tabs */}
     <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
-      {PHASES.map((p, i) => { const isCurrent = i === currentPhaseIdx; return <button key={p.id} onClick={() => setAp(i)} style={{ flex: 1, padding: "10px", borderRadius: "6px", cursor: "pointer", background: ap === i ? p.color : "#141414", color: ap === i ? "#0a0a0a" : "#666", border: "2px solid " + (ap === i ? p.color : isCurrent ? p.color + "55" : "#222"), fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", fontFamily: "'Courier New',monospace", position: "relative" }}>{isCurrent && ap !== i && <span style={{ position: "absolute", top: "5px", right: "6px", width: "6px", height: "6px", borderRadius: "50%", background: p.color }} />}{p.label}<br /><span style={{ fontSize: "9px", fontWeight: "normal" }}>{p.description}</span>{isCurrent && <span style={{ display: "block", fontSize: "8px", marginTop: "2px", opacity: ap === i ? 0.7 : 0.9 }}>● now</span>}</button>; })}
+      {PHASES.map((p, i) => { const isCurrent = i === currentPhaseIdx; return <button key={p.id} onClick={() => setAp(i)} style={{ flex: 1, padding: "10px", borderRadius: "6px", cursor: "pointer", background: ap === i ? p.color : "#141414", color: ap === i ? "#0a0a0a" : "#666", border: "2px solid " + (ap === i ? p.color : isCurrent ? p.color + "55" : "#222"), fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", position: "relative" }}>{isCurrent && ap !== i && <span style={{ position: "absolute", top: "5px", right: "6px", width: "6px", height: "6px", borderRadius: "50%", background: p.color }} />}{p.label}<br /><span style={{ fontSize: "9px", fontWeight: "normal" }}>{p.description}</span>{isCurrent && <span style={{ display: "block", fontSize: "8px", marginTop: "2px", opacity: ap === i ? 0.7 : 0.9 }}>● now</span>}</button>; })}
     </div>
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px", marginBottom: "16px" }}>
@@ -224,8 +224,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   {["p1", "p2", "p3", "p4"].map((k, i) => <div key={k} style={{ textAlign: "center" }}><div style={{ fontSize: "9px", color: PHASES[i].color, marginBottom: "2px" }}>{PHASES[i].label}/wk</div><input type="number" value={editVals[k] ?? 0} onChange={e => setEditVals(v => ({ ...v, [k]: e.target.value }))} style={{ ...iS, width: "100%" }} /></div>)}
                 </div>
                 <div style={{ display: "flex", gap: "6px" }}>
-                  <button onClick={() => saveEditExp(exp.id)} style={{ background: "#6dbf8a", color: "#0a0a0a", border: "none", borderRadius: "3px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", fontFamily: "'Courier New',monospace", flex: 1 }}>SAVE</button>
-                  <button onClick={() => setEditId(null)} style={{ background: "#333", color: "#888", border: "none", borderRadius: "3px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", fontFamily: "'Courier New',monospace" }}>✕</button>
+                  <button onClick={() => saveEditExp(exp.id)} style={{ background: "#6dbf8a", color: "#0a0a0a", border: "none", borderRadius: "3px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", flex: 1 }}>SAVE</button>
+                  <button onClick={() => setEditId(null)} style={{ background: "#333", color: "#888", border: "none", borderRadius: "3px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", }}>✕</button>
                 </div>
               </div> : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div><div style={{ fontSize: "13px" }}>{exp.label}</div>{exp.note[ap] && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{exp.note[ap]}</div>}</div>
@@ -301,10 +301,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note (optional)</label><input type="text" value={newExp.note} onChange={e => setNewExp(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Short description" /></div>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "#6dbf8a" : "#333", color: newExp.label ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>ADD</button>
-          <button onClick={() => { setAddingExp(false); setNewExp({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", p4: "0", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+          <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "#6dbf8a" : "#333", color: newExp.label ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>ADD</button>
+          <button onClick={() => { setAddingExp(false); setNewExp({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", p4: "0", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
         </div>
-      </div> : <button onClick={() => setAddingExp(true)} style={{ background: "#1a1a1a", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
+      </div> : <button onClick={() => setAddingExp(true)} style={{ background: "#1a1a1a", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
     </div>}
 
     {/* BREAKDOWN */}
@@ -319,7 +319,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       })}
       <div style={{ height: "1px", background: "#222", margin: "20px 0" }} />
       <SH>Annual Projection ({ph.label})</SH>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+      <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
         <thead><tr style={{ borderBottom: "1px solid #333", color: "#888", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Weekly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
         <tbody>{expenses.map(exp => {
           const amt = currentEffective(exp, ap);
@@ -406,8 +406,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={editGoalVals.note} onChange={e => setEditGoalVals(v => ({ ...v, note: e.target.value }))} style={iS} /></div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={() => saveEditGoal(g.id)} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>SAVE</button>
-                <button onClick={() => setEditGoalId(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+                <button onClick={() => saveEditGoal(g.id)} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</button>
+                <button onClick={() => setEditGoalId(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
               </div>
             </div> : <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
@@ -437,7 +437,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 {/* TODO: tune — stamp entrance duration (0.45s), bounce easing, entrance delay (0.1s) */}
                 <div style={{ position: "absolute", top: "50%", left: "50%", pointerEvents: "none", zIndex: 11, animation: "goalStampIn 0.45s cubic-bezier(0.175,0.885,0.32,1.275) 0.1s both" }}>
                   {/* TODO: tune — stamp border width (3px), fontSize (20px), letterSpacing (7px), textShadow glow radius (14px) */}
-                  <div style={{ border: "3px solid #6dbf8a", borderRadius: "4px", padding: "8px 20px", fontSize: "20px", fontWeight: "bold", letterSpacing: "7px", color: "#6dbf8a", fontFamily: "'Courier New',monospace", textTransform: "uppercase", background: "rgba(13,13,13,0.93)", whiteSpace: "nowrap", textShadow: "0 0 14px rgba(109,191,138,0.65)" }}>FUNDED</div>
+                  <div style={{ border: "3px solid #6dbf8a", borderRadius: "4px", padding: "8px 20px", fontSize: "20px", fontWeight: "bold", letterSpacing: "7px", color: "#6dbf8a", textTransform: "uppercase", background: "rgba(13,13,13,0.93)", whiteSpace: "nowrap", textShadow: "0 0 14px rgba(109,191,138,0.65)" }}>FUNDED</div>
                 </div>
               </>}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#555", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
@@ -473,14 +473,14 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={newGoal.note} onChange={e => setNewGoal(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Optional description" /></div>
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={addGoal} disabled={!newGoal.label || !newGoal.target} style={{ background: (newGoal.label && newGoal.target) ? "#6dbf8a" : "#333", color: (newGoal.label && newGoal.target) ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newGoal.label && newGoal.target) ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>ADD GOAL</button>
-            <button onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", color: "#c8a84b", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+            <button onClick={addGoal} disabled={!newGoal.label || !newGoal.target} style={{ background: (newGoal.label && newGoal.target) ? "#6dbf8a" : "#333", color: (newGoal.label && newGoal.target) ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newGoal.label && newGoal.target) ? "pointer" : "default", fontWeight: "bold" }}>ADD GOAL</button>
+            <button onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", color: "#c8a84b", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
           </div>
-        </div> : <button onClick={() => setAddingGoal(true)} style={{ background: "#1a1a1a", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", marginBottom: "16px" }}>+ ADD GOAL</button>}
+        </div> : <button onClick={() => setAddingGoal(true)} style={{ background: "#1a1a1a", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</button>}
 
         {completedGoals.length > 0 && <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden" }}>
           {/* Toggle header */}
-          <button onClick={() => setShowCompleted(v => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>
+          <button onClick={() => setShowCompleted(v => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer", }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <span style={{ fontSize: "10px", color: showCompleted ? "#6dbf8a" : "#555", transition: "color 0.2s" }}>{showCompleted ? "▼" : "▶"}</span>
               <span style={{ fontSize: "10px", letterSpacing: "3px", color: "#555", textTransform: "uppercase" }}>Funded History</span>
@@ -531,7 +531,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             <div style={{ color: "#888" }}>Surplus after all goals</div><div style={{ textAlign: "right", color: projS - totG >= 0 ? "#6dbf8a" : "#e8856a" }}>{f(projS - totG)}</div>
           </div>
           <div style={{ borderTop: "1px solid #6dbf8a33", marginTop: "12px", paddingTop: "12px", display: "flex", alignItems: "center", gap: "12px" }}>
-            <button onClick={() => setGoals(prev => prev.map(({ dueWeek, ...rest }) => rest))} style={{ background: "transparent", color: "#6dbf8a66", border: "1px solid #6dbf8a33", borderRadius: "3px", padding: "5px 10px", fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", whiteSpace: "nowrap" }}>Reset Timelines</button>
+            <button onClick={() => setGoals(prev => prev.map(({ dueWeek, ...rest }) => rest))} style={{ background: "transparent", color: "#6dbf8a66", border: "1px solid #6dbf8a33", borderRadius: "3px", padding: "5px 10px", fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>Reset Timelines</button>
             <div style={{ fontSize: "9px", color: "#444" }}>Clears stored due dates — re-anchors all projections to current week</div>
           </div>
         </div>
@@ -683,10 +683,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             </div>;
           })()}
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "#6dbf8a" : "#333", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>ADD LOAN</button>
-            <button onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+            <button onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "#6dbf8a" : "#333", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontWeight: "bold" }}>ADD LOAN</button>
+            <button onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
           </div>
-        </div> : <button onClick={() => setAddingLoan(true)} style={{ background: "#1a1a14", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", marginBottom: "16px" }}>+ ADD LOAN</button>}
+        </div> : <button onClick={() => setAddingLoan(true)} style={{ background: "#1a1a14", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</button>}
       </div>;
     })()}
   </div>);
@@ -716,8 +716,8 @@ function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
       <div><label style={lS}>Note</label><input type="text" value={vals.note ?? ""} onChange={e => setVals(v => ({ ...v, note: e.target.value }))} style={iS} /></div>
     </div>
     <div style={{ display: "flex", gap: "8px" }}>
-      <button onClick={onSave} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>SAVE</button>
-      <button onClick={onCancel} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>
+      <button onClick={onSave} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</button>
+      <button onClick={onCancel} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
     </div>
   </div>;
 }

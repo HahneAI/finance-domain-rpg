@@ -63,7 +63,7 @@ function DayPicker({ scheduledDays, missedDays, onToggle }) {
           return (
             <button key={day} type="button" onClick={() => isScheduled && onToggle(day)} style={{
               padding: "6px 10px", borderRadius: "3px", fontSize: "10px", letterSpacing: "1px",
-              fontFamily: "'Courier New',monospace", cursor: isScheduled ? "pointer" : "default",
+              cursor: isScheduled ? "pointer" : "default",
               border: isMissed ? "1px solid #e8856a" : isScheduled ? "1px solid #444" : "1px solid #222",
               background: isMissed ? "#e8856a22" : isScheduled ? "#1a1a1a" : "#111",
               color: isMissed ? "#e8856a" : isScheduled ? "#888" : "#2a2a2a",
@@ -211,7 +211,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
     }}>
       <div style={{
         background: "#111", border: "1px solid #2a2a2a", borderRadius: "10px",
-        width: "100%", maxWidth: "460px", fontFamily: "'Courier New',monospace",
+        width: "100%", maxWidth: "460px",
         overflow: "hidden", maxHeight: "90vh", display: "flex", flexDirection: "column",
       }}>
 
@@ -279,7 +279,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                         <button onClick={() => setDayToggles(t => ({ ...t, [day]: true }))} style={{
                           padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
                           cursor: "pointer", border: "none", borderRight: "1px solid #2a2a2a",
-                          fontFamily: "'Courier New',monospace", fontWeight: toggle === true ? "bold" : "normal",
+                          fontWeight: toggle === true ? "bold" : "normal",
                           background: toggle === true ? "#6dbf8a22" : "#141414",
                           color: toggle === true ? "#6dbf8a" : "#444",
                           transition: "background 0.15s, color 0.15s",
@@ -287,7 +287,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                         <button onClick={() => setDayToggles(t => ({ ...t, [day]: false }))} style={{
                           padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
                           cursor: "pointer", border: "none",
-                          fontFamily: "'Courier New',monospace", fontWeight: toggle === false ? "bold" : "normal",
+                          fontWeight: toggle === false ? "bold" : "normal",
                           background: toggle === false ? "#e8856a22" : "#141414",
                           color: toggle === false ? "#e8856a" : "#444",
                           transition: "background 0.15s, color 0.15s",
@@ -300,7 +300,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                       <button onClick={() => toggleDay(day)} style={{
                         padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
                         cursor: "pointer", border: `1px solid ${isPickup ? "#6dbf8a55" : "#222"}`,
-                        borderRadius: "4px", fontFamily: "'Courier New',monospace",
+                        borderRadius: "4px",
                         background: isPickup ? "#6dbf8a18" : "#0d0d0d",
                         color: isPickup ? "#6dbf8a" : "#2e2e2e",
                         transition: "background 0.15s, color 0.15s, border-color 0.15s",
@@ -344,7 +344,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
               <button onClick={onDismiss} style={{
                 background: "transparent", border: "none", color: "#444",
                 fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
-                fontFamily: "'Courier New',monospace", cursor: "pointer", padding: "6px 0",
+                cursor: "pointer", padding: "6px 0",
               }}>
                 Skip for now
               </button>
@@ -352,7 +352,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                 background: "#c8a84b", color: "#0a0a0a", border: "none",
                 borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
                 letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
-                fontFamily: "'Courier New',monospace", fontWeight: "bold",
+                fontWeight: "bold",
               }}>
                 {netShiftDelta !== 0 ? "Next →" : "Confirm Week"}
               </button>
@@ -469,7 +469,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
               <button onClick={() => setLayer(1)} style={{
                 background: "transparent", border: "none", color: "#555",
                 fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
-                fontFamily: "'Courier New',monospace", cursor: "pointer", padding: "6px 0",
+                cursor: "pointer", padding: "6px 0",
               }}>
                 ← Back
               </button>
@@ -477,7 +477,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                 background: "#6dbf8a", color: "#0a0a0a", border: "none",
                 borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
                 letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
-                fontFamily: "'Courier New',monospace", fontWeight: "bold",
+                fontWeight: "bold",
               }}>
                 Log &amp; Confirm
               </button>

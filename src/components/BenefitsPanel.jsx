@@ -90,7 +90,7 @@ export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLos
 
           {/* Month table */}
           <div style={{ background: "#141414", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "10px" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
+            <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid #222", color: "#555", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase" }}>
                   <th style={{ padding: "8px 12px", textAlign: "left" }}>Month</th>

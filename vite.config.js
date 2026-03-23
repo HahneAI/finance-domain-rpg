@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
@@ -56,4 +57,14 @@ export default defineConfig({
       },
     }),
   ],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './src/test/setup.js',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      include: ['src/lib/**', 'src/constants/**', 'src/hooks/**', 'src/components/**'],
+    },
+  },
 })

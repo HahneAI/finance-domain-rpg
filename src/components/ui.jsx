@@ -17,3 +17,4 @@ export function Card({ label, val, sub, color, size = "19px" }) {
   );
 }
 export function SmBtn({ children, onClick, c = "#888", bg = "#1a1a1a" }) { return <button onClick={onClick} style={{ background: bg, color: c, border: `1px solid ${c}44`, borderRadius: "3px", padding: "4px 9px", fontSize: "11px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>{children}</button>; }
+export function SH({ children }) { return <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px", marginTop: "4px" }}><div style={{ width: "3px", height: "18px", background: "#c8a84b", borderRadius: "2px", flexShrink: 0 }} /><div style={{ fontSize: "11px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>{children}</div></div>; }

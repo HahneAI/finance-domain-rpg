@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { MONTH_FULL } from "../constants/config.js";
 import { computeNet } from "../lib/finance.js";
-import { Card, VT, iS, lS } from "./ui.jsx";
+import { Card, VT, SH, iS, lS } from "./ui.jsx";
 
 export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, logNetLost, logNetGained, adjustedTakeHome, projectedAnnualNet, currentWeek }) {
   const [view, setView] = useState("summary");
+  const [subview, setSubview] = useState("overview");
   const [editCfg, setEditCfg] = useState(null);
   const { extraPerCheck, taxedWeekCount, fedLiability, moLiability, ficaTotal, fedWithheldBase, moWithheldBase, fedGap, moGap, totalGap, targetExtraTotal, fedAGI } = taxDerived;
   const f = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -40,31 +41,35 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
   }).filter(m => m.wks.length > 0);
 
   return (<div>
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px", marginBottom: "14px" }}>
-      <Card label="Gross (Year)" val={f(yG)} />
-      <Card label="Projected Net" val={f(yN)} color="#6dbf8a" />
-      <Card label="Your 401k" val={f(yE)} color="#7a8bbf" />
-      <Card label="401k w/ Match" val={f(yT)} color="#c8a84b" />
-    </div>
-    {(logNetLost > 0 || logNetGained > 0) && <div style={{ background: logNetLost > logNetGained ? "#2d1a1a" : "#1a2d1e", border: `1px solid ${logNetLost > logNetGained ? "#e8856a55" : "#6dbf8a55"}`, borderRadius: "6px", padding: "11px 14px", marginBottom: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-      <div style={{ fontSize: "11px", color: "#888", display: "flex", gap: "10px", flexWrap: "wrap" }}>
-        <span>Event log:</span>
-        {logNetLost > 0 && <span style={{ color: "#e8856a", fontWeight: "bold" }}>-{f(logNetLost)} lost</span>}
-        {logNetGained > 0 && <span style={{ color: "#6dbf8a", fontWeight: "bold" }}>+{f(logNetGained)} gained</span>}
-        <span>· Adjusted take-home:</span>
+    <div style={{ background: "#111", border: "1px solid #222", borderRadius: "8px", padding: "16px", marginBottom: "20px" }}>
+      <SH>Year Summary</SH>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px", marginBottom: (logNetLost > 0 || logNetGained > 0) ? "14px" : "0" }}>
+        <Card label="Gross (Year)" val={f(yG)} />
+        <Card label="Projected Net" val={f(yN)} color="#6dbf8a" />
+        <Card label="Your 401k" val={f(yE)} color="#7a8bbf" />
+        <Card label="401k w/ Match" val={f(yT)} color="#c8a84b" />
       </div>
-      <div style={{ fontSize: "18px", fontWeight: "bold", color: "#c8a84b" }}>{f(adjustedTakeHome)}</div>
-    </div>}
-    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px", padding: "10px 14px", background: "#141414", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
-      <div style={{ fontSize: "11px", color: "#888", flex: 1 }}>Extra withholding <span style={{ color: "#c8a84b", fontWeight: "bold" }}>{f2(extraPerCheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
-      <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "3px", cursor: "pointer", background: showExtra ? "#3a3210" : "#1a1a1a", color: showExtra ? "#c8a84b" : "#aaa", border: "1px solid " + (showExtra ? "#c8a84b" : "#333"), textTransform: "uppercase", fontFamily: "'Courier New',monospace" }}>{showExtra ? "ON" : "OFF"}</button>
+      {(logNetLost > 0 || logNetGained > 0) && <div style={{ background: logNetLost > logNetGained ? "#2d1a1a" : "#1a2d1e", border: `1px solid ${logNetLost > logNetGained ? "#e8856a55" : "#6dbf8a55"}`, borderRadius: "6px", padding: "11px 14px", marginTop: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+        <div style={{ fontSize: "11px", color: "#888", display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <span>Event log:</span>
+          {logNetLost > 0 && <span style={{ color: "#e8856a", fontWeight: "bold" }}>-{f(logNetLost)} lost</span>}
+          {logNetGained > 0 && <span style={{ color: "#6dbf8a", fontWeight: "bold" }}>+{f(logNetGained)} gained</span>}
+          <span>· Adjusted take-home:</span>
+        </div>
+        <div style={{ fontSize: "18px", fontWeight: "bold", color: "#c8a84b" }}>{f(adjustedTakeHome)}</div>
+      </div>}
     </div>
     <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
-      {["summary", "monthly", "weekly", "401k", "tax schedule", "config"].map(v => <VT key={v} label={v} active={view === v} onClick={() => setView(v)} />)}
+      {["summary", "401k", "config"].map(v => <VT key={v} label={v} active={view === v} onClick={() => setView(v)} />)}
     </div>
 
-    {/* SUMMARY */}
-    {view === "summary" && <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+    {/* SUMMARY — subtabs */}
+    {view === "summary" && <div style={{ display: "flex", gap: "6px", marginBottom: "18px", flexWrap: "wrap" }}>
+      {["overview", "monthly", "weekly", "tax schedule"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "#2a2318" : "transparent", color: subview === v ? "#c8a84b" : "#555", border: "1px solid " + (subview === v ? "#c8a84b66" : "#2a2a2a"), borderRadius: "3px", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>{v}</button>)}
+    </div>}
+
+    {/* OVERVIEW */}
+    {view === "summary" && subview === "overview" && <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
       <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "#c8a84b", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
         <th style={{ textAlign: "left", padding: "8px 6px", width: "4px", paddingLeft: 0 }}></th><th style={{ textAlign: "left", padding: "8px 6px" }}>Month</th><th style={{ textAlign: "center", padding: "8px 6px" }}>Chks</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Take Home</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Your 401k</th><th style={{ textAlign: "right", padding: "8px 6px" }}>w/ Match</th>
       </tr></thead>
@@ -86,7 +91,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     </table></div>}
 
     {/* MONTHLY */}
-    {view === "monthly" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "14px" }}>
+    {view === "summary" && subview === "monthly" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "14px" }}>
       {mo.filter(m => m.n > 0).map(m => <div key={m.name} style={{ background: "#141414", border: "1px solid #222", borderRadius: "8px", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <div style={{ fontSize: "14px", fontWeight: "bold", color: "#c8a84b" }}>{m.name}</div>
@@ -104,7 +109,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     </div>}
 
     {/* WEEKLY */}
-    {view === "weekly" && <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
+    {view === "summary" && subview === "weekly" && <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
       <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "#c8a84b", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
         <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Hrs</th><th style={{ textAlign: "center", padding: "8px 4px" }}>OT</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Wknd</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>401k</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
       </tr></thead>
@@ -152,7 +157,12 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     </div>}
 
     {/* TAX SCHEDULE — debt overview + per-week toggle */}
-    {view === "tax schedule" && <div>
+    {view === "summary" && subview === "tax schedule" && <div>
+      {/* Extra withholding quick-toggle */}
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", padding: "10px 14px", background: "#141414", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
+        <div style={{ fontSize: "11px", color: "#888", flex: 1 }}>Apply extra withholding <span style={{ color: "#c8a84b", fontWeight: "bold" }}>{f2(extraPerCheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
+        <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "3px", cursor: "pointer", background: showExtra ? "#3a3210" : "#1a1a1a", color: showExtra ? "#c8a84b" : "#aaa", border: "1px solid " + (showExtra ? "#c8a84b" : "#333"), textTransform: "uppercase", fontFamily: "'Courier New',monospace", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</button>
+      </div>
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "12px", marginBottom: "20px" }}>
         <Card label="Full Year Fed Liability" val={f(fedLiability)} sub={`On ${f(fedAGI)} AGI`} color="#e8856a" size="20px" />
@@ -162,7 +172,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
 
       {/* Tax gap analysis */}
       <div style={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
-        <div style={{ fontSize: "11px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "16px" }}>Tax Gap Analysis</div>
+        <SH>Tax Gap Analysis</SH>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "13px" }}>
           {[{ l: "Fed withheld (taxed weeks)", v: f(fedWithheldBase), c: "#6dbf8a" }, { l: "MO withheld (taxed weeks)", v: f(moWithheldBase), c: "#6dbf8a" }, { l: "Federal gap", v: f(fedGap), c: "#e8856a" }, { l: "Missouri gap", v: f(moGap), c: "#e8856a" }, { l: "Total income tax gap", v: f(totalGap), c: "#e8856a" }, { l: "Target owed at filing", v: f(config.targetOwedAtFiling), c: "#c8a84b" }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "#777" }}>{r.l}</span><span style={{ fontWeight: "bold", color: r.c }}>{r.v}</span></div>)}
         </div>
@@ -170,7 +180,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
 
       {/* Extra withholding plan */}
       <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "20px", marginBottom: "28px" }}>
-        <div style={{ fontSize: "11px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "16px" }}>Extra Withholding Plan</div>
+        <SH>Extra Withholding Plan</SH>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: "12px", marginBottom: "16px" }}>
           {[{ l: "Extra Needed", v: f(targetExtraTotal), c: "#e8856a" }, { l: "Taxed Checks", v: taxedWeekCount, c: "#e8e0d0" }, { l: "Extra Per Check", v: f2(extraPerCheck), c: "#c8a84b" }].map(c => <div key={c.l} style={{ textAlign: "center", padding: "12px", background: "#0d0d0d", borderRadius: "6px" }}><div style={{ fontSize: "9px", letterSpacing: "2px", color: "#aaa", textTransform: "uppercase", marginBottom: "6px" }}>{c.l}</div><div style={{ fontSize: "20px", fontWeight: "bold", color: c.c }}>{c.v}</div></div>)}
         </div>
@@ -179,7 +189,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
 
       {/* Per-week toggle schedule */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
-        <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#888", textTransform: "uppercase" }}>Weekly Tax Schedule</div>
+        <SH>Weekly Tax Schedule</SH>
         <div style={{ display: "flex", gap: "10px", fontSize: "10px" }}>
           <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "#7a8bbf", display: "inline-block" }} />Taxed weeks: <strong style={{ color: "#e8856a" }}>{config.taxedWeeks.length}</strong></span>
           <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "#6dbf8a", display: "inline-block" }} />Exempt weeks: <strong style={{ color: "#6dbf8a" }}>{allWeeks.filter(w => w.active).length - config.taxedWeeks.length}</strong></span>
@@ -242,12 +252,12 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
           { section: "Tax Rates (from paychecks)", rows: [{ l: "6-Day Federal", v: `${(config.w2FedRate * 100).toFixed(2)}%` }, { l: "6-Day MO State", v: `${(config.w2StateRate * 100).toFixed(2)}%` }, { l: "4-Day Federal", v: `${(config.w1FedRate * 100).toFixed(2)}%` }, { l: "4-Day MO State", v: `${(config.w1StateRate * 100).toFixed(2)}%` }, { l: "FICA", v: `${(config.ficaRate * 100).toFixed(2)}%` }] },
           { section: "Annual Tax Strategy", rows: [{ l: "Federal Std Deduction", v: `$${config.fedStdDeduction.toLocaleString()}` }, { l: "MO Flat Rate", v: `${(config.moFlatRate * 100).toFixed(1)}%` }, { l: "Target Owed at Filing", v: `$${config.targetOwedAtFiling}` }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }] },
         ].map(g => <div key={g.section} style={{ marginBottom: "20px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "10px" }}>{g.section}</div>
+          <SH>{g.section}</SH>
           {g.rows.map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #1a1a1a" }}><span style={{ fontSize: "12px", color: "#888" }}>{r.l}</span><span style={{ fontSize: "12px", fontWeight: "bold", color: "#e8e0d0" }}>{r.v}</span></div>)}
         </div>)}
       </div> : <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase" }}>Editing — recalculates on save</div>
+          <SH>Editing — recalculates on save</SH>
           <div style={{ display: "flex", gap: "8px" }}>
             <button onClick={() => { setConfig(prev => ({ ...editCfg, taxedWeeks: prev.taxedWeeks })); setEditCfg(null); }} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace", fontWeight: "bold" }}>SAVE & RECALCULATE</button>
             <button onClick={() => setEditCfg(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontFamily: "'Courier New',monospace" }}>CANCEL</button>

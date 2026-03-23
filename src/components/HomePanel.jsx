@@ -53,7 +53,7 @@ function Tile({ title, value, sub, status, span, onClick }) {
         fontSize: "9px",
         letterSpacing: "2px",
         textTransform: "uppercase",
-        color: "#666",
+        color: "#999",
         marginBottom: "2px",
       }}>
         {title}
@@ -74,7 +74,7 @@ function Tile({ title, value, sub, status, span, onClick }) {
       {/* Status / sub line — pushes to bottom */}
       <div style={{
         fontSize: "10px",
-        color: "#555",
+        color: "#888",
         letterSpacing: "0.5px",
         marginTop: "auto",
         paddingTop: "6px",

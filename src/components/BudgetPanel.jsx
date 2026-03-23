@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
-import { Card, VT, SmBtn, iS, lS } from "./ui.jsx";
+import { Card, VT, SmBtn, SH, iS, lS } from "./ui.jsx";
 
 // TODO: tune — total particle count (12); must divide evenly into rings below
 // 12 particles evenly distributed around 360°, two distance rings, cycling symbols
@@ -197,7 +197,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     </div>}
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#666", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "#e8856a" : "#6dbf8a" }}>{sp.toFixed(1)}%</span></div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#aaa", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "#e8856a" : "#6dbf8a" }}>{sp.toFixed(1)}%</span></div>
       <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden" }}><div style={{ height: "100%", borderRadius: "4px", width: `${sp}%`, background: sp > 90 ? "#e8856a" : sp > 70 ? "#c8a84b" : "#6dbf8a", transition: "width 0.3s" }} /></div>
     </div>
     {/* View tabs */}
@@ -213,10 +213,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         const cTot = cExp.reduce((s, e) => s + currentEffective(e, ap), 0)
                    + loanItems.reduce((s, e) => s + currentEffective(e, ap), 0);
         return <div key={cat} style={{ marginBottom: "24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "3px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</div>
-            <div style={{ fontSize: "12px", color: CATEGORY_COLORS[cat] }}>{f2(cTot)}/wk</div>
-          </div>
+          <SH color={CATEGORY_COLORS[cat]} right={f2(cTot) + "/wk"}>{cat}</SH>
           {cExp.map(exp => {
             const effAmt = currentEffective(exp, ap);
             const latestEntry = exp.history?.length ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b) : null;
@@ -234,9 +231,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 <div><div style={{ fontSize: "13px" }}>{exp.label}</div>{exp.note[ap] && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{exp.note[ap]}</div>}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
-                    <div style={{ fontSize: "10px", color: "#555" }}>{f(effAmt * 52 / 12)}/mo</div>
-                    {latestEntry && <div style={{ fontSize: "9px", color: "#444", marginTop: "1px" }}>since {latestEntry.effectiveFrom}</div>}
+                    <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "#888" }}>/wk</span></div>
+                    <div style={{ fontSize: "10px", color: "#777" }}>{f(effAmt * 52 / 12)}/mo</div>
+                    {latestEntry && <div style={{ fontSize: "9px", color: "#555", marginTop: "1px" }}>since {latestEntry.effectiveFrom}</div>}
                   </div>
                   <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
                   {delExpId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
@@ -276,8 +273,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "#555" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
-                    <div style={{ fontSize: "10px", color: "#555" }}>{f(effAmt * 52 / 12)}/mo</div>
+                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "#555" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "#888" }}>/wk</span></div>
+                    <div style={{ fontSize: "10px", color: "#777" }}>{f(effAmt * 52 / 12)}/mo</div>
                   </div>
                   <SmBtn onClick={() => startEditLoan(exp)} c="#c8a84b">EDIT</SmBtn>
                   {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
@@ -321,7 +318,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         </div>;
       })}
       <div style={{ height: "1px", background: "#222", margin: "20px 0" }} />
-      <div style={{ fontSize: "10px", letterSpacing: "3px", color: "#888", textTransform: "uppercase", marginBottom: "12px" }}>Annual Projection ({ph.label})</div>
+      <SH>Annual Projection ({ph.label})</SH>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
         <thead><tr style={{ borderBottom: "1px solid #333", color: "#888", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Weekly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
         <tbody>{expenses.map(exp => {
@@ -591,7 +588,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   {exp.note[0] && <div style={{ fontSize: "10px", color: "#666" }}>{exp.note[0]}</div>}
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "#555" : inRunway ? "#7a8bbf" : "#c8a84b" }}>{f2(weeklyAmt)}<span style={{ fontSize: "10px", color: "#666" }}>/wk</span></div>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "#555" : inRunway ? "#7a8bbf" : "#c8a84b" }}>{f2(weeklyAmt)}<span style={{ fontSize: "10px", color: "#888" }}>/wk</span></div>
                   <div style={{ fontSize: "10px", color: "#666" }}>{f(meta.totalAmount)} total</div>
                 </div>
               </div>

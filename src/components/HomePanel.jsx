@@ -129,7 +129,7 @@ export function HomePanel({
       <div style={{
         display: "grid",
         gridTemplateColumns: "1fr 1fr",
-        gap: "10px",
+        gap: "12px",
       }}>
         {tiles.map(tile => (
           <MetricCard

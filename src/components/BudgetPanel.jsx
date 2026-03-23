@@ -39,7 +39,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const [editGoalId, setEditGoalId] = useState(null);
   const [editGoalVals, setEditGoalVals] = useState({});
   const [addingGoal, setAddingGoal] = useState(false);
-  const [newGoal, setNewGoal] = useState({ label: "", target: "", color: "#c8a84b", note: "" });
+  const [newGoal, setNewGoal] = useState({ label: "", target: "", color: "var(--color-gold)", note: "" });
   const [delGoalId, setDelGoalId] = useState(null);
   // Resolve the current effective amount for an expense at the active phase
   const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
@@ -133,8 +133,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, color: g.color, note: g.note }); };
   const saveEditGoal = (id) => { setGoals(p => p.map(g => g.id === id ? { ...g, ...editGoalVals, target: parseFloat(editGoalVals.target) || 0 } : g)); setEditGoalId(null); };
   const addGoal = () => {
-    setGoals(p => [...p, { id: `g_${Date.now()}`, label: newGoal.label, target: parseFloat(newGoal.target) || 0, color: newGoal.color || "#c8a84b", note: newGoal.note, completed: false }]);
-    setAddingGoal(false); setNewGoal({ label: "", target: "", color: "#c8a84b", note: "" });
+    setGoals(p => [...p, { id: `g_${Date.now()}`, label: newGoal.label, target: parseFloat(newGoal.target) || 0, color: newGoal.color || "var(--color-gold)", note: newGoal.note, completed: false }]);
+    setAddingGoal(false); setNewGoal({ label: "", target: "", color: "var(--color-gold)", note: "" });
   };
   const deleteGoal = (id) => { setGoals(p => p.filter(g => g.id !== id)); setDelGoalId(null); };
   const toggleComplete = (id) => setGoals(p => p.map(g => g.id === id ? { ...g, completed: !g.completed } : g));
@@ -188,17 +188,17 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px", marginBottom: "16px" }}>
       <Card label="Weekly Income" val={f2(weeklyIncome)} color="#7eb8c9" />
-      <Card label="Weekly Spend" val={f2(ts)} color="#e8856a" />
-      <Card label="Weekly Left" val={f2(wr)} color={wr >= 0 ? "#6dbf8a" : "#e8856a"} />
+      <Card label="Weekly Spend" val={f2(ts)} color="var(--color-red)" />
+      <Card label="Weekly Left" val={f2(wr)} color={wr >= 0 ? "var(--color-green)" : "var(--color-red)"} />
     </div>
     {logNetLost > 0 && <div style={{ background: "#1a1a2d", border: "1px solid #7a8bbf44", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
       <span style={{ color: "#888" }}>Adj. weekly unallocated (after events):</span>
-      <span style={{ fontWeight: "bold", color: "#c8a84b" }}>{f2(adjustedWeeklyAvg)}/wk</span>
+      <span style={{ fontWeight: "bold", color: "var(--color-gold)" }}>{f2(adjustedWeeklyAvg)}/wk</span>
     </div>}
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#aaa", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "#e8856a" : "#6dbf8a" }}>{sp.toFixed(1)}%</span></div>
-      <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden" }}><div style={{ height: "100%", borderRadius: "4px", width: `${sp}%`, background: sp > 90 ? "#e8856a" : sp > 70 ? "#c8a84b" : "#6dbf8a", transition: "width 0.3s" }} /></div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#aaa", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "var(--color-red)" : "var(--color-green)" }}>{sp.toFixed(1)}%</span></div>
+      <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden" }}><div style={{ height: "100%", borderRadius: "4px", width: `${sp}%`, background: sp > 90 ? "var(--color-red)" : sp > 70 ? "var(--color-gold)" : "var(--color-green)", transition: "width 0.3s" }} /></div>
     </div>
     {/* View tabs */}
     <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
@@ -224,7 +224,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   {["p1", "p2", "p3", "p4"].map((k, i) => <div key={k} style={{ textAlign: "center" }}><div style={{ fontSize: "9px", color: PHASES[i].color, marginBottom: "2px" }}>{PHASES[i].label}/wk</div><input type="number" value={editVals[k] ?? 0} onChange={e => setEditVals(v => ({ ...v, [k]: e.target.value }))} style={{ ...iS, width: "100%" }} /></div>)}
                 </div>
                 <div style={{ display: "flex", gap: "6px" }}>
-                  <button onClick={() => saveEditExp(exp.id)} style={{ background: "#6dbf8a", color: "#0a0a0a", border: "none", borderRadius: "3px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", flex: 1 }}>SAVE</button>
+                  <button onClick={() => saveEditExp(exp.id)} style={{ background: "var(--color-green)", color: "#0a0a0a", border: "none", borderRadius: "3px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", flex: 1 }}>SAVE</button>
                   <button onClick={() => setEditId(null)} style={{ background: "#333", color: "#888", border: "none", borderRadius: "3px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", }}>✕</button>
                 </div>
               </div> : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -237,9 +237,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   </div>
                   <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
                   {delExpId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
-                    <SmBtn onClick={() => deleteExp(exp.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
+                    <SmBtn onClick={() => deleteExp(exp.id)} c="var(--color-red)" bg="#2d1a1a">DEL</SmBtn>
                     <SmBtn onClick={() => setDelExpId(null)}>NO</SmBtn>
-                  </div> : <SmBtn onClick={() => setDelExpId(exp.id)} c="#e8856a">✕</SmBtn>}
+                  </div> : <SmBtn onClick={() => setDelExpId(exp.id)} c="var(--color-red)">✕</SmBtn>}
                 </div>
               </div>}
             </div>;
@@ -259,10 +259,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <span style={{ fontSize: "13px" }}>{exp.label}</span>
-                    <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
+                    <span style={{ fontSize: "9px", background: "rgba(201,168,76,0.13)", color: "var(--color-gold)", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
                     {inRunway && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
-                    {isPaidOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>✓ PAID OFF</span>}
-                    {!isPaidOff && !inRunway && dropsOff && <span style={{ fontSize: "9px", color: "#6dbf8a" }}>drops off {payoffDate}</span>}
+                    {isPaidOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>✓ PAID OFF</span>}
+                    {!isPaidOff && !inRunway && dropsOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>drops off {payoffDate}</span>}
                   </div>
                   {meta && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>
                     {inRunway
@@ -276,11 +276,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                     <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "#555" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "#888" }}>/wk</span></div>
                     <div style={{ fontSize: "10px", color: "#777" }}>{f(effAmt * 52 / 12)}/mo</div>
                   </div>
-                  <SmBtn onClick={() => startEditLoan(exp)} c="#c8a84b">EDIT</SmBtn>
+                  <SmBtn onClick={() => startEditLoan(exp)} c="var(--color-gold)">EDIT</SmBtn>
                   {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
-                    <SmBtn onClick={() => deleteLoan(exp.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
+                    <SmBtn onClick={() => deleteLoan(exp.id)} c="var(--color-red)" bg="#2d1a1a">DEL</SmBtn>
                     <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
-                  </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="#e8856a">✕</SmBtn>}
+                  </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="var(--color-red)">✕</SmBtn>}
                 </div>
               </div>}
             </div>;
@@ -290,7 +290,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
       {/* Add expense form */}
       {addingExp ? <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
-        <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "16px" }}>New Expense Line</div>
+        <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Expense Line</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
           <div><label style={lS}>Label</label><input type="text" value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Insurance" /></div>
           <div><label style={lS}>Category</label><select value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))} style={iS}><option>Needs</option><option>Lifestyle</option><option>Transfers</option></select></div>
@@ -301,10 +301,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note (optional)</label><input type="text" value={newExp.note} onChange={e => setNewExp(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Short description" /></div>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "#6dbf8a" : "#333", color: newExp.label ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>ADD</button>
+          <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "var(--color-green)" : "#333", color: newExp.label ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>ADD</button>
           <button onClick={() => { setAddingExp(false); setNewExp({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", p4: "0", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
         </div>
-      </div> : <button onClick={() => setAddingExp(true)} style={{ background: "#1a1a1a", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
+      </div> : <button onClick={() => setAddingExp(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
     </div>}
 
     {/* BREAKDOWN */}
@@ -326,18 +326,18 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           const isLoan = exp.type === "loan";
           return <tr key={exp.id} style={{ borderBottom: "1px solid #181818" }} onMouseEnter={e => e.currentTarget.style.background = "#141414"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
             <td style={{ padding: "8px 4px" }}>
-              <span style={{ fontSize: "10px", color: isLoan ? "#c8a84b" : CATEGORY_COLORS[exp.category], marginRight: "6px" }}>▸</span>
+              <span style={{ fontSize: "10px", color: isLoan ? "var(--color-gold)" : CATEGORY_COLORS[exp.category], marginRight: "6px" }}>▸</span>
               {exp.label}
-              {isLoan && <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "1px 4px", borderRadius: "2px", marginLeft: "5px" }}>LOAN</span>}
+              {isLoan && <span style={{ fontSize: "9px", background: "rgba(201,168,76,0.13)", color: "var(--color-gold)", padding: "1px 4px", borderRadius: "2px", marginLeft: "5px" }}>LOAN</span>}
             </td>
-            <td style={{ padding: "8px 4px", textAlign: "right", color: isLoan ? "#c8a84b" : CATEGORY_COLORS[exp.category] }}>{f2(amt)}</td>
+            <td style={{ padding: "8px 4px", textAlign: "right", color: isLoan ? "var(--color-gold)" : CATEGORY_COLORS[exp.category] }}>{f2(amt)}</td>
             <td style={{ padding: "8px 4px", textAlign: "right", color: "#888" }}>{f(amt * 52 / 12)}</td>
             <td style={{ padding: "8px 4px", textAlign: "right", color: "#666" }}>{f(amt * 52)}</td>
           </tr>;
         })}</tbody>
         <tfoot>
-          <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td style={{ padding: "10px 4px", color: "#c8a84b" }}>TRUE SPEND</td><td style={{ padding: "10px 4px", textAlign: "right", color: "#e8856a" }}>{f2(ts)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "#e8856a" }}>{f(ts * 52 / 12)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "#e8856a" }}>{f(ts * 52)}</td></tr>
-          <tr style={{ fontWeight: "bold" }}><td style={{ padding: "6px 4px", color: "#6dbf8a" }}>REMAINING</td><td style={{ padding: "6px 4px", textAlign: "right", color: "#6dbf8a" }}>{f2(wr)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "#6dbf8a" }}>{f(wr * 52 / 12)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "#6dbf8a" }}>{f(wr * 52)}</td></tr>
+          <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td style={{ padding: "10px 4px", color: "var(--color-gold)" }}>TRUE SPEND</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-red)" }}>{f2(ts)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-red)" }}>{f(ts * 52 / 12)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-red)" }}>{f(ts * 52)}</td></tr>
+          <tr style={{ fontWeight: "bold" }}><td style={{ padding: "6px 4px", color: "var(--color-green)" }}>REMAINING</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(wr)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wr * 52 / 12)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wr * 52)}</td></tr>
         </tfoot>
       </table>
     </div>}
@@ -359,15 +359,15 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "#666" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((checkingTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
           </div>
           {loans.length > 0 && <div style={{ background: "#1a1a14", border: "1px solid #222", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "#c8a84b", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "#666" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "#c8a84b" }}>{f2(loansTot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((loansTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "#666" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-gold)" }}>{f2(loansTot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((loansTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
           </div>}
           <div style={{ background: CATEGORY_BG["Transfers"], border: "1px solid #222", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Transfers"], marginBottom: "4px" }}>CashApp Transfer</div><div style={{ fontSize: "10px", color: "#666" }}>{transferDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Transfers"] }}>{f2(transferTot)}</div><div style={{ fontSize: "10px", color: "#555" }}>{((transferTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
           </div>
         </>;
       })()}
-      <div style={{ background: wr >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wr >= 0 ? "#6dbf8a" : "#e8856a"}`, borderRadius: "6px", padding: "14px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wr >= 0 ? "#6dbf8a" : "#e8856a", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "#666" }}>See Goals view for event-adjusted timeline</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wr >= 0 ? "#6dbf8a" : "#e8856a" }}>{f2(wr)}</div><div style={{ fontSize: "10px", color: "#666" }}>{f(wr * 52 / 12)}/mo</div></div></div>
+      <div style={{ background: wr >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wr >= 0 ? "var(--color-green)" : "var(--color-red)"}`, borderRadius: "6px", padding: "14px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-red)", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "#666" }}>See Goals view for event-adjusted timeline</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{f2(wr)}</div><div style={{ fontSize: "10px", color: "#666" }}>{f(wr * 52 / 12)}/mo</div></div></div>
       </div>
     </div>}
 
@@ -379,20 +379,20 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       const lastGoalEW = tl.length ? (tl[tl.length - 1].eW ?? weeksLeft + 1) : 0;
       return <div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px", marginBottom: "20px" }}>
-          <Card label="Adj. Weekly Available" val={f2(adjustedWeeklyAvg)} color="#6dbf8a" />
-          <Card label="Active Goals Total" val={f(totG)} color="#c8a84b" />
-          <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projS >= totG ? "#6dbf8a" : "#e8856a"} />
+          <Card label="Adj. Weekly Available" val={f2(adjustedWeeklyAvg)} color="var(--color-green)" />
+          <Card label="Active Goals Total" val={f(totG)} color="var(--color-gold)" />
+          <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projS >= totG ? "var(--color-green)" : "var(--color-red)"} />
         </div>
-        {adjustedWeeklyAvg < baseWeeklyUnallocated && <div style={{ background: "#2d1a1a", border: "1px solid #e8856a44", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", fontSize: "11px", color: "#888" }}>Event log reduced avg by <span style={{ color: "#e8856a", fontWeight: "bold" }}>{f2(baseWeeklyUnallocated - adjustedWeeklyAvg)}/wk</span></div>}
+        {adjustedWeeklyAvg < baseWeeklyUnallocated && <div style={{ background: "#2d1a1a", border: "1px solid #e8856a44", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", fontSize: "11px", color: "#888" }}>Event log reduced avg by <span style={{ color: "var(--color-red)", fontWeight: "bold" }}>{f2(baseWeeklyUnallocated - adjustedWeeklyAvg)}/wk</span></div>}
 
         {tl.map((g, i) => {
           const ok = g.eW !== null && g.eW <= weeksLeft;
           const isEditing = editGoalId === g.id;
           const celebrating = fundingId === g.id;
           // TODO: tune — card glow animation duration (1.8s) and easing (ease-out)
-          return <div key={g.id} style={{ background: "#141414", border: `1px solid ${celebrating ? "#6dbf8a" : g.color + "33"}`, borderRadius: "8px", padding: "16px", marginBottom: "12px", position: "relative", overflow: "visible", animation: celebrating ? "goalFundedGlow 1.8s ease-out forwards" : undefined }}>
+          return <div key={g.id} style={{ background: "#141414", border: `1px solid ${celebrating ? "var(--color-green)" : g.color + "33"}`, borderRadius: "8px", padding: "16px", marginBottom: "12px", position: "relative", overflow: "visible", animation: celebrating ? "goalFundedGlow 1.8s ease-out forwards" : undefined }}>
             {isEditing ? <div>
-              <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "12px" }}>Editing Goal</div>
+              <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "12px" }}>Editing Goal</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={editGoalVals.label} onChange={e => setEditGoalVals(v => ({ ...v, label: e.target.value }))} style={iS} /></div>
                 <div><label style={lS}>Target ($)</label><input type="number" value={editGoalVals.target} onChange={e => setEditGoalVals(v => ({ ...v, target: e.target.value }))} style={iS} /></div>
@@ -406,7 +406,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={editGoalVals.note} onChange={e => setEditGoalVals(v => ({ ...v, note: e.target.value }))} style={iS} /></div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
-                <button onClick={() => saveEditGoal(g.id)} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</button>
+                <button onClick={() => saveEditGoal(g.id)} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</button>
                 <button onClick={() => setEditGoalId(null)} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
               </div>
             </div> : <div>
@@ -420,12 +420,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 </div>
                 <div style={{ textAlign: "right", marginLeft: "12px" }}>
                   <div style={{ fontSize: "18px", fontWeight: "bold", color: g.color }}>{f(g.target)}</div>
-                  <div style={{ fontSize: "10px", color: ok ? "#6dbf8a" : "#e8856a" }}>{ok ? `Wk ${nowIdx + Math.ceil(g.eW)} of 52` : `Wk ${nowIdx + Math.ceil(g.sW + g.wN)} of 52`}</div>
-                  {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "#e8856a", background: "#2d1a1a", padding: "2px 6px", borderRadius: "3px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
+                  <div style={{ fontSize: "10px", color: ok ? "var(--color-green)" : "var(--color-red)" }}>{ok ? `Wk ${nowIdx + Math.ceil(g.eW)} of 52` : `Wk ${nowIdx + Math.ceil(g.sW + g.wN)} of 52`}</div>
+                  {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "3px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                 </div>
               </div>
               {/* TODO: tune — progress bar fill transition duration (0.4s) and easing (ease-out) */}
-              <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}><div style={{ position: "relative", left: celebrating ? 0 : `${Math.min((g.sW / weeksLeft) * 100, 100)}%`, width: celebrating ? "100%" : `${Math.min((g.wN / weeksLeft) * 100, 100 - (g.sW / weeksLeft) * 100)}%`, height: "100%", background: celebrating ? "#6dbf8a" : g.color, borderRadius: "3px", opacity: celebrating ? 1 : (ok ? 1 : 0.4), transition: "all 0.4s ease-out" }} /></div>
+              <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}><div style={{ position: "relative", left: celebrating ? 0 : `${Math.min((g.sW / weeksLeft) * 100, 100)}%`, width: celebrating ? "100%" : `${Math.min((g.wN / weeksLeft) * 100, 100 - (g.sW / weeksLeft) * 100)}%`, height: "100%", background: celebrating ? "var(--color-green)" : g.color, borderRadius: "3px", opacity: celebrating ? 1 : (ok ? 1 : 0.4), transition: "all 0.4s ease-out" }} /></div>
               {celebrating && <>
                 {/* TODO: tune — particle burst container; adjust top/left to reposition burst origin */}
                 <div style={{ position: "absolute", top: "50%", left: "50%", pointerEvents: "none", zIndex: 10 }}>
@@ -437,7 +437,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 {/* TODO: tune — stamp entrance duration (0.45s), bounce easing, entrance delay (0.1s) */}
                 <div style={{ position: "absolute", top: "50%", left: "50%", pointerEvents: "none", zIndex: 11, animation: "goalStampIn 0.45s cubic-bezier(0.175,0.885,0.32,1.275) 0.1s both" }}>
                   {/* TODO: tune — stamp border width (3px), fontSize (20px), letterSpacing (7px), textShadow glow radius (14px) */}
-                  <div style={{ border: "3px solid #6dbf8a", borderRadius: "4px", padding: "8px 20px", fontSize: "20px", fontWeight: "bold", letterSpacing: "7px", color: "#6dbf8a", textTransform: "uppercase", background: "rgba(13,13,13,0.93)", whiteSpace: "nowrap", textShadow: "0 0 14px rgba(109,191,138,0.65)" }}>FUNDED</div>
+                  <div style={{ border: "3px solid #6dbf8a", borderRadius: "4px", padding: "8px 20px", fontSize: "20px", fontWeight: "bold", letterSpacing: "7px", color: "var(--color-green)", textTransform: "uppercase", background: "rgba(13,13,13,0.93)", whiteSpace: "nowrap", textShadow: "0 0 14px rgba(109,191,138,0.65)" }}>FUNDED</div>
                 </div>
               </>}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#555", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
@@ -446,12 +446,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
                   <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
-                  <SmBtn onClick={() => startEditGoal(g)} c="#c8a84b">EDIT</SmBtn>
-                  <SmBtn onClick={() => !celebrating && handleMarkDone(g.id)} c="#6dbf8a">✓ DONE</SmBtn>
+                  <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
+                  <SmBtn onClick={() => !celebrating && handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
                   {delGoalId === g.id ? <div style={{ display: "flex", gap: "4px" }}>
-                    <SmBtn onClick={() => deleteGoal(g.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
+                    <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)" bg="#2d1a1a">DEL</SmBtn>
                     <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
-                  </div> : <SmBtn onClick={() => setDelGoalId(g.id)} c="#e8856a">✕</SmBtn>}
+                  </div> : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)">✕</SmBtn>}
                 </div>
               </div>
             </div>}
@@ -459,7 +459,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         })}
 
         {addingGoal ? <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "16px" }}>New Goal</div>
+          <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Goal</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={e => setNewGoal(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Emergency Fund" /></div>
             <div><label style={lS}>Target ($)</label><input type="number" value={newGoal.target} onChange={e => setNewGoal(v => ({ ...v, target: e.target.value }))} style={iS} /></div>
@@ -473,18 +473,18 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={newGoal.note} onChange={e => setNewGoal(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Optional description" /></div>
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={addGoal} disabled={!newGoal.label || !newGoal.target} style={{ background: (newGoal.label && newGoal.target) ? "#6dbf8a" : "#333", color: (newGoal.label && newGoal.target) ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newGoal.label && newGoal.target) ? "pointer" : "default", fontWeight: "bold" }}>ADD GOAL</button>
-            <button onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", color: "#c8a84b", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
+            <button onClick={addGoal} disabled={!newGoal.label || !newGoal.target} style={{ background: (newGoal.label && newGoal.target) ? "var(--color-green)" : "#333", color: (newGoal.label && newGoal.target) ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newGoal.label && newGoal.target) ? "pointer" : "default", fontWeight: "bold" }}>ADD GOAL</button>
+            <button onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", color: "var(--color-gold)", note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
           </div>
-        </div> : <button onClick={() => setAddingGoal(true)} style={{ background: "#1a1a1a", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</button>}
+        </div> : <button onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</button>}
 
         {completedGoals.length > 0 && <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden" }}>
           {/* Toggle header */}
           <button onClick={() => setShowCompleted(v => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer", }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ fontSize: "10px", color: showCompleted ? "#6dbf8a" : "#555", transition: "color 0.2s" }}>{showCompleted ? "▼" : "▶"}</span>
+              <span style={{ fontSize: "10px", color: showCompleted ? "var(--color-green)" : "#555", transition: "color 0.2s" }}>{showCompleted ? "▼" : "▶"}</span>
               <span style={{ fontSize: "10px", letterSpacing: "3px", color: "#555", textTransform: "uppercase" }}>Funded History</span>
-              <span style={{ fontSize: "10px", background: "#6dbf8a18", color: "#6dbf8a", padding: "2px 8px", borderRadius: "3px", letterSpacing: "1px" }}>{completedGoals.length}</span>
+              <span style={{ fontSize: "10px", background: "rgba(76,175,125,0.09)", color: "var(--color-green)", padding: "2px 8px", borderRadius: "3px", letterSpacing: "1px" }}>{completedGoals.length}</span>
             </div>
             <span style={{ fontSize: "11px", fontWeight: "bold", color: "#444" }}>{f(completedGoals.reduce((s, g) => s + g.target, 0))}</span>
           </button>
@@ -498,7 +498,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: g.note ? "3px" : 0 }}>
                     <span style={{ fontSize: "11px", color: "#3a3a3a", textDecoration: "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
-                    <span style={{ fontSize: "9px", background: "#6dbf8a18", color: "#6dbf8a88", padding: "1px 5px", borderRadius: "3px", flexShrink: 0 }}>✓ FUNDED</span>
+                    <span style={{ fontSize: "9px", background: "rgba(76,175,125,0.09)", color: "rgba(76,175,125,0.53)", padding: "1px 5px", borderRadius: "3px", flexShrink: 0 }}>✓ FUNDED</span>
                   </div>
                   {g.note && <div style={{ fontSize: "9px", color: "#2e2e2e", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.note}</div>}
                 </div>
@@ -508,30 +508,30 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   <SmBtn onClick={() => toggleComplete(g.id)} c="#555">UNDO</SmBtn>
                   {delGoalId === g.id
                     ? <div style={{ display: "flex", gap: "4px" }}>
-                        <SmBtn onClick={() => deleteGoal(g.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
+                        <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)" bg="#2d1a1a">DEL</SmBtn>
                         <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
                       </div>
                     : <SmBtn onClick={() => setDelGoalId(g.id)} c="#333">✕</SmBtn>}
                 </div>
               </div>;
             })}
-            <div style={{ background: "#0d0d0d", borderTop: "1px solid #1a1a1a", padding: "9px 14px 9px 17px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ background: "var(--color-bg-base)", borderTop: "1px solid #1a1a1a", padding: "9px 14px 9px 17px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: "9px", letterSpacing: "2px", color: "#2e2e2e", textTransform: "uppercase" }}>{completedGoals.length} goal{completedGoals.length !== 1 ? "s" : ""} funded</span>
-              <span style={{ fontSize: "12px", fontWeight: "bold", color: "#6dbf8a55" }}>{f(completedGoals.reduce((s, g) => s + g.target, 0))}</span>
+              <span style={{ fontSize: "12px", fontWeight: "bold", color: "rgba(76,175,125,0.33)" }}>{f(completedGoals.reduce((s, g) => s + g.target, 0))}</span>
             </div>
           </>}
         </div>}
 
         <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a", borderRadius: "8px", padding: "16px", marginTop: "8px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#6dbf8a", textTransform: "uppercase", marginBottom: "10px" }}>Year-End Outlook</div>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "10px" }}>Year-End Outlook</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12px" }}>
             <div style={{ color: "#888" }}>Weeks remaining</div><div style={{ textAlign: "right" }}>{weeksLeft}</div>
-            <div style={{ color: "#888" }}>Adj. projected savings</div><div style={{ textAlign: "right", color: "#6dbf8a" }}>{f(projS)}</div>
-            <div style={{ color: "#888" }}>Active goals total</div><div style={{ textAlign: "right", color: "#c8a84b" }}>{f(totG)}</div>
-            <div style={{ color: "#888" }}>Surplus after all goals</div><div style={{ textAlign: "right", color: projS - totG >= 0 ? "#6dbf8a" : "#e8856a" }}>{f(projS - totG)}</div>
+            <div style={{ color: "#888" }}>Adj. projected savings</div><div style={{ textAlign: "right", color: "var(--color-green)" }}>{f(projS)}</div>
+            <div style={{ color: "#888" }}>Active goals total</div><div style={{ textAlign: "right", color: "var(--color-gold)" }}>{f(totG)}</div>
+            <div style={{ color: "#888" }}>Surplus after all goals</div><div style={{ textAlign: "right", color: projS - totG >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{f(projS - totG)}</div>
           </div>
           <div style={{ borderTop: "1px solid #6dbf8a33", marginTop: "12px", paddingTop: "12px", display: "flex", alignItems: "center", gap: "12px" }}>
-            <button onClick={() => setGoals(prev => prev.map(({ dueWeek, ...rest }) => rest))} style={{ background: "transparent", color: "#6dbf8a66", border: "1px solid #6dbf8a33", borderRadius: "3px", padding: "5px 10px", fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>Reset Timelines</button>
+            <button onClick={() => setGoals(prev => prev.map(({ dueWeek, ...rest }) => rest))} style={{ background: "transparent", color: "rgba(76,175,125,0.4)", border: "1px solid #6dbf8a33", borderRadius: "3px", padding: "5px 10px", fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>Reset Timelines</button>
             <div style={{ fontSize: "9px", color: "#444" }}>Clears stored due dates — re-anchors all projections to current week</div>
           </div>
         </div>
@@ -548,9 +548,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
       return <div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "10px", marginBottom: "20px" }}>
-          <Card label="Total Loan Balance" val={f(totalOwed)} color="#c8a84b" />
-          <Card label="Weekly Committed" val={f2(weeklyCommitted)} color="#e8856a" />
-          <Card label="Debt-Free In" val={debtFreeDate ? `${weeksToDebtFree} wks` : "—"} color={debtFreeDate && debtFreeDate <= fiscalYearEnd ? "#6dbf8a" : "#c8a84b"} />
+          <Card label="Total Loan Balance" val={f(totalOwed)} color="var(--color-gold)" />
+          <Card label="Weekly Committed" val={f2(weeklyCommitted)} color="var(--color-red)" />
+          <Card label="Debt-Free In" val={debtFreeDate ? `${weeksToDebtFree} wks` : "—"} color={debtFreeDate && debtFreeDate <= fiscalYearEnd ? "var(--color-green)" : "var(--color-gold)"} />
         </div>
 
         {loans.length === 0 && <div style={{ textAlign: "center", padding: "40px 20px", color: "#444", fontSize: "12px", letterSpacing: "1px" }}>No active loans. Add one below.</div>}
@@ -573,7 +573,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           const weeksUntilFirst = Math.max(Math.ceil((new Date(meta.firstPaymentDate) - new Date(TODAY_ISO)) / (7 * 24 * 60 * 60 * 1000)), 0);
           const freqShort = { weekly: "wk", biweekly: "2wks", monthly: "mo" }[(meta.paymentFrequency ?? meta.payFrequency ?? "weekly")];
 
-          return <div key={exp.id} style={{ background: "#141414", border: `1px solid ${isPaidOff ? "#6dbf8a44" : inRunway ? "#7a8bbf44" : "#c8a84b33"}`, borderRadius: "8px", padding: "16px", marginBottom: "12px" }}>
+          return <div key={exp.id} style={{ background: "#141414", border: `1px solid ${isPaidOff ? "rgba(76,175,125,0.27)" : inRunway ? "#7a8bbf44" : "var(--color-border-accent)"}`, borderRadius: "8px", padding: "16px", marginBottom: "12px" }}>
             {isEditing ? <LoanEditForm vals={editLoanVals} setVals={setEditLoanVals} onSave={() => saveEditLoan(exp.id)} onCancel={() => setEditLoanId(null)} iS={iS} lS={lS} /> :
             <div>
               {/* Header */}
@@ -581,14 +581,14 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                     <span style={{ fontSize: "14px", fontWeight: "bold" }}>{exp.label}</span>
-                    <span style={{ fontSize: "9px", background: "#c8a84b22", color: "#c8a84b", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
+                    <span style={{ fontSize: "9px", background: "rgba(201,168,76,0.13)", color: "var(--color-gold)", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
                     {inRunway && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
-                    {isPaidOff && <span style={{ fontSize: "9px", background: "#6dbf8a22", color: "#6dbf8a", padding: "2px 6px", borderRadius: "2px" }}>✓ PAID OFF</span>}
+                    {isPaidOff && <span style={{ fontSize: "9px", background: "rgba(76,175,125,0.13)", color: "var(--color-green)", padding: "2px 6px", borderRadius: "2px" }}>✓ PAID OFF</span>}
                   </div>
                   {exp.note[0] && <div style={{ fontSize: "10px", color: "#666" }}>{exp.note[0]}</div>}
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "#555" : inRunway ? "#7a8bbf" : "#c8a84b" }}>{f2(weeklyAmt)}<span style={{ fontSize: "10px", color: "#888" }}>/wk</span></div>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "#555" : inRunway ? "#7a8bbf" : "var(--color-gold)" }}>{f2(weeklyAmt)}<span style={{ fontSize: "10px", color: "#888" }}>/wk</span></div>
                   <div style={{ fontSize: "10px", color: "#666" }}>{f(meta.totalAmount)} total</div>
                 </div>
               </div>
@@ -603,23 +603,23 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   <span>{inRunway ? "pre-save" : `${progressPct.toFixed(0)}%`}</span>
                 </div>
                 <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: inRunway ? "100%" : `${progressPct}%`, background: isPaidOff ? "#6dbf8a" : inRunway ? "#7a8bbf" : "#c8a84b", borderRadius: "3px", transition: "width 0.3s", opacity: inRunway ? 0.5 : 1 }} />
+                  <div style={{ height: "100%", width: inRunway ? "100%" : `${progressPct}%`, background: isPaidOff ? "var(--color-green)" : inRunway ? "#7a8bbf" : "var(--color-gold)", borderRadius: "3px", transition: "width 0.3s", opacity: inRunway ? 0.5 : 1 }} />
                 </div>
               </div>
 
               {/* Stats row */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(90px,1fr))", gap: "8px", fontSize: "11px", marginBottom: "10px" }}>
-                <div style={{ background: "#1a1a1a", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
+                <div style={{ background: "var(--color-bg-surface)", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
                   <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>{inRunway ? "FIRST PAYMENT" : "PAYMENTS LEFT"}</div>
-                  <div style={{ color: inRunway ? "#7a8bbf" : isPaidOff ? "#6dbf8a" : "#e8e0d0", fontWeight: "bold", fontSize: "10px" }}>{inRunway ? meta.firstPaymentDate : paymentsLeft}</div>
+                  <div style={{ color: inRunway ? "#7a8bbf" : isPaidOff ? "var(--color-green)" : "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{inRunway ? meta.firstPaymentDate : paymentsLeft}</div>
                 </div>
-                <div style={{ background: "#1a1a1a", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
+                <div style={{ background: "var(--color-bg-surface)", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
                   <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>PAYOFF DATE</div>
-                  <div style={{ color: dropsThisYear ? "#6dbf8a" : "#e8e0d0", fontWeight: "bold", fontSize: "10px" }}>{payoffDate}</div>
+                  <div style={{ color: dropsThisYear ? "var(--color-green)" : "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{payoffDate}</div>
                 </div>
-                <div style={{ background: "#1a1a1a", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
+                <div style={{ background: "var(--color-bg-surface)", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
                   <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>TERM PAYMENT</div>
-                  <div style={{ color: "#e8e0d0", fontWeight: "bold", fontSize: "10px" }}>{f2(payAmt)} / {freqShort}</div>
+                  <div style={{ color: "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{f2(payAmt)} / {freqShort}</div>
                 </div>
               </div>
 
@@ -629,17 +629,17 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               </div>}
 
               {/* Drop-off banner */}
-              {!isPaidOff && !inRunway && dropsThisYear && <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "#6dbf8a" }}>
+              {!isPaidOff && !inRunway && dropsThisYear && <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "var(--color-green)" }}>
                 ✓ Drops off in {weeksUntilPayoff} weeks — goals auto-improve after payoff
               </div>}
 
               {/* Actions */}
               <div style={{ display: "flex", gap: "6px", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
-                <SmBtn onClick={() => startEditLoan(exp)} c="#c8a84b">EDIT</SmBtn>
+                <SmBtn onClick={() => startEditLoan(exp)} c="var(--color-gold)">EDIT</SmBtn>
                 {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
-                  <SmBtn onClick={() => deleteLoan(exp.id)} c="#e8856a" bg="#2d1a1a">DEL</SmBtn>
+                  <SmBtn onClick={() => deleteLoan(exp.id)} c="var(--color-red)" bg="#2d1a1a">DEL</SmBtn>
                   <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
-                </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="#e8856a">✕</SmBtn>}
+                </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="var(--color-red)">✕</SmBtn>}
               </div>
             </div>}
           </div>;
@@ -647,7 +647,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
         {/* Add loan form */}
         {addingLoan ? <div style={{ background: "#141414", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
-          <div style={{ fontSize: "11px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "16px" }}>New Loan</div>
+          <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Loan</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Loan Name</label><input type="text" value={newLoan.label} onChange={e => setNewLoan(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Note" /></div>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Total Amount Owed ($)</label><input type="number" value={newLoan.totalAmount} onChange={e => setNewLoan(v => ({ ...v, totalAmount: e.target.value }))} style={iS} placeholder="2400" /></div>
@@ -676,17 +676,17 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             const freqLabel = { weekly: "week", biweekly: "2 weeks", monthly: "month" }[meta.paymentFrequency];
             return <div style={{ background: "#1a1a14", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px", fontSize: "11px" }}>
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-                <span style={{ color: "#666" }}>Weekly cost: <span style={{ color: "#c8a84b", fontWeight: "bold" }}>{f2(weeklyAmt)}/wk</span></span>
+                <span style={{ color: "#666" }}>Weekly cost: <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(weeklyAmt)}/wk</span></span>
                 <span style={{ color: "#666" }}>{total} payments ({freqLabel})</span>
-                <span style={{ color: "#666" }}>Payoff: <span style={{ color: payoff <= fiscalYearEnd ? "#6dbf8a" : "#e8e0d0" }}>{payoff}</span></span>
+                <span style={{ color: "#666" }}>Payoff: <span style={{ color: payoff <= fiscalYearEnd ? "var(--color-green)" : "var(--color-text-primary)" }}>{payoff}</span></span>
               </div>
             </div>;
           })()}
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "#6dbf8a" : "#333", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "#0d0d0d" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontWeight: "bold" }}>ADD LOAN</button>
+            <button onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-green)" : "#333", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontWeight: "bold" }}>ADD LOAN</button>
             <button onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" }); }} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
           </div>
-        </div> : <button onClick={() => setAddingLoan(true)} style={{ background: "#1a1a14", color: "#c8a84b", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</button>}
+        </div> : <button onClick={() => setAddingLoan(true)} style={{ background: "#1a1a14", color: "var(--color-gold)", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</button>}
       </div>;
     })()}
   </div>);
@@ -695,7 +695,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 // Shared loan edit form (used in both overview and loans tab)
 function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
   return <div>
-    <div style={{ fontSize: "10px", letterSpacing: "2px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "12px" }}>Edit Loan</div>
+    <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "12px" }}>Edit Loan</div>
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
       <div style={{ gridColumn: "1/-1" }}><label style={lS}>Loan Name</label><input type="text" value={vals.label ?? ""} onChange={e => setVals(v => ({ ...v, label: e.target.value }))} style={iS} /></div>
       <div style={{ gridColumn: "1/-1" }}><label style={lS}>Total Amount ($)</label><input type="number" value={vals.totalAmount ?? ""} onChange={e => setVals(v => ({ ...v, totalAmount: e.target.value }))} style={iS} /></div>
@@ -716,7 +716,7 @@ function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
       <div><label style={lS}>Note</label><input type="text" value={vals.note ?? ""} onChange={e => setVals(v => ({ ...v, note: e.target.value }))} style={iS} /></div>
     </div>
     <div style={{ display: "flex", gap: "8px" }}>
-      <button onClick={onSave} style={{ background: "#6dbf8a", color: "#0d0d0d", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</button>
+      <button onClick={onSave} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</button>
       <button onClick={onCancel} style={{ background: "#222", color: "#888", border: "1px solid #333", borderRadius: "3px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
     </div>
   </div>;

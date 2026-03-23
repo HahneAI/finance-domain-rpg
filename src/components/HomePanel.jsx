@@ -13,9 +13,9 @@ const fmtPct = (n) => `${Math.round(n * 100)}%`;
 
 // Status → color tokens (10-15% opacity tint backgrounds)
 const STATUS_COLORS = {
-  green: { bg: "rgba(109,191,138,0.12)", border: "rgba(109,191,138,0.22)", val: "#6dbf8a" },
-  gold:  { bg: "rgba(200,168,75,0.12)",  border: "rgba(200,168,75,0.22)",  val: "#c8a84b" },
-  red:   { bg: "rgba(232,133,106,0.12)", border: "rgba(232,133,106,0.22)", val: "#e8856a" },
+  green: { bg: "rgba(109,191,138,0.12)", border: "rgba(109,191,138,0.22)", val: "var(--color-green)" },
+  gold:  { bg: "rgba(200,168,75,0.12)",  border: "rgba(200,168,75,0.22)",  val: "var(--color-gold)" },
+  red:   { bg: "rgba(232,133,106,0.12)", border: "rgba(232,133,106,0.22)", val: "var(--color-red)" },
 };
 
 function Tile({ title, value, sub, status, span, onClick }) {
@@ -187,7 +187,7 @@ export function HomePanel({
           fontSize: "10px",
           letterSpacing: "3px",
           textTransform: "uppercase",
-          color: "#c8a84b",
+          color: "var(--color-gold)",
           marginBottom: "4px",
         }}>
           Financial Health

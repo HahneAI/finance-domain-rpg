@@ -656,8 +656,29 @@ export default function App() {
           borderTop: "1px solid #222",
           boxShadow: "0 -4px 24px rgba(0,0,0,0.9)",
           zIndex: 20,
+          // fixed creates a containing block — the absolute-positioned indicator
+          // is anchored to this bar, not the viewport.
         }}
       >
+        {/* Sliding tab indicator — 2px gold bar that moves to the active tab.
+            All tabs are flex:1 so each occupies 100%/n of the nav width.
+            We slide via `left` + CSS transition (no layout thrash; tab count is static). */}
+        {(() => {
+          const activeIdx = Math.max(BOTTOM_NAV.findIndex(i => i.key === currentView), 0);
+          const pct = 100 / BOTTOM_NAV.length;
+          return (
+            <div style={{
+              position: "absolute",
+              top: 0,
+              left: `${activeIdx * pct}%`,
+              width: `${pct}%`,
+              height: "2px",
+              background: "var(--color-gold)",
+              transition: "left 0.3s ease",
+              borderRadius: "0 0 1px 1px",
+            }} />
+          );
+        })()}
         {BOTTOM_NAV.map(item => {
           const active = currentView === item.key;
           return (
@@ -676,11 +697,11 @@ export default function App() {
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "3px",
-               
                 fontSize: "9px",
                 letterSpacing: "1px",
                 textTransform: "uppercase",
                 paddingTop: "2px",
+                transition: "color 0.2s ease",
               }}
             >
               {item.icon}

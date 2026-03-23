@@ -474,13 +474,41 @@ fade back:        600ms  (CSS transition on val div)
 
 ---
 
-## What Is NOT Yet Implemented (Priority 6)
+## Tab Sliding Indicator
 
-| Priority | Item | Status |
-|----------|------|--------|
-| 6 | Tab underline sliding indicator | ❌ Not started |
+**Status: ✅ Complete (Priority 6)**
+
+**File:** `src/App.jsx` — inside the mobile bottom nav `<div>`
+
+A 2px gold bar that slides horizontally to the active tab. No library needed — all tabs are `flex: 1` so each occupies exactly `100% / 5 = 20%` of the nav width. Active index is found via `BOTTOM_NAV.findIndex`, and the indicator's `left` value is `activeIndex × 20%`.
+
+```
+position: absolute, top: 0  (sits on the top edge of the nav bar)
+width:  20%  (100% / BOTTOM_NAV.length)
+left:   activeIndex × 20%
+height: 2px
+color:  var(--color-gold)
+transition: left 0.3s ease
+```
+
+The `position: fixed` on the nav container creates a containing block, so `position: absolute` on the indicator is anchored to the bar, not the viewport.
+
+Icon/label color also gets `transition: color 0.2s ease` so the icon fades gold smoothly on activation rather than snapping.
 
 ---
 
-*Generated against commit `0c2435e` — Priority #5 complete.*
+## All Priorities Complete
+
+| Priority | Item | Status |
+|----------|------|--------|
+| 1 | Font swap (DM Sans / DM Serif Display / JetBrains Mono) | ✅ |
+| 2 | Color config — wire all hex to CSS vars | ✅ |
+| 3 | MetricCard — consolidate Card + Tile | ✅ |
+| 4 | Spacing pass — radius, gaps, section margins | ✅ |
+| 5 | Animations — entrance, countup, flash | ✅ |
+| 6 | Tab underline sliding indicator | ✅ |
+
+---
+
+*Generated against commit `dcc4803` — all priorities complete.*
 *Spec source: `docs/finance-dashboard-ui-spec`*

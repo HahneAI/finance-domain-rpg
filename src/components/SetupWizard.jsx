@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { buildYear } from "../lib/finance.js";
+import { iS, lS } from "./ui.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 0 — Welcome (first-run) / Life Event Select (re-entry)
@@ -78,6 +79,257 @@ function Step0({ lifeEvent, onLifeEventChange }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// HELPERS — shared across step components
+// ─────────────────────────────────────────────────────────────────────────────
+function Pill({ label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "7px 14px",
+        fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
+        background: active ? "rgba(201,168,76,0.12)" : "var(--color-bg-raised)",
+        color: active ? "var(--color-gold)" : "var(--color-text-secondary)",
+        border: `1px solid ${active ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"}`,
+        borderRadius: "10px", cursor: "pointer",
+        transition: "background 0.15s, border-color 0.15s, color 0.15s",
+      }}
+    >
+      {active && "✓ "}{label}
+    </button>
+  );
+}
+
+function FieldRow({ children }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+      {children}
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label style={lS}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP 1 — Pay Structure
+// ─────────────────────────────────────────────────────────────────────────────
+const OT_THRESHOLDS = [40, 48];
+const OT_MULTIPLIERS = [1.5, 2];
+const DIFF_TYPES = ["Overnight", "Weekend"];
+
+function Step1({ formData, onChange, lifeEvent }) {
+  // Gate: has the user answered "Do you work for DHL?" yet?
+  const [gateTouched, setGateTouched] = useState(
+    formData.employerPreset === "DHL" || formData.setupComplete === true
+  );
+
+  // Local tracking for which diff types are selected (multiselect)
+  const [diffTypes, setDiffTypes] = useState(() => {
+    if (formData.diffRate > 0) return new Set(["Weekend"]);
+    return new Set();
+  });
+
+  // Local tracking for custom OT threshold input
+  const [otCustom, setOtCustom] = useState(
+    !OT_THRESHOLDS.includes(formData.otThreshold)
+  );
+
+  // Commission toggle
+  const [hasCommission, setHasCommission] = useState(
+    (formData.commissionMonthly ?? 0) > 0
+  );
+
+  const isDHL = formData.employerPreset === "DHL";
+
+  function setDHL(yes) {
+    setGateTouched(true);
+    if (yes) {
+      onChange({
+        employerPreset: "DHL",
+        scheduleIsVariable: true,
+        bucketStartBalance: 64,
+        bucketCap: 128,
+        bucketPayoutRate: 9.825,
+      });
+    } else {
+      onChange({ employerPreset: null });
+    }
+  }
+
+  function toggleDiffType(type) {
+    setDiffTypes(prev => {
+      const next = new Set(prev);
+      next.has(type) ? next.delete(type) : next.add(type);
+      // If all cleared, zero out diffRate
+      if (next.size === 0) onChange({ diffRate: 0 });
+      return next;
+    });
+  }
+
+  function clearDiffs() {
+    setDiffTypes(new Set());
+    onChange({ diffRate: 0 });
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
+      {/* ── Employer Preset Gate ── */}
+      <Field label="Do you work for DHL?">
+        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+          <Pill label="Yes" active={isDHL} onClick={() => setDHL(true)} />
+          <Pill label="No"  active={gateTouched && !isDHL} onClick={() => setDHL(false)} />
+        </div>
+        {isDHL && (
+          <div style={{
+            marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)",
+            lineHeight: "1.5",
+          }}>
+            Rotation schedule, attendance bucket, and dual-rate logic auto-configured for DHL.
+          </div>
+        )}
+      </Field>
+
+      {/* ── Pay fields (shown once gate answered) ── */}
+      {gateTouched && (
+        <>
+          <FieldRow>
+            <Field label="Base Rate ($/hr)">
+              <input
+                {...iS}
+                style={{ ...iS }}
+                type="number" min="0" step="0.01"
+                value={formData.baseRate ?? ""}
+                onChange={e => onChange({ baseRate: parseFloat(e.target.value) || 0 })}
+                placeholder="e.g. 21.15"
+              />
+            </Field>
+            <Field label="Shift Length (hrs)">
+              <input
+                {...iS}
+                style={{ ...iS }}
+                type="number" min="1" step="0.5"
+                value={formData.shiftHours ?? ""}
+                onChange={e => onChange({ shiftHours: parseFloat(e.target.value) || 0 })}
+                placeholder="e.g. 10"
+              />
+            </Field>
+          </FieldRow>
+
+          {/* ── Shift Differential ── */}
+          <Field label="Shift Differential">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
+              {DIFF_TYPES.map(t => (
+                <Pill
+                  key={t} label={t}
+                  active={diffTypes.has(t)}
+                  onClick={() => toggleDiffType(t)}
+                />
+              ))}
+              <Pill label="None" active={diffTypes.size === 0} onClick={clearDiffs} />
+            </div>
+            {diffTypes.size > 0 && (
+              <div style={{ marginTop: "10px" }}>
+                <label style={lS}>Extra $/hr</label>
+                <input
+                  {...iS}
+                  style={{ ...iS }}
+                  type="number" min="0" step="0.25"
+                  value={formData.diffRate ?? ""}
+                  onChange={e => onChange({ diffRate: parseFloat(e.target.value) || 0 })}
+                  placeholder="e.g. 3.00"
+                />
+              </div>
+            )}
+          </Field>
+
+          {/* ── OT Threshold ── */}
+          <Field label="Overtime Threshold (hrs/wk)">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
+              {OT_THRESHOLDS.map(h => (
+                <Pill
+                  key={h} label={`${h}h`}
+                  active={!otCustom && formData.otThreshold === h}
+                  onClick={() => { setOtCustom(false); onChange({ otThreshold: h }); }}
+                />
+              ))}
+              <Pill
+                label="Custom"
+                active={otCustom}
+                onClick={() => setOtCustom(true)}
+              />
+            </div>
+            {otCustom && (
+              <div style={{ marginTop: "10px" }}>
+                <label style={lS}>Hours/week</label>
+                <input
+                  {...iS}
+                  style={{ ...iS }}
+                  type="number" min="1" step="1"
+                  value={formData.otThreshold ?? ""}
+                  onChange={e => onChange({ otThreshold: parseInt(e.target.value) || 40 })}
+                  placeholder="e.g. 40"
+                />
+              </div>
+            )}
+          </Field>
+
+          {/* ── OT Multiplier ── */}
+          <Field label="OT Multiplier">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+              {OT_MULTIPLIERS.map(m => (
+                <Pill
+                  key={m} label={`${m}×`}
+                  active={formData.otMultiplier === m}
+                  onClick={() => onChange({ otMultiplier: m })}
+                />
+              ))}
+            </div>
+          </Field>
+
+          {/* ── Commission (life event only) ── */}
+          {lifeEvent === "commission_job" && (
+            <Field label="Commission Income">
+              <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                <Pill
+                  label="My pay includes commission"
+                  active={hasCommission}
+                  onClick={() => {
+                    const next = !hasCommission;
+                    setHasCommission(next);
+                    if (!next) onChange({ commissionMonthly: 0 });
+                  }}
+                />
+              </div>
+              {hasCommission && (
+                <div style={{ marginTop: "10px" }}>
+                  <label style={lS}>Monthly Average ($)</label>
+                  <input
+                    {...iS}
+                    style={{ ...iS }}
+                    type="number" min="0" step="100"
+                    value={formData.commissionMonthly ?? ""}
+                    onChange={e => onChange({ commissionMonthly: parseFloat(e.target.value) || 0 })}
+                    placeholder="e.g. 800"
+                  />
+                </div>
+              )}
+            </Field>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STEP DEFINITIONS
 //
 // showIf(formData, lifeEvent) → bool — controls which steps appear per life event
@@ -99,7 +351,8 @@ const STEP_DEFS = [
   {
     id: 1, title: "Pay Structure", sprint: "3c",
     showIf: () => true,
-    isValid: () => true, // TODO 3c: d.baseRate > 0 && d.shiftHours > 0
+    isValid: (d) => d.baseRate > 0 && d.shiftHours > 0,
+    component: Step1,
   },
   {
     id: 2, title: "Schedule", sprint: "3d",
@@ -139,7 +392,7 @@ const STEP_DEFS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STUB — placeholder rendered for steps not yet implemented (sprints 3c–3j)
+// STUB — placeholder rendered for steps not yet implemented (sprints 3d–3j)
 // ─────────────────────────────────────────────────────────────────────────────
 function StepStub({ title, sprint }) {
   return (

@@ -68,10 +68,10 @@
 - [x] First-run: welcome copy + Start button; no fields
 - [x] Re-entry: Life Event dropdown (Lost my job / Changed jobs / Got a commission job); dependency engine writes `lifeEvent` and marks affected steps dirty
 
-#### Sub-sprint 3c — Step 1: Pay Structure
-- [ ] DHL employer preset pill gate (`employerPreset: "DHL" | null`) rendered before all pay fields
-- [ ] Pay Structure fields: `baseRate`, `shiftHours`, `diffRate` (overnight/weekend pill multiselect with inline amount inputs), `otThreshold` pill, `otMultiplier` pill
-- [ ] Commission toggle shown if `lifeEvent === "commission"`
+#### Sub-sprint 3c — Step 1: Pay Structure ✅
+- [x] DHL employer preset pill gate (`employerPreset: "DHL" | null`) rendered before all pay fields
+- [x] Pay Structure fields: `baseRate`, `shiftHours`, `diffRate` (overnight/weekend pill multiselect with inline amount inputs), `otThreshold` pill, `otMultiplier` pill
+- [x] Commission toggle shown if `lifeEvent === "commission_job"`
 
 #### Sub-sprint 3d — Step 2: Schedule
 - [ ] Job start date picker → derives `firstActiveIdx` from `FISCAL_YEAR_START`

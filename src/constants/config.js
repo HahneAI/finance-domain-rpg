@@ -26,7 +26,19 @@ export const DEFAULT_CONFIG = {
   commissionMonthly: 0,          // $ / month average; 0 = not a commission job
 
   // ── Deductions / benefits ────────────────────────────────────
-  ltd: 2.00, k401Rate: 0.06, k401MatchRate: 0.05, k401StartDate: "2026-05-15",
+  // selectedBenefits: array of benefit IDs the user has enrolled in (wizard step 3)
+  selectedBenefits: [],
+  // Per-benefit weekly dollar deductions (0 = not enrolled / not tracked)
+  healthPremium: 0,   // Health / Medical insurance weekly premium
+  dentalPremium: 0,   // Dental insurance weekly premium
+  visionPremium: 0,   // Vision insurance weekly premium
+  ltd: 2.00,          // Long-Term Disability flat weekly deduction
+  stdWeekly: 0,       // Short-Term Disability flat weekly deduction
+  lifePremium: 0,     // Life / AD&D insurance weekly premium
+  hsaWeekly: 0,       // HSA contribution per week
+  fsaWeekly: 0,       // FSA contribution per week
+  // 401(k) — rate fields + start date
+  k401Rate: 0.06, k401MatchRate: 0.05, k401StartDate: "2026-05-15",
 
   // ── Schedule ─────────────────────────────────────────────────
   startDate: null,             // "YYYY-MM-DD" job start — used to derive firstActiveIdx; null = not yet set

@@ -439,6 +439,182 @@ function Step2({ formData, onChange }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STEP 3 — Deductions
+// ─────────────────────────────────────────────────────────────────────────────
+const BENEFIT_DEFS = [
+  { id: "health", label: "Health / Medical",      sub: "Medical insurance premium",                    type: "weekly", field: "healthPremium", placeholder: "e.g. 18.50" },
+  { id: "dental", label: "Dental",                sub: "Dental insurance premium",                     type: "weekly", field: "dentalPremium", placeholder: "e.g. 4.00"  },
+  { id: "vision", label: "Vision",                sub: "Vision insurance premium",                     type: "weekly", field: "visionPremium", placeholder: "e.g. 2.00"  },
+  { id: "ltd",    label: "Long-Term Disability",  sub: "LTD insurance — flat weekly deduction",        type: "weekly", field: "ltd",           placeholder: "e.g. 2.00"  },
+  { id: "std",    label: "Short-Term Disability", sub: "STD insurance — flat weekly deduction",        type: "weekly", field: "stdWeekly",     placeholder: "e.g. 1.50"  },
+  { id: "life",   label: "Life / AD&D",           sub: "Group life insurance premium",                 type: "weekly", field: "lifePremium",   placeholder: "e.g. 1.00"  },
+  { id: "k401",   label: "401(k) / Retirement",   sub: "Pre-tax contribution + employer match",        type: "k401"                                                        },
+  { id: "hsa",    label: "HSA",                   sub: "Health Savings Account — weekly contribution", type: "weekly", field: "hsaWeekly",     placeholder: "e.g. 15.00" },
+  { id: "fsa",    label: "FSA",                   sub: "Flexible Spending Account — weekly contribution", type: "weekly", field: "fsaWeekly", placeholder: "e.g. 10.00" },
+];
+
+function BenefitCard({ def, selected, formData, onChange, onToggle }) {
+  return (
+    <div style={{
+      border: `1px solid ${selected ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"}`,
+      borderRadius: "12px",
+      background: selected ? "rgba(201,168,76,0.06)" : "var(--color-bg-raised)",
+      overflow: "hidden",
+      transition: "border-color 0.15s, background 0.15s",
+    }}>
+
+      {/* ── Toggle row ── */}
+      <button
+        onClick={onToggle}
+        style={{
+          width: "100%", display: "flex", alignItems: "center",
+          justifyContent: "space-between", gap: "12px",
+          padding: "12px 14px",
+          background: "transparent", border: "none",
+          cursor: "pointer", textAlign: "left",
+        }}
+      >
+        <div>
+          <div style={{
+            fontSize: "13px", fontWeight: 600,
+            color: selected ? "var(--color-gold)" : "var(--color-text-primary)",
+          }}>
+            {selected && "✓ "}{def.label}
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", marginTop: "2px" }}>
+            {def.sub}
+          </div>
+        </div>
+        <div style={{
+          fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+          color: selected ? "var(--color-gold)" : "var(--color-text-disabled)",
+          flexShrink: 0,
+        }}>
+          {selected ? "On" : "Off"}
+        </div>
+      </button>
+
+      {/* ── Expanded fields ── */}
+      {selected && (
+        <div style={{
+          padding: "12px 14px 14px",
+          borderTop: "1px solid rgba(201,168,76,0.12)",
+          display: "flex", flexDirection: "column", gap: "12px",
+        }}>
+          {def.type === "weekly" && (
+            <Field label="Weekly Deduction ($)">
+              <input
+                {...iS}
+                style={{ ...iS }}
+                type="number" min="0" step="0.01"
+                value={formData[def.field] ?? ""}
+                onChange={e => onChange({ [def.field]: parseFloat(e.target.value) || 0 })}
+                placeholder={def.placeholder}
+              />
+            </Field>
+          )}
+          {def.type === "k401" && (
+            <>
+              <FieldRow>
+                <Field label="Your Contribution (%)">
+                  <input
+                    {...iS}
+                    style={{ ...iS }}
+                    type="number" min="0" max="100" step="0.5"
+                    value={
+                      formData.k401Rate != null
+                        ? +(formData.k401Rate * 100).toFixed(2)
+                        : ""
+                    }
+                    onChange={e => onChange({ k401Rate: (parseFloat(e.target.value) || 0) / 100 })}
+                    placeholder="e.g. 6"
+                  />
+                </Field>
+                <Field label="Employer Match (%)">
+                  <input
+                    {...iS}
+                    style={{ ...iS }}
+                    type="number" min="0" max="100" step="0.5"
+                    value={
+                      formData.k401MatchRate != null
+                        ? +(formData.k401MatchRate * 100).toFixed(2)
+                        : ""
+                    }
+                    onChange={e => onChange({ k401MatchRate: (parseFloat(e.target.value) || 0) / 100 })}
+                    placeholder="e.g. 5"
+                  />
+                </Field>
+              </FieldRow>
+              <Field label="Enrollment / Start Date">
+                <input
+                  {...iS}
+                  style={{ ...iS }}
+                  type="date"
+                  value={formData.k401StartDate ?? ""}
+                  onChange={e => onChange({ k401StartDate: e.target.value || null })}
+                />
+                <div style={{
+                  marginTop: "6px", fontSize: "11px",
+                  color: "var(--color-text-disabled)", lineHeight: "1.5",
+                }}>
+                  Contributions begin the week this date falls in. Past dates mark 401k as already active.
+                </div>
+              </Field>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Step3({ formData, onChange }) {
+  const selected = new Set(formData.selectedBenefits ?? []);
+
+  function toggle(id) {
+    const next = new Set(selected);
+    if (next.has(id)) {
+      next.delete(id);
+      // Zero out fields when deselected so they don't ghost into calculations
+      const def = BENEFIT_DEFS.find(d => d.id === id);
+      if (def?.type === "weekly") onChange({ [def.field]: 0 });
+      if (def?.type === "k401") onChange({ k401Rate: 0, k401MatchRate: 0, k401StartDate: null });
+    } else {
+      next.add(id);
+    }
+    onChange({ selectedBenefits: [...next] });
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      <p style={{
+        fontSize: "13px", color: "var(--color-text-secondary)",
+        margin: "0 0 4px", lineHeight: "1.5",
+      }}>
+        Select any workplace benefits deducted from your paycheck.
+        You can skip this and set it up later.
+      </p>
+      <div style={{
+        display: "flex", flexDirection: "column", gap: "8px",
+        maxHeight: "340px", overflowY: "auto",
+        paddingRight: "2px",          // prevent scrollbar overlap
+      }}>
+        {BENEFIT_DEFS.map(def => (
+          <BenefitCard
+            key={def.id}
+            def={def}
+            selected={selected.has(def.id)}
+            formData={formData}
+            onChange={onChange}
+            onToggle={() => toggle(def.id)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STEP DEFINITIONS
 //
 // showIf(formData, lifeEvent) → bool — controls which steps appear per life event
@@ -478,6 +654,8 @@ const STEP_DEFS = [
     id: 3, title: "Deductions", sprint: "3e",
     showIf: () => true,
     isValid: () => true,
+    skippable: true,
+    component: Step3,
   },
   {
     id: 4, title: "Tax Rates", sprint: "3f",
@@ -647,6 +825,21 @@ export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = 
               }}
             >
               Back
+            </button>
+          )}
+          {current?.skippable && (
+            <button
+              onClick={handleNext}
+              style={{
+                background: "transparent",
+                color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border-subtle)",
+                borderRadius: "12px", padding: "8px 16px",
+                fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              Skip
             </button>
           )}
           <button

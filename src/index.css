@@ -1,3 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Backgrounds ── */
+  --color-bg-base:    #0a0a0a;
+  --color-bg-surface: #111814;
+  --color-bg-raised:  #1a2118;
+
+  /* ── Gold ── */
+  --color-gold:        #c9a84c;
+  --color-gold-muted:  #8a6e2f;
+  --color-gold-bright: #f0c040;
+
+  /* ── Green ── */
+  --color-green:       #4caf7d;
+  --color-green-muted: #2d6b4a;
+
+  /* ── Red ── */
+  --color-red:         #e05c5c;
+  --color-red-muted:   #7a2d2d;
+
+  /* ── Text ── */
+  --color-text-primary:   #f0ede6;
+  --color-text-secondary: #8a9080;
+  --color-text-disabled:  #444c40;
+
+  /* ── Borders ── */
+  --color-border-subtle: #1e2b1e;
+  --color-border-accent: rgba(201,168,76,0.2);
+
+  /* ── Fonts ── */
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-sans:    'DM Sans', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Courier New', monospace;
+}
+
 :root {
   --text: #6b6375;
   --text-h: #08060d;
@@ -53,11 +89,43 @@
 html, body {
   margin: 0;
   background: #0d0d0d;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: #f0ede6;
+  /* DEBUG: overflow-x hidden is the primary iOS horizontal scroll kill-switch.
+     If horizontal scroll returns, check this is NOT being overridden by a child
+     element using position:fixed or transform — those create new stacking contexts
+     that bypass parent overflow:hidden on iOS Safari. */
+  overflow-x: hidden;
+  /* DEBUG: contain prevents rubber-band bounce from revealing content beyond
+     the page edge. 'none' would re-enable native iOS overscroll. */
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  /* DEBUG: removes the grey tap flash on iOS — purely cosmetic. */
+  -webkit-tap-highlight-color: transparent;
 }
 
+/* Safe area utility used by bottom nav and main content padding */
+:root {
+  /* DEBUG: env() safe-area-inset-* are only non-zero on real devices with a
+     notch / Dynamic Island / home indicator. They read as 0px in browser DevTools
+     unless you enable "viewport-fit=cover" in the device emulator settings AND
+     the page meta viewport includes viewport-fit=cover (set in index.html).
+     iPhone 17 expected values: top ~59px, bottom ~34px, left/right ~0px. */
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+/* DEBUG: #root must match html/body overflow-x:hidden — belt-and-suspenders.
+   If a panel component breaks out of this width, the horizontal scroll returns.
+   min-height: 100svh uses "small viewport height" (excludes browser chrome bars)
+   which is the correct unit for mobile — avoids content jumping when Chrome's
+   address bar shows/hides. Use 100dvh only for fixed-position overlays. */
 #root {
   width: 100%;
   max-width: 100%;
+  overflow-x: hidden;
   margin: 0;
   text-align: left;
   border: none;
@@ -65,6 +133,13 @@ html, body {
   min-height: 100svh;
   display: block;
   box-sizing: border-box;
+}
+
+/* DEBUG: At 480px and below the :root font-size drops from 16px to 14px.
+   This affects rem units globally. If any component uses rem and looks too
+   small on iPhone SE (375px), this breakpoint is the cause. */
+@media (max-width: 480px) {
+  :root { font-size: 14px; }
 }
 
 h1,
@@ -109,4 +184,18 @@ code {
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
+}
+
+/* Data tables — JetBrains Mono per spec (only place monospace is allowed) */
+.data-table,
+.data-table td,
+.data-table th {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+/* ── Tile entrance: fade + 8px lift, 0.4s ease-out, fill-both so card is
+   invisible before delay fires (prevents flash of unstyled content). ── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
 }

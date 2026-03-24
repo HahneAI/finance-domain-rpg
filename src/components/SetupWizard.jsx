@@ -968,6 +968,124 @@ function Step4({ formData, onChange }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STEP 5 — Annual Tax Summary (read-only confirmation)
+//
+// No inputs. Shows the tax picture the app will use so the user can confirm
+// before finishing the wizard. Tax strategy (exempt juggling, extra withholding
+// tuning) is behind a feature gate — not part of the wizard.
+// ─────────────────────────────────────────────────────────────────────────────
+function Step5({ formData }) {
+  const stateConfig = formData.userState ? STATE_TAX_TABLE[formData.userState] : null;
+  const isNoTax     = stateConfig?.model === "NONE";
+  const isVariable  = formData.scheduleIsVariable;
+  const pct = n => (n * 100).toFixed(2) + "%";
+
+  const rowStyle = {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    padding: "9px 0", borderBottom: "1px solid #1a1a1a",
+  };
+  const labelStyle = { fontSize: "12px", color: "var(--color-text-secondary)" };
+  const valStyle   = { fontSize: "12px", fontWeight: "bold", color: "var(--color-text-primary)" };
+  const estStyle   = { fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)" };
+
+  function Row({ label, value, estimated }) {
+    return (
+      <div style={rowStyle}>
+        <span style={labelStyle}>{label}</span>
+        <span style={estimated ? estStyle : valStyle}>
+          {value}{estimated ? " est." : ""}
+        </span>
+      </div>
+    );
+  }
+
+  const sectionStyle = {
+    background: "var(--color-bg-raised)", borderRadius: "10px",
+    padding: "14px 16px", display: "flex", flexDirection: "column",
+  };
+  const sectionHeader = {
+    fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+    color: "var(--color-text-disabled)", marginBottom: "4px",
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+
+      <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0, lineHeight: "1.6" }}>
+        Here's the tax picture the app will use to calculate your take-home.
+        You can refine any of this from the Income panel after setup.
+      </p>
+
+      {/* Federal */}
+      <div style={sectionStyle}>
+        <div style={sectionHeader}>Federal Income Tax</div>
+        <Row label="Standard Deduction (2026)" value={`$${(formData.fedStdDeduction ?? 15000).toLocaleString()}`} />
+        <Row label="FICA (Social Security + Medicare)" value={pct(formData.ficaRate ?? 0.0765)} />
+        <Row
+          label={isVariable ? "Effective Rate — Light Weeks" : "Effective Rate"}
+          value={pct(formData.fedRateLow)}
+          estimated={formData.taxRatesEstimated}
+        />
+        {isVariable && (
+          <Row
+            label="Effective Rate — Heavy Weeks"
+            value={pct(formData.fedRateHigh)}
+            estimated={formData.taxRatesEstimated}
+          />
+        )}
+      </div>
+
+      {/* State */}
+      <div style={sectionStyle}>
+        <div style={sectionHeader}>
+          State Income Tax — {stateConfig?.name ?? formData.userState ?? "Not set"}
+        </div>
+        {isNoTax ? (
+          <div style={{ fontSize: "12px", color: "var(--color-text-disabled)", paddingTop: "6px" }}>
+            No state income tax. State rate is 0%.
+          </div>
+        ) : (
+          <>
+            <Row
+              label={isVariable ? "Effective Rate — Light Weeks" : "Effective Rate"}
+              value={pct(formData.stateRateLow)}
+              estimated={formData.taxRatesEstimated}
+            />
+            {isVariable && (
+              <Row
+                label="Effective Rate — Heavy Weeks"
+                value={pct(formData.stateRateHigh)}
+                estimated={formData.taxRatesEstimated}
+              />
+            )}
+            {stateConfig?.model === "PROGRESSIVE" && (
+              <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", paddingTop: "8px", lineHeight: "1.5" }}>
+                Progressive brackets — rates shown are effective (actual withheld ÷ gross), not marginal.
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Confirmation note */}
+      {formData.taxRatesEstimated && (
+        <div style={{
+          fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.6",
+          padding: "10px 12px",
+          background: "rgba(201,168,76,0.06)",
+          border: "1px solid rgba(201,168,76,0.2)",
+          borderRadius: "8px",
+        }}>
+          Rates marked <strong style={{ color: "var(--color-gold)" }}>est.</strong> are pre-filled estimates.
+          Once you have a paystub, use <strong style={{ color: "var(--color-gold)" }}>Sharpen Rates</strong> in
+          the Income panel to lock in exact numbers.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STEP DEFINITIONS
 //
 // showIf(formData, lifeEvent) → bool — controls which steps appear per life event
@@ -1017,9 +1135,10 @@ const STEP_DEFS = [
     component: Step4,
   },
   {
-    id: 5, title: "Annual Tax Strategy", sprint: "3g",
+    id: 5, title: "Tax Summary", sprint: "3g",
     showIf: (_, ev) => ev !== "lost_job",
     isValid: () => true,
+    component: Step5,
   },
   {
     id: 6, title: "Benefits Capture", sprint: "3h",

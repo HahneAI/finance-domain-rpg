@@ -91,10 +91,12 @@
 - [ ] `taxRatesEstimated` flag in config — drives "estimate" badge on tax-derived numbers in IncomePanel; cleared when user confirms real paystub rates
 - [ ] "Sharpen your tax rates" entry point in Settings — same paystub calculator, no full wizard re-run
 
-#### Sub-sprint 3g — Step 5: Annual Tax Strategy
-- [ ] Standard deduction disclosure (read-only, `$15,000 for 2026 single filers`)
-- [ ] State rate display: hidden if NONE model, effective-rate note if PROGRESSIVE
-- [ ] `targetOwedAtFiling` input with plain-English explanation
+#### Sub-sprint 3g — Step 5: Tax Summary *(read-only confirmation)*
+> Tax strategy (exempt juggling, extra withholding tuning, `targetOwedAtFiling`) is behind
+> a feature gate — NOT in the wizard. `targetOwedAtFiling` stays hardcoded at $1,000.
+- [x] Read-only federal summary: standard deduction ($15k), FICA rate, effective fed rate(s)
+- [x] Read-only state summary: hidden for NONE states, effective-rate note for PROGRESSIVE
+- [x] "est." callout when `taxRatesEstimated` — points user to Sharpen Rates in Income panel
 
 #### Sub-sprint 3h — Step 6: Benefits Capture
 - [ ] Health insurance deduction + benefits start date inputs

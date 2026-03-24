@@ -51,23 +51,91 @@ Fields reviewed top-to-bottom. Pick up at `w2FedRate` next session.
 
 ---
 
-## Fields Pending Review (start here next session)
+## Tax Rate Fields — Reworked for Multi-User
 
-| Config Field | Current Value | What It Is | Wizard Question (draft) |
+**Decision (2026-03-24):** The original `w1FedRate / w2FedRate / w1StateRate / w2StateRate` fields were hardcoded to Anthony's specific 4-day/6-day rotating schedule. "Week 1" and "Week 2" mean nothing to any other user. The underlying reality is that withholding rates vary with gross pay (progressive taxation) — not with a named week type.
+
+**New model:**
+- Users with consistent hours → single rate pair (`fedRate`, `stateRate`)
+- Users with variable/rotating hours → two rate pairs (`fedRateLow`/`fedRateHigh`, `stateRateLow`/`stateRateHigh`)
+- Rates are always **derived** from a paystub calculator (enter gross + withheld → app computes rate), never manually entered as decimals
+- State is captured as `userState` (e.g. `"MO"`) and used to pre-fill the state rate from a lookup table; user confirms against their paystub
+
+**Deprecated fields** (single-user hardcoded, replaced by generalized shape below):
+- ~~`w1FedRate`~~ → `fedRateLow`
+- ~~`w2FedRate`~~ → `fedRateHigh`
+- ~~`w1StateRate`~~ → `stateRateLow`
+- ~~`w2StateRate`~~ → `stateRateHigh`
+
+**New config fields:**
+
+| Config Field | Replaces | What It Is | Wizard Question |
 |---|---|---|---|
-| `w2FedRate` | 0.1283 | Federal withholding rate on Week 2 (higher-tax week) | Paystub calculator: enter withheld + gross, app derives rate |
-| `w2StateRate` | 0.040 | MO state withholding rate on Week 2 | Same paystub calculator flow |
-| `w1FedRate` | 0.0784 | Federal withholding rate on Week 1 (lower-tax week) | Second paystub calculator |
-| `w1StateRate` | 0.0338 | MO state withholding rate on Week 1 | Same |
-| `ficaRate` | 0.0765 | FICA — Social Security + Medicare (7.65% federal law) | Pre-filled, confirm only |
-| `fedStdDeduction` | 15000 | Federal standard deduction for 2026 single filer | Pre-filled for 2026, allow override |
-| `moFlatRate` | 0.047 | Missouri flat income tax rate | Pre-filled, confirm only |
-| `targetOwedAtFiling` | 1000 | Target amount owed to IRS at filing | Personal preference question |
-| `taxedWeeks` | [7, 8, 19...] | Which weeks have withholding applied | Auto-derived from firstActiveIdx + rotation — user confirms list |
-| `bucketStartBalance` | 64 | Attendance bucket starting hours | HR policy question |
-| `bucketCap` | 128 | Max bucket before overflow pays out | HR policy question |
-| `bucketPayoutRate` | 9.825 | $/hr for overflow hours | Auto-derived (baseRate ÷ 2) — read-only display, no question |
+| `scheduleIsVariable` | *(new)* | True if gross pay changes week to week | "Does your gross pay change week to week?" — pill: **Yes** · **No** |
+| `userState` | *(new)* | Two-letter state code for tax lookup | "What state do you live in?" — state dropdown |
+| `fedRateLow` | `w1FedRate` | Federal withholding rate on a lighter paycheck | Paystub calculator: enter gross + withheld on a light-week check |
+| `fedRateHigh` | `w2FedRate` | Federal withholding rate on a heavier paycheck | Paystub calculator: enter gross + withheld on a heavy-week check |
+| `stateRateLow` | `w1StateRate` | State withholding rate on a lighter paycheck | Same paystub as fedRateLow — derived simultaneously |
+| `stateRateHigh` | `w2StateRate` | State withholding rate on a heavier paycheck | Same paystub as fedRateHigh — derived simultaneously |
+
+**Notes:**
+- If `scheduleIsVariable = false`, only one paystub calculator shown; `fedRateLow === fedRateHigh` and `stateRateLow === stateRateHigh` (stored once, used for all weeks)
+- State pre-fill lookup covers all 50 states + flat-rate states (MO, IL, etc.) and graduated states (fallback to paystub-derived only)
+- Formula change in `finance.js`: swap `rotation === "6-Day"` check → use `week.grossPay > threshold` or a simpler `week.isHighWeek` flag derived during `buildYear()`
 
 ---
 
-*Last updated: 2026-03-19 — Reviewed through k401StartDate. Resume at w2FedRate.*
+## Fields Pending Review
+
+| Config Field | Current Value | What It Is | Wizard Question (draft) |
+|---|---|---|---|
+| `ficaRate` | 0.0765 | Employee FICA: 6.2% Social Security + 1.45% Medicare. Federal law — same for all W-2 employees below the SS wage cap ($176,100 for 2026). No question needed for target demographic. **Exception:** if pay type gate = self-employed/1099 → override to 0.153 (both halves). Additional Medicare surtax (0.9% above $200k) not applicable at this income level. | Pre-filled at 7.65%, read-only display. Self-employed path auto-sets to 15.3%. No user input required in either case. |
+| `fedStdDeduction` | 15000 | Federal standard deduction for 2026 single filer. **All tax math runs off standard deduction — no itemized deduction support in MVP.** Pre-filled and locked; updated annually by app maintainer. User does not need to touch this. Future optional phase planned for users who want to enter full itemized deductions for more accurate projections (see TODO Section 6). | Pre-filled, read-only. Shown as a disclosure line in Step 5: "All projections use the standard deduction ($15,000 for 2026 single filers). If you itemize, your actual tax liability may differ." |
+| `moFlatRate` | 0.047 | Missouri flat income tax rate | Pre-filled via `userState` lookup, confirm only |
+| `targetOwedAtFiling` | 1000 | Target amount owed to IRS at filing | Personal preference question |
+| `taxedWeeks` | [7, 8, 19...] | Which weeks have withholding applied | **Decision (2026-03-24):** Default all active weeks to taxed on first setup. Written to Supabase (not just DEFAULT_CONFIG) as a database field so it's user-specific from the start. The Tax Exempt Gate (Step 8) is what unlocks per-week toggling — until that's built and the user opts in, every week from `firstActiveIdx` onward is taxed. No wizard question needed; auto-populated on wizard completion. |
+
+---
+
+## Attendance Bucket + Heavy/Light Week — DHL Employer Preset Decision
+
+**Decision (2026-03-24):** The heavy/light week rotation, dual withholding rates (`fedRateLow`/`fedRateHigh`), and bucket attendance model are all DHL-specific. They are not general multi-user features. The wizard resolves all three with a single employer preset gate early in setup.
+
+---
+
+### Employer Preset Gate (Step 1, before Pay Structure fields)
+
+> "Do you work for DHL?"
+
+- Pill: **Yes** · **No**
+- Stored as: `employerPreset: "DHL" | null`
+
+**If "Yes" (DHL preset activates):**
+- `scheduleIsVariable` auto-set to `true` — no question asked
+- Step 2 shows a pre-loaded DHL rotation picker: "Which rotation are you currently on — 4-day or 6-day week?" (writes `startingWeekIsHeavy: true | false`)
+- Step 4 shows two paystub calculators (light/heavy) as normal for variable users
+- Bucket attendance model activates; `bucketStartBalance`, `bucketCap`, `bucketPayoutRate` loaded from DHL preset defaults
+- Step 6 attendance policy gate is skipped — DHL users have bucket tracking automatically
+
+**If "No" (standard path):**
+- `scheduleIsVariable` defaults to `false`; Step 4 gate asks the hours-vary question normally
+- Step 2 asks: "How many hours do you work per week?" — single number, used as the standard week baseline
+- Users log deviations weekly (the check-in / weekly confirmation flow handles this for all users)
+- Step 6 attendance policy gate shown: "Does your employer have a formal attendance policy (points/hours based)?" — Yes enables simplified bucket tracker; No = log-based history only
+- All users get: attendance history view (missed days, monthly trend, day-of-week breakdown) regardless of policy gate answer
+
+**Why this works:**
+- Heavy/light week complexity (`startingWeekIsHeavy`, `fedRateLow`/`fedRateHigh` divergence) is confined to the DHL preset — general users never encounter it
+- Bucket fields (`bucketStartBalance: 64`, `bucketCap: 128`, `bucketPayoutRate: 9.825`) stay DHL-preset-loaded; not in DEFAULT_CONFIG for general users
+- Pattern is extensible: "Do you work at UPS / Amazon warehouse?" presets could follow the same shape if demand exists post-launch
+
+**New config field:**
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `employerPreset` | `"DHL" \| null` | `null` | Set in Step 1; drives preset branching throughout wizard |
+| `startingWeekIsHeavy` | `boolean \| null` | `null` | DHL preset only; `true` = first active week is a 6-day (72hr) week |
+
+---
+
+*Last updated: 2026-03-24 — `taxedWeeks`: default all active weeks taxed, stored in Supabase. Bucket fields + heavy/light week rotation: resolved via DHL employer preset gate in Step 1 (`employerPreset: "DHL" | null`). Standard users: single weekly hours input, log-based attendance. DHL users: rotation picker, dual withholding rates, bucket auto-enabled. Attendance history view added as sprint feature for all users.*

@@ -29,21 +29,35 @@ logs + config + projectedAnnualNet + baseWeeklyUnallocated → logTotals (adjust
 ```
 
 ### Config Object (DEFAULT_CONFIG)
-All income constants in one object — editing any field and saving recalculates all 52 weeks:
+All income constants in one object — editing any field and saving recalculates all 52 weeks.
+
+**Current fields (Anthony's hardcoded single-user values):**
 - `baseRate` $21.15/hr, `shiftHours` 12, `diffRate` $3/hr weekend
 - `otThreshold` 40hrs, `otMultiplier` 1.5x (base only, diff stays flat)
 - `ltd` $2/wk, `k401Rate` 6%, `k401MatchRate` 5%, `k401StartDate` 2026-05-15
 - `firstActiveIdx` 7 (employment starts week ending Feb 23)
 - `w2FedRate` 12.83%, `w2StateRate` 4.0%, `w1FedRate` 7.84%, `w1StateRate` 3.38%
-- `ficaRate` 7.65% (always applies, even exempt weeks)
+- `ficaRate` 7.65%, `fedStdDeduction` 15000, `moFlatRate` 0.047, `targetOwedAtFiling` 1000
 - `taxedWeeks` — flat array of week indices that have fed+state withheld
+- `bucketStartBalance` 64h, `bucketCap` 128h, `bucketPayoutRate` $9.825/hr (DHL attendance policy)
+- `payPeriodEndDay` 0 (Sunday)
 
-### Schedule Logic
+**Fields being added by the setup wizard (see `docs/setup-wizard-plan.md` Phase 1):**
+- `setupComplete`, `taxExemptOptIn`, `paycheckBuffer` — wizard gate/completion fields
+- `employerPreset` ("DHL" | null), `startingWeekIsHeavy` — DHL rotation preset
+- `scheduleIsVariable`, `standardWeeklyHours` — schedule type for non-DHL users
+- `userState` — two-letter state code for STATE_TAX_TABLE lookup (state sprint)
+- `fedRateLow/High`, `stateRateLow/High` — generalized replacements for `w1/w2` rate fields
+
+**Migration note:** `w1FedRate`/`w2FedRate`/`w1StateRate`/`w2StateRate` are deprecated but kept in DEFAULT_CONFIG during transition. finance.js still reads them until Phase 2 updates it to use `fedRateLow/High`.
+
+### Schedule Logic (DHL-specific — Anthony's account)
 - Year indexed 0–52, starting Jan 5 2026 (Monday pay week ends)
-- Even idx = Week 2 (72h: Tue–Sun, 32h OT, 24h weekend diff)
-- Odd idx = Week 1 (48h: Mon/Wed/Thu/Fri, 8h OT, 0 weekend diff)
+- Even idx = 6-day week (72h: Tue–Sun, 32h OT, 24h weekend diff) — heavy week
+- Odd idx = 4-day week (48h: Mon/Wed/Thu/Fri, 8h OT, 0 weekend diff) — light week
 - `firstActiveIdx = 7` — weeks 0–6 are pre-employment, dimmed, excluded from totals
 - `taxedWeeks` array drives withholding; toggling a week index instantly recalculates
+- Phase 2 of the wizard build decouples this logic from hardcoded strings using `employerPreset` + `startingWeekIsHeavy`; standard users get flat weekly hours instead
 
 ### Key Derived Constants (computed, not hardcoded)
 - `projectedAnnualNet` — sum of `computeNet(w)` for all active weeks
@@ -79,8 +93,8 @@ All income constants in one object — editing any field and saving recalculates
 - ✅ Event log: add (5 types, conditional fields), delete with confirm
 
 ### Not Yet Built
-- Persistent storage (all state resets on page refresh)
-- Auth / multi-user
+- Auth / multi-user (Supabase persistence is live for single-user; auth and multi-user accounts are post-MVP)
+- Setup wizard (see `docs/setup-wizard-plan.md` — all config currently hardcoded for Anthony)
 - Data export
 - Mobile layout optimization
 

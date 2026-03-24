@@ -1,3 +1,28 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// SetupWizard.jsx — multi-step onboarding wizard
+//
+// BUILD STATUS (as of 2026-03-24)
+//
+// DONE — all 9 step components are built and wired:
+//   Step 0  (3b) Welcome / Life Event select
+//   Step 1  (3c) Pay Structure — base rate, shift hours, diff, OT
+//   Step 15 (3k) DHL Team Setup — team A/B, rotation type, night/morning shift
+//   Step 2  (3d) Schedule — job start date → firstActiveIdx, pay period end day
+//   Step 3  (3e) Deductions — 401k, LTD, benefits multi-select with inline config
+//   Step 4  (3f) Tax Rates — state dropdown, paystub calculator (skippable)
+//   Step 5  (3g) Tax Summary — read-only confirmation of computed tax picture
+//   Step 6  (3h) Other Deductions — benefits date, freeform rows, attendance gate
+//   Step 7  (3i) Paycheck Buffer — live net preview, $50 floor with override
+//   Step 8  (3j) Tax Exempt Gate — 3 UI variants (A/B/C) behind GATE_VARIANT const
+//
+// PENDING — Phase 4 (App.jsx integration not wired yet):
+//   - App.jsx first-run gate: if (!config.setupComplete) → render <SetupWizard />
+//   - handleWizardComplete: merge returned config, save to Supabase, redirect
+//   - Life Events sidebar item for re-entry
+//
+// Step 8 still needs visual test of all 3 variants before the losers are deleted.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useState } from "react";
 import { buildYear } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
@@ -1218,10 +1243,13 @@ function Step6({ formData, onChange }) {
 // STEP 15 — DHL Team Setup  (sprint 3k)
 //
 // Only shown when employerPreset === "DHL" (Step 1 gate).
-// Captures three things:
+// Captures four things:
 //   1. Team A or B → derives startingWeekIsHeavy; applies DHL_PRESET.defaults
-//   2. Standard rotation vs custom schedule
-//   3. Night shift vs morning shift → drives effectiveDiffRate in buildYear()
+//   2. Standard rotation vs custom schedule → dhlCustomSchedule
+//   3. Night shift vs morning shift → stored as dhlNightShift for future
+//      night-differential tracking. No longer affects weekend diff — all shifts
+//      earn cfg.diffRate on weekend hours equally (corrected 2026-03-24).
+//   4. OT day preference → dhlOtOnWeekend
 // isValid blocks until dhlTeam is set.
 // ─────────────────────────────────────────────────────────────────────────────
 function Step15({ formData, onChange }) {
@@ -1755,7 +1783,8 @@ const STEP_DEFS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STUB — placeholder rendered for steps not yet implemented (sprints 3d–3j)
+// STUB — fallback UI for any step whose component prop is missing.
+// All 9 steps are now implemented; this should never render in normal use.
 // ─────────────────────────────────────────────────────────────────────────────
 function StepStub({ title, sprint }) {
   return (

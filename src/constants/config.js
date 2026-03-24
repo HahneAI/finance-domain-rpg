@@ -18,7 +18,8 @@ export const DEFAULT_CONFIG = {
   dhlTeam: null,               // "A" | "B" | null
   dhlOtOnWeekend: false,       // true = mandatory OT day is typically Sat/Sun on 3-day weeks (adds diffRate)
   dhlCustomSchedule: false,    // false = use DHL_PRESET.rotation days; true = custom/hardcoded arrays (Anthony)
-  dhlNightShift: true,         // true = earn diffRate on weekend shifts; false = morning shift (no diff)
+  dhlNightShift: true,         // stored for future night-shift differential tracking; no longer
+                               // affects weekend diff in buildYear() — all shifts earn diffRate equally
 
   // ── Schedule type (non-DHL users) ───────────────────────────
   scheduleIsVariable: false,   // true = pay varies week-to-week (two paystub calculators)
@@ -105,11 +106,10 @@ export const QUARTER_BOUNDARIES = ["2026-03-31", "2026-06-30", "2026-09-30"];
 // DHL EMPLOYER PRESET
 //
 // Describes the standard DHL 3-day / 4-day alternating rotation.
-// Anthony's account uses a CUSTOM override (4-day / 6-day) — his
-// dhlTeam === null, so buildYear() falls back to the hardcoded
-// day arrays that were there from the start. These constants are
-// used by the "DHL Employer Preset Tune" wizard step (sprint 3k)
-// for new standard DHL employees.
+// Anthony's account uses a CUSTOM schedule (dhlCustomSchedule: true,
+// dhlTeam: "B") — buildYear() routes to the hardcoded 4-day/6-day
+// day arrays for him. DHL_PRESET.rotation is used for new standard
+// DHL employees who go through the wizard (sprint 3k).
 //
 // Day index: 0=Sun  1=Mon  2=Tue  3=Wed  4=Thu  5=Fri  6=Sat
 // ─────────────────────────────────────────────────────────────

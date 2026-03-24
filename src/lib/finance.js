@@ -40,6 +40,13 @@ export function getStateConfig(userState) {
   return STATE_TAX_TABLE[userState] ?? STATE_TAX_TABLE["MO"];
 }
 
+// Builds a full 52-week array of pay data from config.
+// DHL path: alternates heavy (6-day) / light (4-day) from firstActiveIdx,
+//   using either the DHL_PRESET day arrays (dhlTeam + !dhlCustomSchedule)
+//   or Anthony's hardcoded arrays (dhlCustomSchedule: true).
+// Standard path: flat weekly hours, no rotation.
+// Note: cfg.dhlNightShift is stored but NOT used here — weekend diff (diffRate)
+//   applies equally to all shifts. Night differential is tracked separately.
 export function buildYear(cfg) {
   const weeks = [], k401Start = new Date(cfg.k401StartDate), taxedSet = new Set(cfg.taxedWeeks);
   const isDHL = cfg.employerPreset === "DHL";

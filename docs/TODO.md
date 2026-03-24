@@ -60,9 +60,9 @@
 
 ### Phase 3 — SetupWizard component
 
-#### Sub-sprint 3a — Scaffold
-- [ ] `SetupWizard.jsx` — create file; wire step router (`activeSteps = steps.filter(s => s.showIf(formData, lifeEvent))`), Back/Next nav, progress indicator (step X of N), Next disabled until current step validates
-- [ ] `onComplete` handler — auto-populates `taxedWeeks` (all weeks ≥ `firstActiveIdx`), merges `setupComplete: true`, calls parent `onComplete`
+#### Sub-sprint 3a — Scaffold ✅
+- [x] `SetupWizard.jsx` — create file; wire step router (`activeSteps = steps.filter(s => s.showIf(formData, lifeEvent))`), Back/Next nav, progress indicator (step X of N), Next disabled until current step validates
+- [x] `onComplete` handler — auto-populates `taxedWeeks` (all weeks ≥ `firstActiveIdx`), merges `setupComplete: true`, calls parent `onComplete`
 
 #### Sub-sprint 3b — Step 0: Welcome / Life Event Select
 - [ ] First-run: welcome copy + Start button; no fields

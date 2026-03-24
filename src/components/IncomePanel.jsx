@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { MONTH_FULL } from "../constants/config.js";
+import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet } from "../lib/finance.js";
 import { Card, VT, SH, iS, lS } from "./ui.jsx";
 
@@ -7,6 +8,47 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
   const [view, setView] = useState("summary");
   const [subview, setSubview] = useState("overview");
   const [editCfg, setEditCfg] = useState(null);
+  const [showSharpener, setShowSharpener] = useState(false);
+
+  // ── Sharpen Rates modal state ──────────────────────────────────────────────
+  const [sg1, setSg1] = useState("");
+  const [sf1, setSf1] = useState("");
+  const [ss1, setSs1] = useState("");
+  const [sg2, setSg2] = useState("");
+  const [sf2, setSf2] = useState("");
+  const [ss2, setSs2] = useState("");
+  function sharpenDr(gross, withheld) {
+    const g = parseFloat(gross) || 0;
+    if (!g) return null;
+    return +((parseFloat(withheld) || 0) / g).toFixed(4);
+  }
+  const isVariable = config.scheduleIsVariable;
+  const stateConfig = config.userState ? STATE_TAX_TABLE[config.userState] : null;
+  const isNoTax = stateConfig?.model === "NONE";
+  const sFed1 = sharpenDr(sg1, sf1);
+  const sSta1 = sharpenDr(sg1, ss1);
+  const sFed2 = isVariable ? sharpenDr(sg2, sf2) : null;
+  const sSta2 = isVariable ? sharpenDr(sg2, ss2) : null;
+  const canSharpenerApply = sFed1 !== null;
+  function applySharpener() {
+    if (!canSharpenerApply) return;
+    setConfig(prev => ({
+      ...prev,
+      fedRateLow:    sFed1,
+      stateRateLow:  sSta1 ?? 0,
+      fedRateHigh:   isVariable && sFed2 != null ? sFed2 : sFed1,
+      stateRateHigh: isVariable && sSta2 != null ? sSta2 : (sSta1 ?? 0),
+      // Keep legacy fields in sync
+      w1FedRate: sFed1, w1StateRate: sSta1 ?? 0,
+      w2FedRate: isVariable && sFed2 != null ? sFed2 : sFed1,
+      w2StateRate: isVariable && sSta2 != null ? sSta2 : (sSta1 ?? 0),
+      taxRatesEstimated: false,
+    }));
+    setShowSharpener(false);
+    setSg1(""); setSf1(""); setSs1("");
+    setSg2(""); setSf2(""); setSs2("");
+  }
+  const sPct = n => n != null ? (n * 100).toFixed(2) + "%" : "—";
   const { extraPerCheck, taxedWeekCount, fedLiability, moLiability, ficaTotal, fedWithheldBase, moWithheldBase, fedGap, moGap, totalGap, targetExtraTotal, fedAGI } = taxDerived;
   const f = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -41,6 +83,133 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
   }).filter(m => m.wks.length > 0);
 
   return (<div>
+
+    {/* ── Sharpen Rates modal ─────────────────────────────────────────────────── */}
+    {showSharpener && (
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 200,
+        background: "rgba(0,0,0,0.75)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "24px 16px",
+      }}>
+        <div style={{
+          width: "100%", maxWidth: "440px",
+          background: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border-subtle)",
+          borderRadius: "16px", padding: "24px",
+          display: "flex", flexDirection: "column", gap: "20px",
+        }}>
+          <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>
+            Sharpen Your Tax Rates
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+            Enter values from your paycheck stub to replace the estimated rates with exact figures.
+          </div>
+
+          {/* Week 1 */}
+          <div style={{ background: "var(--color-bg-raised)", borderRadius: "10px", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
+              {isVariable ? "Lighter Week Paystub" : "Typical Paycheck"}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div>
+                <label style={lS}>Gross Pay ($)</label>
+                <input style={iS} type="number" min="0" step="0.01" value={sg1} onChange={e => setSg1(e.target.value)} placeholder="e.g. 1050" />
+              </div>
+              <div>
+                <label style={lS}>Fed Income Tax Withheld ($)</label>
+                <input style={iS} type="number" min="0" step="0.01" value={sf1} onChange={e => setSf1(e.target.value)} placeholder="e.g. 82" />
+              </div>
+            </div>
+            {!isNoTax && (
+              <div>
+                <label style={lS}>State Income Tax Withheld ($)</label>
+                <input style={iS} type="number" min="0" step="0.01" value={ss1} onChange={e => setSs1(e.target.value)} placeholder="e.g. 35" />
+              </div>
+            )}
+            {sFed1 !== null && (
+              <div style={{ fontSize: "11px", color: "var(--color-green)" }}>
+                → Fed {sPct(sFed1)}{!isNoTax && sSta1 != null ? `  ·  State ${sPct(sSta1)}` : ""}
+              </div>
+            )}
+          </div>
+
+          {/* Week 2 — variable only */}
+          {isVariable && (
+            <div style={{ background: "var(--color-bg-raised)", borderRadius: "10px", padding: "14px", display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>
+                Heavier Week Paystub
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div>
+                  <label style={lS}>Gross Pay ($)</label>
+                  <input style={iS} type="number" min="0" step="0.01" value={sg2} onChange={e => setSg2(e.target.value)} placeholder="e.g. 1450" />
+                </div>
+                <div>
+                  <label style={lS}>Fed Income Tax Withheld ($)</label>
+                  <input style={iS} type="number" min="0" step="0.01" value={sf2} onChange={e => setSf2(e.target.value)} placeholder="e.g. 186" />
+                </div>
+              </div>
+              {!isNoTax && (
+                <div>
+                  <label style={lS}>State Income Tax Withheld ($)</label>
+                  <input style={iS} type="number" min="0" step="0.01" value={ss2} onChange={e => setSs2(e.target.value)} placeholder="e.g. 58" />
+                </div>
+              )}
+              {sFed2 !== null && (
+                <div style={{ fontSize: "11px", color: "var(--color-green)" }}>
+                  → Fed {sPct(sFed2)}{!isNoTax && sSta2 != null ? `  ·  State ${sPct(sSta2)}` : ""}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <button onClick={() => setShowSharpener(false)} style={{
+              background: "var(--color-bg-raised)", color: "var(--color-text-secondary)",
+              border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
+              padding: "8px 16px", fontSize: "10px", letterSpacing: "2px",
+              textTransform: "uppercase", cursor: "pointer",
+            }}>
+              Cancel
+            </button>
+            <button onClick={applySharpener} disabled={!canSharpenerApply} style={{
+              background: canSharpenerApply ? "var(--color-green)" : "var(--color-bg-raised)",
+              color: canSharpenerApply ? "var(--color-bg-base)" : "var(--color-text-disabled)",
+              border: "none", borderRadius: "12px", padding: "8px 18px",
+              fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+              fontWeight: "bold", cursor: canSharpenerApply ? "pointer" : "not-allowed",
+            }}>
+              Confirm Rates
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Estimated rates banner ──────────────────────────────────────────────── */}
+    {config.taxRatesEstimated && (
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        gap: "12px", padding: "10px 14px", marginBottom: "16px",
+        background: "rgba(201,168,76,0.07)",
+        border: "1px solid rgba(201,168,76,0.25)",
+        borderRadius: "8px",
+      }}>
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+          Tax rates are <strong style={{ color: "var(--color-gold)" }}>estimated</strong> — net figures are approximate until you confirm from a paystub.
+        </div>
+        <button onClick={() => setShowSharpener(true)} style={{
+          fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase",
+          background: "transparent", color: "var(--color-gold)",
+          border: "1px solid rgba(201,168,76,0.4)", borderRadius: "10px",
+          padding: "5px 12px", cursor: "pointer", flexShrink: 0,
+        }}>
+          Sharpen Rates
+        </button>
+      </div>
+    )}
+
     <div style={{ background: "#111", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "16px", marginBottom: "20px" }}>
       <SH>Year Summary</SH>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: (logNetLost > 0 || logNetGained > 0) ? "14px" : "0" }}>
@@ -249,11 +418,24 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         {[
           { section: "Pay Structure", rows: [{ l: "Base Hourly Rate", v: `$${config.baseRate}/hr` }, { l: "Shift Length", v: `${config.shiftHours}h` }, { l: "Weekend Differential", v: `+$${config.diffRate}/hr` }, { l: "OT Threshold", v: `${config.otThreshold}h/wk` }, { l: "OT Multiplier", v: `${config.otMultiplier}×` }] },
           { section: "Deductions", rows: [{ l: "LTD (weekly)", v: `$${config.ltd}` }, { l: "401k Employee", v: `${(config.k401Rate * 100).toFixed(0)}%` }, { l: "401k Employer Match", v: `${(config.k401MatchRate * 100).toFixed(0)}%` }, { l: "401k Start Date", v: config.k401StartDate }] },
-          { section: "Tax Rates (from paychecks)", rows: [{ l: "6-Day Federal", v: `${(config.w2FedRate * 100).toFixed(2)}%` }, { l: "6-Day MO State", v: `${(config.w2StateRate * 100).toFixed(2)}%` }, { l: "4-Day Federal", v: `${(config.w1FedRate * 100).toFixed(2)}%` }, { l: "4-Day MO State", v: `${(config.w1StateRate * 100).toFixed(2)}%` }, { l: "FICA", v: `${(config.ficaRate * 100).toFixed(2)}%` }] },
+          { section: "Tax Rates (from paychecks)", rows: [{ l: `Heavy / ${isVariable ? "High" : "Only"} Fed`, v: `${(config.fedRateHigh * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` }, { l: `Heavy / ${isVariable ? "High" : "Only"} State`, v: `${(config.stateRateHigh * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` }, { l: "Light / Low Fed", v: isVariable ? `${(config.fedRateLow * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` : "—" }, { l: "Light / Low State", v: isVariable ? `${(config.stateRateLow * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` : "—" }, { l: "FICA", v: `${(config.ficaRate * 100).toFixed(2)}%` }] },
           { section: "Annual Tax Strategy", rows: [{ l: "Federal Std Deduction", v: `$${config.fedStdDeduction.toLocaleString()}` }, { l: "MO Flat Rate", v: `${(config.moFlatRate * 100).toFixed(1)}%` }, { l: "Target Owed at Filing", v: `$${config.targetOwedAtFiling}` }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }] },
         ].map(g => <div key={g.section} style={{ marginBottom: "20px" }}>
-          <SH>{g.section}</SH>
-          {g.rows.map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #1a1a1a" }}><span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{r.l}</span><span style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-text-primary)" }}>{r.v}</span></div>)}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <SH>{g.section}</SH>
+            {g.section === "Tax Rates (from paychecks)" && (
+              <button onClick={() => setShowSharpener(true)} style={{
+                fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
+                background: "transparent",
+                color: config.taxRatesEstimated ? "var(--color-gold)" : "var(--color-text-disabled)",
+                border: `1px solid ${config.taxRatesEstimated ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"}`,
+                borderRadius: "8px", padding: "4px 10px", cursor: "pointer", marginBottom: "12px",
+              }}>
+                {config.taxRatesEstimated ? "⚠ Sharpen" : "Recalculate"}
+              </button>
+            )}
+          </div>
+          {g.rows.map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #1a1a1a" }}><span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{r.l}</span><span style={{ fontSize: "12px", fontWeight: "bold", color: r.v.includes("est.") ? "var(--color-gold)" : "var(--color-text-primary)" }}>{r.v}</span></div>)}
         </div>)}
       </div> : <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>

@@ -52,6 +52,10 @@ export const DEFAULT_CONFIG = {
   fedRateHigh: 0.1283,         // replaces w2FedRate
   stateRateLow: 0.0338,        // replaces w1StateRate
   stateRateHigh: 0.040,        // replaces w2StateRate
+  // taxRatesEstimated: true when rates were pre-filled from STATE_TAX_TABLE or DHL preset
+  // rather than derived from an actual paystub. Cleared when user confirms real stub rates.
+  // Drives "est." badge in IncomePanel on all tax-derived figures.
+  taxRatesEstimated: false,
 
   // ── Legacy rate fields — kept for backward-compat fallback ───
   // finance.js computeNet() falls back to these if fedRateLow not set on old rows.
@@ -137,6 +141,14 @@ export const DHL_PRESET = {
     bucketStartBalance: 64,
     bucketCap: 128,
     bucketPayoutRate: 9.825,
+    // ── Tax rate preset — MO supply chain, night shift (paystub-derived from Anthony's setup)
+    // New DHL users get these pre-filled with taxRatesEstimated: true until they confirm their stub.
+    // Morning shift users: same rates (shift affects gross, not effective tax rate).
+    userState: "MO",
+    fedRateLow: 0.0784,          // light / 4-day week effective federal rate
+    fedRateHigh: 0.1283,         // heavy / 6-day week effective federal rate
+    stateRateLow: 0.0338,        // light week MO effective rate
+    stateRateHigh: 0.040,        // heavy week MO effective rate
   },
 };
 

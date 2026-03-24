@@ -126,6 +126,11 @@
 - Light week off-days: Tue / Wed / Sat / Sun — Sat/Sun OT earns `diffRate` (`dhlOtOnWeekend` flag)
 - Heavy week off-days: Mon / Thu / Fri — all weekdays, no diff ever applies
 
+**DHL MO supply chain preset notes (from Anthony's confirmed paystub data):**
+- Tax rates in `DHL_PRESET.defaults` represent a **night shift** employee.
+- **Morning shift users** earn the same base pay but do NOT get the `$1.50/hr` night shift differential (`diffRate`). Add a "Do you work nights?" pill to Step 1 or here that zeros `diffRate` for morning shift.
+- Tax rates are the same regardless of shift — morning vs. night affects gross pay, not effective tax rate.
+
 **Wizard step tasks:**
 - [ ] A / B team pill → writes `dhlTeam`; auto-derives `startingWeekIsHeavy` from `DHL_PRESET.teams[dhlTeam].startsHeavy`; applies `DHL_PRESET.defaults` to formData
 - [ ] "Standard rotation" vs "I've picked up extra days" pill → custom path keeps existing `startingWeekIsHeavy` pill (Anthony's flow); standard path locks days to `DHL_PRESET.rotation`

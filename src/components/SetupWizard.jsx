@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { buildYear } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
-import { FISCAL_YEAR_START } from "../constants/config.js";
+import { FISCAL_YEAR_START, DHL_PRESET } from "../constants/config.js";
+import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 0 — Welcome (first-run) / Life Event Select (re-entry)
@@ -615,6 +616,358 @@ function Step3({ formData, onChange }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STEP 4 — Tax Rates
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Self-contained paystub calculator — renders two sections for variable schedules,
+// one for fixed. onConfirm receives derived rate fields; onEstimate uses table lookup.
+function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
+  const [g1, setG1] = useState("");
+  const [f1, setF1] = useState("");
+  const [s1, setS1] = useState("");
+  const [g2, setG2] = useState("");
+  const [f2, setF2] = useState("");
+  const [s2, setS2] = useState("");
+
+  function dr(gross, withheld) {
+    const g = parseFloat(gross) || 0;
+    if (!g) return null;
+    return +((parseFloat(withheld) || 0) / g).toFixed(4);
+  }
+
+  const fed1  = dr(g1, f1);
+  const sta1  = dr(g1, s1);
+  const fed2  = isVariable ? dr(g2, f2) : null;
+  const sta2  = isVariable ? dr(g2, s2) : null;
+  const canApply = fed1 !== null;
+  const pct = n => n != null ? (n * 100).toFixed(2) + "%" : "—";
+
+  function handleConfirm() {
+    if (!canApply) return;
+    const rates = {
+      fedRateLow:   fed1,
+      stateRateLow: sta1 ?? 0,
+      fedRateHigh:  isVariable && fed2 != null ? fed2 : fed1,
+      stateRateHigh: isVariable && sta2 != null ? sta2 : (sta1 ?? 0),
+    };
+    onConfirm(rates);
+  }
+
+  const boxStyle = {
+    background: "var(--color-bg-raised)", borderRadius: "10px",
+    padding: "14px", display: "flex", flexDirection: "column", gap: "10px",
+  };
+  const hdrStyle = {
+    fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+    color: "var(--color-text-disabled)",
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+        Enter values from a paycheck stub to lock in your exact rates.
+        Don't have it handy? Use the estimate — sharpen anytime from the Income panel.
+      </div>
+
+      {/* Week 1 */}
+      <div style={boxStyle}>
+        <div style={hdrStyle}>{isVariable ? "Lighter Week Paystub" : "Typical Paycheck"}</div>
+        <FieldRow>
+          <Field label="Gross Pay ($)">
+            <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
+              value={g1} onChange={e => setG1(e.target.value)} placeholder="e.g. 1050" />
+          </Field>
+          <Field label="Fed Income Tax Withheld ($)">
+            <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
+              value={f1} onChange={e => setF1(e.target.value)} placeholder="e.g. 82" />
+          </Field>
+        </FieldRow>
+        {!isNoTax && (
+          <Field label="State Income Tax Withheld ($)">
+            <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
+              value={s1} onChange={e => setS1(e.target.value)} placeholder="e.g. 35" />
+          </Field>
+        )}
+        {fed1 !== null && (
+          <div style={{ fontSize: "11px", color: "var(--color-green)" }}>
+            → Fed {pct(fed1)}{!isNoTax && sta1 != null ? `  ·  State ${pct(sta1)}` : ""}
+          </div>
+        )}
+      </div>
+
+      {/* Week 2 — variable schedule only */}
+      {isVariable && (
+        <div style={boxStyle}>
+          <div style={hdrStyle}>Heavier Week Paystub</div>
+          <FieldRow>
+            <Field label="Gross Pay ($)">
+              <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
+                value={g2} onChange={e => setG2(e.target.value)} placeholder="e.g. 1450" />
+            </Field>
+            <Field label="Fed Income Tax Withheld ($)">
+              <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
+                value={f2} onChange={e => setF2(e.target.value)} placeholder="e.g. 186" />
+            </Field>
+          </FieldRow>
+          {!isNoTax && (
+            <Field label="State Income Tax Withheld ($)">
+              <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
+                value={s2} onChange={e => setS2(e.target.value)} placeholder="e.g. 58" />
+            </Field>
+          )}
+          {fed2 !== null && (
+            <div style={{ fontSize: "11px", color: "var(--color-green)" }}>
+              → Fed {pct(fed2)}{!isNoTax && sta2 != null ? `  ·  State ${pct(sta2)}` : ""}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+        {canApply && (
+          <button onClick={handleConfirm} style={{
+            background: "var(--color-green)", color: "var(--color-bg-base)",
+            border: "none", borderRadius: "12px", padding: "8px 16px",
+            fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+            fontWeight: "bold", cursor: "pointer",
+          }}>
+            Apply These Rates
+          </button>
+        )}
+        <button onClick={onEstimate} style={{
+          background: "transparent", color: "var(--color-text-secondary)",
+          border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
+          padding: "8px 14px", fontSize: "10px", letterSpacing: "1.5px",
+          textTransform: "uppercase", cursor: "pointer",
+        }}>
+          Use Estimate for Now
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Step4({ formData, onChange }) {
+  const isDHL      = formData.employerPreset === "DHL";
+  const isVariable = formData.scheduleIsVariable;
+  const stateConfig = formData.userState ? STATE_TAX_TABLE[formData.userState] : null;
+  const isNoTax    = stateConfig?.model === "NONE";
+  const hasRates   = formData.fedRateLow > 0;
+
+  // Show the paystub calculator (collapsed by default when rates already exist)
+  const [showCalc, setShowCalc] = useState(!hasRates);
+
+  function handleStateChange(code) {
+    onChange({ userState: code || null });
+  }
+
+  function handleConfirm(rates) {
+    onChange({ ...rates, taxRatesEstimated: false });
+    setShowCalc(false);
+  }
+
+  function handleEstimate() {
+    const stateEst = isNoTax ? 0 : (stateConfig?.flatRate ?? 0.05);
+    onChange({
+      fedRateLow:    0.10,
+      fedRateHigh:   isVariable ? 0.12 : 0.10,
+      stateRateLow:  stateEst,
+      stateRateHigh: stateEst,
+      taxRatesEstimated: true,
+    });
+    setShowCalc(false);
+  }
+
+  function loadDHLPreset() {
+    const d = DHL_PRESET.defaults;
+    onChange({
+      fedRateLow:    d.fedRateLow,
+      fedRateHigh:   d.fedRateHigh,
+      stateRateLow:  d.stateRateLow,
+      stateRateHigh: d.stateRateHigh,
+      userState:     formData.userState || d.userState,
+      taxRatesEstimated: true,
+    });
+    setShowCalc(false);
+  }
+
+  const pct = n => (n * 100).toFixed(2) + "%";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
+      {/* Variable schedule gate — non-DHL users only */}
+      {isDHL ? (
+        <div style={{
+          fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5",
+          padding: "10px 12px", background: "var(--color-bg-raised)", borderRadius: "8px",
+        }}>
+          Variable schedule auto-enabled — your pay alternates between lighter and heavier weeks.
+        </div>
+      ) : (
+        <Field label="Does your pay vary week to week?">
+          <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+            <Pill label="Yes" active={isVariable === true}
+              onClick={() => onChange({ scheduleIsVariable: true })} />
+            <Pill label="No"  active={isVariable === false}
+              onClick={() => onChange({ scheduleIsVariable: false })} />
+          </div>
+          {isVariable && (
+            <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)" }}>
+              You'll enter two paystubs — one for each week type.
+            </div>
+          )}
+        </Field>
+      )}
+
+      {/* State dropdown */}
+      <Field label="Your State">
+        <select
+          style={{ ...iS, appearance: "none", WebkitAppearance: "none" }}
+          value={formData.userState ?? ""}
+          onChange={e => handleStateChange(e.target.value)}
+        >
+          <option value="">— select state —</option>
+          {STATE_NAMES.map(({ code, name }) => (
+            <option key={code} value={code}>{name} ({code})</option>
+          ))}
+        </select>
+        {formData.userState && isNoTax && (
+          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)" }}>
+            {stateConfig.name} has no state income tax — your state rate will be 0.
+          </div>
+        )}
+        {formData.userState && !isNoTax && stateConfig && (
+          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)" }}>
+            {stateConfig.model === "FLAT"
+              ? `Flat rate: ${(stateConfig.flatRate * 100).toFixed(1)}% — pre-filled on estimate path.`
+              : "Progressive brackets — estimate uses a mid-bracket approximation."}
+          </div>
+        )}
+      </Field>
+
+      {/* DHL MO preset load button — only when no rates set yet */}
+      {isDHL && !hasRates && formData.userState === "MO" && (
+        <div style={{
+          padding: "12px 14px",
+          background: "rgba(201,168,76,0.06)",
+          border: "1px solid rgba(201,168,76,0.2)",
+          borderRadius: "10px",
+        }}>
+          <div style={{ fontSize: "12px", color: "var(--color-text-primary)", marginBottom: "4px" }}>
+            Load DHL Missouri supply chain reference rates
+          </div>
+          <div style={{
+            fontSize: "11px", color: "var(--color-text-disabled)",
+            lineHeight: "1.5", marginBottom: "10px",
+          }}>
+            Night shift paystub-derived. Flagged as estimated until you confirm with your own stub.
+          </div>
+          <button onClick={loadDHLPreset} style={{
+            background: "rgba(201,168,76,0.12)", color: "var(--color-gold)",
+            border: "1px solid rgba(201,168,76,0.4)", borderRadius: "10px",
+            padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+            textTransform: "uppercase", cursor: "pointer",
+          }}>
+            Load DHL MO Preset
+          </button>
+        </div>
+      )}
+
+      {/* Paystub calculator — shown when no rates yet, or user opens it */}
+      {formData.userState && (
+        <>
+          {hasRates && !showCalc ? (
+            <button
+              onClick={() => setShowCalc(true)}
+              style={{
+                background: "transparent", color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
+                padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+                textTransform: "uppercase", cursor: "pointer", alignSelf: "flex-start",
+              }}
+            >
+              Recalculate from Paystub
+            </button>
+          ) : showCalc && (
+            <PaystubCalc
+              isVariable={isVariable}
+              isNoTax={isNoTax}
+              onConfirm={handleConfirm}
+              onEstimate={handleEstimate}
+            />
+          )}
+        </>
+      )}
+
+      {/* Rate summary */}
+      {hasRates && (
+        <div style={{
+          padding: "12px 14px", background: "var(--color-bg-raised)", borderRadius: "10px",
+        }}>
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            marginBottom: "10px",
+          }}>
+            <div style={{
+              fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+              color: "var(--color-text-disabled)",
+            }}>
+              Current Rates
+            </div>
+            <span style={{
+              fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
+              padding: "2px 8px", borderRadius: "6px",
+              background: formData.taxRatesEstimated
+                ? "rgba(201,168,76,0.12)" : "rgba(76,175,125,0.12)",
+              color: formData.taxRatesEstimated
+                ? "var(--color-gold)" : "var(--color-green)",
+              border: `1px solid ${formData.taxRatesEstimated
+                ? "rgba(201,168,76,0.3)" : "rgba(76,175,125,0.3)"}`,
+            }}>
+              {formData.taxRatesEstimated ? "Estimated" : "Confirmed"}
+            </span>
+          </div>
+          <div style={{
+            display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", fontSize: "11px",
+          }}>
+            <div style={{ color: "var(--color-text-secondary)" }}>
+              Fed {isVariable ? "(light)" : "rate"}:{" "}
+              <strong style={{ color: "var(--color-text-primary)" }}>
+                {pct(formData.fedRateLow)}
+              </strong>
+            </div>
+            {isVariable && (
+              <div style={{ color: "var(--color-text-secondary)" }}>
+                Fed (heavy):{" "}
+                <strong style={{ color: "var(--color-text-primary)" }}>
+                  {pct(formData.fedRateHigh)}
+                </strong>
+              </div>
+            )}
+            <div style={{ color: "var(--color-text-secondary)" }}>
+              State {isVariable ? "(light)" : "rate"}:{" "}
+              <strong style={{ color: "var(--color-text-primary)" }}>
+                {isNoTax ? "0% (no state tax)" : pct(formData.stateRateLow)}
+              </strong>
+            </div>
+            {isVariable && !isNoTax && (
+              <div style={{ color: "var(--color-text-secondary)" }}>
+                State (heavy):{" "}
+                <strong style={{ color: "var(--color-text-primary)" }}>
+                  {pct(formData.stateRateHigh)}
+                </strong>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STEP DEFINITIONS
 //
 // showIf(formData, lifeEvent) → bool — controls which steps appear per life event
@@ -660,7 +1013,8 @@ const STEP_DEFS = [
   {
     id: 4, title: "Tax Rates", sprint: "3f",
     showIf: () => true,
-    isValid: () => true, // TODO 3f: d.fedRateLow > 0 && d.stateRateLow >= 0
+    isValid: (d) => d.fedRateLow > 0 && d.userState != null,
+    component: Step4,
   },
   {
     id: 5, title: "Annual Tax Strategy", sprint: "3g",

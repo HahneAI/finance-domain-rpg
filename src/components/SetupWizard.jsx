@@ -1214,6 +1214,345 @@ function Step6({ formData, onChange }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STEP 7 — Paycheck Buffer
+//
+// Shows a live net-per-check preview assembled from formData collected so far.
+// User sets a safety floor (paycheckBuffer). $50 minimum enforced — if user
+// enters less, a warning appears and Next is blocked until they either raise the
+// value or explicitly click "Override anyway" (sets bufferOverrideAck = true).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Estimate a typical weekly gross from formData — does not require a week object.
+function estimateWeeklyGross(d) {
+  const isDHL = d.employerPreset === "DHL";
+  if (isDHL) {
+    // Light-week DHL: 4 shifts × shiftHours = 48h; heavy = 6 × 12 = 72h.
+    // Use a weighted average (26 light + 26 heavy per year).
+    const lightH = 4 * (d.shiftHours || 12);
+    const heavyH = 6 * (d.shiftHours || 12);
+    const gross = (h) => {
+      const base = d.baseRate || 0;
+      const reg = Math.min(h, d.otThreshold || 40);
+      const ot = Math.max(h - (d.otThreshold || 40), 0);
+      return reg * base + ot * base * (d.otMultiplier || 1.5);
+    };
+    return (gross(lightH) + gross(heavyH)) / 2;
+  }
+  if (d.scheduleIsVariable) {
+    // Two-rate variable: average of both gross estimates.
+    const h1 = (d.standardWeeklyHours || 40);
+    const h2 = (d.heavyWeeklyHours || 50);
+    const gross = (h) => {
+      const base = d.baseRate || 0;
+      const reg = Math.min(h, d.otThreshold || 40);
+      const ot = Math.max(h - (d.otThreshold || 40), 0);
+      return reg * base + ot * base * (d.otMultiplier || 1.5);
+    };
+    return (gross(h1) + gross(h2)) / 2;
+  }
+  // Standard fixed schedule — no OT assumed for typical estimate.
+  const h = d.standardWeeklyHours || 40;
+  return h * (d.baseRate || 0);
+}
+
+const BUFFER_FLOOR = 50;
+
+function Step7({ formData, onChange }) {
+  const gross = estimateWeeklyGross(formData);
+  const fica = gross * (formData.ficaRate || 0.0765);
+  const k401k = gross * (formData.k401Rate || 0);
+  const benefits =
+    (formData.healthPremium || 0) +
+    (formData.dentalPremium || 0) +
+    (formData.visionPremium || 0) +
+    (formData.stdWeekly || 0) +
+    (formData.lifePremium || 0) +
+    (formData.hsaWeekly || 0) +
+    (formData.fsaWeekly || 0) +
+    (formData.ltd || 0);
+  const other = (formData.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0);
+  const fed = gross * (formData.fedRateLow || 0);
+  const state = gross * (formData.stateRateLow || 0);
+  const net = gross - fica - k401k - benefits - other - fed - state;
+
+  const buf = formData.paycheckBuffer ?? 50;
+  const overrideAck = formData.bufferOverrideAck === true;
+
+  const rows = [
+    { label: "Gross Pay",      val: gross,   sign: "" },
+    { label: "Federal Tax",    val: fed,     sign: "−" },
+    { label: "State Tax",      val: state,   sign: "−" },
+    { label: "FICA",           val: fica,    sign: "−" },
+    { label: "401(k)",         val: k401k,   sign: "−" },
+    { label: "Benefits",       val: benefits,sign: "−" },
+    { label: "Other Deduct.", val: other,   sign: "−" },
+  ];
+
+  const fmt = (n) => `$${Math.abs(n).toFixed(2)}`;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
+      {/* ── Live net estimate ── */}
+      <div>
+        <label style={lS}>Estimated Weekly Net</label>
+        <div style={{
+          marginTop: "10px",
+          background: "var(--color-bg-raised)",
+          borderRadius: "12px", padding: "16px",
+          border: "1px solid var(--color-border-subtle)",
+        }}>
+          {rows.map(r => (
+            <div key={r.label} style={{
+              display: "flex", justifyContent: "space-between",
+              padding: "4px 0",
+              fontSize: "12px",
+              color: "var(--color-text-secondary)",
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+            }}>
+              <span>{r.label}</span>
+              <span style={{ fontFamily: "var(--font-mono)" }}>
+                {r.sign} {fmt(r.val)}
+              </span>
+            </div>
+          ))}
+          <div style={{
+            display: "flex", justifyContent: "space-between",
+            paddingTop: "10px", marginTop: "4px",
+          }}>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+              Net
+            </span>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: "18px", fontWeight: 700,
+              color: net >= 0 ? "var(--color-green)" : "var(--color-red)",
+            }}>
+              {fmt(net)}
+            </span>
+          </div>
+        </div>
+        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+          Averaged from your pay structure and deductions above.
+          {formData.taxRatesEstimated && " Tax rates are estimated — confirm from a real paystub later."}
+        </div>
+      </div>
+
+      {/* ── Paycheck buffer input ── */}
+      <Field label="Paycheck Safety Buffer ($)">
+        <input
+          {...iS} style={{ ...iS }}
+          type="number" min="0" step="1"
+          value={buf || ""}
+          onChange={e => {
+            onChange({ paycheckBuffer: parseFloat(e.target.value) || 0, bufferOverrideAck: false });
+          }}
+        />
+        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+          Minimum cash cushion per check before the dashboard flags a shortfall. $50 minimum recommended.
+        </div>
+
+        {/* Warning / override */}
+        {buf < BUFFER_FLOOR && (
+          <div style={{
+            marginTop: "10px",
+            padding: "10px 14px",
+            background: "rgba(224,92,92,0.08)",
+            border: "1px solid rgba(224,92,92,0.3)",
+            borderRadius: "10px",
+            display: "flex", flexDirection: "column", gap: "8px",
+          }}>
+            <div style={{ fontSize: "12px", color: "var(--color-red)", lineHeight: "1.5" }}>
+              A buffer under ${BUFFER_FLOOR} leaves very little margin for timing errors or small unexpected costs.
+              This is not recommended.
+            </div>
+            {!overrideAck && (
+              <button
+                onClick={() => onChange({ bufferOverrideAck: true })}
+                style={{
+                  alignSelf: "flex-start",
+                  background: "transparent",
+                  color: "var(--color-text-secondary)",
+                  border: "1px solid rgba(224,92,92,0.4)",
+                  borderRadius: "8px", padding: "5px 12px",
+                  fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                Override anyway
+              </button>
+            )}
+            {overrideAck && (
+              <div style={{ fontSize: "11px", color: "var(--color-text-disabled)" }}>
+                Override accepted — you can continue with a lower buffer.
+              </div>
+            )}
+          </div>
+        )}
+      </Field>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP 8 — Tax Exempt Gate
+//
+// Some weeks are projected tax-free (no withholding). Showing those as
+// "pure net" can mislead — they're a timing benefit, not free money.
+// The gate presents a disclaimer before unlocking the tax-exempt view.
+//
+// Three variants gated by GATE_VARIANT:
+//   'A' — blur overlay over content until user accepts
+//   'B' — content hidden; a text link reveals it
+//   'C' — locked placeholder card with accept button
+//
+// Accept writes taxExemptOptIn: true. isValid blocks until accepted.
+// ─────────────────────────────────────────────────────────────────────────────
+const GATE_VARIANT = 'A'; // ← change to 'B' or 'C' to test; delete losers before merging
+
+const TAX_EXEMPT_DISCLAIMER = (
+  <>
+    Tax-exempt weeks show your projected gross as the full net — no federal or state withholding is
+    deducted. This is a <strong>timing benefit only</strong>. You still owe taxes at filing; these
+    weeks do not represent extra income. The dashboard will flag them clearly so you can set aside
+    the difference.
+  </>
+);
+
+function TaxExemptDisclaimerBox({ onAccept }) {
+  return (
+    <div style={{
+      background: "var(--color-bg-raised)",
+      border: "1px solid rgba(201,168,76,0.25)",
+      borderRadius: "12px", padding: "18px 16px",
+      display: "flex", flexDirection: "column", gap: "14px",
+    }}>
+      <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>
+        Tax-Exempt Week Projections
+      </div>
+      <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.7", color: "var(--color-text-secondary)" }}>
+        {TAX_EXEMPT_DISCLAIMER}
+      </p>
+      <button
+        onClick={onAccept}
+        style={{
+          alignSelf: "flex-start",
+          background: "var(--color-gold)", color: "var(--color-bg-base)",
+          border: "none", borderRadius: "10px",
+          padding: "8px 16px", fontSize: "10px", letterSpacing: "1.5px",
+          fontWeight: 700, textTransform: "uppercase", cursor: "pointer",
+        }}
+      >
+        I understand — show projections
+      </button>
+    </div>
+  );
+}
+
+// Preview content shown after opt-in (placeholder — real chart wires in Phase 5)
+function TaxExemptPreview() {
+  return (
+    <div style={{
+      background: "var(--color-bg-raised)", borderRadius: "12px", padding: "18px 16px",
+      border: "1px solid var(--color-border-subtle)",
+      display: "flex", flexDirection: "column", gap: "8px",
+    }}>
+      <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
+        Tax-Exempt Projections Unlocked
+      </div>
+      <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+        Tax-exempt week projections will appear in the Income panel. Remember to set aside the
+        withheld amount each of those weeks — the dashboard will calculate the suggested reserve.
+      </div>
+    </div>
+  );
+}
+
+function Step8({ formData, onChange }) {
+  const accepted = formData.taxExemptOptIn === true;
+  const accept = () => onChange({ taxExemptOptIn: true });
+
+  // ── Variant A: blur overlay ────────────────────────────────────────────────
+  if (GATE_VARIANT === 'A') {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        {!accepted ? (
+          <div style={{ position: "relative" }}>
+            {/* Blurred background preview */}
+            <div style={{ filter: "blur(4px)", pointerEvents: "none", userSelect: "none", opacity: 0.5 }}>
+              <TaxExemptPreview />
+            </div>
+            {/* Overlay */}
+            <div style={{
+              position: "absolute", inset: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              borderRadius: "12px",
+              background: "rgba(10,10,10,0.65)",
+              backdropFilter: "blur(2px)",
+            }}>
+              <div style={{ maxWidth: "320px", width: "100%", padding: "0 16px" }}>
+                <TaxExemptDisclaimerBox onAccept={accept} />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <TaxExemptPreview />
+        )}
+      </div>
+    );
+  }
+
+  // ── Variant B: hidden content + reveal link ────────────────────────────────
+  if (GATE_VARIANT === 'B') {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        {!accepted ? (
+          <TaxExemptDisclaimerBox onAccept={accept} />
+        ) : (
+          <TaxExemptPreview />
+        )}
+      </div>
+    );
+  }
+
+  // ── Variant C: locked placeholder card ────────────────────────────────────
+  // GATE_VARIANT === 'C'
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {!accepted ? (
+        <div style={{
+          background: "var(--color-bg-raised)", borderRadius: "12px", padding: "18px 16px",
+          border: "1px dashed rgba(201,168,76,0.3)",
+          display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "18px", opacity: 0.5 }}>🔒</span>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
+              Tax-Exempt Week Projections
+            </span>
+          </div>
+          <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
+            {TAX_EXEMPT_DISCLAIMER}
+          </p>
+          <button
+            onClick={accept}
+            style={{
+              background: "var(--color-gold)", color: "var(--color-bg-base)",
+              border: "none", borderRadius: "10px",
+              padding: "8px 16px", fontSize: "10px", letterSpacing: "1.5px",
+              fontWeight: 700, textTransform: "uppercase", cursor: "pointer",
+            }}
+          >
+            Unlock projections
+          </button>
+        </div>
+      ) : (
+        <TaxExemptPreview />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STEP DEFINITIONS
 //
 // showIf(formData, lifeEvent) → bool — controls which steps appear per life event
@@ -1278,12 +1617,14 @@ const STEP_DEFS = [
   {
     id: 7, title: "Paycheck Buffer", sprint: "3i",
     showIf: (_, ev) => ev === null || ev === "changed_jobs",
-    isValid: (d) => (d.paycheckBuffer ?? 0) >= 50,
+    isValid: (d) => (d.paycheckBuffer ?? 0) >= BUFFER_FLOOR || d.bufferOverrideAck === true,
+    component: Step7,
   },
   {
     id: 8, title: "Tax Exempt Gate", sprint: "3j",
     showIf: (_, ev) => ev === null || ev === "changed_jobs",
-    isValid: () => true,
+    isValid: (d) => d.taxExemptOptIn === true,
+    component: Step8,
   },
 ];
 

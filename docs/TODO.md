@@ -105,13 +105,15 @@
 - [x] `isValid`: DHL always passes; standard users must answer attendance pill (skippable)
 
 #### Sub-sprint 3i — Step 7: Paycheck Buffer
-- [ ] Live net-per-check preview computed from `formData` accumulated so far
-- [ ] `paycheckBuffer` input; $50 floor validation with warning and block-until-override behavior
+- [x] Live net-per-check preview: `estimateWeeklyGross()` (DHL weighted avg, variable avg, standard flat); breakdown table: gross, fed, state, FICA, 401k, benefits, other; "estimated" note if taxRatesEstimated
+- [x] `paycheckBuffer` input; `BUFFER_FLOOR = 50`; red warning block renders below $50; "Override anyway" writes `bufferOverrideAck: true` to formData; value change resets ack
+- [x] `isValid`: passes if buf ≥ 50 OR bufferOverrideAck; `bufferOverrideAck` default added to config
 
 #### Sub-sprint 3j — Step 8: Tax Exempt Gate (visual test)
-- [ ] Implement all 3 gate options (A: blur overlay, B: hidden + link, C: locked placeholder card) behind `const GATE_VARIANT = 'A'`
-- [ ] Disclaimer text wired; accept writes `taxExemptOptIn: true`
-- [ ] Visual test all 3 options; delete losers before merging
+- [x] Three variants behind `const GATE_VARIANT = 'A'` — A: blur overlay, B: hidden + disclaimer, C: locked card with padlock
+- [x] Shared `TAX_EXEMPT_DISCLAIMER` const + `TaxExemptDisclaimerBox` + gold accept button
+- [x] Accept writes `taxExemptOptIn: true`; `isValid` blocks until accepted
+- [ ] Visual test all 3 variants; delete losers before merging
 
 #### Sub-sprint 3k — DHL Employer Preset Tune *(post-wizard, DHL users only)*
 > Shown only when `employerPreset === "DHL"`. Positioned after Step 1 (Pay Structure), before Schedule.

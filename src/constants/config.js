@@ -7,6 +7,7 @@ export const DEFAULT_CONFIG = {
   setupComplete: false,        // true once setup wizard completes; gates first-run flow
   taxExemptOptIn: false,       // true once user accepts tax exempt disclaimer (Step 8)
   paycheckBuffer: 50,          // $ safety floor per check; $50 minimum enforced
+  bufferOverrideAck: false,    // true when user explicitly overrides the $50 floor warning
 
   // ── Employer preset ─────────────────────────────────────────
   employerPreset: null,        // "DHL" | null — drives rotation, bucket, dual-rate logic

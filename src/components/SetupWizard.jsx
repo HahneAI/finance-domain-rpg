@@ -27,7 +27,9 @@ function Step0({ lifeEvent, onLifeEventChange }) {
           fontSize: "12px", lineHeight: "1.6",
           color: "var(--color-text-disabled)", margin: 0,
         }}>
-          You'll need: your most recent paystub and your job start date.
+          You don't need your paystub today — but as soon as you can input
+          the tax numbers the government took off of you, the sooner we can
+          sharpen your budget to exact pennies.
         </p>
       </div>
     );

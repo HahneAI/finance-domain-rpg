@@ -14,6 +14,20 @@ This is the primary implementation document for the setup wizard. Read this befo
 
 ---
 
+## Paystub Policy — Do Not Require at Setup
+
+**Paystubs are never required to complete the wizard.** Users skip the tax calculator in Step 4 and proceed with state-table pre-fills (estimates). The app uses these estimates until the user sharpens them.
+
+**What we build instead:**
+- Step 4 tax calculator fields are clearly marked optional — pre-filled from `STATE_TAX_TABLE` so the app is immediately useful
+- Persistent reminders surface in IncomePanel and the dashboard nudging users to input actual withheld amounts from a real paystub to lock in exact rates
+- A dedicated "Sharpen your tax rates" entry point is accessible anytime from Settings — same paystub calculator UI, no full wizard re-run needed
+- Every budget projection shows an "estimate" badge on tax-derived numbers until actual paystub rates are confirmed
+
+The copy in Step 4 and the welcome screen reflects this: *"You don't need your paystub today — but as soon as you can input the tax numbers the government took off of you, the sooner we can sharpen your budget to exact pennies."*
+
+---
+
 ## Overview
 
 A multi-step setup wizard that serves as the first page seen after sign-in when no saved config is detected. Also re-accessible from a sidebar life event menu ("Lost my job", "Changed jobs", "Got a commission job") to reset and re-configure affected fields without wiping unrelated config.
@@ -123,7 +137,7 @@ Dependency: if 401k enrollment date is in the future, app shows countdown in Ben
 ### Step 4 — Tax Rates
 
 **What it affects:** How much is withheld from each paycheck and your projected year-end tax balance.
-**Where to find it:** One or two recent paystubs (depends on whether your hours vary week to week).
+**Where to find it:** One or two recent paystubs — but this step is skippable. State-table estimates pre-fill the rates so the app works immediately. Reminders to sharpen with a real paystub surface throughout the app post-setup.
 
 **Gate question (shown first):**
 > "Does your gross pay change week to week?"
@@ -136,13 +150,14 @@ Dependency: if 401k enrollment date is in the future, app shows countdown in Ben
 - State dropdown → app pre-fills state rate from lookup table
 - User confirms against their paystub in the calculator below
 
-**Paystub calculator UI (shown once or twice based on gate above):**
-> "Pull up [a recent / your lighter-week] paystub. Enter the numbers below and we'll figure out your rates."
-- Input: Gross pay that check
-- Input: Federal income tax withheld
-- Input: State income tax withheld
+**Paystub calculator UI (shown once or twice based on gate above) — optional, skippable:**
+> "Got a paystub handy? Drop in your numbers and we'll nail your exact rates. No paystub yet? No problem — we'll use your state's standard rate as an estimate and remind you to sharpen it later."
+- Input: Gross pay that check *(optional — skip pre-fills state table estimate)*
+- Input: Federal income tax withheld *(optional)*
+- Input: State income tax withheld *(optional)*
 - App derives and displays: federal rate = withheld ÷ gross, state rate = withheld ÷ gross
 - User confirms (or adjusts if paystub had an anomaly)
+- **Skip path:** user clicks "Use estimate for now" → rates pre-filled from STATE_TAX_TABLE; "estimate" badge shown on tax-derived numbers in IncomePanel until confirmed
 
 | Stored Field | Replaces | Notes |
 |---|---|---|
@@ -154,7 +169,7 @@ Dependency: if 401k enrollment date is in the future, app shows countdown in Ben
 | `stateRateHigh` | `w2StateRate` | State rate on heavier paycheck (equals stateRateLow if not variable) |
 | `ficaRate` | — | Pre-filled 7.65% (W-2 employee share: 6.2% SS + 1.45% Medicare). Read-only — no user input. If pay type = self-employed/1099, auto-set to 15.3% instead. SS wage cap ($176,100 for 2026) not a concern at this income level. |
 
-Plain-English note shown at top of step: "We're not asking you to know your tax rate off the top of your head — your paystub already has the answer. Just grab one and we'll do the math together."
+Plain-English note shown at top of step: "You don't need your paystub today — but as soon as you can input the tax numbers the government took off of you, the sooner we can sharpen your budget to exact pennies. For now, we'll estimate from your state's rate."
 
 ---
 

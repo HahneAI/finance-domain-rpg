@@ -58,8 +58,9 @@ Fields reviewed top-to-bottom. Pick up at `w2FedRate` next session.
 **New model:**
 - Users with consistent hours → single rate pair (`fedRate`, `stateRate`)
 - Users with variable/rotating hours → two rate pairs (`fedRateLow`/`fedRateHigh`, `stateRateLow`/`stateRateHigh`)
-- Rates are always **derived** from a paystub calculator (enter gross + withheld → app computes rate), never manually entered as decimals
-- State is captured as `userState` (e.g. `"MO"`) and used to pre-fill the state rate from a lookup table; user confirms against their paystub
+- Rates are **derived** from a paystub calculator (enter gross + withheld → app computes rate), never manually entered as decimals
+- **Paystub is not required at setup.** State rate pre-fills from `STATE_TAX_TABLE` as an estimate. The paystub calculator in Step 4 is skippable — user clicks "Use estimate for now" and continues. Reminders to sharpen rates with a real paystub are surfaced throughout the app post-setup.
+- State is captured as `userState` (e.g. `"MO"`) and used to pre-fill the state rate from a lookup table; user confirms against paystub when available
 
 **Deprecated fields** (single-user hardcoded, replaced by generalized shape below):
 - ~~`w1FedRate`~~ → `fedRateLow`

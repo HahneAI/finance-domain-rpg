@@ -49,7 +49,7 @@
 > **Field-by-field decisions:** `docs/setup-wizard-field-notes.md`
 
 ### Phase 1 — Foundation
-- [ ] `config.js` — add wizard fields (`setupComplete`, `taxExemptOptIn`, `paycheckBuffer`, `employerPreset`, `startingWeekIsHeavy`, `scheduleIsVariable`, `userState`, `standardWeeklyHours`) and generalized rate fields (`fedRateLow/High`, `stateRateLow/High`); keep legacy `w1/w2` rate fields for backward compat during transition
+- [ ] `config.js` — add wizard fields (`setupComplete`, `taxExemptOptIn`, `paycheckBuffer`, `employerPreset`, `startingWeekIsHeavy`, `scheduleIsVariable`, `userState`, `standardWeeklyHours`, `taxRatesEstimated`) and generalized rate fields (`fedRateLow/High`, `stateRateLow/High`); keep legacy `w1/w2` rate fields for backward compat during transition
 - [ ] `db.js` — fix config merge strategy (`{ ...DEFAULT_CONFIG, ...data.config }` so new fields reach existing rows); add Anthony pre-wizard migration block (detects pre-wizard rows by absence of `setupComplete`; sets `employerPreset: "DHL"`, copies w1/w2 rates to new field names, marks `setupComplete: true` so Anthony never sees the wizard)
 
 ### Phase 2 — finance.js + State Tax Table
@@ -87,7 +87,9 @@
 #### Sub-sprint 3f — Step 4: Tax Rates
 - [ ] Variable hours gate (`scheduleIsVariable`) — auto-true for DHL, pill question for standard users
 - [ ] State dropdown (`userState`) → pre-fills rate from `STATE_TAX_TABLE`; NONE model shows "no state income tax" note
-- [ ] One or two paystub calculators (gross + withheld → derives `fedRateLow/High`, `stateRateLow/High`)
+- [ ] Paystub calculator (gross + withheld → derives `fedRateLow/High`, `stateRateLow/High`) — **optional/skippable**: "Use estimate for now" path pre-fills from STATE_TAX_TABLE and sets `taxRatesEstimated: true`
+- [ ] `taxRatesEstimated` flag in config — drives "estimate" badge on tax-derived numbers in IncomePanel; cleared when user confirms real paystub rates
+- [ ] "Sharpen your tax rates" entry point in Settings — same paystub calculator, no full wizard re-run
 
 #### Sub-sprint 3g — Step 5: Annual Tax Strategy
 - [ ] Standard deduction disclosure (read-only, `$15,000 for 2026 single filers`)

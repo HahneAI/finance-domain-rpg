@@ -59,8 +59,54 @@
 - [ ] `App.jsx` — replace `moFlatRate` hardcode with `stateTax()` lookup
 
 ### Phase 3 — SetupWizard component
-- [ ] `SetupWizard.jsx` — create; scaffold step router, Back/Next nav, progress indicator, `onComplete` writes `taxedWeeks` + `setupComplete: true`
-- [ ] Steps 0–8 implemented in order (see `docs/setup-wizard-plan.md` Build Order for per-step sitting breakdown)
+
+#### Sub-sprint 3a — Scaffold
+- [ ] `SetupWizard.jsx` — create file; wire step router (`activeSteps = steps.filter(s => s.showIf(formData, lifeEvent))`), Back/Next nav, progress indicator (step X of N), Next disabled until current step validates
+- [ ] `onComplete` handler — auto-populates `taxedWeeks` (all weeks ≥ `firstActiveIdx`), merges `setupComplete: true`, calls parent `onComplete`
+
+#### Sub-sprint 3b — Step 0: Welcome / Life Event Select
+- [ ] First-run: welcome copy + Start button; no fields
+- [ ] Re-entry: Life Event dropdown (Lost my job / Changed jobs / Got a commission job); dependency engine writes `lifeEvent` and marks affected steps dirty
+
+#### Sub-sprint 3c — Step 1: Pay Structure
+- [ ] DHL employer preset pill gate (`employerPreset: "DHL" | null`) rendered before all pay fields
+- [ ] Pay Structure fields: `baseRate`, `shiftHours`, `diffRate` (overnight/weekend pill multiselect with inline amount inputs), `otThreshold` pill, `otMultiplier` pill
+- [ ] Commission toggle shown if `lifeEvent === "commission"`
+
+#### Sub-sprint 3d — Step 2: Schedule
+- [ ] Job start date picker → derives `firstActiveIdx` from `FISCAL_YEAR_START`
+- [ ] Standard path: weekly hours number input (`standardWeeklyHours`)
+- [ ] DHL path: 4-day / 6-day rotation pill → `startingWeekIsHeavy`
+- [ ] Pay period end day picker (0=Sun default)
+
+#### Sub-sprint 3e — Step 3: Deductions
+- [ ] Benefits availability gate pill (enrolled / not yet / no benefits) — controls field visibility
+- [ ] Fields: `ltd`, `k401Rate`, `k401MatchRate`, `k401StartDate` (shown/hidden per gate answer)
+- [ ] "Not yet" path shows enrollment date + note about projected kick-in
+
+#### Sub-sprint 3f — Step 4: Tax Rates
+- [ ] Variable hours gate (`scheduleIsVariable`) — auto-true for DHL, pill question for standard users
+- [ ] State dropdown (`userState`) → pre-fills rate from `STATE_TAX_TABLE`; NONE model shows "no state income tax" note
+- [ ] One or two paystub calculators (gross + withheld → derives `fedRateLow/High`, `stateRateLow/High`)
+
+#### Sub-sprint 3g — Step 5: Annual Tax Strategy
+- [ ] Standard deduction disclosure (read-only, `$15,000 for 2026 single filers`)
+- [ ] State rate display: hidden if NONE model, effective-rate note if PROGRESSIVE
+- [ ] `targetOwedAtFiling` input with plain-English explanation
+
+#### Sub-sprint 3h — Step 6: Benefits Capture
+- [ ] Health insurance deduction + benefits start date inputs
+- [ ] Repeatable other-deductions field (label + amount, add/remove rows)
+- [ ] Attendance policy gate at bottom — skipped if `employerPreset === "DHL"`
+
+#### Sub-sprint 3i — Step 7: Paycheck Buffer
+- [ ] Live net-per-check preview computed from `formData` accumulated so far
+- [ ] `paycheckBuffer` input; $50 floor validation with warning and block-until-override behavior
+
+#### Sub-sprint 3j — Step 8: Tax Exempt Gate (visual test)
+- [ ] Implement all 3 gate options (A: blur overlay, B: hidden + link, C: locked placeholder card) behind `const GATE_VARIANT = 'A'`
+- [ ] Disclaimer text wired; accept writes `taxExemptOptIn: true`
+- [ ] Visual test all 3 options; delete losers before merging
 
 ### Phase 4 — App.jsx integration
 - [ ] First-run gate: `if (!config.setupComplete)` → render `<SetupWizard />`

@@ -111,7 +111,18 @@ SAVE:   bg green or gold, color bg-base, radius 12px, pad 8px 16px, 10px bold up
 - **No bounce, no spin, no scale-up on mount. Press = `scale(0.97)` only. All durations ≤ 500ms except countup.**
 
 ### Mobile UI Direction
-Current style: **Style A — Terminal Dark** (DM Serif / DM Sans / gold-green on near-black). Next major direction: **Style B — Card-First Progressive Disclosure**. See `docs/mobile-ui-experiments.md` for full style A–D breakdown and mobile testing checklist (min tap target 44px, font-size ≥ 16px to prevent iOS zoom).
+Selected style: **Style D — Dashboard Tile Grid** (Apple Health / Robinhood pattern). Home screen = 2-col metric tile grid, color-coded by status, tappable to drill into panel. Navigation is depth-first (home → detail), not tab-first. Tiles use `grid-column: span 2` for wide items. Back nav via `viewStack` push/pop in App.jsx.
+
+**Mobile testing checklist (run before any mobile ship):**
+- [ ] No horizontal scroll at 390px (iPhone 14–17) and 375px (iPhone SE)
+- [ ] All tap targets ≥ 44×44px
+- [ ] Font-size ≥ 16px on all inputs (prevents iOS zoom)
+- [ ] Bottom nav clears home indicator (`safe-area-inset-bottom`)
+- [ ] PWA installs from Safari "Add to Home Screen"
+- [ ] Standalone display mode active (no browser chrome when launched from home screen)
+- [ ] App works offline (service worker caches JS/CSS)
+- [ ] Dark status bar on iPhone (black-translucent)
+- [ ] Dynamic Island / notch area not obscured
 
 ---
 

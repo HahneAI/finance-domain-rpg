@@ -17,6 +17,15 @@ import {
 } from '../../lib/finance.js'
 import { DEFAULT_CONFIG } from '../../constants/config.js'
 
+// DHL_CONFIG: used for tests that exercise DHL rotation behavior (6-Day/4-Day alternation).
+// startingWeekIsHeavy=false with firstActiveIdx=7 produces the same even=heavy pattern
+// as the legacy idx%2===0 logic, so all rotation-based test assertions remain valid.
+const DHL_CONFIG = {
+  ...DEFAULT_CONFIG,
+  employerPreset: "DHL",
+  startingWeekIsHeavy: false,  // false + firstActiveIdx=7 → even idx = heavy (6-Day)
+}
+
 // ─────────────────────────────────────────────────────────────
 // fedTax
 // ─────────────────────────────────────────────────────────────
@@ -62,7 +71,7 @@ describe('buildYear', () => {
   let weeks
 
   beforeEach(() => {
-    weeks = buildYear(DEFAULT_CONFIG)
+    weeks = buildYear(DHL_CONFIG)
   })
 
   it('generates 53 weeks for the 2026 fiscal year (Jan 5 → Jan 4)', () => {
@@ -94,14 +103,14 @@ describe('buildYear', () => {
   })
 
   it('weeks before firstActiveIdx are inactive with zero grossPay', () => {
-    for (let i = 0; i < DEFAULT_CONFIG.firstActiveIdx; i++) {
+    for (let i = 0; i < DHL_CONFIG.firstActiveIdx; i++) {
       expect(weeks[i].active).toBe(false)
       expect(weeks[i].grossPay).toBe(0)
     }
   })
 
   it('weeks from firstActiveIdx onward are active with positive grossPay', () => {
-    for (let i = DEFAULT_CONFIG.firstActiveIdx; i < weeks.length; i++) {
+    for (let i = DHL_CONFIG.firstActiveIdx; i < weeks.length; i++) {
       expect(weeks[i].active).toBe(true)
       expect(weeks[i].grossPay).toBeGreaterThan(0)
     }
@@ -134,28 +143,28 @@ describe('buildYear', () => {
   })
 
   it('computes correct grossPay for an active 4-Day week (40 regular + 8 OT)', () => {
-    const cfg = DEFAULT_CONFIG
+    const cfg = DHL_CONFIG
     const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier
     const fourDay = weeks.find(w => w.rotation === '4-Day' && w.active)
     expect(fourDay.grossPay).toBeCloseTo(expected)
   })
 
   it('computes correct grossPay for an active 6-Day week (40 regular + 32 OT + 24 weekend)', () => {
-    const cfg = DEFAULT_CONFIG
+    const cfg = DHL_CONFIG
     const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 24 * cfg.diffRate
     const sixDay = weeks.find(w => w.rotation === '6-Day' && w.active)
     expect(sixDay.grossPay).toBeCloseTo(expected)
   })
 
   it('marks weeks in taxedWeeks as taxedBySchedule=true', () => {
-    const taxedSet = new Set(DEFAULT_CONFIG.taxedWeeks)
+    const taxedSet = new Set(DHL_CONFIG.taxedWeeks)
     weeks.forEach(w => {
       if (taxedSet.has(w.idx)) expect(w.taxedBySchedule).toBe(true)
     })
   })
 
   it('marks weeks not in taxedWeeks as taxedBySchedule=false', () => {
-    const taxedSet = new Set(DEFAULT_CONFIG.taxedWeeks)
+    const taxedSet = new Set(DHL_CONFIG.taxedWeeks)
     weeks.forEach(w => {
       if (!taxedSet.has(w.idx)) expect(w.taxedBySchedule).toBe(false)
     })
@@ -183,51 +192,51 @@ describe('computeNet', () => {
   let weeks
 
   beforeEach(() => {
-    weeks = buildYear(DEFAULT_CONFIG)
+    weeks = buildYear(DHL_CONFIG)
   })
 
   it('returns 0 for inactive weeks', () => {
-    expect(computeNet(weeks[0], DEFAULT_CONFIG)).toBe(0)
+    expect(computeNet(weeks[0], DHL_CONFIG)).toBe(0)
   })
 
   it('net pay is less than gross pay for all active weeks', () => {
     weeks.filter(w => w.active).forEach(w => {
-      expect(computeNet(w, DEFAULT_CONFIG)).toBeLessThan(w.grossPay)
+      expect(computeNet(w, DHL_CONFIG)).toBeLessThan(w.grossPay)
     })
   })
 
   it('deducts only FICA, LTD, and 401k on non-taxed active weeks', () => {
     const week = weeks.find(w => w.active && !w.taxedBySchedule)
-    const cfg = DEFAULT_CONFIG
+    const cfg = DHL_CONFIG
     const expected = week.grossPay - week.grossPay * cfg.ficaRate - cfg.ltd - week.k401kEmployee
     expect(computeNet(week, cfg)).toBeCloseTo(expected)
   })
 
-  it('deducts fed and state tax in addition on taxed 4-Day (w1) weeks', () => {
+  it('deducts fed and state tax in addition on taxed 4-Day (low-rate) weeks', () => {
     const week = weeks.find(w => w.active && w.taxedBySchedule && w.rotation === '4-Day')
-    const cfg = DEFAULT_CONFIG
+    const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.ltd + week.k401kEmployee
-    const fed = week.taxableGross * cfg.w1FedRate
-    const st = week.taxableGross * cfg.w1StateRate
+    const fed = week.taxableGross * cfg.fedRateLow  // 4-Day = light = fedRateLow
+    const st = week.taxableGross * cfg.stateRateLow
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
   })
 
-  it('deducts fed and state tax in addition on taxed 6-Day (w2) weeks', () => {
+  it('deducts fed and state tax in addition on taxed 6-Day (high-rate) weeks', () => {
     const week = weeks.find(w => w.active && w.taxedBySchedule && w.rotation === '6-Day')
-    const cfg = DEFAULT_CONFIG
+    const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.ltd + week.k401kEmployee
-    const fed = week.taxableGross * cfg.w2FedRate
-    const st = week.taxableGross * cfg.w2StateRate
+    const fed = week.taxableGross * cfg.fedRateHigh  // 6-Day = heavy = fedRateHigh
+    const st = week.taxableGross * cfg.stateRateHigh
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
   })
 
   it('taxed weeks have a lower net/gross ratio than non-taxed weeks of the same rotation', () => {
     const taxed4 = weeks.find(w => w.active && w.taxedBySchedule && w.rotation === '4-Day')
     const nonTaxed4 = weeks.find(w => w.active && !w.taxedBySchedule && w.rotation === '4-Day')
-    const taxedRatio = computeNet(taxed4, DEFAULT_CONFIG) / taxed4.grossPay
-    const nonTaxedRatio = computeNet(nonTaxed4, DEFAULT_CONFIG) / nonTaxed4.grossPay
+    const taxedRatio = computeNet(taxed4, DHL_CONFIG) / taxed4.grossPay
+    const nonTaxedRatio = computeNet(nonTaxed4, DHL_CONFIG) / nonTaxed4.grossPay
     expect(taxedRatio).toBeLessThan(nonTaxedRatio)
   })
 })
@@ -254,7 +263,7 @@ describe('projectedGross', () => {
   })
 
   it('matches the grossPay of the corresponding active week from buildYear', () => {
-    const weeks = buildYear(cfg)
+    const weeks = buildYear(DHL_CONFIG)
     const sixDay = weeks.find(w => w.active && w.rotation === '6-Day')
     const fourDay = weeks.find(w => w.active && w.rotation === '4-Day')
     expect(projectedGross(true, cfg)).toBeCloseTo(sixDay.grossPay)

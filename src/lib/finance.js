@@ -1,4 +1,5 @@
 import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES } from "../constants/config.js";
+import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 
 // ─────────────────────────────────────────────────────────────
 // PURE FUNCTIONS — all stateless, no component dependencies
@@ -16,20 +17,64 @@ export function fedTax(income) {
   return tax;
 }
 
+// State income tax — three models: NONE, FLAT, PROGRESSIVE.
+// stateConfig comes from STATE_TAX_TABLE[userState].
+export function stateTax(income, stateConfig) {
+  if (!stateConfig || stateConfig.model === "NONE") return 0;
+  if (stateConfig.model === "FLAT") return income * stateConfig.flatRate;
+  if (stateConfig.model === "PROGRESSIVE") {
+    let tax = 0, prev = 0;
+    for (const { max, rate } of stateConfig.brackets) {
+      if (income <= prev) break;
+      tax += (Math.min(income, max ?? Infinity) - prev) * rate;
+      prev = max ?? Infinity;
+    }
+    return tax;
+  }
+  return 0;
+}
+
+// Resolve state tax config for a given userState code.
+// Falls back to MO if state not found (safe default for Anthony).
+export function getStateConfig(userState) {
+  return STATE_TAX_TABLE[userState] ?? STATE_TAX_TABLE["MO"];
+}
+
 export function buildYear(cfg) {
   const weeks = [], k401Start = new Date(cfg.k401StartDate), taxedSet = new Set(cfg.taxedWeeks);
+  const isDHL = cfg.employerPreset === "DHL";
   let d = new Date(2026, 0, 5), idx = 0;
   while (d <= new Date(2027, 0, 4)) {
     const weekEnd = new Date(d), weekStart = new Date(d);
     weekStart.setDate(weekStart.getDate() - 7);
-    const isWeek2 = idx % 2 === 0;
-    const days = Array.from({ length: 7 }, (_, i) => { const x = new Date(weekStart); x.setDate(x.getDate() + i); return x; });
-    const worked = isWeek2 ? [days[1], days[2], days[3], days[4], days[5], days[6]] : [days[0], days[2], days[3], days[4]];
-    const totalHours = worked.length * cfg.shiftHours;
-    const regularHours = Math.min(totalHours, cfg.otThreshold);
-    const overtimeHours = Math.max(totalHours - cfg.otThreshold, 0);
-    const weekendHours = worked.filter(w => w.getDay() === 0 || w.getDay() === 6).length * cfg.shiftHours;
-    const grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate;
+
+    let totalHours, regularHours, overtimeHours, weekendHours, grossPay, worked, rotation, isHighWeek;
+
+    if (isDHL) {
+      // DHL: alternating heavy (6-day) / light (4-day) from firstActiveIdx.
+      // (offset%2+2)%2 handles negative offsets (pre-employment weeks) correctly.
+      const offset = ((idx - cfg.firstActiveIdx) % 2 + 2) % 2;
+      isHighWeek = offset === 0 ? Boolean(cfg.startingWeekIsHeavy) : !Boolean(cfg.startingWeekIsHeavy);
+      const days = Array.from({ length: 7 }, (_, i) => { const x = new Date(weekStart); x.setDate(x.getDate() + i); return x; });
+      worked = isHighWeek
+        ? [days[1], days[2], days[3], days[4], days[5], days[6]]  // 6-day: Tue–Sun
+        : [days[0], days[2], days[3], days[4]];                    // 4-day: Mon/Wed/Thu/Fri
+      rotation = isHighWeek ? "6-Day" : "4-Day";
+      totalHours = worked.length * cfg.shiftHours;
+      weekendHours = worked.filter(w => w.getDay() === 0 || w.getDay() === 6).length * cfg.shiftHours;
+    } else {
+      // Standard path: flat weekly hours, no rotation concept.
+      isHighWeek = false;
+      worked = [];
+      rotation = "Standard";
+      totalHours = cfg.standardWeeklyHours ?? 40;
+      weekendHours = 0;
+    }
+
+    regularHours = Math.min(totalHours, cfg.otThreshold);
+    overtimeHours = Math.max(totalHours - cfg.otThreshold, 0);
+    grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate;
+
     const active = idx >= cfg.firstActiveIdx;
     const has401k = active && weekEnd >= k401Start;
     const k401kEmployee = has401k ? grossPay * cfg.k401Rate : 0;
@@ -37,7 +82,7 @@ export function buildYear(cfg) {
     const taxableGross = active ? grossPay - cfg.ltd - k401kEmployee : 0;
     const isTaxed = active && taxedSet.has(idx);
     weeks.push({
-      idx, weekEnd, weekStart, rotation: isWeek2 ? "6-Day" : "4-Day",
+      idx, weekEnd, weekStart, rotation, isHighWeek,
       workedDayNames: worked.map(w => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][w.getDay()]),
       totalHours, regularHours, overtimeHours, weekendHours,
       grossPay: active ? grossPay : 0, taxableGross, active, has401k, k401kEmployee, k401kEmployer, taxedBySchedule: isTaxed
@@ -51,9 +96,13 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
   if (!w.active) return 0;
   const fica = w.grossPay * cfg.ficaRate, ded = cfg.ltd + w.k401kEmployee;
   if (!w.taxedBySchedule) return w.grossPay - fica - ded;
-  const isW2 = w.rotation === "6-Day";
-  const fed = w.taxableGross * (isW2 ? cfg.w2FedRate : cfg.w1FedRate) + (showExtra ? extraPerCheck : 0);
-  const st = w.taxableGross * (isW2 ? cfg.w2StateRate : cfg.w1StateRate);
+  // Use generalized rate fields; fall back to legacy w1/w2 fields for pre-wizard rows.
+  const fedLow  = cfg.fedRateLow   ?? cfg.w1FedRate;
+  const fedHigh = cfg.fedRateHigh  ?? cfg.w2FedRate;
+  const stLow   = cfg.stateRateLow  ?? cfg.w1StateRate;
+  const stHigh  = cfg.stateRateHigh ?? cfg.w2StateRate;
+  const fed = w.taxableGross * (w.isHighWeek ? fedHigh : fedLow) + (showExtra ? extraPerCheck : 0);
+  const st = w.taxableGross * (w.isHighWeek ? stHigh : stLow);
   return w.grossPay - fed - st - fica - ded;
 }
 

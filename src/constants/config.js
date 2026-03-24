@@ -3,15 +3,62 @@
 // taxedWeeks replaces taxedRanges — flat array, togglable per week
 // ─────────────────────────────────────────────────────────────
 export const DEFAULT_CONFIG = {
+  // ── Wizard gate fields ──────────────────────────────────────
+  setupComplete: false,        // true once setup wizard completes; gates first-run flow
+  taxExemptOptIn: false,       // true once user accepts tax exempt disclaimer (Step 8)
+  paycheckBuffer: 50,          // $ safety floor per check; $50 minimum enforced
+
+  // ── Employer preset ─────────────────────────────────────────
+  employerPreset: null,        // "DHL" | null — drives rotation, bucket, dual-rate logic
+  startingWeekIsHeavy: null,   // DHL only: true = first active week is 6-day (72hr)
+
+  // ── Schedule type (non-DHL users) ───────────────────────────
+  scheduleIsVariable: false,   // true = pay varies week-to-week (two paystub calculators)
+  standardWeeklyHours: 40,     // standard path only — flat hours per week baseline
+
+  // ── Pay structure ────────────────────────────────────────────
   baseRate: 21.15, shiftHours: 12, diffRate: 3.00, otThreshold: 40, otMultiplier: 1.5,
+
+  // ── Deductions / benefits ────────────────────────────────────
   ltd: 2.00, k401Rate: 0.06, k401MatchRate: 0.05, k401StartDate: "2026-05-15",
-  firstActiveIdx: 7, w2FedRate: 0.1283, w2StateRate: 0.040, w1FedRate: 0.0784, w1StateRate: 0.0338,
-  ficaRate: 0.0765, fedStdDeduction: 15000, moFlatRate: 0.047, targetOwedAtFiling: 1000,
+
+  // ── Schedule ─────────────────────────────────────────────────
+  firstActiveIdx: 7,
+
+  // ── Tax rates — generalized (wizard-derived) ─────────────────
+  // These replace the old w1/w2 naming which was DHL-specific.
+  // fedRateLow/stateRateLow = lighter/consistent paycheck rate
+  // fedRateHigh/stateRateHigh = heavier paycheck rate (equals Low if not variable)
+  fedRateLow: 0.0784,          // replaces w1FedRate
+  fedRateHigh: 0.1283,         // replaces w2FedRate
+  stateRateLow: 0.0338,        // replaces w1StateRate
+  stateRateHigh: 0.040,        // replaces w2StateRate
+
+  // ── Legacy rate fields — kept for backward-compat fallback ───
+  // finance.js computeNet() falls back to these if fedRateLow not set on old rows.
+  // Remove after migration confirmed safe.
+  w1FedRate: 0.0784, w2FedRate: 0.1283, w1StateRate: 0.0338, w2StateRate: 0.040,
+
+  // ── FICA / federal tax constants ─────────────────────────────
+  ficaRate: 0.0765, fedStdDeduction: 15000,
+
+  // ── State tax ────────────────────────────────────────────────
+  userState: "MO",             // two-letter code; drives STATE_TAX_TABLE lookup
+  moFlatRate: 0.047,           // kept as fallback; replaced by stateTax() in state sprint
+
+  // ── Annual tax strategy ──────────────────────────────────────
+  targetOwedAtFiling: 1000,
+
+  // ── Tax schedule ─────────────────────────────────────────────
   taxedWeeks: [7, 8, 19, 20, 21, 22, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
-  bucketStartBalance: 64,   // hours — new hire starting balance
-  bucketCap: 128,           // hours — overflow above this pays out as cash
-  bucketPayoutRate: 9.825,  // $/hr for overflow hours (PTO_RATE / 2 ≈ 9.825)
-  payPeriodEndDay: 0,       // day-of-week pay period closes: 0=Sun, 1=Mon, ..., 6=Sat
+
+  // ── DHL attendance bucket (DHL preset only) ──────────────────
+  bucketStartBalance: 64,      // hours — new hire starting balance
+  bucketCap: 128,              // hours — overflow above this pays out as cash
+  bucketPayoutRate: 9.825,     // $/hr for overflow hours (PTO_RATE / 2 ≈ 9.825)
+
+  // ── Pay period ───────────────────────────────────────────────
+  payPeriodEndDay: 0,          // day-of-week pay period closes: 0=Sun, 1=Mon, ..., 6=Sat
 };
 
 export const FISCAL_YEAR_START = "2026-01-05"; // week 0 end date — first Monday of the fiscal year

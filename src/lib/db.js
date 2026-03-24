@@ -66,8 +66,33 @@ export async function loadUserData() {
     return { ...base, history: migratedHistory, note: migratedNote };
   });
 
+  // Merge: new DEFAULT_CONFIG fields fill in for existing rows (safe for any user).
+  // Before this fix, the entire DEFAULT_CONFIG was discarded if any config row existed —
+  // new fields added to DEFAULT_CONFIG would never reach existing users.
+  const mergedConfig = Object.keys(data.config).length
+    ? { ...DEFAULT_CONFIG, ...data.config }
+    : DEFAULT_CONFIG;
+
+  // ── Anthony pre-wizard migration ─────────────────────────────────────────────
+  // Detects Anthony's existing row by absence of setupComplete (pre-wizard rows won't
+  // have this field). Sets DHL preset + marks setupComplete so he never sees the wizard.
+  // Copies legacy w1/w2 rate fields to the new generalized names if not already set.
+  if (!mergedConfig.setupComplete) {
+    mergedConfig.employerPreset = "DHL";
+    mergedConfig.startingWeekIsHeavy = true;  // Anthony's first active week is heavy (6-day)
+    mergedConfig.scheduleIsVariable = true;
+    // Copy legacy rate fields to new names if new names weren't already set by wizard
+    if (mergedConfig.fedRateLow === DEFAULT_CONFIG.fedRateLow) {
+      mergedConfig.fedRateLow   = mergedConfig.w1FedRate   ?? DEFAULT_CONFIG.w1FedRate;
+      mergedConfig.fedRateHigh  = mergedConfig.w2FedRate   ?? DEFAULT_CONFIG.w2FedRate;
+      mergedConfig.stateRateLow  = mergedConfig.w1StateRate ?? DEFAULT_CONFIG.w1StateRate;
+      mergedConfig.stateRateHigh = mergedConfig.w2StateRate ?? DEFAULT_CONFIG.w2StateRate;
+    }
+    mergedConfig.setupComplete = true;
+  }
+
   return {
-    config:    Object.keys(data.config).length   ? data.config   : DEFAULT_CONFIG,
+    config:    mergedConfig,
     expenses:  migratedExpenses,
     goals:     data.goals.length                 ? data.goals     : INITIAL_GOALS,
     logs:      data.logs.length                  ? data.logs      : INITIAL_LOGS,

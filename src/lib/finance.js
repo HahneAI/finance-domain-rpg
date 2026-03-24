@@ -1,4 +1,4 @@
-import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES } from "../constants/config.js";
+import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES, DHL_PRESET } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -56,9 +56,16 @@ export function buildYear(cfg) {
       const offset = ((idx - cfg.firstActiveIdx) % 2 + 2) % 2;
       isHighWeek = offset === 0 ? Boolean(cfg.startingWeekIsHeavy) : !Boolean(cfg.startingWeekIsHeavy);
       const days = Array.from({ length: 7 }, (_, i) => { const x = new Date(weekStart); x.setDate(x.getDate() + i); return x; });
-      worked = isHighWeek
-        ? [days[1], days[2], days[3], days[4], days[5], days[6]]  // 6-day: Tue–Sun
-        : [days[0], days[2], days[3], days[4]];                    // 4-day: Mon/Wed/Thu/Fri
+      if (cfg.dhlTeam && !cfg.dhlCustomSchedule) {
+        // Standard preset rotation — days from DHL_PRESET (Team A or B, picked in wizard Step 15)
+        const rotDays = isHighWeek ? DHL_PRESET.rotation.heavy.days : DHL_PRESET.rotation.light.days;
+        worked = rotDays.map(d => days[d]);
+      } else {
+        // Custom / legacy schedule — Anthony's hardcoded day arrays (dhlTeam===null or dhlCustomSchedule===true)
+        worked = isHighWeek
+          ? [days[1], days[2], days[3], days[4], days[5], days[6]]  // 6-day: Tue–Sun
+          : [days[0], days[2], days[3], days[4]];                    // 4-day: Mon/Wed/Thu/Fri
+      }
       rotation = isHighWeek ? "6-Day" : "4-Day";
       totalHours = worked.length * cfg.shiftHours;
       weekendHours = worked.filter(w => w.getDay() === 0 || w.getDay() === 6).length * cfg.shiftHours;
@@ -73,7 +80,9 @@ export function buildYear(cfg) {
 
     regularHours = Math.min(totalHours, cfg.otThreshold);
     overtimeHours = Math.max(totalHours - cfg.otThreshold, 0);
-    grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate;
+    // Morning-shift DHL workers earn no shift differential (dhlNightShift=false zeroes diffRate).
+    const effectiveDiffRate = (isDHL && cfg.dhlNightShift === false) ? 0 : cfg.diffRate;
+    grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * effectiveDiffRate;
 
     const active = idx >= cfg.firstActiveIdx;
     const has401k = active && weekEnd >= k401Start;

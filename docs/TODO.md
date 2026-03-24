@@ -137,11 +137,16 @@
 - Tax rates are the same regardless of shift — morning vs. night affects gross pay, not effective tax rate.
 
 **Wizard step tasks:**
-- [ ] A / B team pill → writes `dhlTeam`; auto-derives `startingWeekIsHeavy` from `DHL_PRESET.teams[dhlTeam].startsHeavy`; applies `DHL_PRESET.defaults` to formData
-- [ ] "Standard rotation" vs "I've picked up extra days" pill → custom path keeps existing `startingWeekIsHeavy` pill (Anthony's flow); standard path locks days to `DHL_PRESET.rotation`
-- [ ] OT day preference pill: "Weekday (no diff)" / "Sometimes weekend (Sat/Sun)" → `dhlOtOnWeekend: bool`
-- [ ] `isValid`: `d.dhlTeam !== null`
-- [ ] `buildYear()` update: when `dhlTeam !== null`, use `DHL_PRESET.rotation.light.days` / `.heavy.days` instead of hardcoded arrays; add `requiredOtShifts × otShiftHours` to total; apply `diffRate` to OT hours on light weeks if `dhlOtOnWeekend === true`
+- [x] A / B team pill → writes `dhlTeam`; auto-derives `startingWeekIsHeavy` from `DHL_PRESET.teams[dhlTeam].startsHeavy`; applies `DHL_PRESET.defaults` to formData
+- [x] "Standard rotation" vs "Custom schedule" pill → `dhlCustomSchedule: bool`; standard locks to `DHL_PRESET.rotation`; custom preserves Anthony's hardcoded day arrays
+- [x] Night / morning shift pill → `dhlNightShift: bool`; morning zeroes `effectiveDiffRate` in `buildYear()` without changing stored `diffRate`
+- [x] OT day preference pill: "Weekday only" / "Sometimes weekend (Sat/Sun)" → `dhlOtOnWeekend: bool`
+- [x] `isValid`: `d.dhlTeam !== null`
+- [x] `buildYear()` update: `dhlTeam && !dhlCustomSchedule` gates preset rotation; otherwise falls back to hardcoded arrays; `effectiveDiffRate` = 0 when `dhlNightShift === false`
+- [x] `saveUserData()`: syncs `is_dhl` column from `config.employerPreset === "DHL"` on every save
+- [x] `isDHL` prop threaded to `BenefitsPanel` and `LogPanel` from App.jsx
+- [x] `dhlCustomSchedule: false` + `dhlNightShift: true` added to DEFAULT_CONFIG
+- [x] `DHL_PRESET` imported into finance.js
 
 ### Phase 4 — App.jsx integration
 - [ ] First-run gate: `if (!config.setupComplete)` → render `<SetupWizard />`

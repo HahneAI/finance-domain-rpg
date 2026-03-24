@@ -121,6 +121,7 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
         logs,
         show_extra:          showExtra,
         week_confirmations:  weekConfirmations,
+        is_dhl:              config.employerPreset === "DHL",
         updated_at:          new Date().toISOString(),
       },
       { onConflict: "user_id" }

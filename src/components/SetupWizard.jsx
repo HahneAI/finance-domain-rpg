@@ -2,6 +2,7 @@ import { useState } from "react";
 import { buildYear } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
 import { FISCAL_YEAR_START, DHL_PRESET } from "../constants/config.js";
+
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1214,6 +1215,130 @@ function Step6({ formData, onChange }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STEP 15 — DHL Team Setup  (sprint 3k)
+//
+// Only shown when employerPreset === "DHL" (Step 1 gate).
+// Captures three things:
+//   1. Team A or B → derives startingWeekIsHeavy; applies DHL_PRESET.defaults
+//   2. Standard rotation vs custom schedule
+//   3. Night shift vs morning shift → drives effectiveDiffRate in buildYear()
+// isValid blocks until dhlTeam is set.
+// ─────────────────────────────────────────────────────────────────────────────
+function Step15({ formData, onChange }) {
+  const team = formData.dhlTeam;
+  const isCustom = formData.dhlCustomSchedule === true;
+  const isNight = formData.dhlNightShift !== false; // default true
+
+  function pickTeam(t) {
+    const preset = DHL_PRESET.teams[t];
+    const d = DHL_PRESET.defaults;
+    onChange({
+      dhlTeam: t,
+      startingWeekIsHeavy: preset.startsHeavy,
+      // Apply preset defaults only for standard fields not yet wizard-confirmed
+      shiftHours:         d.shiftHours,
+      otThreshold:        d.otThreshold,
+      otMultiplier:       d.otMultiplier,
+      scheduleIsVariable: d.scheduleIsVariable,
+      payPeriodEndDay:    d.payPeriodEndDay,
+      bucketStartBalance: d.bucketStartBalance,
+      bucketCap:          d.bucketCap,
+      bucketPayoutRate:   d.bucketPayoutRate,
+    });
+  }
+
+  const firstWeekLabel = team
+    ? (DHL_PRESET.teams[team].startsHeavy
+        ? `${DHL_PRESET.rotation.heavy.label} (your first active week)`
+        : `${DHL_PRESET.rotation.light.label} (your first active week)`)
+    : null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
+      {/* ── Team A / B ── */}
+      <Field label="Which DHL team are you on?">
+        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+          <Pill label="Team A" active={team === "A"} onClick={() => pickTeam("A")} />
+          <Pill label="Team B" active={team === "B"} onClick={() => pickTeam("B")} />
+        </div>
+        {firstWeekLabel && (
+          <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+            {firstWeekLabel}. Teams alternate every week — while A works their 3-day, B works their 4-day.
+          </div>
+        )}
+        {!team && (
+          <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+            Team A starts on a light week (Mon / Thu / Fri). Team B starts on a heavy week (Tue / Wed / Sat / Sun).
+          </div>
+        )}
+      </Field>
+
+      {/* ── Standard vs custom rotation ── */}
+      <Field label="Do you follow the standard DHL rotation?">
+        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+          <Pill
+            label="Standard rotation"
+            active={!isCustom}
+            onClick={() => onChange({ dhlCustomSchedule: false })}
+          />
+          <Pill
+            label="I have a custom schedule"
+            active={isCustom}
+            onClick={() => onChange({ dhlCustomSchedule: true })}
+          />
+        </div>
+        <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+          {isCustom
+            ? "Custom: your starting week direction is set manually. You can adjust it in the Schedule step."
+            : "Standard: days locked to the DHL rotation preset. Override per-week from the income panel if you pick up extra shifts."}
+        </div>
+      </Field>
+
+      {/* ── Night shift vs morning shift ── */}
+      <Field label="Which shift do you work?">
+        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+          <Pill
+            label="Night shift (+diff)"
+            active={isNight}
+            onClick={() => onChange({ dhlNightShift: true })}
+          />
+          <Pill
+            label="Morning shift"
+            active={!isNight}
+            onClick={() => onChange({ dhlNightShift: false })}
+          />
+        </div>
+        <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+          Night shift earns the {formData.diffRate ? `$${Number(formData.diffRate).toFixed(2)}/hr` : "shift"} differential on weekend hours.
+          Morning shift earns base rate only — same tax rates apply either way.
+        </div>
+      </Field>
+
+      {/* ── OT preference (non-blocking) ── */}
+      <Field label="Where do you typically take your required OT shift?">
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "6px" }}>
+          <Pill
+            label="Weekday only"
+            active={formData.dhlOtOnWeekend === false}
+            onClick={() => onChange({ dhlOtOnWeekend: false })}
+          />
+          <Pill
+            label="Sometimes weekend (Sat / Sun)"
+            active={formData.dhlOtOnWeekend === true}
+            onClick={() => onChange({ dhlOtOnWeekend: true })}
+          />
+        </div>
+        <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+          Weekend OT on a light week earns the shift differential. Weekday OT never does.
+          This affects your light-week gross estimate.
+        </div>
+      </Field>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STEP 7 — Paycheck Buffer
 //
 // Shows a live net-per-check preview assembled from formData collected so far.
@@ -1580,7 +1705,8 @@ const STEP_DEFS = [
   {
     id: 15, title: "DHL Team Setup", sprint: "3k",
     showIf: (d) => d.employerPreset === "DHL",
-    isValid: () => true, // TODO 3k: d.dhlTeam !== null
+    isValid: (d) => d.dhlTeam !== null,
+    component: Step15,
   },
   {
     id: 2, title: "Schedule", sprint: "3d",

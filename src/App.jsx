@@ -367,7 +367,7 @@ export default function App() {
         today={today}
       />}
       {currentView === "benefits" && <BenefitsPanel
-        allWeeks={allWeeks} config={config}
+        allWeeks={allWeeks} config={config} isDHL={isDHL}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
         logK401kGained={logTotals.k401kGained}
@@ -377,7 +377,7 @@ export default function App() {
         bucketModel={bucketModel}
       />}
       {currentView === "log" && <LogPanel
-        logs={logs} setLogs={setLogs} config={config}
+        logs={logs} setLogs={setLogs} config={config} isDHL={isDHL}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}

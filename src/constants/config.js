@@ -17,6 +17,8 @@ export const DEFAULT_CONFIG = {
   // "A" | "B" = standard preset; startingWeekIsHeavy auto-derived from DHL_PRESET.teams[dhlTeam]
   dhlTeam: null,               // "A" | "B" | null
   dhlOtOnWeekend: false,       // true = mandatory OT day is typically Sat/Sun on 3-day weeks (adds diffRate)
+  dhlCustomSchedule: false,    // false = use DHL_PRESET.rotation days; true = custom/hardcoded arrays (Anthony)
+  dhlNightShift: true,         // true = earn diffRate on weekend shifts; false = morning shift (no diff)
 
   // ── Schedule type (non-DHL users) ───────────────────────────
   scheduleIsVariable: false,   // true = pay varies week-to-week (two paystub calculators)

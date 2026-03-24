@@ -7,6 +7,9 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
   "bucketPayoutRate": 9.825,
   "bucketStartBalance": 64,
   "diffRate": 3,
+  "employerPreset": null,
+  "fedRateHigh": 0.1283,
+  "fedRateLow": 0.0784,
   "fedStdDeduction": 15000,
   "ficaRate": 0.0765,
   "firstActiveIdx": 7,
@@ -18,8 +21,16 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
   "otMultiplier": 1.5,
   "otThreshold": 40,
   "payPeriodEndDay": 0,
+  "paycheckBuffer": 50,
+  "scheduleIsVariable": false,
+  "setupComplete": false,
   "shiftHours": 12,
+  "standardWeeklyHours": 40,
+  "startingWeekIsHeavy": null,
+  "stateRateHigh": 0.04,
+  "stateRateLow": 0.0338,
   "targetOwedAtFiling": 1000,
+  "taxExemptOptIn": false,
   "taxedWeeks": [
     7,
     8,
@@ -44,6 +55,7 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
     51,
     52,
   ],
+  "userState": "MO",
   "w1FedRate": 0.0784,
   "w1StateRate": 0.0338,
   "w2FedRate": 0.1283,
@@ -278,7 +290,7 @@ exports[`INITIAL_EXPENSES > matches snapshot 1`] = `
 exports[`INITIAL_GOALS > matches snapshot 1`] = `
 [
   {
-    "color": "#e8856a",
+    "color": "var(--color-red)",
     "completed": false,
     "id": "g1",
     "label": "Tickets & Fines",
@@ -318,7 +330,7 @@ exports[`INITIAL_GOALS > matches snapshot 1`] = `
     "target": 300,
   },
   {
-    "color": "#6dbf8a",
+    "color": "var(--color-green)",
     "completed": false,
     "id": "g6",
     "label": "Furniture & Equipment",
@@ -326,7 +338,7 @@ exports[`INITIAL_GOALS > matches snapshot 1`] = `
     "target": 500,
   },
   {
-    "color": "#c8a84b",
+    "color": "var(--color-gold)",
     "completed": false,
     "id": "g7",
     "label": "FHA Down Payment",

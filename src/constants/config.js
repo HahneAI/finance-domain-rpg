@@ -39,6 +39,14 @@ export const DEFAULT_CONFIG = {
   fsaWeekly: 0,       // FSA contribution per week
   // 401(k) — rate fields + start date
   k401Rate: 0.06, k401MatchRate: 0.05, k401StartDate: "2026-05-15",
+  // Benefits start date — when health/dental/vision coverage activates
+  benefitsStartDate: null,        // "YYYY-MM-DD" | null = already active / not enrolled
+  // Other recurring deductions not covered by preset benefit fields
+  // Array of { id, label, weeklyAmount } — user-defined, add/remove from wizard
+  otherDeductions: [],
+  // Attendance policy — whether employer uses a formal points/hours-based system
+  // null = not yet answered (wizard gate); true = bucket model active; false = log-only
+  attendanceBucketEnabled: null,  // DHL users: always null (bucket handled separately)
 
   // ── Schedule ─────────────────────────────────────────────────
   startDate: null,             // "YYYY-MM-DD" job start — used to derive firstActiveIdx; null = not yet set

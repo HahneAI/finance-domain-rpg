@@ -1086,6 +1086,134 @@ function Step5({ formData }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STEP 6 — Other Deductions & Attendance
+//
+// Remaining pieces after Step 3 already captured preset benefits:
+//   1. Benefits start date — when health/dental/vision activates
+//   2. Other deductions — freeform repeatable label + weekly amount rows
+//   3. Attendance gate — points/hours system? Skipped for DHL.
+// ─────────────────────────────────────────────────────────────────────────────
+function Step6({ formData, onChange }) {
+  const isDHL = formData.employerPreset === "DHL";
+  const others = formData.otherDeductions ?? [];
+
+  function addRow() {
+    const id = Date.now().toString(36);
+    onChange({ otherDeductions: [...others, { id, label: "", weeklyAmount: 0 }] });
+  }
+
+  function updateRow(id, patch) {
+    onChange({
+      otherDeductions: others.map(r => r.id === id ? { ...r, ...patch } : r),
+    });
+  }
+
+  function removeRow(id) {
+    onChange({ otherDeductions: others.filter(r => r.id !== id) });
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
+      {/* ── Benefits start date ── */}
+      <Field label="Benefits Start Date">
+        <input
+          {...iS} style={{ ...iS }}
+          type="date"
+          value={formData.benefitsStartDate ?? ""}
+          onChange={e => onChange({ benefitsStartDate: e.target.value || null })}
+        />
+        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+          When your health, dental, and vision coverage activates. Leave blank if already active or not enrolled.
+        </div>
+      </Field>
+
+      {/* ── Other recurring deductions ── */}
+      <div>
+        <label style={lS}>Other Recurring Deductions</label>
+        <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
+          {others.length === 0 && (
+            <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", padding: "8px 0" }}>
+              No additional deductions. Add rows for anything not covered above — union dues, parking, equipment, etc.
+            </div>
+          )}
+          {others.map(row => (
+            <div key={row.id} style={{
+              display: "grid", gridTemplateColumns: "1fr 120px 32px",
+              gap: "8px", alignItems: "center",
+            }}>
+              <input
+                {...iS} style={{ ...iS }}
+                type="text"
+                placeholder="Label (e.g. Union Dues)"
+                value={row.label}
+                onChange={e => updateRow(row.id, { label: e.target.value })}
+              />
+              <input
+                {...iS} style={{ ...iS }}
+                type="number" min="0" step="0.01"
+                placeholder="$/wk"
+                value={row.weeklyAmount || ""}
+                onChange={e => updateRow(row.id, { weeklyAmount: parseFloat(e.target.value) || 0 })}
+              />
+              <button
+                onClick={() => removeRow(row.id)}
+                style={{
+                  background: "transparent",
+                  color: "var(--color-text-disabled)",
+                  border: "1px solid var(--color-border-subtle)",
+                  borderRadius: "8px", width: "32px", height: "36px",
+                  cursor: "pointer", fontSize: "14px", lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={addRow}
+            style={{
+              background: "transparent", color: "var(--color-text-secondary)",
+              border: "1px solid var(--color-border-subtle)", borderRadius: "10px",
+              padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+              textTransform: "uppercase", cursor: "pointer", alignSelf: "flex-start",
+            }}
+          >
+            + Add Deduction
+          </button>
+        </div>
+      </div>
+
+      {/* ── Attendance policy gate — standard users only ── */}
+      {!isDHL && (
+        <Field label="Does your employer track attendance with a formal policy?">
+          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", marginBottom: "10px", lineHeight: "1.5" }}>
+            Points systems, hours-based buckets, or similar. Not just "you can call out."
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Pill
+              label="Yes — points or hours system"
+              active={formData.attendanceBucketEnabled === true}
+              onClick={() => onChange({ attendanceBucketEnabled: true })}
+            />
+            <Pill
+              label="No — standard time off"
+              active={formData.attendanceBucketEnabled === false}
+              onClick={() => onChange({ attendanceBucketEnabled: false })}
+            />
+          </div>
+          {formData.attendanceBucketEnabled === true && (
+            <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+              Bucket tracking enabled. You can configure intake rates and caps from the app after setup.
+            </div>
+          )}
+        </Field>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STEP DEFINITIONS
 //
 // showIf(formData, lifeEvent) → bool — controls which steps appear per life event
@@ -1141,9 +1269,11 @@ const STEP_DEFS = [
     component: Step5,
   },
   {
-    id: 6, title: "Benefits Capture", sprint: "3h",
+    id: 6, title: "Other Deductions", sprint: "3h",
     showIf: (_, ev) => ev === null || ev === "changed_jobs",
-    isValid: () => true,
+    isValid: (d) => d.employerPreset === "DHL" || d.attendanceBucketEnabled !== null,
+    skippable: true,
+    component: Step6,
   },
   {
     id: 7, title: "Paycheck Buffer", sprint: "3i",

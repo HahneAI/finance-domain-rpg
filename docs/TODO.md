@@ -98,10 +98,11 @@
 - [x] Read-only state summary: hidden for NONE states, effective-rate note for PROGRESSIVE
 - [x] "est." callout when `taxRatesEstimated` — points user to Sharpen Rates in Income panel
 
-#### Sub-sprint 3h — Step 6: Benefits Capture
-- [ ] Health insurance deduction + benefits start date inputs
-- [ ] Repeatable other-deductions field (label + amount, add/remove rows)
-- [ ] Attendance policy gate at bottom — skipped if `employerPreset === "DHL"`
+#### Sub-sprint 3h — Step 6: Other Deductions *(scoped down — preset benefits already in Step 3)*
+- [x] Benefits start date — when health/dental/vision coverage activates
+- [x] Repeatable other-deductions field — freeform label + weekly amount, add/remove rows; stored as `otherDeductions: [{id, label, weeklyAmount}]`
+- [x] Attendance policy gate — standard users only; DHL skipped; `attendanceBucketEnabled: true|false|null`
+- [x] `isValid`: DHL always passes; standard users must answer attendance pill (skippable)
 
 #### Sub-sprint 3i — Step 7: Paycheck Buffer
 - [ ] Live net-per-check preview computed from `formData` accumulated so far

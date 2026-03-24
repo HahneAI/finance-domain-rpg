@@ -1,3 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Backgrounds ── */
+  --color-bg-base:    #0a0a0a;
+  --color-bg-surface: #111814;
+  --color-bg-raised:  #1a2118;
+
+  /* ── Gold ── */
+  --color-gold:        #c9a84c;
+  --color-gold-muted:  #8a6e2f;
+  --color-gold-bright: #f0c040;
+
+  /* ── Green ── */
+  --color-green:       #4caf7d;
+  --color-green-muted: #2d6b4a;
+
+  /* ── Red ── */
+  --color-red:         #e05c5c;
+  --color-red-muted:   #7a2d2d;
+
+  /* ── Text ── */
+  --color-text-primary:   #f0ede6;
+  --color-text-secondary: #8a9080;
+  --color-text-disabled:  #444c40;
+
+  /* ── Borders ── */
+  --color-border-subtle: #1e2b1e;
+  --color-border-accent: rgba(201,168,76,0.2);
+
+  /* ── Fonts ── */
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-sans:    'DM Sans', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Courier New', monospace;
+}
+
 :root {
   --text: #6b6375;
   --text-h: #08060d;
@@ -53,6 +89,8 @@
 html, body {
   margin: 0;
   background: #0d0d0d;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: #f0ede6;
   /* DEBUG: overflow-x hidden is the primary iOS horizontal scroll kill-switch.
      If horizontal scroll returns, check this is NOT being overridden by a child
      element using position:fixed or transform — those create new stacking contexts
@@ -146,4 +184,18 @@ code {
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
+}
+
+/* Data tables — JetBrains Mono per spec (only place monospace is allowed) */
+.data-table,
+.data-table td,
+.data-table th {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+/* ── Tile entrance: fade + 8px lift, 0.4s ease-out, fill-both so card is
+   invisible before delay fires (prevents flash of unstyled content). ── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
 }

@@ -7,12 +7,62 @@ import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { BenefitsPanel } from "./components/BenefitsPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
+import { HomePanel } from "./components/HomePanel.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
   { key: "budget",   label: "Budget" },
   { key: "benefits", label: "Benefits" },
   { key: "log",      label: "Log" },
+];
+
+// Bottom nav items with SVG icons — Chime-style icon+label layout
+const BOTTOM_NAV = [
+  {
+    key: "home",
+    label: "Home",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+    ),
+  },
+  {
+    key: "income",
+    label: "Income",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M5 20h2v-8H5v8zm4 0h2V4H9v16zm4 0h2v-4h-2v4zm4 0h2v-12h-2v12z"/>
+      </svg>
+    ),
+  },
+  {
+    key: "budget",
+    label: "Budget",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+      </svg>
+    ),
+  },
+  {
+    key: "benefits",
+    label: "Benefits",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+      </svg>
+    ),
+  },
+  {
+    key: "log",
+    label: "Log",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+      </svg>
+    ),
+  },
 ];
 
 function SidebarNavItem({ item, active, onClick }) {
@@ -27,9 +77,9 @@ function SidebarNavItem({ item, active, onClick }) {
         fontSize: "11px",
         letterSpacing: "2px",
         textTransform: "uppercase",
-        fontFamily: "'Courier New',monospace",
-        background: active ? "#1a1a1a" : "transparent",
-        color: active ? "#c8a84b" : "#888",
+       
+        background: active ? "var(--color-bg-surface)" : "transparent",
+        color: active ? "var(--color-gold)" : "#888",
         borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
         border: "none",
         cursor: "pointer",
@@ -48,7 +98,9 @@ export default function App() {
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
   const [goals, setGoals] = useState(INITIAL_GOALS);
-  const [topNav, setTopNav] = useState("income");
+  // viewStack: push on navigate, pop on back. Last item = current view.
+  // "home" is always the base — never popped below depth 1.
+  const [viewStack, setViewStack] = useState(["home"]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Persisted to Supabase week_confirmations JSONB column.
   // Shape: { [weekIdx]: { confirmedAt, dayToggles, scheduledDays, missedScheduledDays,
@@ -56,8 +108,25 @@ export default function App() {
   // Keyed by weekIdx (number) so lookup is O(1) in confirmTriggerWeek.
   const [weekConfirmations, setWeekConfirmations] = useState({});
 
+  const currentView = viewStack[viewStack.length - 1];
+  const canGoBack = viewStack.length > 1;
+
+  // Push a panel onto the stack (used by tiles and within-panel navigation)
   const navigate = (key) => {
-    setTopNav(key);
+    setViewStack(prev => [...prev, key]);
+    setDrawerOpen(false);
+  };
+
+  // Pop back one level (back arrow)
+  const navigateBack = () => {
+    setViewStack(prev => prev.length > 1 ? prev.slice(0, -1) : prev);
+    setDrawerOpen(false);
+  };
+
+  // Direct jump: always lands as ["home", key] — used by sidebar/drawer/bottom-nav
+  // so switching panels never nests indefinitely.
+  const navigateDirect = (key) => {
+    setViewStack(key === "home" ? ["home"] : ["home", key]);
     setDrawerOpen(false);
   };
 
@@ -241,8 +310,8 @@ export default function App() {
 
   if (loading) {
     return (
-      <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d",
-        minHeight: "100vh", color: "#c8a84b", display: "flex",
+      <div style={{ background: "var(--color-bg-base)",
+        minHeight: "100vh", color: "var(--color-gold)", display: "flex",
         alignItems: "center", justifyContent: "center", fontSize: "14px",
         letterSpacing: "4px" }}>
         LOADING...
@@ -252,7 +321,17 @@ export default function App() {
 
   const activePanel = (
     <>
-      {topNav === "income" && <IncomePanel
+      {currentView === "home" && <HomePanel
+        navigate={navigate}
+        weeklyIncome={weeklyIncome}
+        adjustedTakeHome={logTotals.adjustedTakeHome}
+        adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
+        remainingSpend={remainingSpend}
+        goals={goals}
+        futureWeekNets={futureWeekNets}
+        currentWeek={currentWeek}
+      />}
+      {currentView === "income" && <IncomePanel
         allWeeks={allWeeks} config={config} setConfig={setConfig}
         showExtra={showExtra} setShowExtra={setShowExtra}
         taxDerived={taxDerived}
@@ -262,7 +341,7 @@ export default function App() {
         projectedAnnualNet={projectedAnnualNet}
         currentWeek={currentWeek}
       />}
-      {topNav === "budget" && <BudgetPanel
+      {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
         goals={goals} setGoals={setGoals}
         adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
@@ -276,7 +355,7 @@ export default function App() {
         currentWeek={currentWeek}
         today={today}
       />}
-      {topNav === "benefits" && <BenefitsPanel
+      {currentView === "benefits" && <BenefitsPanel
         allWeeks={allWeeks} config={config}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
@@ -286,7 +365,7 @@ export default function App() {
         currentWeek={currentWeek}
         bucketModel={bucketModel}
       />}
-      {topNav === "log" && <LogPanel
+      {currentView === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
@@ -300,7 +379,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ fontFamily: "'Courier New',monospace", background: "#0d0d0d", minHeight: "100vh", color: "#e8e0d0", display: "flex" }}>
+    <div style={{ background: "var(--color-bg-base)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
       <style>{`
         /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
            but injecting it here as well catches any future SSR or shadow-DOM edge
@@ -321,12 +400,10 @@ export default function App() {
           .sidebar { display: none !important; }
           .mobile-header { display: flex !important; }
           .mobile-bottom-nav { display: flex !important; }
-          /* DEBUG SAFE AREA: padding-bottom = nav height (62px) + home indicator.
-             On iPhone 17 home indicator adds ~34px. If content is cut off at the
-             bottom, this calc is the first place to check. The 62px = 56px nav +
-             ~6px visual buffer. Increase if bottom content feels too close to nav. */
+          /* Bottom nav is always visible on mobile (including home screen), so
+             content needs padding to clear the nav bar on all views. */
           .main-content {
-            padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px)) !important;
+            padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
           }
         }
         @media (min-width: 768px) {
@@ -372,7 +449,7 @@ export default function App() {
         style={{
           width: "190px",
           minWidth: "190px",
-          background: "#111",
+          background: "var(--color-bg-surface)",
           borderRight: "1px solid #222",
           position: "sticky",
           top: 0,
@@ -383,20 +460,21 @@ export default function App() {
         }}
       >
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #222" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "4px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
+          <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
           <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
-          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
+          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
-            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", fontFamily: "'Courier New',monospace", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
+            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-red)", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
               ◷ {unconfirmedCount} {unconfirmedCount === 1 ? "week" : "weeks"} to confirm
             </button>
           )}
         </div>
         <nav style={{ marginTop: "8px", flex: 1 }}>
+          <SidebarNavItem item={{ key: "home", label: "Home" }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
           {NAV_ITEMS.map(item => (
-            <SidebarNavItem key={item.key} item={item} active={topNav === item.key} onClick={() => navigate(item.key)} />
+            <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
         </nav>
       </div>
@@ -414,7 +492,7 @@ export default function App() {
             paddingRight: "max(16px, env(safe-area-inset-right, 16px))",
             height: "calc(56px + env(safe-area-inset-top, 0px))",
             paddingTop: "env(safe-area-inset-top, 0px)",
-            background: "#0d0d0d",
+            background: "var(--color-bg-base)",
             position: "sticky",
             top: 0,
             zIndex: 30,
@@ -423,43 +501,80 @@ export default function App() {
             justifyContent: "space-between",
           }}
         >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase" }}>DHL / P&G — Jackson MO</div>
-              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "#6dbf8a", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
-            </div>
-            <div style={{ fontSize: "16px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
-          </div>
-          {/* Unconfirmed weeks badge (mobile) — clears dismiss so modal re-opens */}
-          {unconfirmedCount > 0 && (
-            <button onClick={() => setConfirmDismissed(false)} style={{ background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "#e8856a", padding: "4px 9px", fontSize: "9px", letterSpacing: "1.5px", fontFamily: "'Courier New',monospace", cursor: "pointer", textTransform: "uppercase", flexShrink: 0, marginLeft: "8px" }}>
-              ◷ {unconfirmedCount}
-            </button>
-          )}
-          {/* Hamburger button */}
+            {/* ── Hamburger — top LEFT (Chime-style) ── */}
           <button
             onClick={() => setDrawerOpen(true)}
             style={{
               background: "transparent",
-              border: "1px solid #333",
-              borderRadius: "4px",
-              color: "#c8a84b",
+              border: "none",
+              color: "var(--color-gold)",
               cursor: "pointer",
               width: "44px",
-              height: "38px",
+              height: "44px",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               gap: "5px",
               flexShrink: 0,
-              marginLeft: "12px",
             }}
             aria-label="Open navigation"
           >
-            <span style={{ display: "block", width: "18px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
-            <span style={{ display: "block", width: "18px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
-            <span style={{ display: "block", width: "18px", height: "2px", background: "#c8a84b", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-gold)", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-gold)", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-gold)", borderRadius: "1px" }} />
+          </button>
+
+          {/* ── Title block — center ── */}
+          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>DHL / P&G</div>
+              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+            </div>
+            <div style={{ fontSize: "14px", fontWeight: "bold" }}>Finance Dashboard</div>
+          </div>
+
+          {/* ── Notification bell — top RIGHT (Chime-style) ── */}
+          <button
+            onClick={() => setConfirmDismissed(false)}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: unconfirmedCount > 0 ? "var(--color-red)" : "#555",
+              cursor: "pointer",
+              width: "44px",
+              height: "44px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              position: "relative",
+            }}
+            aria-label={unconfirmedCount > 0 ? `${unconfirmedCount} weeks to confirm` : "Notifications"}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+            </svg>
+            {unconfirmedCount > 0 && (
+              <span style={{
+                position: "absolute",
+                top: "6px",
+                right: "6px",
+                background: "var(--color-red)",
+                color: "var(--color-bg-base)",
+                borderRadius: "50%",
+                width: "16px",
+                height: "16px",
+                fontSize: "9px",
+                fontWeight: "bold",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+               
+              }}>
+                {unconfirmedCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -490,7 +605,7 @@ export default function App() {
           left: 0,
           width: "260px",
           height: "100dvh",
-          background: "#111",
+          background: "var(--color-bg-surface)",
           borderRight: "1px solid #2a2a2a",
           zIndex: 50,
           display: "flex",
@@ -500,7 +615,7 @@ export default function App() {
         {/* Drawer header */}
         <div style={{ padding: "16px 18px", borderBottom: "1px solid #222", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
-            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "#c8a84b", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G — Jackson MO</div>
+            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G — Jackson MO</div>
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
           </div>
           <button
@@ -514,18 +629,19 @@ export default function App() {
 
         {/* Drawer nav items */}
         <nav style={{ marginTop: "12px", flex: 1 }}>
+          <SidebarNavItem item={{ key: "home", label: "Home" }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
           {NAV_ITEMS.map(item => (
-            <SidebarNavItem key={item.key} item={item} active={topNav === item.key} onClick={() => navigate(item.key)} />
+            <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
         </nav>
 
         {/* Active section indicator at bottom */}
         <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: "10px", color: "#555", letterSpacing: "1px", textTransform: "uppercase" }}>
-          Viewing: <span style={{ color: "#c8a84b" }}>{topNav}</span>
+          Viewing: <span style={{ color: "var(--color-gold)" }}>{currentView}</span>
         </div>
       </div>
 
-      {/* ── Mobile bottom nav ── */}
+      {/* ── Mobile bottom nav — Chime-style, always visible, icon + label ── */}
       <div
         className="mobile-bottom-nav"
         style={{
@@ -534,35 +650,65 @@ export default function App() {
           bottom: 0,
           left: 0,
           right: 0,
-          height: "calc(56px + env(safe-area-inset-bottom, 0px))",
+          height: "calc(62px + env(safe-area-inset-bottom, 0px))",
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
-          background: "#151515",
-          borderTop: "1px solid #2e2e2e",
-          boxShadow: "0 -4px 20px rgba(0,0,0,0.85)",
+          background: "var(--color-bg-surface)",
+          borderTop: "1px solid #222",
+          boxShadow: "0 -4px 24px rgba(0,0,0,0.9)",
           zIndex: 20,
+          // fixed creates a containing block — the absolute-positioned indicator
+          // is anchored to this bar, not the viewport.
         }}
       >
-        {NAV_ITEMS.map(item => (
-          <button
-            key={item.key}
-            onClick={() => navigate(item.key)}
-            style={{
-              flex: 1,
-              height: "100%",
-              background: "transparent",
-              border: "none",
-              borderTop: topNav === item.key ? "2px solid #c8a84b" : "2px solid transparent",
-              color: topNav === item.key ? "#c8a84b" : "#999",
-              fontSize: "11px",
-              letterSpacing: "1.5px",
-              textTransform: "uppercase",
-              fontFamily: "'Courier New',monospace",
-              cursor: "pointer",
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
+        {/* Sliding tab indicator — 2px gold bar that moves to the active tab.
+            All tabs are flex:1 so each occupies 100%/n of the nav width.
+            We slide via `left` + CSS transition (no layout thrash; tab count is static). */}
+        {(() => {
+          const activeIdx = Math.max(BOTTOM_NAV.findIndex(i => i.key === currentView), 0);
+          const pct = 100 / BOTTOM_NAV.length;
+          return (
+            <div style={{
+              position: "absolute",
+              top: 0,
+              left: `${activeIdx * pct}%`,
+              width: `${pct}%`,
+              height: "2px",
+              background: "var(--color-gold)",
+              transition: "left 0.3s ease",
+              borderRadius: "0 0 1px 1px",
+            }} />
+          );
+        })()}
+        {BOTTOM_NAV.map(item => {
+          const active = currentView === item.key;
+          return (
+            <button
+              key={item.key}
+              onClick={() => navigateDirect(item.key)}
+              style={{
+                flex: 1,
+                height: "100%",
+                background: "transparent",
+                border: "none",
+                color: active ? "var(--color-gold)" : "#555",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "3px",
+                fontSize: "9px",
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+                paddingTop: "2px",
+                transition: "color 0.2s ease",
+              }}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Weekly work confirmation modal ──

@@ -45,19 +45,37 @@
 
 ## 4. Setup Wizard
 
-- [ ] **Setup Wizard** — onboard new / demo users by capturing all income-affecting variables:
-  - [ ] Rigid vs. flexible schedule detection (live logging of worked days if non-set schedule)
-  - [ ] Paycheck buffer — enforce a $50/check minimum safety buffer for uncalculated expenses
-  - [ ] Benefits tab — capture if/when benefits kick in: health insurance, 401k enrollment date and match rate, LTD/STD, and any other deductions so the income engine reflects the correct net from day one
-  - [ ] Tax exemption disclaimer — small "Advanced" text link near any tax withholding / exemption inputs that opens a modal with a professional, warm warning: adjusting exempt status carries personal tax liability risk, Life RPG is a planning tool only and is not responsible for tax outcomes. Tone: informative and caring, not cold legal-speak "Heads up — adjusting your withholding or exemption status can affect how much you owe at tax time. Life RPG helps you plan and visualize your finances, but we're not a tax advisor. If you're unsure, a quick chat with a CPA before changing your W-4 can save you a headache come April. You've got this — just go in informed."
-  - [ ] **Tax exempt mode gate** — the Tax Schedule tab, per-week taxed/exempt toggles, extra withholding toggle, and all related UI should be hidden behind an opt-in wall; user must read and accept the disclaimer warning before the controls unlock; acceptance persists in user state so they don't re-confirm every session; if not opted in, show a locked/blurred placeholder with the "Advanced" prompt to enable
-  - [ ] **Config onboarding wizard** — reverse-engineer all hardcoded config fields into guided setup steps grouped by section:
-    - [ ] **Pay Structure** — base hourly rate, shift length (hrs), weekend differential ($/hr), OT threshold (hrs/wk), OT multiplier
-    - [ ] **Schedule** — first active week index (when did/does the job start), pay rotation detection (Week 1 / Week 2 pattern)
-    - [ ] **Deductions** — LTD weekly amount, 401k employee contribution %, employer match %, 401k enrollment start date
-    - [ ] **Tax Rates** — Week 2 federal withholding rate, Week 2 MO state rate, Week 1 federal rate, Week 1 MO state rate, FICA rate (default 7.65%, rarely changes)
-    - [ ] **Annual Tax Strategy** — federal standard deduction, MO flat rate, target amount owed at filing
-    - [ ] Each section should explain in plain English what the field affects and where to find the value (e.g. "check your paystub" or "your offer letter")
+> **Full spec and step-by-step build order:** `docs/setup-wizard-plan.md`
+> **Field-by-field decisions:** `docs/setup-wizard-field-notes.md`
+
+### Phase 1 — Foundation
+- [ ] `config.js` — add wizard fields (`setupComplete`, `taxExemptOptIn`, `paycheckBuffer`, `employerPreset`, `startingWeekIsHeavy`, `scheduleIsVariable`, `userState`, `standardWeeklyHours`) and generalized rate fields (`fedRateLow/High`, `stateRateLow/High`); keep legacy `w1/w2` rate fields for backward compat during transition
+- [ ] `db.js` — fix config merge strategy (`{ ...DEFAULT_CONFIG, ...data.config }` so new fields reach existing rows); add Anthony pre-wizard migration block (detects pre-wizard rows by absence of `setupComplete`; sets `employerPreset: "DHL"`, copies w1/w2 rates to new field names, marks `setupComplete: true` so Anthony never sees the wizard)
+
+### Phase 2 — finance.js + State Tax Table
+- [ ] `finance.js` — decouple `buildYear()` rotation logic from hardcoded strings; use `employerPreset` + `startingWeekIsHeavy`; update `computeNet()` to use `fedRateLow/High` with `w1/w2` fallback
+- [ ] `stateTaxTable.js` — create 50-state table (NONE / FLAT / PROGRESSIVE models)
+- [ ] `finance.js` — add `stateTax(income, stateConfig)` function
+- [ ] `App.jsx` — replace `moFlatRate` hardcode with `stateTax()` lookup
+
+### Phase 3 — SetupWizard component
+- [ ] `SetupWizard.jsx` — create; scaffold step router, Back/Next nav, progress indicator, `onComplete` writes `taxedWeeks` + `setupComplete: true`
+- [ ] Steps 0–8 implemented in order (see `docs/setup-wizard-plan.md` Build Order for per-step sitting breakdown)
+
+### Phase 4 — App.jsx integration
+- [ ] First-run gate: `if (!config.setupComplete)` → render `<SetupWizard />`
+- [ ] `handleWizardComplete` merges and saves config
+- [ ] Life Events sidebar item + dependency engine for re-entry
+
+### Phase 5 — Tax Exempt Gate
+- [ ] `IncomePanel.jsx` — implement all 3 gate options (A/B/C) behind flag; visual test; pick winner
+
+### Sprint: Attendance History View (All Users)
+- [ ] **Attendance history view** — log-based missed day tracking for all users:
+  - [ ] Pull `missed_unpaid`, `missed_unapproved`, `partial` entries from event log
+  - [ ] Show: missed days per month, running YTD total, day-of-week pattern breakdown
+  - [ ] Surface in LogPanel as collapsible "Attendance History" section
+  - [ ] No bucket math — pure event log history; bucket model output shown separately for users with attendance policy enabled
 
 ---
 
@@ -99,6 +117,27 @@
 
 ---
 
+## 6. Optional Deductions Mapping (Post-Setup Wizard)
+
+- [ ] **Itemized deductions module** — optional advanced setup for users who want more accurate year-end tax projections beyond the standard deduction assumption:
+  - [ ] Entry point: "Advanced" link shown on the Annual Tax Strategy step of the setup wizard, and accessible anytime from Settings
+  - [ ] **Above-the-line deductions** (reduce AGI directly):
+    - [ ] 401k traditional contributions (already tracked in config — auto-pull)
+    - [ ] HSA contributions (if applicable)
+    - [ ] Student loan interest paid
+    - [ ] IRA contributions
+  - [ ] **Itemized vs. standard toggle** — user selects which filing method they use; app compares their itemized total to the standard deduction and warns if standard is higher
+  - [ ] **Common itemized deductions** (if user chooses to itemize):
+    - [ ] Mortgage interest
+    - [ ] State + local taxes paid (SALT, capped at $10k)
+    - [ ] Charitable contributions
+    - [ ] Medical expenses exceeding 7.5% AGI threshold
+  - [ ] **Output:** revised projected AGI and federal tax liability fed back into the tax gap analysis in IncomePanel; "With your deductions, you're projected to owe X instead of Y"
+  - [ ] **Persistence:** deductions stored in user config alongside standard fields; wizard standard deduction assumption shown with a badge: "Standard" or "Itemized" indicating which mode is active
+  - [ ] **Disclaimer:** same tone as tax exempt gate — "This is a planning tool, not tax advice. Your actual liability depends on your full return. A CPA review before filing is always worth it."
+
+---
+
 ## Completed
 
 ### Event Log Rework
@@ -113,4 +152,4 @@
 
 ---
 
-*Last updated: 2026-03-19 — Sections 1, 2 & 3 complete*
+*Last updated: 2026-03-24 — Sections 1, 2 & 3 complete. Section 4 added: full Setup Wizard build plan (Phases 1–5). Section 6 added: optional itemized deductions module (post-wizard, post-launch scope).*

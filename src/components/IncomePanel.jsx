@@ -4,7 +4,7 @@ import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet } from "../lib/finance.js";
 import { Card, VT, SH, iS, lS } from "./ui.jsx";
 
-export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, logNetLost, logNetGained, adjustedTakeHome, projectedAnnualNet, currentWeek }) {
+export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, logNetLost, logNetGained, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin }) {
   const [view, setView] = useState("summary");
   const [subview, setSubview] = useState("overview");
   const [editCfg, setEditCfg] = useState(null);
@@ -234,7 +234,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
 
     {/* SUMMARY — subtabs */}
     {view === "summary" && <div style={{ display: "flex", gap: "6px", marginBottom: "18px", flexWrap: "wrap" }}>
-      {["overview", "monthly", "weekly", "tax schedule"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "#2a2318" : "transparent", color: subview === v ? "var(--color-gold)" : "#555", border: "1px solid " + (subview === v ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{v}</button>)}
+      {["overview", "monthly", "weekly", ...(isAdmin ? ["tax schedule"] : [])].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "#2a2318" : "transparent", color: subview === v ? "var(--color-gold)" : "#555", border: "1px solid " + (subview === v ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{v}</button>)}
     </div>}
 
     {/* OVERVIEW */}
@@ -325,8 +325,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       </table></div>
     </div>}
 
-    {/* TAX SCHEDULE — debt overview + per-week toggle */}
-    {view === "summary" && subview === "tax schedule" && <div>
+    {/* TAX SCHEDULE — debt overview + per-week toggle (admin only) */}
+    {isAdmin && view === "summary" && subview === "tax schedule" && <div>
       {/* Extra withholding quick-toggle */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", padding: "10px 14px", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
         <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flex: 1 }}>Apply extra withholding <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerCheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>

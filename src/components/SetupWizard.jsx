@@ -1310,8 +1310,8 @@ function Step15({ formData, onChange }) {
           />
         </div>
         <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
-          Night shift earns the {formData.diffRate ? `$${Number(formData.diffRate).toFixed(2)}/hr` : "shift"} differential on weekend hours.
-          Morning shift earns base rate only — same tax rates apply either way.
+          All shifts earn the {formData.diffRate ? `$${Number(formData.diffRate).toFixed(2)}/hr` : "shift"} weekend differential.
+          Night shift earns an additional night differential on top — tracked separately.
         </div>
       </Field>
 

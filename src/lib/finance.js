@@ -80,9 +80,9 @@ export function buildYear(cfg) {
 
     regularHours = Math.min(totalHours, cfg.otThreshold);
     overtimeHours = Math.max(totalHours - cfg.otThreshold, 0);
-    // Morning-shift DHL workers earn no shift differential (dhlNightShift=false zeroes diffRate).
-    const effectiveDiffRate = (isDHL && cfg.dhlNightShift === false) ? 0 : cfg.diffRate;
-    grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * effectiveDiffRate;
+    // Weekend diff is universal — earned by all shifts (morning and night).
+    // Night shift differential is a separate bonus tracked independently.
+    grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate;
 
     const active = idx >= cfg.firstActiveIdx;
     const has401k = active && weekEnd >= k401Start;

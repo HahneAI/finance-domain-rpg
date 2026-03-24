@@ -83,6 +83,8 @@ export async function loadUserData() {
     mergedConfig.employerPreset = "DHL";
     mergedConfig.startingWeekIsHeavy = true;
     mergedConfig.scheduleIsVariable = true;
+    mergedConfig.dhlTeam = "B";
+    mergedConfig.dhlCustomSchedule = true;
     // Promote legacy w1/w2 rate field names to the generalized names used by the wizard
     if (mergedConfig.fedRateLow === DEFAULT_CONFIG.fedRateLow) {
       mergedConfig.fedRateLow    = mergedConfig.w1FedRate   ?? DEFAULT_CONFIG.w1FedRate;

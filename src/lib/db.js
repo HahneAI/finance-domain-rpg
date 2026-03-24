@@ -79,9 +79,13 @@ export async function loadUserData() {
   // Fires once for any DHL user whose row pre-dates the setup wizard (setupComplete absent).
   // Sets the DHL employer preset, marks setupComplete, and promotes legacy rate field names.
   // Scoped to is_dhl === true so it never runs for standard or future multi-user accounts.
+  //
+  // startingWeekIsHeavy: false — verified against INITIAL_LOGS week 10 = "6-Day":
+  //   offset = ((10 - firstActiveIdx) % 2 + 2) % 2 = 1 → isHighWeek = !startingWeekIsHeavy
+  //   so !startingWeekIsHeavy must be true → startingWeekIsHeavy must be false.
   if (data.is_dhl && !mergedConfig.setupComplete) {
     mergedConfig.employerPreset = "DHL";
-    mergedConfig.startingWeekIsHeavy = true;
+    mergedConfig.startingWeekIsHeavy = false;   // corrected: false = odd-offset weeks are heavy
     mergedConfig.scheduleIsVariable = true;
     mergedConfig.dhlTeam = "B";
     mergedConfig.dhlCustomSchedule = true;
@@ -93,6 +97,14 @@ export async function loadUserData() {
       mergedConfig.stateRateHigh = mergedConfig.w2StateRate ?? DEFAULT_CONFIG.w2StateRate;
     }
     mergedConfig.setupComplete = true;
+  }
+
+  // ── One-time rotation correction ─────────────────────────────────────────────
+  // The initial migration incorrectly stamped startingWeekIsHeavy: true for B-team.
+  // For Anthony's custom schedule the offset math requires false (week 10 = 6-Day in logs).
+  // This fires on next load for any already-migrated row that still has the wrong value.
+  if (mergedConfig.dhlTeam === "B" && mergedConfig.dhlCustomSchedule === true && mergedConfig.startingWeekIsHeavy === true) {
+    mergedConfig.startingWeekIsHeavy = false;
   }
 
   return {

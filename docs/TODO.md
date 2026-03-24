@@ -110,6 +110,29 @@
 - [ ] Disclaimer text wired; accept writes `taxExemptOptIn: true`
 - [ ] Visual test all 3 options; delete losers before merging
 
+#### Sub-sprint 3k — DHL Employer Preset Tune *(post-wizard, DHL users only)*
+> Shown only when `employerPreset === "DHL"`. Positioned after Step 1 (Pay Structure), before Schedule.
+> Anthony's account is unaffected — his `dhlTeam === null` keeps `buildYear()` on the existing hardcoded day arrays.
+
+**Standard DHL rotation (2026 — rigid, full-year):**
+| Week type | Required days | Hours | Weekend shifts |
+|-----------|--------------|-------|----------------|
+| Light     | Mon / Thu / Fri | 36h (3 × 12h) | 0 |
+| Heavy     | Tue / Wed / Sat / Sun | 48h (4 × 12h) | 2 (Sat + Sun) |
+
+**Teams:** A-team starts on light; B-team starts on heavy. Both alternate every week — while A works their 3-day, B works their 4-day.
+
+**Required OT (DHL mandated — 1 extra 12h shift per week, worker picks off-day):**
+- Light week off-days: Tue / Wed / Sat / Sun — Sat/Sun OT earns `diffRate` (`dhlOtOnWeekend` flag)
+- Heavy week off-days: Mon / Thu / Fri — all weekdays, no diff ever applies
+
+**Wizard step tasks:**
+- [ ] A / B team pill → writes `dhlTeam`; auto-derives `startingWeekIsHeavy` from `DHL_PRESET.teams[dhlTeam].startsHeavy`; applies `DHL_PRESET.defaults` to formData
+- [ ] "Standard rotation" vs "I've picked up extra days" pill → custom path keeps existing `startingWeekIsHeavy` pill (Anthony's flow); standard path locks days to `DHL_PRESET.rotation`
+- [ ] OT day preference pill: "Weekday (no diff)" / "Sometimes weekend (Sat/Sun)" → `dhlOtOnWeekend: bool`
+- [ ] `isValid`: `d.dhlTeam !== null`
+- [ ] `buildYear()` update: when `dhlTeam !== null`, use `DHL_PRESET.rotation.light.days` / `.heavy.days` instead of hardcoded arrays; add `requiredOtShifts × otShiftHours` to total; apply `diffRate` to OT hours on light weeks if `dhlOtOnWeekend === true`
+
 ### Phase 4 — App.jsx integration
 - [ ] First-run gate: `if (!config.setupComplete)` → render `<SetupWizard />`
 - [ ] `handleWizardComplete` merges and saves config

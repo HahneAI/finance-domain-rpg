@@ -194,6 +194,7 @@ function Step1({ formData, onChange, lifeEvent }) {
             lineHeight: "1.5",
           }}>
             Rotation schedule, attendance bucket, and dual-rate logic auto-configured for DHL.
+            You'll pick your team (A or B) in the next step.
           </div>
         )}
       </Field>
@@ -461,6 +462,11 @@ const STEP_DEFS = [
     showIf: () => true,
     isValid: (d) => d.baseRate > 0 && d.shiftHours > 0,
     component: Step1,
+  },
+  {
+    id: 15, title: "DHL Team Setup", sprint: "3k",
+    showIf: (d) => d.employerPreset === "DHL",
+    isValid: () => true, // TODO 3k: d.dhlTeam !== null
   },
   {
     id: 2, title: "Schedule", sprint: "3d",

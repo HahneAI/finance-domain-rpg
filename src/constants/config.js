@@ -10,7 +10,12 @@ export const DEFAULT_CONFIG = {
 
   // ── Employer preset ─────────────────────────────────────────
   employerPreset: null,        // "DHL" | null — drives rotation, bucket, dual-rate logic
-  startingWeekIsHeavy: null,   // DHL only: true = first active week is 6-day (72hr)
+  startingWeekIsHeavy: null,   // DHL only: true = first active week is heavy; null = use dhlTeam to derive
+  // ── DHL team preset (standard rotation — not Anthony's custom schedule) ──
+  // null = Anthony's custom override (hardcoded day arrays in buildYear)
+  // "A" | "B" = standard preset; startingWeekIsHeavy auto-derived from DHL_PRESET.teams[dhlTeam]
+  dhlTeam: null,               // "A" | "B" | null
+  dhlOtOnWeekend: false,       // true = mandatory OT day is typically Sat/Sun on 3-day weeks (adds diffRate)
 
   // ── Schedule type (non-DHL users) ───────────────────────────
   scheduleIsVariable: false,   // true = pay varies week-to-week (two paystub calculators)
@@ -68,6 +73,60 @@ export const PTO_RATE = 19.65;
 export const WEEKS_REMAINING = 44;
 // Quarter end-of-period cutoff dates (Q1→Q2, Q2→Q3, Q3→Q4 boundaries)
 export const QUARTER_BOUNDARIES = ["2026-03-31", "2026-06-30", "2026-09-30"];
+
+// ─────────────────────────────────────────────────────────────
+// DHL EMPLOYER PRESET
+//
+// Describes the standard DHL 3-day / 4-day alternating rotation.
+// Anthony's account uses a CUSTOM override (4-day / 6-day) — his
+// dhlTeam === null, so buildYear() falls back to the hardcoded
+// day arrays that were there from the start. These constants are
+// used by the "DHL Employer Preset Tune" wizard step (sprint 3k)
+// for new standard DHL employees.
+//
+// Day index: 0=Sun  1=Mon  2=Tue  3=Wed  4=Thu  5=Fri  6=Sat
+// ─────────────────────────────────────────────────────────────
+export const DHL_PRESET = {
+  rotation: {
+    // Light week — 3 required shifts
+    light: {
+      days: [1, 4, 5],            // Mon, Thu, Fri
+      label: "3-Day (Mon / Thu / Fri)",
+      baseHours: 36,              // 3 × 12h
+      weekendShifts: 0,
+    },
+    // Heavy week — 4 required shifts
+    heavy: {
+      days: [2, 3, 6, 0],        // Tue, Wed, Sat, Sun
+      label: "4-Day (Tue / Wed / Sat / Sun)",
+      baseHours: 48,              // 4 × 12h
+      weekendShifts: 2,           // Sat + Sun earn diffRate
+    },
+  },
+  // While A-team works their light (3-day) week, B-team is on heavy (4-day).
+  // Team selection auto-derives startingWeekIsHeavy.
+  teams: {
+    A: { startsHeavy: false },   // A-team week 1 = light (Mon/Thu/Fri)
+    B: { startsHeavy: true  },   // B-team week 1 = heavy (Tue/Wed/Sat/Sun)
+  },
+  // DHL mandates 1 extra 12h shift per week (required OT).
+  // Worker picks any off-day for that week:
+  //   3-day off-days: Tue, Wed, Sat, Sun → Sat/Sun OT earns diffRate (dhlOtOnWeekend flag)
+  //   4-day off-days: Mon, Thu, Fri      → all weekdays, no diff ever applies
+  requiredOtShifts: 1,
+  otShiftHours: 12,
+  // Preset defaults — applied to formData on team selection in the wizard
+  defaults: {
+    shiftHours: 12,
+    otThreshold: 40,
+    otMultiplier: 1.5,
+    scheduleIsVariable: true,
+    payPeriodEndDay: 0,          // Sunday (end of pay period after last shift)
+    bucketStartBalance: 64,
+    bucketCap: 128,
+    bucketPayoutRate: 9.825,
+  },
+};
 
 export const FED_BRACKETS = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [Infinity, 0.24]];
 

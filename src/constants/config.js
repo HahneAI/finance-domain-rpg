@@ -24,6 +24,7 @@ export const DEFAULT_CONFIG = {
   ltd: 2.00, k401Rate: 0.06, k401MatchRate: 0.05, k401StartDate: "2026-05-15",
 
   // ── Schedule ─────────────────────────────────────────────────
+  startDate: null,             // "YYYY-MM-DD" job start — used to derive firstActiveIdx; null = not yet set
   firstActiveIdx: 7,
 
   // ── Tax rates — generalized (wizard-derived) ─────────────────

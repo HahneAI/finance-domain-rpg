@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { buildYear } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
+import { FISCAL_YEAR_START } from "../constants/config.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 0 — Welcome (first-run) / Life Event Select (re-entry)
@@ -330,6 +331,113 @@ function Step1({ formData, onChange, lifeEvent }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STEP 2 — Schedule
+// ─────────────────────────────────────────────────────────────────────────────
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// Derives the fiscal week index for a given date string "YYYY-MM-DD".
+// Week 0 ends on FISCAL_YEAR_START; each subsequent week is 7 days.
+// Returns the smallest idx such that that week's end >= the given date.
+function dateToWeekIdx(dateStr) {
+  const weekZeroEnd = new Date(FISCAL_YEAR_START + "T00:00:00");
+  const target      = new Date(dateStr       + "T00:00:00");
+  const diffDays    = (target - weekZeroEnd) / 86400000;
+  return Math.max(0, Math.ceil(diffDays / 7));
+}
+
+function Step2({ formData, onChange }) {
+  const isDHL = formData.employerPreset === "DHL";
+
+  function handleDateChange(dateStr) {
+    if (!dateStr) return;
+    onChange({ startDate: dateStr, firstActiveIdx: dateToWeekIdx(dateStr) });
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
+      {/* ── Job start date ── */}
+      <Field label="Job Start Date">
+        <input
+          {...iS}
+          style={{ ...iS }}
+          type="date"
+          value={formData.startDate ?? ""}
+          onChange={e => handleDateChange(e.target.value)}
+        />
+        {formData.startDate && (
+          <div style={{
+            marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)",
+          }}>
+            Income tracking starts week {formData.firstActiveIdx} of the fiscal year.
+          </div>
+        )}
+      </Field>
+
+      {/* ── Hours / rotation ── */}
+      {isDHL ? (
+        <Field label="Which week are you currently on?">
+          <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+            <Pill
+              label="4-Day week"
+              active={formData.startingWeekIsHeavy === false}
+              onClick={() => onChange({ startingWeekIsHeavy: false })}
+            />
+            <Pill
+              label="6-Day week"
+              active={formData.startingWeekIsHeavy === true}
+              onClick={() => onChange({ startingWeekIsHeavy: true })}
+            />
+          </div>
+          <div style={{
+            marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)",
+            lineHeight: "1.5",
+          }}>
+            This lets the app alternate light/heavy income correctly from your start date.
+          </div>
+        </Field>
+      ) : (
+        <Field label="Standard Weekly Hours">
+          <input
+            {...iS}
+            style={{ ...iS }}
+            type="number" min="1" step="0.5"
+            value={formData.standardWeeklyHours ?? ""}
+            onChange={e => onChange({ standardWeeklyHours: parseFloat(e.target.value) || 40 })}
+            placeholder="e.g. 40"
+          />
+          <div style={{
+            marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)",
+          }}>
+            Deviations from this are logged week-by-week from the dashboard.
+          </div>
+        </Field>
+      )}
+
+      {/* ── Pay period end day ── */}
+      <Field label="Pay Period Closes On">
+        <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+          {DAY_LABELS.map((d, i) => (
+            <Pill
+              key={i} label={d}
+              active={formData.payPeriodEndDay === i}
+              onClick={() => onChange({ payPeriodEndDay: i })}
+            />
+          ))}
+        </div>
+        <div style={{
+          marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)",
+          lineHeight: "1.5",
+        }}>
+          The app prompts you to confirm what you worked each week on this day.
+        </div>
+      </Field>
+
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STEP DEFINITIONS
 //
 // showIf(formData, lifeEvent) → bool — controls which steps appear per life event
@@ -357,7 +465,8 @@ const STEP_DEFS = [
   {
     id: 2, title: "Schedule", sprint: "3d",
     showIf: () => true,
-    isValid: () => true, // TODO 3d: d.firstActiveIdx != null
+    isValid: (d) => d.startDate != null,
+    component: Step2,
   },
   {
     id: 3, title: "Deductions", sprint: "3e",

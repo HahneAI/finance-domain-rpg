@@ -73,11 +73,11 @@
 - [x] Pay Structure fields: `baseRate`, `shiftHours`, `diffRate` (overnight/weekend pill multiselect with inline amount inputs), `otThreshold` pill, `otMultiplier` pill
 - [x] Commission toggle shown if `lifeEvent === "commission_job"`
 
-#### Sub-sprint 3d — Step 2: Schedule
-- [ ] Job start date picker → derives `firstActiveIdx` from `FISCAL_YEAR_START`
-- [ ] Standard path: weekly hours number input (`standardWeeklyHours`)
-- [ ] DHL path: 4-day / 6-day rotation pill → `startingWeekIsHeavy`
-- [ ] Pay period end day picker (0=Sun default)
+#### Sub-sprint 3d — Step 2: Schedule ✅
+- [x] Job start date picker → derives `firstActiveIdx` from `FISCAL_YEAR_START`
+- [x] Standard path: weekly hours number input (`standardWeeklyHours`)
+- [x] DHL path: 4-day / 6-day rotation pill → `startingWeekIsHeavy`
+- [x] Pay period end day picker (0=Sun default)
 
 #### Sub-sprint 3e — Step 3: Deductions
 - [ ] Benefits availability gate pill (enrolled / not yet / no benefits) — controls field visibility

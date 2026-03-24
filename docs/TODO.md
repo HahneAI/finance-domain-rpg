@@ -64,9 +64,9 @@
 - [x] `SetupWizard.jsx` — create file; wire step router (`activeSteps = steps.filter(s => s.showIf(formData, lifeEvent))`), Back/Next nav, progress indicator (step X of N), Next disabled until current step validates
 - [x] `onComplete` handler — auto-populates `taxedWeeks` (all weeks ≥ `firstActiveIdx`), merges `setupComplete: true`, calls parent `onComplete`
 
-#### Sub-sprint 3b — Step 0: Welcome / Life Event Select
-- [ ] First-run: welcome copy + Start button; no fields
-- [ ] Re-entry: Life Event dropdown (Lost my job / Changed jobs / Got a commission job); dependency engine writes `lifeEvent` and marks affected steps dirty
+#### Sub-sprint 3b — Step 0: Welcome / Life Event Select ✅
+- [x] First-run: welcome copy + Start button; no fields
+- [x] Re-entry: Life Event dropdown (Lost my job / Changed jobs / Got a commission job); dependency engine writes `lifeEvent` and marks affected steps dirty
 
 #### Sub-sprint 3c — Step 1: Pay Structure
 - [ ] DHL employer preset pill gate (`employerPreset: "DHL" | null`) rendered before all pay fields

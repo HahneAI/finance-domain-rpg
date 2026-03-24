@@ -2,15 +2,88 @@ import { useState } from "react";
 import { buildYear } from "../lib/finance.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STEP 0 — Welcome (first-run) / Life Event Select (re-entry)
+// ─────────────────────────────────────────────────────────────────────────────
+const LIFE_EVENTS = [
+  { value: "lost_job",      label: "Lost my job",            sub: "Updates pay structure, schedule, deductions, and tax rates" },
+  { value: "changed_jobs",  label: "Changed jobs",           sub: "Full re-setup — FICA and tax strategy pre-filled from current config" },
+  { value: "commission_job", label: "Got a commission job",  sub: "Adds commission income to your pay structure" },
+];
+
+function Step0({ lifeEvent, onLifeEventChange }) {
+  // ── First-run ──────────────────────────────────────────────────────────────
+  if (lifeEvent === null) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <p style={{
+          fontSize: "14px", lineHeight: "1.6",
+          color: "var(--color-text-secondary)", margin: 0,
+        }}>
+          Before we build your dashboard, let's capture your pay setup.
+          This takes about 3 minutes. You'll be able to update anything
+          anytime from the Life Events menu.
+        </p>
+        <p style={{
+          fontSize: "12px", lineHeight: "1.6",
+          color: "var(--color-text-disabled)", margin: 0,
+        }}>
+          You'll need: your most recent paystub and your job start date.
+        </p>
+      </div>
+    );
+  }
+
+  // ── Re-entry ───────────────────────────────────────────────────────────────
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+      <p style={{
+        fontSize: "13px", color: "var(--color-text-secondary)",
+        margin: "0 0 4px",
+      }}>
+        What changed? Only the affected steps will be updated — everything else stays as-is.
+      </p>
+      {LIFE_EVENTS.map(ev => {
+        const active = lifeEvent === ev.value;
+        return (
+          <button
+            key={ev.value}
+            onClick={() => onLifeEventChange(ev.value)}
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "flex-start",
+              gap: "3px", textAlign: "left",
+              background: active ? "rgba(201,168,76,0.10)" : "var(--color-bg-raised)",
+              border: `1px solid ${active ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"}`,
+              borderRadius: "12px",
+              padding: "12px 14px",
+              cursor: "pointer",
+              transition: "background 0.15s, border-color 0.15s",
+            }}
+          >
+            <span style={{
+              fontSize: "13px", fontWeight: "600",
+              color: active ? "var(--color-gold)" : "var(--color-text-primary)",
+            }}>
+              {active && "✓ "}{ev.label}
+            </span>
+            <span style={{ fontSize: "11px", color: "var(--color-text-disabled)" }}>
+              {ev.sub}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STEP DEFINITIONS
 //
 // showIf(formData, lifeEvent) → bool — controls which steps appear per life event
-// isValid(formData) → bool          — gates Next button; stubs return true until
-//                                     the step UI is implemented in its sprint
+// isValid(formData, lifeEvent) → bool — gates Next; stubs return true until implemented
 //
-// Life event routing (from spec):
+// Life event routing:
 //   null (first-run)   → all steps 0–8
-//   "lost_job"         → steps 0–4 only; steps 5–7 preserved in config but skipped; step 8 skipped
+//   "lost_job"         → steps 0–4; steps 5–7 preserved in config but skipped; step 8 skipped
 //   "changed_jobs"     → all steps 0–8
 //   "commission_job"   → steps 0–5 only; steps 6–8 skipped
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18,7 +91,8 @@ const STEP_DEFS = [
   {
     id: 0, title: "Welcome", sprint: "3b",
     showIf: () => true,
-    isValid: () => true,
+    isValid: (_, ev) => ev === null || ev !== null, // re-entry: event already set by sidebar
+    component: Step0,
   },
   {
     id: 1, title: "Pay Structure", sprint: "3c",
@@ -63,8 +137,7 @@ const STEP_DEFS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STUB — placeholder rendered for steps not yet implemented
-// Replaced step-by-step in sprints 3b–3j
+// STUB — placeholder rendered for steps not yet implemented (sprints 3c–3j)
 // ─────────────────────────────────────────────────────────────────────────────
 function StepStub({ title, sprint }) {
   return (
@@ -79,10 +152,7 @@ function StepStub({ title, sprint }) {
       }}>
         Sprint {sprint}
       </div>
-      <div style={{
-        fontSize: "15px", color: "var(--color-text-primary)",
-        fontFamily: "var(--font-display)",
-      }}>
+      <div style={{ fontSize: "15px", color: "var(--color-text-primary)", fontFamily: "var(--font-display)" }}>
         {title}
       </div>
       <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
@@ -111,25 +181,19 @@ export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = 
   const isLast      = stepIdx === activeSteps.length - 1;
   const canProceed  = current?.isValid(formData, lifeEvent) ?? false;
 
-  // Partial update — step components call this to write into formData
   function update(patch) {
     setFormData(prev => ({ ...prev, ...patch }));
   }
 
   function handleNext() {
-    if (!isLast) {
-      setStepIdx(i => i + 1);
-    } else {
-      handleComplete();
-    }
+    if (!isLast) setStepIdx(i => i + 1);
+    else handleComplete();
   }
 
   function handleBack() {
     if (stepIdx > 0) setStepIdx(i => i - 1);
   }
 
-  // On finish: auto-populate taxedWeeks (all active weeks from firstActiveIdx onward)
-  // then hand the merged config up to App.jsx
   function handleComplete() {
     const allWeeks   = buildYear(formData);
     const taxedWeeks = allWeeks
@@ -139,6 +203,7 @@ export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = 
   }
 
   const progressPct = ((stepIdx + 1) / activeSteps.length) * 100;
+  const StepComponent = current?.component ?? null;
 
   return (
     <div style={{
@@ -146,8 +211,7 @@ export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = 
       background: "var(--color-bg-base)",
       display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center",
-      padding: "24px 16px",
-      zIndex: 100,
+      padding: "24px 16px", zIndex: 100,
     }}>
       <div style={{
         width: "100%", maxWidth: "480px",
@@ -158,13 +222,13 @@ export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = 
         display: "flex", flexDirection: "column", gap: "28px",
       }}>
 
-        {/* ── Header: step label + title + progress bar ── */}
+        {/* ── Header: step counter + title + progress bar ── */}
         <div>
           <div style={{
             fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase",
             color: "var(--color-text-disabled)", marginBottom: "6px",
           }}>
-            Setup · {stepIdx + 1} of {activeSteps.length}
+            {lifeEvent === null ? "Setup" : "Life Event"} · {stepIdx + 1} of {activeSteps.length}
           </div>
           <div style={{
             fontSize: "20px", fontFamily: "var(--font-display)",
@@ -172,8 +236,6 @@ export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = 
           }}>
             {current?.title}
           </div>
-
-          {/* Progress bar */}
           <div style={{
             marginTop: "14px", height: "3px", borderRadius: "2px",
             background: "var(--color-border-subtle)",
@@ -189,10 +251,18 @@ export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = 
 
         {/* ── Step content ── */}
         <div style={{ minHeight: "160px" }}>
-          <StepStub title={current?.title} sprint={current?.sprint} />
+          {StepComponent
+            ? <StepComponent
+                formData={formData}
+                onChange={update}
+                lifeEvent={lifeEvent}
+                onLifeEventChange={setLifeEvent}
+              />
+            : <StepStub title={current?.title} sprint={current?.sprint} />
+          }
         </div>
 
-        {/* ── Navigation: Back / Next|Finish ── */}
+        {/* ── Navigation ── */}
         <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
           {stepIdx > 0 && (
             <button
@@ -201,8 +271,7 @@ export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = 
                 background: "var(--color-bg-raised)",
                 color: "var(--color-text-secondary)",
                 border: "1px solid var(--color-border-subtle)",
-                borderRadius: "12px",
-                padding: "8px 16px",
+                borderRadius: "12px", padding: "8px 16px",
                 fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
                 cursor: "pointer",
               }}
@@ -216,9 +285,7 @@ export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = 
             style={{
               background: canProceed ? "var(--color-gold)" : "var(--color-bg-raised)",
               color: canProceed ? "var(--color-bg-base)" : "var(--color-text-disabled)",
-              border: "none",
-              borderRadius: "12px",
-              padding: "8px 22px",
+              border: "none", borderRadius: "12px", padding: "8px 22px",
               fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
               fontWeight: "bold",
               cursor: canProceed ? "pointer" : "not-allowed",

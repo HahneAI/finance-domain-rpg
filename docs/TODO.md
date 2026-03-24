@@ -48,27 +48,116 @@
 > **Full spec and step-by-step build order:** `docs/setup-wizard-plan.md`
 > **Field-by-field decisions:** `docs/setup-wizard-field-notes.md`
 
-### Phase 1 — Foundation
-- [ ] `config.js` — add wizard fields (`setupComplete`, `taxExemptOptIn`, `paycheckBuffer`, `employerPreset`, `startingWeekIsHeavy`, `scheduleIsVariable`, `userState`, `standardWeeklyHours`) and generalized rate fields (`fedRateLow/High`, `stateRateLow/High`); keep legacy `w1/w2` rate fields for backward compat during transition
-- [ ] `db.js` — fix config merge strategy (`{ ...DEFAULT_CONFIG, ...data.config }` so new fields reach existing rows); add Anthony pre-wizard migration block (detects pre-wizard rows by absence of `setupComplete`; sets `employerPreset: "DHL"`, copies w1/w2 rates to new field names, marks `setupComplete: true` so Anthony never sees the wizard)
+### Phase 1 — Foundation ✅
+- [x] `config.js` — add wizard fields (`setupComplete`, `taxExemptOptIn`, `paycheckBuffer`, `employerPreset`, `startingWeekIsHeavy`, `scheduleIsVariable`, `userState`, `standardWeeklyHours`, `taxRatesEstimated`) and generalized rate fields (`fedRateLow/High`, `stateRateLow/High`); keep legacy `w1/w2` rate fields for backward compat during transition
+- [x] `db.js` — fix config merge strategy (`{ ...DEFAULT_CONFIG, ...data.config }` so new fields reach existing rows); pre-wizard migration block stamps `employerPreset: "DHL"`, `dhlTeam: "B"`, `dhlCustomSchedule: true`, copies w1/w2 rates to new field names, marks `setupComplete: true` so Anthony never sees the wizard
 
-### Phase 2 — finance.js + State Tax Table
-- [ ] `finance.js` — decouple `buildYear()` rotation logic from hardcoded strings; use `employerPreset` + `startingWeekIsHeavy`; update `computeNet()` to use `fedRateLow/High` with `w1/w2` fallback
-- [ ] `stateTaxTable.js` — create 50-state table (NONE / FLAT / PROGRESSIVE models)
-- [ ] `finance.js` — add `stateTax(income, stateConfig)` function
-- [ ] `App.jsx` — replace `moFlatRate` hardcode with `stateTax()` lookup
+### Phase 2 — finance.js + State Tax Table ✅
+- [x] `finance.js` — decoupled `buildYear()` rotation logic; uses `employerPreset` + `startingWeekIsHeavy`; `computeNet()` uses `fedRateLow/High` with `w1/w2` fallback; weekend diff earned by all shifts (corrected 2026-03-24 — `dhlNightShift` no longer zeros `diffRate`)
+- [x] `stateTaxTable.js` — 50-state table (NONE / FLAT / PROGRESSIVE models)
+- [x] `finance.js` — `stateTax(income, stateConfig)` function
+- [x] `App.jsx` — `moFlatRate` replaced by `stateTax()` lookup; `getStateConfig()` helper in finance.js
 
 ### Phase 3 — SetupWizard component
-- [ ] `SetupWizard.jsx` — create; scaffold step router, Back/Next nav, progress indicator, `onComplete` writes `taxedWeeks` + `setupComplete: true`
-- [ ] Steps 0–8 implemented in order (see `docs/setup-wizard-plan.md` Build Order for per-step sitting breakdown)
 
-### Phase 4 — App.jsx integration
+#### Sub-sprint 3a — Scaffold ✅
+- [x] `SetupWizard.jsx` — create file; wire step router (`activeSteps = steps.filter(s => s.showIf(formData, lifeEvent))`), Back/Next nav, progress indicator (step X of N), Next disabled until current step validates
+- [x] `onComplete` handler — auto-populates `taxedWeeks` (all weeks ≥ `firstActiveIdx`), merges `setupComplete: true`, calls parent `onComplete`
+
+#### Sub-sprint 3b — Step 0: Welcome / Life Event Select ✅
+- [x] First-run: welcome copy + Start button; no fields
+- [x] Re-entry: Life Event dropdown (Lost my job / Changed jobs / Got a commission job); dependency engine writes `lifeEvent` and marks affected steps dirty
+
+#### Sub-sprint 3c — Step 1: Pay Structure ✅
+- [x] DHL employer preset pill gate (`employerPreset: "DHL" | null`) rendered before all pay fields
+- [x] Pay Structure fields: `baseRate`, `shiftHours`, `diffRate` (overnight/weekend pill multiselect with inline amount inputs), `otThreshold` pill, `otMultiplier` pill
+- [x] Commission toggle shown if `lifeEvent === "commission_job"`
+
+#### Sub-sprint 3d — Step 2: Schedule ✅
+- [x] Job start date picker → derives `firstActiveIdx` from `FISCAL_YEAR_START`
+- [x] Standard path: weekly hours number input (`standardWeeklyHours`)
+- [x] DHL path: 4-day / 6-day rotation pill → `startingWeekIsHeavy`
+- [x] Pay period end day picker (0=Sun default)
+
+#### Sub-sprint 3e — Step 3: Deductions ✅
+- [x] Benefits availability gate pill (enrolled / not yet / no benefits) — controls field visibility
+- [x] Fields: `ltd`, `k401Rate`, `k401MatchRate`, `k401StartDate`, benefit premium fields (health, dental, vision, etc.) shown/hidden per gate answer
+- [x] "Not yet" path shows enrollment date + note about projected kick-in
+
+#### Sub-sprint 3f — Step 4: Tax Rates ✅
+- [x] Variable hours gate (`scheduleIsVariable`) — auto-true for DHL, pill question for standard users
+- [x] State dropdown (`userState`) → pre-fills rate from `STATE_TAX_TABLE`; NONE model shows "no state income tax" note
+- [x] Paystub calculator (gross + withheld → derives `fedRateLow/High`, `stateRateLow/High`) — **optional/skippable**: "Use estimate for now" path pre-fills from STATE_TAX_TABLE and sets `taxRatesEstimated: true`
+- [x] `taxRatesEstimated` flag in config — drives "estimate" badge on tax-derived numbers in IncomePanel; cleared when user confirms real paystub rates
+- [x] "Sharpen your tax rates" modal in IncomePanel (Sharpen Rates button) — same paystub calculator, no full wizard re-run
+
+#### Sub-sprint 3g — Step 5: Tax Summary *(read-only confirmation)*
+> Tax strategy (exempt juggling, extra withholding tuning, `targetOwedAtFiling`) is behind
+> a feature gate — NOT in the wizard. `targetOwedAtFiling` stays hardcoded at $1,000.
+- [x] Read-only federal summary: standard deduction ($15k), FICA rate, effective fed rate(s)
+- [x] Read-only state summary: hidden for NONE states, effective-rate note for PROGRESSIVE
+- [x] "est." callout when `taxRatesEstimated` — points user to Sharpen Rates in Income panel
+
+#### Sub-sprint 3h — Step 6: Other Deductions *(scoped down — preset benefits already in Step 3)*
+- [x] Benefits start date — when health/dental/vision coverage activates
+- [x] Repeatable other-deductions field — freeform label + weekly amount, add/remove rows; stored as `otherDeductions: [{id, label, weeklyAmount}]`
+- [x] Attendance policy gate — standard users only; DHL skipped; `attendanceBucketEnabled: true|false|null`
+- [x] `isValid`: DHL always passes; standard users must answer attendance pill (skippable)
+
+#### Sub-sprint 3i — Step 7: Paycheck Buffer
+- [x] Live net-per-check preview: `estimateWeeklyGross()` (DHL weighted avg, variable avg, standard flat); breakdown table: gross, fed, state, FICA, 401k, benefits, other; "estimated" note if taxRatesEstimated
+- [x] `paycheckBuffer` input; `BUFFER_FLOOR = 50`; red warning block renders below $50; "Override anyway" writes `bufferOverrideAck: true` to formData; value change resets ack
+- [x] `isValid`: passes if buf ≥ 50 OR bufferOverrideAck; `bufferOverrideAck` default added to config
+
+#### Sub-sprint 3j — Step 8: Tax Exempt Gate (visual test)
+- [x] Three variants behind `const GATE_VARIANT = 'A'` — A: blur overlay, B: hidden + disclaimer, C: locked card with padlock
+- [x] Shared `TAX_EXEMPT_DISCLAIMER` const + `TaxExemptDisclaimerBox` + gold accept button
+- [x] Accept writes `taxExemptOptIn: true`; `isValid` blocks until accepted
+- [ ] Visual test all 3 variants; delete losers before merging
+
+#### Sub-sprint 3k — DHL Employer Preset Tune *(post-wizard, DHL users only)* ✅
+> Shown only when `employerPreset === "DHL"`. Positioned after Step 1 (Pay Structure), before Schedule.
+> Anthony's account: `dhlTeam: "B"`, `dhlCustomSchedule: true` stamped by the pre-wizard migration in db.js — keeps `buildYear()` on his 4-day/6-day hardcoded arrays (2026-03-24).
+
+**Standard DHL rotation (2026 — rigid, full-year):**
+| Week type | Required days | Hours | Weekend shifts |
+|-----------|--------------|-------|----------------|
+| Light     | Mon / Thu / Fri | 36h (3 × 12h) | 0 |
+| Heavy     | Tue / Wed / Sat / Sun | 48h (4 × 12h) | 2 (Sat + Sun) |
+
+**Teams:** A-team starts on light; B-team starts on heavy. Both alternate every week — while A works their 3-day, B works their 4-day.
+
+**Required OT (DHL mandated — 1 extra 12h shift per week, worker picks off-day):**
+- Light week off-days: Tue / Wed / Sat / Sun — Sat/Sun OT earns `diffRate` (`dhlOtOnWeekend` flag)
+- Heavy week off-days: Mon / Thu / Fri — all weekdays, no diff ever applies
+
+**DHL MO supply chain preset notes:**
+- Weekend `diffRate` is earned by **all shifts** (morning and night) — corrected 2026-03-24. The original assumption that morning shift earns no diff was wrong.
+- `dhlNightShift` is still stored for future night-shift bonus tracking; it no longer gates `diffRate` in `buildYear()`.
+- Tax rates are the same regardless of shift — morning vs. night affects gross pay, not effective tax rate.
+
+**Wizard step tasks:**
+- [x] A / B team pill → writes `dhlTeam`; auto-derives `startingWeekIsHeavy` from `DHL_PRESET.teams[dhlTeam].startsHeavy`; applies `DHL_PRESET.defaults` to formData
+- [x] "Standard rotation" vs "Custom schedule" pill → `dhlCustomSchedule: bool`; standard locks to `DHL_PRESET.rotation`; custom preserves Anthony's hardcoded day arrays
+- [x] Night / morning shift pill → `dhlNightShift: bool`; stored for future night differential — no longer zeros `diffRate` (corrected 2026-03-24; `effectiveDiffRate` removed from `buildYear()`)
+- [x] OT day preference pill: "Weekday only" / "Sometimes weekend (Sat/Sun)" → `dhlOtOnWeekend: bool`
+- [x] `isValid`: `d.dhlTeam !== null`
+- [x] `buildYear()` update: `dhlTeam && !dhlCustomSchedule` gates preset rotation; otherwise falls back to hardcoded arrays; all shifts earn `cfg.diffRate` on weekend hours equally
+- [x] `saveUserData()`: syncs `is_dhl` column from `config.employerPreset === "DHL"` on every save
+- [x] `isDHL` prop threaded to `BenefitsPanel` and `LogPanel` from App.jsx
+- [x] `dhlCustomSchedule: false` + `dhlNightShift: true` added to DEFAULT_CONFIG
+- [x] `DHL_PRESET` imported into finance.js
+
+### Phase 3 — SetupWizard component ✅
+All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. Pending: Phase 4 integration.
+
+### Phase 4 — App.jsx integration ← NEXT
 - [ ] First-run gate: `if (!config.setupComplete)` → render `<SetupWizard />`
 - [ ] `handleWizardComplete` merges and saves config
 - [ ] Life Events sidebar item + dependency engine for re-entry
 
 ### Phase 5 — Tax Exempt Gate
-- [ ] `IncomePanel.jsx` — implement all 3 gate options (A/B/C) behind flag; visual test; pick winner
+- [ ] `IncomePanel.jsx` — visual test all 3 variants (A/B/C) behind `GATE_VARIANT` const; pick winner; delete losers
 
 ### Sprint: Attendance History View (All Users)
 - [ ] **Attendance history view** — log-based missed day tracking for all users:
@@ -152,4 +241,4 @@
 
 ---
 
-*Last updated: 2026-03-24 — Sections 1, 2 & 3 complete. Section 4 added: full Setup Wizard build plan (Phases 1–5). Section 6 added: optional itemized deductions module (post-wizard, post-launch scope).*
+*Last updated: 2026-03-24 — Section 4 Phases 1–3 complete. Phase 4 (App.jsx integration) is the next sprint. Weekend diff corrected: all DHL shifts earn diffRate equally; dhlNightShift stored for future night-bonus tracking only. Anthony's row: dhlTeam="B", dhlCustomSchedule=true stamped by migration. isAdmin gates tax schedule subview in IncomePanel.*

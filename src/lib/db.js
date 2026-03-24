@@ -17,7 +17,7 @@ export async function loadUserData() {
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra")
+    .select("config, expenses, goals, logs, show_extra, is_dhl, is_admin")
     .eq("user_id", USER_ID)
     .single();
 
@@ -37,6 +37,8 @@ export async function loadUserData() {
       logs:               INITIAL_LOGS,
       showExtra:          true,
       weekConfirmations:  {},
+      isDHL:              false,
+      isAdmin:            false,
     };
   }
 
@@ -73,18 +75,20 @@ export async function loadUserData() {
     ? { ...DEFAULT_CONFIG, ...data.config }
     : DEFAULT_CONFIG;
 
-  // ── Anthony pre-wizard migration ─────────────────────────────────────────────
-  // Detects Anthony's existing row by absence of setupComplete (pre-wizard rows won't
-  // have this field). Sets DHL preset + marks setupComplete so he never sees the wizard.
-  // Copies legacy w1/w2 rate fields to the new generalized names if not already set.
-  if (!mergedConfig.setupComplete) {
+  // ── Pre-wizard migration for DHL users ───────────────────────────────────────
+  // Fires once for any DHL user whose row pre-dates the setup wizard (setupComplete absent).
+  // Sets the DHL employer preset, marks setupComplete, and promotes legacy rate field names.
+  // Scoped to is_dhl === true so it never runs for standard or future multi-user accounts.
+  if (data.is_dhl && !mergedConfig.setupComplete) {
     mergedConfig.employerPreset = "DHL";
-    mergedConfig.startingWeekIsHeavy = true;  // Anthony's first active week is heavy (6-day)
+    mergedConfig.startingWeekIsHeavy = true;
     mergedConfig.scheduleIsVariable = true;
-    // Copy legacy rate fields to new names if new names weren't already set by wizard
+    mergedConfig.dhlTeam = "B";
+    mergedConfig.dhlCustomSchedule = true;
+    // Promote legacy w1/w2 rate field names to the generalized names used by the wizard
     if (mergedConfig.fedRateLow === DEFAULT_CONFIG.fedRateLow) {
-      mergedConfig.fedRateLow   = mergedConfig.w1FedRate   ?? DEFAULT_CONFIG.w1FedRate;
-      mergedConfig.fedRateHigh  = mergedConfig.w2FedRate   ?? DEFAULT_CONFIG.w2FedRate;
+      mergedConfig.fedRateLow    = mergedConfig.w1FedRate   ?? DEFAULT_CONFIG.w1FedRate;
+      mergedConfig.fedRateHigh   = mergedConfig.w2FedRate   ?? DEFAULT_CONFIG.w2FedRate;
       mergedConfig.stateRateLow  = mergedConfig.w1StateRate ?? DEFAULT_CONFIG.w1StateRate;
       mergedConfig.stateRateHigh = mergedConfig.w2StateRate ?? DEFAULT_CONFIG.w2StateRate;
     }
@@ -92,12 +96,14 @@ export async function loadUserData() {
   }
 
   return {
-    config:    mergedConfig,
-    expenses:  migratedExpenses,
-    goals:     data.goals.length                 ? data.goals     : INITIAL_GOALS,
-    logs:      data.logs.length                  ? data.logs      : INITIAL_LOGS,
+    config:             mergedConfig,
+    expenses:           migratedExpenses,
+    goals:              data.goals.length ? data.goals  : INITIAL_GOALS,
+    logs:               data.logs.length  ? data.logs   : INITIAL_LOGS,
     showExtra:          data.show_extra,
     weekConfirmations:  wcData?.week_confirmations ?? {},
+    isDHL:              data.is_dhl   ?? false,
+    isAdmin:            data.is_admin ?? false,
   };
 }
 
@@ -117,6 +123,7 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
         logs,
         show_extra:          showExtra,
         week_confirmations:  weekConfirmations,
+        is_dhl:              config.employerPreset === "DHL",
         updated_at:          new Date().toISOString(),
       },
       { onConflict: "user_id" }

@@ -7,10 +7,19 @@ export const DEFAULT_CONFIG = {
   setupComplete: false,        // true once setup wizard completes; gates first-run flow
   taxExemptOptIn: false,       // true once user accepts tax exempt disclaimer (Step 8)
   paycheckBuffer: 50,          // $ safety floor per check; $50 minimum enforced
+  bufferOverrideAck: false,    // true when user explicitly overrides the $50 floor warning
 
   // ── Employer preset ─────────────────────────────────────────
   employerPreset: null,        // "DHL" | null — drives rotation, bucket, dual-rate logic
-  startingWeekIsHeavy: null,   // DHL only: true = first active week is 6-day (72hr)
+  startingWeekIsHeavy: null,   // DHL only: true = first active week is heavy; null = use dhlTeam to derive
+  // ── DHL team preset (standard rotation — not Anthony's custom schedule) ──
+  // null = Anthony's custom override (hardcoded day arrays in buildYear)
+  // "A" | "B" = standard preset; startingWeekIsHeavy auto-derived from DHL_PRESET.teams[dhlTeam]
+  dhlTeam: null,               // "A" | "B" | null
+  dhlOtOnWeekend: false,       // true = mandatory OT day is typically Sat/Sun on 3-day weeks (adds diffRate)
+  dhlCustomSchedule: false,    // false = use DHL_PRESET.rotation days; true = custom/hardcoded arrays (Anthony)
+  dhlNightShift: true,         // stored for future night-shift differential tracking; no longer
+                               // affects weekend diff in buildYear() — all shifts earn diffRate equally
 
   // ── Schedule type (non-DHL users) ───────────────────────────
   scheduleIsVariable: false,   // true = pay varies week-to-week (two paystub calculators)
@@ -18,11 +27,33 @@ export const DEFAULT_CONFIG = {
 
   // ── Pay structure ────────────────────────────────────────────
   baseRate: 21.15, shiftHours: 12, diffRate: 3.00, otThreshold: 40, otMultiplier: 1.5,
+  commissionMonthly: 0,          // $ / month average; 0 = not a commission job
 
   // ── Deductions / benefits ────────────────────────────────────
-  ltd: 2.00, k401Rate: 0.06, k401MatchRate: 0.05, k401StartDate: "2026-05-15",
+  // selectedBenefits: array of benefit IDs the user has enrolled in (wizard step 3)
+  selectedBenefits: [],
+  // Per-benefit weekly dollar deductions (0 = not enrolled / not tracked)
+  healthPremium: 0,   // Health / Medical insurance weekly premium
+  dentalPremium: 0,   // Dental insurance weekly premium
+  visionPremium: 0,   // Vision insurance weekly premium
+  ltd: 2.00,          // Long-Term Disability flat weekly deduction
+  stdWeekly: 0,       // Short-Term Disability flat weekly deduction
+  lifePremium: 0,     // Life / AD&D insurance weekly premium
+  hsaWeekly: 0,       // HSA contribution per week
+  fsaWeekly: 0,       // FSA contribution per week
+  // 401(k) — rate fields + start date
+  k401Rate: 0.06, k401MatchRate: 0.05, k401StartDate: "2026-05-15",
+  // Benefits start date — when health/dental/vision coverage activates
+  benefitsStartDate: null,        // "YYYY-MM-DD" | null = already active / not enrolled
+  // Other recurring deductions not covered by preset benefit fields
+  // Array of { id, label, weeklyAmount } — user-defined, add/remove from wizard
+  otherDeductions: [],
+  // Attendance policy — whether employer uses a formal points/hours-based system
+  // null = not yet answered (wizard gate); true = bucket model active; false = log-only
+  attendanceBucketEnabled: null,  // DHL users: always null (bucket handled separately)
 
   // ── Schedule ─────────────────────────────────────────────────
+  startDate: null,             // "YYYY-MM-DD" job start — used to derive firstActiveIdx; null = not yet set
   firstActiveIdx: 7,
 
   // ── Tax rates — generalized (wizard-derived) ─────────────────
@@ -33,6 +64,10 @@ export const DEFAULT_CONFIG = {
   fedRateHigh: 0.1283,         // replaces w2FedRate
   stateRateLow: 0.0338,        // replaces w1StateRate
   stateRateHigh: 0.040,        // replaces w2StateRate
+  // taxRatesEstimated: true when rates were pre-filled from STATE_TAX_TABLE or DHL preset
+  // rather than derived from an actual paystub. Cleared when user confirms real stub rates.
+  // Drives "est." badge in IncomePanel on all tax-derived figures.
+  taxRatesEstimated: false,
 
   // ── Legacy rate fields — kept for backward-compat fallback ───
   // finance.js computeNet() falls back to these if fedRateLow not set on old rows.
@@ -66,6 +101,67 @@ export const PTO_RATE = 19.65;
 export const WEEKS_REMAINING = 44;
 // Quarter end-of-period cutoff dates (Q1→Q2, Q2→Q3, Q3→Q4 boundaries)
 export const QUARTER_BOUNDARIES = ["2026-03-31", "2026-06-30", "2026-09-30"];
+
+// ─────────────────────────────────────────────────────────────
+// DHL EMPLOYER PRESET
+//
+// Describes the standard DHL 3-day / 4-day alternating rotation.
+// Anthony's account uses a CUSTOM schedule (dhlCustomSchedule: true,
+// dhlTeam: "B") — buildYear() routes to the hardcoded 4-day/6-day
+// day arrays for him. DHL_PRESET.rotation is used for new standard
+// DHL employees who go through the wizard (sprint 3k).
+//
+// Day index: 0=Sun  1=Mon  2=Tue  3=Wed  4=Thu  5=Fri  6=Sat
+// ─────────────────────────────────────────────────────────────
+export const DHL_PRESET = {
+  rotation: {
+    // Light week — 3 required shifts
+    light: {
+      days: [1, 4, 5],            // Mon, Thu, Fri
+      label: "3-Day (Mon / Thu / Fri)",
+      baseHours: 36,              // 3 × 12h
+      weekendShifts: 0,
+    },
+    // Heavy week — 4 required shifts
+    heavy: {
+      days: [2, 3, 6, 0],        // Tue, Wed, Sat, Sun
+      label: "4-Day (Tue / Wed / Sat / Sun)",
+      baseHours: 48,              // 4 × 12h
+      weekendShifts: 2,           // Sat + Sun earn diffRate
+    },
+  },
+  // While A-team works their light (3-day) week, B-team is on heavy (4-day).
+  // Team selection auto-derives startingWeekIsHeavy.
+  teams: {
+    A: { startsHeavy: false },   // A-team week 1 = light (Mon/Thu/Fri)
+    B: { startsHeavy: true  },   // B-team week 1 = heavy (Tue/Wed/Sat/Sun)
+  },
+  // DHL mandates 1 extra 12h shift per week (required OT).
+  // Worker picks any off-day for that week:
+  //   3-day off-days: Tue, Wed, Sat, Sun → Sat/Sun OT earns diffRate (dhlOtOnWeekend flag)
+  //   4-day off-days: Mon, Thu, Fri      → all weekdays, no diff ever applies
+  requiredOtShifts: 1,
+  otShiftHours: 12,
+  // Preset defaults — applied to formData on team selection in the wizard
+  defaults: {
+    shiftHours: 12,
+    otThreshold: 40,
+    otMultiplier: 1.5,
+    scheduleIsVariable: true,
+    payPeriodEndDay: 0,          // Sunday (end of pay period after last shift)
+    bucketStartBalance: 64,
+    bucketCap: 128,
+    bucketPayoutRate: 9.825,
+    // ── Tax rate preset — MO supply chain, night shift (paystub-derived from Anthony's setup)
+    // New DHL users get these pre-filled with taxRatesEstimated: true until they confirm their stub.
+    // Morning shift users: same rates (shift affects gross, not effective tax rate).
+    userState: "MO",
+    fedRateLow: 0.0784,          // light / 4-day week effective federal rate
+    fedRateHigh: 0.1283,         // heavy / 6-day week effective federal rate
+    stateRateLow: 0.0338,        // light week MO effective rate
+    stateRateHigh: 0.040,        // heavy week MO effective rate
+  },
+};
 
 export const FED_BRACKETS = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [Infinity, 0.24]];
 

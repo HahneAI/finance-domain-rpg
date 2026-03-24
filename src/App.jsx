@@ -95,6 +95,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [showExtra, setShowExtra] = useState(true);
+  const [isDHL, setIsDHL] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
   const [goals, setGoals] = useState(INITIAL_GOALS);
@@ -139,6 +141,8 @@ export default function App() {
       setExpenses(data.expenses);
       setGoals(data.goals);
       setWeekConfirmations(data.weekConfirmations ?? {});
+      setIsDHL(data.isDHL);
+      setIsAdmin(data.isAdmin);
       setLoading(false);
     });
   }, []);
@@ -347,6 +351,7 @@ export default function App() {
         adjustedTakeHome={logTotals.adjustedTakeHome}
         projectedAnnualNet={projectedAnnualNet}
         currentWeek={currentWeek}
+        isAdmin={isAdmin}
       />}
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
@@ -363,7 +368,7 @@ export default function App() {
         today={today}
       />}
       {currentView === "benefits" && <BenefitsPanel
-        allWeeks={allWeeks} config={config}
+        allWeeks={allWeeks} config={config} isDHL={isDHL}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
         logK401kGained={logTotals.k401kGained}
@@ -373,7 +378,7 @@ export default function App() {
         bucketModel={bucketModel}
       />}
       {currentView === "log" && <LogPanel
-        logs={logs} setLogs={setLogs} config={config}
+        logs={logs} setLogs={setLogs} config={config} isDHL={isDHL}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}

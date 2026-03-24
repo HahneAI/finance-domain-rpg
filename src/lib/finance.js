@@ -1,4 +1,4 @@
-import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES } from "../constants/config.js";
+import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES, DHL_PRESET } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -40,6 +40,13 @@ export function getStateConfig(userState) {
   return STATE_TAX_TABLE[userState] ?? STATE_TAX_TABLE["MO"];
 }
 
+// Builds a full 52-week array of pay data from config.
+// DHL path: alternates heavy (6-day) / light (4-day) from firstActiveIdx,
+//   using either the DHL_PRESET day arrays (dhlTeam + !dhlCustomSchedule)
+//   or Anthony's hardcoded arrays (dhlCustomSchedule: true).
+// Standard path: flat weekly hours, no rotation.
+// Note: cfg.dhlNightShift is stored but NOT used here — weekend diff (diffRate)
+//   applies equally to all shifts. Night differential is tracked separately.
 export function buildYear(cfg) {
   const weeks = [], k401Start = new Date(cfg.k401StartDate), taxedSet = new Set(cfg.taxedWeeks);
   const isDHL = cfg.employerPreset === "DHL";
@@ -56,9 +63,16 @@ export function buildYear(cfg) {
       const offset = ((idx - cfg.firstActiveIdx) % 2 + 2) % 2;
       isHighWeek = offset === 0 ? Boolean(cfg.startingWeekIsHeavy) : !Boolean(cfg.startingWeekIsHeavy);
       const days = Array.from({ length: 7 }, (_, i) => { const x = new Date(weekStart); x.setDate(x.getDate() + i); return x; });
-      worked = isHighWeek
-        ? [days[1], days[2], days[3], days[4], days[5], days[6]]  // 6-day: Tue–Sun
-        : [days[0], days[2], days[3], days[4]];                    // 4-day: Mon/Wed/Thu/Fri
+      if (cfg.dhlTeam && !cfg.dhlCustomSchedule) {
+        // Standard preset rotation — days from DHL_PRESET (Team A or B, picked in wizard Step 15)
+        const rotDays = isHighWeek ? DHL_PRESET.rotation.heavy.days : DHL_PRESET.rotation.light.days;
+        worked = rotDays.map(d => days[d]);
+      } else {
+        // Custom / legacy schedule — Anthony's hardcoded day arrays (dhlTeam===null or dhlCustomSchedule===true)
+        worked = isHighWeek
+          ? [days[1], days[2], days[3], days[4], days[5], days[6]]  // 6-day: Tue–Sun
+          : [days[0], days[2], days[3], days[4]];                    // 4-day: Mon/Wed/Thu/Fri
+      }
       rotation = isHighWeek ? "6-Day" : "4-Day";
       totalHours = worked.length * cfg.shiftHours;
       weekendHours = worked.filter(w => w.getDay() === 0 || w.getDay() === 6).length * cfg.shiftHours;
@@ -73,6 +87,8 @@ export function buildYear(cfg) {
 
     regularHours = Math.min(totalHours, cfg.otThreshold);
     overtimeHours = Math.max(totalHours - cfg.otThreshold, 0);
+    // Weekend diff is universal — earned by all shifts (morning and night).
+    // Night shift differential is a separate bonus tracked independently.
     grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate;
 
     const active = idx >= cfg.firstActiveIdx;

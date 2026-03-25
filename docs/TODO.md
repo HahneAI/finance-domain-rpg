@@ -273,9 +273,9 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 
 ### Budget & Loans Bugs
 
-- [ ] **Budget breakdown yearly chart is tied to quarter selector** — The stretch chart in the Budget breakdown tab changes when flipping through quarters at the top. It should be a static full-year chart spanning all 4 quarters, auto-adjusting its totals whenever a bill amount changes. The quarter tab selector should only affect the detail rows below, not the chart itself.
+- [x] **Budget breakdown yearly chart is tied to quarter selector** — The stretch chart in the Budget breakdown tab changes when flipping through quarters at the top. It should be a static full-year chart spanning all 4 quarters, auto-adjusting its totals whenever a bill amount changes. The quarter tab selector should only affect the detail rows below, not the chart itself.
 
-- [ ] **Loan expense doesn't end at payoff** — When a loan is set to be paid off within the current fiscal year, the expense row in the breakdown chart continues projecting past the payoff date instead of dropping to $0. The running total should taper off and stop once the loan balance reaches zero within the fiscal year period.
+- [x] **Loan expense doesn't end at payoff** — When a loan is set to be paid off within the current fiscal year, the expense row in the breakdown chart continues projecting past the payoff date instead of dropping to $0. The running total should taper off and stop once the loan balance reaches zero within the fiscal year period.
 
 ---
 
@@ -352,4 +352,4 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 
 ---
 
-*Last updated: 2026-03-25 — §7 UI Polish Sprint added (weekly table slim, overview/401k table changes, home tab restructure, budget chart bug, loans payoff bug). Next: §7 polish items or Phase 5 (Tax Exempt Gate visual test).*
+*Last updated: 2026-03-25 — §7 budget chart + loan payoff bugs fixed. Breakdown tab now shows full-year annual projection independent of quarter selector; loan annual cost stops at payoff date. Next: remaining §7 polish items or Phase 5 (Tax Exempt Gate visual test).*

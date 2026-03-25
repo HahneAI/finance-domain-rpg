@@ -22,6 +22,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
   const [editId, setEditId] = useState(null);
   const [editVals, setEditVals] = useState({});
   const [cdel, setCdel] = useState(null);
+  const [histOpen, setHistOpen] = useState(false);
 
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const f0 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -42,6 +43,28 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
 
   // Active weeks for the dropdown (all active, sorted chronologically)
   const activeWeeks = allWeeks.filter(w => w.active);
+
+  // ── Attendance History ──
+  const attendanceLogs = logs.filter(e => ["missed_unpaid", "missed_unapproved", "partial"].includes(e.type));
+  const byMonth = {};
+  for (const e of attendanceLogs) {
+    if (!e.weekEnd) continue;
+    const month = e.weekEnd.slice(0, 7);
+    if (!byMonth[month]) byMonth[month] = { unpaid: 0, unapproved: 0, unapprovedH: 0, partial: 0, partialH: 0 };
+    const m = byMonth[month];
+    if (e.type === "missed_unpaid")     m.unpaid       += parseInt(e.shiftsLost) || 0;
+    if (e.type === "missed_unapproved") { m.unapproved += normalizeDays(e.missedDays).length; m.unapprovedH += parseFloat(e.hoursLost) || 0; }
+    if (e.type === "partial")           { m.partial    += 1;                                  m.partialH    += parseFloat(e.hoursLost) || 0; }
+  }
+  const dowCounts = {};
+  for (const e of logs.filter(e => ["missed_unpaid", "missed_unapproved"].includes(e.type))) {
+    for (const d of normalizeDays(e.missedDays)) dowCounts[d] = (dowCounts[d] || 0) + 1;
+  }
+  const dowSorted = Object.entries(dowCounts).sort((a, b) => b[1] - a[1]);
+  const totalMissedDays = dowSorted.reduce((s, [, c]) => s + c, 0);
+  const ytdUnpaid     = Object.values(byMonth).reduce((s, m) => s + m.unpaid, 0);
+  const ytdUnapproved = Object.values(byMonth).reduce((s, m) => s + m.unapproved, 0);
+  const ytdPartial    = Object.values(byMonth).reduce((s, m) => s + m.partial, 0);
 
   // Resolve a weekEnd ISO string → weekIdx + weekRotation
   const resolveWeek = (dateStr) => {
@@ -290,6 +313,87 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
         </div>
       </div>
     </div>
+
+    {/* Attendance History */}
+    {attendanceLogs.length > 0 && (
+      <div style={{ marginBottom: "20px" }}>
+        <button
+          onClick={() => setHistOpen(o => !o)}
+          style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: histOpen ? "6px 6px 0 0" : "6px", padding: "10px 14px", cursor: "pointer" }}
+        >
+          <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Attendance History</span>
+          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            {(ytdUnpaid + ytdUnapproved) > 0 && <span style={{ fontSize: "11px", color: "var(--color-red)" }}>{ytdUnpaid + ytdUnapproved} days missed YTD</span>}
+            <span style={{ fontSize: "10px", color: "#666" }}>{histOpen ? "▲" : "▼"}</span>
+          </span>
+        </button>
+
+        {histOpen && (
+          <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderTop: "none", borderRadius: "0 0 6px 6px", padding: "14px" }}>
+
+            {/* YTD summary tiles */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px", marginBottom: "14px" }}>
+              <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
+                <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-red)", fontFamily: "var(--font-mono)" }}>{ytdUnpaid}</div>
+                <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Unpaid Shifts</div>
+              </div>
+              <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
+                <div style={{ fontSize: "20px", fontWeight: "bold", color: "#e8622a", fontFamily: "var(--font-mono)" }}>{ytdUnapproved}</div>
+                <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Unapprov. Days</div>
+              </div>
+              <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
+                <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>{ytdPartial}</div>
+                <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Partial Shifts</div>
+              </div>
+            </div>
+
+            {/* Monthly breakdown */}
+            {Object.keys(byMonth).length > 0 && (
+              <div style={{ marginBottom: "14px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "6px" }}>By Month</div>
+                <div style={{ display: "grid", gridTemplateColumns: "70px 1fr 1fr 1fr", gap: "4px 8px", fontSize: "9px", color: "#444", textTransform: "uppercase", marginBottom: "4px" }}>
+                  <span>Month</span><span>Unpaid</span><span>Unapprov.</span><span>Partial</span>
+                </div>
+                {Object.entries(byMonth).sort().map(([month, m]) => {
+                  const [yr, mo] = month.split("-");
+                  const label = `${LOG_MONTH_SHORT[parseInt(mo) - 1]} ${yr}`;
+                  return (
+                    <div key={month} style={{ display: "grid", gridTemplateColumns: "70px 1fr 1fr 1fr", gap: "4px 8px", padding: "4px 0", borderBottom: "1px solid #1a1a1a" }}>
+                      <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>{label}</span>
+                      <span style={{ fontSize: "11px", color: m.unpaid > 0 ? "var(--color-red)" : "#333", fontFamily: "var(--font-mono)" }}>{m.unpaid > 0 ? `${m.unpaid}sh` : "—"}</span>
+                      <span style={{ fontSize: "11px", color: m.unapproved > 0 ? "#e8622a" : "#333", fontFamily: "var(--font-mono)" }}>{m.unapproved > 0 ? `${m.unapproved}d·${m.unapprovedH}h` : "—"}</span>
+                      <span style={{ fontSize: "11px", color: m.partial > 0 ? "var(--color-text-secondary)" : "#333", fontFamily: "var(--font-mono)" }}>{m.partial > 0 ? `${m.partial}·${m.partialH}h` : "—"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Day-of-week pattern */}
+            {dowSorted.length > 0 && (
+              <div>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "6px" }}>Day Pattern</div>
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  {dowSorted.map(([day, count]) => {
+                    const pct = totalMissedDays > 0 ? count / totalMissedDays : 0;
+                    const isWeekend = day === "Sat" || day === "Sun";
+                    const col = pct >= 0.3 ? "var(--color-red)" : pct >= 0.15 ? "var(--color-gold)" : "var(--color-text-secondary)";
+                    return (
+                      <div key={day} style={{ display: "flex", alignItems: "center", gap: "5px", background: "var(--color-bg-raised)", padding: "4px 10px", borderRadius: "12px" }}>
+                        <span style={{ fontSize: "10px", color: isWeekend ? "var(--color-gold)" : col, fontWeight: pct >= 0.2 ? "bold" : "normal", textTransform: "uppercase", letterSpacing: "1px" }}>{day}</span>
+                        <span style={{ fontSize: "11px", color: col, fontFamily: "var(--font-mono)", fontWeight: "bold" }}>{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: "10px", color: "#444", marginTop: "6px" }}>{totalMissedDays} total missed day{totalMissedDays !== 1 ? "s" : ""} logged</div>
+              </div>
+            )}
+
+          </div>
+        )}
+      </div>
+    )}
 
     {/* Log header + add button */}
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>

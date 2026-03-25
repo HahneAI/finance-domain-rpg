@@ -271,6 +271,12 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 - [ ] **Center "Financial Health" section header** — `SH` component left-aligns with gold bar by default. Override to center for this section header only.
 - [ ] **Rewrite Home subtitle** — Replace `"Week {idx} of 52 · {rotation}"` with: `"Another beautiful day, {weekdayName} the {dayOfMonth}. You are working on your {topPriorityGoal} goal"`. Derive weekday name and day-of-month from `today` prop. Top priority goal = first non-completed goal by position, or first goal if none defined yet; if no goals, fall back to `"financial"`.
 
+### Budget & Loans Bugs
+
+- [ ] **Budget breakdown yearly chart is tied to quarter selector** — The stretch chart in the Budget breakdown tab changes when flipping through quarters at the top. It should be a static full-year chart spanning all 4 quarters, auto-adjusting its totals whenever a bill amount changes. The quarter tab selector should only affect the detail rows below, not the chart itself.
+
+- [ ] **Loan expense doesn't end at payoff** — When a loan is set to be paid off within the current fiscal year, the expense row in the breakdown chart continues projecting past the payoff date instead of dropping to $0. The running total should taper off and stop once the loan balance reaches zero within the fiscal year period.
+
 ---
 
 ## 8. Post-Auth Roadmap
@@ -346,4 +352,4 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 
 ---
 
-*Last updated: 2026-03-25 — Section 4 Phases 1–4 + Attendance History View complete. Section 5 WeekConfirmModal holes (Hole 1/2/3) all resolved. Next: Phase 5 (Tax Exempt Gate visual test) or §6 Post-Auth features.*
+*Last updated: 2026-03-25 — §7 UI Polish Sprint added (weekly table slim, overview/401k table changes, home tab restructure, budget chart bug, loans payoff bug). Next: §7 polish items or Phase 5 (Tax Exempt Gate visual test).*

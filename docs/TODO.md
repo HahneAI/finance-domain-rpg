@@ -241,7 +241,7 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 - [x] **Base pay prefill corrected** — `DEFAULT_CONFIG.baseRate` and placeholder changed from 21.15 → 19.65 (DHL forklift operator base rate); `PTO_RATE` was already 19.65
 - [x] **Wizard scroll fixed** — Step 1 (and any tall step) now scrollable on mobile; outer container uses `overflowY: auto` + `margin: auto` on inner card instead of `justifyContent: center` which clipped tall steps
 - [x] **DHL differential note added** — Step 1 DHL confirmation pill now shows: "Weekend rate ($3.00/hr) is pre-filled. Night shift adds $1.50/hr — set in the DHL team step."
-- [ ] **Night shift differential** — `dhlNightShift` flag is stored and displayed in Step 15 (DHL Team Setup) but not yet computed in `buildYear()`. Night shift earns +$1.50/hr stacked on top of weekend diff (+$3.00). Add `nightDiffRate: 1.50` to DEFAULT_CONFIG and apply in `buildYear()` for DHL night-shift weeks.
+- [x] **Night shift differential** — `nightDiffRate: 1.50` added to DEFAULT_CONFIG; applied in `buildYear()`, `projectedGross()`, and `calcEventImpact()` (missed_unpaid, missed_unapproved, partial, pto). Stacks on all hours for DHL night-shift weeks. Step 15 note updated to confirm live computation.
 
 ---
 

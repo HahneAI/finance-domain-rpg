@@ -102,8 +102,9 @@ export function buildYear(cfg) {
     regularHours = Math.min(totalHours, cfg.otThreshold);
     overtimeHours = Math.max(totalHours - cfg.otThreshold, 0);
     // Weekend diff is universal — earned by all shifts (morning and night).
-    // Night shift differential is a separate bonus tracked independently.
-    grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate;
+    // Night diff stacks on top of all hours when DHL + dhlNightShift is active.
+    const nightDiffBonus = (isDHL && cfg.dhlNightShift) ? totalHours * (cfg.nightDiffRate ?? 0) : 0;
+    grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate + nightDiffBonus;
 
     const active = idx >= cfg.firstActiveIdx;
     const has401k = active && weekEnd >= k401Start;
@@ -137,10 +138,12 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
 }
 
 export function projectedGross(isWeek2, cfg) {
+  const isDHL = cfg.employerPreset === "DHL";
   const ns = isWeek2 ? 6 : 4, totalH = ns * cfg.shiftHours;
   const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
   const wknd = isWeek2 ? 2 * cfg.shiftHours : 0;
-  return reg * cfg.baseRate + ot * cfg.baseRate * cfg.otMultiplier + wknd * cfg.diffRate;
+  const nightDiff = (isDHL && cfg.dhlNightShift) ? totalH * (cfg.nightDiffRate ?? 0) : 0;
+  return reg * cfg.baseRate + ot * cfg.baseRate * cfg.otMultiplier + wknd * cfg.diffRate + nightDiff;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -371,6 +374,8 @@ export function computeBucketModel(logs, cfg) {
 }
 
 export function calcEventImpact(event, cfg) {
+  const isDHL = cfg.employerPreset === "DHL";
+  const nightDiffPerHour = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
   const isWeek2 = event.weekRotation === "6-Day" || event.weekRotation === "Week 2"; // "Week 2" kept for backward compat with stored data
   const normalShifts = isWeek2 ? 6 : 4, normalWeekendShifts = isWeek2 ? 2 : 0;
   const baseGross = projectedGross(isWeek2, cfg);
@@ -380,17 +385,18 @@ export function calcEventImpact(event, cfg) {
     const actualHours = actualShifts * cfg.shiftHours;
     const actualWknd = Math.max(normalWeekendShifts - (event.weekendShifts || 0), 0);
     const actualReg = Math.min(actualHours, cfg.otThreshold), actualOT = Math.max(actualHours - cfg.otThreshold, 0);
-    const actualGross = actualReg * cfg.baseRate + actualOT * cfg.baseRate * cfg.otMultiplier + actualWknd * cfg.shiftHours * cfg.diffRate;
+    const actualGross = actualReg * cfg.baseRate + actualOT * cfg.baseRate * cfg.otMultiplier + actualWknd * cfg.shiftHours * cfg.diffRate + actualHours * nightDiffPerHour;
     grossLost = Math.max(baseGross - actualGross, 0); hoursLostForPTO = (event.shiftsLost || 0) * cfg.shiftHours;
   } else if (event.type === "pto") {
     const ptoH = event.ptoHours || 0, normalH = normalShifts * cfg.shiftHours;
     const normalOT = Math.max(normalH - cfg.otThreshold, 0), actualOT = Math.max(normalH - ptoH - cfg.otThreshold, 0);
-    grossLost = ptoH * (cfg.baseRate - PTO_RATE) + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
+    // Night diff applies to hours worked but not to PTO hours — include the delta
+    grossLost = ptoH * (cfg.baseRate + nightDiffPerHour - PTO_RATE) + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
   } else if (event.type === "missed_unapproved") {
-    // Same gross/PTO math as partial — hours missed × base rate; bucket hit tracked separately
-    grossLost = (event.hoursLost || 0) * cfg.baseRate; hoursLostForPTO = event.hoursLost || 0;
+    // Hours missed × (base rate + night diff); bucket hit tracked separately
+    grossLost = (event.hoursLost || 0) * (cfg.baseRate + nightDiffPerHour); hoursLostForPTO = event.hoursLost || 0;
   } else if (event.type === "partial") {
-    grossLost = (event.hoursLost || 0) * cfg.baseRate; hoursLostForPTO = event.hoursLost || 0;
+    grossLost = (event.hoursLost || 0) * (cfg.baseRate + nightDiffPerHour); hoursLostForPTO = event.hoursLost || 0;
   } else if (event.type === "bonus") {
     grossGained = event.amount || 0;
   } else if (event.type === "other_loss") { grossLost = event.amount || 0; }

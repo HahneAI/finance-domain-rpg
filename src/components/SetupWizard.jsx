@@ -1341,7 +1341,7 @@ function Step15({ formData, onChange }) {
         </div>
         <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
           All shifts earn the {formData.diffRate ? `$${Number(formData.diffRate).toFixed(2)}/hr` : "shift"} weekend differential.
-          Night shift earns an additional night differential on top — tracked separately.
+          Night shift adds +${Number(formData.nightDiffRate || 1.50).toFixed(2)}/hr on all hours (stacks with weekend).
         </div>
       </Field>
 

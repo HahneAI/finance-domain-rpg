@@ -12,7 +12,7 @@ import {
 // ─────────────────────────────────────────────────────────────
 vi.mock('../../lib/supabase.js', () => ({
   supabase: { from: vi.fn() },
-  USER_ID: 'test-user-id',
+  getCurrentUserId: vi.fn().mockResolvedValue('test-user-id'),
 }))
 
 import { supabase } from '../../lib/supabase.js'

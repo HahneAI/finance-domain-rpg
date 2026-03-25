@@ -1,4 +1,4 @@
-import { supabase, USER_ID } from "./supabase.js";
+import { supabase, getCurrentUserId } from "./supabase.js";
 import {
   DEFAULT_CONFIG,
   INITIAL_EXPENSES,
@@ -13,19 +13,36 @@ import { buildLoanHistory } from "./finance.js";
  * Falls back to app defaults if the row is empty or missing.
  */
 export async function loadUserData() {
+  const userId = await getCurrentUserId();
+
+  // Not signed in — return blank defaults so the app never crashes on unauthenticated load.
+  // App.jsx auth gate will redirect to LoginScreen before this matters for real users.
+  if (!userId) {
+    return {
+      config:             DEFAULT_CONFIG,
+      expenses:           INITIAL_EXPENSES,
+      goals:              INITIAL_GOALS,
+      logs:               INITIAL_LOGS,
+      showExtra:          true,
+      weekConfirmations:  {},
+      isDHL:              false,
+      isAdmin:            false,
+    };
+  }
+
   // Select core fields first — week_confirmations is fetched separately so a missing
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
     .select("config, expenses, goals, logs, show_extra, is_dhl, is_admin")
-    .eq("user_id", USER_ID)
+    .eq("user_id", userId)
     .single();
 
   // Fetch week_confirmations independently; gracefully returns {} if column missing.
   const { data: wcData } = await supabase
     .from("user_data")
     .select("week_confirmations")
-    .eq("user_id", USER_ID)
+    .eq("user_id", userId)
     .single();
 
   if (error || !data) {
@@ -128,11 +145,14 @@ export async function loadUserData() {
  * Called from a debounced useEffect in App.jsx on any state change.
  */
 export async function saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations }) {
+  const userId = await getCurrentUserId();
+  if (!userId) return; // unauthenticated — never write
+
   const { error } = await supabase
     .from("user_data")
     .upsert(
       {
-        user_id:             USER_ID,
+        user_id:             userId,
         config,
         expenses,
         goals,

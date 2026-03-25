@@ -187,10 +187,10 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 
 ### Hole 3 — Calendar date labels always assume Monday-start fiscal year
 **Fix:** Align `buildYear()` to understand the actual fiscal year calendar; overlay pay period start day so all date math across the app runs only on paychecks that land in the current fiscal year.
-- [ ] Audit `buildYear()` — ensure week start day is derived from `FISCAL_YEAR_START` config, not hardcoded to Monday
-- [ ] Add `payPeriodStartDay` to config (0=Sun, 1=Mon, etc.); use it as a metaphorical overlay in calendar/day grid displays
-- [ ] WeekConfirmModal day grid: dates under each day label must derive from actual week start, not always `weekStart + 0..6` assuming Mon=0
-- [ ] Verify all fiscal-year-bound math (PTO accrual, bucket model, goal timelines) runs only on paychecks that land within the current fiscal year
+- [x] Audit `buildYear()` — ensure week start day is derived from `FISCAL_YEAR_START` config, not hardcoded to Monday
+- [x] Add `payPeriodStartDay` to config (0=Sun, 1=Mon, etc.); use it as a metaphorical overlay in calendar/day grid displays
+- [x] WeekConfirmModal day grid: dates under each day label must derive from actual week start, not always `weekStart + 0..6` assuming Mon=0
+- [x] Verify all fiscal-year-bound math (PTO accrual, bucket model, goal timelines) runs only on paychecks that land within the current fiscal year
 
 ---
 

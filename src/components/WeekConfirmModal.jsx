@@ -36,14 +36,21 @@ const fmtDate = d => d.toLocaleDateString("en-US", { month: "short", day: "numer
 const f2 = n => `$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /**
- * Given the week's Monday (weekStart), returns an array of 7 Date objects
- * aligned to DAY_NAMES order: [Mon, Tue, Wed, Thu, Fri, Sat, Sun].
- * Used to display the calendar date under each day label in Layer 1.
+ * Given a weekStart date, returns an array of 7 Date objects aligned to
+ * DAY_NAMES order: [Mon, Tue, Wed, Thu, Fri, Sat, Sun].
+ * Computes each date from weekStart's actual day-of-week so the function
+ * stays correct even if FISCAL_YEAR_START ever shifts to a non-Monday.
+ *
+ * DAY_NAMES index → JS getDay(): Mon→1, Tue→2, Wed→3, Thu→4, Fri→5, Sat→6, Sun→0
+ * offset = (targetDow - startDow + 7) % 7
  */
 function weekDayDates(weekStart) {
+  const startDow = weekStart.getDay(); // 0=Sun,1=Mon,...,6=Sat
   return DAY_NAMES.map((_, i) => {
+    const targetDow = (i + 1) % 7; // Mon→1, Tue→2, ..., Sun→0
+    const offset = (targetDow - startDow + 7) % 7;
     const d = new Date(weekStart);
-    d.setDate(d.getDate() + i);
+    d.setDate(d.getDate() + offset);
     return d;
   });
 }
@@ -98,6 +105,8 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
   const netShiftDelta = pickupDays.length - missedScheduledDays.length;
 
   const dayDates = weekDayDates(week.weekStart);
+  // Pay period starts the day after payPeriodEndDay (e.g. end=Sun→start=Mon=1)
+  const payPeriodStartDow = ((config.payPeriodEndDay ?? 0) + 1) % 7;
 
   // ── Toggle handler: 3 states ──────────────────────────────────────────────
   const toggleDay = (day) => {
@@ -288,16 +297,24 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                 const toggle = dayToggles[day]; // true=worked, false=missed, null=off
                 const date = dayDates[i];
                 const isPickup = !isScheduled && toggle === true;
+                // Pay period start overlay — marks the first day of the new pay period
+                const isPayStart = date.getDay() === payPeriodStartDow;
 
                 return (
                   <div key={day} style={{
                     display: "flex", alignItems: "center",
                     padding: "9px 20px",
                     borderBottom: "1px solid #161616",
+                    borderTop: isPayStart ? "1px solid rgba(201,168,76,0.18)" : undefined,
                   }}>
                     {/* Day + date */}
                     <div style={{ width: "86px" }}>
-                      <div style={{ fontSize: "11px", fontWeight: "bold", color: isScheduled ? "var(--color-text-primary)" : "#555", letterSpacing: "1px" }}>{day}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                        <div style={{ fontSize: "11px", fontWeight: "bold", color: isScheduled ? "var(--color-text-primary)" : "#555", letterSpacing: "1px" }}>{day}</div>
+                        {isPayStart && (
+                          <span style={{ fontSize: "7px", letterSpacing: "1.5px", color: "var(--color-gold)", textTransform: "uppercase", opacity: 0.7 }}>pay start</span>
+                        )}
+                      </div>
                       <div style={{ fontSize: "9px", color: "#444" }}>{fmtDate(date)}</div>
                     </div>
 

@@ -1,4 +1,4 @@
-import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES, DHL_PRESET } from "../constants/config.js";
+import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -58,8 +58,12 @@ export function getStateConfig(userState) {
 export function buildYear(cfg) {
   const weeks = [], k401Start = new Date(cfg.k401StartDate), taxedSet = new Set(cfg.taxedWeeks);
   const isDHL = cfg.employerPreset === "DHL";
-  let d = new Date(2026, 0, 5), idx = 0;
-  while (d <= new Date(2027, 0, 4)) {
+  // Derive loop bounds from FISCAL_YEAR_START so the range stays in sync with the
+  // constant rather than being duplicated as a hardcoded literal.
+  const [fyY, fyM, fyD] = FISCAL_YEAR_START.split('-').map(Number);
+  let d = new Date(fyY, fyM - 1, fyD), idx = 0;
+  const fyEnd = new Date(fyY + 1, fyM - 1, fyD - 1);
+  while (d <= fyEnd) {
     const weekEnd = new Date(d), weekStart = new Date(d);
     weekStart.setDate(weekStart.getDate() - 7);
 
@@ -302,8 +306,9 @@ export function computeBucketModel(logs, cfg) {
   const cap = cfg.bucketCap ?? 128;
   let balance = cfg.bucketStartBalance ?? 64;
 
-  // Job start month: week 0 ends 2026-01-05; firstActiveIdx weeks of 7 days forward = first active week end
-  const weekZeroEnd = new Date(2026, 0, 5);
+  // Job start month: week 0 ends at FISCAL_YEAR_START; firstActiveIdx weeks of 7 days forward = first active week end
+  const [wzeY, wzeM, wzeD] = FISCAL_YEAR_START.split('-').map(Number);
+  const weekZeroEnd = new Date(wzeY, wzeM - 1, wzeD);
   const firstWeekEnd = new Date(weekZeroEnd.getTime() + (cfg.firstActiveIdx ?? 7) * 7 * 86400000);
   const firstWeekStart = new Date(firstWeekEnd.getTime() - 7 * 86400000);
   const jobStartMonth = toLocalIso(firstWeekStart).slice(0, 7);

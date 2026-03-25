@@ -250,26 +250,26 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 ### Weekly Pay Table (Income → Weekly tab)
 Currently 9 columns (Wk End, Rot, Hrs, OT, Wknd, Gross, 401k, Take Home, Status) — requires horizontal scroll on mobile, visually dense with small text.
 
-- [ ] **Slim weekly table to essential columns only** — Keep: Wk End, Gross, Take Home, Status badge. Drop: Rot (redundant with color), Hrs, OT, Wknd, 401k. Goal: fits 390px screen without horizontal scroll.
-- [ ] **"Full detail" info button** — Add a small ⓘ button in the section header of the weekly table. Tapping opens a near-full-screen modal/sheet showing the complete 9-column table (all data points preserved, scrollable). Dismisses on tap-outside or ✕ button.
+- [x] **Slim weekly table to essential columns only** — Keep: Wk End, Gross, Take Home, Status badge. Drop: Rot (redundant with color), Hrs, OT, Wknd, 401k. Goal: fits 390px screen without horizontal scroll.
+- [x] **"Full detail" info button** — Add a small ⊞ button in the section header of the weekly table. Tapping opens a near-full-screen modal/sheet showing the complete 9-column table (all data points preserved, scrollable). Dismisses on tap-outside or ✕ button.
 
 ### Overview Tab (Income → Summary → Overview)
 Monthly summary table currently shows 7 columns including `Your 401k` and `w/ Match`.
 
-- [ ] **Remove 401k columns from overview table** — Drop `Your 401k` and `w/ Match` columns from the monthly overview table. Keep: status bar, Month, Chks, Gross, Take Home. 401k detail lives exclusively on the 401k tab.
+- [x] **Remove 401k columns from overview table** — Drop `Your 401k` and `w/ Match` columns from the monthly overview table. Keep: status bar, Month, Chks, Gross, Take Home. 401k detail lives exclusively on the 401k tab.
 
 ### 401k Tab (Income → 401k)
 Currently shows a per-week table (one row per week with has401k=true) with a Rot column.
 
-- [ ] **Switch 401k table to monthly breakdown** — Aggregate weekly rows into monthly rows (same grouping logic as the overview monthly table). Columns: Month, Your X%, Match, Mo Total, Running. Remove the Rot column entirely — rotation is not meaningful at the month level.
+- [x] **Switch 401k table to monthly breakdown** — Aggregate weekly rows into monthly rows (same grouping logic as the overview monthly table). Columns: Month, Gross, Your X%, Match, Mo Total, Running. Remove the Rot column entirely — rotation is not meaningful at the month level.
 
 ### Home Tab (HomePanel.jsx)
 Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emergency Fund, Goals, Next Week.
 
-- [ ] **Replace Take Home card with Weekly Left — show what's left after expenses** — Remove the raw "Take Home" card (paycheck total). Keep "Weekly Left" (`adjustedWeeklyAvg` — after all expenses) as the primary top hero card (span 2). This is the number the user actually cares about day-to-day. Make sure its value reflects the current week's actual net minus expenses, not just a flat average.
-- [ ] **Remove "Emergency Fund" card** — Drop the Emergency Fund card. Remaining cards: Weekly Left, Net Worth Trend, Budget Health, Goals, Next Week.
-- [ ] **Center "Financial Health" section header** — `SH` component left-aligns with gold bar by default. Override to center for this section header only.
-- [ ] **Rewrite Home subtitle** — Replace `"Week {idx} of 52 · {rotation}"` with: `"Another beautiful day, {weekdayName} the {dayOfMonth}. You are working on your {topPriorityGoal} goal"`. Derive weekday name and day-of-month from `today` prop. Top priority goal = first non-completed goal by position, or first goal if none defined yet; if no goals, fall back to `"financial"`.
+- [x] **Replace Take Home card with Weekly Left — show what's left after expenses** — Remove the raw "Take Home" card (paycheck total). Keep "Weekly Left" (`adjustedWeeklyAvg` — after all expenses) as the primary top hero card (span 2). This is the number the user actually cares about day-to-day. Make sure its value reflects the current week's actual net minus expenses, not just a flat average.
+- [x] **Remove "Emergency Fund" card** — Drop the Emergency Fund card. Remaining cards: Weekly Left, Net Worth Trend, Budget Health, Goals, Next Week.
+- [x] **Center "Financial Health" section header** — `SH` component left-aligns with gold bar by default. Override to center for this section header only.
+- [x] **Rewrite Home subtitle** — Replace `"Week {idx} of 52 · {rotation}"` with: `"Another beautiful day, {weekdayName} the {dayOfMonth}. You are working on your {topPriorityGoal} goal"`. Derive weekday name and day-of-month from `today` prop. Top priority goal = first non-completed goal by position, or first goal if none defined yet; if no goals, fall back to `"financial"`.
 
 ### Budget & Loans Bugs
 
@@ -352,4 +352,4 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 
 ---
 
-*Last updated: 2026-03-25 — §7 budget chart + loan payoff bugs fixed. Breakdown tab now shows full-year annual projection independent of quarter selector; loan annual cost stops at payoff date. Next: remaining §7 polish items or Phase 5 (Tax Exempt Gate visual test).*
+*Last updated: 2026-03-25 — §7 UI Polish Sprint fully complete. Weekly table slimmed to 4 cols + full-detail modal; overview table drops 401k cols; 401k table switches to monthly rows; home tab promotes Weekly Left as hero, removes Take Home + Emergency Fund, centers header, rewrites subtitle with date + top goal. Next: Phase 5 (Tax Exempt Gate visual test) or §8 Post-Auth features.*

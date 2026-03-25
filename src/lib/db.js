@@ -61,7 +61,7 @@ export async function loadUserData() {
 
   // Migrate and normalize all expenses on load
   const PROJECT_START = FISCAL_YEAR_START;
-  const rawExpenses = data.expenses.length ? data.expenses : INITIAL_EXPENSES;
+  const rawExpenses = Array.isArray(data.expenses) ? data.expenses : [];
   const migratedExpenses = rawExpenses.map(exp => {
     // Loans: always regenerate history from loanMeta so runway/payoff math stays fresh
     if (exp.type === "loan" && exp.loanMeta) {
@@ -131,8 +131,8 @@ export async function loadUserData() {
   return {
     config:             mergedConfig,
     expenses:           migratedExpenses,
-    goals:              data.goals.length ? data.goals  : INITIAL_GOALS,
-    logs:               data.logs.length  ? data.logs   : INITIAL_LOGS,
+    goals:              Array.isArray(data.goals) ? data.goals : [],
+    logs:               Array.isArray(data.logs)  ? data.logs  : [],
     showExtra:          data.show_extra,
     weekConfirmations:  wcData?.week_confirmations ?? {},
     isDHL:              data.is_dhl   ?? false,

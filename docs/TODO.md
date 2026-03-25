@@ -203,36 +203,45 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 - [x] In Supabase SQL editor: `UPDATE user_data SET user_id = '<auth-uuid>' WHERE user_id = 'db07a039-...'`
 - [x] Update `VITE_USER_ID` in `.env` to match the auth UUID (keeps the app working until dynamic auth lands)
 
-### Step 1 — supabase.js: swap hardcoded USER_ID for dynamic session
-- [ ] Remove `export const USER_ID = import.meta.env.VITE_USER_ID`
-- [ ] Export `getCurrentUserId()` helper: `(await supabase.auth.getUser()).data.user?.id ?? null`
-- [ ] Export `onAuthChange(callback)` wrapper around `supabase.auth.onAuthStateChange`
+### Step 1 — supabase.js: swap hardcoded USER_ID for dynamic session ✅
+- [x] Remove `export const USER_ID = import.meta.env.VITE_USER_ID`
+- [x] Export `getCurrentUserId()` helper: `(await supabase.auth.getUser()).data.user?.id ?? null`
+- [x] Export `onAuthChange(callback)` wrapper around `supabase.auth.onAuthStateChange`
 
-### Step 2 — db.js: make load/save user-ID-aware
-- [ ] `loadUserData()` — call `getCurrentUserId()`; return defaults (not throw) if null (unauthenticated visitor gets a blank slate, not a crash)
-- [ ] `saveUserData()` — call `getCurrentUserId()`; bail silently if null so unauthenticated state never writes
+### Step 2 — db.js: make load/save user-ID-aware ✅
+- [x] `loadUserData()` — call `getCurrentUserId()`; return defaults (not throw) if null (unauthenticated visitor gets a blank slate, not a crash)
+- [x] `saveUserData()` — call `getCurrentUserId()`; bail silently if null so unauthenticated state never writes
+- [x] **Data isolation fix (2026-03-25)** — new users with empty rows no longer see Anthony's personal goals/logs/expenses; empty arrays now return `[]` instead of falling back to `INITIAL_GOALS/LOGS/EXPENSES`
 
-### Step 3 — LoginScreen.jsx (new component)
-- [ ] Email + password fields; Sign In button → `supabase.auth.signInWithPassword()`
-- [ ] "Create account" toggle → `supabase.auth.signUp()` then `INSERT INTO user_data (user_id) VALUES (new_uid)` to seed the row
-- [ ] Inline error display (wrong password, email taken, etc.)
-- [ ] Loading state during async call; disable buttons while in flight
+### Step 3 — LoginScreen.jsx (new component) ✅
+- [x] Email + password fields; Sign In button → `supabase.auth.signInWithPassword()`
+- [x] "Create account" toggle → `supabase.auth.signUp()` then `INSERT INTO user_data (user_id) VALUES (new_uid)` to seed the row
+- [x] Inline error display (wrong password, email taken, etc.)
+- [x] Loading state during async call; disable buttons while in flight
+- [x] `emailRedirectTo: window.location.origin` — confirmation email links back to the active domain (Vercel preview / prod / localhost) instead of hardcoded localhost
 
-### Step 4 — App.jsx: auth gate
-- [ ] On mount: `supabase.auth.getSession()` — if valid session exists, skip login screen (persistence)
-- [ ] Listen to `onAuthStateChange` — update `authedUser` state; null = show login, object = show dashboard
-- [ ] Pass `authedUser` down or handle sign-out button (clears session + resets all state back to defaults)
-- [ ] Hard gate: render `<LoginScreen onAuth={setAuthedUser} />` before any dashboard content when `authedUser === null`
+### Step 4 — App.jsx: auth gate ✅
+- [x] On mount: `supabase.auth.getSession()` — if valid session exists, skip login screen (persistence)
+- [x] Listen to `onAuthStateChange` — update `authedUser` state; null = show login, object = show dashboard
+- [x] `authChecked` flag prevents flash of login screen during session restore on reload
+- [x] Sign-out button (⎋) in desktop sidebar and mobile drawer → `supabase.auth.signOut()`
+- [x] Hard gate: render `<LoginScreen />` before any dashboard content when `authedUser === null`
 
-### Step 5 — Supabase RLS (run in SQL editor before second user)
-- [ ] `ALTER TABLE user_data ENABLE ROW LEVEL SECURITY;`
-- [ ] `CREATE POLICY "own row only" ON user_data FOR ALL USING (auth.uid() = user_id);`
-- [ ] Verify your own session still reads/writes after enabling (anon key + RLS + policy must all line up)
+### Step 5 — Supabase RLS ✅
+- [x] `ALTER TABLE user_data ENABLE ROW LEVEL SECURITY;` — run in Supabase SQL editor
+- [x] `CREATE POLICY "own row only" ON user_data FOR ALL USING (auth.uid() = user_id);`
+- [x] Verified: existing account reads/writes correctly after RLS enabled
 
 ### Step 6 — Session persistence on mobile (PWA)
 - [ ] Supabase JS client persists session to localStorage automatically — verify it survives "Add to Home Screen" launch (standalone mode uses same localStorage origin)
 - [ ] Test: sign in on Safari, add to home screen, relaunch — should go straight to dashboard, no login prompt
 - [ ] If session expires: `onAuthStateChange` fires with `SIGNED_OUT` → app drops back to login screen cleanly
+
+### Wizard Polish (identified 2026-03-25 from test user session)
+- [x] **Base pay prefill corrected** — `DEFAULT_CONFIG.baseRate` and placeholder changed from 21.15 → 19.65 (DHL forklift operator base rate); `PTO_RATE` was already 19.65
+- [x] **Wizard scroll fixed** — Step 1 (and any tall step) now scrollable on mobile; outer container uses `overflowY: auto` + `margin: auto` on inner card instead of `justifyContent: center` which clipped tall steps
+- [x] **DHL differential note added** — Step 1 DHL confirmation pill now shows: "Weekend rate ($3.00/hr) is pre-filled. Night shift adds $1.50/hr — set in the DHL team step."
+- [ ] **Night shift differential** — `dhlNightShift` flag is stored and displayed in Step 15 (DHL Team Setup) but not yet computed in `buildYear()`. Night shift earns +$1.50/hr stacked on top of weekend diff (+$3.00). Add `nightDiffRate: 1.50` to DEFAULT_CONFIG and apply in `buildYear()` for DHL night-shift weeks.
 
 ---
 

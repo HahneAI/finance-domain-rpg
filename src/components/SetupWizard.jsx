@@ -220,8 +220,10 @@ function Step1({ formData, onChange, lifeEvent }) {
             marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)",
             lineHeight: "1.5",
           }}>
-            Rotation schedule, attendance bucket, and dual-rate logic auto-configured for DHL.
-            You'll pick your team (A or B) in the next step.
+            Rotation schedule, attendance bucket, and dual-rate logic auto-configured.
+            You'll pick your team (A or B) in the next step.{" "}
+            Weekend rate ($3.00/hr) is pre-filled below. Night shift adds $1.50/hr —
+            set in the DHL team step.
           </div>
         )}
       </Field>
@@ -237,7 +239,7 @@ function Step1({ formData, onChange, lifeEvent }) {
                 type="number" min="0" step="0.01"
                 value={formData.baseRate ?? ""}
                 onChange={e => onChange({ baseRate: parseFloat(e.target.value) || 0 })}
-                placeholder="e.g. 21.15"
+                placeholder="e.g. 19.65"
               />
             </Field>
             <Field label="Shift Length (hrs)">
@@ -1856,12 +1858,14 @@ export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = 
     <div style={{
       position: "fixed", inset: 0,
       background: "var(--color-bg-base)",
+      overflowY: "auto", WebkitOverflowScrolling: "touch",
       display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center",
+      alignItems: "center",
       padding: "24px 16px", zIndex: 100,
     }}>
       <div style={{
         width: "100%", maxWidth: "480px",
+        margin: "auto",
         background: "var(--color-bg-surface)",
         border: "1px solid var(--color-border-subtle)",
         borderRadius: "20px",

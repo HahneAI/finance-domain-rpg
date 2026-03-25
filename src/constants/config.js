@@ -26,7 +26,7 @@ export const DEFAULT_CONFIG = {
   standardWeeklyHours: 40,     // standard path only — flat hours per week baseline
 
   // ── Pay structure ────────────────────────────────────────────
-  baseRate: 21.15, shiftHours: 12, diffRate: 3.00, otThreshold: 40, otMultiplier: 1.5,
+  baseRate: 19.65, shiftHours: 12, diffRate: 3.00, otThreshold: 40, otMultiplier: 1.5,
   commissionMonthly: 0,          // $ / month average; 0 = not a commission job
 
   // ── Deductions / benefits ────────────────────────────────────

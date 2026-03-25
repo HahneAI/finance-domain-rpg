@@ -333,16 +333,16 @@ describe('loadUserData — rotation correction', () => {
 })
 
 describe('loadUserData — goals and logs fallback', () => {
-  it('falls back to INITIAL_GOALS when goals array is empty', async () => {
+  it('returns empty array for goals when row has empty goals (new user isolation)', async () => {
     setupLoadMock(makeRow({ goals: [] }))
     const result = await loadUserData()
-    expect(result.goals).toEqual(INITIAL_GOALS)
+    expect(result.goals).toEqual([])
   })
 
-  it('falls back to INITIAL_LOGS when logs array is empty', async () => {
+  it('returns empty array for logs when row has empty logs (new user isolation)', async () => {
     setupLoadMock(makeRow({ logs: [] }))
     const result = await loadUserData()
-    expect(result.logs).toEqual(INITIAL_LOGS)
+    expect(result.logs).toEqual([])
   })
 
   it('preserves non-empty goals from the row', async () => {

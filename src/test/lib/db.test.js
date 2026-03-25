@@ -408,4 +408,18 @@ describe('saveUserData', () => {
     const [upsertData] = mockUpsert.mock.calls[0]
     expect(upsertData.is_dhl).toBe(false)
   })
+
+  it('logs error message when upsert fails (line 149 error branch)', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mockUpsert = vi.fn().mockResolvedValue({ error: { message: 'Connection refused' } })
+    supabase.from.mockReturnValue({ upsert: mockUpsert })
+
+    await saveUserData({
+      config: DEFAULT_CONFIG,
+      expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
+    })
+
+    expect(consoleSpy).toHaveBeenCalledWith('Failed to save user data:', 'Connection refused')
+    consoleSpy.mockRestore()
+  })
 })

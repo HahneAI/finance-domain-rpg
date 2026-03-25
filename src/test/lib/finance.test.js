@@ -187,6 +187,29 @@ describe('buildYear', () => {
     expect(lateActive.length).toBeGreaterThan(0)
     lateActive.forEach(w => expect(w.k401kEmployee).toBeGreaterThan(0))
   })
+
+  it('standard DHL preset rotation uses DHL_PRESET day arrays when dhlTeam set and !dhlCustomSchedule', () => {
+    // This path covers lines 76-77: the dhlTeam && !dhlCustomSchedule branch in buildYear()
+    const presetConfig = {
+      ...DHL_CONFIG,
+      dhlTeam: 'A',
+      dhlCustomSchedule: false,
+      startingWeekIsHeavy: true,  // Team A starts heavy
+    }
+    const presetWeeks = buildYear(presetConfig)
+    expect(presetWeeks).toHaveLength(53)
+    // Active weeks should have non-zero gross pay
+    const activeWeeks = presetWeeks.filter(w => w.active)
+    expect(activeWeeks.length).toBeGreaterThan(0)
+    activeWeeks.forEach(w => expect(w.grossPay).toBeGreaterThan(0))
+    // Standard preset heavy week (DHL_PRESET light = Mon/Thu/Fri = 3 shifts = 36h)
+    // light and heavy weeks should produce different grossPay amounts
+    const firstHeavy = activeWeeks.find(w => w.rotation === '6-Day')
+    const firstLight = activeWeeks.find(w => w.rotation === '4-Day')
+    if (firstHeavy && firstLight) {
+      expect(firstHeavy.grossPay).toBeGreaterThan(firstLight.grossPay)
+    }
+  })
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -558,16 +581,30 @@ describe('loanPaymentsRemaining', () => {
     expect(loanPaymentsRemaining(futureLoan)).toBe(10)
   })
 
-  it('returns a reduced count when some payments have elapsed', () => {
+  it('returns a reduced count when today is mid-term (hits elapsed calculation path)', () => {
+    // Use a long-running loan so today (March 22) is between firstPaymentDate and payoffDate.
+    // 52 weekly payments from 2026-01-01 → payoff ≈ 2026-12-31; March 22 is ~11 payments in.
     const activeLoan = {
+      totalAmount: 5200,
+      paymentAmount: 100,
+      paymentFrequency: 'weekly',
+      firstPaymentDate: '2026-01-01',
+    }
+    const remaining = loanPaymentsRemaining(activeLoan)
+    // 52 total - 11 elapsed ≈ 41 remaining
+    expect(remaining).toBeGreaterThan(0)
+    expect(remaining).toBeLessThan(52)
+  })
+
+  it('returns total payment count when today is before firstPaymentDate', () => {
+    vi.setSystemTime(new Date(2026, 0, 1)) // Jan 1 — before firstPaymentDate
+    const loan = {
       totalAmount: 1000,
       paymentAmount: 100,
       paymentFrequency: 'weekly',
-      firstPaymentDate: '2026-01-01', // 81 days before March 22 = ~11 weekly payments elapsed
+      firstPaymentDate: '2026-06-01',
     }
-    const remaining = loanPaymentsRemaining(activeLoan)
-    expect(remaining).toBeGreaterThanOrEqual(0)
-    expect(remaining).toBeLessThan(10)
+    expect(loanPaymentsRemaining(loan)).toBe(10) // ceil(1000/100)
   })
 })
 
@@ -898,6 +935,10 @@ describe('stateTax', () => {
     for (const cfg of Object.values(STATE_TAX_TABLE)) {
       expect(stateTax(40000, cfg)).toBeGreaterThanOrEqual(0)
     }
+  })
+
+  it('returns 0 for unknown model string (defensive fallback branch)', () => {
+    expect(stateTax(50000, { model: 'CUSTOM_UNKNOWN' })).toBe(0)
   })
 })
 

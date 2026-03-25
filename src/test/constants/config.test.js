@@ -156,9 +156,9 @@ describe('PHASES', () => {
     }
   })
 
-  it('all color fields are valid hex color strings', () => {
+  it('all color fields are valid hex or CSS variable strings', () => {
     for (const phase of PHASES) {
-      expect(phase.color).toMatch(/^#[0-9a-fA-F]{3,8}$/)
+      expect(phase.color).toMatch(/^(#[0-9a-fA-F]{3,8}|var\(--[\w-]+\))$/)
     }
   })
 })
@@ -184,9 +184,9 @@ describe('EVENT_TYPES', () => {
     }
   })
 
-  it('all color fields are valid hex color strings', () => {
+  it('all color fields are valid hex or CSS variable strings', () => {
     for (const [, val] of Object.entries(EVENT_TYPES)) {
-      expect(val.color).toMatch(/^#[0-9a-fA-F]{3,8}$/)
+      expect(val.color).toMatch(/^(#[0-9a-fA-F]{3,8}|var\(--[\w-]+\))$/)
     }
   })
 })
@@ -273,9 +273,9 @@ describe('INITIAL_GOALS', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('all color fields are valid hex color strings', () => {
+  it('all color fields are valid hex or CSS variable strings', () => {
     for (const goal of INITIAL_GOALS) {
-      expect(goal.color).toMatch(/^#[0-9a-fA-F]{3,8}$/)
+      expect(goal.color).toMatch(/^(#[0-9a-fA-F]{3,8}|var\(--[\w-]+\))$/)
     }
   })
 })

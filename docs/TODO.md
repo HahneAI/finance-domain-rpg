@@ -245,7 +245,36 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 
 ---
 
-## 7. Post-Auth Roadmap
+## 7. UI Polish Sprint
+
+### Weekly Pay Table (Income → Weekly tab)
+Currently 9 columns (Wk End, Rot, Hrs, OT, Wknd, Gross, 401k, Take Home, Status) — requires horizontal scroll on mobile, visually dense with small text.
+
+- [ ] **Slim weekly table to essential columns only** — Keep: Wk End, Gross, Take Home, Status badge. Drop: Rot (redundant with color), Hrs, OT, Wknd, 401k. Goal: fits 390px screen without horizontal scroll.
+- [ ] **"Full detail" info button** — Add a small ⓘ button in the section header of the weekly table. Tapping opens a near-full-screen modal/sheet showing the complete 9-column table (all data points preserved, scrollable). Dismisses on tap-outside or ✕ button.
+
+### Overview Tab (Income → Summary → Overview)
+Monthly summary table currently shows 7 columns including `Your 401k` and `w/ Match`.
+
+- [ ] **Remove 401k columns from overview table** — Drop `Your 401k` and `w/ Match` columns from the monthly overview table. Keep: status bar, Month, Chks, Gross, Take Home. 401k detail lives exclusively on the 401k tab.
+
+### 401k Tab (Income → 401k)
+Currently shows a per-week table (one row per week with has401k=true) with a Rot column.
+
+- [ ] **Switch 401k table to monthly breakdown** — Aggregate weekly rows into monthly rows (same grouping logic as the overview monthly table). Columns: Month, Your X%, Match, Mo Total, Running. Remove the Rot column entirely — rotation is not meaningful at the month level.
+
+### Home Tab (HomePanel.jsx)
+Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emergency Fund, Goals, Next Week.
+
+- [ ] **Weekly Take Home card — show actual current-week paycheck** — Card already sits at the top (span 2). Change its value from `weeklyTakeHome` (average) to `computeNet(currentWeek, config)` — the actual net for the paycheck being received this week. Subtitle: "paycheck received this week" or similar. If current week is inactive/pre-employment, fall back to next active week.
+- [ ] **Remove "Weekly Left" card and "Emergency Fund" card** — `Weekly Left` (after all expenses) and `Emergency Fund` (goal status) both removed. Remaining cards: Weekly Take Home, Net Worth Trend, Budget Health, Goals, Next Week — fits cleaner on one screen.
+  - *Note: Confirm during implementation which card is the intended "take home card" to remove — likely "Weekly Left" (shows take-home after expenses). Emergency Fund removal is unambiguous.*
+- [ ] **Center "Financial Health" section header** — `SH` component left-aligns with gold bar by default. Override to center for this section header only.
+- [ ] **Rewrite Home subtitle** — Replace `"Week {idx} of 52 · {rotation}"` with: `"Another beautiful day, {weekdayName} the {dayOfMonth}. You are working on your {topPriorityGoal} goal"`. Derive weekday name and day-of-month from `today` prop. Top priority goal = first non-completed goal by position, or first goal if none defined yet; if no goals, fall back to `"financial"`.
+
+---
+
+## 8. Post-Auth Roadmap
 
 ### Fiscal Week Features
 
@@ -283,7 +312,7 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 
 ---
 
-## 8. Optional Deductions Mapping (Post-Setup Wizard)
+## 9. Optional Deductions Mapping (Post-Setup Wizard)
 
 - [ ] **Itemized deductions module** — optional advanced setup for users who want more accurate year-end tax projections beyond the standard deduction assumption:
   - [ ] Entry point: "Advanced" link shown on the Annual Tax Strategy step of the setup wizard, and accessible anytime from Settings

@@ -29,7 +29,16 @@ export function LoginScreen() {
     setLoading(true);
 
     if (isSignUp) {
-      const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          // Redirect back to whatever domain this app is running on after
+          // email confirmation — works for localhost, Vercel preview URLs,
+          // and production without any hardcoding.
+          emailRedirectTo: window.location.origin,
+        },
+      });
       if (signUpError) {
         setError(signUpError.message);
         setLoading(false);

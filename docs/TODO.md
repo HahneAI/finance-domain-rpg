@@ -168,7 +168,33 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 
 ---
 
-## 5. Post-Auth Roadmap
+## 5. WeekConfirmModal — Three Holes (identified 2026-03-25)
+
+### Hole 1 — Net-zero swallows real schedule changes
+**Fix:** Make all event logs show editable shifts + hours fields (so missed/gained can be directly adjusted), and show a confirmation popup before "Log & Confirm" that validates the hours math.
+- [ ] Net-zero with actual day swap → offer "Confirm Clean" OR "Log Swap →" in Layer 1 footer instead of silently confirming
+- [ ] Layer 2 (WeekConfirmModal): add editable Shifts Missed + Hours Missed override fields after DayPicker for missed_unpaid / missed_unapproved
+- [ ] Layer 2 (WeekConfirmModal): add editable Shifts Gained + Hours Gained fields for bonus type
+- [ ] Layer 2 footer: "Log & Confirm" → first click shows confirmation summary (hours math check, override warning); second click saves
+- [ ] LogPanel add/edit forms: same override fields (Shifts Missed + Hours Missed after DayPicker for missed types; Shifts/Hours Gained for bonus)
+- [ ] LogPanel SAVE buttons: gated behind same confirmation popup showing the math before committing
+
+### Hole 2 — Confirming a zero-content absence event
+**Fix:** Guard the Layer 2 confirm action — if missed type but no days selected and no manual hours entered, block or warn. Show popup if user tries to navigate away from an open event form without finishing it.
+- [ ] WeekConfirmModal Layer 2: disable / warn on "Log & Confirm" if missed type has 0 shifts, 0 hours, and no days selected (the empty confirm case)
+- [ ] WeekConfirmModal: if user clicks "Skip for now" or dismisses while on Layer 2, show "You haven't finished logging — leave anyway?" confirmation
+- [ ] LogPanel add form: warn user with "Leave without saving?" if they click CANCEL after partially filling a form (at minimum a week is selected)
+
+### Hole 3 — Calendar date labels always assume Monday-start fiscal year
+**Fix:** Align `buildYear()` to understand the actual fiscal year calendar; overlay pay period start day so all date math across the app runs only on paychecks that land in the current fiscal year.
+- [ ] Audit `buildYear()` — ensure week start day is derived from `FISCAL_YEAR_START` config, not hardcoded to Monday
+- [ ] Add `payPeriodStartDay` to config (0=Sun, 1=Mon, etc.); use it as a metaphorical overlay in calendar/day grid displays
+- [ ] WeekConfirmModal day grid: dates under each day label must derive from actual week start, not always `weekStart + 0..6` assuming Mon=0
+- [ ] Verify all fiscal-year-bound math (PTO accrual, bucket model, goal timelines) runs only on paychecks that land within the current fiscal year
+
+---
+
+## 6. Post-Auth Roadmap
 
 ### Fiscal Week Features
 
@@ -206,7 +232,7 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 
 ---
 
-## 6. Optional Deductions Mapping (Post-Setup Wizard)
+## 7. Optional Deductions Mapping (Post-Setup Wizard)
 
 - [ ] **Itemized deductions module** — optional advanced setup for users who want more accurate year-end tax projections beyond the standard deduction assumption:
   - [ ] Entry point: "Advanced" link shown on the Annual Tax Strategy step of the setup wizard, and accessible anytime from Settings

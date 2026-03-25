@@ -85,6 +85,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
     Object.fromEntries(DAY_NAMES.map(d => [d, week.workedDayNames.includes(d) ? true : null]))
   );
   const [layer, setLayer] = useState(1);
+  const [confirming, setConfirming] = useState(false);
 
   // ── Layer 2 form state (mirrors LogPanel's blank event shape) ─────────────
   const [eventVals, setEventVals] = useState({});
@@ -172,6 +173,28 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       amount: !isDeficit ? pickupDays.length * config.shiftHours * config.baseRate : 0,
       ptoHours: 0,
       note: "",
+    });
+    setLayer(2);
+  };
+
+  // ── Log Swap handler (net-zero case with actual day changes) ──────────────
+  // Net-zero means equal shift count but different days — may affect pay (e.g.
+  // missed weekday Mon, worked weekend Sun earns diffRate). Lets the user log it.
+  const handleLogSwap = () => {
+    setEventVals({
+      weekEnd: toLocalIso(week.weekEnd),
+      weekIdx: week.idx,
+      weekRotation: week.rotation,
+      type: "missed_unpaid",
+      missedDays: missedScheduledDays,
+      shiftsLost: missedScheduledDays.length,
+      weekendShifts: missedScheduledDays.filter(d => d === "Sat" || d === "Sun").length,
+      hoursLost: missedScheduledDays.length * config.shiftHours,
+      shiftsGained: pickupDays.length,
+      hoursGained: pickupDays.length * config.shiftHours,
+      amount: 0,
+      ptoHours: 0,
+      note: `Day swap — missed ${missedScheduledDays.join(", ")}, picked up ${pickupDays.join(", ")}`,
     });
     setLayer(2);
   };
@@ -348,14 +371,34 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
               }}>
                 Skip for now
               </button>
-              <button onClick={handleSave} style={{
-                background: "var(--color-gold)", color: "#0a0a0a", border: "none",
-                borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
-                letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
-                fontWeight: "bold",
-              }}>
-                {netShiftDelta !== 0 ? "Next →" : "Confirm Week"}
-              </button>
+              {netShiftDelta === 0 && (missedScheduledDays.length > 0 || pickupDays.length > 0) ? (
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button onClick={handleSave} style={{
+                    background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333",
+                    borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
+                    letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                  }}>
+                    Confirm Clean
+                  </button>
+                  <button onClick={handleLogSwap} style={{
+                    background: "var(--color-gold)", color: "#0a0a0a", border: "none",
+                    borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
+                    letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                    fontWeight: "bold",
+                  }}>
+                    Log Swap →
+                  </button>
+                </div>
+              ) : (
+                <button onClick={handleSave} style={{
+                  background: "var(--color-gold)", color: "#0a0a0a", border: "none",
+                  borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
+                  letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                  fontWeight: "bold",
+                }}>
+                  {netShiftDelta !== 0 ? "Next →" : "Confirm Week"}
+                </button>
+              )}
             </div>
           </>
         )}
@@ -395,7 +438,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                 </select>
               </div>
 
-              {/* DayPicker — for missed types */}
+              {/* DayPicker + shifts/hours override — for missed types */}
               {(eventVals.type === "missed_unpaid" || eventVals.type === "missed_unapproved") && (
                 <div style={{ marginBottom: "12px" }}>
                   <DayPicker
@@ -403,6 +446,34 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                     missedDays={Array.isArray(eventVals.missedDays) ? eventVals.missedDays : []}
                     onToggle={toggleMissedDay}
                   />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
+                    <div>
+                      <label style={lS}>Shifts Missed</label>
+                      <input type="number" min="0" value={eventVals.shiftsLost ?? 0}
+                        onChange={e => setEventVals(v => ({ ...v, shiftsLost: e.target.value }))}
+                        style={{ ...iS, marginTop: "4px" }} />
+                    </div>
+                    <div>
+                      <label style={lS}>Hours Missed</label>
+                      <input type="number" min="0" step="0.5" value={eventVals.hoursLost ?? 0}
+                        onChange={e => setEventVals(v => ({ ...v, hoursLost: e.target.value }))}
+                        style={{ ...iS, marginTop: "4px" }} />
+                    </div>
+                    {(() => {
+                      const s = parseInt(eventVals.shiftsLost) || 0;
+                      const h = parseFloat(eventVals.hoursLost) || 0;
+                      const expected = s * config.shiftHours;
+                      return expected > 0 && Math.abs(h - expected) > 0.01 ? (
+                        <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(201,168,76,0.08)", borderRadius: "4px" }}>
+                          ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h
+                        </div>
+                      ) : (
+                        <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-text-disabled)" }}>
+                          {s} × {config.shiftHours}h = {expected}h — edit to override
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               )}
 
@@ -436,6 +507,26 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                 </div>
               )}
 
+              {/* Shifts/hours gained — bonus type */}
+              {eventVals.type === "bonus" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                  <div>
+                    <label style={lS}>Shifts Gained</label>
+                    <input type="number" min="0"
+                      value={eventVals.shiftsGained !== undefined ? eventVals.shiftsGained : pickupDays.length}
+                      onChange={e => setEventVals(v => ({ ...v, shiftsGained: e.target.value }))}
+                      style={{ ...iS, marginTop: "4px" }} />
+                  </div>
+                  <div>
+                    <label style={lS}>Hours Gained</label>
+                    <input type="number" min="0" step="0.5"
+                      value={eventVals.hoursGained !== undefined ? eventVals.hoursGained : pickupDays.length * config.shiftHours}
+                      onChange={e => setEventVals(v => ({ ...v, hoursGained: e.target.value }))}
+                      style={{ ...iS, marginTop: "4px" }} />
+                  </div>
+                </div>
+              )}
+
               {/* Note */}
               <div style={{ marginBottom: "12px" }}>
                 <label style={lS}>Note</label>
@@ -462,25 +553,80 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                   </div>
                 </div>
               )}
+              {/* Confirmation block — shown after first click of "Log & Confirm" */}
+              {confirming && (
+                <div style={{ marginTop: "16px", padding: "14px", background: "#1a2d1e", border: "1px solid rgba(76,175,125,0.4)", borderRadius: "6px" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "10px" }}>Confirm entry</div>
+                  <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.9" }}>
+                    <div><span style={{ color: "#555" }}>Type:</span> {EVENT_TYPES[eventVals.type]?.label ?? eventVals.type}</div>
+                    {(eventVals.type === "missed_unpaid" || eventVals.type === "missed_unapproved") && (() => {
+                      const s = parseInt(eventVals.shiftsLost) || 0;
+                      const h = parseFloat(eventVals.hoursLost) || 0;
+                      const expected = s * config.shiftHours;
+                      const overridden = expected > 0 && Math.abs(h - expected) > 0.01;
+                      return (
+                        <>
+                          <div><span style={{ color: "#555" }}>Shifts missed:</span> <span style={{ color: "var(--color-text-primary)" }}>{s}</span></div>
+                          <div>
+                            <span style={{ color: "#555" }}>Hours missed:</span>{" "}
+                            <span style={{ color: overridden ? "var(--color-gold)" : "var(--color-text-primary)" }}>{h}h</span>
+                            {overridden && <span style={{ color: "var(--color-gold)", fontSize: "9px", marginLeft: "6px" }}>⚠ manually overridden (expected {expected}h)</span>}
+                          </div>
+                          {(eventVals.missedDays ?? []).length > 0 && <div><span style={{ color: "#555" }}>Days:</span> {eventVals.missedDays.join(", ")}</div>}
+                        </>
+                      );
+                    })()}
+                    {eventVals.type === "bonus" && (
+                      <>
+                        <div><span style={{ color: "#555" }}>Amount:</span> <span style={{ color: "var(--color-green)" }}>{f2(parseFloat(eventVals.amount) || 0)}</span></div>
+                        <div><span style={{ color: "#555" }}>Shifts gained:</span> {eventVals.shiftsGained !== undefined ? eventVals.shiftsGained : pickupDays.length}</div>
+                        <div><span style={{ color: "#555" }}>Hours gained:</span> {eventVals.hoursGained !== undefined ? eventVals.hoursGained : pickupDays.length * config.shiftHours}h</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Layer 2 footer */}
             <div style={{ padding: "14px 20px", borderTop: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-              <button onClick={() => setLayer(1)} style={{
-                background: "transparent", border: "none", color: "var(--color-text-disabled)",
-                fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
-                cursor: "pointer", padding: "6px 0",
-              }}>
-                ← Back
-              </button>
-              <button onClick={handleConfirmLayer2} style={{
-                background: "var(--color-green)", color: "#0a0a0a", border: "none",
-                borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
-                letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
-                fontWeight: "bold",
-              }}>
-                Log &amp; Confirm
-              </button>
+              {!confirming ? (
+                <>
+                  <button onClick={() => { setLayer(1); setConfirming(false); }} style={{
+                    background: "transparent", border: "none", color: "var(--color-text-disabled)",
+                    fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                    cursor: "pointer", padding: "6px 0",
+                  }}>
+                    ← Back
+                  </button>
+                  <button onClick={() => setConfirming(true)} style={{
+                    background: "var(--color-green)", color: "#0a0a0a", border: "none",
+                    borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
+                    letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                    fontWeight: "bold",
+                  }}>
+                    Log &amp; Confirm
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => setConfirming(false)} style={{
+                    background: "transparent", border: "none", color: "var(--color-text-disabled)",
+                    fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                    cursor: "pointer", padding: "6px 0",
+                  }}>
+                    ← Edit
+                  </button>
+                  <button onClick={handleConfirmLayer2} style={{
+                    background: "var(--color-green)", color: "#0a0a0a", border: "none",
+                    borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
+                    letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                    fontWeight: "bold",
+                  }}>
+                    Yes, Log It
+                  </button>
+                </>
+              )}
             </div>
           </>
         )}

@@ -140,7 +140,7 @@ describe('WeekConfirmModal — Layer 1 day toggles', () => {
     expect(screen.getByText(/\+ 1 pickup/i)).toBeTruthy()
   })
 
-  it('pickup exactly offsetting a missed day shows "Net hours unchanged"', () => {
+  it('pickup exactly offsetting a missed day shows "Net hours unchanged" and swap buttons', () => {
     renderModal()
     // Miss one scheduled day
     const missedBtns = screen.getAllByRole('button', { name: /^missed$/i })
@@ -148,8 +148,9 @@ describe('WeekConfirmModal — Layer 1 day toggles', () => {
     // Pick up the unscheduled day (Sun)
     fireEvent.click(screen.getByRole('button', { name: /\+ pickup/i }))
     expect(screen.getByText(/net hours unchanged/i)).toBeTruthy()
-    // Button should still say "Confirm Week" (net zero)
-    expect(screen.getByRole('button', { name: /confirm week/i })).toBeTruthy()
+    // Net-zero swap: show "Confirm Clean" + "Log Swap →" instead of plain "Confirm Week"
+    expect(screen.getByRole('button', { name: /confirm clean/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /log swap/i })).toBeTruthy()
   })
 
   it('confirms ✓ Pickup toggle text when unscheduled day is activated', () => {
@@ -208,12 +209,12 @@ describe('WeekConfirmModal — net-zero confirmation', () => {
     expect(confirmation.scheduledDays).toEqual(SIX_DAY_WEEK.workedDayNames)
   })
 
-  it('net-zero after miss + pickup: calls onConfirm with netShiftDelta 0 and no logEntry', () => {
+  it('net-zero after miss + pickup: "Confirm Clean" calls onConfirm with netShiftDelta 0 and no logEntry', () => {
     const { mockConfirm } = renderModal()
     const missedBtns = screen.getAllByRole('button', { name: /^missed$/i })
     fireEvent.click(missedBtns[0])                                            // miss Mon
     fireEvent.click(screen.getByRole('button', { name: /\+ pickup/i }))      // pickup Sun
-    fireEvent.click(screen.getByRole('button', { name: /confirm week/i }))
+    fireEvent.click(screen.getByRole('button', { name: /confirm clean/i }))  // choose clean confirm
     const [confirmation, logEntry] = mockConfirm.mock.calls[0]
     expect(confirmation.netShiftDelta).toBe(0)
     expect(logEntry).toBeNull()
@@ -317,7 +318,9 @@ describe('WeekConfirmModal — Layer 2 onConfirm callback', () => {
     const missedBtns = screen.getAllByRole('button', { name: /^missed$/i })
     fireEvent.click(missedBtns[0]) // miss Mon → deficit
     fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    // Two-step: first click shows confirmation summary, second click saves
     fireEvent.click(screen.getByRole('button', { name: /log & confirm/i }))
+    fireEvent.click(screen.getByRole('button', { name: /yes, log it/i }))
   }
 
   it('calls onConfirm with a confirmation record and a log entry', () => {
@@ -399,8 +402,10 @@ describe('WeekConfirmModal — known hole: vacuous missed_unpaid event', () => {
     const monPills = screen.getAllByRole('button', { name: /^mon$/i })
     // The last one is in the Layer 2 DayPicker (the first may be in Layer 1 hidden behind it)
     fireEvent.click(monPills[monPills.length - 1])
+    // Two-step: first click shows confirmation summary, second click saves
     fireEvent.click(screen.getByRole('button', { name: /log & confirm/i }))
-    // Confirm is still called — no guard stops it
+    fireEvent.click(screen.getByRole('button', { name: /yes, log it/i }))
+    // Confirm is still called — no guard stops a zero-hour entry (Hole 2 fix is separate)
     expect(mockConfirm).toHaveBeenCalledOnce()
     const [, logEntry] = mockConfirm.mock.calls[0]
     expect(logEntry.shiftsLost).toBe(0) // vacuous entry

@@ -194,7 +194,49 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 
 ---
 
-## 6. Post-Auth Roadmap
+## 6. Auth & Multi-User
+
+> Builds on existing Supabase project. RLS is currently **disabled** — must be enabled before any second user touches the table.
+> `user_data.user_id` is already a UUID primary key — no schema changes needed for auth linkage.
+
+### Step 0 — Link your account (manual, one-time) ✅
+- [x] In Supabase SQL editor: `UPDATE user_data SET user_id = '<auth-uuid>' WHERE user_id = 'db07a039-...'`
+- [x] Update `VITE_USER_ID` in `.env` to match the auth UUID (keeps the app working until dynamic auth lands)
+
+### Step 1 — supabase.js: swap hardcoded USER_ID for dynamic session
+- [ ] Remove `export const USER_ID = import.meta.env.VITE_USER_ID`
+- [ ] Export `getCurrentUserId()` helper: `(await supabase.auth.getUser()).data.user?.id ?? null`
+- [ ] Export `onAuthChange(callback)` wrapper around `supabase.auth.onAuthStateChange`
+
+### Step 2 — db.js: make load/save user-ID-aware
+- [ ] `loadUserData()` — call `getCurrentUserId()`; return defaults (not throw) if null (unauthenticated visitor gets a blank slate, not a crash)
+- [ ] `saveUserData()` — call `getCurrentUserId()`; bail silently if null so unauthenticated state never writes
+
+### Step 3 — LoginScreen.jsx (new component)
+- [ ] Email + password fields; Sign In button → `supabase.auth.signInWithPassword()`
+- [ ] "Create account" toggle → `supabase.auth.signUp()` then `INSERT INTO user_data (user_id) VALUES (new_uid)` to seed the row
+- [ ] Inline error display (wrong password, email taken, etc.)
+- [ ] Loading state during async call; disable buttons while in flight
+
+### Step 4 — App.jsx: auth gate
+- [ ] On mount: `supabase.auth.getSession()` — if valid session exists, skip login screen (persistence)
+- [ ] Listen to `onAuthStateChange` — update `authedUser` state; null = show login, object = show dashboard
+- [ ] Pass `authedUser` down or handle sign-out button (clears session + resets all state back to defaults)
+- [ ] Hard gate: render `<LoginScreen onAuth={setAuthedUser} />` before any dashboard content when `authedUser === null`
+
+### Step 5 — Supabase RLS (run in SQL editor before second user)
+- [ ] `ALTER TABLE user_data ENABLE ROW LEVEL SECURITY;`
+- [ ] `CREATE POLICY "own row only" ON user_data FOR ALL USING (auth.uid() = user_id);`
+- [ ] Verify your own session still reads/writes after enabling (anon key + RLS + policy must all line up)
+
+### Step 6 — Session persistence on mobile (PWA)
+- [ ] Supabase JS client persists session to localStorage automatically — verify it survives "Add to Home Screen" launch (standalone mode uses same localStorage origin)
+- [ ] Test: sign in on Safari, add to home screen, relaunch — should go straight to dashboard, no login prompt
+- [ ] If session expires: `onAuthStateChange` fires with `SIGNED_OUT` → app drops back to login screen cleanly
+
+---
+
+## 7. Post-Auth Roadmap
 
 ### Fiscal Week Features
 
@@ -232,7 +274,7 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 
 ---
 
-## 7. Optional Deductions Mapping (Post-Setup Wizard)
+## 8. Optional Deductions Mapping (Post-Setup Wizard)
 
 - [ ] **Itemized deductions module** — optional advanced setup for users who want more accurate year-end tax projections beyond the standard deduction assumption:
   - [ ] Entry point: "Advanced" link shown on the Annual Tax Strategy step of the setup wizard, and accessible anytime from Settings

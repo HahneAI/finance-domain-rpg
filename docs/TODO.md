@@ -151,10 +151,10 @@
 ### Phase 3 — SetupWizard component ✅
 All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. Pending: Phase 4 integration.
 
-### Phase 4 — App.jsx integration ← NEXT
-- [ ] First-run gate: `if (!config.setupComplete)` → render `<SetupWizard />`
-- [ ] `handleWizardComplete` merges and saves config
-- [ ] Life Events sidebar item + dependency engine for re-entry
+### Phase 4 — App.jsx integration ✅
+- [x] First-run gate: `if (!config.setupComplete)` → render `<SetupWizard />`
+- [x] `handleWizardComplete` merges and saves config
+- [x] Life Events sidebar item + dependency engine for re-entry
 
 ### Phase 5 — Tax Exempt Gate
 - [ ] `IncomePanel.jsx` — visual test all 3 variants (A/B/C) behind `GATE_VARIANT` const; pick winner; delete losers
@@ -267,4 +267,4 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 
 ---
 
-*Last updated: 2026-03-25 — Section 4 Phases 1–3 + Attendance History View complete. Section 5 WeekConfirmModal holes (Hole 1/2/3) all resolved. Phase 4 (App.jsx integration) is the next sprint.*
+*Last updated: 2026-03-25 — Section 4 Phases 1–4 + Attendance History View complete. Section 5 WeekConfirmModal holes (Hole 1/2/3) all resolved. Next: Phase 5 (Tax Exempt Gate visual test) or §6 Post-Auth features.*

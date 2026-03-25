@@ -26,6 +26,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
   const [histOpen, setHistOpen] = useState(false);
   const [addConfirming, setAddConfirming] = useState(false);
   const [editConfirming, setEditConfirming] = useState(false);
+  const [cancelWarning, setCancelWarning] = useState(false);
 
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const f0 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -512,11 +513,21 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
           {nEv.type === "other_loss" && <div>-${parseFloat(nEv.amount) || 0} other loss</div>}
         </div>
       )}
+      {cancelWarning && (
+        <div style={{ marginBottom: "10px", padding: "12px", background: "#2d1a1a", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "6px", fontSize: "11px" }}>
+          <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-red)", textTransform: "uppercase", marginBottom: "6px" }}>Leave without saving?</div>
+          <div style={{ color: "var(--color-text-secondary)", marginBottom: "10px", fontSize: "10px" }}>This event will be discarded.</div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button onClick={() => { setAdding(false); setNEv(blank); setAddConfirming(false); setCancelWarning(false); }} style={{ background: "var(--color-red)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Yes, Discard</button>
+            <button onClick={() => setCancelWarning(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Keep Editing</button>
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", gap: "8px" }}>
         {!addConfirming ? (
           <>
             <button onClick={() => setAddConfirming(true)} disabled={!nEv.weekEnd} style={{ background: nEv.weekEnd ? "var(--color-green)" : "var(--color-border-subtle)", color: nEv.weekEnd ? "var(--color-bg-base)" : "#555", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: nEv.weekEnd ? "pointer" : "default", fontWeight: "bold" }}>SAVE</button>
-            <button onClick={() => { setAdding(false); setNEv(blank); setAddConfirming(false); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</button>
+            <button onClick={() => nEv.weekEnd ? setCancelWarning(true) : (setAdding(false), setNEv(blank), setAddConfirming(false))} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</button>
           </>
         ) : (
           <>

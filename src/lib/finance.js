@@ -1,4 +1,4 @@
-import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES, DHL_PRESET } from "../constants/config.js";
+import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -58,8 +58,12 @@ export function getStateConfig(userState) {
 export function buildYear(cfg) {
   const weeks = [], k401Start = new Date(cfg.k401StartDate), taxedSet = new Set(cfg.taxedWeeks);
   const isDHL = cfg.employerPreset === "DHL";
-  let d = new Date(2026, 0, 5), idx = 0;
-  while (d <= new Date(2027, 0, 4)) {
+  // Derive loop bounds from FISCAL_YEAR_START so the range stays in sync with the
+  // constant rather than being duplicated as a hardcoded literal.
+  const [fyY, fyM, fyD] = FISCAL_YEAR_START.split('-').map(Number);
+  let d = new Date(fyY, fyM - 1, fyD), idx = 0;
+  const fyEnd = new Date(fyY + 1, fyM - 1, fyD - 1);
+  while (d <= fyEnd) {
     const weekEnd = new Date(d), weekStart = new Date(d);
     weekStart.setDate(weekStart.getDate() - 7);
 
@@ -98,8 +102,9 @@ export function buildYear(cfg) {
     regularHours = Math.min(totalHours, cfg.otThreshold);
     overtimeHours = Math.max(totalHours - cfg.otThreshold, 0);
     // Weekend diff is universal — earned by all shifts (morning and night).
-    // Night shift differential is a separate bonus tracked independently.
-    grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate;
+    // Night diff stacks on top of all hours when DHL + dhlNightShift is active.
+    const nightDiffBonus = (isDHL && cfg.dhlNightShift) ? totalHours * (cfg.nightDiffRate ?? 0) : 0;
+    grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate + nightDiffBonus;
 
     const active = idx >= cfg.firstActiveIdx;
     const has401k = active && weekEnd >= k401Start;
@@ -133,10 +138,12 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
 }
 
 export function projectedGross(isWeek2, cfg) {
+  const isDHL = cfg.employerPreset === "DHL";
   const ns = isWeek2 ? 6 : 4, totalH = ns * cfg.shiftHours;
   const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
   const wknd = isWeek2 ? 2 * cfg.shiftHours : 0;
-  return reg * cfg.baseRate + ot * cfg.baseRate * cfg.otMultiplier + wknd * cfg.diffRate;
+  const nightDiff = (isDHL && cfg.dhlNightShift) ? totalH * (cfg.nightDiffRate ?? 0) : 0;
+  return reg * cfg.baseRate + ot * cfg.baseRate * cfg.otMultiplier + wknd * cfg.diffRate + nightDiff;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -302,8 +309,9 @@ export function computeBucketModel(logs, cfg) {
   const cap = cfg.bucketCap ?? 128;
   let balance = cfg.bucketStartBalance ?? 64;
 
-  // Job start month: week 0 ends 2026-01-05; firstActiveIdx weeks of 7 days forward = first active week end
-  const weekZeroEnd = new Date(2026, 0, 5);
+  // Job start month: week 0 ends at FISCAL_YEAR_START; firstActiveIdx weeks of 7 days forward = first active week end
+  const [wzeY, wzeM, wzeD] = FISCAL_YEAR_START.split('-').map(Number);
+  const weekZeroEnd = new Date(wzeY, wzeM - 1, wzeD);
   const firstWeekEnd = new Date(weekZeroEnd.getTime() + (cfg.firstActiveIdx ?? 7) * 7 * 86400000);
   const firstWeekStart = new Date(firstWeekEnd.getTime() - 7 * 86400000);
   const jobStartMonth = toLocalIso(firstWeekStart).slice(0, 7);
@@ -366,6 +374,8 @@ export function computeBucketModel(logs, cfg) {
 }
 
 export function calcEventImpact(event, cfg) {
+  const isDHL = cfg.employerPreset === "DHL";
+  const nightDiffPerHour = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
   const isWeek2 = event.weekRotation === "6-Day" || event.weekRotation === "Week 2"; // "Week 2" kept for backward compat with stored data
   const normalShifts = isWeek2 ? 6 : 4, normalWeekendShifts = isWeek2 ? 2 : 0;
   const baseGross = projectedGross(isWeek2, cfg);
@@ -375,17 +385,18 @@ export function calcEventImpact(event, cfg) {
     const actualHours = actualShifts * cfg.shiftHours;
     const actualWknd = Math.max(normalWeekendShifts - (event.weekendShifts || 0), 0);
     const actualReg = Math.min(actualHours, cfg.otThreshold), actualOT = Math.max(actualHours - cfg.otThreshold, 0);
-    const actualGross = actualReg * cfg.baseRate + actualOT * cfg.baseRate * cfg.otMultiplier + actualWknd * cfg.shiftHours * cfg.diffRate;
+    const actualGross = actualReg * cfg.baseRate + actualOT * cfg.baseRate * cfg.otMultiplier + actualWknd * cfg.shiftHours * cfg.diffRate + actualHours * nightDiffPerHour;
     grossLost = Math.max(baseGross - actualGross, 0); hoursLostForPTO = (event.shiftsLost || 0) * cfg.shiftHours;
   } else if (event.type === "pto") {
     const ptoH = event.ptoHours || 0, normalH = normalShifts * cfg.shiftHours;
     const normalOT = Math.max(normalH - cfg.otThreshold, 0), actualOT = Math.max(normalH - ptoH - cfg.otThreshold, 0);
-    grossLost = ptoH * (cfg.baseRate - PTO_RATE) + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
+    // Night diff applies to hours worked but not to PTO hours — include the delta
+    grossLost = ptoH * (cfg.baseRate + nightDiffPerHour - PTO_RATE) + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
   } else if (event.type === "missed_unapproved") {
-    // Same gross/PTO math as partial — hours missed × base rate; bucket hit tracked separately
-    grossLost = (event.hoursLost || 0) * cfg.baseRate; hoursLostForPTO = event.hoursLost || 0;
+    // Hours missed × (base rate + night diff); bucket hit tracked separately
+    grossLost = (event.hoursLost || 0) * (cfg.baseRate + nightDiffPerHour); hoursLostForPTO = event.hoursLost || 0;
   } else if (event.type === "partial") {
-    grossLost = (event.hoursLost || 0) * cfg.baseRate; hoursLostForPTO = event.hoursLost || 0;
+    grossLost = (event.hoursLost || 0) * (cfg.baseRate + nightDiffPerHour); hoursLostForPTO = event.hoursLost || 0;
   } else if (event.type === "bonus") {
     grossGained = event.amount || 0;
   } else if (event.type === "other_loss") { grossLost = event.amount || 0; }

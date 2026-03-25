@@ -3,7 +3,7 @@
 exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations) 1`] = `
 {
   "attendanceBucketEnabled": null,
-  "baseRate": 21.15,
+  "baseRate": 19.65,
   "benefitsStartDate": null,
   "bucketCap": 128,
   "bucketPayoutRate": 9.825,
@@ -31,6 +31,7 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
   "lifePremium": 0,
   "ltd": 2,
   "moFlatRate": 0.047,
+  "nightDiffRate": 1.5,
   "otMultiplier": 1.5,
   "otThreshold": 40,
   "otherDeductions": [],

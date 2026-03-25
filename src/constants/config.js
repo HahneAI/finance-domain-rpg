@@ -18,15 +18,14 @@ export const DEFAULT_CONFIG = {
   dhlTeam: null,               // "A" | "B" | null
   dhlOtOnWeekend: false,       // true = mandatory OT day is typically Sat/Sun on 3-day weeks (adds diffRate)
   dhlCustomSchedule: false,    // false = use DHL_PRESET.rotation days; true = custom/hardcoded arrays (Anthony)
-  dhlNightShift: true,         // stored for future night-shift differential tracking; no longer
-                               // affects weekend diff in buildYear() — all shifts earn diffRate equally
+  dhlNightShift: true,         // true = night shift; applies nightDiffRate on all hours in buildYear()
 
   // ── Schedule type (non-DHL users) ───────────────────────────
   scheduleIsVariable: false,   // true = pay varies week-to-week (two paystub calculators)
   standardWeeklyHours: 40,     // standard path only — flat hours per week baseline
 
   // ── Pay structure ────────────────────────────────────────────
-  baseRate: 21.15, shiftHours: 12, diffRate: 3.00, otThreshold: 40, otMultiplier: 1.5,
+  baseRate: 19.65, shiftHours: 12, diffRate: 3.00, nightDiffRate: 1.50, otThreshold: 40, otMultiplier: 1.5,
   commissionMonthly: 0,          // $ / month average; 0 = not a commission job
 
   // ── Deductions / benefits ────────────────────────────────────

@@ -289,8 +289,8 @@ describe('PTO_RATE', () => {
     expect(PTO_RATE).toBeGreaterThan(0)
   })
 
-  it('is less than DEFAULT_CONFIG.baseRate (PTO pays less than regular)', () => {
-    expect(PTO_RATE).toBeLessThan(DEFAULT_CONFIG.baseRate)
+  it('equals DEFAULT_CONFIG.baseRate (PTO pays at the base hourly rate)', () => {
+    expect(PTO_RATE).toBe(DEFAULT_CONFIG.baseRate)
   })
 })
 

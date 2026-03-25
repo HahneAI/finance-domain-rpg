@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso } from "./lib/finance.js";
 import { loadUserData, saveUserData } from "./lib/db.js";
+import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { BenefitsPanel } from "./components/BenefitsPanel.jsx";
@@ -9,6 +10,7 @@ import { LogPanel } from "./components/LogPanel.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
 import { SetupWizard } from "./components/SetupWizard.jsx";
+import { LoginScreen } from "./components/LoginScreen.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -93,6 +95,13 @@ function SidebarNavItem({ item, active, onClick }) {
 }
 
 export default function App() {
+  // ── Auth state ─────────────────────────────────────────────────────────────
+  // authChecked: true once the initial getSession() call resolves.
+  // Without this flag, there's a flash of the login screen on every page reload
+  // even when a valid session already exists in localStorage.
+  const [authedUser, setAuthedUser]   = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [showExtra, setShowExtra] = useState(true);
@@ -136,8 +145,21 @@ export default function App() {
     setDrawerOpen(false);
   };
 
-  // ── Load from Supabase on mount ──
+  // ── Auth: check existing session on mount, subscribe to changes ──
   useEffect(() => {
+    // Resolve any existing session first (handles reload + PWA relaunch from localStorage).
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setAuthedUser(session?.user ?? null);
+      setAuthChecked(true);
+    });
+    // Subscribe to future sign-in / sign-out events.
+    return onAuthChange((user) => setAuthedUser(user));
+  }, []);
+
+  // ── Load from Supabase once auth resolves to a signed-in user ──
+  useEffect(() => {
+    if (!authedUser) return;
+    setLoading(true);
     loadUserData().then((data) => {
       setConfig(data.config);
       setShowExtra(data.showExtra);
@@ -150,7 +172,7 @@ export default function App() {
       if (!data.config.setupComplete) setWizardEntry(false);
       setLoading(false);
     });
-  }, []);
+  }, [authedUser]);
 
   // ── Debounced save to Supabase (800ms) ──
   const saveTimer = useRef(null);
@@ -329,6 +351,20 @@ export default function App() {
     setWizardEntry(null);
   }
 
+  // Checking localStorage for an existing session — avoid flash of login screen.
+  if (!authChecked) {
+    return (
+      <div style={{ background: "var(--color-bg-base)", minHeight: "100vh", color: "var(--color-gold)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", letterSpacing: "4px" }}>
+        LOADING...
+      </div>
+    );
+  }
+
+  // No valid session — show login / create account screen.
+  if (!authedUser) {
+    return <LoginScreen />;
+  }
+
   if (loading) {
     return (
       <div style={{ background: "var(--color-bg-base)",
@@ -482,8 +518,19 @@ export default function App() {
         }}
       >
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #222" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
-          <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
+              <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
+            </div>
+            <button
+              title="Sign out"
+              onClick={async () => { await supabase.auth.signOut(); }}
+              style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "16px", padding: "2px 0", marginTop: "1px", lineHeight: 1 }}
+            >
+              ⎋
+            </button>
+          </div>
           {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
@@ -681,13 +728,22 @@ export default function App() {
             <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G — Jackson MO</div>
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
           </div>
-          <button
-            onClick={() => setDrawerOpen(false)}
-            style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: "2px 4px", marginTop: "2px" }}
-            aria-label="Close navigation"
-          >
-            ✕
-          </button>
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <button
+              title="Sign out"
+              onClick={async () => { await supabase.auth.signOut(); setDrawerOpen(false); }}
+              style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "16px", lineHeight: 1, padding: "2px 6px" }}
+            >
+              ⎋
+            </button>
+            <button
+              onClick={() => setDrawerOpen(false)}
+              style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: "2px 4px", marginTop: "2px" }}
+              aria-label="Close navigation"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Drawer nav items */}

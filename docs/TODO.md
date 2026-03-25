@@ -151,20 +151,20 @@
 ### Phase 3 — SetupWizard component ✅
 All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. Pending: Phase 4 integration.
 
-### Phase 4 — App.jsx integration ← NEXT
-- [ ] First-run gate: `if (!config.setupComplete)` → render `<SetupWizard />`
-- [ ] `handleWizardComplete` merges and saves config
-- [ ] Life Events sidebar item + dependency engine for re-entry
+### Phase 4 — App.jsx integration ✅
+- [x] First-run gate: `if (!config.setupComplete)` → render `<SetupWizard />`
+- [x] `handleWizardComplete` merges and saves config
+- [x] Life Events sidebar item + dependency engine for re-entry
 
 ### Phase 5 — Tax Exempt Gate
 - [ ] `IncomePanel.jsx` — visual test all 3 variants (A/B/C) behind `GATE_VARIANT` const; pick winner; delete losers
 
-### Sprint: Attendance History View (All Users)
-- [ ] **Attendance history view** — log-based missed day tracking for all users:
-  - [ ] Pull `missed_unpaid`, `missed_unapproved`, `partial` entries from event log
-  - [ ] Show: missed days per month, running YTD total, day-of-week pattern breakdown
-  - [ ] Surface in LogPanel as collapsible "Attendance History" section
-  - [ ] No bucket math — pure event log history; bucket model output shown separately for users with attendance policy enabled
+### Sprint: Attendance History View (All Users) ✅
+- [x] **Attendance history view** — log-based missed day tracking for all users:
+  - [x] Pull `missed_unpaid`, `missed_unapproved`, `partial` entries from event log
+  - [x] Show: missed days per month, running YTD total, day-of-week pattern breakdown
+  - [x] Surface in LogPanel as collapsible "Attendance History" section
+  - [x] No bucket math — pure event log history; bucket model output shown separately for users with attendance policy enabled
 
 ---
 
@@ -172,29 +172,80 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 
 ### Hole 1 — Net-zero swallows real schedule changes
 **Fix:** Make all event logs show editable shifts + hours fields (so missed/gained can be directly adjusted), and show a confirmation popup before "Log & Confirm" that validates the hours math.
-- [ ] Net-zero with actual day swap → offer "Confirm Clean" OR "Log Swap →" in Layer 1 footer instead of silently confirming
-- [ ] Layer 2 (WeekConfirmModal): add editable Shifts Missed + Hours Missed override fields after DayPicker for missed_unpaid / missed_unapproved
-- [ ] Layer 2 (WeekConfirmModal): add editable Shifts Gained + Hours Gained fields for bonus type
-- [ ] Layer 2 footer: "Log & Confirm" → first click shows confirmation summary (hours math check, override warning); second click saves
-- [ ] LogPanel add/edit forms: same override fields (Shifts Missed + Hours Missed after DayPicker for missed types; Shifts/Hours Gained for bonus)
-- [ ] LogPanel SAVE buttons: gated behind same confirmation popup showing the math before committing
+- [x] Net-zero with actual day swap → offer "Confirm Clean" OR "Log Swap →" in Layer 1 footer instead of silently confirming
+- [x] Layer 2 (WeekConfirmModal): add editable Shifts Missed + Hours Missed override fields after DayPicker for missed_unpaid / missed_unapproved
+- [x] Layer 2 (WeekConfirmModal): add editable Shifts Gained + Hours Gained fields for bonus type
+- [x] Layer 2 footer: "Log & Confirm" → first click shows confirmation summary (hours math check, override warning); second click saves
+- [x] LogPanel add/edit forms: same override fields (Shifts Missed + Hours Missed after DayPicker for missed types; Shifts/Hours Gained for bonus)
+- [x] LogPanel SAVE buttons: gated behind same confirmation popup showing the math before committing
 
 ### Hole 2 — Confirming a zero-content absence event
 **Fix:** Guard the Layer 2 confirm action — if missed type but no days selected and no manual hours entered, block or warn. Show popup if user tries to navigate away from an open event form without finishing it.
-- [ ] WeekConfirmModal Layer 2: disable / warn on "Log & Confirm" if missed type has 0 shifts, 0 hours, and no days selected (the empty confirm case)
-- [ ] WeekConfirmModal: if user clicks "Skip for now" or dismisses while on Layer 2, show "You haven't finished logging — leave anyway?" confirmation
-- [ ] LogPanel add form: warn user with "Leave without saving?" if they click CANCEL after partially filling a form (at minimum a week is selected)
+- [x] WeekConfirmModal Layer 2: disable / warn on "Log & Confirm" if missed type has 0 shifts, 0 hours, and no days selected (the empty confirm case)
+- [x] WeekConfirmModal: if user clicks "Skip for now" or dismisses while on Layer 2, show "You haven't finished logging — leave anyway?" confirmation
+- [x] LogPanel add form: warn user with "Leave without saving?" if they click CANCEL after partially filling a form (at minimum a week is selected)
 
 ### Hole 3 — Calendar date labels always assume Monday-start fiscal year
 **Fix:** Align `buildYear()` to understand the actual fiscal year calendar; overlay pay period start day so all date math across the app runs only on paychecks that land in the current fiscal year.
-- [ ] Audit `buildYear()` — ensure week start day is derived from `FISCAL_YEAR_START` config, not hardcoded to Monday
-- [ ] Add `payPeriodStartDay` to config (0=Sun, 1=Mon, etc.); use it as a metaphorical overlay in calendar/day grid displays
-- [ ] WeekConfirmModal day grid: dates under each day label must derive from actual week start, not always `weekStart + 0..6` assuming Mon=0
-- [ ] Verify all fiscal-year-bound math (PTO accrual, bucket model, goal timelines) runs only on paychecks that land within the current fiscal year
+- [x] Audit `buildYear()` — ensure week start day is derived from `FISCAL_YEAR_START` config, not hardcoded to Monday
+- [x] Add `payPeriodStartDay` to config (0=Sun, 1=Mon, etc.); use it as a metaphorical overlay in calendar/day grid displays
+- [x] WeekConfirmModal day grid: dates under each day label must derive from actual week start, not always `weekStart + 0..6` assuming Mon=0
+- [x] Verify all fiscal-year-bound math (PTO accrual, bucket model, goal timelines) runs only on paychecks that land within the current fiscal year
 
 ---
 
-## 6. Post-Auth Roadmap
+## 6. Auth & Multi-User
+
+> Builds on existing Supabase project. RLS is currently **disabled** — must be enabled before any second user touches the table.
+> `user_data.user_id` is already a UUID primary key — no schema changes needed for auth linkage.
+
+### Step 0 — Link your account (manual, one-time) ✅
+- [x] In Supabase SQL editor: `UPDATE user_data SET user_id = '<auth-uuid>' WHERE user_id = 'db07a039-...'`
+- [x] Update `VITE_USER_ID` in `.env` to match the auth UUID (keeps the app working until dynamic auth lands)
+
+### Step 1 — supabase.js: swap hardcoded USER_ID for dynamic session ✅
+- [x] Remove `export const USER_ID = import.meta.env.VITE_USER_ID`
+- [x] Export `getCurrentUserId()` helper: `(await supabase.auth.getUser()).data.user?.id ?? null`
+- [x] Export `onAuthChange(callback)` wrapper around `supabase.auth.onAuthStateChange`
+
+### Step 2 — db.js: make load/save user-ID-aware ✅
+- [x] `loadUserData()` — call `getCurrentUserId()`; return defaults (not throw) if null (unauthenticated visitor gets a blank slate, not a crash)
+- [x] `saveUserData()` — call `getCurrentUserId()`; bail silently if null so unauthenticated state never writes
+- [x] **Data isolation fix (2026-03-25)** — new users with empty rows no longer see Anthony's personal goals/logs/expenses; empty arrays now return `[]` instead of falling back to `INITIAL_GOALS/LOGS/EXPENSES`
+
+### Step 3 — LoginScreen.jsx (new component) ✅
+- [x] Email + password fields; Sign In button → `supabase.auth.signInWithPassword()`
+- [x] "Create account" toggle → `supabase.auth.signUp()` then `INSERT INTO user_data (user_id) VALUES (new_uid)` to seed the row
+- [x] Inline error display (wrong password, email taken, etc.)
+- [x] Loading state during async call; disable buttons while in flight
+- [x] `emailRedirectTo: window.location.origin` — confirmation email links back to the active domain (Vercel preview / prod / localhost) instead of hardcoded localhost
+
+### Step 4 — App.jsx: auth gate ✅
+- [x] On mount: `supabase.auth.getSession()` — if valid session exists, skip login screen (persistence)
+- [x] Listen to `onAuthStateChange` — update `authedUser` state; null = show login, object = show dashboard
+- [x] `authChecked` flag prevents flash of login screen during session restore on reload
+- [x] Sign-out button (⎋) in desktop sidebar and mobile drawer → `supabase.auth.signOut()`
+- [x] Hard gate: render `<LoginScreen />` before any dashboard content when `authedUser === null`
+
+### Step 5 — Supabase RLS ✅
+- [x] `ALTER TABLE user_data ENABLE ROW LEVEL SECURITY;` — run in Supabase SQL editor
+- [x] `CREATE POLICY "own row only" ON user_data FOR ALL USING (auth.uid() = user_id);`
+- [x] Verified: existing account reads/writes correctly after RLS enabled
+
+### Step 6 — Session persistence on mobile (PWA)
+- [ ] Supabase JS client persists session to localStorage automatically — verify it survives "Add to Home Screen" launch (standalone mode uses same localStorage origin)
+- [ ] Test: sign in on Safari, add to home screen, relaunch — should go straight to dashboard, no login prompt
+- [ ] If session expires: `onAuthStateChange` fires with `SIGNED_OUT` → app drops back to login screen cleanly
+
+### Wizard Polish (identified 2026-03-25 from test user session)
+- [x] **Base pay prefill corrected** — `DEFAULT_CONFIG.baseRate` and placeholder changed from 21.15 → 19.65 (DHL forklift operator base rate); `PTO_RATE` was already 19.65
+- [x] **Wizard scroll fixed** — Step 1 (and any tall step) now scrollable on mobile; outer container uses `overflowY: auto` + `margin: auto` on inner card instead of `justifyContent: center` which clipped tall steps
+- [x] **DHL differential note added** — Step 1 DHL confirmation pill now shows: "Weekend rate ($3.00/hr) is pre-filled. Night shift adds $1.50/hr — set in the DHL team step."
+- [x] **Night shift differential** — `nightDiffRate: 1.50` added to DEFAULT_CONFIG; applied in `buildYear()`, `projectedGross()`, and `calcEventImpact()` (missed_unpaid, missed_unapproved, partial, pto). Stacks on all hours for DHL night-shift weeks. Step 15 note updated to confirm live computation.
+
+---
+
+## 7. Post-Auth Roadmap
 
 ### Fiscal Week Features
 
@@ -232,7 +283,7 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 
 ---
 
-## 7. Optional Deductions Mapping (Post-Setup Wizard)
+## 8. Optional Deductions Mapping (Post-Setup Wizard)
 
 - [ ] **Itemized deductions module** — optional advanced setup for users who want more accurate year-end tax projections beyond the standard deduction assumption:
   - [ ] Entry point: "Advanced" link shown on the Annual Tax Strategy step of the setup wizard, and accessible anytime from Settings
@@ -267,4 +318,4 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 
 ---
 
-*Last updated: 2026-03-24 — Section 4 Phases 1–3 complete. Phase 4 (App.jsx integration) is the next sprint. Weekend diff corrected: all DHL shifts earn diffRate equally; dhlNightShift stored for future night-bonus tracking only. Anthony's row: dhlTeam="B", dhlCustomSchedule=true stamped by migration. isAdmin gates tax schedule subview in IncomePanel.*
+*Last updated: 2026-03-25 — Section 4 Phases 1–4 + Attendance History View complete. Section 5 WeekConfirmModal holes (Hole 1/2/3) all resolved. Next: Phase 5 (Tax Exempt Gate visual test) or §6 Post-Auth features.*

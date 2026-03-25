@@ -1,4 +1,4 @@
-import { supabase, USER_ID } from "./supabase.js";
+import { supabase, getCurrentUserId } from "./supabase.js";
 import {
   DEFAULT_CONFIG,
   INITIAL_EXPENSES,
@@ -13,19 +13,36 @@ import { buildLoanHistory } from "./finance.js";
  * Falls back to app defaults if the row is empty or missing.
  */
 export async function loadUserData() {
+  const userId = await getCurrentUserId();
+
+  // Not signed in — return blank defaults so the app never crashes on unauthenticated load.
+  // App.jsx auth gate will redirect to LoginScreen before this matters for real users.
+  if (!userId) {
+    return {
+      config:             DEFAULT_CONFIG,
+      expenses:           INITIAL_EXPENSES,
+      goals:              INITIAL_GOALS,
+      logs:               INITIAL_LOGS,
+      showExtra:          true,
+      weekConfirmations:  {},
+      isDHL:              false,
+      isAdmin:            false,
+    };
+  }
+
   // Select core fields first — week_confirmations is fetched separately so a missing
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
     .select("config, expenses, goals, logs, show_extra, is_dhl, is_admin")
-    .eq("user_id", USER_ID)
+    .eq("user_id", userId)
     .single();
 
   // Fetch week_confirmations independently; gracefully returns {} if column missing.
   const { data: wcData } = await supabase
     .from("user_data")
     .select("week_confirmations")
-    .eq("user_id", USER_ID)
+    .eq("user_id", userId)
     .single();
 
   if (error || !data) {
@@ -44,7 +61,7 @@ export async function loadUserData() {
 
   // Migrate and normalize all expenses on load
   const PROJECT_START = FISCAL_YEAR_START;
-  const rawExpenses = data.expenses.length ? data.expenses : INITIAL_EXPENSES;
+  const rawExpenses = Array.isArray(data.expenses) ? data.expenses : [];
   const migratedExpenses = rawExpenses.map(exp => {
     // Loans: always regenerate history from loanMeta so runway/payoff math stays fresh
     if (exp.type === "loan" && exp.loanMeta) {
@@ -111,11 +128,20 @@ export async function loadUserData() {
     mergedConfig.startingWeekIsHeavy = false;  // odd-offset weeks from firstActiveIdx are heavy
   }
 
+  // ── One-time baseRate correction (night diff separation) ─────────────────────
+  // Prior to 2026-03-25 the night shift differential (+$1.50) was baked into
+  // baseRate (19.65 + 1.50 = 21.15) rather than tracked as nightDiffRate.
+  // Correct stored value so night diff isn't double-counted now that buildYear()
+  // computes it separately via nightDiffRate.
+  if (data.is_dhl && mergedConfig.baseRate === 21.15) {
+    mergedConfig.baseRate = 19.65;
+  }
+
   return {
     config:             mergedConfig,
     expenses:           migratedExpenses,
-    goals:              data.goals.length ? data.goals  : INITIAL_GOALS,
-    logs:               data.logs.length  ? data.logs   : INITIAL_LOGS,
+    goals:              Array.isArray(data.goals) ? data.goals : [],
+    logs:               Array.isArray(data.logs)  ? data.logs  : [],
     showExtra:          data.show_extra,
     weekConfirmations:  wcData?.week_confirmations ?? {},
     isDHL:              data.is_dhl   ?? false,
@@ -128,11 +154,14 @@ export async function loadUserData() {
  * Called from a debounced useEffect in App.jsx on any state change.
  */
 export async function saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations }) {
+  const userId = await getCurrentUserId();
+  if (!userId) return; // unauthenticated — never write
+
   const { error } = await supabase
     .from("user_data")
     .upsert(
       {
-        user_id:             USER_ID,
+        user_id:             userId,
         config,
         expenses,
         goals,

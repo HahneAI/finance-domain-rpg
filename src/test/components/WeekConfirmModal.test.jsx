@@ -377,20 +377,18 @@ describe('WeekConfirmModal — Layer 2 onConfirm callback', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Known hole: zero-shift missed event
+// Hole 2 fix: vacuous missed event is now blocked
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('WeekConfirmModal — known hole: vacuous missed_unpaid event', () => {
-  it('allows Log & Confirm with missedDays empty (shiftsLost=0 entry goes through)', () => {
-    // This test documents the known gap: if the user clears all missedDays pills in
-    // Layer 2 before confirming, the resulting log entry has shiftsLost=0 / hoursLost=0.
-    // The entry is financially a no-op but still gets appended to logs.
-    const mockConfirm = vi.fn()
+describe('WeekConfirmModal — Hole 2 fix: vacuous missed_unpaid event blocked', () => {
+  it('disables "Log & Confirm" when all days cleared and hours are zero', () => {
+    // Hole 2 fix: if the user clears all missedDays pills in Layer 2 without
+    // entering manual hours, the "Log & Confirm" button is now disabled.
     render(
       <WeekConfirmModal
         week={SIX_DAY_WEEK}
         config={BASE_CONFIG}
-        onConfirm={mockConfirm}
+        onConfirm={vi.fn()}
         onDismiss={vi.fn()}
       />
     )
@@ -398,17 +396,70 @@ describe('WeekConfirmModal — known hole: vacuous missed_unpaid event', () => {
     fireEvent.click(missedBtns[0])                                        // miss Mon → deficit
     fireEvent.click(screen.getByRole('button', { name: /next/i }))
     // In Layer 2, the day picker shows Mon pre-selected. Click it to deselect.
-    // (Find the Mon pill button in the DayPicker inside Layer 2)
     const monPills = screen.getAllByRole('button', { name: /^mon$/i })
-    // The last one is in the Layer 2 DayPicker (the first may be in Layer 1 hidden behind it)
     fireEvent.click(monPills[monPills.length - 1])
-    // Two-step: first click shows confirmation summary, second click saves
-    fireEvent.click(screen.getByRole('button', { name: /log & confirm/i }))
-    fireEvent.click(screen.getByRole('button', { name: /yes, log it/i }))
-    // Confirm is still called — no guard stops a zero-hour entry (Hole 2 fix is separate)
-    expect(mockConfirm).toHaveBeenCalledOnce()
-    const [, logEntry] = mockConfirm.mock.calls[0]
-    expect(logEntry.shiftsLost).toBe(0) // vacuous entry
+    // "Log & Confirm" should now be disabled — 0 shifts, 0 hours, 0 days
+    const logBtn = screen.getByRole('button', { name: /log & confirm/i })
+    expect(logBtn).toBeDisabled()
+  })
+
+  it('shows the vacuous event warning banner when all days cleared', () => {
+    render(
+      <WeekConfirmModal
+        week={SIX_DAY_WEEK}
+        config={BASE_CONFIG}
+        onConfirm={vi.fn()}
+        onDismiss={vi.fn()}
+      />
+    )
+    const missedBtns = screen.getAllByRole('button', { name: /^missed$/i })
+    fireEvent.click(missedBtns[0])
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    const monPills = screen.getAllByRole('button', { name: /^mon$/i })
+    fireEvent.click(monPills[monPills.length - 1])
+    expect(screen.getByText(/no shifts or hours selected/i)).toBeTruthy()
+  })
+
+  it('"Skip for now" shows abandon warning after user reached Layer 2', () => {
+    const { mockDismiss } = renderModal()
+    const missedBtns = screen.getAllByRole('button', { name: /^missed$/i })
+    fireEvent.click(missedBtns[0])                                         // miss Mon → deficit
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))         // go to Layer 2
+    fireEvent.click(screen.getByRole('button', { name: /← back/i }))       // back to Layer 1
+    fireEvent.click(screen.getByRole('button', { name: /skip for now/i })) // try to skip
+    // onDismiss should NOT have been called yet — warning is shown first
+    expect(mockDismiss).not.toHaveBeenCalled()
+    expect(screen.getByText(/you started logging an event/i)).toBeTruthy()
+  })
+
+  it('"Yes, skip" in the abandon warning calls onDismiss', () => {
+    const { mockDismiss } = renderModal()
+    const missedBtns = screen.getAllByRole('button', { name: /^missed$/i })
+    fireEvent.click(missedBtns[0])
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    fireEvent.click(screen.getByRole('button', { name: /← back/i }))
+    fireEvent.click(screen.getByRole('button', { name: /skip for now/i }))
+    fireEvent.click(screen.getByRole('button', { name: /yes, skip/i }))
+    expect(mockDismiss).toHaveBeenCalledOnce()
+  })
+
+  it('"← Keep logging" in the abandon warning dismisses the warning', () => {
+    renderModal()
+    const missedBtns = screen.getAllByRole('button', { name: /^missed$/i })
+    fireEvent.click(missedBtns[0])
+    fireEvent.click(screen.getByRole('button', { name: /next/i }))
+    fireEvent.click(screen.getByRole('button', { name: /← back/i }))
+    fireEvent.click(screen.getByRole('button', { name: /skip for now/i }))
+    fireEvent.click(screen.getByRole('button', { name: /keep logging/i }))
+    // Warning gone, "Skip for now" back in footer
+    expect(screen.queryByText(/you started logging an event/i)).toBeNull()
+    expect(screen.getByRole('button', { name: /skip for now/i })).toBeTruthy()
+  })
+
+  it('"Skip for now" with no Layer 2 visit calls onDismiss directly', () => {
+    const { mockDismiss } = renderModal()
+    fireEvent.click(screen.getByRole('button', { name: /skip for now/i }))
+    expect(mockDismiss).toHaveBeenCalledOnce()
   })
 })
 

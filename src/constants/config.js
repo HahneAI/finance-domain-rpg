@@ -105,11 +105,18 @@ export const QUARTER_BOUNDARIES = ["2026-03-31", "2026-06-30", "2026-09-30"];
 // ─────────────────────────────────────────────────────────────
 // DHL EMPLOYER PRESET
 //
-// Describes the standard DHL 3-day / 4-day alternating rotation.
-// Anthony's account uses a CUSTOM schedule (dhlCustomSchedule: true,
-// dhlTeam: "B") — buildYear() routes to the hardcoded 4-day/6-day
-// day arrays for him. DHL_PRESET.rotation is used for new standard
-// DHL employees who go through the wizard (sprint 3k).
+// Standard DHL B-team rotation (used for new wizard users):
+//   Heavy week: 4 shifts (Tue/Wed/Sat/Sun) — 48h
+//   Light week: 3 shifts (Mon/Thu/Fri)     — 36h
+//
+// Anthony's custom schedule (dhlCustomSchedule: true):
+//   Heavy week: 4 standard + 2 scheduled OT = 6-Day (Tue–Sun, 72h)
+//   Light week: 3 standard + 1 scheduled OT = 4-Day (Mon/Wed/Thu/Fri, 48h)
+//   OT is baked into his hardcoded day arrays in buildYear(); new standard
+//   users get the preset rotation only (no OT pre-baked).
+//
+// DHL_PRESET.rotation is used by buildYear() for standard users.
+// Anthony's row: dhlTeam="B", dhlCustomSchedule=true → hardcoded arrays.
 //
 // Day index: 0=Sun  1=Mon  2=Tue  3=Wed  4=Thu  5=Fri  6=Sat
 // ─────────────────────────────────────────────────────────────

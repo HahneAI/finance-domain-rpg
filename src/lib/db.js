@@ -100,11 +100,15 @@ export async function loadUserData() {
   }
 
   // ── One-time rotation correction ─────────────────────────────────────────────
-  // The initial migration incorrectly stamped startingWeekIsHeavy: true for B-team.
-  // For Anthony's custom schedule the offset math requires false (week 10 = 6-Day in logs).
-  // This fires on next load for any already-migrated row that still has the wrong value.
-  if (mergedConfig.dhlTeam === "B" && mergedConfig.dhlCustomSchedule === true && mergedConfig.startingWeekIsHeavy === true) {
-    mergedConfig.startingWeekIsHeavy = false;
+  // The initial migration set startingWeekIsHeavy: true. The intended follow-up
+  // correction (checking dhlTeam === "B") never fired because dhlTeam was still
+  // null in Supabase — the B-team migration ran before setupComplete was set.
+  // Trigger condition: is_dhl + dhlTeam still null (pre-wizard, never corrected).
+  // Sets all three fields needed for Anthony's custom schedule correctly.
+  if (data.is_dhl && mergedConfig.dhlTeam === null) {
+    mergedConfig.dhlTeam = "B";
+    mergedConfig.dhlCustomSchedule = true;
+    mergedConfig.startingWeekIsHeavy = false;  // odd-offset weeks from firstActiveIdx are heavy
   }
 
   return {

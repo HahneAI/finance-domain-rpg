@@ -266,9 +266,8 @@ Currently shows a per-week table (one row per week with has401k=true) with a Rot
 ### Home Tab (HomePanel.jsx)
 Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emergency Fund, Goals, Next Week.
 
-- [ ] **Weekly Take Home card — show actual current-week paycheck** — Card already sits at the top (span 2). Change its value from `weeklyTakeHome` (average) to `computeNet(currentWeek, config)` — the actual net for the paycheck being received this week. Subtitle: "paycheck received this week" or similar. If current week is inactive/pre-employment, fall back to next active week.
-- [ ] **Remove "Weekly Left" card and "Emergency Fund" card** — `Weekly Left` (after all expenses) and `Emergency Fund` (goal status) both removed. Remaining cards: Weekly Take Home, Net Worth Trend, Budget Health, Goals, Next Week — fits cleaner on one screen.
-  - *Note: Confirm during implementation which card is the intended "take home card" to remove — likely "Weekly Left" (shows take-home after expenses). Emergency Fund removal is unambiguous.*
+- [ ] **Replace Take Home card with Weekly Left — show what's left after expenses** — Remove the raw "Take Home" card (paycheck total). Keep "Weekly Left" (`adjustedWeeklyAvg` — after all expenses) as the primary top hero card (span 2). This is the number the user actually cares about day-to-day. Make sure its value reflects the current week's actual net minus expenses, not just a flat average.
+- [ ] **Remove "Emergency Fund" card** — Drop the Emergency Fund card. Remaining cards: Weekly Left, Net Worth Trend, Budget Health, Goals, Next Week.
 - [ ] **Center "Financial Health" section header** — `SH` component left-aligns with gold bar by default. Override to center for this section header only.
 - [ ] **Rewrite Home subtitle** — Replace `"Week {idx} of 52 · {rotation}"` with: `"Another beautiful day, {weekdayName} the {dayOfMonth}. You are working on your {topPriorityGoal} goal"`. Derive weekday name and day-of-month from `today` prop. Top priority goal = first non-completed goal by position, or first goal if none defined yet; if no goals, fall back to `"financial"`.
 

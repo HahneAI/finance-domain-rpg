@@ -128,6 +128,15 @@ export async function loadUserData() {
     mergedConfig.startingWeekIsHeavy = false;  // odd-offset weeks from firstActiveIdx are heavy
   }
 
+  // ── One-time baseRate correction (night diff separation) ─────────────────────
+  // Prior to 2026-03-25 the night shift differential (+$1.50) was baked into
+  // baseRate (19.65 + 1.50 = 21.15) rather than tracked as nightDiffRate.
+  // Correct stored value so night diff isn't double-counted now that buildYear()
+  // computes it separately via nightDiffRate.
+  if (data.is_dhl && mergedConfig.baseRate === 21.15) {
+    mergedConfig.baseRate = 19.65;
+  }
+
   return {
     config:             mergedConfig,
     expenses:           migratedExpenses,

@@ -181,9 +181,9 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 
 ### Hole 2 — Confirming a zero-content absence event
 **Fix:** Guard the Layer 2 confirm action — if missed type but no days selected and no manual hours entered, block or warn. Show popup if user tries to navigate away from an open event form without finishing it.
-- [ ] WeekConfirmModal Layer 2: disable / warn on "Log & Confirm" if missed type has 0 shifts, 0 hours, and no days selected (the empty confirm case)
-- [ ] WeekConfirmModal: if user clicks "Skip for now" or dismisses while on Layer 2, show "You haven't finished logging — leave anyway?" confirmation
-- [ ] LogPanel add form: warn user with "Leave without saving?" if they click CANCEL after partially filling a form (at minimum a week is selected)
+- [x] WeekConfirmModal Layer 2: disable / warn on "Log & Confirm" if missed type has 0 shifts, 0 hours, and no days selected (the empty confirm case)
+- [x] WeekConfirmModal: if user clicks "Skip for now" or dismisses while on Layer 2, show "You haven't finished logging — leave anyway?" confirmation
+- [x] LogPanel add form: warn user with "Leave without saving?" if they click CANCEL after partially filling a form (at minimum a week is selected)
 
 ### Hole 3 — Calendar date labels always assume Monday-start fiscal year
 **Fix:** Align `buildYear()` to understand the actual fiscal year calendar; overlay pay period start day so all date math across the app runs only on paychecks that land in the current fiscal year.

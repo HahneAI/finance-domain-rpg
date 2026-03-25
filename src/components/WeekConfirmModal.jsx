@@ -86,6 +86,8 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
   );
   const [layer, setLayer] = useState(1);
   const [confirming, setConfirming] = useState(false);
+  const [wentToLayer2, setWentToLayer2] = useState(false);
+  const [skipWarning, setSkipWarning] = useState(false);
 
   // ── Layer 2 form state (mirrors LogPanel's blank event shape) ─────────────
   const [eventVals, setEventVals] = useState({});
@@ -136,6 +138,17 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
   // calcEventImpact with an empty event object before Layer 2 is initialized.
   const previewImpact = eventVals.weekEnd ? calcEventImpact(eventVals, config) : null;
 
+  // ── Vacuous event guard ────────────────────────────────────────────────────
+  // A missed_unpaid/missed_unapproved entry with zero shifts, zero hours, and
+  // no days selected is a financially inert no-op that would only clutter the log.
+  // Block "Log & Confirm" in this state; warn the user visually.
+  const isVacuousEvent = (
+    (eventVals.type === "missed_unpaid" || eventVals.type === "missed_unapproved") &&
+    (parseInt(eventVals.shiftsLost) || 0) === 0 &&
+    (parseFloat(eventVals.hoursLost) || 0) === 0 &&
+    (eventVals.missedDays ?? []).length === 0
+  );
+
   // ── Layer 1 save ──────────────────────────────────────────────────────────
   // Called when user clicks "Confirm Week" or "Next →".
   //
@@ -175,6 +188,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       note: "",
     });
     setLayer(2);
+    setWentToLayer2(true);
   };
 
   // ── Log Swap handler (net-zero case with actual day changes) ──────────────
@@ -197,6 +211,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       note: `Day swap — missed ${missedScheduledDays.join(", ")}, picked up ${pickupDays.join(", ")}`,
     });
     setLayer(2);
+    setWentToLayer2(true);
   };
 
   // ── Layer 2 confirm ───────────────────────────────────────────────────────
@@ -363,14 +378,38 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
             </div>
 
             {/* Layer 1 footer */}
-            <div style={{ padding: "14px 20px", borderTop: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-              <button onClick={onDismiss} style={{
-                background: "transparent", border: "none", color: "#444",
-                fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
-                cursor: "pointer", padding: "6px 0",
-              }}>
-                Skip for now
-              </button>
+            <div style={{ padding: "14px 20px", borderTop: "1px solid #1e1e1e", flexShrink: 0 }}>
+              {skipWarning ? (
+                /* Abandon warning — shown when user tries to skip after starting Layer 2 */
+                <div style={{ padding: "12px 14px", background: "#2d1a1a", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "6px" }}>
+                  <div style={{ fontSize: "10px", color: "var(--color-red)", marginBottom: "8px" }}>
+                    You started logging an event — skip anyway?
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <button onClick={() => setSkipWarning(false)} style={{
+                      background: "transparent", border: "none", color: "var(--color-text-secondary)",
+                      fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", padding: "6px 0",
+                    }}>
+                      ← Keep logging
+                    </button>
+                    <button onClick={onDismiss} style={{
+                      background: "var(--color-red)", color: "#0a0a0a", border: "none",
+                      borderRadius: "4px", padding: "8px 16px", fontSize: "10px",
+                      letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold",
+                    }}>
+                      Yes, skip
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <button onClick={() => wentToLayer2 ? setSkipWarning(true) : onDismiss()} style={{
+                    background: "transparent", border: "none", color: "#444",
+                    fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                    cursor: "pointer", padding: "6px 0",
+                  }}>
+                    Skip for now
+                  </button>
               {netShiftDelta === 0 && (missedScheduledDays.length > 0 || pickupDays.length > 0) ? (
                 <div style={{ display: "flex", gap: "8px" }}>
                   <button onClick={handleSave} style={{
@@ -398,6 +437,8 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                 }}>
                   {netShiftDelta !== 0 ? "Next →" : "Confirm Week"}
                 </button>
+              )}
+                </div>
               )}
             </div>
           </>
@@ -553,6 +594,14 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                   </div>
                 </div>
               )}
+              {/* Vacuous event warning — no days, no hours on a missed type */}
+              {isVacuousEvent && !confirming && (
+                <div style={{ marginTop: "12px", padding: "10px 12px", background: "#2d1a1a", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "6px", fontSize: "10px", color: "var(--color-red)", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span>⚠</span>
+                  <span>No shifts or hours selected — choose days above or enter hours before confirming.</span>
+                </div>
+              )}
+
               {/* Confirmation block — shown after first click of "Log & Confirm" */}
               {confirming && (
                 <div style={{ marginTop: "16px", padding: "14px", background: "#1a2d1e", border: "1px solid rgba(76,175,125,0.4)", borderRadius: "6px" }}>
@@ -599,10 +648,12 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                   }}>
                     ← Back
                   </button>
-                  <button onClick={() => setConfirming(true)} style={{
-                    background: "var(--color-green)", color: "#0a0a0a", border: "none",
+                  <button onClick={() => !isVacuousEvent && setConfirming(true)} disabled={isVacuousEvent} style={{
+                    background: isVacuousEvent ? "var(--color-text-disabled)" : "var(--color-green)",
+                    color: isVacuousEvent ? "#222" : "#0a0a0a", border: "none",
                     borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
-                    letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                    letterSpacing: "2px", textTransform: "uppercase",
+                    cursor: isVacuousEvent ? "not-allowed" : "pointer",
                     fontWeight: "bold",
                   }}>
                     Log &amp; Confirm

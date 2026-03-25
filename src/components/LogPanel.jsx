@@ -15,6 +15,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
   const blank = {
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
     shiftsLost: 0, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0,
+    shiftsGained: 0, hoursGained: 0,
     missedDays: [], note: ""
   };
   const [adding, setAdding] = useState(false);
@@ -23,6 +24,8 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
   const [editVals, setEditVals] = useState({});
   const [cdel, setCdel] = useState(null);
   const [histOpen, setHistOpen] = useState(false);
+  const [addConfirming, setAddConfirming] = useState(false);
+  const [editConfirming, setEditConfirming] = useState(false);
 
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const f0 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -106,7 +109,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
   };
 
   // ── Add handlers ──
-  const handleWeekEndChange = (dateStr) => setNEv(v => ({ ...v, weekEnd: dateStr, ...resolveWeek(dateStr), missedDays: [] }));
+  const handleWeekEndChange = (dateStr) => setNEv(v => ({ ...v, weekEnd: dateStr, ...resolveWeek(dateStr), missedDays: [], shiftsLost: 0, weekendShifts: 0, hoursLost: 0 }));
   const addLog = () => {
     setLogs(p => [...p, {
       ...nEv, id: Date.now(),
@@ -115,8 +118,10 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       ptoHours: parseFloat(nEv.ptoHours) || 0,
       hoursLost: parseFloat(nEv.hoursLost) || 0,
       amount: parseFloat(nEv.amount) || 0,
+      shiftsGained: parseInt(nEv.shiftsGained) || 0,
+      hoursGained: parseFloat(nEv.hoursGained) || 0,
     }]);
-    setAdding(false); setNEv(blank);
+    setAdding(false); setNEv(blank); setAddConfirming(false);
   };
 
   // ── Edit handlers ──
@@ -125,7 +130,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
     setEditVals({ ...entry, missedDays: normalizeDays(entry.missedDays) });
     setCdel(null); setAdding(false);
   };
-  const handleEditWeekEndChange = (dateStr) => setEditVals(v => ({ ...v, weekEnd: dateStr, ...resolveWeek(dateStr), missedDays: [] }));
+  const handleEditWeekEndChange = (dateStr) => setEditVals(v => ({ ...v, weekEnd: dateStr, ...resolveWeek(dateStr), missedDays: [], shiftsLost: 0, weekendShifts: 0, hoursLost: 0 }));
   const saveEdit = () => {
     setLogs(p => p.map(e => e.id !== editId ? e : {
       ...editVals, id: editId,
@@ -134,8 +139,10 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       ptoHours: parseFloat(editVals.ptoHours) || 0,
       hoursLost: parseFloat(editVals.hoursLost) || 0,
       amount: parseFloat(editVals.amount) || 0,
+      shiftsGained: parseInt(editVals.shiftsGained) || 0,
+      hoursGained: parseFloat(editVals.hoursGained) || 0,
     }));
-    setEditId(null);
+    setEditId(null); setEditConfirming(false);
   };
 
   // ── Day picker component ──
@@ -211,19 +218,70 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       </select>
     </div>
 
-    {/* missed_unpaid: day picker drives shiftsLost + weekendShifts */}
+    {/* missed_unpaid: day picker drives shiftsLost + weekendShifts; editable override below */}
     {vals.type === "missed_unpaid" && (
       <div style={{ gridColumn: "1 / -1" }}>
         <DayPicker vals={vals} set={set} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
+          <div>
+            <label style={lS}>Shifts Missed</label>
+            <input type="number" min="0" value={vals.shiftsLost ?? 0}
+              onChange={e => set(v => ({ ...v, shiftsLost: e.target.value }))}
+              style={{ ...iS, marginTop: "4px" }} />
+          </div>
+          <div>
+            <label style={lS}>Hours Missed</label>
+            <input type="number" min="0" step="0.5" value={vals.hoursLost ?? 0}
+              onChange={e => set(v => ({ ...v, hoursLost: e.target.value }))}
+              style={{ ...iS, marginTop: "4px" }} />
+          </div>
+          {(() => {
+            const s = parseInt(vals.shiftsLost) || 0;
+            const h = parseFloat(vals.hoursLost) || 0;
+            const expected = s * config.shiftHours;
+            return expected > 0 && Math.abs(h - expected) > 0.01 ? (
+              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(201,168,76,0.08)", borderRadius: "4px" }}>
+                ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h
+              </div>
+            ) : (
+              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-text-disabled)" }}>
+                {s} × {config.shiftHours}h = {expected}h — edit to override
+              </div>
+            );
+          })()}
+        </div>
       </div>
     )}
 
-    {/* missed_unapproved: day picker drives hoursLost; each selected day = 1 full shift */}
+    {/* missed_unapproved: day picker drives hoursLost; editable override below */}
     {vals.type === "missed_unapproved" && (
       <div style={{ gridColumn: "1 / -1" }}>
         <DayPicker vals={vals} set={set} />
         <div style={{ marginTop: "8px", padding: "8px 10px", background: "#1e1210", border: "1px solid #e8622a44", borderRadius: "4px", fontSize: "10px", color: "#e8622a", lineHeight: "1.6" }}>
           ⚠ Unapproved — hits attendance bucket ({normalizeDays(vals.missedDays).length * config.shiftHours}h deducted this entry)
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
+          <div>
+            <label style={lS}>Days / Shifts</label>
+            <input type="number" min="0" readOnly value={normalizeDays(vals.missedDays).length}
+              style={{ ...iS, marginTop: "4px", opacity: 0.5 }} />
+          </div>
+          <div>
+            <label style={lS}>Hours Missed</label>
+            <input type="number" min="0" step="0.5" value={vals.hoursLost ?? 0}
+              onChange={e => set(v => ({ ...v, hoursLost: e.target.value }))}
+              style={{ ...iS, marginTop: "4px" }} />
+          </div>
+          {(() => {
+            const s = normalizeDays(vals.missedDays).length;
+            const h = parseFloat(vals.hoursLost) || 0;
+            const expected = s * config.shiftHours;
+            return expected > 0 && Math.abs(h - expected) > 0.01 ? (
+              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(201,168,76,0.08)", borderRadius: "4px" }}>
+                ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h · bucket hit uses override amount
+              </div>
+            ) : null;
+          })()}
         </div>
       </div>
     )}
@@ -247,6 +305,25 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
     {(vals.type === "bonus" || vals.type === "other_loss") && (
       <div><label style={lS}>Amount ($)</label>
         <input type="number" min="0" value={vals.amount} onChange={e => set(v => ({ ...v, amount: e.target.value }))} style={iS} />
+      </div>
+    )}
+
+    {vals.type === "bonus" && (
+      <div style={{ gridColumn: "1 / -1" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "4px" }}>
+          <div>
+            <label style={lS}>Shifts Gained</label>
+            <input type="number" min="0" value={vals.shiftsGained ?? 0}
+              onChange={e => set(v => ({ ...v, shiftsGained: e.target.value }))}
+              style={{ ...iS, marginTop: "4px" }} />
+          </div>
+          <div>
+            <label style={lS}>Hours Gained</label>
+            <input type="number" min="0" step="0.5" value={vals.hoursGained ?? 0}
+              onChange={e => set(v => ({ ...v, hoursGained: e.target.value }))}
+              style={{ ...iS, marginTop: "4px" }} />
+          </div>
+        </div>
       </div>
     )}
 
@@ -419,9 +496,34 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
         <FormFields vals={nEv} set={setNEv} onWeekEndChange={handleWeekEndChange} />
       </div>
+      {addConfirming && (
+        <div style={{ marginBottom: "10px", padding: "12px", background: "#1a2d1e", border: "1px solid rgba(76,175,125,0.4)", borderRadius: "6px", fontSize: "11px", color: "var(--color-text-secondary)" }}>
+          <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "8px" }}>Confirm entry?</div>
+          {(nEv.type === "missed_unpaid" || nEv.type === "missed_unapproved") && (() => {
+            const s = parseInt(nEv.shiftsLost) || 0;
+            const h = parseFloat(nEv.hoursLost) || 0;
+            const expected = s * config.shiftHours;
+            const overridden = expected > 0 && Math.abs(h - expected) > 0.01;
+            return <div>{s} shift(s) · {h}h missed{overridden && <span style={{ color: "var(--color-gold)", marginLeft: "6px", fontSize: "9px" }}>⚠ hours overridden (expected {expected}h)</span>}</div>;
+          })()}
+          {nEv.type === "bonus" && <div>+${parseFloat(nEv.amount) || 0} · {parseInt(nEv.shiftsGained) || 0} shift(s) · {parseFloat(nEv.hoursGained) || 0}h gained</div>}
+          {nEv.type === "partial" && <div>{parseFloat(nEv.hoursLost) || 0}h partial shift</div>}
+          {nEv.type === "pto" && <div>{parseFloat(nEv.ptoHours) || 0}h PTO</div>}
+          {nEv.type === "other_loss" && <div>-${parseFloat(nEv.amount) || 0} other loss</div>}
+        </div>
+      )}
       <div style={{ display: "flex", gap: "8px" }}>
-        <button onClick={addLog} disabled={!nEv.weekEnd} style={{ background: nEv.weekEnd ? "var(--color-green)" : "var(--color-border-subtle)", color: nEv.weekEnd ? "var(--color-bg-base)" : "#555", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: nEv.weekEnd ? "pointer" : "default", fontWeight: "bold" }}>SAVE</button>
-        <button onClick={() => { setAdding(false); setNEv(blank); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
+        {!addConfirming ? (
+          <>
+            <button onClick={() => setAddConfirming(true)} disabled={!nEv.weekEnd} style={{ background: nEv.weekEnd ? "var(--color-green)" : "var(--color-border-subtle)", color: nEv.weekEnd ? "var(--color-bg-base)" : "#555", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: nEv.weekEnd ? "pointer" : "default", fontWeight: "bold" }}>SAVE</button>
+            <button onClick={() => { setAdding(false); setNEv(blank); setAddConfirming(false); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</button>
+          </>
+        ) : (
+          <>
+            <button onClick={addLog} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>YES, LOG IT</button>
+            <button onClick={() => setAddConfirming(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>EDIT</button>
+          </>
+        )}
       </div>
     </div>}
 
@@ -445,9 +547,34 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
               <FormFields vals={editVals} set={setEditVals} onWeekEndChange={handleEditWeekEndChange} />
             </div>
+            {editConfirming && (
+              <div style={{ marginBottom: "10px", padding: "12px", background: "#1a2d1e", border: "1px solid rgba(76,175,125,0.4)", borderRadius: "6px", fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "8px" }}>Confirm changes?</div>
+                {(editVals.type === "missed_unpaid" || editVals.type === "missed_unapproved") && (() => {
+                  const s = parseInt(editVals.shiftsLost) || 0;
+                  const h = parseFloat(editVals.hoursLost) || 0;
+                  const expected = s * config.shiftHours;
+                  const overridden = expected > 0 && Math.abs(h - expected) > 0.01;
+                  return <div>{s} shift(s) · {h}h missed{overridden && <span style={{ color: "var(--color-gold)", marginLeft: "6px", fontSize: "9px" }}>⚠ hours overridden (expected {expected}h)</span>}</div>;
+                })()}
+                {editVals.type === "bonus" && <div>+${parseFloat(editVals.amount) || 0} · {parseInt(editVals.shiftsGained) || 0} shift(s) · {parseFloat(editVals.hoursGained) || 0}h gained</div>}
+                {editVals.type === "partial" && <div>{parseFloat(editVals.hoursLost) || 0}h partial shift</div>}
+                {editVals.type === "pto" && <div>{parseFloat(editVals.ptoHours) || 0}h PTO</div>}
+                {editVals.type === "other_loss" && <div>-${parseFloat(editVals.amount) || 0} other loss</div>}
+              </div>
+            )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={saveEdit} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</button>
-              <button onClick={() => setEditId(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
+              {!editConfirming ? (
+                <>
+                  <button onClick={() => setEditConfirming(true)} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</button>
+                  <button onClick={() => { setEditId(null); setEditConfirming(false); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={saveEdit} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>YES, SAVE</button>
+                  <button onClick={() => setEditConfirming(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>EDIT</button>
+                </>
+              )}
             </div>
           </>
         ) : (

@@ -97,12 +97,12 @@ export async function loadUserData() {
   // Sets the DHL employer preset, marks setupComplete, and promotes legacy rate field names.
   // Scoped to is_dhl === true so it never runs for standard or future multi-user accounts.
   //
-  // startingWeekIsHeavy: false — verified against INITIAL_LOGS week 10 = "6-Day":
-  //   offset = ((10 - firstActiveIdx) % 2 + 2) % 2 = 1 → isHighWeek = !startingWeekIsHeavy
-  //   so !startingWeekIsHeavy must be true → startingWeekIsHeavy must be false.
+  // startingWeekIsLong: false — verified against INITIAL_LOGS week 10 = "6-Day":
+  //   offset = ((10 - firstActiveIdx) % 2 + 2) % 2 = 1 → isHighWeek = !startingWeekIsLong
+  //   so !startingWeekIsLong must be true → startingWeekIsLong must be false.
   if (data.is_dhl && !mergedConfig.setupComplete) {
     mergedConfig.employerPreset = "DHL";
-    mergedConfig.startingWeekIsHeavy = false;   // corrected: false = odd-offset weeks are heavy
+    mergedConfig.startingWeekIsLong = false;    // corrected: false = odd-offset weeks are long
     mergedConfig.scheduleIsVariable = true;
     mergedConfig.dhlTeam = "B";
     mergedConfig.dhlCustomSchedule = true;
@@ -116,8 +116,17 @@ export async function loadUserData() {
     mergedConfig.setupComplete = true;
   }
 
+  // ── One-time startingWeekIsHeavy → startingWeekIsLong rename ────────────────
+  // Config key renamed 2026-03-25. Must run BEFORE rotation correction so the
+  // corrected value isn't overwritten by the old stored key.
+  // Safe to run every load — old key won't exist after first save with new name.
+  if ("startingWeekIsHeavy" in mergedConfig) {
+    mergedConfig.startingWeekIsLong = mergedConfig.startingWeekIsHeavy;
+    delete mergedConfig.startingWeekIsHeavy;
+  }
+
   // ── One-time rotation correction ─────────────────────────────────────────────
-  // The initial migration set startingWeekIsHeavy: true. The intended follow-up
+  // The initial migration set startingWeekIsLong: true. The intended follow-up
   // correction (checking dhlTeam === "B") never fired because dhlTeam was still
   // null in Supabase — the B-team migration ran before setupComplete was set.
   // Trigger condition: is_dhl + dhlTeam still null (pre-wizard, never corrected).
@@ -125,7 +134,7 @@ export async function loadUserData() {
   if (data.is_dhl && mergedConfig.dhlTeam === null) {
     mergedConfig.dhlTeam = "B";
     mergedConfig.dhlCustomSchedule = true;
-    mergedConfig.startingWeekIsHeavy = false;  // odd-offset weeks from firstActiveIdx are heavy
+    mergedConfig.startingWeekIsLong = false;   // odd-offset weeks from firstActiveIdx are long
   }
 
   // ── One-time baseRate correction (night diff separation) ─────────────────────

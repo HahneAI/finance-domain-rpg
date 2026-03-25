@@ -43,7 +43,7 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
   "shiftHours": 12,
   "standardWeeklyHours": 40,
   "startDate": null,
-  "startingWeekIsHeavy": null,
+  "startingWeekIsLong": null,
   "stateRateHigh": 0.04,
   "stateRateLow": 0.0338,
   "stdWeekly": 0,

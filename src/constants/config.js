@@ -11,10 +11,10 @@ export const DEFAULT_CONFIG = {
 
   // ── Employer preset ─────────────────────────────────────────
   employerPreset: null,        // "DHL" | null — drives rotation, bucket, dual-rate logic
-  startingWeekIsHeavy: null,   // DHL only: true = first active week is heavy; null = use dhlTeam to derive
+  startingWeekIsLong: null,    // DHL only: true = first active week is long (6-day); null = use dhlTeam to derive
   // ── DHL team preset (standard rotation — not Anthony's custom schedule) ──
   // null = Anthony's custom override (hardcoded day arrays in buildYear)
-  // "A" | "B" = standard preset; startingWeekIsHeavy auto-derived from DHL_PRESET.teams[dhlTeam]
+  // "A" | "B" = standard preset; startingWeekIsLong auto-derived from DHL_PRESET.teams[dhlTeam]
   dhlTeam: null,               // "A" | "B" | null
   dhlOtOnWeekend: false,       // true = mandatory OT day is typically Sat/Sun on 3-day weeks (adds diffRate)
   dhlCustomSchedule: false,    // false = use DHL_PRESET.rotation days; true = custom/hardcoded arrays (Anthony)
@@ -57,8 +57,8 @@ export const DEFAULT_CONFIG = {
 
   // ── Tax rates — generalized (wizard-derived) ─────────────────
   // These replace the old w1/w2 naming which was DHL-specific.
-  // fedRateLow/stateRateLow = lighter/consistent paycheck rate
-  // fedRateHigh/stateRateHigh = heavier paycheck rate (equals Low if not variable)
+  // fedRateLow/stateRateLow = shorter/consistent paycheck rate
+  // fedRateHigh/stateRateHigh = longer paycheck rate (equals Low if not variable)
   fedRateLow: 0.0784,          // replaces w1FedRate
   fedRateHigh: 0.1283,         // replaces w2FedRate
   stateRateLow: 0.0338,        // replaces w1StateRate
@@ -105,12 +105,12 @@ export const QUARTER_BOUNDARIES = ["2026-03-31", "2026-06-30", "2026-09-30"];
 // DHL EMPLOYER PRESET
 //
 // Standard DHL B-team rotation (used for new wizard users):
-//   Heavy week: 4 shifts (Tue/Wed/Sat/Sun) — 48h
-//   Light week: 3 shifts (Mon/Thu/Fri)     — 36h
+//   Long week:  4 shifts (Tue/Wed/Sat/Sun) — 48h
+//   Short week: 3 shifts (Mon/Thu/Fri)     — 36h
 //
 // Anthony's custom schedule (dhlCustomSchedule: true):
-//   Heavy week: 4 standard + 2 scheduled OT = 6-Day (Tue–Sun, 72h)
-//   Light week: 3 standard + 1 scheduled OT = 4-Day (Mon/Wed/Thu/Fri, 48h)
+//   Long week:  4 standard + 2 scheduled OT = 6-Day (Tue–Sun, 72h)
+//   Short week: 3 standard + 1 scheduled OT = 4-Day (Mon/Wed/Thu/Fri, 48h)
 //   OT is baked into his hardcoded day arrays in buildYear(); new standard
 //   users get the preset rotation only (no OT pre-baked).
 //
@@ -121,26 +121,26 @@ export const QUARTER_BOUNDARIES = ["2026-03-31", "2026-06-30", "2026-09-30"];
 // ─────────────────────────────────────────────────────────────
 export const DHL_PRESET = {
   rotation: {
-    // Light week — 3 required shifts
-    light: {
+    // Short week — 3 required shifts
+    short: {
       days: [1, 4, 5],            // Mon, Thu, Fri
       label: "3-Day (Mon / Thu / Fri)",
       baseHours: 36,              // 3 × 12h
       weekendShifts: 0,
     },
-    // Heavy week — 4 required shifts
-    heavy: {
+    // Long week — 4 required shifts
+    long: {
       days: [2, 3, 6, 0],        // Tue, Wed, Sat, Sun
       label: "4-Day (Tue / Wed / Sat / Sun)",
       baseHours: 48,              // 4 × 12h
       weekendShifts: 2,           // Sat + Sun earn diffRate
     },
   },
-  // While A-team works their light (3-day) week, B-team is on heavy (4-day).
-  // Team selection auto-derives startingWeekIsHeavy.
+  // While A-team works their short (3-day) week, B-team is on long (4-day).
+  // Team selection auto-derives startingWeekIsLong.
   teams: {
-    A: { startsHeavy: false },   // A-team week 1 = light (Mon/Thu/Fri)
-    B: { startsHeavy: true  },   // B-team week 1 = heavy (Tue/Wed/Sat/Sun)
+    A: { startsLong: false },    // A-team week 1 = short (Mon/Thu/Fri)
+    B: { startsLong: true  },    // B-team week 1 = long (Tue/Wed/Sat/Sun)
   },
   // DHL mandates 1 extra 12h shift per week (required OT).
   // Worker picks any off-day for that week:
@@ -162,10 +162,10 @@ export const DHL_PRESET = {
     // New DHL users get these pre-filled with taxRatesEstimated: true until they confirm their stub.
     // Morning shift users: same rates (shift affects gross, not effective tax rate).
     userState: "MO",
-    fedRateLow: 0.0784,          // light / 4-day week effective federal rate
-    fedRateHigh: 0.1283,         // heavy / 6-day week effective federal rate
-    stateRateLow: 0.0338,        // light week MO effective rate
-    stateRateHigh: 0.040,        // heavy week MO effective rate
+    fedRateLow: 0.0784,          // short / 4-day week effective federal rate
+    fedRateHigh: 0.1283,         // long / 6-day week effective federal rate
+    stateRateLow: 0.0338,        // short week MO effective rate
+    stateRateHigh: 0.040,        // long week MO effective rate
   },
 };
 

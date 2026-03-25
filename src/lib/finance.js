@@ -41,15 +41,15 @@ export function getStateConfig(userState) {
 }
 
 // Builds a full 52-week array of pay data from config.
-// DHL path: alternates heavy (6-day) / light (4-day) from firstActiveIdx,
+// DHL path: alternates long (6-day) / short (4-day) from firstActiveIdx,
 //   using either the DHL_PRESET day arrays (dhlTeam + !dhlCustomSchedule)
 //   or Anthony's hardcoded arrays (dhlCustomSchedule: true).
 //
 // Anthony's custom schedule vs standard DHL B-team rotation:
-//   Standard B-team heavy = 4 shifts (Tue/Wed/Sat/Sun)   → 48h
-//   Standard B-team light = 3 shifts (Mon/Thu/Fri)        → 36h
-//   Anthony heavy = 4 standard + 2 scheduled OT           → 6-Day (Tue–Sun, 72h)
-//   Anthony light = 3 standard + 1 scheduled OT           → 4-Day (Mon/Wed/Thu/Fri, 48h)
+//   Standard B-team long  = 4 shifts (Tue/Wed/Sat/Sun)   → 48h
+//   Standard B-team short = 3 shifts (Mon/Thu/Fri)        → 36h
+//   Anthony long  = 4 standard + 2 scheduled OT           → 6-Day (Tue–Sun, 72h)
+//   Anthony short = 3 standard + 1 scheduled OT           → 4-Day (Mon/Wed/Thu/Fri, 48h)
 //   The hardcoded day arrays below represent his full week including OT.
 //
 // Standard path: flat weekly hours, no rotation.
@@ -70,19 +70,19 @@ export function buildYear(cfg) {
     let totalHours, regularHours, overtimeHours, weekendHours, grossPay, worked, rotation, isHighWeek;
 
     if (isDHL) {
-      // DHL: alternating heavy (6-day) / light (4-day) from firstActiveIdx.
+      // DHL: alternating long (6-day) / short (4-day) from firstActiveIdx.
       // (offset%2+2)%2 handles negative offsets (pre-employment weeks) correctly.
       const offset = ((idx - cfg.firstActiveIdx) % 2 + 2) % 2;
-      isHighWeek = offset === 0 ? Boolean(cfg.startingWeekIsHeavy) : !Boolean(cfg.startingWeekIsHeavy);
+      isHighWeek = offset === 0 ? Boolean(cfg.startingWeekIsLong) : !Boolean(cfg.startingWeekIsLong);
       const days = Array.from({ length: 7 }, (_, i) => { const x = new Date(weekStart); x.setDate(x.getDate() + i); return x; });
       if (cfg.dhlTeam && !cfg.dhlCustomSchedule) {
         // Standard preset rotation — days from DHL_PRESET (Team A or B, picked in wizard Step 15)
-        const rotDays = isHighWeek ? DHL_PRESET.rotation.heavy.days : DHL_PRESET.rotation.light.days;
+        const rotDays = isHighWeek ? DHL_PRESET.rotation.long.days : DHL_PRESET.rotation.short.days;
         worked = rotDays.map(d => days[d]);
       } else {
         // Anthony's custom schedule: standard B-team days + scheduled OT baked in.
-        // Heavy: Tue/Wed/Sat/Sun (standard) + Thu/Fri (2 OT) = Tue–Sun (6-Day, 72h)
-        // Light: Mon/Thu/Fri (standard) + Wed (1 OT)         = Mon/Wed/Thu/Fri (4-Day, 48h)
+        // Long:  Tue/Wed/Sat/Sun (standard) + Thu/Fri (2 OT) = Tue–Sun (6-Day, 72h)
+        // Short: Mon/Thu/Fri (standard) + Wed (1 OT)         = Mon/Wed/Thu/Fri (4-Day, 48h)
         worked = isHighWeek
           ? [days[1], days[2], days[3], days[4], days[5], days[6]]  // 6-day: Tue–Sun
           : [days[0], days[2], days[3], days[4]];                    // 4-day: Mon/Wed/Thu/Fri

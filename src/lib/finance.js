@@ -44,6 +44,14 @@ export function getStateConfig(userState) {
 // DHL path: alternates heavy (6-day) / light (4-day) from firstActiveIdx,
 //   using either the DHL_PRESET day arrays (dhlTeam + !dhlCustomSchedule)
 //   or Anthony's hardcoded arrays (dhlCustomSchedule: true).
+//
+// Anthony's custom schedule vs standard DHL B-team rotation:
+//   Standard B-team heavy = 4 shifts (Tue/Wed/Sat/Sun)   → 48h
+//   Standard B-team light = 3 shifts (Mon/Thu/Fri)        → 36h
+//   Anthony heavy = 4 standard + 2 scheduled OT           → 6-Day (Tue–Sun, 72h)
+//   Anthony light = 3 standard + 1 scheduled OT           → 4-Day (Mon/Wed/Thu/Fri, 48h)
+//   The hardcoded day arrays below represent his full week including OT.
+//
 // Standard path: flat weekly hours, no rotation.
 // Note: cfg.dhlNightShift is stored but NOT used here — weekend diff (diffRate)
 //   applies equally to all shifts. Night differential is tracked separately.
@@ -68,7 +76,9 @@ export function buildYear(cfg) {
         const rotDays = isHighWeek ? DHL_PRESET.rotation.heavy.days : DHL_PRESET.rotation.light.days;
         worked = rotDays.map(d => days[d]);
       } else {
-        // Custom / legacy schedule — Anthony's hardcoded day arrays (dhlTeam===null or dhlCustomSchedule===true)
+        // Anthony's custom schedule: standard B-team days + scheduled OT baked in.
+        // Heavy: Tue/Wed/Sat/Sun (standard) + Thu/Fri (2 OT) = Tue–Sun (6-Day, 72h)
+        // Light: Mon/Thu/Fri (standard) + Wed (1 OT)         = Mon/Wed/Thu/Fri (4-Day, 48h)
         worked = isHighWeek
           ? [days[1], days[2], days[3], days[4], days[5], days[6]]  // 6-day: Tue–Sun
           : [days[0], days[2], days[3], days[4]];                    // 4-day: Mon/Wed/Thu/Fri

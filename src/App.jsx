@@ -387,6 +387,7 @@ export default function App() {
         goals={goals}
         futureWeekNets={futureWeekNets}
         currentWeek={currentWeek}
+        today={today}
       />}
       {currentView === "income" && <IncomePanel
         allWeeks={allWeeks} config={config} setConfig={setConfig}

@@ -262,7 +262,8 @@ describe('loadUserData — pre-wizard DHL migration', () => {
     expect(result.config.employerPreset).toBe('DHL')
     expect(result.config.dhlTeam).toBe('B')
     expect(result.config.dhlCustomSchedule).toBe(true)
-    expect(result.config.startingWeekIsHeavy).toBe(false)
+    expect(result.config.startingWeekIsLong).toBe(false)
+    expect(result.config.startingWeekIsHeavy).toBeUndefined()
     expect(result.config.setupComplete).toBe(true)
   })
 
@@ -313,14 +314,14 @@ describe('loadUserData — rotation correction', () => {
       setupComplete: true,
       employerPreset: 'DHL',
       dhlTeam: null,            // never corrected pre-wizard
-      startingWeekIsHeavy: true, // wrong initial value
+    startingWeekIsLong: true, // wrong initial value — gets corrected to false
     }
     setupLoadMock(makeRow({ config, is_dhl: true }))
 
     const result = await loadUserData()
     expect(result.config.dhlTeam).toBe('B')
     expect(result.config.dhlCustomSchedule).toBe(true)
-    expect(result.config.startingWeekIsHeavy).toBe(false)
+    expect(result.config.startingWeekIsLong).toBe(false)
   })
 
   it('does NOT fire rotation correction when dhlTeam is already set', async () => {

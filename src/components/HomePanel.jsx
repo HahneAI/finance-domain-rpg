@@ -21,8 +21,8 @@ export function HomePanel({
   goals,
   futureWeekNets,
   currentWeek,
+  today,
 }) {
-  const weeklyTakeHome = adjustedTakeHome / 52;
   const avgWeeklySpend = remainingSpend?.avgWeeklySpend ?? 0;
   const annualSavings = adjustedWeeklyAvg * 52;
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
@@ -32,27 +32,30 @@ export function HomePanel({
   const totalGoalTarget = goals.reduce((s, g) => s + g.target, 0);
   const completedGoalValue = completedGoals.reduce((s, g) => s + g.target, 0);
 
-  const emergencyGoal = goals.find(g => g.label.toLowerCase().includes("emergency"));
+  // Subtitle: "Another beautiful day, {Weekday} the {Nth}. You are working on your {goal} goal"
+  const topGoal = goals.find(g => !g.completed)?.label?.toLowerCase() ?? "financial";
+  const todayDate = today ? new Date(today + "T12:00:00") : null;
+  const weekdayName = todayDate ? todayDate.toLocaleDateString("en-US", { weekday: "long" }) : null;
+  const dayNum = todayDate?.getDate();
+  const dayOrdinal = dayNum != null
+    ? dayNum + (dayNum === 1 || dayNum === 21 || dayNum === 31 ? "st"
+              : dayNum === 2 || dayNum === 22 ? "nd"
+              : dayNum === 3 || dayNum === 23 ? "rd" : "th")
+    : null;
+  const subtitle = weekdayName && dayOrdinal
+    ? `Another beautiful day, ${weekdayName} the ${dayOrdinal}. You are working on your ${topGoal} goal`
+    : currentWeek ? `Week ${currentWeek.idx} of 52 · ${currentWeek.rotation}` : "2026 Dashboard";
 
   // ── Tile definitions in display order ──
   // rawVal: raw number passed to MetricCard for countup + flash ($ tiles only)
   const tiles = [
-    {
-      title: "Take Home",
-      value: fmt$(weeklyTakeHome),
-      rawVal: weeklyTakeHome,
-      sub: "per week · all events applied",
-      status: weeklyTakeHome > 0 ? "green" : "red",
-      span: 2,
-      key: "income",
-    },
     {
       title: "Weekly Left",
       value: fmt$(adjustedWeeklyAvg),
       rawVal: adjustedWeeklyAvg,
       sub: "after all expenses",
       status: adjustedWeeklyAvg > 100 ? "green" : adjustedWeeklyAvg >= 0 ? "gold" : "red",
-      span: 1,
+      span: 2,
       key: "budget",
     },
     {
@@ -65,26 +68,6 @@ export function HomePanel({
       key: "income",
     },
     {
-      title: "Budget Health",
-      value: fmtPct(spendRatio),
-      // no rawVal — percent, not a dollar countup
-      sub: `${fmt$(avgWeeklySpend)}/wk spend · ${fmt$(weeklyIncome)}/wk income`,
-      status: spendRatio < 0.5 ? "green" : spendRatio < 0.75 ? "gold" : "red",
-      span: 2,
-      key: "budget",
-    },
-    {
-      title: "Emergency Fund",
-      value: emergencyGoal ? fmt$(emergencyGoal.target) : "—",
-      rawVal: emergencyGoal?.target ?? null,
-      sub: emergencyGoal
-        ? (emergencyGoal.completed ? "funded ✓" : `target · ${emergencyGoal.label}`)
-        : "no emergency goal set",
-      status: emergencyGoal?.completed ? "green" : emergencyGoal ? "gold" : "red",
-      span: 1,
-      key: "budget",
-    },
-    {
       title: "Goals",
       value: `${completedGoals.length}/${goals.length}`,
       // no rawVal — fraction string, not a $ value
@@ -94,6 +77,15 @@ export function HomePanel({
       status: goals.length > 0 && completedGoals.length === goals.length ? "green"
             : completedGoals.length > 0 ? "gold" : "gold",
       span: 1,
+      key: "budget",
+    },
+    {
+      title: "Budget Health",
+      value: fmtPct(spendRatio),
+      // no rawVal — percent, not a dollar countup
+      sub: `${fmt$(avgWeeklySpend)}/wk spend · ${fmt$(weeklyIncome)}/wk income`,
+      status: spendRatio < 0.5 ? "green" : spendRatio < 0.75 ? "gold" : "red",
+      span: 2,
       key: "budget",
     },
     {
@@ -116,7 +108,7 @@ export function HomePanel({
   return (
     <div style={{ paddingBottom: "8px" }}>
       {/* Section header */}
-      <div style={{ marginBottom: "18px" }}>
+      <div style={{ marginBottom: "18px", textAlign: "center" }}>
         <div style={{
           fontSize: "10px",
           letterSpacing: "3px",
@@ -127,9 +119,7 @@ export function HomePanel({
           Financial Health
         </div>
         <div style={{ fontSize: "11px", color: "#555", letterSpacing: "1px" }}>
-          {currentWeek
-            ? `Week ${currentWeek.idx} of 52 · ${currentWeek.rotation}`
-            : "2026 Dashboard"}
+          {subtitle}
         </div>
       </div>
 

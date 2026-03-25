@@ -23,12 +23,12 @@ import { STATE_TAX_TABLE } from '../../constants/stateTaxTable.js'
 import { DEFAULT_CONFIG } from '../../constants/config.js'
 
 // DHL_CONFIG: used for tests that exercise DHL rotation behavior (6-Day/4-Day alternation).
-// startingWeekIsHeavy=false with firstActiveIdx=7 produces the same even=heavy pattern
+// startingWeekIsLong=false with firstActiveIdx=7 produces the same even=long pattern
 // as the legacy idx%2===0 logic, so all rotation-based test assertions remain valid.
 const DHL_CONFIG = {
   ...DEFAULT_CONFIG,
   employerPreset: "DHL",
-  startingWeekIsHeavy: false,  // false + firstActiveIdx=7 → even idx = heavy (6-Day)
+  startingWeekIsLong: false,  // false + firstActiveIdx=7 → even idx = long (6-Day)
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -194,7 +194,7 @@ describe('buildYear', () => {
       ...DHL_CONFIG,
       dhlTeam: 'A',
       dhlCustomSchedule: false,
-      startingWeekIsHeavy: true,  // Team A starts heavy
+      startingWeekIsLong: true,  // Team A starts long
     }
     const presetWeeks = buildYear(presetConfig)
     expect(presetWeeks).toHaveLength(53)
@@ -202,12 +202,12 @@ describe('buildYear', () => {
     const activeWeeks = presetWeeks.filter(w => w.active)
     expect(activeWeeks.length).toBeGreaterThan(0)
     activeWeeks.forEach(w => expect(w.grossPay).toBeGreaterThan(0))
-    // Standard preset heavy week (DHL_PRESET light = Mon/Thu/Fri = 3 shifts = 36h)
-    // light and heavy weeks should produce different grossPay amounts
-    const firstHeavy = activeWeeks.find(w => w.rotation === '6-Day')
-    const firstLight = activeWeeks.find(w => w.rotation === '4-Day')
-    if (firstHeavy && firstLight) {
-      expect(firstHeavy.grossPay).toBeGreaterThan(firstLight.grossPay)
+    // Standard preset long week (DHL_PRESET short = Mon/Thu/Fri = 3 shifts = 36h)
+    // short and long weeks should produce different grossPay amounts
+    const firstLong  = activeWeeks.find(w => w.rotation === '6-Day')
+    const firstShort = activeWeeks.find(w => w.rotation === '4-Day')
+    if (firstLong && firstShort) {
+      expect(firstLong.grossPay).toBeGreaterThan(firstShort.grossPay)
     }
   })
 })
@@ -245,7 +245,7 @@ describe('computeNet', () => {
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.ltd + week.k401kEmployee
-    const fed = week.taxableGross * cfg.fedRateLow  // 4-Day = light = fedRateLow
+    const fed = week.taxableGross * cfg.fedRateLow  // 4-Day = short = fedRateLow
     const st = week.taxableGross * cfg.stateRateLow
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
   })
@@ -255,7 +255,7 @@ describe('computeNet', () => {
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.ltd + week.k401kEmployee
-    const fed = week.taxableGross * cfg.fedRateHigh  // 6-Day = heavy = fedRateHigh
+    const fed = week.taxableGross * cfg.fedRateHigh  // 6-Day = long = fedRateHigh
     const st = week.taxableGross * cfg.stateRateHigh
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
   })

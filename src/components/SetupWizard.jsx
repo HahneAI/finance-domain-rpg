@@ -409,21 +409,21 @@ function Step2({ formData, onChange }) {
         <Field label="Which week are you currently on?">
           <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
             <Pill
-              label="4-Day week"
-              active={formData.startingWeekIsHeavy === false}
-              onClick={() => onChange({ startingWeekIsHeavy: false })}
+              label="Short week (3-Day)"
+              active={formData.startingWeekIsLong === false}
+              onClick={() => onChange({ startingWeekIsLong: false })}
             />
             <Pill
-              label="6-Day week"
-              active={formData.startingWeekIsHeavy === true}
-              onClick={() => onChange({ startingWeekIsHeavy: true })}
+              label="Long week (4-Day)"
+              active={formData.startingWeekIsLong === true}
+              onClick={() => onChange({ startingWeekIsLong: true })}
             />
           </div>
           <div style={{
             marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)",
             lineHeight: "1.5",
           }}>
-            This lets the app alternate light/heavy income correctly from your start date.
+            This lets the app alternate short/long income correctly from your start date.
           </div>
         </Field>
       ) : (
@@ -699,7 +699,7 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
 
       {/* Week 1 */}
       <div style={boxStyle}>
-        <div style={hdrStyle}>{isVariable ? "Lighter Week Paystub" : "Typical Paycheck"}</div>
+        <div style={hdrStyle}>{isVariable ? "Shorter Week Paystub" : "Typical Paycheck"}</div>
         <FieldRow>
           <Field label="Gross Pay ($)">
             <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
@@ -726,7 +726,7 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
       {/* Week 2 — variable schedule only */}
       {isVariable && (
         <div style={boxStyle}>
-          <div style={hdrStyle}>Heavier Week Paystub</div>
+          <div style={hdrStyle}>Longer Week Paystub</div>
           <FieldRow>
             <Field label="Gross Pay ($)">
               <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
@@ -831,7 +831,7 @@ function Step4({ formData, onChange }) {
           fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5",
           padding: "10px 12px", background: "var(--color-bg-raised)", borderRadius: "8px",
         }}>
-          Variable schedule auto-enabled — your pay alternates between lighter and heavier weeks.
+          Variable schedule auto-enabled — your pay alternates between shorter and longer weeks.
         </div>
       ) : (
         <Field label="Does your pay vary week to week?">
@@ -961,28 +961,28 @@ function Step4({ formData, onChange }) {
             display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", fontSize: "11px",
           }}>
             <div style={{ color: "var(--color-text-secondary)" }}>
-              Fed {isVariable ? "(light)" : "rate"}:{" "}
+              Fed {isVariable ? "(short)" : "rate"}:{" "}
               <strong style={{ color: "var(--color-text-primary)" }}>
                 {pct(formData.fedRateLow)}
               </strong>
             </div>
             {isVariable && (
               <div style={{ color: "var(--color-text-secondary)" }}>
-                Fed (heavy):{" "}
+                Fed (long):{" "}
                 <strong style={{ color: "var(--color-text-primary)" }}>
                   {pct(formData.fedRateHigh)}
                 </strong>
               </div>
             )}
             <div style={{ color: "var(--color-text-secondary)" }}>
-              State {isVariable ? "(light)" : "rate"}:{" "}
+              State {isVariable ? "(short)" : "rate"}:{" "}
               <strong style={{ color: "var(--color-text-primary)" }}>
                 {isNoTax ? "0% (no state tax)" : pct(formData.stateRateLow)}
               </strong>
             </div>
             {isVariable && !isNoTax && (
               <div style={{ color: "var(--color-text-secondary)" }}>
-                State (heavy):{" "}
+                State (long):{" "}
                 <strong style={{ color: "var(--color-text-primary)" }}>
                   {pct(formData.stateRateHigh)}
                 </strong>
@@ -1050,13 +1050,13 @@ function Step5({ formData }) {
         <Row label="Standard Deduction (2026)" value={`$${(formData.fedStdDeduction ?? 15000).toLocaleString()}`} />
         <Row label="FICA (Social Security + Medicare)" value={pct(formData.ficaRate ?? 0.0765)} />
         <Row
-          label={isVariable ? "Effective Rate — Light Weeks" : "Effective Rate"}
+          label={isVariable ? "Effective Rate — Short Weeks" : "Effective Rate"}
           value={pct(formData.fedRateLow)}
           estimated={formData.taxRatesEstimated}
         />
         {isVariable && (
           <Row
-            label="Effective Rate — Heavy Weeks"
+            label="Effective Rate — Long Weeks"
             value={pct(formData.fedRateHigh)}
             estimated={formData.taxRatesEstimated}
           />
@@ -1075,13 +1075,13 @@ function Step5({ formData }) {
         ) : (
           <>
             <Row
-              label={isVariable ? "Effective Rate — Light Weeks" : "Effective Rate"}
+              label={isVariable ? "Effective Rate — Short Weeks" : "Effective Rate"}
               value={pct(formData.stateRateLow)}
               estimated={formData.taxRatesEstimated}
             />
             {isVariable && (
               <Row
-                label="Effective Rate — Heavy Weeks"
+                label="Effective Rate — Long Weeks"
                 value={pct(formData.stateRateHigh)}
                 estimated={formData.taxRatesEstimated}
               />
@@ -1264,7 +1264,7 @@ function Step15({ formData, onChange }) {
     const d = DHL_PRESET.defaults;
     onChange({
       dhlTeam: t,
-      startingWeekIsHeavy: preset.startsHeavy,
+      startingWeekIsLong: preset.startsLong,
       // Apply preset defaults only for standard fields not yet wizard-confirmed
       shiftHours:         d.shiftHours,
       otThreshold:        d.otThreshold,
@@ -1278,9 +1278,9 @@ function Step15({ formData, onChange }) {
   }
 
   const firstWeekLabel = team
-    ? (DHL_PRESET.teams[team].startsHeavy
-        ? `${DHL_PRESET.rotation.heavy.label} (your first active week)`
-        : `${DHL_PRESET.rotation.light.label} (your first active week)`)
+    ? (DHL_PRESET.teams[team].startsLong
+        ? `${DHL_PRESET.rotation.long.label} (your first active week)`
+        : `${DHL_PRESET.rotation.short.label} (your first active week)`)
     : null;
 
   return (
@@ -1299,7 +1299,7 @@ function Step15({ formData, onChange }) {
         )}
         {!team && (
           <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
-            Team A starts on a light week (Mon / Thu / Fri). Team B starts on a heavy week (Tue / Wed / Sat / Sun).
+            Team A starts on a short week (Mon / Thu / Fri). Team B starts on a long week (Tue / Wed / Sat / Sun).
           </div>
         )}
       </Field>
@@ -1360,8 +1360,8 @@ function Step15({ formData, onChange }) {
           />
         </div>
         <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
-          Weekend OT on a light week earns the shift differential. Weekday OT never does.
-          This affects your light-week gross estimate.
+          Weekend OT on a short week earns the shift differential. Weekday OT never does.
+          This affects your short-week gross estimate.
         </div>
       </Field>
     </div>
@@ -1381,22 +1381,22 @@ function Step15({ formData, onChange }) {
 function estimateWeeklyGross(d) {
   const isDHL = d.employerPreset === "DHL";
   if (isDHL) {
-    // Light-week DHL: 4 shifts × shiftHours = 48h; heavy = 6 × 12 = 72h.
-    // Use a weighted average (26 light + 26 heavy per year).
-    const lightH = 4 * (d.shiftHours || 12);
-    const heavyH = 6 * (d.shiftHours || 12);
+    // Short-week DHL: 4 shifts × shiftHours = 48h; long = 6 × 12 = 72h.
+    // Use a weighted average (26 short + 26 long per year).
+    const shortH = 4 * (d.shiftHours || 12);
+    const longH  = 6 * (d.shiftHours || 12);
     const gross = (h) => {
       const base = d.baseRate || 0;
       const reg = Math.min(h, d.otThreshold || 40);
       const ot = Math.max(h - (d.otThreshold || 40), 0);
       return reg * base + ot * base * (d.otMultiplier || 1.5);
     };
-    return (gross(lightH) + gross(heavyH)) / 2;
+    return (gross(shortH) + gross(longH)) / 2;
   }
   if (d.scheduleIsVariable) {
     // Two-rate variable: average of both gross estimates.
     const h1 = (d.standardWeeklyHours || 40);
-    const h2 = (d.heavyWeeklyHours || 50);
+    const h2 = (d.longWeeklyHours || 50);
     const gross = (h) => {
       const base = d.baseRate || 0;
       const reg = Math.min(h, d.otThreshold || 40);

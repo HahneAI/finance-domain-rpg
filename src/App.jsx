@@ -8,6 +8,7 @@ import { BenefitsPanel } from "./components/BenefitsPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
+import { SetupWizard } from "./components/SetupWizard.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -109,6 +110,9 @@ export default function App() {
   //                        pickupDays, netShiftDelta, eventId } }
   // Keyed by weekIdx (number) so lookup is O(1) in confirmTriggerWeek.
   const [weekConfirmations, setWeekConfirmations] = useState({});
+  // wizardEntry: null=closed, false=first-run, string=re-entry life event
+  const [wizardEntry, setWizardEntry] = useState(null);
+  const [lifeEventMenu, setLifeEventMenu] = useState(false);
 
   const currentView = viewStack[viewStack.length - 1];
   const canGoBack = viewStack.length > 1;
@@ -143,6 +147,7 @@ export default function App() {
       setWeekConfirmations(data.weekConfirmations ?? {});
       setIsDHL(data.isDHL);
       setIsAdmin(data.isAdmin);
+      if (!data.config.setupComplete) setWizardEntry(false);
       setLoading(false);
     });
   }, []);
@@ -319,6 +324,11 @@ export default function App() {
     return map;
   }, [logs, config, today]);
 
+  function handleWizardComplete(mergedConfig) {
+    setConfig(mergedConfig);
+    setWizardEntry(null);
+  }
+
   if (loading) {
     return (
       <div style={{ background: "var(--color-bg-base)",
@@ -488,6 +498,47 @@ export default function App() {
           {NAV_ITEMS.map(item => (
             <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
+          {/* ── Life Events (re-entry wizard) ── */}
+          <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
+            <button
+              onClick={() => setLifeEventMenu(p => !p)}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "14px 20px", fontSize: "11px",
+                letterSpacing: "2px", textTransform: "uppercase",
+                background: "transparent",
+                color: lifeEventMenu ? "var(--color-gold)" : "#888",
+                borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
+                border: "none", cursor: "pointer", transition: "all 0.15s",
+              }}
+            >
+              Life Events
+            </button>
+            {lifeEventMenu && (
+              <div>
+                {[
+                  { value: "lost_job",      label: "Lost my job" },
+                  { value: "changed_jobs",  label: "Changed jobs" },
+                  { value: "commission_job", label: "Commission job" },
+                ].map(ev => (
+                  <button
+                    key={ev.value}
+                    onClick={() => { setWizardEntry(ev.value); setLifeEventMenu(false); }}
+                    style={{
+                      display: "block", width: "100%", textAlign: "left",
+                      padding: "10px 24px", fontSize: "10px",
+                      letterSpacing: "1.5px", textTransform: "uppercase",
+                      background: "transparent", color: "#666",
+                      border: "none", borderLeft: "3px solid transparent",
+                      cursor: "pointer", transition: "color 0.15s",
+                    }}
+                  >
+                    {ev.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </nav>
       </div>
 
@@ -645,6 +696,47 @@ export default function App() {
           {NAV_ITEMS.map(item => (
             <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
+          {/* ── Life Events (re-entry wizard) ── */}
+          <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
+            <button
+              onClick={() => setLifeEventMenu(p => !p)}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "14px 20px", fontSize: "11px",
+                letterSpacing: "2px", textTransform: "uppercase",
+                background: "transparent",
+                color: lifeEventMenu ? "var(--color-gold)" : "#888",
+                borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
+                border: "none", cursor: "pointer", transition: "all 0.15s",
+              }}
+            >
+              Life Events
+            </button>
+            {lifeEventMenu && (
+              <div>
+                {[
+                  { value: "lost_job",      label: "Lost my job" },
+                  { value: "changed_jobs",  label: "Changed jobs" },
+                  { value: "commission_job", label: "Commission job" },
+                ].map(ev => (
+                  <button
+                    key={ev.value}
+                    onClick={() => { setWizardEntry(ev.value); setLifeEventMenu(false); setDrawerOpen(false); }}
+                    style={{
+                      display: "block", width: "100%", textAlign: "left",
+                      padding: "10px 24px", fontSize: "10px",
+                      letterSpacing: "1.5px", textTransform: "uppercase",
+                      background: "transparent", color: "#666",
+                      border: "none", borderLeft: "3px solid transparent",
+                      cursor: "pointer", transition: "color 0.15s",
+                    }}
+                  >
+                    {ev.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </nav>
 
         {/* Active section indicator at bottom */}
@@ -738,6 +830,14 @@ export default function App() {
             if (logEntry) setLogs(p => [...p, logEntry]);
           }}
           onDismiss={() => setConfirmDismissed(true)}
+        />
+      )}
+      {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}
+      {wizardEntry !== null && (
+        <SetupWizard
+          config={config}
+          onComplete={handleWizardComplete}
+          lifeEvent={wizardEntry === false ? null : wizardEntry}
         />
       )}
     </div>

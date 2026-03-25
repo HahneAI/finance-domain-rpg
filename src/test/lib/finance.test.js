@@ -14,7 +14,12 @@ import {
   loanPaymentsRemaining,
   computeBucketModel,
   calcEventImpact,
+  toLocalIso,
+  stateTax,
+  getStateConfig,
+  loanRunwayStartDate,
 } from '../../lib/finance.js'
+import { STATE_TAX_TABLE } from '../../constants/stateTaxTable.js'
 import { DEFAULT_CONFIG } from '../../constants/config.js'
 
 // DHL_CONFIG: used for tests that exercise DHL rotation behavior (6-Day/4-Day alternation).
@@ -819,5 +824,150 @@ describe('calcEventImpact', () => {
       const newEvent = makeEvent({ type: 'bonus', weekRotation: '6-Day', weekEnd: '2026-02-02', amount: 100 })
       expect(calcEventImpact(legacyEvent, cfg).grossGained).toBe(calcEventImpact(newEvent, cfg).grossGained)
     })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// toLocalIso
+// ─────────────────────────────────────────────────────────────
+describe('toLocalIso', () => {
+  it('returns a YYYY-MM-DD string', () => {
+    const result = toLocalIso(new Date(2026, 0, 5))
+    expect(result).toBe('2026-01-05')
+  })
+
+  it('zero-pads single-digit month and day', () => {
+    expect(toLocalIso(new Date(2026, 2, 4))).toBe('2026-03-04')  // March 4
+    expect(toLocalIso(new Date(2026, 9, 1))).toBe('2026-10-01')  // Oct 1
+  })
+
+  it('handles year-end boundary', () => {
+    expect(toLocalIso(new Date(2026, 11, 31))).toBe('2026-12-31')
+  })
+
+  it('handles fiscal year start (2026-01-05)', () => {
+    expect(toLocalIso(new Date(2026, 0, 5))).toBe('2026-01-05')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// stateTax
+// ─────────────────────────────────────────────────────────────
+describe('stateTax', () => {
+  it('returns 0 for a NONE-model state (TX)', () => {
+    const cfg = STATE_TAX_TABLE['TX']
+    expect(stateTax(50000, cfg)).toBe(0)
+  })
+
+  it('returns 0 for null stateConfig', () => {
+    expect(stateTax(50000, null)).toBe(0)
+  })
+
+  it('returns 0 for undefined stateConfig', () => {
+    expect(stateTax(50000, undefined)).toBe(0)
+  })
+
+  it('calculates flat tax correctly for MO (4.7%)', () => {
+    const cfg = STATE_TAX_TABLE['MO']
+    expect(cfg.model).toBe('FLAT')
+    expect(stateTax(50000, cfg)).toBeCloseTo(50000 * 0.047, 5)
+  })
+
+  it('flat tax: zero income returns 0', () => {
+    expect(stateTax(0, STATE_TAX_TABLE['MO'])).toBe(0)
+  })
+
+  it('calculates progressive tax within first bracket (AL — $400 @ 2%)', () => {
+    const cfg = STATE_TAX_TABLE['AL']
+    expect(cfg.model).toBe('PROGRESSIVE')
+    expect(stateTax(400, cfg)).toBeCloseTo(400 * 0.02, 5)
+  })
+
+  it('calculates progressive tax spanning multiple brackets (AL — $5000)', () => {
+    // AL: [0–500 @ 2%, 500–3000 @ 4%, 3000+ @ 5%]
+    // 500*0.02 + 2500*0.04 + 2000*0.05 = 10 + 100 + 100 = 210
+    const cfg = STATE_TAX_TABLE['AL']
+    expect(stateTax(5000, cfg)).toBeCloseTo(210, 5)
+  })
+
+  it('progressive zero income returns 0', () => {
+    expect(stateTax(0, STATE_TAX_TABLE['CA'])).toBe(0)
+  })
+
+  it('result is always non-negative for all 50 states', () => {
+    for (const cfg of Object.values(STATE_TAX_TABLE)) {
+      expect(stateTax(40000, cfg)).toBeGreaterThanOrEqual(0)
+    }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// getStateConfig
+// ─────────────────────────────────────────────────────────────
+describe('getStateConfig', () => {
+  it('returns the correct config for a known state (MO)', () => {
+    const cfg = getStateConfig('MO')
+    expect(cfg).toBe(STATE_TAX_TABLE['MO'])
+    expect(cfg.model).toBe('FLAT')
+  })
+
+  it('returns a config with a model field for common states', () => {
+    for (const code of ['TX', 'CA', 'IL', 'AL', 'MO', 'FL', 'NY']) {
+      const cfg = getStateConfig(code)
+      expect(cfg).toHaveProperty('model')
+    }
+  })
+
+  it('falls back to MO for an unknown state code', () => {
+    expect(getStateConfig('XX')).toBe(STATE_TAX_TABLE['MO'])
+  })
+
+  it('falls back to MO for undefined', () => {
+    expect(getStateConfig(undefined)).toBe(STATE_TAX_TABLE['MO'])
+  })
+
+  it('returns a NONE config for no-income-tax states', () => {
+    expect(getStateConfig('FL').model).toBe('NONE')
+    expect(getStateConfig('TX').model).toBe('NONE')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// loanRunwayStartDate
+// ─────────────────────────────────────────────────────────────
+describe('loanRunwayStartDate', () => {
+  const baseLoan = {
+    totalAmount: 5000,
+    paymentAmount: 200,
+    firstPaymentDate: '2026-06-01',
+  }
+
+  it('weekly frequency → 7 days before firstPaymentDate', () => {
+    const loan = { ...baseLoan, paymentFrequency: 'weekly' }
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-25')
+  })
+
+  it('biweekly frequency → 14 days before firstPaymentDate', () => {
+    const loan = { ...baseLoan, paymentFrequency: 'biweekly' }
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-18')
+  })
+
+  it('monthly frequency → ~30 days before firstPaymentDate', () => {
+    const loan = { ...baseLoan, paymentFrequency: 'monthly' }
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-02')
+  })
+
+  it('defaults to weekly (7 days) when no paymentFrequency provided', () => {
+    expect(loanRunwayStartDate({ ...baseLoan })).toBe('2026-05-25')
+  })
+
+  it('returns a valid ISO date string', () => {
+    const result = loanRunwayStartDate({ ...baseLoan, paymentFrequency: 'weekly' })
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('start date is strictly before firstPaymentDate', () => {
+    const result = loanRunwayStartDate({ ...baseLoan, paymentFrequency: 'weekly' })
+    expect(result < baseLoan.firstPaymentDate).toBe(true)
   })
 })

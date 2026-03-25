@@ -45,23 +45,35 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
   const activeWeeks = allWeeks.filter(w => w.active);
 
   // ── Attendance History ──
+  // Only absence-type events feed the history view; bonus/other_loss are irrelevant here.
   const attendanceLogs = logs.filter(e => ["missed_unpaid", "missed_unapproved", "partial"].includes(e.type));
+
+  // Group by calendar month (YYYY-MM) for the monthly breakdown table.
+  // missed_unpaid     → shiftsLost (full approved shifts)
+  // missed_unapproved → days from missedDays array + raw hoursLost (bucket-hit events)
+  // partial           → count of partial-shift events + hoursLost
   const byMonth = {};
   for (const e of attendanceLogs) {
     if (!e.weekEnd) continue;
-    const month = e.weekEnd.slice(0, 7);
+    const month = e.weekEnd.slice(0, 7); // "YYYY-MM"
     if (!byMonth[month]) byMonth[month] = { unpaid: 0, unapproved: 0, unapprovedH: 0, partial: 0, partialH: 0 };
     const m = byMonth[month];
     if (e.type === "missed_unpaid")     m.unpaid       += parseInt(e.shiftsLost) || 0;
     if (e.type === "missed_unapproved") { m.unapproved += normalizeDays(e.missedDays).length; m.unapprovedH += parseFloat(e.hoursLost) || 0; }
     if (e.type === "partial")           { m.partial    += 1;                                  m.partialH    += parseFloat(e.hoursLost) || 0; }
   }
+
+  // Count how many times each day-of-week appears across missed/unapproved events.
+  // Partials excluded — a partial shift isn't a full absence.
   const dowCounts = {};
   for (const e of logs.filter(e => ["missed_unpaid", "missed_unapproved"].includes(e.type))) {
     for (const d of normalizeDays(e.missedDays)) dowCounts[d] = (dowCounts[d] || 0) + 1;
   }
+  // Sorted descending so the most-missed day leads in the pill row.
   const dowSorted = Object.entries(dowCounts).sort((a, b) => b[1] - a[1]);
   const totalMissedDays = dowSorted.reduce((s, [, c]) => s + c, 0);
+
+  // YTD roll-ups: drive the header badge and the three summary tiles.
   const ytdUnpaid     = Object.values(byMonth).reduce((s, m) => s + m.unpaid, 0);
   const ytdUnapproved = Object.values(byMonth).reduce((s, m) => s + m.unapproved, 0);
   const ytdPartial    = Object.values(byMonth).reduce((s, m) => s + m.partial, 0);

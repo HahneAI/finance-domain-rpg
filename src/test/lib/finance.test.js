@@ -29,6 +29,10 @@ const DHL_CONFIG = {
   ...DEFAULT_CONFIG,
   employerPreset: "DHL",
   startingWeekIsLong: false,  // false + firstActiveIdx=7 → even idx = long (6-Day)
+  // Explicit 401k values — test must not depend on DEFAULT_CONFIG personal values
+  k401Rate: 0.06,
+  k401MatchRate: 0.05,
+  k401StartDate: "2026-05-15",
 }
 
 // ─────────────────────────────────────────────────────────────

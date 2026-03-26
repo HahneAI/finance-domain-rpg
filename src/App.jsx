@@ -473,6 +473,13 @@ export default function App() {
           .main-content {
             padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
           }
+          /* Safe-area height + top padding for Dynamic Island / notch iPhones.
+             CSS !important overrides inline styles in iOS PWA standalone mode where
+             env() may not resolve reliably on inline attributes. */
+          .mobile-header {
+            height: calc(56px + env(safe-area-inset-top, 0px)) !important;
+            padding-top: env(safe-area-inset-top, 0px) !important;
+          }
         }
         @media (min-width: 768px) {
           .mobile-header { display: none !important; }

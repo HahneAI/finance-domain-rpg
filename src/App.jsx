@@ -107,6 +107,7 @@ export default function App() {
   const [showExtra, setShowExtra] = useState(true);
   const [isDHL, setIsDHL] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [ptoGoal, setPtoGoal] = useState(null);
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
   const [goals, setGoals] = useState(INITIAL_GOALS);
@@ -169,6 +170,7 @@ export default function App() {
       setWeekConfirmations(data.weekConfirmations ?? {});
       setIsDHL(data.isDHL);
       setIsAdmin(data.isAdmin);
+      setPtoGoal(data.ptoGoal);
       if (!data.config.setupComplete) setWizardEntry(false);
       setLoading(false);
     });
@@ -180,10 +182,10 @@ export default function App() {
     if (loading) return;
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations });
+      saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
     }, 800);
     return () => clearTimeout(saveTimer.current);
-  }, [config, expenses, goals, logs, showExtra, weekConfirmations, loading]);
+  }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal, loading]);
 
   // ── today: reactive date string — ticks at midnight so everything auto-advances ──
   const [today, setToday] = useState(() => toLocalIso(new Date()));
@@ -432,6 +434,8 @@ export default function App() {
         logPTOHoursLost={logTotals.ptoHoursLost}
         currentWeek={currentWeek}
         bucketModel={bucketModel}
+        ptoGoal={ptoGoal}
+        setPtoGoal={setPtoGoal}
       />}
       {currentView === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config} isDHL={isDHL}

@@ -237,6 +237,12 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 - [x] Test: sign in on Safari, add to home screen, relaunch — should go straight to dashboard, no login prompt
 - [x] If session expires: `onAuthStateChange` fires with `SIGNED_OUT` → app drops back to login screen cleanly
 
+### PTO Goal (2026-03-26)
+- [x] **Gate PTO Accrual section to DHL preset only** — `isDHL` prop was passed from App.jsx but not destructured in BenefitsPanel; PTO section was showing for all users
+- [x] **Replace hardcoded Paternity Leave block with configurable PTO Goal** — label, hoursNeeded, targetDate, negativeBalanceCap; same accrual formula as hardcoded block; add/edit/clear inline UI
+- [x] **New `user_data.pto_goal` JSONB column** — migration 004; parallel to `goals` field
+- [x] **Wire pto_goal through db.js → App.jsx state → BenefitsPanel props**
+
 ### Wizard Polish (2026-03-26 — verbosity + diff simplification)
 - [x] **Verbosity pass** — trim multi-sentence helper text to one sentence across all steps; bump key helper text from 11px/disabled to 12px/secondary for readability
 - [x] **Step 1 differential simplification** — remove Overnight/Weekend pill multiselect; replace with single "Weekend Differential ($/hr)" input bar (enter 0 for none); diffRate set directly

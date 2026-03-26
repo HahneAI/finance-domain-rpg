@@ -68,6 +68,27 @@ function AccountDetail({ authedUser, config, onBack }) {
   const setupBorder = config.setupComplete ? "rgba(76,175,125,0.3)"         : "rgba(201,168,76,0.3)";
   const setupLabel  = config.setupComplete ? "Setup complete"               : "Setup pending";
 
+  const [showPwForm, setShowPwForm] = useState(false);
+  const [newPw, setNewPw]           = useState("");
+  const [confirmPw, setConfirmPw]   = useState("");
+  const [pwError, setPwError]       = useState(null);
+  const [pwSaved, setPwSaved]       = useState(false);
+  const [pwLoading, setPwLoading]   = useState(false);
+
+  async function handleChangePw(e) {
+    e.preventDefault();
+    setPwError(null);
+    if (newPw !== confirmPw) { setPwError("Passwords don't match."); return; }
+    if (newPw.length < 6)    { setPwError("Must be at least 6 characters."); return; }
+    setPwLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPw });
+    setPwLoading(false);
+    if (error) { setPwError(error.message); return; }
+    setPwSaved(true);
+    setNewPw(""); setConfirmPw("");
+    setTimeout(() => { setPwSaved(false); setShowPwForm(false); }, 2000);
+  }
+
   return (
     <>
       <BackBar onBack={onBack} title="Account" />
@@ -79,6 +100,42 @@ function AccountDetail({ authedUser, config, onBack }) {
           </span>
         } />
       </DetailCard>
+
+      {/* Change password */}
+      <DetailCard>
+        {!showPwForm ? (
+          <button
+            onClick={() => setShowPwForm(true)}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "14px 16px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
+          >
+            <span style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500" }}>Change Password</span>
+            <span style={{ fontSize: "18px", color: "#555", lineHeight: 1 }}>›</span>
+          </button>
+        ) : (
+          <form onSubmit={handleChangePw} style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", fontWeight: "600" }}>Change Password</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={lS}>New Password</label>
+              <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="At least 6 characters" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={lS}>Confirm Password</label>
+              <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+            </div>
+            {pwError && (
+              <div style={{ fontSize: "11px", color: "var(--color-red)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{pwError}</div>
+            )}
+            {pwSaved && (
+              <div style={{ fontSize: "11px", color: "var(--color-green)" }}>Password updated.</div>
+            )}
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button type="button" onClick={() => { setShowPwForm(false); setPwError(null); setNewPw(""); setConfirmPw(""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button type="submit" disabled={pwLoading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: pwLoading ? "default" : "pointer" }}>{pwLoading ? "..." : "Save"}</button>
+            </div>
+          </form>
+        )}
+      </DetailCard>
+
       <button
         onClick={async () => { await supabase.auth.signOut(); }}
         style={{ width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-red)", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}

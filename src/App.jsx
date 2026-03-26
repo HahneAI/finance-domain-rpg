@@ -110,8 +110,9 @@ export default function App() {
   // authChecked: true once the initial getSession() call resolves.
   // Without this flag, there's a flash of the login screen on every page reload
   // even when a valid session already exists in localStorage.
-  const [authedUser, setAuthedUser]   = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const [authedUser, setAuthedUser]         = useState(null);
+  const [authChecked, setAuthChecked]       = useState(false);
+  const [pendingPasswordReset, setPendingPasswordReset] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -165,7 +166,11 @@ export default function App() {
       setAuthChecked(true);
     });
     // Subscribe to future sign-in / sign-out events.
-    return onAuthChange((user) => setAuthedUser(user));
+    return onAuthChange((event, user) => {
+      if (event === "PASSWORD_RECOVERY") setPendingPasswordReset(true);
+      else setPendingPasswordReset(false);
+      setAuthedUser(user);
+    });
   }, []);
 
   // ── Load from Supabase once auth resolves to a signed-in user ──
@@ -385,6 +390,11 @@ export default function App() {
   // No valid session — show login / create account screen.
   if (!authedUser) {
     return <LoginScreen />;
+  }
+
+  // Supabase PASSWORD_RECOVERY event — user clicked a reset link, show set-new-password form.
+  if (pendingPasswordReset) {
+    return <LoginScreen recoveryMode onRecoveryDone={() => setPendingPasswordReset(false)} />;
   }
 
   if (loading) {

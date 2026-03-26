@@ -313,6 +313,16 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 - [ ] **Wire Apple Sign In** — `supabase.auth.signInWithOAuth({ provider: 'apple' })`; add Apple button to `LoginScreen.jsx`; configure provider in Supabase dashboard; required for iOS App Store compliance
 - [ ] **LoginScreen layout update** — add OAuth buttons below email/password form with a divider ("or continue with"); style per platform guidelines (Apple button must be black/white)
 
+### Benefits → Deductions Pipeline
+The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premiums and freeform `otherDeductions` into `config`, but **none of them are applied to take-home math**. Only `cfg.ltd` and `k401kEmployee` are deducted in `computeNet()` and `buildYear()`.
+
+- [ ] **Wire benefit premiums into `buildYear()` taxable gross** — `healthPremium`, `dentalPremium`, `visionPremium`, `stdWeekly`, `lifePremium` are pre-tax deductions; reduce taxable gross before fed/state/FICA are applied (same position as `cfg.ltd` today)
+- [ ] **Wire HSA and FSA into `buildYear()` taxable gross** — both are pre-tax; add to the pre-tax deduction pool alongside insurance premiums
+- [ ] **Wire `otherDeductions` array into `computeNet()`** — sum `otherDeductions[].weeklyAmount` and subtract post-tax (after FICA/fed/state, since arbitrary deductions may not be pre-tax); or allow a `preTax` flag per entry
+- [ ] **Respect `benefitsStartDate`** — deductions should only apply to weeks on or after `config.benefitsStartDate`; weeks before that date skip all benefit/HSA/FSA deductions (same pattern as `k401StartDate` gate on 401k)
+- [ ] **Update wizard preview (Step 7 — Paycheck Buffer)** — the live net-per-check breakdown already shows a "Benefits" subtotal; verify it matches `buildYear()` after the fix and that the buffer step stays in sync
+- [ ] **Income config view** — add benefit premium fields to the Income → Config read-only display and edit form (same treatment as `ltd` today)
+
 ### Setup Wizard Tune
 - [ ] **End-to-end wizard walkthrough** — run a fresh account through every step; note any confusing copy, broken layout, or missing validation
 - [ ] **Step copy pass** — trim any remaining multi-sentence helper text to one sentence; ensure every step has a clear "why this matters" hook

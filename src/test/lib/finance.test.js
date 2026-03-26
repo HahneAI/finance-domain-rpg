@@ -18,6 +18,7 @@ import {
   stateTax,
   getStateConfig,
   loanRunwayStartDate,
+  dhlEmployerMatchRate,
 } from '../../lib/finance.js'
 import { STATE_TAX_TABLE } from '../../constants/stateTaxTable.js'
 import { DEFAULT_CONFIG } from '../../constants/config.js'
@@ -29,10 +30,37 @@ const DHL_CONFIG = {
   ...DEFAULT_CONFIG,
   employerPreset: "DHL",
   startingWeekIsLong: false,  // false + firstActiveIdx=7 → even idx = long (6-Day)
+  // Explicit 401k values — test must not depend on DEFAULT_CONFIG personal values
+  k401Rate: 0.06,
+  k401MatchRate: 0.05,
+  k401StartDate: "2026-05-15",
 }
 
 // ─────────────────────────────────────────────────────────────
 // fedTax
+// ─────────────────────────────────────────────────────────────
+// dhlEmployerMatchRate
+// ─────────────────────────────────────────────────────────────
+
+describe('dhlEmployerMatchRate', () => {
+  it('matches 100% up to 4%: contribute 4 → match 4', () => {
+    expect(dhlEmployerMatchRate(0.04)).toBeCloseTo(0.04)
+  })
+  it('contribute 5% → match 4.5%', () => {
+    expect(dhlEmployerMatchRate(0.05)).toBeCloseTo(0.045)
+  })
+  it('contribute 6% → match 5% (cap)', () => {
+    expect(dhlEmployerMatchRate(0.06)).toBeCloseTo(0.05)
+  })
+  it('contribute 7%+ → match stays at 5% cap', () => {
+    expect(dhlEmployerMatchRate(0.07)).toBeCloseTo(0.05)
+    expect(dhlEmployerMatchRate(0.15)).toBeCloseTo(0.05)
+  })
+  it('contribute 0% → match 0', () => {
+    expect(dhlEmployerMatchRate(0)).toBe(0)
+  })
+})
+
 // ─────────────────────────────────────────────────────────────
 
 describe('fedTax', () => {

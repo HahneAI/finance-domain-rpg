@@ -243,6 +243,10 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 - [x] **Visual touchups** — spacing and color polish across wizard steps
 - [x] **Paycheck buffer rework** — convert buffer from hard floor/warning system to an optional toggle (default: on, $50); show total annual buffer amount on the step; buffer value excluded from all math pipeline (not counted as spendable income in any panel); toggle on/off with input bar appearing when on; $200 max ceiling; 2-sentence plain-language explanation on step page; add code comments around the buffer pipeline exclusion points
 
+### Bug Fixes (2026-03-26 — new test account contamination + iOS safe area)
+- [x] **DEFAULT_CONFIG contamination** — `ltd: 2.00`, `k401Rate: 0.06`, `k401MatchRate: 0.05`, `k401StartDate: "2026-05-15"` were Anthony's live DHL values hardcoded as defaults; new users got them via `{ ...DEFAULT_CONFIG, ...data.config }` merge. Zeroed all four fields to safe neutrals (`ltd: 0`, `k401Rate: 0`, `k401MatchRate: 0`, `k401StartDate: null`).
+- [x] **iPhone Dynamic Island / notch safe-area** — mobile header height and `padding-top` were only set via inline styles; `env(safe-area-inset-top)` can fail to resolve in iOS PWA standalone mode without CSS `!important`. Moved explicit `height` and `padding-top` rules into the `@media (max-width: 767px)` block with `!important` so they win over inline styles and reliably apply in standalone mode.
+
 ### Wizard Polish (identified 2026-03-25 from test user session)
 - [x] **Base pay prefill corrected** — `DEFAULT_CONFIG.baseRate` and placeholder changed from 21.15 → 19.65 (DHL forklift operator base rate); `PTO_RATE` was already 19.65
 - [x] **Wizard scroll fixed** — Step 1 (and any tall step) now scrollable on mobile; outer container uses `overflowY: auto` + `margin: auto` on inner card instead of `justifyContent: center` which clipped tall steps

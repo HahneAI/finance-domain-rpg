@@ -113,7 +113,7 @@
 - [x] Three variants behind `const GATE_VARIANT = 'A'` — A: blur overlay, B: hidden + disclaimer, C: locked card with padlock
 - [x] Shared `TAX_EXEMPT_DISCLAIMER` const + `TaxExemptDisclaimerBox` + gold accept button
 - [x] Accept writes `taxExemptOptIn: true`; `isValid` blocks until accepted
-- [ ] Visual test all 3 variants; delete losers before merging
+- [x] Visual test all 3 variants; delete losers before merging
 
 #### Sub-sprint 3k — DHL Employer Preset Tune *(post-wizard, DHL users only)* ✅
 > Shown only when `employerPreset === "DHL"`. Positioned after Step 1 (Pay Structure), before Schedule.
@@ -157,7 +157,7 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 - [x] Life Events sidebar item + dependency engine for re-entry
 
 ### Phase 5 — Tax Exempt Gate
-- [ ] `IncomePanel.jsx` — visual test all 3 variants (A/B/C) behind `GATE_VARIANT` const; pick winner; delete losers
+- [x] `IncomePanel.jsx` — visual test all 3 variants (A/B/C) behind `GATE_VARIANT` const; pick winner; delete losers
 
 ### Sprint: Attendance History View (All Users) ✅
 - [x] **Attendance history view** — log-based missed day tracking for all users:
@@ -232,10 +232,16 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 - [x] `CREATE POLICY "own row only" ON user_data FOR ALL USING (auth.uid() = user_id);`
 - [x] Verified: existing account reads/writes correctly after RLS enabled
 
-### Step 6 — Session persistence on mobile (PWA)
-- [ ] Supabase JS client persists session to localStorage automatically — verify it survives "Add to Home Screen" launch (standalone mode uses same localStorage origin)
-- [ ] Test: sign in on Safari, add to home screen, relaunch — should go straight to dashboard, no login prompt
-- [ ] If session expires: `onAuthStateChange` fires with `SIGNED_OUT` → app drops back to login screen cleanly
+### Step 6 — Session persistence on mobile (PWA) ✅
+- [x] Supabase JS client persists session to localStorage automatically — verify it survives "Add to Home Screen" launch (standalone mode uses same localStorage origin)
+- [x] Test: sign in on Safari, add to home screen, relaunch — should go straight to dashboard, no login prompt
+- [x] If session expires: `onAuthStateChange` fires with `SIGNED_OUT` → app drops back to login screen cleanly
+
+### Wizard Polish (2026-03-26 — verbosity + diff simplification)
+- [x] **Verbosity pass** — trim multi-sentence helper text to one sentence across all steps; bump key helper text from 11px/disabled to 12px/secondary for readability
+- [x] **Step 1 differential simplification** — remove Overnight/Weekend pill multiselect; replace with single "Weekend Differential ($/hr)" input bar (enter 0 for none); diffRate set directly
+- [x] **Visual touchups** — spacing and color polish across wizard steps
+- [x] **Paycheck buffer rework** — convert buffer from hard floor/warning system to an optional toggle (default: on, $50); show total annual buffer amount on the step; buffer value excluded from all math pipeline (not counted as spendable income in any panel); toggle on/off with input bar appearing when on; $200 max ceiling; 2-sentence plain-language explanation on step page; add code comments around the buffer pipeline exclusion points
 
 ### Wizard Polish (identified 2026-03-25 from test user session)
 - [x] **Base pay prefill corrected** — `DEFAULT_CONFIG.baseRate` and placeholder changed from 21.15 → 19.65 (DHL forklift operator base rate); `PTO_RATE` was already 19.65

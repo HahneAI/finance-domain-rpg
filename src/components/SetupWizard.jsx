@@ -12,15 +12,10 @@
 //   Step 4  (3f) Tax Rates — state dropdown, paystub calculator (skippable)
 //   Step 5  (3g) Tax Summary — read-only confirmation of computed tax picture
 //   Step 6  (3h) Other Deductions — benefits date, freeform rows, attendance gate
-//   Step 7  (3i) Paycheck Buffer — live net preview, $50 floor with override
+//   Step 7  (3i) Paycheck Buffer — live net preview, optional toggle, $200 ceiling
 //   Step 8  (3j) Tax Exempt Gate — 3 UI variants (A/B/C) behind GATE_VARIANT const
 //
-// PENDING — Phase 4 (App.jsx integration not wired yet):
-//   - App.jsx first-run gate: if (!config.setupComplete) → render <SetupWizard />
-//   - handleWizardComplete: merge returned config, save to Supabase, redirect
-//   - Life Events sidebar item for re-entry
-//
-// Step 8 still needs visual test of all 3 variants before the losers are deleted.
+// All 9 step components are wired. Phase 4 App.jsx integration complete.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
@@ -48,17 +43,13 @@ function Step0({ lifeEvent, onLifeEventChange }) {
           fontSize: "14px", lineHeight: "1.6",
           color: "var(--color-text-secondary)", margin: 0,
         }}>
-          Before we build your dashboard, let's capture your pay setup.
-          This takes about 3 minutes. You'll be able to update anything
-          anytime from the Life Events menu.
+          Set up your pay in a few steps. Update anything later from Life Events.
         </p>
         <p style={{
           fontSize: "12px", lineHeight: "1.6",
-          color: "var(--color-text-disabled)", margin: 0,
+          color: "var(--color-text-secondary)", margin: 0,
         }}>
-          You don't need your paystub today — but as soon as you can input
-          the tax numbers the government took off of you, the sooner we can
-          sharpen your budget to exact pennies.
+          Have a recent paystub? You'll sharpen tax rates from the Income panel — no rush now.
         </p>
       </div>
     );
@@ -150,19 +141,12 @@ function Field({ label, children }) {
 // ─────────────────────────────────────────────────────────────────────────────
 const OT_THRESHOLDS = [40, 48];
 const OT_MULTIPLIERS = [1.5, 2];
-const DIFF_TYPES = ["Overnight", "Weekend"];
 
 function Step1({ formData, onChange, lifeEvent }) {
   // Gate: has the user answered "Do you work for DHL?" yet?
   const [gateTouched, setGateTouched] = useState(
     formData.employerPreset === "DHL" || formData.setupComplete === true
   );
-
-  // Local tracking for which diff types are selected (multiselect)
-  const [diffTypes, setDiffTypes] = useState(() => {
-    if (formData.diffRate > 0) return new Set(["Weekend"]);
-    return new Set();
-  });
 
   // Local tracking for custom OT threshold input
   const [otCustom, setOtCustom] = useState(
@@ -191,21 +175,6 @@ function Step1({ formData, onChange, lifeEvent }) {
     }
   }
 
-  function toggleDiffType(type) {
-    setDiffTypes(prev => {
-      const next = new Set(prev);
-      next.has(type) ? next.delete(type) : next.add(type);
-      // If all cleared, zero out diffRate
-      if (next.size === 0) onChange({ diffRate: 0 });
-      return next;
-    });
-  }
-
-  function clearDiffs() {
-    setDiffTypes(new Set());
-    onChange({ diffRate: 0 });
-  }
-
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
@@ -217,13 +186,10 @@ function Step1({ formData, onChange, lifeEvent }) {
         </div>
         {isDHL && (
           <div style={{
-            marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)",
+            marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
             lineHeight: "1.5",
           }}>
-            Rotation schedule, attendance bucket, and dual-rate logic auto-configured.
-            You'll pick your team (A or B) in the next step.{" "}
-            Weekend rate ($3.00/hr) is pre-filled below. Night shift adds $1.50/hr —
-            set in the DHL team step.
+            Rotation, attendance, and dual-rate auto-configured. Weekend rate pre-filled — night shift differential set in the next step.
           </div>
         )}
       </Field>
@@ -254,31 +220,16 @@ function Step1({ formData, onChange, lifeEvent }) {
             </Field>
           </FieldRow>
 
-          {/* ── Shift Differential ── */}
-          <Field label="Shift Differential">
-            <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
-              {DIFF_TYPES.map(t => (
-                <Pill
-                  key={t} label={t}
-                  active={diffTypes.has(t)}
-                  onClick={() => toggleDiffType(t)}
-                />
-              ))}
-              <Pill label="None" active={diffTypes.size === 0} onClick={clearDiffs} />
-            </div>
-            {diffTypes.size > 0 && (
-              <div style={{ marginTop: "10px" }}>
-                <label style={lS}>Extra $/hr</label>
-                <input
-                  {...iS}
-                  style={{ ...iS }}
-                  type="number" min="0" step="0.25"
-                  value={formData.diffRate ?? ""}
-                  onChange={e => onChange({ diffRate: parseFloat(e.target.value) || 0 })}
-                  placeholder="e.g. 3.00"
-                />
-              </div>
-            )}
+          {/* ── Weekend Differential ── directly configurable; 0 = no differential ── */}
+          <Field label="Weekend Differential ($/hr)">
+            <input
+              {...iS}
+              style={{ ...iS }}
+              type="number" min="0" step="0.25"
+              value={formData.diffRate ?? ""}
+              onChange={e => onChange({ diffRate: parseFloat(e.target.value) || 0 })}
+              placeholder="0 = no differential"
+            />
           </Field>
 
           {/* ── OT Threshold ── */}
@@ -397,7 +348,7 @@ function Step2({ formData, onChange }) {
         />
         {formData.startDate && (
           <div style={{
-            marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)",
+            marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)",
           }}>
             Income tracking starts week {formData.firstActiveIdx} of the fiscal year.
           </div>
@@ -420,10 +371,10 @@ function Step2({ formData, onChange }) {
             />
           </div>
           <div style={{
-            marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)",
+            marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
             lineHeight: "1.5",
           }}>
-            This lets the app alternate short/long income correctly from your start date.
+            Used to alternate short/long week income from your start date.
           </div>
         </Field>
       ) : (
@@ -437,9 +388,9 @@ function Step2({ formData, onChange }) {
             placeholder="e.g. 40"
           />
           <div style={{
-            marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)",
+            marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)",
           }}>
-            Deviations from this are logged week-by-week from the dashboard.
+            Deviations are logged week-by-week from the dashboard.
           </div>
         </Field>
       )}
@@ -456,10 +407,10 @@ function Step2({ formData, onChange }) {
           ))}
         </div>
         <div style={{
-          marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)",
+          marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
           lineHeight: "1.5",
         }}>
-          The app prompts you to confirm what you worked each week on this day.
+          Weekly confirmation prompt fires on this day.
         </div>
       </Field>
 
@@ -618,10 +569,9 @@ function Step3({ formData, onChange }) {
     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
       <p style={{
         fontSize: "13px", color: "var(--color-text-secondary)",
-        margin: "0 0 4px", lineHeight: "1.5",
+        margin: "0 0 8px", lineHeight: "1.5",
       }}>
-        Select any workplace benefits deducted from your paycheck.
-        You can skip this and set it up later.
+        Select benefits deducted from your paycheck — skip if none yet.
       </p>
       <div style={{
         display: "flex", flexDirection: "column", gap: "8px",
@@ -693,8 +643,7 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
-        Enter values from a paycheck stub to lock in your exact rates.
-        Don't have it handy? Use the estimate — sharpen anytime from the Income panel.
+        Enter paystub values for exact rates — or estimate now and sharpen later.
       </div>
 
       {/* Week 1 */}
@@ -1040,8 +989,7 @@ function Step5({ formData }) {
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
 
       <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0, lineHeight: "1.6" }}>
-        Here's the tax picture the app will use to calculate your take-home.
-        You can refine any of this from the Income panel after setup.
+        Your tax picture — refine anytime via Income → Sharpen Rates.
       </p>
 
       {/* Federal */}
@@ -1088,7 +1036,7 @@ function Step5({ formData }) {
             )}
             {stateConfig?.model === "PROGRESSIVE" && (
               <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", paddingTop: "8px", lineHeight: "1.5" }}>
-                Progressive brackets — rates shown are effective (actual withheld ÷ gross), not marginal.
+                Progressive — effective rates (withheld ÷ gross), not marginal.
               </div>
             )}
           </>
@@ -1104,9 +1052,8 @@ function Step5({ formData }) {
           border: "1px solid rgba(201,168,76,0.2)",
           borderRadius: "8px",
         }}>
-          Rates marked <strong style={{ color: "var(--color-gold)" }}>est.</strong> are pre-filled estimates.
-          Once you have a paystub, use <strong style={{ color: "var(--color-gold)" }}>Sharpen Rates</strong> in
-          the Income panel to lock in exact numbers.
+          Rates marked <strong style={{ color: "var(--color-gold)" }}>est.</strong> are estimates —
+          confirm with a paystub via <strong style={{ color: "var(--color-gold)" }}>Sharpen Rates</strong> in Income.
         </div>
       )}
     </div>
@@ -1152,7 +1099,7 @@ function Step6({ formData, onChange }) {
           onChange={e => onChange({ benefitsStartDate: e.target.value || null })}
         />
         <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
-          When your health, dental, and vision coverage activates. Leave blank if already active or not enrolled.
+          Leave blank if coverage is already active or not enrolled.
         </div>
       </Field>
 
@@ -1162,7 +1109,7 @@ function Step6({ formData, onChange }) {
         <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
           {others.length === 0 && (
             <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", padding: "8px 0" }}>
-              No additional deductions. Add rows for anything not covered above — union dues, parking, equipment, etc.
+              Nothing added — examples: union dues, parking, equipment.
             </div>
           )}
           {others.map(row => (
@@ -1215,7 +1162,7 @@ function Step6({ formData, onChange }) {
       {/* ── Attendance policy gate — standard users only ── */}
       {!isDHL && (
         <Field label="Does your employer track attendance with a formal policy?">
-          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", marginBottom: "10px", lineHeight: "1.5" }}>
+          <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px", lineHeight: "1.5" }}>
             Points systems, hours-based buckets, or similar. Not just "you can call out."
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
@@ -1232,7 +1179,7 @@ function Step6({ formData, onChange }) {
           </div>
           {formData.attendanceBucketEnabled === true && (
             <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
-              Bucket tracking enabled. You can configure intake rates and caps from the app after setup.
+              Bucket tracking on — configure rates and caps after setup.
             </div>
           )}
         </Field>
@@ -1293,12 +1240,12 @@ function Step15({ formData, onChange }) {
           <Pill label="Team B" active={team === "B"} onClick={() => pickTeam("B")} />
         </div>
         {firstWeekLabel && (
-          <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+          <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
             {firstWeekLabel}. Teams alternate every week — while A works their 3-day, B works their 4-day.
           </div>
         )}
         {!team && (
-          <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+          <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
             Team A starts on a short week (Mon / Thu / Fri). Team B starts on a long week (Tue / Wed / Sat / Sun).
           </div>
         )}
@@ -1318,10 +1265,10 @@ function Step15({ formData, onChange }) {
             onClick={() => onChange({ dhlCustomSchedule: true })}
           />
         </div>
-        <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+        <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
           {isCustom
-            ? "Custom: your starting week direction is set manually. You can adjust it in the Schedule step."
-            : "Standard: days locked to the DHL rotation preset. Override per-week from the income panel if you pick up extra shifts."}
+            ? "Manual — adjust direction in the Schedule step."
+            : "Standard rotation. Override per-week from Income if you pick up extra shifts."}
         </div>
       </Field>
 
@@ -1339,7 +1286,7 @@ function Step15({ formData, onChange }) {
             onClick={() => onChange({ dhlNightShift: false })}
           />
         </div>
-        <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+        <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
           All shifts earn the {formData.diffRate ? `$${Number(formData.diffRate).toFixed(2)}/hr` : "shift"} weekend differential.
           Night shift adds +${Number(formData.nightDiffRate || 1.50).toFixed(2)}/hr on all hours (stacks with weekend).
         </div>
@@ -1359,9 +1306,8 @@ function Step15({ formData, onChange }) {
             onClick={() => onChange({ dhlOtOnWeekend: true })}
           />
         </div>
-        <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
-          Weekend OT on a short week earns the shift differential. Weekday OT never does.
-          This affects your short-week gross estimate.
+        <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+          Weekend OT earns the differential — weekday OT does not.
         </div>
       </Field>
     </div>
@@ -1369,12 +1315,11 @@ function Step15({ formData, onChange }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STEP 7 — Paycheck Buffer
+// STEP 7 — Paycheck Buffer (estimateWeeklyGross helper defined above)
 //
-// Shows a live net-per-check preview assembled from formData collected so far.
-// User sets a safety floor (paycheckBuffer). $50 minimum enforced — if user
-// enters less, a warning appears and Next is blocked until they either raise the
-// value or explicitly click "Override anyway" (sets bufferOverrideAck = true).
+// Shows a live net-per-check preview, then lets the user toggle the buffer on/off
+// and set an amount (default $50, max $200). See App.jsx bufferPerWeek comment for
+// how the buffer is excluded from all downstream spendable math at runtime.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Estimate a typical weekly gross from formData — does not require a week object.
@@ -1410,7 +1355,15 @@ function estimateWeeklyGross(d) {
   return h * (d.baseRate || 0);
 }
 
-const BUFFER_FLOOR = 50;
+// ─── STEP 7 — Paycheck Buffer ────────────────────────────────────────────────
+// The buffer is an optional per-week amount excluded from every spendable
+// calculation in the app. It is NOT a deduction — the money lands on the
+// paycheck normally — but the app's budget, goal, and income math treat it
+// as invisible, letting it accumulate quietly as a safety reserve.
+//
+// Max: $200/week  Default: On at $50
+// ─────────────────────────────────────────────────────────────────────────────
+const BUFFER_MAX = 200;
 
 function Step7({ formData, onChange }) {
   const gross = estimateWeeklyGross(formData);
@@ -1430,17 +1383,18 @@ function Step7({ formData, onChange }) {
   const state = gross * (formData.stateRateLow || 0);
   const net = gross - fica - k401k - benefits - other - fed - state;
 
-  const buf = formData.paycheckBuffer ?? 50;
-  const overrideAck = formData.bufferOverrideAck === true;
+  // Buffer toggle state — bufferEnabled defaults to true (on)
+  const bufferOn = formData.bufferEnabled ?? true;
+  const buf      = formData.paycheckBuffer ?? 50;
 
   const rows = [
-    { label: "Gross Pay",      val: gross,   sign: "" },
-    { label: "Federal Tax",    val: fed,     sign: "−" },
-    { label: "State Tax",      val: state,   sign: "−" },
-    { label: "FICA",           val: fica,    sign: "−" },
-    { label: "401(k)",         val: k401k,   sign: "−" },
-    { label: "Benefits",       val: benefits,sign: "−" },
-    { label: "Other Deduct.", val: other,   sign: "−" },
+    { label: "Gross Pay",      val: gross,    sign: "" },
+    { label: "Federal Tax",    val: fed,      sign: "−" },
+    { label: "State Tax",      val: state,    sign: "−" },
+    { label: "FICA",           val: fica,     sign: "−" },
+    { label: "401(k)",         val: k401k,    sign: "−" },
+    { label: "Benefits",       val: benefits, sign: "−" },
+    { label: "Other Deduct.", val: other,    sign: "−" },
   ];
 
   const fmt = (n) => `$${Math.abs(n).toFixed(2)}`;
@@ -1486,64 +1440,43 @@ function Step7({ formData, onChange }) {
             </span>
           </div>
         </div>
-        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
-          Averaged from your pay structure and deductions above.
-          {formData.taxRatesEstimated && " Tax rates are estimated — confirm from a real paystub later."}
+        <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+          Estimated average from your setup so far.
+          {formData.taxRatesEstimated && " Tax rates are estimated — confirm via Sharpen Rates."}
         </div>
       </div>
 
-      {/* ── Paycheck buffer input ── */}
-      <Field label="Paycheck Safety Buffer ($)">
-        <input
-          {...iS} style={{ ...iS }}
-          type="number" min="0" step="1"
-          value={buf || ""}
-          onChange={e => {
-            onChange({ paycheckBuffer: parseFloat(e.target.value) || 0, bufferOverrideAck: false });
-          }}
-        />
-        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
-          Minimum cash cushion per check before the dashboard flags a shortfall. $50 minimum recommended.
+      {/* ── Paycheck buffer toggle ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <p style={{ margin: 0, fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+          A paycheck buffer is a fixed amount from every check that the app
+          doesn't count as spendable income. Turn it on to build a quiet
+          safety reserve without cluttering your budget.
+        </p>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <Pill label="On"  active={bufferOn}  onClick={() => onChange({ bufferEnabled: true  })} />
+          <Pill label="Off" active={!bufferOn} onClick={() => onChange({ bufferEnabled: false })} />
         </div>
-
-        {/* Warning / override */}
-        {buf < BUFFER_FLOOR && (
-          <div style={{
-            marginTop: "10px",
-            padding: "10px 14px",
-            background: "rgba(224,92,92,0.08)",
-            border: "1px solid rgba(224,92,92,0.3)",
-            borderRadius: "10px",
-            display: "flex", flexDirection: "column", gap: "8px",
-          }}>
-            <div style={{ fontSize: "12px", color: "var(--color-red)", lineHeight: "1.5" }}>
-              A buffer under ${BUFFER_FLOOR} leaves very little margin for timing errors or small unexpected costs.
-              This is not recommended.
+        {/* Amount input — only visible when buffer is on */}
+        {bufferOn && (
+          <>
+            <input
+              {...iS} style={{ ...iS }}
+              type="number" min="0" max={BUFFER_MAX} step="1"
+              value={buf || ""}
+              onChange={e => {
+                // Clamp to BUFFER_MAX ceiling; do not enforce a floor
+                const v = Math.min(parseFloat(e.target.value) || 0, BUFFER_MAX);
+                onChange({ paycheckBuffer: v });
+              }}
+              placeholder="e.g. 50"
+            />
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+              At ${buf}/week — ${(buf * 52).toLocaleString()} reserved annually.
             </div>
-            {!overrideAck && (
-              <button
-                onClick={() => onChange({ bufferOverrideAck: true })}
-                style={{
-                  alignSelf: "flex-start",
-                  background: "transparent",
-                  color: "var(--color-text-secondary)",
-                  border: "1px solid rgba(224,92,92,0.4)",
-                  borderRadius: "8px", padding: "5px 12px",
-                  fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
-                  cursor: "pointer",
-                }}
-              >
-                Override anyway
-              </button>
-            )}
-            {overrideAck && (
-              <div style={{ fontSize: "11px", color: "var(--color-text-disabled)" }}>
-                Override accepted — you can continue with a lower buffer.
-              </div>
-            )}
-          </div>
+          </>
         )}
-      </Field>
+      </div>
     </div>
   );
 }
@@ -1555,14 +1488,7 @@ function Step7({ formData, onChange }) {
 // "pure net" can mislead — they're a timing benefit, not free money.
 // The gate presents a disclaimer before unlocking the tax-exempt view.
 //
-// Three variants gated by GATE_VARIANT:
-//   'A' — blur overlay over content until user accepts
-//   'B' — content hidden; a text link reveals it
-//   'C' — locked placeholder card with accept button
-//
-// Accept writes taxExemptOptIn: true. isValid blocks until accepted.
-// ─────────────────────────────────────────────────────────────────────────────
-const GATE_VARIANT = 'A'; // ← no longer used; variant is now a state inside Step8 below
+// Tax Exempt Gate — Variant C: locked placeholder card with accept button
 
 const TAX_EXEMPT_DISCLAIMER = (
   <>
@@ -1572,36 +1498,6 @@ const TAX_EXEMPT_DISCLAIMER = (
     the difference.
   </>
 );
-
-function TaxExemptDisclaimerBox({ onAccept }) {
-  return (
-    <div style={{
-      background: "var(--color-bg-raised)",
-      border: "1px solid rgba(201,168,76,0.25)",
-      borderRadius: "12px", padding: "18px 16px",
-      display: "flex", flexDirection: "column", gap: "14px",
-    }}>
-      <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>
-        Tax-Exempt Week Projections
-      </div>
-      <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.7", color: "var(--color-text-secondary)" }}>
-        {TAX_EXEMPT_DISCLAIMER}
-      </p>
-      <button
-        onClick={onAccept}
-        style={{
-          alignSelf: "flex-start",
-          background: "var(--color-gold)", color: "var(--color-bg-base)",
-          border: "none", borderRadius: "10px",
-          padding: "8px 16px", fontSize: "10px", letterSpacing: "1.5px",
-          fontWeight: 700, textTransform: "uppercase", cursor: "pointer",
-        }}
-      >
-        I understand — show projections
-      </button>
-    </div>
-  );
-}
 
 // Preview content shown after opt-in (placeholder — real chart wires in Phase 5)
 function TaxExemptPreview() {
@@ -1623,73 +1519,10 @@ function TaxExemptPreview() {
 }
 
 function Step8({ formData, onChange }) {
-  const [variant, setVariant] = useState('A');
   const accepted = formData.taxExemptOptIn === true;
   const accept = () => onChange({ taxExemptOptIn: true });
-  const switchVariant = (v) => { setVariant(v); onChange({ taxExemptOptIn: false }); };
-
-  const variantPicker = (
-    <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "4px" }}>
-      <span style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Style</span>
-      {['A', 'B', 'C'].map(v => (
-        <button key={v} onClick={() => switchVariant(v)} style={{
-          padding: "3px 10px", fontSize: "10px", borderRadius: "12px", cursor: "pointer",
-          background: variant === v ? "var(--color-gold)" : "transparent",
-          color: variant === v ? "var(--color-bg-base)" : "#666",
-          border: `1px solid ${variant === v ? "var(--color-gold)" : "var(--color-border-subtle)"}`,
-          fontWeight: variant === v ? "bold" : "normal", letterSpacing: "1px",
-        }}>{v}</button>
-      ))}
-    </div>
-  );
-
-  // ── Variant A: blur overlay ────────────────────────────────────────────────
-  if (variant === 'A') {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-        {variantPicker}
-        {!accepted ? (
-          <div style={{ position: "relative" }}>
-            <div style={{ filter: "blur(4px)", pointerEvents: "none", userSelect: "none", opacity: 0.5 }}>
-              <TaxExemptPreview />
-            </div>
-            <div style={{
-              position: "absolute", inset: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              borderRadius: "12px",
-              background: "rgba(10,10,10,0.65)",
-              backdropFilter: "blur(2px)",
-            }}>
-              <div style={{ maxWidth: "320px", width: "100%", padding: "0 16px" }}>
-                <TaxExemptDisclaimerBox onAccept={accept} />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <TaxExemptPreview />
-        )}
-      </div>
-    );
-  }
-
-  // ── Variant B: hidden content + reveal link ────────────────────────────────
-  if (variant === 'B') {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-        {variantPicker}
-        {!accepted ? (
-          <TaxExemptDisclaimerBox onAccept={accept} />
-        ) : (
-          <TaxExemptPreview />
-        )}
-      </div>
-    );
-  }
-
-  // ── Variant C: locked placeholder card ────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      {variantPicker}
       {!accepted ? (
         <div style={{
           background: "var(--color-bg-raised)", borderRadius: "12px", padding: "18px 16px",
@@ -1705,15 +1538,12 @@ function Step8({ formData, onChange }) {
           <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
             {TAX_EXEMPT_DISCLAIMER}
           </p>
-          <button
-            onClick={accept}
-            style={{
-              background: "var(--color-gold)", color: "var(--color-bg-base)",
-              border: "none", borderRadius: "10px",
-              padding: "8px 16px", fontSize: "10px", letterSpacing: "1.5px",
-              fontWeight: 700, textTransform: "uppercase", cursor: "pointer",
-            }}
-          >
+          <button onClick={accept} style={{
+            background: "var(--color-gold)", color: "var(--color-bg-base)",
+            border: "none", borderRadius: "10px", padding: "8px 16px",
+            fontSize: "10px", letterSpacing: "1.5px", fontWeight: 700,
+            textTransform: "uppercase", cursor: "pointer",
+          }}>
             Unlock projections
           </button>
         </div>
@@ -1790,7 +1620,7 @@ const STEP_DEFS = [
   {
     id: 7, title: "Paycheck Buffer", sprint: "3i",
     showIf: (_, ev) => ev === null || ev === "changed_jobs",
-    isValid: (d) => (d.paycheckBuffer ?? 0) >= BUFFER_FLOOR || d.bufferOverrideAck === true,
+    isValid: () => true,  // buffer is optional; toggle + amount are both optional
     component: Step7,
   },
   {

@@ -16,8 +16,9 @@ const BASE_CONFIG = {
   // Ensure Step 4 isValid (fedRateLow > 0, userState != null)
   fedRateLow: 0.0784,
   userState: 'MO',
-  // Ensure Step 7 isValid (paycheckBuffer >= 50)
+  // Buffer is optional — no floor enforced
   paycheckBuffer: 50,
+  bufferEnabled: true,
   // No DHL by default
   employerPreset: null,
   dhlTeam: null,
@@ -103,8 +104,8 @@ describe('SetupWizard — step routing', () => {
 describe('SetupWizard — Step 0 rendering', () => {
   it('first-run renders welcome copy (no event selection buttons)', () => {
     renderWizard({ lifeEvent: null })
-    // Welcome copy mentions building the dashboard or capturing pay setup
-    expect(screen.getByText(/before we build your dashboard/i)).toBeTruthy()
+    // Welcome copy mentions setting up pay
+    expect(screen.getByText(/set up your pay/i)).toBeTruthy()
     // No life event options visible
     expect(screen.queryByText(/lost my job/i)).toBeNull()
   })
@@ -246,12 +247,13 @@ describe('SetupWizard — isValid gates', () => {
     expect(nextBtn).toBeDisabled()
   })
 
-  it('Step 7 (Paycheck Buffer): Next blocked when buffer < 50 and no override ack', () => {
+  it('Step 7 (Paycheck Buffer): Next NOT blocked — buffer is optional', () => {
     const config = {
       ...BASE_CONFIG,
       startDate: '2026-03-01',
-      attendanceBucketEnabled: false,  // makes step 6 valid
-      paycheckBuffer: 0,               // below floor
+      attendanceBucketEnabled: false,
+      paycheckBuffer: 0,        // below old floor — should no longer block
+      bufferEnabled: true,
       bufferOverrideAck: false,
     }
     renderWizard({ config })
@@ -264,8 +266,9 @@ describe('SetupWizard — isValid gates', () => {
     clickNext()  // 6 Other Deductions
     clickNext()  // 7 Paycheck Buffer
     expect(screen.getByText('Paycheck Buffer')).toBeTruthy()
+    // Next is enabled regardless of buffer value — buffer is optional
     const nextBtn = screen.getByRole('button', { name: /next|finish/i })
-    expect(nextBtn).toBeDisabled()
+    expect(nextBtn).not.toBeDisabled()
   })
 
   it('Step 8 (Tax Exempt): Next blocked until taxExemptOptIn is true', () => {

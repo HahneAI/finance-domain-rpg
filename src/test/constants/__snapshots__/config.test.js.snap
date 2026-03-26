@@ -8,6 +8,7 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
   "bucketCap": 128,
   "bucketPayoutRate": 9.825,
   "bucketStartBalance": 64,
+  "bufferEnabled": true,
   "bufferOverrideAck": false,
   "commissionMonthly": 0,
   "dentalPremium": 0,

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { EVENT_TYPES, PTO_RATE } from "../constants/config.js";
+import { EVENT_TYPES } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { Card, iS, lS } from "./ui.jsx";
 
@@ -288,7 +288,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
     )}
 
     {vals.type === "pto" && (
-      <div><label style={lS}>PTO Hours (${PTO_RATE}/hr flat)</label>
+      <div><label style={lS}>PTO Hours (${config.baseRate}/hr flat)</label>
         <input type="number" min="0" value={vals.ptoHours} onChange={e => set(v => ({ ...v, ptoHours: e.target.value }))} style={iS} />
       </div>
     )}
@@ -615,7 +615,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
               <div style={{ fontSize: "10px", color: "#666" }}>
                 {entry.type === "missed_unpaid"     && `${entry.shiftsLost} shift(s) · ${entry.weekendShifts} wknd · ${entry.shiftsLost * config.shiftHours}h`}
                 {entry.type === "missed_unapproved" && `${entry.hoursLost}h unapproved`}
-                {entry.type === "pto"               && `${entry.ptoHours}h PTO @ $${PTO_RATE}`}
+                {entry.type === "pto"               && `${entry.ptoHours}h PTO @ $${config.baseRate}`}
                 {entry.type === "partial"           && `${entry.hoursLost}h partial`}
                 {entry.type === "bonus"             && `+${f(entry.amount)} bonus`}
                 {entry.type === "other_loss"        && `-${f(entry.amount)} other`}

@@ -1,13 +1,28 @@
-import { Card } from "./ui.jsx";
+import { useState } from "react";
+import { Card, iS, lS, SmBtn } from "./ui.jsx";
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const fmtMonth = yyyyMM => { const [y, m] = yyyyMM.split("-").map(Number); return `${MONTH_SHORT[m - 1]} ${y}`; };
+const fmtDate  = iso => { const [, m, d] = iso.split("-").map(Number); return `${MONTH_SHORT[m - 1]} ${d}`; };
 
-export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLost, logK401kGained, logK401kMatchGained, logPTOHoursLost, currentWeek, bucketModel }) {
+const SH = ({ children }) => (
+  <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "12px" }}>
+    {children}
+  </div>
+);
+
+const EMPTY_FORM = { label: "", hoursNeeded: "", targetDate: "", negativeBalanceCap: "40" };
+
+export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kMatchLost,
+  logK401kGained, logK401kMatchGained, logPTOHoursLost, currentWeek, bucketModel,
+  ptoGoal, setPtoGoal }) {
+
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const now = new Date();
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  // ── 401k computations ──────────────────────────────────────────────────────
   const bE = allWeeks.reduce((s, w) => s + w.k401kEmployee, 0);
   const k401Active = currentWeek ? currentWeek.weekEnd >= new Date(config.k401StartDate) : false;
   const weeksUntil401k = !k401Active && currentWeek
@@ -16,19 +31,69 @@ export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLos
   const bM = allWeeks.reduce((s, w) => s + w.k401kEmployer, 0);
   const aE = Math.max(bE - logK401kLost + (logK401kGained ?? 0), 0);
   const aM = Math.max(bM - logK401kMatchLost + (logK401kMatchGained ?? 0), 0);
-  const ptoBs = allWeeks.filter(w => w.active && w.weekEnd <= new Date(2026, 8, 14)).reduce((s, w) => s + w.totalHours, 0) / 20;
-  const adjP = Math.max(ptoBs - logPTOHoursLost / 20, 0);
-  const avail = adjP + 40;
+
+  // ── PTO Goal computations (DHL only) ───────────────────────────────────────
+  // Accrual rate: 1 hour per 20 hours worked.
+  // Cutoff date: ptoGoal.targetDate (when leave starts — app projects accrual up to that date).
+  // Available = accrued hours (adj for lost PTO) + negative balance cap.
+  const ptoCutoff = ptoGoal ? new Date(ptoGoal.targetDate) : null;
+  const ptoBs     = ptoCutoff
+    ? allWeeks.filter(w => w.active && w.weekEnd <= ptoCutoff).reduce((s, w) => s + w.totalHours, 0) / 20
+    : 0;
+  const adjP      = Math.max(ptoBs - logPTOHoursLost / 20, 0);
+  const negCap    = ptoGoal?.negativeBalanceCap ?? 40;
+  const avail     = adjP + negCap;
+  const hoursNeed = ptoGoal?.hoursNeeded ?? 0;
+  const onTrack   = avail >= hoursNeed;
+
+  // ── PTO Goal form state ────────────────────────────────────────────────────
+  const [formOpen, setFormOpen] = useState(false);
+  const [formVals, setFormVals] = useState(EMPTY_FORM);
+  const [editMode, setEditMode] = useState(false);
+
+  const shiftHours = config.shiftHours ?? 12;
+
+  function openAdd() {
+    setFormVals(EMPTY_FORM);
+    setEditMode(false);
+    setFormOpen(true);
+  }
+  function openEdit() {
+    setFormVals({
+      label:              ptoGoal.label,
+      hoursNeeded:        String(ptoGoal.hoursNeeded),
+      targetDate:         ptoGoal.targetDate,
+      negativeBalanceCap: String(ptoGoal.negativeBalanceCap),
+    });
+    setEditMode(true);
+    setFormOpen(true);
+  }
+  function saveForm() {
+    const hrs = parseFloat(formVals.hoursNeeded) || 0;
+    const cap = parseFloat(formVals.negativeBalanceCap) || 40;
+    if (!formVals.label.trim() || !hrs || !formVals.targetDate) return;
+    setPtoGoal({
+      label:              formVals.label.trim(),
+      hoursNeeded:        hrs,
+      targetDate:         formVals.targetDate,
+      negativeBalanceCap: cap,
+    });
+    setFormOpen(false);
+  }
+
   return (<div>
-    {/* 401k status banner */}
+
+    {/* ── 401k status banner ── */}
     {currentWeek && <div style={{ background: k401Active ? "#1a3a20" : "#1e1e2a", border: `1px solid ${k401Active ? "rgba(76,175,125,0.27)" : "#7a8bbf44"}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Status</div>
       {k401Active
         ? <div style={{ fontSize: "11px", color: "var(--color-green)", fontWeight: "bold" }}>Active — contributions running since {config.k401StartDate}</div>
         : <div style={{ fontSize: "11px", color: "#7a8bbf" }}><strong style={{ color: "var(--color-text-primary)" }}>{weeksUntil401k} week{weeksUntil401k !== 1 ? "s" : ""}</strong> until enrollment ({config.k401StartDate})</div>}
     </div>}
+
+    {/* ── 401k projections ── */}
     <div style={{ marginBottom: "24px" }}>
-      <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "12px" }}>401k Projections</div>
+      <SH>401k Projections</SH>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
         <Card label="Base Your Contributions" val={f(bE)} color="#7a8bbf" size="18px" />
         <Card label="Base Employer Match" val={f(bM)} color="var(--color-green)" size="18px" />
@@ -39,22 +104,159 @@ export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLos
         <Card label="Adj. Employer Match" val={f(aM)} sub={[logK401kMatchLost > 0 && `-${f(logK401kMatchLost)} lost`, logK401kMatchGained > 0 && `+${f(logK401kMatchGained)} bonus`].filter(Boolean).join(" · ")} color="var(--color-green)" size="18px" />
         <Card label="Adj. Total Balance" val={f(aE + aM)} color="var(--color-gold)" size="18px" />
       </div>}
-      <div style={{ padding: "12px 14px", background: "#3a3210", border: "1px solid #c8a84b44", borderRadius: "6px", fontSize: "11px", color: "#aaa", lineHeight: "1.8" }}>FHA: save <span style={{ color: "var(--color-gold)" }}>$3,000 cash</span> + borrow <span style={{ color: "#7a8bbf" }}>{f(aE)} from 401k</span> = <span style={{ color: "var(--color-green)" }}>~{f(aE + 3000)}+ toward FHA</span></div>
     </div>
-    <div style={{ marginBottom: "24px" }}>
-      <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "12px" }}>PTO Accrual</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
-        <Card label="Accrual Rate" val="1 hr / 20 worked" color="#7eb8c9" size="14px" />
-        <Card label="Base Accrued by Sep 15" val={`~${ptoBs.toFixed(1)} hrs`} color="var(--color-text-primary)" size="18px" />
-        {logPTOHoursLost > 0 ? <Card label="Adj. Accrued by Sep 15" val={`~${adjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" /> : <Card label="Negative Balance Cap" val="40 hrs (after 90d)" color="#888" size="14px" />}
-      </div>
-      <div style={{ background: avail >= 134 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${avail >= 134 ? "var(--color-green)" : "var(--color-red)"}`, borderRadius: "6px", padding: "14px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-          <div><div style={{ fontSize: "11px", color: avail >= 134 ? "var(--color-green)" : "var(--color-red)", fontWeight: "bold", marginBottom: "4px" }}>Paternity Leave Plan</div><div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Need ~134 hrs · {adjP.toFixed(1)} accrued + 40 neg = <strong style={{ color: "var(--color-text-primary)" }}>{avail.toFixed(1)} available</strong></div></div>
-          <div style={{ textAlign: "right" }}><div style={{ fontSize: "14px", fontWeight: "bold", color: avail >= 134 ? "var(--color-green)" : "var(--color-red)" }}>{avail >= 134 ? "On Track" : "Shortfall"}</div>{avail < 134 && <div style={{ fontSize: "10px", color: "var(--color-red)" }}>Short {(134 - avail).toFixed(1)} hrs</div>}</div>
+
+    {/* ── PTO Accrual + Leave Goal — DHL users only ── */}
+    {isDHL && (
+      <div style={{ marginBottom: "24px" }}>
+        <SH>PTO Accrual</SH>
+
+        {/* Accrual metric cards — cutoff driven by goal targetDate if set */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
+          <Card label="Accrual Rate" val="1 hr / 20 worked" color="#7eb8c9" size="14px" />
+          {ptoGoal ? (
+            <>
+              <Card
+                label={`Base Accrued by ${fmtDate(ptoGoal.targetDate)}`}
+                val={`~${ptoBs.toFixed(1)} hrs`}
+                color="var(--color-text-primary)"
+                size="18px"
+              />
+              {logPTOHoursLost > 0
+                ? <Card label={`Adj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${adjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
+                : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="#888" size="14px" />
+              }
+            </>
+          ) : (
+            <>
+              <Card label="Accrued by Leave Date" val="— set a goal" color="var(--color-text-disabled)" size="14px" />
+              <Card label="Negative Balance Cap" val="40 hrs (after 90d)" color="#888" size="14px" />
+            </>
+          )}
         </div>
+
+        {/* ── PTO Leave Goal tracker / form ── */}
+        {!formOpen && ptoGoal && (
+          <div style={{ background: onTrack ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${onTrack ? "var(--color-green)" : "var(--color-red)"}`, borderRadius: "6px", padding: "14px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
+              <div>
+                <div style={{ fontSize: "11px", color: onTrack ? "var(--color-green)" : "var(--color-red)", fontWeight: "bold", marginBottom: "4px" }}>
+                  {ptoGoal.label}
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                  Need {hoursNeed} hrs · {adjP.toFixed(1)} accrued + {negCap} neg cap = <strong style={{ color: "var(--color-text-primary)" }}>{avail.toFixed(1)} available</strong>
+                </div>
+                <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "3px" }}>
+                  Leave starts {fmtDate(ptoGoal.targetDate)} · ≈ {Math.ceil(hoursNeed / shiftHours)} shifts
+                </div>
+              </div>
+              <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
+                <div style={{ fontSize: "14px", fontWeight: "bold", color: onTrack ? "var(--color-green)" : "var(--color-red)" }}>
+                  {onTrack ? "On Track" : "Shortfall"}
+                </div>
+                {!onTrack && <div style={{ fontSize: "10px", color: "var(--color-red)" }}>Short {(hoursNeed - avail).toFixed(1)} hrs</div>}
+                <div style={{ display: "flex", gap: "6px", marginTop: "2px" }}>
+                  <SmBtn onClick={openEdit} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Edit</SmBtn>
+                  <SmBtn onClick={() => setPtoGoal(null)} c="var(--color-red)" bg="var(--color-bg-raised)">Clear</SmBtn>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* No goal set — prompt */}
+        {!formOpen && !ptoGoal && (
+          <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+              No PTO leave goal set. Add one to track your accrual progress toward a leave target.
+            </div>
+            <SmBtn onClick={openAdd} c="var(--color-gold)" bg="var(--color-bg-raised)">Set Goal</SmBtn>
+          </div>
+        )}
+
+        {/* Inline add / edit form */}
+        {formOpen && (
+          <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
+              {editMode ? "Edit Leave Goal" : "New Leave Goal"}
+            </div>
+
+            <div>
+              <label style={lS}>Goal Label</label>
+              <input
+                {...iS} style={{ ...iS }}
+                type="text"
+                value={formVals.label}
+                onChange={e => setFormVals(v => ({ ...v, label: e.target.value }))}
+                placeholder="e.g. Paternity Leave"
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              <div>
+                <label style={lS}>Hours Needed</label>
+                <input
+                  {...iS} style={{ ...iS }}
+                  type="number" min="0" step="1"
+                  value={formVals.hoursNeeded}
+                  onChange={e => setFormVals(v => ({ ...v, hoursNeeded: e.target.value }))}
+                  placeholder="e.g. 134"
+                />
+                {formVals.hoursNeeded && (
+                  <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>
+                    ≈ {Math.ceil(parseFloat(formVals.hoursNeeded) / shiftHours)} shifts at {shiftHours}h
+                  </div>
+                )}
+              </div>
+              <div>
+                <label style={lS}>Negative Balance Cap (hrs)</label>
+                <input
+                  {...iS} style={{ ...iS }}
+                  type="number" min="0" step="1"
+                  value={formVals.negativeBalanceCap}
+                  onChange={e => setFormVals(v => ({ ...v, negativeBalanceCap: e.target.value }))}
+                  placeholder="40"
+                />
+                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>
+                  Hours DHL allows you to borrow
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label style={lS}>Leave Start Date</label>
+              <input
+                {...iS} style={{ ...iS }}
+                type="date"
+                value={formVals.targetDate}
+                onChange={e => setFormVals(v => ({ ...v, targetDate: e.target.value }))}
+              />
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>
+                App projects your PTO accrual up to this date.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setFormOpen(false)}
+                style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveForm}
+                disabled={!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate}
+                style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", fontWeight: "bold", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", opacity: (!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate) ? 0.4 : 1 }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    )}
+
+    {/* ── Attendance Bucket (DHL only — bucketModel only provided for DHL users) ── */}
     {bucketModel && (() => {
       const bm = bucketModel;
       const cap = config.bucketCap ?? 128;
@@ -63,7 +265,7 @@ export function BenefitsPanel({ allWeeks, config, logK401kLost, logK401kMatchLos
       const pct = Math.min((bm.currentBalance / cap) * 100, 100);
       return (
         <div style={{ marginBottom: "24px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "12px" }}>Attendance Bucket</div>
+          <SH>Attendance Bucket</SH>
 
           {/* Balance bar */}
           <div style={{ background: "var(--color-bg-surface)", border: `1px solid ${bandColor}33`, borderRadius: "8px", padding: "16px", marginBottom: "10px" }}>

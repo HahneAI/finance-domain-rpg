@@ -14,11 +14,53 @@ import {
   loanPaymentsRemaining,
   computeBucketModel,
   calcEventImpact,
+  toLocalIso,
+  stateTax,
+  getStateConfig,
+  loanRunwayStartDate,
+  dhlEmployerMatchRate,
 } from '../../lib/finance.js'
+import { STATE_TAX_TABLE } from '../../constants/stateTaxTable.js'
 import { DEFAULT_CONFIG } from '../../constants/config.js'
+
+// DHL_CONFIG: used for tests that exercise DHL rotation behavior (6-Day/4-Day alternation).
+// startingWeekIsLong=false with firstActiveIdx=7 produces the same even=long pattern
+// as the legacy idx%2===0 logic, so all rotation-based test assertions remain valid.
+const DHL_CONFIG = {
+  ...DEFAULT_CONFIG,
+  employerPreset: "DHL",
+  startingWeekIsLong: false,  // false + firstActiveIdx=7 → even idx = long (6-Day)
+  // Explicit 401k values — test must not depend on DEFAULT_CONFIG personal values
+  k401Rate: 0.06,
+  k401MatchRate: 0.05,
+  k401StartDate: "2026-05-15",
+}
 
 // ─────────────────────────────────────────────────────────────
 // fedTax
+// ─────────────────────────────────────────────────────────────
+// dhlEmployerMatchRate
+// ─────────────────────────────────────────────────────────────
+
+describe('dhlEmployerMatchRate', () => {
+  it('matches 100% up to 4%: contribute 4 → match 4', () => {
+    expect(dhlEmployerMatchRate(0.04)).toBeCloseTo(0.04)
+  })
+  it('contribute 5% → match 4.5%', () => {
+    expect(dhlEmployerMatchRate(0.05)).toBeCloseTo(0.045)
+  })
+  it('contribute 6% → match 5% (cap)', () => {
+    expect(dhlEmployerMatchRate(0.06)).toBeCloseTo(0.05)
+  })
+  it('contribute 7%+ → match stays at 5% cap', () => {
+    expect(dhlEmployerMatchRate(0.07)).toBeCloseTo(0.05)
+    expect(dhlEmployerMatchRate(0.15)).toBeCloseTo(0.05)
+  })
+  it('contribute 0% → match 0', () => {
+    expect(dhlEmployerMatchRate(0)).toBe(0)
+  })
+})
+
 // ─────────────────────────────────────────────────────────────
 
 describe('fedTax', () => {
@@ -62,7 +104,7 @@ describe('buildYear', () => {
   let weeks
 
   beforeEach(() => {
-    weeks = buildYear(DEFAULT_CONFIG)
+    weeks = buildYear(DHL_CONFIG)
   })
 
   it('generates 53 weeks for the 2026 fiscal year (Jan 5 → Jan 4)', () => {
@@ -94,14 +136,14 @@ describe('buildYear', () => {
   })
 
   it('weeks before firstActiveIdx are inactive with zero grossPay', () => {
-    for (let i = 0; i < DEFAULT_CONFIG.firstActiveIdx; i++) {
+    for (let i = 0; i < DHL_CONFIG.firstActiveIdx; i++) {
       expect(weeks[i].active).toBe(false)
       expect(weeks[i].grossPay).toBe(0)
     }
   })
 
   it('weeks from firstActiveIdx onward are active with positive grossPay', () => {
-    for (let i = DEFAULT_CONFIG.firstActiveIdx; i < weeks.length; i++) {
+    for (let i = DHL_CONFIG.firstActiveIdx; i < weeks.length; i++) {
       expect(weeks[i].active).toBe(true)
       expect(weeks[i].grossPay).toBeGreaterThan(0)
     }
@@ -133,29 +175,29 @@ describe('buildYear', () => {
     expect(sixDay.grossPay).toBeGreaterThan(fourDay.grossPay)
   })
 
-  it('computes correct grossPay for an active 4-Day week (40 regular + 8 OT)', () => {
-    const cfg = DEFAULT_CONFIG
-    const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier
+  it('computes correct grossPay for an active 4-Day week (40 regular + 8 OT + 48h night diff)', () => {
+    const cfg = DHL_CONFIG
+    const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier + 48 * cfg.nightDiffRate
     const fourDay = weeks.find(w => w.rotation === '4-Day' && w.active)
     expect(fourDay.grossPay).toBeCloseTo(expected)
   })
 
-  it('computes correct grossPay for an active 6-Day week (40 regular + 32 OT + 24 weekend)', () => {
-    const cfg = DEFAULT_CONFIG
-    const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 24 * cfg.diffRate
+  it('computes correct grossPay for an active 6-Day week (40 regular + 32 OT + 24 weekend + 72h night diff)', () => {
+    const cfg = DHL_CONFIG
+    const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 24 * cfg.diffRate + 72 * cfg.nightDiffRate
     const sixDay = weeks.find(w => w.rotation === '6-Day' && w.active)
     expect(sixDay.grossPay).toBeCloseTo(expected)
   })
 
   it('marks weeks in taxedWeeks as taxedBySchedule=true', () => {
-    const taxedSet = new Set(DEFAULT_CONFIG.taxedWeeks)
+    const taxedSet = new Set(DHL_CONFIG.taxedWeeks)
     weeks.forEach(w => {
       if (taxedSet.has(w.idx)) expect(w.taxedBySchedule).toBe(true)
     })
   })
 
   it('marks weeks not in taxedWeeks as taxedBySchedule=false', () => {
-    const taxedSet = new Set(DEFAULT_CONFIG.taxedWeeks)
+    const taxedSet = new Set(DHL_CONFIG.taxedWeeks)
     weeks.forEach(w => {
       if (!taxedSet.has(w.idx)) expect(w.taxedBySchedule).toBe(false)
     })
@@ -173,6 +215,29 @@ describe('buildYear', () => {
     expect(lateActive.length).toBeGreaterThan(0)
     lateActive.forEach(w => expect(w.k401kEmployee).toBeGreaterThan(0))
   })
+
+  it('standard DHL preset rotation uses DHL_PRESET day arrays when dhlTeam set and !dhlCustomSchedule', () => {
+    // This path covers lines 76-77: the dhlTeam && !dhlCustomSchedule branch in buildYear()
+    const presetConfig = {
+      ...DHL_CONFIG,
+      dhlTeam: 'A',
+      dhlCustomSchedule: false,
+      startingWeekIsLong: true,  // Team A starts long
+    }
+    const presetWeeks = buildYear(presetConfig)
+    expect(presetWeeks).toHaveLength(53)
+    // Active weeks should have non-zero gross pay
+    const activeWeeks = presetWeeks.filter(w => w.active)
+    expect(activeWeeks.length).toBeGreaterThan(0)
+    activeWeeks.forEach(w => expect(w.grossPay).toBeGreaterThan(0))
+    // Standard preset long week (DHL_PRESET short = Mon/Thu/Fri = 3 shifts = 36h)
+    // short and long weeks should produce different grossPay amounts
+    const firstLong  = activeWeeks.find(w => w.rotation === '6-Day')
+    const firstShort = activeWeeks.find(w => w.rotation === '4-Day')
+    if (firstLong && firstShort) {
+      expect(firstLong.grossPay).toBeGreaterThan(firstShort.grossPay)
+    }
+  })
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -183,51 +248,51 @@ describe('computeNet', () => {
   let weeks
 
   beforeEach(() => {
-    weeks = buildYear(DEFAULT_CONFIG)
+    weeks = buildYear(DHL_CONFIG)
   })
 
   it('returns 0 for inactive weeks', () => {
-    expect(computeNet(weeks[0], DEFAULT_CONFIG)).toBe(0)
+    expect(computeNet(weeks[0], DHL_CONFIG)).toBe(0)
   })
 
   it('net pay is less than gross pay for all active weeks', () => {
     weeks.filter(w => w.active).forEach(w => {
-      expect(computeNet(w, DEFAULT_CONFIG)).toBeLessThan(w.grossPay)
+      expect(computeNet(w, DHL_CONFIG)).toBeLessThan(w.grossPay)
     })
   })
 
   it('deducts only FICA, LTD, and 401k on non-taxed active weeks', () => {
     const week = weeks.find(w => w.active && !w.taxedBySchedule)
-    const cfg = DEFAULT_CONFIG
+    const cfg = DHL_CONFIG
     const expected = week.grossPay - week.grossPay * cfg.ficaRate - cfg.ltd - week.k401kEmployee
     expect(computeNet(week, cfg)).toBeCloseTo(expected)
   })
 
-  it('deducts fed and state tax in addition on taxed 4-Day (w1) weeks', () => {
+  it('deducts fed and state tax in addition on taxed 4-Day (low-rate) weeks', () => {
     const week = weeks.find(w => w.active && w.taxedBySchedule && w.rotation === '4-Day')
-    const cfg = DEFAULT_CONFIG
+    const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.ltd + week.k401kEmployee
-    const fed = week.taxableGross * cfg.w1FedRate
-    const st = week.taxableGross * cfg.w1StateRate
+    const fed = week.taxableGross * cfg.fedRateLow  // 4-Day = short = fedRateLow
+    const st = week.taxableGross * cfg.stateRateLow
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
   })
 
-  it('deducts fed and state tax in addition on taxed 6-Day (w2) weeks', () => {
+  it('deducts fed and state tax in addition on taxed 6-Day (high-rate) weeks', () => {
     const week = weeks.find(w => w.active && w.taxedBySchedule && w.rotation === '6-Day')
-    const cfg = DEFAULT_CONFIG
+    const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.ltd + week.k401kEmployee
-    const fed = week.taxableGross * cfg.w2FedRate
-    const st = week.taxableGross * cfg.w2StateRate
+    const fed = week.taxableGross * cfg.fedRateHigh  // 6-Day = long = fedRateHigh
+    const st = week.taxableGross * cfg.stateRateHigh
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
   })
 
   it('taxed weeks have a lower net/gross ratio than non-taxed weeks of the same rotation', () => {
     const taxed4 = weeks.find(w => w.active && w.taxedBySchedule && w.rotation === '4-Day')
     const nonTaxed4 = weeks.find(w => w.active && !w.taxedBySchedule && w.rotation === '4-Day')
-    const taxedRatio = computeNet(taxed4, DEFAULT_CONFIG) / taxed4.grossPay
-    const nonTaxedRatio = computeNet(nonTaxed4, DEFAULT_CONFIG) / nonTaxed4.grossPay
+    const taxedRatio = computeNet(taxed4, DHL_CONFIG) / taxed4.grossPay
+    const nonTaxedRatio = computeNet(nonTaxed4, DHL_CONFIG) / nonTaxed4.grossPay
     expect(taxedRatio).toBeLessThan(nonTaxedRatio)
   })
 })
@@ -254,11 +319,11 @@ describe('projectedGross', () => {
   })
 
   it('matches the grossPay of the corresponding active week from buildYear', () => {
-    const weeks = buildYear(cfg)
+    const weeks = buildYear(DHL_CONFIG)
     const sixDay = weeks.find(w => w.active && w.rotation === '6-Day')
     const fourDay = weeks.find(w => w.active && w.rotation === '4-Day')
-    expect(projectedGross(true, cfg)).toBeCloseTo(sixDay.grossPay)
-    expect(projectedGross(false, cfg)).toBeCloseTo(fourDay.grossPay)
+    expect(projectedGross(true, DHL_CONFIG)).toBeCloseTo(sixDay.grossPay)
+    expect(projectedGross(false, DHL_CONFIG)).toBeCloseTo(fourDay.grossPay)
   })
 })
 
@@ -544,16 +609,30 @@ describe('loanPaymentsRemaining', () => {
     expect(loanPaymentsRemaining(futureLoan)).toBe(10)
   })
 
-  it('returns a reduced count when some payments have elapsed', () => {
+  it('returns a reduced count when today is mid-term (hits elapsed calculation path)', () => {
+    // Use a long-running loan so today (March 22) is between firstPaymentDate and payoffDate.
+    // 52 weekly payments from 2026-01-01 → payoff ≈ 2026-12-31; March 22 is ~11 payments in.
     const activeLoan = {
+      totalAmount: 5200,
+      paymentAmount: 100,
+      paymentFrequency: 'weekly',
+      firstPaymentDate: '2026-01-01',
+    }
+    const remaining = loanPaymentsRemaining(activeLoan)
+    // 52 total - 11 elapsed ≈ 41 remaining
+    expect(remaining).toBeGreaterThan(0)
+    expect(remaining).toBeLessThan(52)
+  })
+
+  it('returns total payment count when today is before firstPaymentDate', () => {
+    vi.setSystemTime(new Date(2026, 0, 1)) // Jan 1 — before firstPaymentDate
+    const loan = {
       totalAmount: 1000,
       paymentAmount: 100,
       paymentFrequency: 'weekly',
-      firstPaymentDate: '2026-01-01', // 81 days before March 22 = ~11 weekly payments elapsed
+      firstPaymentDate: '2026-06-01',
     }
-    const remaining = loanPaymentsRemaining(activeLoan)
-    expect(remaining).toBeGreaterThanOrEqual(0)
-    expect(remaining).toBeLessThan(10)
+    expect(loanPaymentsRemaining(loan)).toBe(10) // ceil(1000/100)
   })
 })
 
@@ -810,5 +889,154 @@ describe('calcEventImpact', () => {
       const newEvent = makeEvent({ type: 'bonus', weekRotation: '6-Day', weekEnd: '2026-02-02', amount: 100 })
       expect(calcEventImpact(legacyEvent, cfg).grossGained).toBe(calcEventImpact(newEvent, cfg).grossGained)
     })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// toLocalIso
+// ─────────────────────────────────────────────────────────────
+describe('toLocalIso', () => {
+  it('returns a YYYY-MM-DD string', () => {
+    const result = toLocalIso(new Date(2026, 0, 5))
+    expect(result).toBe('2026-01-05')
+  })
+
+  it('zero-pads single-digit month and day', () => {
+    expect(toLocalIso(new Date(2026, 2, 4))).toBe('2026-03-04')  // March 4
+    expect(toLocalIso(new Date(2026, 9, 1))).toBe('2026-10-01')  // Oct 1
+  })
+
+  it('handles year-end boundary', () => {
+    expect(toLocalIso(new Date(2026, 11, 31))).toBe('2026-12-31')
+  })
+
+  it('handles fiscal year start (2026-01-05)', () => {
+    expect(toLocalIso(new Date(2026, 0, 5))).toBe('2026-01-05')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// stateTax
+// ─────────────────────────────────────────────────────────────
+describe('stateTax', () => {
+  it('returns 0 for a NONE-model state (TX)', () => {
+    const cfg = STATE_TAX_TABLE['TX']
+    expect(stateTax(50000, cfg)).toBe(0)
+  })
+
+  it('returns 0 for null stateConfig', () => {
+    expect(stateTax(50000, null)).toBe(0)
+  })
+
+  it('returns 0 for undefined stateConfig', () => {
+    expect(stateTax(50000, undefined)).toBe(0)
+  })
+
+  it('calculates flat tax correctly for MO (4.7%)', () => {
+    const cfg = STATE_TAX_TABLE['MO']
+    expect(cfg.model).toBe('FLAT')
+    expect(stateTax(50000, cfg)).toBeCloseTo(50000 * 0.047, 5)
+  })
+
+  it('flat tax: zero income returns 0', () => {
+    expect(stateTax(0, STATE_TAX_TABLE['MO'])).toBe(0)
+  })
+
+  it('calculates progressive tax within first bracket (AL — $400 @ 2%)', () => {
+    const cfg = STATE_TAX_TABLE['AL']
+    expect(cfg.model).toBe('PROGRESSIVE')
+    expect(stateTax(400, cfg)).toBeCloseTo(400 * 0.02, 5)
+  })
+
+  it('calculates progressive tax spanning multiple brackets (AL — $5000)', () => {
+    // AL: [0–500 @ 2%, 500–3000 @ 4%, 3000+ @ 5%]
+    // 500*0.02 + 2500*0.04 + 2000*0.05 = 10 + 100 + 100 = 210
+    const cfg = STATE_TAX_TABLE['AL']
+    expect(stateTax(5000, cfg)).toBeCloseTo(210, 5)
+  })
+
+  it('progressive zero income returns 0', () => {
+    expect(stateTax(0, STATE_TAX_TABLE['CA'])).toBe(0)
+  })
+
+  it('result is always non-negative for all 50 states', () => {
+    for (const cfg of Object.values(STATE_TAX_TABLE)) {
+      expect(stateTax(40000, cfg)).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('returns 0 for unknown model string (defensive fallback branch)', () => {
+    expect(stateTax(50000, { model: 'CUSTOM_UNKNOWN' })).toBe(0)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// getStateConfig
+// ─────────────────────────────────────────────────────────────
+describe('getStateConfig', () => {
+  it('returns the correct config for a known state (MO)', () => {
+    const cfg = getStateConfig('MO')
+    expect(cfg).toBe(STATE_TAX_TABLE['MO'])
+    expect(cfg.model).toBe('FLAT')
+  })
+
+  it('returns a config with a model field for common states', () => {
+    for (const code of ['TX', 'CA', 'IL', 'AL', 'MO', 'FL', 'NY']) {
+      const cfg = getStateConfig(code)
+      expect(cfg).toHaveProperty('model')
+    }
+  })
+
+  it('falls back to MO for an unknown state code', () => {
+    expect(getStateConfig('XX')).toBe(STATE_TAX_TABLE['MO'])
+  })
+
+  it('falls back to MO for undefined', () => {
+    expect(getStateConfig(undefined)).toBe(STATE_TAX_TABLE['MO'])
+  })
+
+  it('returns a NONE config for no-income-tax states', () => {
+    expect(getStateConfig('FL').model).toBe('NONE')
+    expect(getStateConfig('TX').model).toBe('NONE')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// loanRunwayStartDate
+// ─────────────────────────────────────────────────────────────
+describe('loanRunwayStartDate', () => {
+  const baseLoan = {
+    totalAmount: 5000,
+    paymentAmount: 200,
+    firstPaymentDate: '2026-06-01',
+  }
+
+  it('weekly frequency → 7 days before firstPaymentDate', () => {
+    const loan = { ...baseLoan, paymentFrequency: 'weekly' }
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-25')
+  })
+
+  it('biweekly frequency → 14 days before firstPaymentDate', () => {
+    const loan = { ...baseLoan, paymentFrequency: 'biweekly' }
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-18')
+  })
+
+  it('monthly frequency → ~30 days before firstPaymentDate', () => {
+    const loan = { ...baseLoan, paymentFrequency: 'monthly' }
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-02')
+  })
+
+  it('defaults to weekly (7 days) when no paymentFrequency provided', () => {
+    expect(loanRunwayStartDate({ ...baseLoan })).toBe('2026-05-25')
+  })
+
+  it('returns a valid ISO date string', () => {
+    const result = loanRunwayStartDate({ ...baseLoan, paymentFrequency: 'weekly' })
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('start date is strictly before firstPaymentDate', () => {
+    const result = loanRunwayStartDate({ ...baseLoan, paymentFrequency: 'weekly' })
+    expect(result < baseLoan.firstPaymentDate).toBe(true)
   })
 })

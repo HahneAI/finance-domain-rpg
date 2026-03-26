@@ -1,13 +1,16 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso } from "./lib/finance.js";
+import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso } from "./lib/finance.js";
 import { loadUserData, saveUserData } from "./lib/db.js";
+import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
 import { BenefitsPanel } from "./components/BenefitsPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
+import { SetupWizard } from "./components/SetupWizard.jsx";
+import { LoginScreen } from "./components/LoginScreen.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -92,9 +95,19 @@ function SidebarNavItem({ item, active, onClick }) {
 }
 
 export default function App() {
+  // ── Auth state ─────────────────────────────────────────────────────────────
+  // authChecked: true once the initial getSession() call resolves.
+  // Without this flag, there's a flash of the login screen on every page reload
+  // even when a valid session already exists in localStorage.
+  const [authedUser, setAuthedUser]   = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [showExtra, setShowExtra] = useState(true);
+  const [isDHL, setIsDHL] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [ptoGoal, setPtoGoal] = useState(null);
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
   const [goals, setGoals] = useState(INITIAL_GOALS);
@@ -107,6 +120,9 @@ export default function App() {
   //                        pickupDays, netShiftDelta, eventId } }
   // Keyed by weekIdx (number) so lookup is O(1) in confirmTriggerWeek.
   const [weekConfirmations, setWeekConfirmations] = useState({});
+  // wizardEntry: null=closed, false=first-run, string=re-entry life event
+  const [wizardEntry, setWizardEntry] = useState(null);
+  const [lifeEventMenu, setLifeEventMenu] = useState(false);
 
   const currentView = viewStack[viewStack.length - 1];
   const canGoBack = viewStack.length > 1;
@@ -130,8 +146,21 @@ export default function App() {
     setDrawerOpen(false);
   };
 
-  // ── Load from Supabase on mount ──
+  // ── Auth: check existing session on mount, subscribe to changes ──
   useEffect(() => {
+    // Resolve any existing session first (handles reload + PWA relaunch from localStorage).
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setAuthedUser(session?.user ?? null);
+      setAuthChecked(true);
+    });
+    // Subscribe to future sign-in / sign-out events.
+    return onAuthChange((user) => setAuthedUser(user));
+  }, []);
+
+  // ── Load from Supabase once auth resolves to a signed-in user ──
+  useEffect(() => {
+    if (!authedUser) return;
+    setLoading(true);
     loadUserData().then((data) => {
       setConfig(data.config);
       setShowExtra(data.showExtra);
@@ -139,9 +168,13 @@ export default function App() {
       setExpenses(data.expenses);
       setGoals(data.goals);
       setWeekConfirmations(data.weekConfirmations ?? {});
+      setIsDHL(data.isDHL);
+      setIsAdmin(data.isAdmin);
+      setPtoGoal(data.ptoGoal);
+      if (!data.config.setupComplete) setWizardEntry(false);
       setLoading(false);
     });
-  }, []);
+  }, [authedUser]);
 
   // ── Debounced save to Supabase (800ms) ──
   const saveTimer = useRef(null);
@@ -149,10 +182,10 @@ export default function App() {
     if (loading) return;
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations });
+      saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
     }, 800);
     return () => clearTimeout(saveTimer.current);
-  }, [config, expenses, goals, logs, showExtra, weekConfirmations, loading]);
+  }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal, loading]);
 
   // ── today: reactive date string — ticks at midnight so everything auto-advances ──
   const [today, setToday] = useState(() => toLocalIso(new Date()));
@@ -224,10 +257,17 @@ export default function App() {
   const taxDerived = useMemo(() => {
     const tt = allWeeks.filter(w => w.active).reduce((s, w) => s + w.taxableGross, 0);
     const fAGI = Math.max(tt - config.fedStdDeduction, 0);
-    const fL = fedTax(fAGI), mL = tt * config.moFlatRate;
+    const fL = fedTax(fAGI);
+    // State liability: config-driven via STATE_TAX_TABLE; falls back to moFlatRate for old rows.
+    const stateConfig = getStateConfig(config.userState);
+    const mL = stateConfig ? stateTax(tt, stateConfig) : tt * (config.moFlatRate ?? 0.047);
     const ficaT = allWeeks.filter(w => w.active).reduce((s, w) => s + w.grossPay * config.ficaRate, 0);
-    const fWB = allWeeks.filter(w => w.active && w.taxedBySchedule).reduce((s, w) => s + w.taxableGross * (w.rotation === "6-Day" ? config.w2FedRate : config.w1FedRate), 0);
-    const mWB = allWeeks.filter(w => w.active && w.taxedBySchedule).reduce((s, w) => s + w.taxableGross * (w.rotation === "6-Day" ? config.w2StateRate : config.w1StateRate), 0);
+    const fedLow  = config.fedRateLow   ?? config.w1FedRate;
+    const fedHigh = config.fedRateHigh  ?? config.w2FedRate;
+    const stLow   = config.stateRateLow  ?? config.w1StateRate;
+    const stHigh  = config.stateRateHigh ?? config.w2StateRate;
+    const fWB = allWeeks.filter(w => w.active && w.taxedBySchedule).reduce((s, w) => s + w.taxableGross * (w.isHighWeek ? fedHigh : fedLow), 0);
+    const mWB = allWeeks.filter(w => w.active && w.taxedBySchedule).reduce((s, w) => s + w.taxableGross * (w.isHighWeek ? stHigh : stLow), 0);
     const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - config.targetOwedAtFiling, 0);
     const twC = allWeeks.filter(w => w.active && w.taxedBySchedule).length;
     return { fedAGI: fAGI, fedLiability: fL, moLiability: mL, ficaTotal: ficaT, fedWithheldBase: fWB, moWithheldBase: mWB, fedGap: fG, moGap: mG, totalGap: tG, targetExtraTotal: tET, taxedWeekCount: twC, extraPerCheck: twC > 0 ? tET / twC : 0 };
@@ -238,11 +278,20 @@ export default function App() {
     allWeeks.filter(w => w.active).reduce((s, w) => s + computeNet(w, config, taxDerived.extraPerCheck, showExtra), 0)
     , [allWeeks, config, taxDerived, showExtra]);
 
-  const weeklyIncome = projectedAnnualNet / 52;
+  // ─── Paycheck Buffer ─────────────────────────────────────────────────────────
+  // When enabled, paycheckBuffer ($/week) is excluded from all downstream spendable
+  // math: weeklyIncome, baseWeeklyUnallocated, adjustedWeeklyAvg, futureWeekNets,
+  // goal timelines, and budget panel calculations all use the buffer-adjusted value.
+  // projectedAnnualNet (above) is intentionally untouched — the Income panel uses
+  // it to display real earned income, not the spendable portion.
+  const bufferPerWeek = (config.bufferEnabled ?? true) ? (config.paycheckBuffer ?? 50) : 0;
+  const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
 
   const futureWeekNets = useMemo(
-    () => futureWeeks.map(w => computeNet(w, config, taxDerived.extraPerCheck, showExtra)),
-    [futureWeeks, config, taxDerived, showExtra]
+    // Buffer excluded per week — feeds BudgetPanel goal timelines and HomePanel
+    // "Next Week" tile; both should show spendable net, not raw paycheck amount.
+    () => futureWeeks.map(w => computeNet(w, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek),
+    [futureWeeks, config, taxDerived, showExtra, bufferPerWeek]
   );
 
   // ── Week-by-week remaining spend using history-aware amounts ──
@@ -308,6 +357,25 @@ export default function App() {
     return map;
   }, [logs, config, today]);
 
+  function handleWizardComplete(mergedConfig) {
+    setConfig(mergedConfig);
+    setWizardEntry(null);
+  }
+
+  // Checking localStorage for an existing session — avoid flash of login screen.
+  if (!authChecked) {
+    return (
+      <div style={{ background: "var(--color-bg-base)", minHeight: "100vh", color: "var(--color-gold)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", letterSpacing: "4px" }}>
+        LOADING...
+      </div>
+    );
+  }
+
+  // No valid session — show login / create account screen.
+  if (!authedUser) {
+    return <LoginScreen />;
+  }
+
   if (loading) {
     return (
       <div style={{ background: "var(--color-bg-base)",
@@ -330,6 +398,7 @@ export default function App() {
         goals={goals}
         futureWeekNets={futureWeekNets}
         currentWeek={currentWeek}
+        today={today}
       />}
       {currentView === "income" && <IncomePanel
         allWeeks={allWeeks} config={config} setConfig={setConfig}
@@ -340,6 +409,7 @@ export default function App() {
         adjustedTakeHome={logTotals.adjustedTakeHome}
         projectedAnnualNet={projectedAnnualNet}
         currentWeek={currentWeek}
+        isAdmin={isAdmin}
       />}
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
@@ -356,7 +426,7 @@ export default function App() {
         today={today}
       />}
       {currentView === "benefits" && <BenefitsPanel
-        allWeeks={allWeeks} config={config}
+        allWeeks={allWeeks} config={config} isDHL={isDHL}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
         logK401kGained={logTotals.k401kGained}
@@ -364,9 +434,11 @@ export default function App() {
         logPTOHoursLost={logTotals.ptoHoursLost}
         currentWeek={currentWeek}
         bucketModel={bucketModel}
+        ptoGoal={ptoGoal}
+        setPtoGoal={setPtoGoal}
       />}
       {currentView === "log" && <LogPanel
-        logs={logs} setLogs={setLogs} config={config}
+        logs={logs} setLogs={setLogs} config={config} isDHL={isDHL}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}
@@ -404,6 +476,15 @@ export default function App() {
              content needs padding to clear the nav bar on all views. */
           .main-content {
             padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+          }
+          /* Safe-area height + top padding for Dynamic Island / notch iPhones.
+             CSS !important overrides inline styles in iOS PWA standalone mode where
+             env() may not resolve reliably on inline attributes.
+             flex-direction: column so inner content row stacks below the safe area. */
+          .mobile-header {
+            height: calc(56px + env(safe-area-inset-top, 0px)) !important;
+            padding-top: env(safe-area-inset-top, 0px) !important;
+            flex-direction: column !important;
           }
         }
         @media (min-width: 768px) {
@@ -460,8 +541,19 @@ export default function App() {
         }}
       >
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #222" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
-          <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+              <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
+            </div>
+            <button
+              title="Sign out"
+              onClick={async () => { await supabase.auth.signOut(); }}
+              style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "16px", padding: "2px 0", marginTop: "1px", lineHeight: 1 }}
+            >
+              ⎋
+            </button>
+          </div>
           {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
@@ -476,6 +568,47 @@ export default function App() {
           {NAV_ITEMS.map(item => (
             <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
+          {/* ── Life Events (re-entry wizard) ── */}
+          <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
+            <button
+              onClick={() => setLifeEventMenu(p => !p)}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "14px 20px", fontSize: "11px",
+                letterSpacing: "2px", textTransform: "uppercase",
+                background: "transparent",
+                color: lifeEventMenu ? "var(--color-gold)" : "#888",
+                borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
+                border: "none", cursor: "pointer", transition: "all 0.15s",
+              }}
+            >
+              Life Events
+            </button>
+            {lifeEventMenu && (
+              <div>
+                {[
+                  { value: "lost_job",      label: "Lost my job" },
+                  { value: "changed_jobs",  label: "Changed jobs" },
+                  { value: "commission_job", label: "Commission job" },
+                ].map(ev => (
+                  <button
+                    key={ev.value}
+                    onClick={() => { setWizardEntry(ev.value); setLifeEventMenu(false); }}
+                    style={{
+                      display: "block", width: "100%", textAlign: "left",
+                      padding: "10px 24px", fontSize: "10px",
+                      letterSpacing: "1.5px", textTransform: "uppercase",
+                      background: "transparent", color: "#666",
+                      border: "none", borderLeft: "3px solid transparent",
+                      cursor: "pointer", transition: "color 0.15s",
+                    }}
+                  >
+                    {ev.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </nav>
       </div>
 
@@ -488,19 +621,28 @@ export default function App() {
           style={{
             display: "none",
             borderBottom: "2px solid #c8a84b",
-            padding: "0 max(16px, env(safe-area-inset-left, 16px))",
-            paddingRight: "max(16px, env(safe-area-inset-right, 16px))",
-            height: "calc(56px + env(safe-area-inset-top, 0px))",
-            paddingTop: "env(safe-area-inset-top, 0px)",
             background: "var(--color-bg-base)",
             position: "sticky",
             top: 0,
             zIndex: 30,
+            flexDirection: "column",
+            // Height + padding-top are overridden with !important in the @media CSS block
+            // to ensure env(safe-area-inset-top) resolves in iOS PWA standalone mode.
+            height: "calc(56px + env(safe-area-inset-top, 0px))",
+            paddingTop: "env(safe-area-inset-top, 0px)",
+          }}
+        >
+          {/* Inner content row — always exactly 56px, sits BELOW the Dynamic Island */}
+          <div style={{
+            height: "56px",
+            display: "flex",
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-          }}
-        >
+            padding: "0 max(16px, env(safe-area-inset-left, 16px))",
+            paddingRight: "max(16px, env(safe-area-inset-right, 16px))",
+            flex: "none",
+          }}>
             {/* ── Hamburger — top LEFT (Chime-style) ── */}
           <button
             onClick={() => setDrawerOpen(true)}
@@ -528,7 +670,7 @@ export default function App() {
           {/* ── Title block — center ── */}
           <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>DHL / P&G</div>
+              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
               {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
             </div>
             <div style={{ fontSize: "14px", fontWeight: "bold" }}>Finance Dashboard</div>
@@ -570,12 +712,13 @@ export default function App() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-               
+
               }}>
                 {unconfirmedCount}
               </span>
             )}
           </button>
+          </div>
         </div>
 
         {/* Panel content */}
@@ -615,16 +758,25 @@ export default function App() {
         {/* Drawer header */}
         <div style={{ padding: "16px 18px", borderBottom: "1px solid #222", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
-            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G — Jackson MO</div>
+            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
           </div>
-          <button
-            onClick={() => setDrawerOpen(false)}
-            style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: "2px 4px", marginTop: "2px" }}
-            aria-label="Close navigation"
-          >
-            ✕
-          </button>
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <button
+              title="Sign out"
+              onClick={async () => { await supabase.auth.signOut(); setDrawerOpen(false); }}
+              style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "16px", lineHeight: 1, padding: "2px 6px" }}
+            >
+              ⎋
+            </button>
+            <button
+              onClick={() => setDrawerOpen(false)}
+              style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: "2px 4px", marginTop: "2px" }}
+              aria-label="Close navigation"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Drawer nav items */}
@@ -633,6 +785,47 @@ export default function App() {
           {NAV_ITEMS.map(item => (
             <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
+          {/* ── Life Events (re-entry wizard) ── */}
+          <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
+            <button
+              onClick={() => setLifeEventMenu(p => !p)}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "14px 20px", fontSize: "11px",
+                letterSpacing: "2px", textTransform: "uppercase",
+                background: "transparent",
+                color: lifeEventMenu ? "var(--color-gold)" : "#888",
+                borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
+                border: "none", cursor: "pointer", transition: "all 0.15s",
+              }}
+            >
+              Life Events
+            </button>
+            {lifeEventMenu && (
+              <div>
+                {[
+                  { value: "lost_job",      label: "Lost my job" },
+                  { value: "changed_jobs",  label: "Changed jobs" },
+                  { value: "commission_job", label: "Commission job" },
+                ].map(ev => (
+                  <button
+                    key={ev.value}
+                    onClick={() => { setWizardEntry(ev.value); setLifeEventMenu(false); setDrawerOpen(false); }}
+                    style={{
+                      display: "block", width: "100%", textAlign: "left",
+                      padding: "10px 24px", fontSize: "10px",
+                      letterSpacing: "1.5px", textTransform: "uppercase",
+                      background: "transparent", color: "#666",
+                      border: "none", borderLeft: "3px solid transparent",
+                      cursor: "pointer", transition: "color 0.15s",
+                    }}
+                  >
+                    {ev.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </nav>
 
         {/* Active section indicator at bottom */}
@@ -726,6 +919,14 @@ export default function App() {
             if (logEntry) setLogs(p => [...p, logEntry]);
           }}
           onDismiss={() => setConfirmDismissed(true)}
+        />
+      )}
+      {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}
+      {wizardEntry !== null && (
+        <SetupWizard
+          config={config}
+          onComplete={handleWizardComplete}
+          lifeEvent={wizardEntry === false ? null : wizardEntry}
         />
       )}
     </div>

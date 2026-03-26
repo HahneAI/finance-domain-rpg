@@ -1,4 +1,4 @@
-import { supabase, USER_ID } from "./supabase.js";
+import { supabase, getCurrentUserId } from "./supabase.js";
 import {
   DEFAULT_CONFIG,
   INITIAL_EXPENSES,
@@ -13,19 +13,36 @@ import { buildLoanHistory } from "./finance.js";
  * Falls back to app defaults if the row is empty or missing.
  */
 export async function loadUserData() {
+  const userId = await getCurrentUserId();
+
+  // Not signed in — return blank defaults so the app never crashes on unauthenticated load.
+  // App.jsx auth gate will redirect to LoginScreen before this matters for real users.
+  if (!userId) {
+    return {
+      config:             DEFAULT_CONFIG,
+      expenses:           INITIAL_EXPENSES,
+      goals:              INITIAL_GOALS,
+      logs:               INITIAL_LOGS,
+      showExtra:          true,
+      weekConfirmations:  {},
+      isDHL:              false,
+      isAdmin:            false,
+    };
+  }
+
   // Select core fields first — week_confirmations is fetched separately so a missing
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra")
-    .eq("user_id", USER_ID)
+    .select("config, expenses, goals, logs, show_extra, is_dhl, is_admin, pto_goal")
+    .eq("user_id", userId)
     .single();
 
   // Fetch week_confirmations independently; gracefully returns {} if column missing.
   const { data: wcData } = await supabase
     .from("user_data")
     .select("week_confirmations")
-    .eq("user_id", USER_ID)
+    .eq("user_id", userId)
     .single();
 
   if (error || !data) {
@@ -37,12 +54,14 @@ export async function loadUserData() {
       logs:               INITIAL_LOGS,
       showExtra:          true,
       weekConfirmations:  {},
+      isDHL:              false,
+      isAdmin:            false,
     };
   }
 
   // Migrate and normalize all expenses on load
   const PROJECT_START = FISCAL_YEAR_START;
-  const rawExpenses = data.expenses.length ? data.expenses : INITIAL_EXPENSES;
+  const rawExpenses = Array.isArray(data.expenses) ? data.expenses : [];
   const migratedExpenses = rawExpenses.map(exp => {
     // Loans: always regenerate history from loanMeta so runway/payoff math stays fresh
     if (exp.type === "loan" && exp.loanMeta) {
@@ -66,13 +85,77 @@ export async function loadUserData() {
     return { ...base, history: migratedHistory, note: migratedNote };
   });
 
+  // Merge: new DEFAULT_CONFIG fields fill in for existing rows (safe for any user).
+  // Before this fix, the entire DEFAULT_CONFIG was discarded if any config row existed —
+  // new fields added to DEFAULT_CONFIG would never reach existing users.
+  const mergedConfig = Object.keys(data.config).length
+    ? { ...DEFAULT_CONFIG, ...data.config }
+    : DEFAULT_CONFIG;
+
+  // ── Pre-wizard migration for DHL users ───────────────────────────────────────
+  // Fires once for any DHL user whose row pre-dates the setup wizard (setupComplete absent).
+  // Sets the DHL employer preset, marks setupComplete, and promotes legacy rate field names.
+  // Scoped to is_dhl === true so it never runs for standard or future multi-user accounts.
+  //
+  // startingWeekIsLong: false — verified against INITIAL_LOGS week 10 = "6-Day":
+  //   offset = ((10 - firstActiveIdx) % 2 + 2) % 2 = 1 → isHighWeek = !startingWeekIsLong
+  //   so !startingWeekIsLong must be true → startingWeekIsLong must be false.
+  if (data.is_dhl && !mergedConfig.setupComplete) {
+    mergedConfig.employerPreset = "DHL";
+    mergedConfig.startingWeekIsLong = false;    // corrected: false = odd-offset weeks are long
+    mergedConfig.scheduleIsVariable = true;
+    mergedConfig.dhlTeam = "B";
+    mergedConfig.dhlCustomSchedule = true;
+    // Promote legacy w1/w2 rate field names to the generalized names used by the wizard
+    if (mergedConfig.fedRateLow === DEFAULT_CONFIG.fedRateLow) {
+      mergedConfig.fedRateLow    = mergedConfig.w1FedRate   ?? DEFAULT_CONFIG.w1FedRate;
+      mergedConfig.fedRateHigh   = mergedConfig.w2FedRate   ?? DEFAULT_CONFIG.w2FedRate;
+      mergedConfig.stateRateLow  = mergedConfig.w1StateRate ?? DEFAULT_CONFIG.w1StateRate;
+      mergedConfig.stateRateHigh = mergedConfig.w2StateRate ?? DEFAULT_CONFIG.w2StateRate;
+    }
+    mergedConfig.setupComplete = true;
+  }
+
+  // ── One-time startingWeekIsHeavy → startingWeekIsLong rename ────────────────
+  // Config key renamed 2026-03-25. Must run BEFORE rotation correction so the
+  // corrected value isn't overwritten by the old stored key.
+  // Safe to run every load — old key won't exist after first save with new name.
+  if ("startingWeekIsHeavy" in mergedConfig) {
+    mergedConfig.startingWeekIsLong = mergedConfig.startingWeekIsHeavy;
+    delete mergedConfig.startingWeekIsHeavy;
+  }
+
+  // ── One-time rotation correction ─────────────────────────────────────────────
+  // The initial migration set startingWeekIsLong: true. The intended follow-up
+  // correction (checking dhlTeam === "B") never fired because dhlTeam was still
+  // null in Supabase — the B-team migration ran before setupComplete was set.
+  // Trigger condition: is_dhl + dhlTeam still null (pre-wizard, never corrected).
+  // Sets all three fields needed for Anthony's custom schedule correctly.
+  if (data.is_dhl && mergedConfig.dhlTeam === null) {
+    mergedConfig.dhlTeam = "B";
+    mergedConfig.dhlCustomSchedule = true;
+    mergedConfig.startingWeekIsLong = false;   // odd-offset weeks from firstActiveIdx are long
+  }
+
+  // ── One-time baseRate correction (night diff separation) ─────────────────────
+  // Prior to 2026-03-25 the night shift differential (+$1.50) was baked into
+  // baseRate (19.65 + 1.50 = 21.15) rather than tracked as nightDiffRate.
+  // Correct stored value so night diff isn't double-counted now that buildYear()
+  // computes it separately via nightDiffRate.
+  if (data.is_dhl && mergedConfig.baseRate === 21.15) {
+    mergedConfig.baseRate = 19.65;
+  }
+
   return {
-    config:    Object.keys(data.config).length   ? data.config   : DEFAULT_CONFIG,
-    expenses:  migratedExpenses,
-    goals:     data.goals.length                 ? data.goals     : INITIAL_GOALS,
-    logs:      data.logs.length                  ? data.logs      : INITIAL_LOGS,
+    config:             mergedConfig,
+    expenses:           migratedExpenses,
+    goals:              Array.isArray(data.goals) ? data.goals : [],
+    logs:               Array.isArray(data.logs)  ? data.logs  : [],
     showExtra:          data.show_extra,
     weekConfirmations:  wcData?.week_confirmations ?? {},
+    isDHL:              data.is_dhl   ?? false,
+    isAdmin:            data.is_admin ?? false,
+    ptoGoal:            data.pto_goal ?? null,
   };
 }
 
@@ -80,18 +163,23 @@ export async function loadUserData() {
  * Upsert all state blobs atomically.
  * Called from a debounced useEffect in App.jsx on any state change.
  */
-export async function saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations }) {
+export async function saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal }) {
+  const userId = await getCurrentUserId();
+  if (!userId) return; // unauthenticated — never write
+
   const { error } = await supabase
     .from("user_data")
     .upsert(
       {
-        user_id:             USER_ID,
+        user_id:             userId,
         config,
         expenses,
         goals,
         logs,
         show_extra:          showExtra,
         week_confirmations:  weekConfirmations,
+        is_dhl:              config.employerPreset === "DHL",
+        pto_goal:            ptoGoal ?? null,
         updated_at:          new Date().toISOString(),
       },
       { onConflict: "user_id" }

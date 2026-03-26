@@ -59,6 +59,73 @@ Life RPG is an AI-powered life planning app that guides users (males 18-28 with 
 
 ---
 
+## UI Component Standards
+
+> Full reference: `docs/finance-dashboard-ui-impl.md`
+
+### Design Token Source
+All colors and fonts are CSS vars defined in `src/index.css` `@theme` block. **Never use raw hex for gold, green, or red.**
+
+| Token | Value | Role |
+|-------|-------|------|
+| `--color-bg-base` | `#0a0a0a` | App shell / page background |
+| `--color-bg-surface` | `#111814` | Card background |
+| `--color-bg-raised` | `#1a2118` | Elevated card, button hover |
+| `--color-gold` | `#c9a84c` | Hero numbers, primary actions |
+| `--color-green` | `#4caf7d` | Positive / income values |
+| `--color-red` | `#e05c5c` | Negative / spend values |
+| `--color-text-primary` | `#f0ede6` | Body text |
+| `--color-text-secondary` | `#8a9080` | Labels, sublabels |
+| `--color-text-disabled` | `#444c40` | Inactive / disabled |
+| `--font-display` | DM Serif Display | Hero numbers only |
+| `--font-sans` | DM Sans | All UI body text |
+| `--font-mono` | JetBrains Mono | Inputs + data table cells only |
+
+### Shared Primitives (`src/components/ui.jsx`)
+
+| Export | What it is | Key props |
+|--------|-----------|-----------|
+| `MetricCard` / `Card` | Unified static + interactive card | `label`, `val`, `sub`, `status` (`green\|gold\|red`), `onClick`, `rawVal` (triggers countup), `entranceIndex` (stagger), `span` |
+| `NT` | Nav tab (top-level) | `label`, `active`, `onClick` — gold when active |
+| `VT` | View tab (sub-panel) | Same as NT, smaller padding |
+| `SmBtn` | Inline utility button | `children`, `onClick`, `c` (color), `bg` |
+| `SH` | Section header | `children`, `color`, `right` — gold left-bar + uppercase label |
+| `iS` | Input style object | Spread onto `<input>` / `<select>` — JetBrains Mono, 16px, full-width |
+| `lS` | Label style object | Spread onto `<label>` — 10px, 2px tracking, uppercase, disabled color |
+
+### Layout Constants
+- Card grid gap: `12px`
+- Section `marginBottom`: `20px`
+- Card padding: `18px 16px` (static) · `16px 18px` + `minHeight: 88px` (interactive)
+
+### Inline Button Pattern (not abstracted — apply directly)
+```
+CANCEL: bg-raised, text-secondary, border-subtle, radius 12px, pad 7px 14px, 10px uppercase
+SAVE:   bg green or gold, color bg-base, radius 12px, pad 8px 16px, 10px bold uppercase
+```
+
+### Animation Rules
+- Entrance stagger: `entranceIndex` prop on MetricCard → `fadeSlideUp` 400ms, 80ms/card delay, capped at 400ms
+- Countup: pass `rawVal` (number) → animates 0→target over 1200ms on mount/change
+- Value flash: `rawVal` change → gold-bright for 150ms, fades back over 600ms
+- **No bounce, no spin, no scale-up on mount. Press = `scale(0.97)` only. All durations ≤ 500ms except countup.**
+
+### Mobile UI Direction
+Selected style: **Style D — Dashboard Tile Grid** (Apple Health / Robinhood pattern). Home screen = 2-col metric tile grid, color-coded by status, tappable to drill into panel. Navigation is depth-first (home → detail), not tab-first. Tiles use `grid-column: span 2` for wide items. Back nav via `viewStack` push/pop in App.jsx.
+
+**Mobile testing checklist (run before any mobile ship):**
+- [ ] No horizontal scroll at 390px (iPhone 14–17) and 375px (iPhone SE)
+- [ ] All tap targets ≥ 44×44px
+- [ ] Font-size ≥ 16px on all inputs (prevents iOS zoom)
+- [ ] Bottom nav clears home indicator (`safe-area-inset-bottom`)
+- [ ] PWA installs from Safari "Add to Home Screen"
+- [ ] Standalone display mode active (no browser chrome when launched from home screen)
+- [ ] App works offline (service worker caches JS/CSS)
+- [ ] Dark status bar on iPhone (black-translucent)
+- [ ] Dynamic Island / notch area not obscured
+
+---
+
 ## File Organization
 
 ### Standard Structure

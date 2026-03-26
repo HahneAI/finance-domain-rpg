@@ -1,4 +1,5 @@
-import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES } from "../constants/config.js";
+import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START } from "../constants/config.js";
+import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 
 // ─────────────────────────────────────────────────────────────
 // PURE FUNCTIONS — all stateless, no component dependencies
@@ -10,34 +11,125 @@ function toLocalIso(date) {
 }
 export { toLocalIso };
 
+// ─── DHL 401k tiered employer match ─────────────────────────────────────────
+// DHL matches 100% up to 4%, then 50¢ per $1 from 4%→6%, capped at 5% match.
+//   Contribute 4% → DHL matches 4.0%
+//   Contribute 5% → DHL matches 4.5%
+//   Contribute 6% → DHL matches 5.0%  (cap)
+//   Contribute 7%+ → DHL matches 5.0% (cap holds)
+export function dhlEmployerMatchRate(k401Rate) {
+  const tier1 = Math.min(k401Rate, 0.04);
+  const tier2 = Math.min(Math.max(k401Rate - 0.04, 0), 0.02) * 0.5;
+  return tier1 + tier2;
+}
+
 export function fedTax(income) {
   let tax = 0, prev = 0;
   for (const [limit, rate] of FED_BRACKETS) { if (income <= prev) break; tax += (Math.min(income, limit) - prev) * rate; prev = limit; }
   return tax;
 }
 
+// State income tax — three models: NONE, FLAT, PROGRESSIVE.
+// stateConfig comes from STATE_TAX_TABLE[userState].
+export function stateTax(income, stateConfig) {
+  if (!stateConfig || stateConfig.model === "NONE") return 0;
+  if (stateConfig.model === "FLAT") return income * stateConfig.flatRate;
+  if (stateConfig.model === "PROGRESSIVE") {
+    let tax = 0, prev = 0;
+    for (const { max, rate } of stateConfig.brackets) {
+      if (income <= prev) break;
+      tax += (Math.min(income, max ?? Infinity) - prev) * rate;
+      prev = max ?? Infinity;
+    }
+    return tax;
+  }
+  return 0;
+}
+
+// Resolve state tax config for a given userState code.
+// Falls back to MO if state not found (safe default for Anthony).
+export function getStateConfig(userState) {
+  return STATE_TAX_TABLE[userState] ?? STATE_TAX_TABLE["MO"];
+}
+
+// Builds a full 52-week array of pay data from config.
+// DHL path: alternates long (6-day) / short (4-day) from firstActiveIdx,
+//   using either the DHL_PRESET day arrays (dhlTeam + !dhlCustomSchedule)
+//   or Anthony's hardcoded arrays (dhlCustomSchedule: true).
+//
+// Anthony's custom schedule vs standard DHL B-team rotation:
+//   Standard B-team long  = 4 shifts (Tue/Wed/Sat/Sun)   → 48h
+//   Standard B-team short = 3 shifts (Mon/Thu/Fri)        → 36h
+//   Anthony long  = 4 standard + 2 scheduled OT           → 6-Day (Tue–Sun, 72h)
+//   Anthony short = 3 standard + 1 scheduled OT           → 4-Day (Mon/Wed/Thu/Fri, 48h)
+//   The hardcoded day arrays below represent his full week including OT.
+//
+// Standard path: flat weekly hours, no rotation.
+// Note: cfg.dhlNightShift is stored but NOT used here — weekend diff (diffRate)
+//   applies equally to all shifts. Night differential is tracked separately.
 export function buildYear(cfg) {
   const weeks = [], k401Start = new Date(cfg.k401StartDate), taxedSet = new Set(cfg.taxedWeeks);
-  let d = new Date(2026, 0, 5), idx = 0;
-  while (d <= new Date(2027, 0, 4)) {
+  const isDHL = cfg.employerPreset === "DHL";
+  // Derive loop bounds from FISCAL_YEAR_START so the range stays in sync with the
+  // constant rather than being duplicated as a hardcoded literal.
+  const [fyY, fyM, fyD] = FISCAL_YEAR_START.split('-').map(Number);
+  let d = new Date(fyY, fyM - 1, fyD), idx = 0;
+  const fyEnd = new Date(fyY + 1, fyM - 1, fyD - 1);
+  while (d <= fyEnd) {
     const weekEnd = new Date(d), weekStart = new Date(d);
     weekStart.setDate(weekStart.getDate() - 7);
-    const isWeek2 = idx % 2 === 0;
-    const days = Array.from({ length: 7 }, (_, i) => { const x = new Date(weekStart); x.setDate(x.getDate() + i); return x; });
-    const worked = isWeek2 ? [days[1], days[2], days[3], days[4], days[5], days[6]] : [days[0], days[2], days[3], days[4]];
-    const totalHours = worked.length * cfg.shiftHours;
-    const regularHours = Math.min(totalHours, cfg.otThreshold);
-    const overtimeHours = Math.max(totalHours - cfg.otThreshold, 0);
-    const weekendHours = worked.filter(w => w.getDay() === 0 || w.getDay() === 6).length * cfg.shiftHours;
-    const grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate;
+
+    let totalHours, regularHours, overtimeHours, weekendHours, grossPay, worked, rotation, isHighWeek;
+
+    if (isDHL) {
+      // DHL: alternating long (6-day) / short (4-day) from firstActiveIdx.
+      // (offset%2+2)%2 handles negative offsets (pre-employment weeks) correctly.
+      const offset = ((idx - cfg.firstActiveIdx) % 2 + 2) % 2;
+      isHighWeek = offset === 0 ? Boolean(cfg.startingWeekIsLong) : !Boolean(cfg.startingWeekIsLong);
+      const days = Array.from({ length: 7 }, (_, i) => { const x = new Date(weekStart); x.setDate(x.getDate() + i); return x; });
+      if (cfg.dhlTeam && !cfg.dhlCustomSchedule) {
+        // Standard preset rotation — days from DHL_PRESET (Team A or B, picked in wizard Step 15)
+        const rotDays = isHighWeek ? DHL_PRESET.rotation.long.days : DHL_PRESET.rotation.short.days;
+        worked = rotDays.map(d => days[d]);
+      } else {
+        // Anthony's custom schedule: standard B-team days + scheduled OT baked in.
+        // Long:  Tue/Wed/Sat/Sun (standard) + Thu/Fri (2 OT) = Tue–Sun (6-Day, 72h)
+        // Short: Mon/Thu/Fri (standard) + Wed (1 OT)         = Mon/Wed/Thu/Fri (4-Day, 48h)
+        worked = isHighWeek
+          ? [days[1], days[2], days[3], days[4], days[5], days[6]]  // 6-day: Tue–Sun
+          : [days[0], days[2], days[3], days[4]];                    // 4-day: Mon/Wed/Thu/Fri
+      }
+      rotation = isHighWeek ? "6-Day" : "4-Day";
+      totalHours = worked.length * cfg.shiftHours;
+      weekendHours = worked.filter(w => w.getDay() === 0 || w.getDay() === 6).length * cfg.shiftHours;
+    } else {
+      // Standard path: flat weekly hours, no rotation concept.
+      isHighWeek = false;
+      worked = [];
+      rotation = "Standard";
+      totalHours = cfg.standardWeeklyHours ?? 40;
+      weekendHours = 0;
+    }
+
+    regularHours = Math.min(totalHours, cfg.otThreshold);
+    overtimeHours = Math.max(totalHours - cfg.otThreshold, 0);
+    // Weekend diff is universal — earned by all shifts (morning and night).
+    // Night diff stacks on top of all hours when DHL + dhlNightShift is active.
+    const nightDiffBonus = (isDHL && cfg.dhlNightShift) ? totalHours * (cfg.nightDiffRate ?? 0) : 0;
+    grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate + nightDiffBonus;
+
     const active = idx >= cfg.firstActiveIdx;
     const has401k = active && weekEnd >= k401Start;
     const k401kEmployee = has401k ? grossPay * cfg.k401Rate : 0;
-    const k401kEmployer = has401k ? grossPay * cfg.k401MatchRate : 0;
+    // DHL match is formula-driven (tiered); other employers use stored flat k401MatchRate.
+    const effectiveMatchRate = cfg.employerPreset === "DHL"
+      ? dhlEmployerMatchRate(cfg.k401Rate)
+      : cfg.k401MatchRate;
+    const k401kEmployer = has401k ? grossPay * effectiveMatchRate : 0;
     const taxableGross = active ? grossPay - cfg.ltd - k401kEmployee : 0;
     const isTaxed = active && taxedSet.has(idx);
     weeks.push({
-      idx, weekEnd, weekStart, rotation: isWeek2 ? "6-Day" : "4-Day",
+      idx, weekEnd, weekStart, rotation, isHighWeek,
       workedDayNames: worked.map(w => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][w.getDay()]),
       totalHours, regularHours, overtimeHours, weekendHours,
       grossPay: active ? grossPay : 0, taxableGross, active, has401k, k401kEmployee, k401kEmployer, taxedBySchedule: isTaxed
@@ -51,17 +143,23 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
   if (!w.active) return 0;
   const fica = w.grossPay * cfg.ficaRate, ded = cfg.ltd + w.k401kEmployee;
   if (!w.taxedBySchedule) return w.grossPay - fica - ded;
-  const isW2 = w.rotation === "6-Day";
-  const fed = w.taxableGross * (isW2 ? cfg.w2FedRate : cfg.w1FedRate) + (showExtra ? extraPerCheck : 0);
-  const st = w.taxableGross * (isW2 ? cfg.w2StateRate : cfg.w1StateRate);
+  // Use generalized rate fields; fall back to legacy w1/w2 fields for pre-wizard rows.
+  const fedLow  = cfg.fedRateLow   ?? cfg.w1FedRate;
+  const fedHigh = cfg.fedRateHigh  ?? cfg.w2FedRate;
+  const stLow   = cfg.stateRateLow  ?? cfg.w1StateRate;
+  const stHigh  = cfg.stateRateHigh ?? cfg.w2StateRate;
+  const fed = w.taxableGross * (w.isHighWeek ? fedHigh : fedLow) + (showExtra ? extraPerCheck : 0);
+  const st = w.taxableGross * (w.isHighWeek ? stHigh : stLow);
   return w.grossPay - fed - st - fica - ded;
 }
 
 export function projectedGross(isWeek2, cfg) {
+  const isDHL = cfg.employerPreset === "DHL";
   const ns = isWeek2 ? 6 : 4, totalH = ns * cfg.shiftHours;
   const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
   const wknd = isWeek2 ? 2 * cfg.shiftHours : 0;
-  return reg * cfg.baseRate + ot * cfg.baseRate * cfg.otMultiplier + wknd * cfg.diffRate;
+  const nightDiff = (isDHL && cfg.dhlNightShift) ? totalH * (cfg.nightDiffRate ?? 0) : 0;
+  return reg * cfg.baseRate + ot * cfg.baseRate * cfg.otMultiplier + wknd * cfg.diffRate + nightDiff;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -227,8 +325,9 @@ export function computeBucketModel(logs, cfg) {
   const cap = cfg.bucketCap ?? 128;
   let balance = cfg.bucketStartBalance ?? 64;
 
-  // Job start month: week 0 ends 2026-01-05; firstActiveIdx weeks of 7 days forward = first active week end
-  const weekZeroEnd = new Date(2026, 0, 5);
+  // Job start month: week 0 ends at FISCAL_YEAR_START; firstActiveIdx weeks of 7 days forward = first active week end
+  const [wzeY, wzeM, wzeD] = FISCAL_YEAR_START.split('-').map(Number);
+  const weekZeroEnd = new Date(wzeY, wzeM - 1, wzeD);
   const firstWeekEnd = new Date(weekZeroEnd.getTime() + (cfg.firstActiveIdx ?? 7) * 7 * 86400000);
   const firstWeekStart = new Date(firstWeekEnd.getTime() - 7 * 86400000);
   const jobStartMonth = toLocalIso(firstWeekStart).slice(0, 7);
@@ -291,6 +390,8 @@ export function computeBucketModel(logs, cfg) {
 }
 
 export function calcEventImpact(event, cfg) {
+  const isDHL = cfg.employerPreset === "DHL";
+  const nightDiffPerHour = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
   const isWeek2 = event.weekRotation === "6-Day" || event.weekRotation === "Week 2"; // "Week 2" kept for backward compat with stored data
   const normalShifts = isWeek2 ? 6 : 4, normalWeekendShifts = isWeek2 ? 2 : 0;
   const baseGross = projectedGross(isWeek2, cfg);
@@ -300,17 +401,18 @@ export function calcEventImpact(event, cfg) {
     const actualHours = actualShifts * cfg.shiftHours;
     const actualWknd = Math.max(normalWeekendShifts - (event.weekendShifts || 0), 0);
     const actualReg = Math.min(actualHours, cfg.otThreshold), actualOT = Math.max(actualHours - cfg.otThreshold, 0);
-    const actualGross = actualReg * cfg.baseRate + actualOT * cfg.baseRate * cfg.otMultiplier + actualWknd * cfg.shiftHours * cfg.diffRate;
+    const actualGross = actualReg * cfg.baseRate + actualOT * cfg.baseRate * cfg.otMultiplier + actualWknd * cfg.shiftHours * cfg.diffRate + actualHours * nightDiffPerHour;
     grossLost = Math.max(baseGross - actualGross, 0); hoursLostForPTO = (event.shiftsLost || 0) * cfg.shiftHours;
   } else if (event.type === "pto") {
     const ptoH = event.ptoHours || 0, normalH = normalShifts * cfg.shiftHours;
     const normalOT = Math.max(normalH - cfg.otThreshold, 0), actualOT = Math.max(normalH - ptoH - cfg.otThreshold, 0);
-    grossLost = ptoH * (cfg.baseRate - PTO_RATE) + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
+    // Night diff applies to hours worked but not to PTO hours — include the delta
+    grossLost = ptoH * (cfg.baseRate + nightDiffPerHour - PTO_RATE) + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
   } else if (event.type === "missed_unapproved") {
-    // Same gross/PTO math as partial — hours missed × base rate; bucket hit tracked separately
-    grossLost = (event.hoursLost || 0) * cfg.baseRate; hoursLostForPTO = event.hoursLost || 0;
+    // Hours missed × (base rate + night diff); bucket hit tracked separately
+    grossLost = (event.hoursLost || 0) * (cfg.baseRate + nightDiffPerHour); hoursLostForPTO = event.hoursLost || 0;
   } else if (event.type === "partial") {
-    grossLost = (event.hoursLost || 0) * cfg.baseRate; hoursLostForPTO = event.hoursLost || 0;
+    grossLost = (event.hoursLost || 0) * (cfg.baseRate + nightDiffPerHour); hoursLostForPTO = event.hoursLost || 0;
   } else if (event.type === "bonus") {
     grossGained = event.amount || 0;
   } else if (event.type === "other_loss") { grossLost = event.amount || 0; }
@@ -327,8 +429,8 @@ export function calcEventImpact(event, cfg) {
     grossLost, grossGained, netLost, netGained, baseGross, hoursLostForPTO,
     bucketHoursDeducted: event.type === "missed_unapproved" ? (event.hoursLost || 0) : 0,
     k401kLost: affectsK401 ? grossLost * cfg.k401Rate : 0,
-    k401kMatchLost: affectsK401 ? grossLost * cfg.k401MatchRate : 0,
+    k401kMatchLost: affectsK401 ? grossLost * (cfg.employerPreset === "DHL" ? dhlEmployerMatchRate(cfg.k401Rate) : cfg.k401MatchRate) : 0,
     k401kGained: affectsK401 ? grossGained * cfg.k401Rate : 0,
-    k401kMatchGained: affectsK401 ? grossGained * cfg.k401MatchRate : 0
+    k401kMatchGained: affectsK401 ? grossGained * (cfg.employerPreset === "DHL" ? dhlEmployerMatchRate(cfg.k401Rate) : cfg.k401MatchRate) : 0
   };
 }

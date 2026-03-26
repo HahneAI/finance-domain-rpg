@@ -574,9 +574,13 @@ export default function App() {
             <button
               title="Sign out"
               onClick={async () => { await supabase.auth.signOut(); }}
-              style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "16px", padding: "2px 0", marginTop: "1px", lineHeight: 1 }}
+              style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", padding: "2px 0", marginTop: "1px", lineHeight: 1, display: "flex", alignItems: "center" }}
             >
-              ⎋
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
             </button>
           </div>
           {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
@@ -790,9 +794,13 @@ export default function App() {
             <button
               title="Sign out"
               onClick={async () => { await supabase.auth.signOut(); setDrawerOpen(false); }}
-              style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "16px", lineHeight: 1, padding: "2px 6px" }}
+              style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
             >
-              ⎋
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
             </button>
             <button
               onClick={() => setDrawerOpen(false)}

@@ -90,7 +90,7 @@ export const DEFAULT_CONFIG = {
   // ── DHL attendance bucket (DHL preset only) ──────────────────
   bucketStartBalance: 64,      // hours — new hire starting balance
   bucketCap: 128,              // hours — overflow above this pays out as cash
-  bucketPayoutRate: 9.825,     // $/hr for overflow hours (PTO_RATE / 2 ≈ 9.825)
+  bucketPayoutRate: 9.825,     // $/hr for overflow hours (baseRate / 2 ≈ 9.825 at DHL rates)
 
   // ── Pay period ───────────────────────────────────────────────
   payPeriodEndDay: 0,          // day-of-week pay period closes: 0=Sun, 1=Mon, ..., 6=Sat

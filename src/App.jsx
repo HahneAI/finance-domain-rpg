@@ -493,6 +493,15 @@ export default function App() {
           /* DEBUG: overlay also hides on desktop so a half-open drawer doesn't
              ghost behind the sidebar if the user resizes the window. */
           .mobile-drawer-overlay { display: none !important; }
+          /* DEBUG DESKTOP SCROLL: sidebar has height:100vh which makes the root
+             flex container exactly 100vh tall. Without overflow-y:auto here,
+             the main-content stretches to 100vh via align-items:stretch and
+             content that exceeds that height overflows without a scroll target —
+             the window never grows past 100vh. This rule makes main-content the
+             scroll container on desktop so mouse-wheel scroll works. */
+          .main-content {
+            overflow-y: auto;
+          }
         }
         /* DEBUG DRAWER: translateX(-100%) hides the drawer fully off-screen left.
            The .open class moves it to x=0. If the drawer flickers on load,

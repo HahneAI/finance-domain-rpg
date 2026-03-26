@@ -422,7 +422,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
           { section: "Pay Structure", rows: [{ l: "Base Hourly Rate", v: `$${config.baseRate}/hr` }, { l: "Shift Length", v: `${config.shiftHours}h` }, { l: "Weekend Differential", v: `+$${config.diffRate}/hr` }, ...(config.dhlNightShift ? [{ l: "Night Differential", v: `+$${config.nightDiffRate}/hr` }] : []), { l: "OT Threshold", v: `${config.otThreshold}h/wk` }, { l: "OT Multiplier", v: `${config.otMultiplier}×` }] },
           { section: "Deductions", rows: [{ l: "LTD (weekly)", v: `$${config.ltd}` }, { l: "401k Employee", v: `${(config.k401Rate * 100).toFixed(0)}%` }, { l: "401k Employer Match", v: `${((config.employerPreset === "DHL" ? dhlEmployerMatchRate(config.k401Rate) : config.k401MatchRate) * 100).toFixed(1)}%${config.employerPreset === "DHL" ? " (formula)" : ""}` }, { l: "401k Start Date", v: config.k401StartDate }] },
           { section: "Tax Rates (from paychecks)", rows: [{ l: `Long / ${isVariable ? "High" : "Only"} Fed`, v: `${(config.fedRateHigh * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` }, { l: `Long / ${isVariable ? "High" : "Only"} State`, v: `${(config.stateRateHigh * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` }, { l: "Short / Low Fed", v: isVariable ? `${(config.fedRateLow * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` : "—" }, { l: "Short / Low State", v: isVariable ? `${(config.stateRateLow * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` : "—" }, { l: "FICA", v: `${(config.ficaRate * 100).toFixed(2)}%` }] },
-          { section: "Annual Tax Strategy", rows: [{ l: "Federal Std Deduction", v: `$${config.fedStdDeduction.toLocaleString()}` }, { l: "MO Flat Rate", v: `${(config.moFlatRate * 100).toFixed(1)}%` }, { l: "Target Owed at Filing", v: `$${config.targetOwedAtFiling}` }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }] },
+          { section: "Annual Tax Strategy", rows: [{ l: "Federal Std Deduction", v: `$${config.fedStdDeduction.toLocaleString()}` }, ...(config.userState ? [] : [{ l: "State Rate (fallback)", v: `${(config.moFlatRate * 100).toFixed(1)}%` }]), { l: "Target Owed at Filing", v: `$${config.targetOwedAtFiling}` }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }] },
+          { section: "Paycheck Buffer", rows: [{ l: "Buffer Enabled", v: config.bufferEnabled ? "On" : "Off" }, ...(config.bufferEnabled ? [{ l: "Buffer Per Check", v: `$${config.paycheckBuffer}` }] : [])] },
         ].map(g => <div key={g.section} style={{ marginBottom: "20px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <SH>{g.section}</SH>
@@ -467,9 +468,19 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
             { l: "Short / Low State Rate", f: "w1StateRate", t: "number", s: "0.0001" },
             { l: "FICA Rate", f: "ficaRate", t: "number", s: "0.0001" },
             { l: "Federal Std Deduction ($)", f: "fedStdDeduction", t: "number", s: "100" },
-            { l: "MO Flat Rate", f: "moFlatRate", t: "number", s: "0.001" },
+            { l: "State Rate (fallback)", f: "moFlatRate", t: "number", s: "0.001" },
             { l: "Target Owed at Filing ($)", f: "targetOwedAtFiling", t: "number", s: "100" },
           ].map(fi => <div key={fi.f}><label style={lS}>{fi.l}</label><input type={fi.t} step={fi.s} value={editCfg[fi.f]} onChange={e => setEditCfg(v => ({ ...v, [fi.f]: fi.t === "number" ? parseFloat(e.target.value) || 0 : e.target.value }))} style={iS} /></div>)}
+          {/* Buffer — boolean toggle + amount; rendered outside the map since it needs a checkbox */}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", gridColumn: "span 2" }}>
+            <label style={lS}>Paycheck Buffer</label>
+            <input type="checkbox" checked={!!editCfg.bufferEnabled} onChange={e => setEditCfg(v => ({ ...v, bufferEnabled: e.target.checked }))} style={{ width: "16px", height: "16px", cursor: "pointer" }} />
+            <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{editCfg.bufferEnabled ? "On" : "Off"}</span>
+          </div>
+          {editCfg.bufferEnabled && <div>
+            <label style={lS}>Buffer Per Check ($)</label>
+            <input type="number" step="1" min="50" max="200" value={editCfg.paycheckBuffer} onChange={e => setEditCfg(v => ({ ...v, paycheckBuffer: Math.min(200, Math.max(0, parseFloat(e.target.value) || 0)) }))} style={iS} />
+          </div>}
         </div>
       </div>}
     </div>}

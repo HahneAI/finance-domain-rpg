@@ -1555,14 +1555,7 @@ function Step7({ formData, onChange }) {
 // "pure net" can mislead — they're a timing benefit, not free money.
 // The gate presents a disclaimer before unlocking the tax-exempt view.
 //
-// Three variants gated by GATE_VARIANT:
-//   'A' — blur overlay over content until user accepts
-//   'B' — content hidden; a text link reveals it
-//   'C' — locked placeholder card with accept button
-//
-// Accept writes taxExemptOptIn: true. isValid blocks until accepted.
-// ─────────────────────────────────────────────────────────────────────────────
-const GATE_VARIANT = 'A'; // ← no longer used; variant is now a state inside Step8 below
+// Tax Exempt Gate — Variant C: locked placeholder card with accept button
 
 const TAX_EXEMPT_DISCLAIMER = (
   <>
@@ -1572,36 +1565,6 @@ const TAX_EXEMPT_DISCLAIMER = (
     the difference.
   </>
 );
-
-function TaxExemptDisclaimerBox({ onAccept }) {
-  return (
-    <div style={{
-      background: "var(--color-bg-raised)",
-      border: "1px solid rgba(201,168,76,0.25)",
-      borderRadius: "12px", padding: "18px 16px",
-      display: "flex", flexDirection: "column", gap: "14px",
-    }}>
-      <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>
-        Tax-Exempt Week Projections
-      </div>
-      <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.7", color: "var(--color-text-secondary)" }}>
-        {TAX_EXEMPT_DISCLAIMER}
-      </p>
-      <button
-        onClick={onAccept}
-        style={{
-          alignSelf: "flex-start",
-          background: "var(--color-gold)", color: "var(--color-bg-base)",
-          border: "none", borderRadius: "10px",
-          padding: "8px 16px", fontSize: "10px", letterSpacing: "1.5px",
-          fontWeight: 700, textTransform: "uppercase", cursor: "pointer",
-        }}
-      >
-        I understand — show projections
-      </button>
-    </div>
-  );
-}
 
 // Preview content shown after opt-in (placeholder — real chart wires in Phase 5)
 function TaxExemptPreview() {
@@ -1623,73 +1586,10 @@ function TaxExemptPreview() {
 }
 
 function Step8({ formData, onChange }) {
-  const [variant, setVariant] = useState('A');
   const accepted = formData.taxExemptOptIn === true;
   const accept = () => onChange({ taxExemptOptIn: true });
-  const switchVariant = (v) => { setVariant(v); onChange({ taxExemptOptIn: false }); };
-
-  const variantPicker = (
-    <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "4px" }}>
-      <span style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Style</span>
-      {['A', 'B', 'C'].map(v => (
-        <button key={v} onClick={() => switchVariant(v)} style={{
-          padding: "3px 10px", fontSize: "10px", borderRadius: "12px", cursor: "pointer",
-          background: variant === v ? "var(--color-gold)" : "transparent",
-          color: variant === v ? "var(--color-bg-base)" : "#666",
-          border: `1px solid ${variant === v ? "var(--color-gold)" : "var(--color-border-subtle)"}`,
-          fontWeight: variant === v ? "bold" : "normal", letterSpacing: "1px",
-        }}>{v}</button>
-      ))}
-    </div>
-  );
-
-  // ── Variant A: blur overlay ────────────────────────────────────────────────
-  if (variant === 'A') {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-        {variantPicker}
-        {!accepted ? (
-          <div style={{ position: "relative" }}>
-            <div style={{ filter: "blur(4px)", pointerEvents: "none", userSelect: "none", opacity: 0.5 }}>
-              <TaxExemptPreview />
-            </div>
-            <div style={{
-              position: "absolute", inset: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              borderRadius: "12px",
-              background: "rgba(10,10,10,0.65)",
-              backdropFilter: "blur(2px)",
-            }}>
-              <div style={{ maxWidth: "320px", width: "100%", padding: "0 16px" }}>
-                <TaxExemptDisclaimerBox onAccept={accept} />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <TaxExemptPreview />
-        )}
-      </div>
-    );
-  }
-
-  // ── Variant B: hidden content + reveal link ────────────────────────────────
-  if (variant === 'B') {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-        {variantPicker}
-        {!accepted ? (
-          <TaxExemptDisclaimerBox onAccept={accept} />
-        ) : (
-          <TaxExemptPreview />
-        )}
-      </div>
-    );
-  }
-
-  // ── Variant C: locked placeholder card ────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      {variantPicker}
       {!accepted ? (
         <div style={{
           background: "var(--color-bg-raised)", borderRadius: "12px", padding: "18px 16px",
@@ -1705,15 +1605,12 @@ function Step8({ formData, onChange }) {
           <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
             {TAX_EXEMPT_DISCLAIMER}
           </p>
-          <button
-            onClick={accept}
-            style={{
-              background: "var(--color-gold)", color: "var(--color-bg-base)",
-              border: "none", borderRadius: "10px",
-              padding: "8px 16px", fontSize: "10px", letterSpacing: "1.5px",
-              fontWeight: 700, textTransform: "uppercase", cursor: "pointer",
-            }}
-          >
+          <button onClick={accept} style={{
+            background: "var(--color-gold)", color: "var(--color-bg-base)",
+            border: "none", borderRadius: "10px", padding: "8px 16px",
+            fontSize: "10px", letterSpacing: "1.5px", fontWeight: 700,
+            textTransform: "uppercase", cursor: "pointer",
+          }}>
             Unlock projections
           </button>
         </div>

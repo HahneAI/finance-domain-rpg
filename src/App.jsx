@@ -543,7 +543,7 @@ export default function App() {
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #222" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
+              <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
               <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
             </div>
             <button
@@ -670,7 +670,7 @@ export default function App() {
           {/* ── Title block — center ── */}
           <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>DHL / P&G</div>
+              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
               {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
             </div>
             <div style={{ fontSize: "14px", fontWeight: "bold" }}>Finance Dashboard</div>
@@ -758,7 +758,7 @@ export default function App() {
         {/* Drawer header */}
         <div style={{ padding: "16px 18px", borderBottom: "1px solid #222", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
-            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G — Jackson MO</div>
+            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
           </div>
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>

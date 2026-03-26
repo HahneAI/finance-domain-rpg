@@ -227,10 +227,6 @@ describe('INITIAL_EXPENSES', () => {
     }
   })
 
-  it('contains at least one Transfers category expense (for CashApp direct deposit)', () => {
-    expect(INITIAL_EXPENSES.some(e => e.category === 'Transfers')).toBe(true)
-  })
-
   it('all expense ids are unique', () => {
     const ids = INITIAL_EXPENSES.map(e => e.id)
     expect(new Set(ids).size).toBe(ids.length)

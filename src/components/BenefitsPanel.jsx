@@ -104,9 +104,6 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
         <Card label="Adj. Employer Match" val={f(aM)} sub={[logK401kMatchLost > 0 && `-${f(logK401kMatchLost)} lost`, logK401kMatchGained > 0 && `+${f(logK401kMatchGained)} bonus`].filter(Boolean).join(" · ")} color="var(--color-green)" size="18px" />
         <Card label="Adj. Total Balance" val={f(aE + aM)} color="var(--color-gold)" size="18px" />
       </div>}
-      <div style={{ padding: "12px 14px", background: "#3a3210", border: "1px solid #c8a84b44", borderRadius: "6px", fontSize: "11px", color: "#aaa", lineHeight: "1.8" }}>
-        FHA: save <span style={{ color: "var(--color-gold)" }}>$3,000 cash</span> + borrow <span style={{ color: "#7a8bbf" }}>{f(aE)} from 401k</span> = <span style={{ color: "var(--color-green)" }}>~{f(aE + 3000)}+ toward FHA</span>
-      </div>
     </div>
 
     {/* ── PTO Accrual + Leave Goal — DHL users only ── */}

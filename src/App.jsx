@@ -276,11 +276,20 @@ export default function App() {
     allWeeks.filter(w => w.active).reduce((s, w) => s + computeNet(w, config, taxDerived.extraPerCheck, showExtra), 0)
     , [allWeeks, config, taxDerived, showExtra]);
 
-  const weeklyIncome = projectedAnnualNet / 52;
+  // ─── Paycheck Buffer ─────────────────────────────────────────────────────────
+  // When enabled, paycheckBuffer ($/week) is excluded from all downstream spendable
+  // math: weeklyIncome, baseWeeklyUnallocated, adjustedWeeklyAvg, futureWeekNets,
+  // goal timelines, and budget panel calculations all use the buffer-adjusted value.
+  // projectedAnnualNet (above) is intentionally untouched — the Income panel uses
+  // it to display real earned income, not the spendable portion.
+  const bufferPerWeek = (config.bufferEnabled ?? true) ? (config.paycheckBuffer ?? 50) : 0;
+  const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
 
   const futureWeekNets = useMemo(
-    () => futureWeeks.map(w => computeNet(w, config, taxDerived.extraPerCheck, showExtra)),
-    [futureWeeks, config, taxDerived, showExtra]
+    // Buffer excluded per week — feeds BudgetPanel goal timelines and HomePanel
+    // "Next Week" tile; both should show spendable net, not raw paycheck amount.
+    () => futureWeeks.map(w => computeNet(w, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek),
+    [futureWeeks, config, taxDerived, showExtra, bufferPerWeek]
   );
 
   // ── Week-by-week remaining spend using history-aware amounts ──

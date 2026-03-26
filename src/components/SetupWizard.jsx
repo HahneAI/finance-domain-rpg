@@ -12,7 +12,7 @@
 //   Step 4  (3f) Tax Rates — state dropdown, paystub calculator (skippable)
 //   Step 5  (3g) Tax Summary — read-only confirmation of computed tax picture
 //   Step 6  (3h) Other Deductions — benefits date, freeform rows, attendance gate
-//   Step 7  (3i) Paycheck Buffer — live net preview, $50 floor with override
+//   Step 7  (3i) Paycheck Buffer — live net preview, optional toggle, $200 ceiling
 //   Step 8  (3j) Tax Exempt Gate — 3 UI variants (A/B/C) behind GATE_VARIANT const
 //
 // All 9 step components are wired. Phase 4 App.jsx integration complete.
@@ -1315,12 +1315,11 @@ function Step15({ formData, onChange }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STEP 7 — Paycheck Buffer
+// STEP 7 — Paycheck Buffer (estimateWeeklyGross helper defined above)
 //
-// Shows a live net-per-check preview assembled from formData collected so far.
-// User sets a safety floor (paycheckBuffer). $50 minimum enforced — if user
-// enters less, a warning appears and Next is blocked until they either raise the
-// value or explicitly click "Override anyway" (sets bufferOverrideAck = true).
+// Shows a live net-per-check preview, then lets the user toggle the buffer on/off
+// and set an amount (default $50, max $200). See App.jsx bufferPerWeek comment for
+// how the buffer is excluded from all downstream spendable math at runtime.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Estimate a typical weekly gross from formData — does not require a week object.
@@ -1356,7 +1355,15 @@ function estimateWeeklyGross(d) {
   return h * (d.baseRate || 0);
 }
 
-const BUFFER_FLOOR = 50;
+// ─── STEP 7 — Paycheck Buffer ────────────────────────────────────────────────
+// The buffer is an optional per-week amount excluded from every spendable
+// calculation in the app. It is NOT a deduction — the money lands on the
+// paycheck normally — but the app's budget, goal, and income math treat it
+// as invisible, letting it accumulate quietly as a safety reserve.
+//
+// Max: $200/week  Default: On at $50
+// ─────────────────────────────────────────────────────────────────────────────
+const BUFFER_MAX = 200;
 
 function Step7({ formData, onChange }) {
   const gross = estimateWeeklyGross(formData);
@@ -1376,17 +1383,18 @@ function Step7({ formData, onChange }) {
   const state = gross * (formData.stateRateLow || 0);
   const net = gross - fica - k401k - benefits - other - fed - state;
 
-  const buf = formData.paycheckBuffer ?? 50;
-  const overrideAck = formData.bufferOverrideAck === true;
+  // Buffer toggle state — bufferEnabled defaults to true (on)
+  const bufferOn = formData.bufferEnabled ?? true;
+  const buf      = formData.paycheckBuffer ?? 50;
 
   const rows = [
-    { label: "Gross Pay",      val: gross,   sign: "" },
-    { label: "Federal Tax",    val: fed,     sign: "−" },
-    { label: "State Tax",      val: state,   sign: "−" },
-    { label: "FICA",           val: fica,    sign: "−" },
-    { label: "401(k)",         val: k401k,   sign: "−" },
-    { label: "Benefits",       val: benefits,sign: "−" },
-    { label: "Other Deduct.", val: other,   sign: "−" },
+    { label: "Gross Pay",      val: gross,    sign: "" },
+    { label: "Federal Tax",    val: fed,      sign: "−" },
+    { label: "State Tax",      val: state,    sign: "−" },
+    { label: "FICA",           val: fica,     sign: "−" },
+    { label: "401(k)",         val: k401k,    sign: "−" },
+    { label: "Benefits",       val: benefits, sign: "−" },
+    { label: "Other Deduct.", val: other,    sign: "−" },
   ];
 
   const fmt = (n) => `$${Math.abs(n).toFixed(2)}`;
@@ -1432,64 +1440,43 @@ function Step7({ formData, onChange }) {
             </span>
           </div>
         </div>
-        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+        <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
           Estimated average from your setup so far.
           {formData.taxRatesEstimated && " Tax rates are estimated — confirm via Sharpen Rates."}
         </div>
       </div>
 
-      {/* ── Paycheck buffer input ── */}
-      <Field label="Paycheck Safety Buffer ($)">
-        <input
-          {...iS} style={{ ...iS }}
-          type="number" min="0" step="1"
-          value={buf || ""}
-          onChange={e => {
-            onChange({ paycheckBuffer: parseFloat(e.target.value) || 0, bufferOverrideAck: false });
-          }}
-        />
-        <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
-          Safety reserve held back per check — not counted in your spendable budget.
+      {/* ── Paycheck buffer toggle ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <p style={{ margin: 0, fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+          A paycheck buffer is a fixed amount from every check that the app
+          doesn't count as spendable income. Turn it on to build a quiet
+          safety reserve without cluttering your budget.
+        </p>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <Pill label="On"  active={bufferOn}  onClick={() => onChange({ bufferEnabled: true  })} />
+          <Pill label="Off" active={!bufferOn} onClick={() => onChange({ bufferEnabled: false })} />
         </div>
-
-        {/* Warning / override */}
-        {buf < BUFFER_FLOOR && (
-          <div style={{
-            marginTop: "10px",
-            padding: "10px 14px",
-            background: "rgba(224,92,92,0.08)",
-            border: "1px solid rgba(224,92,92,0.3)",
-            borderRadius: "10px",
-            display: "flex", flexDirection: "column", gap: "8px",
-          }}>
-            <div style={{ fontSize: "12px", color: "var(--color-red)", lineHeight: "1.5" }}>
-              A buffer under ${BUFFER_FLOOR} leaves very little margin for timing errors or small unexpected costs.
-              This is not recommended.
+        {/* Amount input — only visible when buffer is on */}
+        {bufferOn && (
+          <>
+            <input
+              {...iS} style={{ ...iS }}
+              type="number" min="0" max={BUFFER_MAX} step="1"
+              value={buf || ""}
+              onChange={e => {
+                // Clamp to BUFFER_MAX ceiling; do not enforce a floor
+                const v = Math.min(parseFloat(e.target.value) || 0, BUFFER_MAX);
+                onChange({ paycheckBuffer: v });
+              }}
+              placeholder="e.g. 50"
+            />
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+              At ${buf}/week — ${(buf * 52).toLocaleString()} reserved annually.
             </div>
-            {!overrideAck && (
-              <button
-                onClick={() => onChange({ bufferOverrideAck: true })}
-                style={{
-                  alignSelf: "flex-start",
-                  background: "transparent",
-                  color: "var(--color-text-secondary)",
-                  border: "1px solid rgba(224,92,92,0.4)",
-                  borderRadius: "8px", padding: "5px 12px",
-                  fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
-                  cursor: "pointer",
-                }}
-              >
-                Override anyway
-              </button>
-            )}
-            {overrideAck && (
-              <div style={{ fontSize: "11px", color: "var(--color-text-disabled)" }}>
-                Override accepted — you can continue with a lower buffer.
-              </div>
-            )}
-          </div>
+          </>
         )}
-      </Field>
+      </div>
     </div>
   );
 }
@@ -1633,7 +1620,7 @@ const STEP_DEFS = [
   {
     id: 7, title: "Paycheck Buffer", sprint: "3i",
     showIf: (_, ev) => ev === null || ev === "changed_jobs",
-    isValid: (d) => (d.paycheckBuffer ?? 0) >= BUFFER_FLOOR || d.bufferOverrideAck === true,
+    isValid: () => true,  // buffer is optional; toggle + amount are both optional
     component: Step7,
   },
   {

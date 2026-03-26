@@ -6,8 +6,9 @@ export const DEFAULT_CONFIG = {
   // ── Wizard gate fields ──────────────────────────────────────
   setupComplete: false,        // true once setup wizard completes; gates first-run flow
   taxExemptOptIn: false,       // true once user accepts tax exempt disclaimer (Step 8)
-  paycheckBuffer: 50,          // $ safety floor per check; $50 minimum enforced
-  bufferOverrideAck: false,    // true when user explicitly overrides the $50 floor warning
+  bufferEnabled: true,         // when true, paycheckBuffer is excluded from all spendable math
+  paycheckBuffer: 50,          // $/week excluded per check (bufferEnabled must be true); max $200
+  bufferOverrideAck: false,    // legacy — kept for backward compat with existing saved data
 
   // ── Employer preset ─────────────────────────────────────────
   employerPreset: null,        // "DHL" | null — drives rotation, bucket, dual-rate logic

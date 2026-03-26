@@ -241,7 +241,7 @@ All 9 step components (3a–3k) built and wired. SetupWizard exports correctly. 
 - [x] **Verbosity pass** — trim multi-sentence helper text to one sentence across all steps; bump key helper text from 11px/disabled to 12px/secondary for readability
 - [x] **Step 1 differential simplification** — remove Overnight/Weekend pill multiselect; replace with single "Weekend Differential ($/hr)" input bar (enter 0 for none); diffRate set directly
 - [x] **Visual touchups** — spacing and color polish across wizard steps
-- [ ] **Paycheck buffer rework** — convert buffer from hard floor/warning system to an optional toggle (default: on, $50); show total annual buffer amount on the step; buffer value excluded from all math pipeline (not counted as spendable income in any panel); toggle on/off with input bar appearing when on; $200 max ceiling; 2-sentence plain-language explanation on step page; add code comments around the buffer pipeline exclusion points
+- [x] **Paycheck buffer rework** — convert buffer from hard floor/warning system to an optional toggle (default: on, $50); show total annual buffer amount on the step; buffer value excluded from all math pipeline (not counted as spendable income in any panel); toggle on/off with input bar appearing when on; $200 max ceiling; 2-sentence plain-language explanation on step page; add code comments around the buffer pipeline exclusion points
 
 ### Wizard Polish (identified 2026-03-25 from test user session)
 - [x] **Base pay prefill corrected** — `DEFAULT_CONFIG.baseRate` and placeholder changed from 21.15 → 19.65 (DHL forklift operator base rate); `PTO_RATE` was already 19.65

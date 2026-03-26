@@ -103,8 +103,8 @@ describe('SetupWizard — step routing', () => {
 describe('SetupWizard — Step 0 rendering', () => {
   it('first-run renders welcome copy (no event selection buttons)', () => {
     renderWizard({ lifeEvent: null })
-    // Welcome copy mentions building the dashboard or capturing pay setup
-    expect(screen.getByText(/before we build your dashboard/i)).toBeTruthy()
+    // Welcome copy mentions setting up pay
+    expect(screen.getByText(/set up your pay/i)).toBeTruthy()
     // No life event options visible
     expect(screen.queryByText(/lost my job/i)).toBeNull()
   })

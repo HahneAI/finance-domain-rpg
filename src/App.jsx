@@ -107,6 +107,7 @@ export default function App() {
   const [showExtra, setShowExtra] = useState(true);
   const [isDHL, setIsDHL] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [ptoGoal, setPtoGoal] = useState(null);
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
   const [goals, setGoals] = useState(INITIAL_GOALS);
@@ -169,6 +170,7 @@ export default function App() {
       setWeekConfirmations(data.weekConfirmations ?? {});
       setIsDHL(data.isDHL);
       setIsAdmin(data.isAdmin);
+      setPtoGoal(data.ptoGoal);
       if (!data.config.setupComplete) setWizardEntry(false);
       setLoading(false);
     });
@@ -180,10 +182,10 @@ export default function App() {
     if (loading) return;
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations });
+      saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
     }, 800);
     return () => clearTimeout(saveTimer.current);
-  }, [config, expenses, goals, logs, showExtra, weekConfirmations, loading]);
+  }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal, loading]);
 
   // ── today: reactive date string — ticks at midnight so everything auto-advances ──
   const [today, setToday] = useState(() => toLocalIso(new Date()));
@@ -432,6 +434,8 @@ export default function App() {
         logPTOHoursLost={logTotals.ptoHoursLost}
         currentWeek={currentWeek}
         bucketModel={bucketModel}
+        ptoGoal={ptoGoal}
+        setPtoGoal={setPtoGoal}
       />}
       {currentView === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config} isDHL={isDHL}
@@ -475,10 +479,12 @@ export default function App() {
           }
           /* Safe-area height + top padding for Dynamic Island / notch iPhones.
              CSS !important overrides inline styles in iOS PWA standalone mode where
-             env() may not resolve reliably on inline attributes. */
+             env() may not resolve reliably on inline attributes.
+             flex-direction: column so inner content row stacks below the safe area. */
           .mobile-header {
             height: calc(56px + env(safe-area-inset-top, 0px)) !important;
             padding-top: env(safe-area-inset-top, 0px) !important;
+            flex-direction: column !important;
           }
         }
         @media (min-width: 768px) {
@@ -537,7 +543,7 @@ export default function App() {
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #222" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>DHL / P&G — Jackson MO</div>
+              <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
               <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
             </div>
             <button
@@ -615,19 +621,28 @@ export default function App() {
           style={{
             display: "none",
             borderBottom: "2px solid #c8a84b",
-            padding: "0 max(16px, env(safe-area-inset-left, 16px))",
-            paddingRight: "max(16px, env(safe-area-inset-right, 16px))",
-            height: "calc(56px + env(safe-area-inset-top, 0px))",
-            paddingTop: "env(safe-area-inset-top, 0px)",
             background: "var(--color-bg-base)",
             position: "sticky",
             top: 0,
             zIndex: 30,
+            flexDirection: "column",
+            // Height + padding-top are overridden with !important in the @media CSS block
+            // to ensure env(safe-area-inset-top) resolves in iOS PWA standalone mode.
+            height: "calc(56px + env(safe-area-inset-top, 0px))",
+            paddingTop: "env(safe-area-inset-top, 0px)",
+          }}
+        >
+          {/* Inner content row — always exactly 56px, sits BELOW the Dynamic Island */}
+          <div style={{
+            height: "56px",
+            display: "flex",
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-          }}
-        >
+            padding: "0 max(16px, env(safe-area-inset-left, 16px))",
+            paddingRight: "max(16px, env(safe-area-inset-right, 16px))",
+            flex: "none",
+          }}>
             {/* ── Hamburger — top LEFT (Chime-style) ── */}
           <button
             onClick={() => setDrawerOpen(true)}
@@ -655,7 +670,7 @@ export default function App() {
           {/* ── Title block — center ── */}
           <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>DHL / P&G</div>
+              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
               {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
             </div>
             <div style={{ fontSize: "14px", fontWeight: "bold" }}>Finance Dashboard</div>
@@ -697,12 +712,13 @@ export default function App() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-               
+
               }}>
                 {unconfirmedCount}
               </span>
             )}
           </button>
+          </div>
         </div>
 
         {/* Panel content */}
@@ -742,7 +758,7 @@ export default function App() {
         {/* Drawer header */}
         <div style={{ padding: "16px 18px", borderBottom: "1px solid #222", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
-            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>DHL / P&G — Jackson MO</div>
+            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
           </div>
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>

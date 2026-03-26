@@ -34,7 +34,7 @@ export async function loadUserData() {
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra, is_dhl, is_admin")
+    .select("config, expenses, goals, logs, show_extra, is_dhl, is_admin, pto_goal")
     .eq("user_id", userId)
     .single();
 
@@ -155,6 +155,7 @@ export async function loadUserData() {
     weekConfirmations:  wcData?.week_confirmations ?? {},
     isDHL:              data.is_dhl   ?? false,
     isAdmin:            data.is_admin ?? false,
+    ptoGoal:            data.pto_goal ?? null,
   };
 }
 
@@ -162,7 +163,7 @@ export async function loadUserData() {
  * Upsert all state blobs atomically.
  * Called from a debounced useEffect in App.jsx on any state change.
  */
-export async function saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations }) {
+export async function saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal }) {
   const userId = await getCurrentUserId();
   if (!userId) return; // unauthenticated — never write
 
@@ -178,6 +179,7 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
         show_extra:          showExtra,
         week_confirmations:  weekConfirmations,
         is_dhl:              config.employerPreset === "DHL",
+        pto_goal:            ptoGoal ?? null,
         updated_at:          new Date().toISOString(),
       },
       { onConflict: "user_id" }

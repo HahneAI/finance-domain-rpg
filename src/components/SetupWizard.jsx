@@ -1295,12 +1295,12 @@ function Step15({ formData, onChange }) {
           <Pill
             label="Night shift (+diff)"
             active={isNight}
-            onClick={() => onChange({ dhlNightShift: true })}
+            onClick={() => onChange({ dhlNightShift: true, nightDiffRate: 1.50 })}
           />
           <Pill
             label="Morning shift"
             active={!isNight}
-            onClick={() => onChange({ dhlNightShift: false })}
+            onClick={() => onChange({ dhlNightShift: false, nightDiffRate: 0 })}
           />
         </div>
         <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>

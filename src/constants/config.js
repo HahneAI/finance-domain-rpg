@@ -159,6 +159,10 @@ export const DHL_PRESET = {
     bucketStartBalance: 64,
     bucketCap: 128,
     bucketPayoutRate: 9.825,
+    baseRate: 19.65,             // DHL base hourly rate (MO, supply chain)
+    diffRate: 3.00,              // weekend shift differential
+    nightDiffRate: 1.50,         // night shift differential; wizard Step 15 writes 0 for morning shift
+    dhlNightShift: true,         // default assumption; wizard Step 15 overrides
     // ── Tax rate preset — MO supply chain, night shift (paystub-derived from Anthony's setup)
     // New DHL users get these pre-filled with taxRatesEstimated: true until they confirm their stub.
     // Morning shift users: same rates (shift affects gross, not effective tax rate).
@@ -182,34 +186,11 @@ export const PHASES = [
   { id: "q4", label: "Oct–Dec", description: "Oct 1 → Dec 31", color: "var(--color-green)" },
 ];
 
-export const INITIAL_EXPENSES = [
-  { id: "housing",   category: "Needs",      label: "Housing",              note: ["Staying w/ family", "Trailer split w/ brother (incl. electric + internet)", "Trailer split w/ brother (incl. electric + internet)", "Trailer split w/ brother (incl. electric + internet)"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [50, 125, 125, 125] }] },
-  { id: "kids",      category: "Needs",      label: "Kids / Angel",         note: ["Extra support, pregnancy help", "Minimum child support baseline", "Minimum child support baseline", "Minimum child support baseline"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [450, 350, 350, 350] }] },
-  { id: "food",      category: "Needs",      label: "Food",                 note: ["", "", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [65, 65, 65, 65] }] },
-  { id: "jesse",     category: "Needs",      label: "Jesse (Loan + Phone)", note: ["Loan $35 + phone $15 + extra", "Loan $35 + phone $15 + extra", "Loan paid off — phone only", "Loan paid off — phone only"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [100, 100, 60, 60] }] },
-  { id: "nicotine",  category: "Lifestyle",  label: "Nicotine",             note: ["", "", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [35, 35, 35, 35] }] },
-  { id: "rumble",    category: "Lifestyle",  label: "Rumble",               note: ["", "", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [2.50, 2.50, 2.50, 2.50] }] },
-  { id: "walmart",   category: "Lifestyle",  label: "Walmart+",             note: ["", "", "", ""], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [3.75, 3.75, 3.75, 3.75] }] },
-  { id: "fireflood", category: "Lifestyle",  label: "Fireflood",            note: ["$70/mo", "$70/mo", "$70/mo", "$70/mo"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [17.50, 17.50, 17.50, 17.50] }] },
-  { id: "cashapp",   category: "Transfers",  label: "CashApp Transfer",     note: ["Direct deposit benefit trigger", "Direct deposit benefit trigger", "Direct deposit benefit trigger", "Direct deposit benefit trigger"], history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [125, 125, 125, 125] }] },
-];
+export const INITIAL_EXPENSES = [];
 
-export const INITIAL_GOALS = [
-  { id: "g1", label: "Tickets & Fines", target: 600, color: "var(--color-red)", note: "Traffic tickets — may be more than $600", completed: false },
-  { id: "g2", label: "SUV (Cash Purchase)", target: 3000, color: "#c9a96e", note: "Full cash buy of used vehicle", completed: false },
-  { id: "g3", label: "Angel Emergency Fund", target: 1000, color: "#7eb8c9", note: "Safety net for Angel & baby", completed: false },
-  { id: "g4", label: "New Phone", target: 1200, color: "#7a8bbf", note: "Personal device upgrade", completed: false },
-  { id: "g5", label: "Laptop Repair", target: 300, color: "#a96ec9", note: "Dev/work laptop", completed: false },
-  { id: "g6", label: "Furniture & Equipment", target: 500, color: "var(--color-green)", note: "Trailer setup", completed: false },
-  { id: "g7", label: "FHA Down Payment", target: 3000, color: "var(--color-gold)", note: "Save $3k cash + 401k loan for remainder", completed: false },
-];
+export const INITIAL_GOALS = [];
 
-export const INITIAL_LOGS = [{
-  id: 1, weekEnd: "2026-03-16", weekIdx: 10, weekRotation: "6-Day",
-  type: "missed_unpaid", shiftsLost: 3, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0,
-  workedDays: "Fri, Sat, Sun", missedDays: "Tue, Wed, Thu",
-  note: "Worked Fri/Sat/Sun only (36h instead of 72h) — 3 days missed unpaid",
-}];
+export const INITIAL_LOGS = [];
 
 export const EVENT_TYPES = {
   missed_unpaid:     { label: "Missed Shift (Unpaid/Approved)", color: "var(--color-red)", icon: "✕" },

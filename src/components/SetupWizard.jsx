@@ -19,7 +19,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
-import { buildYear } from "../lib/finance.js";
+import { buildYear, dhlEmployerMatchRate } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
 import { FISCAL_YEAR_START, DHL_PRESET } from "../constants/config.js";
 
@@ -510,20 +510,37 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
                     placeholder="e.g. 6"
                   />
                 </Field>
-                <Field label="Employer Match (%)">
-                  <input
-                    {...iS}
-                    style={{ ...iS }}
-                    type="number" min="0" max="100" step="0.5"
-                    value={
-                      formData.k401MatchRate != null
-                        ? +(formData.k401MatchRate * 100).toFixed(2)
-                        : ""
-                    }
-                    onChange={e => onChange({ k401MatchRate: (parseFloat(e.target.value) || 0) / 100 })}
-                    placeholder="e.g. 5"
-                  />
-                </Field>
+                {formData.employerPreset === "DHL" ? (
+                  <Field label="DHL Match (computed)">
+                    <div style={{
+                      ...iS,
+                      color: "var(--color-text-secondary)",
+                      display: "flex",
+                      alignItems: "center",
+                      pointerEvents: "none",
+                    }}>
+                      {(dhlEmployerMatchRate(formData.k401Rate || 0) * 100).toFixed(1)}%
+                    </div>
+                    <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)" }}>
+                      100% match up to 4%, then 50% up to 6% (5% cap).
+                    </div>
+                  </Field>
+                ) : (
+                  <Field label="Employer Match (%)">
+                    <input
+                      {...iS}
+                      style={{ ...iS }}
+                      type="number" min="0" max="100" step="0.5"
+                      value={
+                        formData.k401MatchRate != null
+                          ? +(formData.k401MatchRate * 100).toFixed(2)
+                          : ""
+                      }
+                      onChange={e => onChange({ k401MatchRate: (parseFloat(e.target.value) || 0) / 100 })}
+                      placeholder="e.g. 5"
+                    />
+                  </Field>
+                )}
               </FieldRow>
               <Field label="Enrollment / Start Date">
                 <input

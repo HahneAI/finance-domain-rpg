@@ -11,6 +11,18 @@ function toLocalIso(date) {
 }
 export { toLocalIso };
 
+// ─── DHL 401k tiered employer match ─────────────────────────────────────────
+// DHL matches 100% up to 4%, then 50¢ per $1 from 4%→6%, capped at 5% match.
+//   Contribute 4% → DHL matches 4.0%
+//   Contribute 5% → DHL matches 4.5%
+//   Contribute 6% → DHL matches 5.0%  (cap)
+//   Contribute 7%+ → DHL matches 5.0% (cap holds)
+export function dhlEmployerMatchRate(k401Rate) {
+  const tier1 = Math.min(k401Rate, 0.04);
+  const tier2 = Math.min(Math.max(k401Rate - 0.04, 0), 0.02) * 0.5;
+  return tier1 + tier2;
+}
+
 export function fedTax(income) {
   let tax = 0, prev = 0;
   for (const [limit, rate] of FED_BRACKETS) { if (income <= prev) break; tax += (Math.min(income, limit) - prev) * rate; prev = limit; }
@@ -109,7 +121,11 @@ export function buildYear(cfg) {
     const active = idx >= cfg.firstActiveIdx;
     const has401k = active && weekEnd >= k401Start;
     const k401kEmployee = has401k ? grossPay * cfg.k401Rate : 0;
-    const k401kEmployer = has401k ? grossPay * cfg.k401MatchRate : 0;
+    // DHL match is formula-driven (tiered); other employers use stored flat k401MatchRate.
+    const effectiveMatchRate = cfg.employerPreset === "DHL"
+      ? dhlEmployerMatchRate(cfg.k401Rate)
+      : cfg.k401MatchRate;
+    const k401kEmployer = has401k ? grossPay * effectiveMatchRate : 0;
     const taxableGross = active ? grossPay - cfg.ltd - k401kEmployee : 0;
     const isTaxed = active && taxedSet.has(idx);
     weeks.push({
@@ -413,8 +429,8 @@ export function calcEventImpact(event, cfg) {
     grossLost, grossGained, netLost, netGained, baseGross, hoursLostForPTO,
     bucketHoursDeducted: event.type === "missed_unapproved" ? (event.hoursLost || 0) : 0,
     k401kLost: affectsK401 ? grossLost * cfg.k401Rate : 0,
-    k401kMatchLost: affectsK401 ? grossLost * cfg.k401MatchRate : 0,
+    k401kMatchLost: affectsK401 ? grossLost * (cfg.employerPreset === "DHL" ? dhlEmployerMatchRate(cfg.k401Rate) : cfg.k401MatchRate) : 0,
     k401kGained: affectsK401 ? grossGained * cfg.k401Rate : 0,
-    k401kMatchGained: affectsK401 ? grossGained * cfg.k401MatchRate : 0
+    k401kMatchGained: affectsK401 ? grossGained * (cfg.employerPreset === "DHL" ? dhlEmployerMatchRate(cfg.k401Rate) : cfg.k401MatchRate) : 0
   };
 }

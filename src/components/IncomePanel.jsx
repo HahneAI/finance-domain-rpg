@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { MONTH_FULL } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
-import { computeNet } from "../lib/finance.js";
+import { computeNet, dhlEmployerMatchRate } from "../lib/finance.js";
 import { Card, VT, SH, iS, lS } from "./ui.jsx";
 
 export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, logNetLost, logNetGained, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin }) {
@@ -299,7 +299,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     {view === "401k" && <div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "12px", marginBottom: "24px" }}>
         <Card label="Your Contributions" val={f(yE)} sub={`${(config.k401Rate * 100).toFixed(0)}% · starts ${config.k401StartDate}`} color="#7a8bbf" size="22px" />
-        <Card label="Employer Match" val={f(allWeeks.reduce((s, w) => s + w.k401kEmployer, 0))} sub={`${(config.k401MatchRate * 100).toFixed(0)}% match`} color="var(--color-green)" size="22px" />
+        <Card label="Employer Match" val={f(allWeeks.reduce((s, w) => s + w.k401kEmployer, 0))} sub={`${((config.employerPreset === "DHL" ? dhlEmployerMatchRate(config.k401Rate) : config.k401MatchRate) * 100).toFixed(1)}% match`} color="var(--color-green)" size="22px" />
         <Card label="Total 401k Balance" val={f(yT)} sub="Projected year-end 2026" color="var(--color-gold)" size="22px" />
       </div>
       {(() => {
@@ -420,7 +420,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         </div>
         {[
           { section: "Pay Structure", rows: [{ l: "Base Hourly Rate", v: `$${config.baseRate}/hr` }, { l: "Shift Length", v: `${config.shiftHours}h` }, { l: "Weekend Differential", v: `+$${config.diffRate}/hr` }, ...(config.dhlNightShift ? [{ l: "Night Differential", v: `+$${config.nightDiffRate}/hr` }] : []), { l: "OT Threshold", v: `${config.otThreshold}h/wk` }, { l: "OT Multiplier", v: `${config.otMultiplier}×` }] },
-          { section: "Deductions", rows: [{ l: "LTD (weekly)", v: `$${config.ltd}` }, { l: "401k Employee", v: `${(config.k401Rate * 100).toFixed(0)}%` }, { l: "401k Employer Match", v: `${(config.k401MatchRate * 100).toFixed(0)}%` }, { l: "401k Start Date", v: config.k401StartDate }] },
+          { section: "Deductions", rows: [{ l: "LTD (weekly)", v: `$${config.ltd}` }, { l: "401k Employee", v: `${(config.k401Rate * 100).toFixed(0)}%` }, { l: "401k Employer Match", v: `${((config.employerPreset === "DHL" ? dhlEmployerMatchRate(config.k401Rate) : config.k401MatchRate) * 100).toFixed(1)}%${config.employerPreset === "DHL" ? " (formula)" : ""}` }, { l: "401k Start Date", v: config.k401StartDate }] },
           { section: "Tax Rates (from paychecks)", rows: [{ l: `Long / ${isVariable ? "High" : "Only"} Fed`, v: `${(config.fedRateHigh * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` }, { l: `Long / ${isVariable ? "High" : "Only"} State`, v: `${(config.stateRateHigh * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` }, { l: "Short / Low Fed", v: isVariable ? `${(config.fedRateLow * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` : "—" }, { l: "Short / Low State", v: isVariable ? `${(config.stateRateLow * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` : "—" }, { l: "FICA", v: `${(config.ficaRate * 100).toFixed(2)}%` }] },
           { section: "Annual Tax Strategy", rows: [{ l: "Federal Std Deduction", v: `$${config.fedStdDeduction.toLocaleString()}` }, { l: "MO Flat Rate", v: `${(config.moFlatRate * 100).toFixed(1)}%` }, { l: "Target Owed at Filing", v: `$${config.targetOwedAtFiling}` }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }] },
         ].map(g => <div key={g.section} style={{ marginBottom: "20px" }}>

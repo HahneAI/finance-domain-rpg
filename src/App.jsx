@@ -475,10 +475,12 @@ export default function App() {
           }
           /* Safe-area height + top padding for Dynamic Island / notch iPhones.
              CSS !important overrides inline styles in iOS PWA standalone mode where
-             env() may not resolve reliably on inline attributes. */
+             env() may not resolve reliably on inline attributes.
+             flex-direction: column so inner content row stacks below the safe area. */
           .mobile-header {
             height: calc(56px + env(safe-area-inset-top, 0px)) !important;
             padding-top: env(safe-area-inset-top, 0px) !important;
+            flex-direction: column !important;
           }
         }
         @media (min-width: 768px) {
@@ -615,19 +617,28 @@ export default function App() {
           style={{
             display: "none",
             borderBottom: "2px solid #c8a84b",
-            padding: "0 max(16px, env(safe-area-inset-left, 16px))",
-            paddingRight: "max(16px, env(safe-area-inset-right, 16px))",
-            height: "calc(56px + env(safe-area-inset-top, 0px))",
-            paddingTop: "env(safe-area-inset-top, 0px)",
             background: "var(--color-bg-base)",
             position: "sticky",
             top: 0,
             zIndex: 30,
+            flexDirection: "column",
+            // Height + padding-top are overridden with !important in the @media CSS block
+            // to ensure env(safe-area-inset-top) resolves in iOS PWA standalone mode.
+            height: "calc(56px + env(safe-area-inset-top, 0px))",
+            paddingTop: "env(safe-area-inset-top, 0px)",
+          }}
+        >
+          {/* Inner content row — always exactly 56px, sits BELOW the Dynamic Island */}
+          <div style={{
+            height: "56px",
+            display: "flex",
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-          }}
-        >
+            padding: "0 max(16px, env(safe-area-inset-left, 16px))",
+            paddingRight: "max(16px, env(safe-area-inset-right, 16px))",
+            flex: "none",
+          }}>
             {/* ── Hamburger — top LEFT (Chime-style) ── */}
           <button
             onClick={() => setDrawerOpen(true)}
@@ -697,12 +708,13 @@ export default function App() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-               
+
               }}>
                 {unconfirmedCount}
               </span>
             )}
           </button>
+          </div>
         </div>
 
         {/* Panel content */}

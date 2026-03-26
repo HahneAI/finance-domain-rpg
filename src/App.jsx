@@ -461,6 +461,7 @@ export default function App() {
       {currentView === "profile" && <ProfilePanel
         authedUser={authedUser}
         config={config}
+        setConfig={setConfig}
       />}
     </>
   );

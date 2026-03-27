@@ -11,12 +11,14 @@ import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
 import { SetupWizard } from "./components/SetupWizard.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
+import { ProfilePanel } from "./components/ProfilePanel.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
   { key: "budget",   label: "Budget" },
   { key: "benefits", label: "Benefits" },
   { key: "log",      label: "Log" },
+  { key: "profile",  label: "Profile" },
 ];
 
 // Bottom nav items with SVG icons — Chime-style icon+label layout
@@ -66,6 +68,15 @@ const BOTTOM_NAV = [
       </svg>
     ),
   },
+  {
+    key: "profile",
+    label: "Profile",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+      </svg>
+    ),
+  },
 ];
 
 function SidebarNavItem({ item, active, onClick }) {
@@ -99,8 +110,9 @@ export default function App() {
   // authChecked: true once the initial getSession() call resolves.
   // Without this flag, there's a flash of the login screen on every page reload
   // even when a valid session already exists in localStorage.
-  const [authedUser, setAuthedUser]   = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const [authedUser, setAuthedUser]         = useState(null);
+  const [authChecked, setAuthChecked]       = useState(false);
+  const [pendingPasswordReset, setPendingPasswordReset] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -154,7 +166,11 @@ export default function App() {
       setAuthChecked(true);
     });
     // Subscribe to future sign-in / sign-out events.
-    return onAuthChange((user) => setAuthedUser(user));
+    return onAuthChange((event, user) => {
+      if (event === "PASSWORD_RECOVERY") setPendingPasswordReset(true);
+      else setPendingPasswordReset(false);
+      setAuthedUser(user);
+    });
   }, []);
 
   // ── Load from Supabase once auth resolves to a signed-in user ──
@@ -376,6 +392,11 @@ export default function App() {
     return <LoginScreen />;
   }
 
+  // Supabase PASSWORD_RECOVERY event — user clicked a reset link, show set-new-password form.
+  if (pendingPasswordReset) {
+    return <LoginScreen recoveryMode onRecoveryDone={() => setPendingPasswordReset(false)} />;
+  }
+
   if (loading) {
     return (
       <div style={{ background: "var(--color-bg-base)",
@@ -446,6 +467,11 @@ export default function App() {
         currentWeek={currentWeek}
         goals={goals}
         bucketModel={bucketModel}
+      />}
+      {currentView === "profile" && <ProfilePanel
+        authedUser={authedUser}
+        config={config}
+        setConfig={setConfig}
       />}
     </>
   );
@@ -558,9 +584,13 @@ export default function App() {
             <button
               title="Sign out"
               onClick={async () => { await supabase.auth.signOut(); }}
-              style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "16px", padding: "2px 0", marginTop: "1px", lineHeight: 1 }}
+              style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", padding: "2px 0", marginTop: "1px", lineHeight: 1, display: "flex", alignItems: "center" }}
             >
-              ⎋
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
             </button>
           </div>
           {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
@@ -774,9 +804,13 @@ export default function App() {
             <button
               title="Sign out"
               onClick={async () => { await supabase.auth.signOut(); setDrawerOpen(false); }}
-              style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "16px", lineHeight: 1, padding: "2px 6px" }}
+              style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
             >
-              ⎋
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
             </button>
             <button
               onClick={() => setDrawerOpen(false)}

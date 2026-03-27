@@ -52,11 +52,11 @@ const GoogleIcon = (
   </svg>
 );
 
-const AppleIcon = (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.7 9.05 7.42c1.27.07 2.15.73 2.88.78 1.09-.21 2.14-.9 3.29-.84 1.4.07 2.45.65 3.14 1.63-2.87 1.72-2.19 5.51.48 6.63-.57 1.56-1.32 3.1-1.79 4.66zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
-  </svg>
-);
+// const AppleIcon = (
+//   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+//     <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.7 9.05 7.42c1.27.07 2.15.73 2.88.78 1.09-.21 2.14-.9 3.29-.84 1.4.07 2.45.65 3.14 1.63-2.87 1.72-2.19 5.51.48 6.63-.57 1.56-1.32 3.1-1.79 4.66zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
+//   </svg>
+// ); // TODO: uncomment when Apple Developer account ($99/yr) is set up
 
 // ── Divider ──────────────────────────────────────────────────────────────────
 
@@ -245,7 +245,8 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone }) {
       {/* OAuth */}
       <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
         <OAuthBtn provider="google" label="Continue with Google" icon={GoogleIcon} onClick={() => handleOAuth("google")} />
-        <OAuthBtn provider="apple"  label="Continue with Apple"  icon={AppleIcon}  onClick={() => handleOAuth("apple")}  />
+        {/* Apple Sign In — requires Apple Developer account ($99/yr); re-enable when ready:
+        <OAuthBtn provider="apple" label="Continue with Apple" icon={AppleIcon} onClick={() => handleOAuth("apple")} /> */}
       </div>
 
       <Divider label="or" />

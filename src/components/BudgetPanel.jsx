@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
 import { Card, VT, SmBtn, SH, iS, lS } from "./ui.jsx";
@@ -79,6 +79,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const [draggingGoalId, setDraggingGoalId] = useState(null);
   const [dragOverGoalId, setDragOverGoalId] = useState(null);
   const [dragPreviewCategory, setDragPreviewCategory] = useState(null);
+  const [draggingExpenseId, setDraggingExpenseId] = useState(null);
+  const [dragOverExpenseId, setDragOverExpenseId] = useState(null);
+  const [dragPreviewExpenseCategory, setDragPreviewExpenseCategory] = useState(null);
+  const expenseTouchDraggingRef = useRef(false);
+  const expenseTouchHoverLaneRef = useRef(null);
+  const expenseTouchHoverIdRef = useRef(null);
   // Resolve the current effective amount for an expense at the active phase
   const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
 
@@ -154,6 +160,83 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   };
   const deleteExp = (id) => { setExpenses(p => p.filter(e => e.id !== id)); setDelExpId(null); };
+  const reorderExpenseByDrag = (draggedId, overId, lane) => {
+    setExpenses(prev => {
+      const regular = prev.filter(e => e.type !== "loan");
+      const dragged = regular.find(e => e.id === draggedId);
+      if (!dragged) return prev;
+
+      const targetLane = lane ?? dragged.category;
+      const regularWithoutDragged = regular.filter(e => e.id !== draggedId);
+      const draggedNext = { ...dragged, category: targetLane };
+
+      let insertIndex = regularWithoutDragged.length;
+      if (overId) {
+        const overIndex = regularWithoutDragged.findIndex(e => e.id === overId);
+        if (overIndex !== -1) insertIndex = overIndex;
+      } else {
+        const laneLastIndex = regularWithoutDragged.reduce((lastIdx, exp, idx) =>
+          exp.category === targetLane ? idx : lastIdx, -1);
+        insertIndex = laneLastIndex + 1;
+      }
+
+      const reorderedRegular = [...regularWithoutDragged];
+      reorderedRegular.splice(insertIndex, 0, draggedNext);
+
+      let regularIdx = 0;
+      return prev.map(exp => exp.type === "loan" ? exp : reorderedRegular[regularIdx++]);
+    });
+  };
+  const onExpenseDragStart = (exp) => {
+    setDraggingExpenseId(exp.id);
+    setDragPreviewExpenseCategory(exp.category);
+  };
+  const onExpenseDragEnd = () => {
+    expenseTouchDraggingRef.current = false;
+    expenseTouchHoverLaneRef.current = null;
+    expenseTouchHoverIdRef.current = null;
+    setDraggingExpenseId(null);
+    setDragOverExpenseId(null);
+    setDragPreviewExpenseCategory(null);
+  };
+  const onExpenseTouchStart = (exp) => {
+    expenseTouchDraggingRef.current = true;
+    expenseTouchHoverLaneRef.current = exp.category;
+    expenseTouchHoverIdRef.current = null;
+    onExpenseDragStart(exp);
+  };
+  const onExpenseTouchMove = (e) => {
+    if (!expenseTouchDraggingRef.current) return;
+    const point = e.touches?.[0];
+    if (!point) return;
+    e.preventDefault();
+    const hovered = document.elementFromPoint(point.clientX, point.clientY);
+    const laneEl = hovered?.closest?.("[data-expense-lane]");
+    const lane = laneEl?.getAttribute("data-expense-lane");
+    if (lane === "Needs" || lane === "Lifestyle") {
+      expenseTouchHoverLaneRef.current = lane;
+      setDragPreviewExpenseCategory(lane);
+    }
+
+    const overCardEl = hovered?.closest?.("[data-expense-id]");
+    const overId = overCardEl?.getAttribute("data-expense-id") ?? null;
+    if (overId && overId !== draggingExpenseId) {
+      expenseTouchHoverIdRef.current = overId;
+      setDragOverExpenseId(overId);
+    } else {
+      expenseTouchHoverIdRef.current = null;
+      setDragOverExpenseId(null);
+    }
+  };
+  const onExpenseTouchEnd = () => {
+    if (!expenseTouchDraggingRef.current || !draggingExpenseId) {
+      onExpenseDragEnd();
+      return;
+    }
+    const lane = expenseTouchHoverLaneRef.current ?? dragPreviewExpenseCategory;
+    reorderExpenseByDrag(draggingExpenseId, expenseTouchHoverIdRef.current, lane);
+    onExpenseDragEnd();
+  };
 
   // Loan helpers
   const startEditLoan = (exp) => {
@@ -326,13 +409,86 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         const loanItems = cat === "Needs" ? loans : [];
         const cTot = cExp.reduce((s, e) => s + currentEffective(e, ap), 0)
                    + loanItems.reduce((s, e) => s + currentEffective(e, ap), 0);
-        return <div key={cat} style={{ marginBottom: "24px" }}>
+        const isExpenseDropLane = cat === "Needs" || cat === "Lifestyle";
+        return <div
+          key={cat}
+          data-expense-lane={isExpenseDropLane ? cat : undefined}
+          onDragOver={(e) => {
+            if (!isExpenseDropLane) return;
+            e.preventDefault();
+            setDragPreviewExpenseCategory(cat);
+            setDragOverExpenseId(null);
+          }}
+          onDrop={(e) => {
+            if (!isExpenseDropLane) return;
+            e.preventDefault();
+            if (!draggingExpenseId) return;
+            reorderExpenseByDrag(draggingExpenseId, null, cat);
+            onExpenseDragEnd();
+          }}
+          style={{
+            marginBottom: "24px",
+            padding: isExpenseDropLane ? "8px" : 0,
+            borderRadius: isExpenseDropLane ? "10px" : 0,
+            border: isExpenseDropLane
+              ? `1px solid ${dragPreviewExpenseCategory === cat ? `${CATEGORY_COLORS[cat]}77` : "#1f1f1f"}`
+              : "none",
+            background: isExpenseDropLane
+              ? (dragPreviewExpenseCategory === cat ? CATEGORY_BG[cat] : "transparent")
+              : "transparent",
+            transition: "background 220ms ease, border-color 220ms ease",
+          }}
+        >
           <SH color={CATEGORY_COLORS[cat]} right={f2(cTot) + "/wk"}>{cat}</SH>
           {cExp.map(exp => {
             const effAmt = currentEffective(exp, ap);
             const latestEntry = exp.history?.length ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b) : null;
-            return <div key={exp.id} style={{ background: CATEGORY_BG[cat], border: "1px solid #1e1e1e", borderRadius: "6px", padding: "10px 12px", marginBottom: "6px" }}>
-              {editId === exp.id ? <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            const isEditing = editId === exp.id;
+            const isDragging = draggingExpenseId === exp.id;
+            const isDropTarget = dragOverExpenseId === exp.id;
+            const previewCategory = dragPreviewExpenseCategory ?? exp.category;
+            const lanePreviewingMove = isDragging && previewCategory !== exp.category;
+            return <div
+              key={exp.id}
+              data-expense-id={exp.id}
+              draggable={!isEditing && isExpenseDropLane}
+              onDragStart={() => onExpenseDragStart(exp)}
+              onDragEnd={onExpenseDragEnd}
+              onTouchStart={() => {
+                if (!isEditing && isExpenseDropLane) onExpenseTouchStart(exp);
+              }}
+              onTouchMove={onExpenseTouchMove}
+              onTouchEnd={onExpenseTouchEnd}
+              onTouchCancel={onExpenseDragEnd}
+              onDragOver={(e) => {
+                if (!draggingExpenseId || !isExpenseDropLane) return;
+                e.preventDefault();
+                e.stopPropagation();
+                setDragOverExpenseId(exp.id);
+                setDragPreviewExpenseCategory(cat);
+              }}
+              onDrop={(e) => {
+                if (!isExpenseDropLane) return;
+                e.preventDefault();
+                e.stopPropagation();
+                if (!draggingExpenseId) return;
+                reorderExpenseByDrag(draggingExpenseId, exp.id, cat);
+                onExpenseDragEnd();
+              }}
+              style={{
+                background: lanePreviewingMove ? CATEGORY_BG[previewCategory] : CATEGORY_BG[cat],
+                border: `1px solid ${isDropTarget ? `${CATEGORY_COLORS[cat]}99` : "#1e1e1e"}`,
+                borderRadius: "6px",
+                padding: "10px 12px",
+                marginBottom: "6px",
+                opacity: isDragging ? 0.68 : 1,
+                cursor: isEditing ? "default" : (isExpenseDropLane ? "grab" : "default"),
+                transform: isDragging ? "scale(0.985)" : "scale(1)",
+                transition: "background 220ms ease, border-color 220ms ease, opacity 150ms ease, transform 150ms ease",
+                touchAction: isExpenseDropLane ? "none" : "auto",
+              }}
+            >
+              {isEditing ? <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <span style={{ fontSize: "12px" }}>{exp.label}</span>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
                   <div>

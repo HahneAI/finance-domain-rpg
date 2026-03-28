@@ -29,6 +29,11 @@ const GOAL_LANES = {
   },
 };
 
+const EXPENSE_DRAG_PREVIEW_TINT = {
+  Needs: "rgba(217, 112, 112, 0.26)",
+  Lifestyle: "rgba(122, 139, 191, 0.3)",
+};
+
 const EXPENSE_CYCLE_OPTIONS = [
   { value: "weekly", label: "Every week", days: 7 },
   { value: "biweekly", label: "Every 2 weeks", days: 14 },
@@ -191,6 +196,14 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     setDraggingExpenseId(exp.id);
     setDragPreviewExpenseCategory(exp.category);
   };
+  const resetExpensePreviewToOrigin = () => {
+    if (!draggingExpenseId) {
+      setDragPreviewExpenseCategory(null);
+      return;
+    }
+    const origin = regularExpenses.find(e => e.id === draggingExpenseId)?.category ?? null;
+    setDragPreviewExpenseCategory(origin);
+  };
   const onExpenseDragEnd = () => {
     expenseTouchDraggingRef.current = false;
     expenseTouchHoverLaneRef.current = null;
@@ -216,6 +229,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     if (lane === "Needs" || lane === "Lifestyle") {
       expenseTouchHoverLaneRef.current = lane;
       setDragPreviewExpenseCategory(lane);
+    } else {
+      expenseTouchHoverLaneRef.current = null;
+      resetExpensePreviewToOrigin();
     }
 
     const overCardEl = hovered?.closest?.("[data-expense-id]");
@@ -447,6 +463,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             reorderExpenseByDrag(draggingExpenseId, null, cat);
             onExpenseDragEnd();
           }}
+          onDragLeave={(e) => {
+            if (!isExpenseDropLane) return;
+            if (e.currentTarget.contains(e.relatedTarget)) return;
+            setDragOverExpenseId(null);
+            resetExpensePreviewToOrigin();
+          }}
           style={{
             marginBottom: "24px",
             padding: isExpenseDropLane ? "8px" : 0,
@@ -469,6 +491,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             const isDropTarget = dragOverExpenseId === exp.id;
             const previewCategory = dragPreviewExpenseCategory ?? exp.category;
             const lanePreviewingMove = isDragging && previewCategory !== exp.category;
+            const previewTint = lanePreviewingMove ? EXPENSE_DRAG_PREVIEW_TINT[previewCategory] : null;
             return <div
               key={exp.id}
               data-expense-id={exp.id}
@@ -496,16 +519,24 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 reorderExpenseByDrag(draggingExpenseId, exp.id, cat);
                 onExpenseDragEnd();
               }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget)) return;
+                if (!isDragging) setDragOverExpenseId(null);
+                resetExpensePreviewToOrigin();
+              }}
               style={{
-                background: lanePreviewingMove ? CATEGORY_BG[previewCategory] : CATEGORY_BG[cat],
-                border: `1px solid ${isDropTarget ? `${CATEGORY_COLORS[cat]}99` : "#1e1e1e"}`,
+                background: lanePreviewingMove
+                  ? `linear-gradient(120deg, ${CATEGORY_BG[cat]} 0%, ${CATEGORY_BG[cat]} 40%, ${previewTint} 72%, ${CATEGORY_BG[previewCategory]} 100%)`
+                  : CATEGORY_BG[cat],
+                border: `1px solid ${isDropTarget ? `${CATEGORY_COLORS[cat]}99` : lanePreviewingMove ? `${CATEGORY_COLORS[previewCategory]}66` : "#1e1e1e"}`,
                 borderRadius: "6px",
                 padding: "10px 12px",
                 marginBottom: "6px",
                 opacity: isDragging ? 0.68 : 1,
                 cursor: isEditing ? "default" : (isExpenseDropLane ? "grab" : "default"),
                 transform: isDragging ? "scale(0.985)" : "scale(1)",
-                transition: "background 220ms ease, border-color 220ms ease, opacity 150ms ease, transform 150ms ease",
+                boxShadow: lanePreviewingMove ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}44 inset` : "none",
+                transition: "background 220ms ease, border-color 220ms ease, box-shadow 220ms ease, opacity 150ms ease, transform 150ms ease",
                 touchAction: isExpenseDropLane ? "none" : "auto",
               }}
             >

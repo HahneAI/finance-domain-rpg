@@ -298,14 +298,14 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 ## 8. Pre-Launch Polish
 
 ### UI Tune
-- [ ] **Full UI pass** — review every panel for spacing, alignment, and visual consistency; fix any cards that feel cramped or misaligned on 390px; verify no horizontal scroll anywhere
-- [ ] **Typography pass** — confirm all hero numbers use `--font-display`, all body text uses `--font-sans`, all inputs and data table cells use `--font-mono`; fix any mismatches
-- [ ] **Loading and empty states** — every panel should have a clean skeleton or empty-state message; nothing should flash or jump on first load
-- [ ] **Mobile tap targets** — audit all buttons and interactive elements at 390px; anything below 44×44px gets padding bumped
+- [x] **Full UI pass** — review every panel for spacing, alignment, and visual consistency; fix any cards that feel cramped or misaligned on 390px; verify no horizontal scroll anywhere
+- [x] **Typography pass** — confirm all hero numbers use `--font-display`, all body text uses `--font-sans`, all inputs and data table cells use `--font-mono`; fix any mismatches
+- [x] **Loading and empty states** — every panel should have a clean skeleton or empty-state message; nothing should flash or jump on first load
+- [x] **Mobile tap targets** — audit all buttons and interactive elements at 390px; anything below 44×44px gets padding bumped
 
 ### Color Scheme Decision
-- [ ] **Lock final color palette** — evaluate the current token set in `--theme` block (`--color-bg-base`, `--color-gold`, `--color-green`, `--color-red`, etc.); decide if any tokens need adjustment before first external user; document final decisions in CLAUDE.md
-- [ ] **Status color consistency** — audit all `status` props on `MetricCard`; confirm green/gold/red always mean the same thing (positive/neutral-attention/negative) across all panels
+- [x] **Lock final color palette** — evaluate the current token set in `--theme` block (`--color-bg-base`, `--color-gold`, `--color-green`, `--color-red`, etc.); decide if any tokens need adjustment before first external user; document final decisions in CLAUDE.md
+- [x] **Status color consistency** — audit all `status` props on `MetricCard`; confirm green/gold/red always mean the same thing (positive/neutral-attention/negative) across all panels
 
 ### Auth Providers
 - [ ] **Decide on supported auth methods** — email/password (already built), Google OAuth, Apple Sign In; Apple required for iOS App Store; pick which to support at launch

@@ -105,6 +105,44 @@ function SidebarNavItem({ item, active, onClick }) {
   );
 }
 
+function FullScreenLoadingState({ label = "Loading your dashboard" }) {
+  return (
+    <div style={{
+      background: "var(--color-bg-base)",
+      minHeight: "100vh",
+      color: "var(--color-text-primary)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "24px",
+    }}>
+      <div style={{
+        width: "100%",
+        maxWidth: "420px",
+        border: "1px solid var(--color-border-subtle)",
+        borderRadius: "16px",
+        background: "var(--color-bg-surface)",
+        padding: "18px",
+      }}>
+        <div style={{
+          fontSize: "11px",
+          letterSpacing: "3px",
+          textTransform: "uppercase",
+          color: "var(--color-gold)",
+          marginBottom: "12px",
+        }}>
+          {label}
+        </div>
+        <div style={{ display: "grid", gap: "10px" }}>
+          <div style={{ height: "56px", borderRadius: "12px", background: "var(--color-bg-raised)" }} />
+          <div style={{ height: "56px", borderRadius: "12px", background: "var(--color-bg-raised)" }} />
+          <div style={{ height: "56px", borderRadius: "12px", background: "var(--color-bg-raised)" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // ── Auth state ─────────────────────────────────────────────────────────────
   // authChecked: true once the initial getSession() call resolves.
@@ -380,11 +418,7 @@ export default function App() {
 
   // Checking localStorage for an existing session — avoid flash of login screen.
   if (!authChecked) {
-    return (
-      <div style={{ background: "var(--color-bg-base)", minHeight: "100vh", color: "var(--color-gold)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", letterSpacing: "4px" }}>
-        LOADING...
-      </div>
-    );
+    return <FullScreenLoadingState label="Checking session" />;
   }
 
   // No valid session — show login / create account screen.
@@ -398,14 +432,7 @@ export default function App() {
   }
 
   if (loading) {
-    return (
-      <div style={{ background: "var(--color-bg-base)",
-        minHeight: "100vh", color: "var(--color-gold)", display: "flex",
-        alignItems: "center", justifyContent: "center", fontSize: "14px",
-        letterSpacing: "4px" }}>
-        LOADING...
-      </div>
-    );
+    return <FullScreenLoadingState />;
   }
 
   const activePanel = (

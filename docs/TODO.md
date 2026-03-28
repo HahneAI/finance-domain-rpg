@@ -311,7 +311,7 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 - [ ] **Decide on supported auth methods** — email/password (already built), Google OAuth, Apple Sign In; Apple required for iOS App Store; pick which to support at launch
 - [ ] **Wire Google OAuth** — `supabase.auth.signInWithOAuth({ provider: 'google' })`; add Google button to `LoginScreen.jsx`; configure provider in Supabase dashboard
 - [ ] **Wire Apple Sign In** — `supabase.auth.signInWithOAuth({ provider: 'apple' })`; add Apple button to `LoginScreen.jsx`; configure provider in Supabase dashboard; required for iOS App Store compliance
-- [ ] **LoginScreen layout update** — add OAuth buttons below email/password form with a divider ("or continue with"); style per platform guidelines (Apple button must be black/white)
+- [x] **LoginScreen layout update** — add OAuth buttons below email/password form with a divider ("or continue with"); style per platform guidelines (Apple button must be black/white)
 
 ### Benefits → Deductions Pipeline
 The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premiums and freeform `otherDeductions` into `config`, but **none of them are applied to take-home math**. Only `cfg.ltd` and `k401kEmployee` are deducted in `computeNet()` and `buildYear()`.

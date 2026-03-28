@@ -339,7 +339,7 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 
 ### Near-Term Product Sprint Backlog
 
-- [ ] **Goal card drag + cross-category preview** — support click-and-drag reordering for goals; while dragging between **Expenses** and **Lifestyle**, preview the destination with a live color-fade transition before drop
+- [x] **Goal card drag + cross-category preview** — support click-and-drag reordering for goals; while dragging between **Expenses** and **Lifestyle**, preview the destination with a live color-fade transition before drop
 - [ ] **Expense editor pay-cycle model** — inline expense editor should capture (1) amount and (2) pay cycle via dropdown (weekly, biweekly, every 30 days, yearly); compute per-paycheck set-aside from the selected cycle; apply auto-start math from the input/edit date forward only
 - [ ] **Goal timeline monthly/weekly scale refresh** — switch to a monthly notated bar with subtle four-week sub-divisions; render goal progress in weekly chunks so mid-month targets visually stop at the midpoint of that month
 - [ ] **Income Summary monthly cleanup** — remove all 401(k) card references from the monthly tab

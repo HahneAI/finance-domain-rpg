@@ -57,6 +57,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const [draggingGoalId, setDraggingGoalId] = useState(null);
   const [dragOverGoalId, setDragOverGoalId] = useState(null);
   const [dragPreviewCategory, setDragPreviewCategory] = useState(null);
+  const [draggingExpenseId, setDraggingExpenseId] = useState(null);
+  const [dragOverExpenseId, setDragOverExpenseId] = useState(null);
+  const [dragPreviewExpenseCategory, setDragPreviewExpenseCategory] = useState(null);
   // Resolve the current effective amount for an expense at the active phase
   const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
 
@@ -115,6 +118,42 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     setAddingExp(false); setNewExp({ label: "", category: "Needs", p1: "0", p2: "0", p3: "0", p4: "0", note: "" });
   };
   const deleteExp = (id) => { setExpenses(p => p.filter(e => e.id !== id)); setDelExpId(null); };
+  const reorderExpenseByDrag = (draggedId, overId, lane) => {
+    setExpenses(prev => {
+      const regular = prev.filter(e => e.type !== "loan");
+      const dragged = regular.find(e => e.id === draggedId);
+      if (!dragged) return prev;
+
+      const targetLane = lane ?? dragged.category;
+      const regularWithoutDragged = regular.filter(e => e.id !== draggedId);
+      const draggedNext = { ...dragged, category: targetLane };
+
+      let insertIndex = regularWithoutDragged.length;
+      if (overId) {
+        const overIndex = regularWithoutDragged.findIndex(e => e.id === overId);
+        if (overIndex !== -1) insertIndex = overIndex;
+      } else {
+        const laneLastIndex = regularWithoutDragged.reduce((lastIdx, exp, idx) =>
+          exp.category === targetLane ? idx : lastIdx, -1);
+        insertIndex = laneLastIndex + 1;
+      }
+
+      const reorderedRegular = [...regularWithoutDragged];
+      reorderedRegular.splice(insertIndex, 0, draggedNext);
+
+      let regularIdx = 0;
+      return prev.map(exp => exp.type === "loan" ? exp : reorderedRegular[regularIdx++]);
+    });
+  };
+  const onExpenseDragStart = (exp) => {
+    setDraggingExpenseId(exp.id);
+    setDragPreviewExpenseCategory(exp.category);
+  };
+  const onExpenseDragEnd = () => {
+    setDraggingExpenseId(null);
+    setDragOverExpenseId(null);
+    setDragPreviewExpenseCategory(null);
+  };
 
   // Loan helpers
   const startEditLoan = (exp) => {
@@ -287,13 +326,77 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         const loanItems = cat === "Needs" ? loans : [];
         const cTot = cExp.reduce((s, e) => s + currentEffective(e, ap), 0)
                    + loanItems.reduce((s, e) => s + currentEffective(e, ap), 0);
-        return <div key={cat} style={{ marginBottom: "24px" }}>
+        const isExpenseDropLane = cat === "Needs" || cat === "Lifestyle";
+        return <div
+          key={cat}
+          onDragOver={(e) => {
+            if (!isExpenseDropLane) return;
+            e.preventDefault();
+            setDragPreviewExpenseCategory(cat);
+            setDragOverExpenseId(null);
+          }}
+          onDrop={(e) => {
+            if (!isExpenseDropLane) return;
+            e.preventDefault();
+            if (!draggingExpenseId) return;
+            reorderExpenseByDrag(draggingExpenseId, null, cat);
+            onExpenseDragEnd();
+          }}
+          style={{
+            marginBottom: "24px",
+            padding: isExpenseDropLane ? "8px" : 0,
+            borderRadius: isExpenseDropLane ? "10px" : 0,
+            border: isExpenseDropLane
+              ? `1px solid ${dragPreviewExpenseCategory === cat ? `${CATEGORY_COLORS[cat]}77` : "#1f1f1f"}`
+              : "none",
+            background: isExpenseDropLane
+              ? (dragPreviewExpenseCategory === cat ? CATEGORY_BG[cat] : "transparent")
+              : "transparent",
+            transition: "background 220ms ease, border-color 220ms ease",
+          }}
+        >
           <SH color={CATEGORY_COLORS[cat]} right={f2(cTot) + "/wk"}>{cat}</SH>
           {cExp.map(exp => {
             const effAmt = currentEffective(exp, ap);
             const latestEntry = exp.history?.length ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b) : null;
-            return <div key={exp.id} style={{ background: CATEGORY_BG[cat], border: "1px solid #1e1e1e", borderRadius: "6px", padding: "10px 12px", marginBottom: "6px" }}>
-              {editId === exp.id ? <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            const isEditing = editId === exp.id;
+            const isDragging = draggingExpenseId === exp.id;
+            const isDropTarget = dragOverExpenseId === exp.id;
+            const previewCategory = dragPreviewExpenseCategory ?? exp.category;
+            const lanePreviewingMove = isDragging && previewCategory !== exp.category;
+            return <div
+              key={exp.id}
+              draggable={!isEditing && isExpenseDropLane}
+              onDragStart={() => onExpenseDragStart(exp)}
+              onDragEnd={onExpenseDragEnd}
+              onDragOver={(e) => {
+                if (!draggingExpenseId || !isExpenseDropLane) return;
+                e.preventDefault();
+                e.stopPropagation();
+                setDragOverExpenseId(exp.id);
+                setDragPreviewExpenseCategory(cat);
+              }}
+              onDrop={(e) => {
+                if (!isExpenseDropLane) return;
+                e.preventDefault();
+                e.stopPropagation();
+                if (!draggingExpenseId) return;
+                reorderExpenseByDrag(draggingExpenseId, exp.id, cat);
+                onExpenseDragEnd();
+              }}
+              style={{
+                background: lanePreviewingMove ? CATEGORY_BG[previewCategory] : CATEGORY_BG[cat],
+                border: `1px solid ${isDropTarget ? `${CATEGORY_COLORS[cat]}99` : "#1e1e1e"}`,
+                borderRadius: "6px",
+                padding: "10px 12px",
+                marginBottom: "6px",
+                opacity: isDragging ? 0.68 : 1,
+                cursor: isEditing ? "default" : (isExpenseDropLane ? "grab" : "default"),
+                transform: isDragging ? "scale(0.985)" : "scale(1)",
+                transition: "background 220ms ease, border-color 220ms ease, opacity 150ms ease, transform 150ms ease",
+              }}
+            >
+              {isEditing ? <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <span style={{ fontSize: "12px" }}>{exp.label}</span>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(80px,1fr))", gap: "6px" }}>
                   {["p1", "p2", "p3", "p4"].map((k, i) => <div key={k} style={{ textAlign: "center" }}><div style={{ fontSize: "9px", color: PHASES[i].color, marginBottom: "2px" }}>{PHASES[i].label}/wk</div><input type="number" value={editVals[k] ?? 0} onChange={e => setEditVals(v => ({ ...v, [k]: e.target.value }))} style={{ ...iS, width: "100%" }} /></div>)}

@@ -241,7 +241,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     if (!futureWeeks?.length) return [];
     const buckets = [];
     futureWeeks.forEach((week, weekOffset) => {
-      const d = new Date(week.weekEnd);
+      const rawWeekEnd = week?.weekEnd;
+      const d = rawWeekEnd instanceof Date ? rawWeekEnd : new Date(rawWeekEnd);
+      if (Number.isNaN(d.getTime())) return;
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const label = d.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
       const existing = buckets[buckets.length - 1];
@@ -251,6 +253,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         existing.end = weekOffset + 1;
       }
     });
+    if (!buckets.length) {
+      return [{ key: "fallback", label: "WEEKS", start: 0, end: Math.max(futureWeeks.length, 1) }];
+    }
     return buckets;
   }, [futureWeeks]);
 

@@ -107,6 +107,19 @@ export function HomePanel({
 
   return (
     <div style={{ paddingBottom: "8px" }}>
+      {goals.length === 0 && (
+        <div style={{
+          marginBottom: "14px",
+          padding: "12px 14px",
+          background: "rgba(201,168,76,0.08)",
+          border: "1px solid rgba(201,168,76,0.24)",
+          borderRadius: "10px",
+          fontSize: "12px",
+          color: "var(--color-text-secondary)",
+        }}>
+          No active goals yet. Add your first goal in Budget to unlock timeline forecasting.
+        </div>
+      )}
       {/* Section header */}
       <div style={{ marginBottom: "18px", textAlign: "center" }}>
         <div style={{

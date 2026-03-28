@@ -47,9 +47,9 @@
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  --sans: var(--font-sans);
+  --heading: var(--font-display);
+  --mono: var(--font-mono);
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
@@ -102,6 +102,26 @@ html, body {
   -webkit-overflow-scrolling: touch;
   /* DEBUG: removes the grey tap flash on iOS — purely cosmetic. */
   -webkit-tap-highlight-color: transparent;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+input,
+select,
+textarea {
+  font-family: var(--font-mono);
+}
+
+button {
+  font-family: var(--font-sans);
 }
 
 /* Safe area utility used by bottom nav and main content padding */
@@ -190,7 +210,16 @@ code {
 .data-table,
 .data-table td,
 .data-table th {
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 767px) {
+  button,
+  a[role="button"],
+  input[type="button"],
+  input[type="submit"] {
+    min-height: 44px;
+  }
 }
 
 /* ── Tile entrance: fade + 8px lift, 0.4s ease-out, fill-both so card is

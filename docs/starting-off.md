@@ -1,6 +1,8 @@
 # Finance Pillar — Claude Code Handoff
 ## (Pillar 1 of 4 | MVP Launch Requirement)
 
+**Total line limit rule: keep each file within a practical line cap; when the cap is reached, apply a rolling update process that summarizes and compacts older sections before adding new content.**
+
 ## What This Is (Plain Terms)
 
 A personal finance dashboard built for one person (Anthony, DHL/P&G warehouse worker, Jackson MO) tracking his entire 2026 financial picture. It calculates his exact take-home pay week by week based on his rotating shift schedule, tracks his budget across three spending phases, logs any income disruptions (missed shifts, PTO, bonuses), and projects how long it will take to hit each of his savings goals in priority order.

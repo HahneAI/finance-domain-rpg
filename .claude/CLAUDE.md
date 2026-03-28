@@ -1,5 +1,7 @@
 # CLAUDE.md - Life RPG Project Configuration
 
+**Total line limit rule: keep each file within a practical line cap; when the cap is reached, apply a rolling update process that summarizes and compacts older sections before adding new content.**
+
 ## App Pillars & Launch Plan
 
 The app is built around 4 life domains. Each pillar is a separate paid package unlocked via Stripe.

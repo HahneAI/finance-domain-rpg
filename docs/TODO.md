@@ -337,6 +337,25 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 - [ ] **Delete account** — destructive action with "type DELETE to confirm" gate; removes `user_data` row then calls `supabase.auth.admin.deleteUser()` (or a backend route); irreversible warning
 - [ ] **Sign out all devices** — `supabase.auth.signOut({ scope: 'global' })`; useful when a device is lost
 
+### Near-Term Product Sprint Backlog
+
+- [ ] **Goal card drag + cross-category preview** — support click-and-drag reordering for goals; while dragging between **Expenses** and **Lifestyle**, preview the destination with a live color-fade transition before drop
+- [ ] **Expense editor pay-cycle model** — inline expense editor should capture (1) amount and (2) pay cycle via dropdown (weekly, biweekly, every 30 days, yearly); compute per-paycheck set-aside from the selected cycle; apply auto-start math from the input/edit date forward only
+- [ ] **Goal timeline monthly/weekly scale refresh** — switch to a monthly notated bar with subtle four-week sub-divisions; render goal progress in weekly chunks so mid-month targets visually stop at the midpoint of that month
+- [ ] **Income Summary monthly cleanup** — remove all 401(k) card references from the monthly tab
+- [ ] **Income Summary weekly modal fix** — full-details modal is clipped top/bottom and currently traps users; fix vertical scrolling and exit behavior
+- [ ] **Rolling year progression system (weekly + goal timeline)** — for Income Summary (weekly) and Goals timeline:
+  - [ ] show only the current window plus the previous 4 weeks on-screen
+  - [ ] as older weeks/months roll off, keep data in storage but hide from view (do not delete)
+  - [ ] slightly scale visible timeline elements forward over time while preserving consistent proportions
+  - [ ] design persistence update if needed (parent/child timeline tables keyed to user id)
+- [ ] **Adjusted weekly take-home from events: fix + audit** — repair budget-tab UI math so adjusted take-home updates correctly; audit that the corrected value is consumed by goals timeline math
+- [ ] **Tax payback math integration** — incorporate missed-day event impact into extra tax payback projections (if days are missed, projected owed taxes should decrease appropriately)
+- [ ] **Year Summary net card behavior** — replace projected net display with adjusted net (post-event math); add info icon + modal that explains take-home loss from missed-event logs; remove separate adjusted take-home UI component
+- [ ] **Benefits tab recovery** — investigate and fix broken Benefits tab behavior
+- [ ] **Log tab simplification** — keep only `Net Loss`, `PTO Loss`, and `Bucket Hour Loss` cards
+- [ ] **Log tab data consolidation card** — merge all remaining pre-history log metrics into one large clean card (no heavy visual separators between data points); define and label these grouped data chunks consistently
+
 ---
 
 ## 9. Post-Auth Roadmap

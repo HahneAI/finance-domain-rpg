@@ -335,11 +335,18 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 - [ ] **Re-entry flow** — verify the Life Events re-entry path (lost job, changed jobs, commission) correctly diffs and re-runs only the affected steps
 
 ### Profile & Account Management
+> Audit run: 2026-03-28
+
 - [ ] **Profile screen** — new panel (or Settings tab) showing: display name, email, account created date, subscription status placeholder
+  - Audit: **Partially live** (Profile panel + Account view exist, email shown), but display name, account created date, and subscription placeholder are not implemented.
 - [ ] **Change email** — `supabase.auth.updateUser({ email: newEmail })`; confirmation email flow
+  - Audit: **Not live** (no change-email form/action found).
 - [ ] **Change password** — `supabase.auth.updateUser({ password: newPassword })`; current password confirmation before allowing change
+  - Audit: **Partially live** (`updateUser({ password })` exists), but current-password confirmation gate is not implemented.
 - [ ] **Delete account** — destructive action with "type DELETE to confirm" gate; removes `user_data` row then calls `supabase.auth.admin.deleteUser()` (or a backend route); irreversible warning
+  - Audit: **Not live** (no delete-account UI/flow found).
 - [ ] **Sign out all devices** — `supabase.auth.signOut({ scope: 'global' })`; useful when a device is lost
+  - Audit: **Not live** (standard sign-out exists; global scope sign-out not found).
 
 ### Near-Term Product Sprint Backlog
 

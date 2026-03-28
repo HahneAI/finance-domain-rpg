@@ -2,8 +2,18 @@ import { useState } from "react";
 import { Card, iS, lS, SmBtn } from "./ui.jsx";
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const fmtMonth = yyyyMM => { const [y, m] = yyyyMM.split("-").map(Number); return `${MONTH_SHORT[m - 1]} ${y}`; };
-const fmtDate  = iso => { const [, m, d] = iso.split("-").map(Number); return `${MONTH_SHORT[m - 1]} ${d}`; };
+const fmtMonth = yyyyMM => {
+  if (!yyyyMM || !yyyyMM.includes("-")) return "—";
+  const [y, m] = yyyyMM.split("-").map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return "—";
+  return `${MONTH_SHORT[m - 1]} ${y}`;
+};
+const fmtDate  = iso => {
+  if (!iso || !iso.includes("-")) return "—";
+  const [, m, d] = iso.split("-").map(Number);
+  if (!Number.isFinite(m) || !Number.isFinite(d) || m < 1 || m > 12 || d < 1 || d > 31) return "—";
+  return `${MONTH_SHORT[m - 1]} ${d}`;
+};
 
 const SH = ({ children }) => (
   <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "12px" }}>
@@ -24,9 +34,11 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
 
   // ── 401k computations ──────────────────────────────────────────────────────
   const bE = allWeeks.reduce((s, w) => s + w.k401kEmployee, 0);
-  const k401Active = currentWeek ? currentWeek.weekEnd >= new Date(config.k401StartDate) : false;
-  const weeksUntil401k = !k401Active && currentWeek
-    ? allWeeks.filter(w => w.active && w.weekEnd >= currentWeek.weekEnd && w.weekEnd < new Date(config.k401StartDate)).length
+  const k401Start = config.k401StartDate ? new Date(config.k401StartDate) : null;
+  const hasValid401Start = Boolean(k401Start && !Number.isNaN(k401Start.getTime()));
+  const k401Active = hasValid401Start && currentWeek ? currentWeek.weekEnd >= k401Start : false;
+  const weeksUntil401k = hasValid401Start && !k401Active && currentWeek
+    ? allWeeks.filter(w => w.active && w.weekEnd >= currentWeek.weekEnd && w.weekEnd < k401Start).length
     : null;
   const bM = allWeeks.reduce((s, w) => s + w.k401kEmployer, 0);
   const aE = Math.max(bE - logK401kLost + (logK401kGained ?? 0), 0);
@@ -36,7 +48,8 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
   // Accrual rate: 1 hour per 20 hours worked.
   // Cutoff date: ptoGoal.targetDate (when leave starts — app projects accrual up to that date).
   // Available = accrued hours (adj for lost PTO) + negative balance cap.
-  const ptoCutoff = ptoGoal ? new Date(ptoGoal.targetDate) : null;
+  const ptoCutoffRaw = ptoGoal?.targetDate ? new Date(ptoGoal.targetDate) : null;
+  const ptoCutoff = ptoCutoffRaw && !Number.isNaN(ptoCutoffRaw.getTime()) ? ptoCutoffRaw : null;
   const ptoBs     = ptoCutoff
     ? allWeeks.filter(w => w.active && w.weekEnd <= ptoCutoff).reduce((s, w) => s + w.totalHours, 0) / 20
     : 0;
@@ -59,6 +72,7 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
     setFormOpen(true);
   }
   function openEdit() {
+    if (!ptoGoal) return;
     setFormVals({
       label:              ptoGoal.label,
       hoursNeeded:        String(ptoGoal.hoursNeeded),
@@ -86,7 +100,9 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
     {/* ── 401k status banner ── */}
     {currentWeek && <div style={{ background: k401Active ? "#1a3a20" : "#1e1e2a", border: `1px solid ${k401Active ? "rgba(76,175,125,0.27)" : "#7a8bbf44"}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Status</div>
-      {k401Active
+      {!hasValid401Start
+        ? <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Enrollment start date not set yet</div>
+        : k401Active
         ? <div style={{ fontSize: "11px", color: "var(--color-green)", fontWeight: "bold" }}>Active — contributions running since {config.k401StartDate}</div>
         : <div style={{ fontSize: "11px", color: "#7a8bbf" }}><strong style={{ color: "var(--color-text-primary)" }}>{weeksUntil401k} week{weeksUntil401k !== 1 ? "s" : ""}</strong> until enrollment ({config.k401StartDate})</div>}
     </div>}

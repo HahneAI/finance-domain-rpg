@@ -13,3 +13,8 @@
 - Past log losses are intentionally smeared across remaining weeks, while current/future-week losses are applied to their exact `week.idx` via `futureEventDeductions`; this is the key split that controls where dips appear in the goal bar.
 - `wN` fallback for unfunded goals still uses an average-net approximation (`remaining / avgNet`) when no completion week is found, so partial-year visual extrapolation can diverge from true week-by-week surplus under volatile checks.
 - Current goal bar rendering in `BudgetPanel` is week-index based (`Wk {nowIdx}…Wk 52` with `% width = sW/wN over weeksLeft`), so the TODO “monthly notated bar with 4-week sub-divisions” will require a presentation-layer scale remap without breaking the existing weekly surplus engine.
+
+## 2026-03-28 — Goals timeline monthly/weekly refresh implemented
+- Replaced the single continuous goal fill bar with a month-notated track in `BudgetPanel`: timeline now builds month segments from `futureWeeks`, applies subtle 4-part visual subdivisions per month, and labels each month on the goal card.
+- Goal funding fill now renders as **discrete weekly chunks** (one chunk per funded/projection week between `sW` and `sW + wN`), preserving week-level surplus sequencing from `computeGoalTimeline()` while improving mid-month stop fidelity.
+- The update is visual-only for scale/readability: no changes were made to `computeGoalTimeline()` surplus math or goal funding order.

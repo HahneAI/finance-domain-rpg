@@ -237,6 +237,22 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   };
 
   const weeksLeft = futureWeeks?.length ?? 44;
+  const timelineMonthSegments = useMemo(() => {
+    if (!futureWeeks?.length) return [];
+    const buckets = [];
+    futureWeeks.forEach((week, weekOffset) => {
+      const d = new Date(week.weekEnd);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
+      const existing = buckets[buckets.length - 1];
+      if (!existing || existing.key !== key) {
+        buckets.push({ key, label, start: weekOffset, end: weekOffset + 1 });
+      } else {
+        existing.end = weekOffset + 1;
+      }
+    });
+    return buckets;
+  }, [futureWeeks]);
 
   // Goal timeline — computed at component level so useEffect can read it
   const tl = useMemo(
@@ -576,8 +592,76 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                 </div>
               </div>
-              {/* TODO: tune — progress bar fill transition duration (0.4s) and easing (ease-out) */}
-              <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "4px" }}><div style={{ position: "relative", left: celebrating ? 0 : `${Math.min((g.sW / weeksLeft) * 100, 100)}%`, width: celebrating ? "100%" : `${Math.min((g.wN / weeksLeft) * 100, 100 - (g.sW / weeksLeft) * 100)}%`, height: "100%", background: celebrating ? "var(--color-green)" : g.color, borderRadius: "3px", opacity: celebrating ? 1 : (ok ? 1 : 0.4), transition: "all 0.4s ease-out" }} /></div>
+              {/* TODO: tune — monthly timeline subdivision opacity/width (currently subtle for low visual noise) */}
+              {(() => {
+                const nWeeks = Math.max(weeksLeft, 1);
+                const rawStart = Number.isFinite(g.sW) ? g.sW : 0;
+                const rawSpan = Number.isFinite(g.wN) ? g.wN : 0;
+                const startWeek = Math.max(0, Math.floor(rawStart));
+                const endWeek = Math.max(startWeek, Math.min(nWeeks, Math.ceil(rawStart + rawSpan)));
+                const weeklyChunks = [];
+                for (let wk = startWeek; wk < endWeek; wk++) weeklyChunks.push(wk);
+                return <div style={{ marginBottom: "8px" }}>
+                  <div style={{
+                    height: "16px",
+                    borderRadius: "6px",
+                    border: "1px solid #232323",
+                    background: "#111",
+                    position: "relative",
+                    overflow: "hidden",
+                    marginBottom: "6px"
+                  }}>
+                    {/* Month overlays + four-week subdivisions */}
+                    {timelineMonthSegments.map(seg => {
+                      const left = (seg.start / nWeeks) * 100;
+                      const width = ((seg.end - seg.start) / nWeeks) * 100;
+                      return <div key={seg.key} style={{
+                        position: "absolute",
+                        top: 0,
+                        left: `${left}%`,
+                        width: `${width}%`,
+                        height: "100%",
+                        borderLeft: "1px solid #242424",
+                        backgroundImage: "repeating-linear-gradient(to right, transparent 0%, transparent 24%, rgba(255,255,255,0.07) 25%, transparent 26%)",
+                        opacity: 0.45,
+                        pointerEvents: "none"
+                      }} />;
+                    })}
+                    {/* Weekly chunk funding fill */}
+                    {weeklyChunks.map(wk => (
+                      <div key={wk} style={{
+                        position: "absolute",
+                        top: "2px",
+                        left: `${(wk / nWeeks) * 100}%`,
+                        width: `${Math.max((1 / nWeeks) * 100 - 0.12, 0.18)}%`,
+                        height: "calc(100% - 4px)",
+                        borderRadius: "2px",
+                        background: celebrating ? "var(--color-green)" : g.color,
+                        opacity: celebrating ? 1 : (ok ? 0.95 : 0.55),
+                        boxShadow: celebrating ? "0 0 10px rgba(76,175,125,0.55)" : "none",
+                        transition: "background 0.35s ease-out, opacity 0.35s ease-out"
+                      }} />
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 8px", flex: 1 }}>
+                      {timelineMonthSegments.map(seg => (
+                        <span key={`${seg.key}-label`} style={{
+                          fontSize: "8px",
+                          letterSpacing: "1.5px",
+                          color: "#5f5f5f",
+                          textTransform: "uppercase"
+                        }}>
+                          {seg.label}
+                        </span>
+                      ))}
+                    </div>
+                    <span style={{ fontSize: "8px", letterSpacing: "1.5px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
+                      weekly chunks
+                    </span>
+                  </div>
+                </div>;
+              })()}
               {celebrating && <>
                 {/* TODO: tune — particle burst container; adjust top/left to reposition burst origin */}
                 <div style={{ position: "absolute", top: "50%", left: "50%", pointerEvents: "none", zIndex: 10 }}>

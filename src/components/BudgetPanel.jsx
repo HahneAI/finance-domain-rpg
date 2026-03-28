@@ -90,6 +90,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const expenseTouchDraggingRef = useRef(false);
   const expenseTouchHoverLaneRef = useRef(null);
   const expenseTouchHoverIdRef = useRef(null);
+  const expenseTouchHoldTimerRef = useRef(null);
+  const expenseTouchHoldMetaRef = useRef(null);
+  const [pendingExpenseTouchId, setPendingExpenseTouchId] = useState(null);
+  const EXPENSE_TOUCH_HOLD_MS = 2000;
+  const TOUCH_SCROLL_CANCEL_PX = 12;
   // Resolve the current effective amount for an expense at the active phase
   const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
 
@@ -193,6 +198,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     });
   };
   const onExpenseDragStart = (exp) => {
+    if (expenseTouchHoldTimerRef.current) {
+      clearTimeout(expenseTouchHoldTimerRef.current);
+      expenseTouchHoldTimerRef.current = null;
+    }
+    expenseTouchHoldMetaRef.current = null;
+    setPendingExpenseTouchId(null);
     setDraggingExpenseId(exp.id);
     setDragPreviewExpenseCategory(exp.category);
   };
@@ -205,6 +216,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     setDragPreviewExpenseCategory(origin);
   };
   const onExpenseDragEnd = () => {
+    if (expenseTouchHoldTimerRef.current) {
+      clearTimeout(expenseTouchHoldTimerRef.current);
+      expenseTouchHoldTimerRef.current = null;
+    }
+    expenseTouchHoldMetaRef.current = null;
+    setPendingExpenseTouchId(null);
     expenseTouchDraggingRef.current = false;
     expenseTouchHoverLaneRef.current = null;
     expenseTouchHoverIdRef.current = null;
@@ -212,13 +229,42 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     setDragOverExpenseId(null);
     setDragPreviewExpenseCategory(null);
   };
-  const onExpenseTouchStart = (exp) => {
-    expenseTouchDraggingRef.current = true;
-    expenseTouchHoverLaneRef.current = exp.category;
-    expenseTouchHoverIdRef.current = null;
-    onExpenseDragStart(exp);
+  const onExpenseTouchStart = (e, exp) => {
+    if (!e.target?.closest?.("[data-expense-drag-handle]")) return;
+    if (expenseTouchHoldTimerRef.current) clearTimeout(expenseTouchHoldTimerRef.current);
+    const point = e.touches?.[0];
+    if (!point) return;
+    expenseTouchHoldMetaRef.current = { x: point.clientX, y: point.clientY, expenseId: exp.id, category: exp.category };
+    setPendingExpenseTouchId(exp.id);
+    expenseTouchHoldTimerRef.current = setTimeout(() => {
+      expenseTouchHoldTimerRef.current = null;
+      const meta = expenseTouchHoldMetaRef.current;
+      if (!meta || meta.expenseId !== exp.id) return;
+      expenseTouchDraggingRef.current = true;
+      expenseTouchHoverLaneRef.current = meta.category;
+      expenseTouchHoverIdRef.current = null;
+      setPendingExpenseTouchId(null);
+      onExpenseDragStart(exp);
+    }, EXPENSE_TOUCH_HOLD_MS);
   };
   const onExpenseTouchMove = (e) => {
+    if (!expenseTouchDraggingRef.current) {
+      const point = e.touches?.[0];
+      const meta = expenseTouchHoldMetaRef.current;
+      if (point && meta) {
+        const movedX = Math.abs(point.clientX - meta.x);
+        const movedY = Math.abs(point.clientY - meta.y);
+        if (movedX > TOUCH_SCROLL_CANCEL_PX || movedY > TOUCH_SCROLL_CANCEL_PX) {
+          if (expenseTouchHoldTimerRef.current) {
+            clearTimeout(expenseTouchHoldTimerRef.current);
+            expenseTouchHoldTimerRef.current = null;
+          }
+          expenseTouchHoldMetaRef.current = null;
+          setPendingExpenseTouchId(null);
+        }
+      }
+      return;
+    }
     if (!expenseTouchDraggingRef.current) return;
     const point = e.touches?.[0];
     if (!point) return;
@@ -245,6 +291,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     }
   };
   const onExpenseTouchEnd = () => {
+    if (expenseTouchHoldTimerRef.current) {
+      clearTimeout(expenseTouchHoldTimerRef.current);
+      expenseTouchHoldTimerRef.current = null;
+    }
     if (!expenseTouchDraggingRef.current || !draggingExpenseId) {
       onExpenseDragEnd();
       return;
@@ -449,7 +499,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         const isExpenseDropLane = cat === "Needs" || cat === "Lifestyle";
         return <div
           key={cat}
+          draggable={false}
           data-expense-lane={isExpenseDropLane ? cat : undefined}
+          onDragStart={(e) => e.preventDefault()}
           onDragOver={(e) => {
             if (!isExpenseDropLane) return;
             e.preventDefault();
@@ -474,10 +526,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             padding: isExpenseDropLane ? "8px" : 0,
             borderRadius: isExpenseDropLane ? "10px" : 0,
             border: isExpenseDropLane
-              ? `1px solid ${dragPreviewExpenseCategory === cat ? `${CATEGORY_COLORS[cat]}77` : "#1f1f1f"}`
+              ? `1px solid ${dragPreviewExpenseCategory === cat ? `${CATEGORY_COLORS[cat]}44` : "#1f1f1f"}`
               : "none",
             background: isExpenseDropLane
-              ? (dragPreviewExpenseCategory === cat ? CATEGORY_BG[cat] : "transparent")
+              ? (dragPreviewExpenseCategory === cat ? "rgba(20,20,20,0.35)" : "transparent")
               : "transparent",
             transition: "background 220ms ease, border-color 220ms ease",
           }}
@@ -498,8 +550,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               draggable={!isEditing && isExpenseDropLane}
               onDragStart={() => onExpenseDragStart(exp)}
               onDragEnd={onExpenseDragEnd}
-              onTouchStart={() => {
-                if (!isEditing && isExpenseDropLane) onExpenseTouchStart(exp);
+              onTouchStart={(e) => {
+                if (!isEditing && isExpenseDropLane) onExpenseTouchStart(e, exp);
               }}
               onTouchMove={onExpenseTouchMove}
               onTouchEnd={onExpenseTouchEnd}
@@ -532,12 +584,14 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 borderRadius: "6px",
                 padding: "10px 12px",
                 marginBottom: "6px",
-                opacity: isDragging ? 0.68 : 1,
-                cursor: isEditing ? "default" : (isExpenseDropLane ? "grab" : "default"),
-                transform: isDragging ? "scale(0.985)" : "scale(1)",
-                boxShadow: lanePreviewingMove ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}44 inset` : "none",
+                opacity: isDragging ? 0.92 : 1,
+                cursor: isEditing ? "default" : (isExpenseDropLane ? (isDragging ? "grabbing" : "grab") : "default"),
+                transform: isDragging ? "scale(1.015) rotate(-1deg)" : "scale(1)",
+                boxShadow: isDragging
+                  ? `0 10px 20px rgba(0,0,0,0.35), 0 0 0 1px ${CATEGORY_COLORS[previewCategory]}66`
+                  : lanePreviewingMove ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}44 inset` : "none",
                 transition: "background 220ms ease, border-color 220ms ease, box-shadow 220ms ease, opacity 150ms ease, transform 150ms ease",
-                touchAction: isExpenseDropLane ? "none" : "auto",
+                touchAction: isExpenseDropLane ? "pan-y" : "auto",
               }}
             >
               {isEditing ? <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -561,9 +615,33 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   <button onClick={() => saveEditExp(exp.id)} style={{ background: "var(--color-green)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", flex: 1 }}>SAVE</button>
                   <button onClick={() => setEditId(null)} style={{ background: "var(--color-border-subtle)", color: "var(--color-text-secondary)", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", }}>✕</button>
                 </div>
-              </div> : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              </div> : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
+                <button
+                  type="button"
+                  data-expense-drag-handle
+                  aria-label={`Hold to drag ${exp.label}`}
+                  style={{
+                    background: pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}22` : "transparent",
+                    color: pendingExpenseTouchId === exp.id ? CATEGORY_COLORS[cat] : "#666",
+                    border: `1px solid ${pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}66` : "#2a2a2a"}`,
+                    borderRadius: "8px",
+                    width: "26px",
+                    height: "26px",
+                    minWidth: "26px",
+                    padding: 0,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "11px",
+                    cursor: isEditing ? "default" : "grab",
+                    touchAction: "none",
+                  }}
+                >
+                  ⋮⋮
+                </button>
                 <div><div style={{ fontSize: "13px" }}>{exp.label}</div>{exp.note[ap] && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{exp.note[ap]}</div>}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  {pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
                     <div style={{ fontSize: "10px", color: "#777" }}>{f(effAmt * 52 / 12)}/mo</div>
@@ -735,6 +813,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
         {Object.entries(goalsByLane).map(([lane, laneGoals]) => <div
           key={lane}
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
           onDragOver={(e) => {
             e.preventDefault();
             setDragPreviewCategory(lane);

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
 import { Card, VT, SmBtn, SH, iS, lS } from "./ui.jsx";
@@ -60,6 +60,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const [draggingExpenseId, setDraggingExpenseId] = useState(null);
   const [dragOverExpenseId, setDragOverExpenseId] = useState(null);
   const [dragPreviewExpenseCategory, setDragPreviewExpenseCategory] = useState(null);
+  const expenseTouchDraggingRef = useRef(false);
+  const expenseTouchHoverLaneRef = useRef(null);
+  const expenseTouchHoverIdRef = useRef(null);
   // Resolve the current effective amount for an expense at the active phase
   const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
 
@@ -150,9 +153,50 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     setDragPreviewExpenseCategory(exp.category);
   };
   const onExpenseDragEnd = () => {
+    expenseTouchDraggingRef.current = false;
+    expenseTouchHoverLaneRef.current = null;
+    expenseTouchHoverIdRef.current = null;
     setDraggingExpenseId(null);
     setDragOverExpenseId(null);
     setDragPreviewExpenseCategory(null);
+  };
+  const onExpenseTouchStart = (exp) => {
+    expenseTouchDraggingRef.current = true;
+    expenseTouchHoverLaneRef.current = exp.category;
+    expenseTouchHoverIdRef.current = null;
+    onExpenseDragStart(exp);
+  };
+  const onExpenseTouchMove = (e) => {
+    if (!expenseTouchDraggingRef.current) return;
+    const point = e.touches?.[0];
+    if (!point) return;
+    e.preventDefault();
+    const hovered = document.elementFromPoint(point.clientX, point.clientY);
+    const laneEl = hovered?.closest?.("[data-expense-lane]");
+    const lane = laneEl?.getAttribute("data-expense-lane");
+    if (lane === "Needs" || lane === "Lifestyle") {
+      expenseTouchHoverLaneRef.current = lane;
+      setDragPreviewExpenseCategory(lane);
+    }
+
+    const overCardEl = hovered?.closest?.("[data-expense-id]");
+    const overId = overCardEl?.getAttribute("data-expense-id") ?? null;
+    if (overId && overId !== draggingExpenseId) {
+      expenseTouchHoverIdRef.current = overId;
+      setDragOverExpenseId(overId);
+    } else {
+      expenseTouchHoverIdRef.current = null;
+      setDragOverExpenseId(null);
+    }
+  };
+  const onExpenseTouchEnd = () => {
+    if (!expenseTouchDraggingRef.current || !draggingExpenseId) {
+      onExpenseDragEnd();
+      return;
+    }
+    const lane = expenseTouchHoverLaneRef.current ?? dragPreviewExpenseCategory;
+    reorderExpenseByDrag(draggingExpenseId, expenseTouchHoverIdRef.current, lane);
+    onExpenseDragEnd();
   };
 
   // Loan helpers
@@ -329,6 +373,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         const isExpenseDropLane = cat === "Needs" || cat === "Lifestyle";
         return <div
           key={cat}
+          data-expense-lane={isExpenseDropLane ? cat : undefined}
           onDragOver={(e) => {
             if (!isExpenseDropLane) return;
             e.preventDefault();
@@ -366,9 +411,16 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             const lanePreviewingMove = isDragging && previewCategory !== exp.category;
             return <div
               key={exp.id}
+              data-expense-id={exp.id}
               draggable={!isEditing && isExpenseDropLane}
               onDragStart={() => onExpenseDragStart(exp)}
               onDragEnd={onExpenseDragEnd}
+              onTouchStart={() => {
+                if (!isEditing && isExpenseDropLane) onExpenseTouchStart(exp);
+              }}
+              onTouchMove={onExpenseTouchMove}
+              onTouchEnd={onExpenseTouchEnd}
+              onTouchCancel={onExpenseDragEnd}
               onDragOver={(e) => {
                 if (!draggingExpenseId || !isExpenseDropLane) return;
                 e.preventDefault();
@@ -394,6 +446,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 cursor: isEditing ? "default" : (isExpenseDropLane ? "grab" : "default"),
                 transform: isDragging ? "scale(0.985)" : "scale(1)",
                 transition: "background 220ms ease, border-color 220ms ease, opacity 150ms ease, transform 150ms ease",
+                touchAction: isExpenseDropLane ? "none" : "auto",
               }}
             >
               {isEditing ? <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

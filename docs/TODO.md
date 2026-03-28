@@ -317,9 +317,13 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premiums and freeform `otherDeductions` into `config`, but **none of them are applied to take-home math**. Only `cfg.ltd` and `k401kEmployee` are deducted in `computeNet()` and `buildYear()`.
 
 - [ ] **Wire benefit premiums into `buildYear()` taxable gross** — `healthPremium`, `dentalPremium`, `visionPremium`, `stdWeekly`, `lifePremium` are pre-tax deductions; reduce taxable gross before fed/state/FICA are applied (same position as `cfg.ltd` today)
+  - Audit (2026-03-28): issue found — `taxableGross` currently subtracts only `cfg.ltd` + `k401kEmployee`.
 - [ ] **Wire HSA and FSA into `buildYear()` taxable gross** — both are pre-tax; add to the pre-tax deduction pool alongside insurance premiums
+  - Audit (2026-03-28): issue found — `hsaWeekly` and `fsaWeekly` are configured but not used in pay math.
 - [ ] **Wire `otherDeductions` array into `computeNet()`** — sum `otherDeductions[].weeklyAmount` and subtract post-tax (after FICA/fed/state, since arbitrary deductions may not be pre-tax); or allow a `preTax` flag per entry
+  - Audit (2026-03-28): issue found — `computeNet()` currently deducts only LTD + employee 401(k).
 - [ ] **Respect `benefitsStartDate`** — deductions should only apply to weeks on or after `config.benefitsStartDate`; weeks before that date skip all benefit/HSA/FSA deductions (same pattern as `k401StartDate` gate on 401k)
+  - Audit (2026-03-28): issue found — no `benefitsStartDate` gate is applied in `buildYear()`.
 - [ ] **Update wizard preview (Step 7 — Paycheck Buffer)** — the live net-per-check breakdown already shows a "Benefits" subtotal; verify it matches `buildYear()` after the fix and that the buffer step stays in sync
 - [ ] **Income config view** — add benefit premium fields to the Income → Config read-only display and edit form (same treatment as `ltd` today)
 

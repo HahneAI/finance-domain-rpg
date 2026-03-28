@@ -241,16 +241,6 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone }) {
 
   return (
     <Shell title={isSignUp ? "Create account" : "Sign in"}>
-
-      {/* OAuth */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
-        <OAuthBtn provider="google" label="Continue with Google" icon={GoogleIcon} onClick={() => handleOAuth("google")} />
-        {/* Apple Sign In — requires Apple Developer account ($99/yr); re-enable when ready:
-        <OAuthBtn provider="apple" label="Continue with Apple" icon={AppleIcon} onClick={() => handleOAuth("apple")} /> */}
-      </div>
-
-      <Divider label="or" />
-
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "4px" }}>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -274,6 +264,17 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone }) {
 
         <SubmitBtn loading={loading}>{loading ? "..." : isSignUp ? "Create account" : "Sign in"}</SubmitBtn>
       </form>
+
+      <div style={{ marginTop: "20px" }}>
+        <Divider label="or continue with" />
+      </div>
+
+      {/* OAuth */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "14px" }}>
+        <OAuthBtn provider="google" label="Continue with Google" icon={GoogleIcon} onClick={() => handleOAuth("google")} />
+        {/* Apple Sign In — requires Apple Developer account ($99/yr); re-enable when ready:
+        <OAuthBtn provider="apple" label="Continue with Apple" icon={AppleIcon} onClick={() => handleOAuth("apple")} /> */}
+      </div>
 
       {/* Mode toggle */}
       <div style={{ marginTop: "20px", textAlign: "center", fontSize: "11px", color: "var(--color-text-secondary)" }}>

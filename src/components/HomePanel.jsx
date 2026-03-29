@@ -27,6 +27,7 @@ export function HomePanel({
   const annualSavings = adjustedWeeklyAvg * 52;
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
   const nextWeekNet = futureWeekNets?.[0];
+  const flowScore = Math.min(100, Math.round(Math.max(0, (1 - spendRatio) * 55 + (adjustedWeeklyAvg > 0 ? 25 : 10) + (goals.length ? (goals.filter(g => g.completed).length / goals.length) * 20 : 0))));
 
   const completedGoals = goals.filter(g => g.completed);
   const totalGoalTarget = goals.reduce((s, g) => s + g.target, 0);
@@ -131,8 +132,17 @@ export function HomePanel({
         }}>
           Financial Health
         </div>
-        <div style={{ fontSize: "11px", color: "#555", letterSpacing: "1px" }}>
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", lineHeight: 1.6 }}>
           {subtitle}
+        </div>
+        <div style={{ marginTop: "12px", maxWidth: "260px", marginInline: "auto", textAlign: "left" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px", fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-soft)" }}>
+            <span>Flow Score</span>
+            <span>{flowScore}</span>
+          </div>
+          <div style={{ height: "6px", background: "rgba(127,163,154,0.2)", borderRadius: "999px", overflow: "hidden" }}>
+            <div style={{ width: `${flowScore}%`, height: "100%", background: "linear-gradient(90deg, var(--color-accent-primary), var(--color-accent-soft))", borderRadius: "999px", transition: "width 0.45s ease-in-out" }} />
+          </div>
         </div>
       </div>
 

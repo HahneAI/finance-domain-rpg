@@ -58,9 +58,9 @@ export function VT({ label, active, onClick }) { return <button onClick={onClick
 // ─────────────────────────────────────────────────────────────
 
 const METRIC_STATUS = {
-  green: { bg: "rgba(76,175,125,0.10)", border: "rgba(76,175,125,0.22)", val: "var(--color-green)" },
-  gold:  { bg: "rgba(201,168,76,0.10)", border: "rgba(201,168,76,0.22)", val: "var(--color-gold)" },
-  red:   { bg: "rgba(224,92,92,0.10)",  border: "rgba(224,92,92,0.22)",  val: "var(--color-red)" },
+  green: { bg: "linear-gradient(170deg, rgba(0,200,150,0.16), rgba(7,19,15,0.65))", border: "rgba(0,200,150,0.28)", val: "var(--color-accent-soft)" },
+  gold:  { bg: "linear-gradient(170deg, rgba(0,200,150,0.12), rgba(7,19,15,0.60))", border: "rgba(0,200,150,0.24)", val: "var(--color-accent-primary)" },
+  red:   { bg: "linear-gradient(170deg, rgba(239,68,68,0.16), rgba(29,10,10,0.65))",  border: "rgba(239,68,68,0.3)",  val: "var(--color-red)" },
 };
 
 // fmt$ used by MetricCard to display counted dollar values
@@ -117,12 +117,13 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
     padding: isButton ? "16px 18px" : "18px 16px",
     textAlign: "left",
     color: "inherit",
+    boxShadow: "0 8px 26px rgba(0,0,0,0.32)",
     minWidth: 0,
     ...entranceStyle,
     ...(isButton && {
       cursor: "pointer",
       transform: pressed ? "scale(0.97)" : "scale(1)",
-      transition: "transform 80ms ease",
+      transition: "transform 120ms ease, box-shadow 160ms ease",
       minHeight: "88px",
       display: "flex",
       flexDirection: "column",

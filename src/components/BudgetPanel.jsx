@@ -103,9 +103,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const expenseTouchHoverIdRef = useRef(null);
   const expenseTouchHoldTimerRef = useRef(null);
   const expenseTouchHoldMetaRef = useRef(null);
+  const expenseTouchAutoScrollRef = useRef({ rafId: null, direction: 0, speed: 0 });
   const [pendingExpenseTouchId, setPendingExpenseTouchId] = useState(null);
-  const EXPENSE_TOUCH_HOLD_MS = 2000;
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+  const EXPENSE_TOUCH_HOLD_MS = 450;
   const TOUCH_SCROLL_CANCEL_PX = 12;
+  const TOUCH_EDGE_AUTOSCROLL_ZONE_PX = 92;
+  const TOUCH_MAX_AUTOSCROLL_SPEED_PX = 18;
   // Resolve the current effective amount for an expense at the active phase
   const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
 
@@ -204,6 +208,37 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   };
   const deleteExp = (id) => { setExpenses(p => p.filter(e => e.id !== id)); setDelExpId(null); };
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(pointer: coarse)");
+    const sync = () => setIsCoarsePointer(mq.matches);
+    sync();
+    mq.addEventListener?.("change", sync);
+    return () => mq.removeEventListener?.("change", sync);
+  }, []);
+  useEffect(() => () => {
+    if (expenseTouchAutoScrollRef.current.rafId) cancelAnimationFrame(expenseTouchAutoScrollRef.current.rafId);
+  }, []);
+  const stopTouchAutoScroll = () => {
+    if (expenseTouchAutoScrollRef.current.rafId) cancelAnimationFrame(expenseTouchAutoScrollRef.current.rafId);
+    expenseTouchAutoScrollRef.current = { rafId: null, direction: 0, speed: 0 };
+  };
+  const runTouchAutoScroll = () => {
+    const { direction, speed } = expenseTouchAutoScrollRef.current;
+    if (!direction || speed <= 0) {
+      stopTouchAutoScroll();
+      return;
+    }
+    window.scrollBy(0, direction * speed);
+    expenseTouchAutoScrollRef.current.rafId = requestAnimationFrame(runTouchAutoScroll);
+  };
+  const startTouchAutoScroll = (direction, speed) => {
+    expenseTouchAutoScrollRef.current.direction = direction;
+    expenseTouchAutoScrollRef.current.speed = speed;
+    if (!expenseTouchAutoScrollRef.current.rafId) {
+      expenseTouchAutoScrollRef.current.rafId = requestAnimationFrame(runTouchAutoScroll);
+    }
+  };
   const reorderExpenseByDrag = (draggedId, overId, lane) => {
     setExpenses(prev => {
       const regular = prev.filter(e => e.type !== "loan");
@@ -259,6 +294,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     expenseTouchDraggingRef.current = false;
     expenseTouchHoverLaneRef.current = null;
     expenseTouchHoverIdRef.current = null;
+    stopTouchAutoScroll();
     setDraggingExpenseId(null);
     setDragOverExpenseId(null);
     setDragPreviewExpenseCategory(null);
@@ -304,6 +340,17 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     const point = e.touches?.[0];
     if (!point) return;
     e.preventDefault();
+    const edgeTop = TOUCH_EDGE_AUTOSCROLL_ZONE_PX;
+    const edgeBottom = window.innerHeight - TOUCH_EDGE_AUTOSCROLL_ZONE_PX;
+    if (point.clientY < edgeTop) {
+      const ratio = 1 - (point.clientY / edgeTop);
+      startTouchAutoScroll(-1, Math.max(4, Math.round(TOUCH_MAX_AUTOSCROLL_SPEED_PX * ratio)));
+    } else if (point.clientY > edgeBottom) {
+      const ratio = (point.clientY - edgeBottom) / TOUCH_EDGE_AUTOSCROLL_ZONE_PX;
+      startTouchAutoScroll(1, Math.max(4, Math.round(TOUCH_MAX_AUTOSCROLL_SPEED_PX * ratio)));
+    } else {
+      stopTouchAutoScroll();
+    }
     const hovered = document.elementFromPoint(point.clientX, point.clientY);
     const laneEl = hovered?.closest?.("[data-expense-lane]");
     const lane = laneEl?.getAttribute("data-expense-lane");
@@ -610,7 +657,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             return <div
               key={exp.id}
               data-expense-id={exp.id}
-              draggable={!isEditing && isExpenseDropLane}
+              draggable={!isEditing && isExpenseDropLane && !isCoarsePointer}
               onDragStart={() => onExpenseDragStart(exp)}
               onDragEnd={onExpenseDragEnd}
               onTouchStart={(e) => {
@@ -655,6 +702,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   : lanePreviewingMove ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}44 inset` : "none",
                 transition: "background 220ms ease, border-color 220ms ease, box-shadow 220ms ease, opacity 150ms ease, transform 150ms ease",
                 touchAction: isExpenseDropLane ? "pan-y" : "auto",
+                userSelect: isExpenseDropLane ? "none" : "auto",
+                WebkitUserSelect: isExpenseDropLane ? "none" : "auto",
               }}
             >
               {isEditing ? <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -683,6 +732,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   type="button"
                   data-expense-drag-handle
                   aria-label={`Hold to drag ${exp.label}`}
+                  onContextMenu={(e) => e.preventDefault()}
                   style={{
                     background: pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}22` : "transparent",
                     color: pendingExpenseTouchId === exp.id ? CATEGORY_COLORS[cat] : "#666",

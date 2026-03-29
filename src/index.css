@@ -1,49 +1,48 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── Backgrounds ── */
-  --color-bg-base:    #0a0a0a;
-  --color-bg-surface: #111814;
-  --color-bg-raised:  #1a2118;
+  --color-bg-primary: #0B0B0F;
+  --color-bg-secondary: #12121A;
+  --color-bg-tertiary: #171723;
 
-  /* ── Gold ── */
-  --color-gold:        #c9a84c;
-  --color-gold-muted:  #8a6e2f;
-  --color-gold-bright: #f0c040;
+  --color-accent-primary: #6E5BFF;
+  --color-accent-soft: #8B7CFF;
 
-  /* ── Green ── */
-  --color-green:       #4caf7d;
-  --color-green-muted: #2d6b4a;
+  --color-success: #22C55E;
+  --color-danger: #EF4444;
+  --color-warning: #F59E0B;
 
-  /* ── Red ── */
-  --color-red:         #e05c5c;
-  --color-red-muted:   #7a2d2d;
+  --color-text-primary: #F7F7F5;
+  --color-text-secondary: #A1A1AA;
+  --color-text-disabled: #656577;
 
-  /* ── Text ── */
-  --color-text-primary:   #f0ede6;
-  --color-text-secondary: #8a9080;
-  --color-text-disabled:  #444c40;
+  --color-border-subtle: #262635;
+  --color-border-strong: #33334A;
 
-  /* ── Borders ── */
-  --color-border-subtle: #1e2b1e;
-  --color-border-accent: rgba(201,168,76,0.2);
+  --font-display: 'Inter Tight', 'SF Pro Display', 'Inter', system-ui, sans-serif;
+  --font-sans: 'Inter', 'SF Pro Text', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Courier New', monospace;
 
-  /* ── Fonts ── */
-  --font-display: 'DM Serif Display', Georgia, serif;
-  --font-sans:    'DM Sans', system-ui, sans-serif;
-  --font-mono:    'JetBrains Mono', 'Courier New', monospace;
+  --color-bg-base: var(--color-bg-primary);
+  --color-bg-surface: var(--color-bg-secondary);
+  --color-bg-raised: var(--color-bg-tertiary);
+  --color-gold: var(--color-accent-primary);
+  --color-gold-muted: #56508f;
+  --color-gold-bright: var(--color-accent-soft);
+  --color-green: var(--color-success);
+  --color-red: var(--color-danger);
 }
 
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
+  --text: #A1A1AA;
+  --text-h: #F7F7F5;
+  --bg: #0B0B0F;
+  --border: #262635;
+  --code-bg: #171723;
+  --accent: #6E5BFF;
+  --accent-bg: rgba(110, 91, 255, 0.14);
+  --accent-border: rgba(110, 91, 255, 0.48);
+  --social-bg: rgba(139, 124, 255, 0.14);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
@@ -53,7 +52,7 @@
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
-  color-scheme: light dark;
+  color-scheme: dark;
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -66,31 +65,11 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
 html, body {
   margin: 0;
-  background: #0d0d0d;
-  font-family: 'DM Sans', system-ui, sans-serif;
-  color: #f0ede6;
+  background: var(--color-bg-primary);
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
   /* DEBUG: overflow-x hidden is the primary iOS horizontal scroll kill-switch.
      If horizontal scroll returns, check this is NOT being overridden by a child
      element using position:fixed or transform — those create new stacking contexts
@@ -149,7 +128,7 @@ button {
   margin: 0;
   text-align: left;
   border: none;
-  background: #0d0d0d;
+  background: radial-gradient(circle at top, #141426 0%, var(--color-bg-primary) 45%);
   min-height: 100svh;
   display: block;
   box-sizing: border-box;

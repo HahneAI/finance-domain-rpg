@@ -31,6 +31,7 @@ export function HomePanel({
   const completedGoals = goals.filter(g => g.completed);
   const totalGoalTarget = goals.reduce((s, g) => s + g.target, 0);
   const completedGoalValue = completedGoals.reduce((s, g) => s + g.target, 0);
+  const momentumProgress = goals.length > 0 ? completedGoals.length / goals.length : 0;
 
   // Subtitle: "Another beautiful day, {Weekday} the {Nth}. You are working on your {goal} goal"
   const topGoal = goals.find(g => !g.completed)?.label?.toLowerCase() ?? "financial";
@@ -68,12 +69,13 @@ export function HomePanel({
       key: "income",
     },
     {
-      title: "Goals",
+      title: "Momentum",
       value: `${completedGoals.length}/${goals.length}`,
       // no rawVal — fraction string, not a $ value
       sub: completedGoals.length > 0
         ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
         : `${fmt$(totalGoalTarget)} total target`,
+      progress: momentumProgress,
       status: goals.length > 0 && completedGoals.length === goals.length ? "green"
             : completedGoals.length > 0 ? "gold" : "gold",
       span: 1,
@@ -126,12 +128,12 @@ export function HomePanel({
           fontSize: "10px",
           letterSpacing: "3px",
           textTransform: "uppercase",
-          color: "var(--color-gold)",
+          color: "var(--color-accent-soft)",
           marginBottom: "4px",
         }}>
           Financial Health
         </div>
-        <div style={{ fontSize: "11px", color: "#555", letterSpacing: "1px" }}>
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", letterSpacing: "0.6px", lineHeight: 1.7 }}>
           {subtitle}
         </div>
       </div>
@@ -154,6 +156,7 @@ export function HomePanel({
             size="30px"
             onClick={() => navigate(tile.key)}
             entranceIndex={i}
+            progress={tile.progress}
           />
         ))}
       </div>

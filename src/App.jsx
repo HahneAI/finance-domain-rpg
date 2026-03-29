@@ -458,6 +458,7 @@ export default function App() {
         projectedAnnualNet={projectedAnnualNet}
         currentWeek={currentWeek}
         isAdmin={isAdmin}
+        today={today}
       />}
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}

@@ -861,10 +861,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       const totG = goals.reduce((s, g) => !g.completed ? s + g.target : s, 0);
       const projS = adjustedWeeklyAvg * weeksLeft;
       const lastGoalEW = tl.length ? (tl[tl.length - 1].eW ?? weeksLeft + 1) : 0;
-      const goalsByLane = {
-        Expenses: tl.filter(g => g.category !== "Lifestyle"),
-        Lifestyle: tl.filter(g => g.category === "Lifestyle"),
-      };
       return <div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Adj. Weekly Available" val={f2(adjustedWeeklyAvg)} color="var(--color-green)" />
@@ -873,36 +869,21 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         </div>
         {adjustedWeeklyAvg < baseWeeklyUnallocated && <div style={{ background: "#2d1a1a", border: "1px solid #e8856a44", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", fontSize: "11px", color: "var(--color-text-secondary)" }}>Event log reduced avg by <span style={{ color: "var(--color-red)", fontWeight: "bold" }}>{f2(baseWeeklyUnallocated - adjustedWeeklyAvg)}/wk</span></div>}
 
-        {Object.entries(goalsByLane).map(([lane, laneGoals]) => <div
-          key={lane}
-          draggable={false}
-          onDragStart={(e) => e.preventDefault()}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragPreviewCategory(lane);
-            setDragOverGoalId(null);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            if (!draggingGoalId) return;
-            reorderGoalByDrag(draggingGoalId, null, lane);
-            onGoalDragEnd();
-          }}
+        <div
           style={{
             marginBottom: "16px",
             padding: "12px",
             borderRadius: "10px",
-            border: `1px solid ${dragPreviewCategory === lane ? GOAL_LANES[lane].border : "#222"}`,
-            background: dragPreviewCategory === lane ? GOAL_LANES[lane].tint : "rgba(16,16,16,0.55)",
-            transition: "background 220ms ease, border-color 220ms ease",
+            border: "1px solid #222",
+            background: "rgba(16,16,16,0.55)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: laneGoals.length ? "10px" : "0" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: GOAL_LANES[lane].text }}>{lane} Goals</div>
-            <div style={{ fontSize: "10px", color: "#666" }}>{laneGoals.length}</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>Active Goals</div>
+            <div style={{ fontSize: "10px", color: "#666" }}>{tl.length}</div>
           </div>
-          {!laneGoals.length && <div style={{ border: `1px dashed ${GOAL_LANES[lane].border}`, borderRadius: "8px", padding: "10px 12px", fontSize: "10px", color: "#666", letterSpacing: "1px", textTransform: "uppercase" }}>Drop a goal here</div>}
-          {laneGoals.map((g, i) => {
+          {!tl.length && <div style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", color: "#666", letterSpacing: "1px", textTransform: "uppercase" }}>No active goals yet</div>}
+          {tl.map((g, i) => {
           const ok = g.eW !== null && g.eW <= weeksLeft;
           const isEditing = editGoalId === g.id;
           const celebrating = fundingId === g.id;
@@ -920,18 +901,18 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               e.preventDefault();
               e.stopPropagation();
               setDragOverGoalId(g.id);
-              setDragPreviewCategory(lane);
+              setDragPreviewCategory(g.category);
             }}
             onDrop={(e) => {
               e.preventDefault();
               e.stopPropagation();
               if (!draggingGoalId) return;
-              reorderGoalByDrag(draggingGoalId, g.id, lane);
+              reorderGoalByDrag(draggingGoalId, g.id);
               onGoalDragEnd();
             }}
             style={{
               background: lanePreviewingMove ? GOAL_LANES[previewLane].tint : "var(--color-bg-surface)",
-              border: `1px solid ${isDropTarget ? GOAL_LANES[lane].text : (celebrating ? "var(--color-green)" : g.color + "33")}`,
+              border: `1px solid ${isDropTarget ? "var(--color-gold)" : (celebrating ? "var(--color-green)" : g.color + "33")}`,
               borderRadius: "8px",
               padding: "16px",
               marginBottom: "12px",
@@ -1098,7 +1079,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             </div>}
           </div>;
         })}
-        </div>)}
+        </div>
 
         {addingGoal ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
           <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Goal</div>

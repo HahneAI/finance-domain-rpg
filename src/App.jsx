@@ -307,25 +307,70 @@ export default function App() {
     ? { num: currentWeek.idx, total: 52 }
     : null;
 
+  // ── Event impact summary (single source for adjusted income math) ──
+  const eventImpact = useMemo(() => {
+    const futureWeekCount = futureWeeks.length || 1;
+    const weeklyNetAdjustments = {};
+    const futureEventDeductionsByWeek = {};
+    let nL = 0, nG = 0, k4L = 0, k4ML = 0, k4G = 0, k4MG = 0, ptoL = 0, bucket = 0;
+    const grossDeltaByWeek = {};
+
+    logs.forEach(e => {
+      const i = calcEventImpact(e, config);
+      nL += i.netLost; nG += i.netGained;
+      k4L += i.k401kLost; k4ML += i.k401kMatchLost;
+      k4G += i.k401kGained; k4MG += i.k401kMatchGained;
+      ptoL += i.hoursLostForPTO; bucket += i.bucketHoursDeducted;
+
+      const idx = Number(e.weekIdx);
+      if (!Number.isFinite(idx)) return;
+      const netDelta = (i.netGained || 0) - (i.netLost || 0);
+      if (netDelta !== 0) weeklyNetAdjustments[idx] = (weeklyNetAdjustments[idx] || 0) + netDelta;
+      const grossDelta = (i.grossGained || 0) - (i.grossLost || 0);
+      if (grossDelta !== 0) grossDeltaByWeek[idx] = (grossDeltaByWeek[idx] || 0) + grossDelta;
+
+      if (e.weekEnd && e.weekEnd >= today && i.netLost) {
+        futureEventDeductionsByWeek[idx] = (futureEventDeductionsByWeek[idx] || 0) + i.netLost;
+      }
+    });
+
+    const totalNetAdjustment = Object.values(weeklyNetAdjustments).reduce((s, v) => s + v, 0);
+    return {
+      netLost: nL, netGained: nG,
+      k401kLost: k4L, k401kMatchLost: k4ML,
+      k401kGained: k4G, k401kMatchGained: k4MG,
+      ptoHoursLost: ptoL, bucketHours: bucket,
+      totalNetAdjustment,
+      adjustedWeeklyDelta: totalNetAdjustment / futureWeekCount,
+      weeklyNetAdjustments,
+      futureEventDeductionsByWeek,
+      grossDeltaByWeek,
+    };
+  }, [logs, config, futureWeeks, today]);
+
   // ── Tax derived values ──
   const taxDerived = useMemo(() => {
-    const tt = allWeeks.filter(w => w.active).reduce((s, w) => s + w.taxableGross, 0);
+    const activeWeeks = allWeeks.filter(w => w.active);
+    const adjustedTaxableGrossByWeek = new Map(
+      activeWeeks.map(w => [w.idx, Math.max((w.taxableGross ?? 0) + (eventImpact.grossDeltaByWeek[w.idx] || 0), 0)])
+    );
+    const tt = activeWeeks.reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0), 0);
     const fAGI = Math.max(tt - config.fedStdDeduction, 0);
     const fL = fedTax(fAGI);
     // State liability: config-driven via STATE_TAX_TABLE; falls back to moFlatRate for old rows.
     const stateConfig = getStateConfig(config.userState);
     const mL = stateConfig ? stateTax(tt, stateConfig) : tt * (config.moFlatRate ?? 0.047);
-    const ficaT = allWeeks.filter(w => w.active).reduce((s, w) => s + w.grossPay * config.ficaRate, 0);
+    const ficaT = activeWeeks.reduce((s, w) => s + Math.max((w.grossPay ?? 0) + (eventImpact.grossDeltaByWeek[w.idx] || 0), 0) * config.ficaRate, 0);
     const fedLow  = config.fedRateLow   ?? config.w1FedRate;
     const fedHigh = config.fedRateHigh  ?? config.w2FedRate;
     const stLow   = config.stateRateLow  ?? config.w1StateRate;
     const stHigh  = config.stateRateHigh ?? config.w2StateRate;
-    const fWB = allWeeks.filter(w => w.active && w.taxedBySchedule).reduce((s, w) => s + w.taxableGross * (w.isHighWeek ? fedHigh : fedLow), 0);
-    const mWB = allWeeks.filter(w => w.active && w.taxedBySchedule).reduce((s, w) => s + w.taxableGross * (w.isHighWeek ? stHigh : stLow), 0);
+    const fWB = activeWeeks.filter(w => w.taxedBySchedule).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? fedHigh : fedLow), 0);
+    const mWB = activeWeeks.filter(w => w.taxedBySchedule).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? stHigh : stLow), 0);
     const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - config.targetOwedAtFiling, 0);
-    const twC = allWeeks.filter(w => w.active && w.taxedBySchedule).length;
+    const twC = activeWeeks.filter(w => w.taxedBySchedule).length;
     return { fedAGI: fAGI, fedLiability: fL, moLiability: mL, ficaTotal: ficaT, fedWithheldBase: fWB, moWithheldBase: mWB, fedGap: fG, moGap: mG, totalGap: tG, targetExtraTotal: tET, taxedWeekCount: twC, extraPerCheck: twC > 0 ? tET / twC : 0 };
-  }, [allWeeks, config]);
+  }, [allWeeks, config, eventImpact.grossDeltaByWeek]);
 
   // ── Live projected net from income engine ──
   const projectedAnnualNet = useMemo(() =>
@@ -353,24 +398,18 @@ export default function App() {
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
   // ── Event log cascade ──
-  const logTotals = useMemo(() => {
-    let nL = 0, nG = 0, k4L = 0, k4ML = 0, k4G = 0, k4MG = 0, ptoL = 0, bucket = 0;
-    logs.forEach(e => {
-      const i = calcEventImpact(e, config);
-      nL += i.netLost; nG += i.netGained;
-      k4L += i.k401kLost; k4ML += i.k401kMatchLost;
-      k4G += i.k401kGained; k4MG += i.k401kMatchGained;
-      ptoL += i.hoursLostForPTO; bucket += i.bucketHoursDeducted;
-    });
-    return {
-      netLost: nL, netGained: nG,
-      k401kLost: k4L, k401kMatchLost: k4ML,
-      k401kGained: k4G, k401kMatchGained: k4MG,
-      ptoHoursLost: ptoL, bucketHours: bucket,
-      adjustedTakeHome: projectedAnnualNet - nL + nG,
-      adjustedWeeklyAvg: baseWeeklyUnallocated - (nL / (futureWeeks.length || 1)) + (nG / (futureWeeks.length || 1))
-    };
-  }, [logs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks]);
+  const logTotals = useMemo(() => ({
+    netLost: eventImpact.netLost,
+    netGained: eventImpact.netGained,
+    k401kLost: eventImpact.k401kLost,
+    k401kMatchLost: eventImpact.k401kMatchLost,
+    k401kGained: eventImpact.k401kGained,
+    k401kMatchGained: eventImpact.k401kMatchGained,
+    ptoHoursLost: eventImpact.ptoHoursLost,
+    bucketHours: eventImpact.bucketHours,
+    adjustedTakeHome: projectedAnnualNet + eventImpact.totalNetAdjustment,
+    adjustedWeeklyAvg: baseWeeklyUnallocated + eventImpact.adjustedWeeklyDelta
+  }), [eventImpact, projectedAnnualNet, baseWeeklyUnallocated]);
 
   // ── Attendance bucket model ──
   const bucketModel = useMemo(() => computeBucketModel(logs, config), [logs, config]);
@@ -388,10 +427,8 @@ export default function App() {
   //   hiding it in a per-week average.
   //
   // HOW IT'S BUILT:
-  //   calcEventImpact() is re-run here (not cached from logTotals) to get the
-  //   week-aware netLost: rotation (6-Day/4-Day) sets the shift count and
-  //   withholding tier; weekIdx checked against cfg.taxedWeeks sets whether
-  //   fed+state rates apply. Result is indexed by Number(weekIdx) to match week.idx.
+  //   eventImpact memo is the single source of truth for week-aware event deltas;
+  //   this map is forwarded directly so goals math and budget math stay in sync.
   //
   // REUSE:
   //   Any feature that needs to know "how much net pay is lost on a specific future
@@ -399,17 +436,7 @@ export default function App() {
   //   waterfall chart, a per-week surplus sparkline, or a "next paycheck" estimate
   //   that accounts for already-logged partial shifts.
   // ─────────────────────────────────────────────────────────────────────────────────
-  const futureEventDeductions = useMemo(() => {
-    const map = {};
-    logs.forEach(e => {
-      if (!e.weekEnd || e.weekEnd < today) return;
-      const impact = calcEventImpact(e, config);
-      if (!impact.netLost) return;
-      const idx = Number(e.weekIdx);
-      map[idx] = (map[idx] || 0) + impact.netLost;
-    });
-    return map;
-  }, [logs, config, today]);
+  const futureEventDeductions = eventImpact.futureEventDeductionsByWeek;
 
   function handleWizardComplete(mergedConfig) {
     setConfig(mergedConfig);

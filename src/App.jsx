@@ -11,12 +11,14 @@ import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
 import { SetupWizard } from "./components/SetupWizard.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
+import { ProfilePanel } from "./components/ProfilePanel.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
   { key: "budget",   label: "Budget" },
   { key: "benefits", label: "Benefits" },
   { key: "log",      label: "Log" },
+  { key: "profile",  label: "Account" },
 ];
 
 // Bottom nav items with SVG icons — Chime-style icon+label layout
@@ -66,6 +68,15 @@ const BOTTOM_NAV = [
       </svg>
     ),
   },
+  {
+    key: "profile",
+    label: "Account",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+      </svg>
+    ),
+  },
 ];
 
 function SidebarNavItem({ item, active, onClick }) {
@@ -94,13 +105,52 @@ function SidebarNavItem({ item, active, onClick }) {
   );
 }
 
+function FullScreenLoadingState({ label = "Loading your dashboard" }) {
+  return (
+    <div style={{
+      background: "var(--color-bg-base)",
+      minHeight: "100vh",
+      color: "var(--color-text-primary)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "24px",
+    }}>
+      <div style={{
+        width: "100%",
+        maxWidth: "420px",
+        border: "1px solid var(--color-border-subtle)",
+        borderRadius: "16px",
+        background: "var(--color-bg-surface)",
+        padding: "18px",
+      }}>
+        <div style={{
+          fontSize: "11px",
+          letterSpacing: "3px",
+          textTransform: "uppercase",
+          color: "var(--color-gold)",
+          marginBottom: "12px",
+        }}>
+          {label}
+        </div>
+        <div style={{ display: "grid", gap: "10px" }}>
+          <div style={{ height: "56px", borderRadius: "12px", background: "var(--color-bg-raised)" }} />
+          <div style={{ height: "56px", borderRadius: "12px", background: "var(--color-bg-raised)" }} />
+          <div style={{ height: "56px", borderRadius: "12px", background: "var(--color-bg-raised)" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // ── Auth state ─────────────────────────────────────────────────────────────
   // authChecked: true once the initial getSession() call resolves.
   // Without this flag, there's a flash of the login screen on every page reload
   // even when a valid session already exists in localStorage.
-  const [authedUser, setAuthedUser]   = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const [authedUser, setAuthedUser]         = useState(null);
+  const [authChecked, setAuthChecked]       = useState(false);
+  const [pendingPasswordReset, setPendingPasswordReset] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -154,7 +204,11 @@ export default function App() {
       setAuthChecked(true);
     });
     // Subscribe to future sign-in / sign-out events.
-    return onAuthChange((user) => setAuthedUser(user));
+    return onAuthChange((event, user) => {
+      if (event === "PASSWORD_RECOVERY") setPendingPasswordReset(true);
+      else setPendingPasswordReset(false);
+      setAuthedUser(user);
+    });
   }, []);
 
   // ── Load from Supabase once auth resolves to a signed-in user ──
@@ -253,25 +307,74 @@ export default function App() {
     ? { num: currentWeek.idx, total: 52 }
     : null;
 
+  // ── Event impact summary (single source for adjusted income math) ──
+  const eventImpact = useMemo(() => {
+    const futureWeekCount = futureWeeks.length || 1;
+    const weeklyNetAdjustments = {};
+    const futureEventDeductionsByWeek = {};
+    let nL = 0, nG = 0, k4L = 0, k4ML = 0, k4G = 0, k4MG = 0, ptoL = 0, bucket = 0, missedEventDayNetLost = 0;
+    const grossDeltaByWeek = {};
+
+    logs.forEach(e => {
+      const i = calcEventImpact(e, config);
+      nL += i.netLost; nG += i.netGained;
+      if ((e.type === "missed_unpaid" || e.type === "missed_unapproved") && i.netLost) {
+        missedEventDayNetLost += i.netLost;
+      }
+      k4L += i.k401kLost; k4ML += i.k401kMatchLost;
+      k4G += i.k401kGained; k4MG += i.k401kMatchGained;
+      ptoL += i.hoursLostForPTO; bucket += i.bucketHoursDeducted;
+
+      const idx = Number(e.weekIdx);
+      if (!Number.isFinite(idx)) return;
+      const netDelta = (i.netGained || 0) - (i.netLost || 0);
+      if (netDelta !== 0) weeklyNetAdjustments[idx] = (weeklyNetAdjustments[idx] || 0) + netDelta;
+      const grossDelta = (i.grossGained || 0) - (i.grossLost || 0);
+      if (grossDelta !== 0) grossDeltaByWeek[idx] = (grossDeltaByWeek[idx] || 0) + grossDelta;
+
+      if (e.weekEnd && e.weekEnd >= today && i.netLost) {
+        futureEventDeductionsByWeek[idx] = (futureEventDeductionsByWeek[idx] || 0) + i.netLost;
+      }
+    });
+
+    const totalNetAdjustment = Object.values(weeklyNetAdjustments).reduce((s, v) => s + v, 0);
+    return {
+      netLost: nL, netGained: nG,
+      missedEventDayNetLost,
+      k401kLost: k4L, k401kMatchLost: k4ML,
+      k401kGained: k4G, k401kMatchGained: k4MG,
+      ptoHoursLost: ptoL, bucketHours: bucket,
+      totalNetAdjustment,
+      adjustedWeeklyDelta: totalNetAdjustment / futureWeekCount,
+      weeklyNetAdjustments,
+      futureEventDeductionsByWeek,
+      grossDeltaByWeek,
+    };
+  }, [logs, config, futureWeeks, today]);
+
   // ── Tax derived values ──
   const taxDerived = useMemo(() => {
-    const tt = allWeeks.filter(w => w.active).reduce((s, w) => s + w.taxableGross, 0);
+    const activeWeeks = allWeeks.filter(w => w.active);
+    const adjustedTaxableGrossByWeek = new Map(
+      activeWeeks.map(w => [w.idx, Math.max((w.taxableGross ?? 0) + (eventImpact.grossDeltaByWeek[w.idx] || 0), 0)])
+    );
+    const tt = activeWeeks.reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0), 0);
     const fAGI = Math.max(tt - config.fedStdDeduction, 0);
     const fL = fedTax(fAGI);
     // State liability: config-driven via STATE_TAX_TABLE; falls back to moFlatRate for old rows.
     const stateConfig = getStateConfig(config.userState);
     const mL = stateConfig ? stateTax(tt, stateConfig) : tt * (config.moFlatRate ?? 0.047);
-    const ficaT = allWeeks.filter(w => w.active).reduce((s, w) => s + w.grossPay * config.ficaRate, 0);
+    const ficaT = activeWeeks.reduce((s, w) => s + Math.max((w.grossPay ?? 0) + (eventImpact.grossDeltaByWeek[w.idx] || 0), 0) * config.ficaRate, 0);
     const fedLow  = config.fedRateLow   ?? config.w1FedRate;
     const fedHigh = config.fedRateHigh  ?? config.w2FedRate;
     const stLow   = config.stateRateLow  ?? config.w1StateRate;
     const stHigh  = config.stateRateHigh ?? config.w2StateRate;
-    const fWB = allWeeks.filter(w => w.active && w.taxedBySchedule).reduce((s, w) => s + w.taxableGross * (w.isHighWeek ? fedHigh : fedLow), 0);
-    const mWB = allWeeks.filter(w => w.active && w.taxedBySchedule).reduce((s, w) => s + w.taxableGross * (w.isHighWeek ? stHigh : stLow), 0);
+    const fWB = activeWeeks.filter(w => w.taxedBySchedule).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? fedHigh : fedLow), 0);
+    const mWB = activeWeeks.filter(w => w.taxedBySchedule).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? stHigh : stLow), 0);
     const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - config.targetOwedAtFiling, 0);
-    const twC = allWeeks.filter(w => w.active && w.taxedBySchedule).length;
+    const twC = activeWeeks.filter(w => w.taxedBySchedule).length;
     return { fedAGI: fAGI, fedLiability: fL, moLiability: mL, ficaTotal: ficaT, fedWithheldBase: fWB, moWithheldBase: mWB, fedGap: fG, moGap: mG, totalGap: tG, targetExtraTotal: tET, taxedWeekCount: twC, extraPerCheck: twC > 0 ? tET / twC : 0 };
-  }, [allWeeks, config]);
+  }, [allWeeks, config, eventImpact.grossDeltaByWeek]);
 
   // ── Live projected net from income engine ──
   const projectedAnnualNet = useMemo(() =>
@@ -299,24 +402,19 @@ export default function App() {
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
   // ── Event log cascade ──
-  const logTotals = useMemo(() => {
-    let nL = 0, nG = 0, k4L = 0, k4ML = 0, k4G = 0, k4MG = 0, ptoL = 0, bucket = 0;
-    logs.forEach(e => {
-      const i = calcEventImpact(e, config);
-      nL += i.netLost; nG += i.netGained;
-      k4L += i.k401kLost; k4ML += i.k401kMatchLost;
-      k4G += i.k401kGained; k4MG += i.k401kMatchGained;
-      ptoL += i.hoursLostForPTO; bucket += i.bucketHoursDeducted;
-    });
-    return {
-      netLost: nL, netGained: nG,
-      k401kLost: k4L, k401kMatchLost: k4ML,
-      k401kGained: k4G, k401kMatchGained: k4MG,
-      ptoHoursLost: ptoL, bucketHours: bucket,
-      adjustedTakeHome: projectedAnnualNet - nL + nG,
-      adjustedWeeklyAvg: baseWeeklyUnallocated - (nL / (futureWeeks.length || 1)) + (nG / (futureWeeks.length || 1))
-    };
-  }, [logs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks]);
+  const logTotals = useMemo(() => ({
+    netLost: eventImpact.netLost,
+    netGained: eventImpact.netGained,
+    missedEventDayNetLost: eventImpact.missedEventDayNetLost,
+    k401kLost: eventImpact.k401kLost,
+    k401kMatchLost: eventImpact.k401kMatchLost,
+    k401kGained: eventImpact.k401kGained,
+    k401kMatchGained: eventImpact.k401kMatchGained,
+    ptoHoursLost: eventImpact.ptoHoursLost,
+    bucketHours: eventImpact.bucketHours,
+    adjustedTakeHome: projectedAnnualNet + eventImpact.totalNetAdjustment,
+    adjustedWeeklyAvg: baseWeeklyUnallocated + eventImpact.adjustedWeeklyDelta
+  }), [eventImpact, projectedAnnualNet, baseWeeklyUnallocated]);
 
   // ── Attendance bucket model ──
   const bucketModel = useMemo(() => computeBucketModel(logs, config), [logs, config]);
@@ -334,10 +432,8 @@ export default function App() {
   //   hiding it in a per-week average.
   //
   // HOW IT'S BUILT:
-  //   calcEventImpact() is re-run here (not cached from logTotals) to get the
-  //   week-aware netLost: rotation (6-Day/4-Day) sets the shift count and
-  //   withholding tier; weekIdx checked against cfg.taxedWeeks sets whether
-  //   fed+state rates apply. Result is indexed by Number(weekIdx) to match week.idx.
+  //   eventImpact memo is the single source of truth for week-aware event deltas;
+  //   this map is forwarded directly so goals math and budget math stay in sync.
   //
   // REUSE:
   //   Any feature that needs to know "how much net pay is lost on a specific future
@@ -345,17 +441,7 @@ export default function App() {
   //   waterfall chart, a per-week surplus sparkline, or a "next paycheck" estimate
   //   that accounts for already-logged partial shifts.
   // ─────────────────────────────────────────────────────────────────────────────────
-  const futureEventDeductions = useMemo(() => {
-    const map = {};
-    logs.forEach(e => {
-      if (!e.weekEnd || e.weekEnd < today) return;
-      const impact = calcEventImpact(e, config);
-      if (!impact.netLost) return;
-      const idx = Number(e.weekIdx);
-      map[idx] = (map[idx] || 0) + impact.netLost;
-    });
-    return map;
-  }, [logs, config, today]);
+  const futureEventDeductions = eventImpact.futureEventDeductionsByWeek;
 
   function handleWizardComplete(mergedConfig) {
     setConfig(mergedConfig);
@@ -364,11 +450,7 @@ export default function App() {
 
   // Checking localStorage for an existing session — avoid flash of login screen.
   if (!authChecked) {
-    return (
-      <div style={{ background: "var(--color-bg-base)", minHeight: "100vh", color: "var(--color-gold)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", letterSpacing: "4px" }}>
-        LOADING...
-      </div>
-    );
+    return <FullScreenLoadingState label="Checking session" />;
   }
 
   // No valid session — show login / create account screen.
@@ -376,15 +458,13 @@ export default function App() {
     return <LoginScreen />;
   }
 
+  // Supabase PASSWORD_RECOVERY event — user clicked a reset link, show set-new-password form.
+  if (pendingPasswordReset) {
+    return <LoginScreen recoveryMode onRecoveryDone={() => setPendingPasswordReset(false)} />;
+  }
+
   if (loading) {
-    return (
-      <div style={{ background: "var(--color-bg-base)",
-        minHeight: "100vh", color: "var(--color-gold)", display: "flex",
-        alignItems: "center", justifyContent: "center", fontSize: "14px",
-        letterSpacing: "4px" }}>
-        LOADING...
-      </div>
-    );
+    return <FullScreenLoadingState />;
   }
 
   const activePanel = (
@@ -404,12 +484,12 @@ export default function App() {
         allWeeks={allWeeks} config={config} setConfig={setConfig}
         showExtra={showExtra} setShowExtra={setShowExtra}
         taxDerived={taxDerived}
-        logNetLost={logTotals.netLost}
-        logNetGained={logTotals.netGained}
+        missedEventDayNetLost={logTotals.missedEventDayNetLost}
         adjustedTakeHome={logTotals.adjustedTakeHome}
         projectedAnnualNet={projectedAnnualNet}
         currentWeek={currentWeek}
         isAdmin={isAdmin}
+        today={today}
       />}
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
@@ -446,6 +526,11 @@ export default function App() {
         currentWeek={currentWeek}
         goals={goals}
         bucketModel={bucketModel}
+      />}
+      {currentView === "profile" && <ProfilePanel
+        authedUser={authedUser}
+        config={config}
+        setConfig={setConfig}
       />}
     </>
   );
@@ -493,6 +578,15 @@ export default function App() {
           /* DEBUG: overlay also hides on desktop so a half-open drawer doesn't
              ghost behind the sidebar if the user resizes the window. */
           .mobile-drawer-overlay { display: none !important; }
+          /* DEBUG DESKTOP SCROLL: sidebar has height:100vh which makes the root
+             flex container exactly 100vh tall. Without overflow-y:auto here,
+             the main-content stretches to 100vh via align-items:stretch and
+             content that exceeds that height overflows without a scroll target —
+             the window never grows past 100vh. This rule makes main-content the
+             scroll container on desktop so mouse-wheel scroll works. */
+          .main-content {
+            overflow-y: auto;
+          }
         }
         /* DEBUG DRAWER: translateX(-100%) hides the drawer fully off-screen left.
            The .open class moves it to x=0. If the drawer flickers on load,
@@ -549,9 +643,13 @@ export default function App() {
             <button
               title="Sign out"
               onClick={async () => { await supabase.auth.signOut(); }}
-              style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "16px", padding: "2px 0", marginTop: "1px", lineHeight: 1 }}
+              style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", padding: "2px 0", marginTop: "1px", lineHeight: 1, display: "flex", alignItems: "center" }}
             >
-              ⎋
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
             </button>
           </div>
           {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
@@ -765,9 +863,13 @@ export default function App() {
             <button
               title="Sign out"
               onClick={async () => { await supabase.auth.signOut(); setDrawerOpen(false); }}
-              style={{ background: "transparent", border: "none", color: "#444", cursor: "pointer", fontSize: "16px", lineHeight: 1, padding: "2px 6px" }}
+              style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
             >
-              ⎋
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
             </button>
             <button
               onClick={() => setDrawerOpen(false)}

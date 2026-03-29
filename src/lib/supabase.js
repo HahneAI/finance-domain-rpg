@@ -53,16 +53,17 @@ export async function getCurrentUserId() {
 }
 
 /**
- * Subscribe to auth state changes (SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED, etc.).
+ * Subscribe to auth state changes (SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED,
+ * PASSWORD_RECOVERY, etc.). Callback receives (event, user).
  * Returns the unsubscribe function — call it in the useEffect cleanup.
  *
  * Usage in App.jsx:
- *   const unsub = onAuthChange((user) => setAuthedUser(user));
+ *   const unsub = onAuthChange((event, user) => { ... });
  *   return () => unsub();
  */
 export function onAuthChange(callback) {
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-    callback(session?.user ?? null);
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    callback(event, session?.user ?? null);
   });
   return () => subscription.unsubscribe();
 }

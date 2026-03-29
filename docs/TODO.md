@@ -295,7 +295,81 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 
 ---
 
-## 8. Post-Auth Roadmap
+## 8. Pre-Launch Polish
+
+### UI Tune
+- [x] **Full UI pass** — review every panel for spacing, alignment, and visual consistency; fix any cards that feel cramped or misaligned on 390px; verify no horizontal scroll anywhere
+- [x] **Typography pass** — confirm all hero numbers use `--font-display`, all body text uses `--font-sans`, all inputs and data table cells use `--font-mono`; fix any mismatches
+- [x] **Loading and empty states** — every panel should have a clean skeleton or empty-state message; nothing should flash or jump on first load
+- [x] **Mobile tap targets** — audit all buttons and interactive elements at 390px; anything below 44×44px gets padding bumped
+
+### Color Scheme Decision
+- [x] **Lock final color palette** — evaluate the current token set in `--theme` block (`--color-bg-base`, `--color-gold`, `--color-green`, `--color-red`, etc.); decide if any tokens need adjustment before first external user; document final decisions in CLAUDE.md
+- [x] **Status color consistency** — audit all `status` props on `MetricCard`; confirm green/gold/red always mean the same thing (positive/neutral-attention/negative) across all panels
+
+### Auth Providers
+- [ ] **Decide on supported auth methods** — email/password (already built), Google OAuth, Apple Sign In; Apple required for iOS App Store; pick which to support at launch
+- [ ] **Wire Google OAuth** — `supabase.auth.signInWithOAuth({ provider: 'google' })`; add Google button to `LoginScreen.jsx`; configure provider in Supabase dashboard
+- [ ] **Wire Apple Sign In** — `supabase.auth.signInWithOAuth({ provider: 'apple' })`; add Apple button to `LoginScreen.jsx`; configure provider in Supabase dashboard; required for iOS App Store compliance
+- [x] **LoginScreen layout update** — add OAuth buttons below email/password form with a divider ("or continue with"); style per platform guidelines (Apple button must be black/white)
+
+### Benefits → Deductions Pipeline
+The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premiums and freeform `otherDeductions` into `config`, but **none of them are applied to take-home math**. Only `cfg.ltd` and `k401kEmployee` are deducted in `computeNet()` and `buildYear()`.
+
+- [ ] **Wire benefit premiums into `buildYear()` taxable gross** — `healthPremium`, `dentalPremium`, `visionPremium`, `stdWeekly`, `lifePremium` are pre-tax deductions; reduce taxable gross before fed/state/FICA are applied (same position as `cfg.ltd` today)
+  - Audit (2026-03-28): issue found — `taxableGross` currently subtracts only `cfg.ltd` + `k401kEmployee`.
+- [ ] **Wire HSA and FSA into `buildYear()` taxable gross** — both are pre-tax; add to the pre-tax deduction pool alongside insurance premiums
+  - Audit (2026-03-28): issue found — `hsaWeekly` and `fsaWeekly` are configured but not used in pay math.
+- [ ] **Wire `otherDeductions` array into `computeNet()`** — sum `otherDeductions[].weeklyAmount` and subtract post-tax (after FICA/fed/state, since arbitrary deductions may not be pre-tax); or allow a `preTax` flag per entry
+  - Audit (2026-03-28): issue found — `computeNet()` currently deducts only LTD + employee 401(k).
+- [ ] **Respect `benefitsStartDate`** — deductions should only apply to weeks on or after `config.benefitsStartDate`; weeks before that date skip all benefit/HSA/FSA deductions (same pattern as `k401StartDate` gate on 401k)
+  - Audit (2026-03-28): issue found — no `benefitsStartDate` gate is applied in `buildYear()`.
+- [ ] **Update wizard preview (Step 7 — Paycheck Buffer)** — the live net-per-check breakdown already shows a "Benefits" subtotal; verify it matches `buildYear()` after the fix and that the buffer step stays in sync
+- [ ] **Income config view** — add benefit premium fields to the Income → Config read-only display and edit form (same treatment as `ltd` today)
+
+### Setup Wizard Tune
+- [ ] **End-to-end wizard walkthrough** — run a fresh account through every step; note any confusing copy, broken layout, or missing validation
+- [ ] **Step copy pass** — trim any remaining multi-sentence helper text to one sentence; ensure every step has a clear "why this matters" hook
+- [ ] **Mobile layout audit** — every wizard step must scroll cleanly at 390px with no clipped inputs or buttons hidden behind the keyboard
+- [ ] **Edge case inputs** — test 0 values, very large numbers, and empty fields at each step; verify no NaN, Infinity, or blank values leak into config
+- [ ] **Re-entry flow** — verify the Life Events re-entry path (lost job, changed jobs, commission) correctly diffs and re-runs only the affected steps
+
+### Profile & Account Management
+> Audit run: 2026-03-28
+
+- [ ] **Profile screen** — new panel (or Settings tab) showing: display name, email, account created date, subscription status placeholder
+  - Audit: **Partially live** (Profile panel + Account view exist, email shown), but display name, account created date, and subscription placeholder are not implemented.
+- [ ] **Change email** — `supabase.auth.updateUser({ email: newEmail })`; confirmation email flow
+  - Audit: **Not live** (no change-email form/action found).
+- [ ] **Change password** — `supabase.auth.updateUser({ password: newPassword })`; current password confirmation before allowing change
+  - Audit: **Partially live** (`updateUser({ password })` exists), but current-password confirmation gate is not implemented.
+- [ ] **Delete account** — destructive action with "type DELETE to confirm" gate; removes `user_data` row then calls `supabase.auth.admin.deleteUser()` (or a backend route); irreversible warning
+  - Audit: **Not live** (no delete-account UI/flow found).
+- [ ] **Sign out all devices** — `supabase.auth.signOut({ scope: 'global' })`; useful when a device is lost
+  - Audit: **Not live** (standard sign-out exists; global scope sign-out not found).
+
+### Near-Term Product Sprint Backlog
+
+- [x] **Goal card drag + cross-category preview** — support click-and-drag reordering for goals; while dragging between **Expenses** and **Lifestyle**, preview the destination with a live color-fade transition before drop
+- [ ] **Expense editor pay-cycle model** — inline expense editor should capture (1) amount and (2) pay cycle via dropdown (weekly, biweekly, every 30 days, yearly); compute per-paycheck set-aside from the selected cycle; apply auto-start math from the input/edit date forward only
+- [x] **Goal timeline monthly/weekly scale refresh** — switch to a monthly notated bar with subtle four-week sub-divisions; render goal progress in weekly chunks so mid-month targets visually stop at the midpoint of that month
+- [ ] **Income Summary monthly cleanup** — remove all 401(k) card references from the monthly tab
+- [ ] **Income Summary weekly modal fix** — full-details modal is clipped top/bottom and currently traps users; fix vertical scrolling and exit behavior
+- [ ] **Rolling year progression system (weekly + goal timeline)** — for Income Summary (weekly) and Goals timeline:
+  - [ ] show only the current window plus the previous 4 weeks on-screen
+  - [ ] as older weeks/months roll off, keep data in storage but hide from view (do not delete)
+  - [ ] slightly scale visible timeline elements forward over time while preserving consistent proportions
+  - [ ] design persistence update if needed (parent/child timeline tables keyed to user id)
+- [ ] **Adjusted weekly take-home from events: fix + audit** — repair budget-tab UI math so adjusted take-home updates correctly; audit that the corrected value is consumed by goals timeline math
+- [ ] **Tax payback math integration** — incorporate missed-day event impact into extra tax payback projections (if days are missed, projected owed taxes should decrease appropriately)
+- [ ] **Year Summary net card behavior** — replace projected net display with adjusted net (post-event math); add info icon + modal that explains take-home loss from missed-event logs; remove separate adjusted take-home UI component
+- [ ] **Benefits tab recovery** — investigate and fix broken Benefits tab behavior
+- [ ] **Log tab simplification** — keep only `Net Loss`, `PTO Loss`, and `Bucket Hour Loss` cards
+- [ ] **Log tab data consolidation card** — merge all remaining pre-history log metrics into one large clean card (no heavy visual separators between data points); define and label these grouped data chunks consistently
+
+---
+
+## 9. Post-Auth Roadmap
 
 ### Fiscal Week Features
 
@@ -333,7 +407,7 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 
 ---
 
-## 9. Optional Deductions Mapping (Post-Setup Wizard)
+## 10. Optional Deductions Mapping (Post-Setup Wizard)
 
 - [ ] **Itemized deductions module** — optional advanced setup for users who want more accurate year-end tax projections beyond the standard deduction assumption:
   - [ ] Entry point: "Advanced" link shown on the Annual Tax Strategy step of the setup wizard, and accessible anytime from Settings
@@ -364,6 +438,10 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 - [x] Add `baseRate`, `diffRate`, `nightDiffRate`, `dhlNightShift` to `DHL_PRESET.defaults` — preset is now self-contained
 - [ ] Tax schedule tab for DHL users — pending tax research sprint (currently `isAdmin` only)
 
+### Multi-User Readiness Stragglers (2026-03-26)
+- [x] **"MO Flat Rate" label in Income config view** — renamed to "State Rate (fallback)"; hidden entirely when `config.userState` is set (field is unused once wizard assigns a state)
+- [x] **`PTO_RATE` hardcoded constant removed from runtime** — `calcEventImpact()` and `computeBucketModel()` now use `cfg.baseRate` / `cfg.baseRate / 2` directly; `LogPanel` labels use `config.baseRate`; constant retained in config.js for test assertions only
+
 ---
 
 ### Event Log Rework
@@ -378,4 +456,4 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 
 ---
 
-*Last updated: 2026-03-25 — §7 UI Polish Sprint fully complete. Weekly table slimmed to 4 cols + full-detail modal; overview table drops 401k cols; 401k table switches to monthly rows; home tab promotes Weekly Left as hero, removes Take Home + Emergency Fund, centers header, rewrites subtitle with date + top goal. Next: Phase 5 (Tax Exempt Gate visual test) or §8 Post-Auth features.*
+*Last updated: 2026-03-26 — §8 Pre-Launch Polish added (UI tune, color scheme decision, auth providers, wizard tune, profile/account management). Old §8 Post-Auth Roadmap renumbered to §9; Old §9 Optional Deductions renumbered to §10.*

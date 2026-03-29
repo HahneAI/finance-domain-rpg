@@ -1,5 +1,7 @@
 # Life RPG — Project Plan
 
+**Total line limit rule: keep each file within a practical line cap; when the cap is reached, apply a rolling update process that summarizes and compacts older sections before adding new content.**
+
 **Developer:** Anthony (solo)
 **Target Launch:** August 1, 2026
 **Sprint Structure:** 30-min sessions, 4x/week

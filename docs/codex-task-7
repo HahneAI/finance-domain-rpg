@@ -1,0 +1,150 @@
+# Codex Task Specification
+
+# =========================
+# TASK_SPEC (MACHINE READABLE)
+# =========================
+
+```json
+{
+  "task_id": "FEATURE_year_summary_use_adjusted_net_with_event_loss_info_modal",
+  "task_type": "FEATURE",
+  "status": "PENDING",
+
+  "objective": "In the year summary card within the summary tab, replace the currently displayed projected net with the adjusted net after event/day-missed math, add an info icon that opens a modal breaking down the take-home loss caused by missed event days, and remove the separate yellow/red adjusted take-home UI component since that information is being consolidated into the year summary card.",
+
+  "scope": {
+    "allowed_files": [
+      "summary tab component",
+      "year summary card component",
+      "adjusted net / adjusted take-home calculation selectors or helpers",
+      "event-days-missed loss calculation helpers",
+      "shared modal/dialog component if already used by the app",
+      "info icon / card action UI for the year summary card",
+      "adjusted take-home standalone UI component targeted for removal"
+    ],
+    "restricted_files": [
+      "authentication logic",
+      "expense editor logic",
+      "goals timeline visuals",
+      "tax payback logic unless directly required for adjusted net sourcing",
+      "unrelated dashboard tabs/pages",
+      "global theme system outside the affected card/modal"
+    ],
+    "entry_points": [
+      "summary tab render flow",
+      "year summary card data mapping",
+      "adjusted event-based net income calculation pipeline",
+      "modal open/close interaction for summary card details",
+      "standalone adjusted take-home component render path"
+    ],
+    "out_of_scope": [
+      "full summary tab redesign",
+      "new analytics beyond the event-day missed take-home breakdown",
+      "changes to unrelated budget or goals surfaces",
+      "broad modal framework refactors"
+    ]
+  },
+
+  "implementation": {
+    "steps": [
+      "Inspect the current summary tab and identify how the year summary card currently sources and displays projected net.",
+      "Replace the displayed projected net value in the year summary card with the adjusted net that already reflects event/day-missed math.",
+      "Ensure the adjusted net source of truth is the same corrected event-based income logic currently intended for the app, rather than a stale projected-only value.",
+      "Add an info icon to the year summary card in a way that fits the current UI pattern.",
+      "Wire the info icon to open a popup modal or dialog.",
+      "Inside the modal, show a clear breakdown of take-home loss caused specifically by missed event days/logs, scoped to take-home impact only.",
+      "Keep the modal focused and concise: explain the adjusted net difference in terms of event-day missed take-home loss.",
+      "Remove the separate yellow/red adjusted take-home UI component from the relevant surface since its purpose is now folded into the year summary card.",
+      "Ensure removing that standalone component does not break dependent layout, state wiring, or summary calculations."
+    ],
+    "constraints": [
+      "Do not modify unrelated summary metrics",
+      "Preserve existing TypeScript types",
+      "Reuse the app's existing modal/dialog pattern if available",
+      "Keep the breakdown limited to take-home loss from missed event days",
+      "Prefer using an existing adjusted-net source of truth rather than duplicating math",
+      "Remove only the specific standalone adjusted-take-home UI component referenced"
+    ]
+  },
+
+  "change_log": {
+    "expected_changes": [
+      {
+        "file": "year summary card component",
+        "change": "Replace projected net display with adjusted net and add info icon trigger"
+      },
+      {
+        "file": "summary tab data mapping/helper",
+        "change": "Feed the year summary card from adjusted net after event/day-missed math"
+      },
+      {
+        "file": "modal/dialog content component or inline modal section",
+        "change": "Display breakdown of take-home loss caused by missed event days"
+      },
+      {
+        "file": "adjusted take-home standalone UI component/path",
+        "change": "Remove the separate yellow/red adjusted take-home UI from the relevant view"
+      }
+    ]
+  },
+
+  "impact_analysis": {
+    "affected_areas": [
+      "summary tab rendering",
+      "year summary card values",
+      "adjusted net display logic",
+      "event-day loss explanation UX",
+      "layout after removing standalone adjusted-take-home component"
+    ],
+    "risk_areas": [
+      "year summary may still read stale projected net if selectors are not updated consistently",
+      "modal may show values that do not exactly match the card if different helper paths are used",
+      "removing the standalone adjusted-take-home component may leave empty spacing or broken conditional layout",
+      "take-home loss breakdown may accidentally include tax or non-event adjustments if sourcing is unclear"
+    ],
+    "potential_bugs": [
+      {
+        "area": "year summary card",
+        "risk": "projected net label/value may not fully switch over to adjusted net everywhere it appears"
+      },
+      {
+        "area": "modal breakdown",
+        "risk": "the loss shown in the modal may not match the adjusted net difference shown on the card"
+      },
+      {
+        "area": "component removal",
+        "risk": "removing the yellow/red adjusted take-home UI may break spacing, state dependencies, or conditional rendering"
+      },
+      {
+        "area": "source-of-truth consistency",
+        "risk": "card and modal may use different event-loss calculations if the data flow is duplicated"
+      }
+    ]
+  },
+
+  "validation": {
+    "checks": [
+      "Year summary card displays adjusted net instead of projected net",
+      "Adjusted net reflects event/day-missed math",
+      "Info icon opens a working modal/dialog",
+      "Modal clearly breaks down take-home loss from missed event days only",
+      "Separate yellow/red adjusted take-home UI component is removed from the relevant screen",
+      "Layout remains clean after component removal",
+      "No console errors",
+      "No TypeScript errors",
+      "No unintended file changes"
+    ]
+  },
+
+  "output_format": {
+    "require_summary": true,
+    "summary_fields": [
+      "files_changed",
+      "changes_made",
+      "adjusted_net_source_confirmed",
+      "modal_breakdown_rules",
+      "component_removed",
+      "remaining_edge_cases"
+    ]
+  }
+}

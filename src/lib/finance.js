@@ -1,4 +1,4 @@
-import { FED_BRACKETS, PTO_RATE, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START } from "../constants/config.js";
+import { FED_BRACKETS, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -321,7 +321,7 @@ function prevMonth(yyyyMM) {
 }
 
 export function computeBucketModel(logs, cfg) {
-  const payoutRate = cfg.bucketPayoutRate ?? (PTO_RATE / 2);
+  const payoutRate = cfg.bucketPayoutRate ?? (cfg.baseRate / 2);
   const cap = cfg.bucketCap ?? 128;
   let balance = cfg.bucketStartBalance ?? 64;
 
@@ -406,8 +406,8 @@ export function calcEventImpact(event, cfg) {
   } else if (event.type === "pto") {
     const ptoH = event.ptoHours || 0, normalH = normalShifts * cfg.shiftHours;
     const normalOT = Math.max(normalH - cfg.otThreshold, 0), actualOT = Math.max(normalH - ptoH - cfg.otThreshold, 0);
-    // Night diff applies to hours worked but not to PTO hours — include the delta
-    grossLost = ptoH * (cfg.baseRate + nightDiffPerHour - PTO_RATE) + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
+    // PTO pays at baseRate; night diff applies to hours worked only — both deltas included
+    grossLost = ptoH * nightDiffPerHour + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
   } else if (event.type === "missed_unapproved") {
     // Hours missed × (base rate + night diff); bucket hit tracked separately
     grossLost = (event.hoursLost || 0) * (cfg.baseRate + nightDiffPerHour); hoursLostForPTO = event.hoursLost || 0;

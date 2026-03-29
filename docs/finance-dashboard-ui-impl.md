@@ -337,6 +337,98 @@ display: block
 
 ---
 
+## Additional UI Components (Audit Additions)
+
+**Status: ✅ Added to reference coverage (previously undocumented in this file)**
+
+The implementation includes several UI components outside `src/components/ui.jsx`
+that are part of the real shipped interface and should be tracked for the theme
+overhaul plan.
+
+---
+
+### WeekConfirmModal — weekly confirmation modal
+
+**File:** `src/components/WeekConfirmModal.jsx`
+
+Two-layer modal overlay used for weekly schedule confirmation and optional event
+logging. Includes:
+
+- Full-screen dark backdrop + centered modal card
+- Day-toggle matrix (Mon–Sun) with status color states
+- Layer-2 event form sharing `iS` + `lS` field styles
+- Primary/secondary CTA buttons and delta/impact messaging
+
+**Theme-risk notes for makeover:**
+- Contains several hardcoded neutrals (`#111`, `#2a2a2a`, `#222`, `#444`, `#888`)
+- Should be fully tokenised to align with global palette rules
+
+---
+
+### SetupWizard — multi-step onboarding UI shell
+
+**File:** `src/components/SetupWizard.jsx`
+
+Large multi-step UI with many local layout atoms that are not exported through
+`ui.jsx`:
+
+- `Pill` (active/inactive segmented choice buttons)
+- `FieldRow` + `Field` wrappers for dense form layouts
+- Step-level CTA patterns and validation message blocks
+
+**Theme-risk notes for makeover:**
+- Broad use of inline styles and local atoms means theme migration should include
+  a shared wizard token layer (or extracted primitives) to avoid drift
+
+---
+
+### LoginScreen — auth and recovery shell
+
+**File:** `src/components/LoginScreen.jsx`
+
+Authentication surface with local component atoms:
+
+- `Shell` (centered auth card layout)
+- `SocialBtn`, `SubmitBtn`, `Divider`, `ErrorBox`
+- Sign-in, sign-up, forgot-password, and recovery-mode views
+
+**Theme-risk notes for makeover:**
+- Contains hardcoded border/separator shades and custom button sizing
+- Should be aligned to the same radius/padding scale as dashboard cards
+
+---
+
+### ProfilePanel — account/settings surfaces
+
+**File:** `src/components/ProfilePanel.jsx`
+
+Account/settings UI with local reusable pieces:
+
+- `BackBar` for sub-view navigation
+- `DetailCard` + `DetailRow` grouped read-only/edit surfaces
+- Local form/action rows (password update, sign-out, employment edits)
+
+**Theme-risk notes for makeover:**
+- Uses mixed token + raw color values in borders/labels
+- Candidate for extraction into shared “settings surface” primitives
+
+---
+
+### App shell local components
+
+**File:** `src/App.jsx`
+
+UI shell includes local components that materially affect visual identity:
+
+- `SidebarNavItem` (desktop-style left rail item)
+- `FullScreenLoadingState` (loading skeleton card shell)
+- Bottom navigation icon/label system + sliding indicator container
+
+These should remain in the UI reference document because they define core
+navigation and loading affordances during the makeover.
+
+---
+
 ## File Map
 
 ```
@@ -352,7 +444,10 @@ src/
     ├── BudgetPanel.jsx        — Expenses/Goals/Loans; uses MetricCard (static), VT, SmBtn, SH, iS, lS
     ├── BenefitsPanel.jsx      — 401k + PTO; uses MetricCard (static)
     ├── LogPanel.jsx           — Event log; uses MetricCard (static), iS, lS
-    └── WeekConfirmModal.jsx   — Week confirmation modal
+    ├── WeekConfirmModal.jsx   — Week confirmation modal (2-layer delta + event flow)
+    ├── SetupWizard.jsx        — Multi-step onboarding / life-event wizard
+    ├── LoginScreen.jsx        — Authentication and recovery shell
+    └── ProfilePanel.jsx       — Account and employment detail surfaces
 ```
 
 ---

@@ -101,12 +101,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const [dragOverGoalId, setDragOverGoalId] = useState(null);
   const [dragPreviewCategory, setDragPreviewCategory] = useState(null);
   const [draggingExpenseId, setDraggingExpenseId] = useState(null);
-  const [dragOverExpenseId, setDragOverExpenseId] = useState(null);
   const [dragPreviewExpenseCategory, setDragPreviewExpenseCategory] = useState(null);
+  const [touchInsertLane, setTouchInsertLane] = useState(null);
+  const [touchInsertIndex, setTouchInsertIndex] = useState(null);
   const [touchDragOverlay, setTouchDragOverlay] = useState({ visible: false, x: 0, y: 0, label: "", sourceCategory: "Needs" });
   const expenseTouchDraggingRef = useRef(false);
   const expenseTouchHoverLaneRef = useRef(null);
-  const expenseTouchHoverIdRef = useRef(null);
+  const expenseTouchInsertRef = useRef({ lane: null, index: null });
   const expenseTouchHoldTimerRef = useRef(null);
   const expenseTouchHoldMetaRef = useRef(null);
   const expenseTouchAutoScrollRef = useRef({ rafId: null, direction: 0, speed: 0 });
@@ -277,7 +278,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       expenseTouchAutoScrollRef.current.rafId = requestAnimationFrame(runTouchAutoScroll);
     }
   };
-  const reorderExpenseByDrag = (draggedId, overId, lane) => {
+  const reorderExpenseByInsert = (draggedId, lane, laneInsertIndex = null) => {
     setExpenses(prev => {
       const regular = prev.filter(e => e.type !== "loan");
       const dragged = regular.find(e => e.id === draggedId);
@@ -286,12 +287,22 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       const targetLane = lane ?? dragged.category;
       const regularWithoutDragged = regular.filter(e => e.id !== draggedId);
       const draggedNext = { ...dragged, category: targetLane };
-
+      const laneItems = regularWithoutDragged.filter(e => e.category === targetLane);
+      const normalizedLaneIndex = laneInsertIndex == null
+        ? laneItems.length
+        : Math.max(0, Math.min(laneInsertIndex, laneItems.length));
+      let seenInLane = 0;
       let insertIndex = regularWithoutDragged.length;
-      if (overId) {
-        const overIndex = regularWithoutDragged.findIndex(e => e.id === overId);
-        if (overIndex !== -1) insertIndex = overIndex;
-      } else {
+      for (let idx = 0; idx < regularWithoutDragged.length; idx += 1) {
+        const item = regularWithoutDragged[idx];
+        if (item.category !== targetLane) continue;
+        if (seenInLane === normalizedLaneIndex) {
+          insertIndex = idx;
+          break;
+        }
+        seenInLane += 1;
+      }
+      if (normalizedLaneIndex === laneItems.length) {
         const laneLastIndex = regularWithoutDragged.reduce((lastIdx, exp, idx) =>
           exp.category === targetLane ? idx : lastIdx, -1);
         insertIndex = laneLastIndex + 1;
@@ -304,6 +315,24 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       return prev.map(exp => exp.type === "loan" ? exp : reorderedRegular[regularIdx++]);
     });
   };
+  const getLaneInsertIndexFromY = (lane, clientY) => {
+    if (!lane || typeof document === "undefined") return null;
+    const laneEl = document.querySelector(`[data-expense-lane="${lane}"]`);
+    if (!laneEl) return null;
+    const laneCards = Array.from(laneEl.querySelectorAll("[data-expense-id]"))
+      .filter((card) => card.getAttribute("data-expense-id") !== draggingExpenseId);
+    if (!laneCards.length) return 0;
+    for (let idx = 0; idx < laneCards.length; idx += 1) {
+      const rect = laneCards[idx].getBoundingClientRect();
+      if (clientY < rect.top + (rect.height / 2)) return idx;
+    }
+    return laneCards.length;
+  };
+  const setTouchInsertTarget = (lane, index) => {
+    expenseTouchInsertRef.current = { lane, index };
+    setTouchInsertLane(lane);
+    setTouchInsertIndex(index);
+  };
   const onExpenseDragStart = (exp) => {
     if (expenseTouchHoldTimerRef.current) {
       clearTimeout(expenseTouchHoldTimerRef.current);
@@ -313,6 +342,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     setPendingExpenseTouchId(null);
     setDraggingExpenseId(exp.id);
     setDragPreviewExpenseCategory(exp.category);
+    const originLaneItems = regularExpenses.filter(e => e.id !== exp.id && e.category === exp.category);
+    setTouchInsertTarget(exp.category, originLaneItems.length);
   };
   const resetExpensePreviewToOrigin = () => {
     if (!draggingExpenseId) {
@@ -331,12 +362,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     setPendingExpenseTouchId(null);
     expenseTouchDraggingRef.current = false;
     expenseTouchHoverLaneRef.current = null;
-    expenseTouchHoverIdRef.current = null;
+    expenseTouchInsertRef.current = { lane: null, index: null };
     stopTouchAutoScroll();
     hideTouchDragOverlay();
     setDraggingExpenseId(null);
-    setDragOverExpenseId(null);
     setDragPreviewExpenseCategory(null);
+    setTouchInsertLane(null);
+    setTouchInsertIndex(null);
   };
   const onExpenseTouchStart = (e, exp) => {
     if (!e.target?.closest?.("[data-expense-drag-handle]")) return;
@@ -352,7 +384,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       if (!meta || meta.expenseId !== exp.id) return;
       expenseTouchDraggingRef.current = true;
       expenseTouchHoverLaneRef.current = meta.category;
-      expenseTouchHoverIdRef.current = null;
+      expenseTouchInsertRef.current = { lane: meta.category, index: null };
       setPendingExpenseTouchId(null);
       onExpenseDragStart(exp);
       showTouchDragOverlay({ clientX: meta.x, clientY: meta.y }, exp);
@@ -398,19 +430,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     if (lane === "Needs" || lane === "Lifestyle") {
       expenseTouchHoverLaneRef.current = lane;
       setDragPreviewExpenseCategory(lane);
+      const insertIndex = getLaneInsertIndexFromY(lane, point.clientY);
+      setTouchInsertTarget(lane, insertIndex);
     } else {
       expenseTouchHoverLaneRef.current = null;
       resetExpensePreviewToOrigin();
-    }
-
-    const overCardEl = hovered?.closest?.("[data-expense-id]");
-    const overId = overCardEl?.getAttribute("data-expense-id") ?? null;
-    if (overId && overId !== draggingExpenseId) {
-      expenseTouchHoverIdRef.current = overId;
-      setDragOverExpenseId(overId);
-    } else {
-      expenseTouchHoverIdRef.current = null;
-      setDragOverExpenseId(null);
+      setTouchInsertTarget(null, null);
     }
   };
   const onExpenseTouchEnd = () => {
@@ -423,7 +448,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       return;
     }
     const lane = expenseTouchHoverLaneRef.current ?? dragPreviewExpenseCategory;
-    reorderExpenseByDrag(draggingExpenseId, expenseTouchHoverIdRef.current, lane);
+    const insertIndex = expenseTouchInsertRef.current.lane === lane ? expenseTouchInsertRef.current.index : null;
+    reorderExpenseByInsert(draggingExpenseId, lane, insertIndex);
     onExpenseDragEnd();
   };
 
@@ -651,6 +677,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     {view === "overview" && <div>
       {overviewCats.map(cat => {
         const cExp = regularExpenses.filter(e => e.category === cat);
+        const laneCardsExcludingDragged = cExp.filter(item => item.id !== draggingExpenseId);
         const loanItems = cat === "Needs" ? loans : [];
         const cTot = cExp.reduce((s, e) => s + currentEffective(e, ap), 0)
                    + loanItems.reduce((s, e) => s + currentEffective(e, ap), 0);
@@ -664,20 +691,22 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             if (!isExpenseDropLane) return;
             e.preventDefault();
             setDragPreviewExpenseCategory(cat);
-            setDragOverExpenseId(null);
+            const insertIndex = getLaneInsertIndexFromY(cat, e.clientY);
+            setTouchInsertTarget(cat, insertIndex);
           }}
           onDrop={(e) => {
             if (!isExpenseDropLane) return;
             e.preventDefault();
             if (!draggingExpenseId) return;
-            reorderExpenseByDrag(draggingExpenseId, null, cat);
+            const insertIndex = getLaneInsertIndexFromY(cat, e.clientY);
+            reorderExpenseByInsert(draggingExpenseId, cat, insertIndex);
             onExpenseDragEnd();
           }}
           onDragLeave={(e) => {
             if (!isExpenseDropLane) return;
             if (e.currentTarget.contains(e.relatedTarget)) return;
-            setDragOverExpenseId(null);
             resetExpensePreviewToOrigin();
+            setTouchInsertTarget(null, null);
           }}
           style={{
             marginBottom: "24px",
@@ -700,10 +729,14 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             const activeBillingMeta = phaseBillingMeta ?? exp.billingMeta;
             const isEditing = editId === exp.id;
             const isDragging = draggingExpenseId === exp.id;
-            const isDropTarget = dragOverExpenseId === exp.id;
             const previewCategory = dragPreviewExpenseCategory ?? exp.category;
             const lanePreviewingMove = isDragging && previewCategory !== exp.category;
             const previewTint = lanePreviewingMove ? EXPENSE_DRAG_PREVIEW_TINT[previewCategory] : null;
+            const cardInsertIndex = laneCardsExcludingDragged.findIndex(item => item.id === exp.id);
+            const showInsertLineBefore = isExpenseDropLane
+              && draggingExpenseId
+              && touchInsertLane === cat
+              && touchInsertIndex === cardInsertIndex;
             return <div
               key={exp.id}
               data-expense-id={exp.id}
@@ -720,35 +753,37 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 if (!draggingExpenseId || !isExpenseDropLane) return;
                 e.preventDefault();
                 e.stopPropagation();
-                setDragOverExpenseId(exp.id);
                 setDragPreviewExpenseCategory(cat);
+                const insertIndex = getLaneInsertIndexFromY(cat, e.clientY);
+                setTouchInsertTarget(cat, insertIndex);
               }}
               onDrop={(e) => {
                 if (!isExpenseDropLane) return;
                 e.preventDefault();
                 e.stopPropagation();
                 if (!draggingExpenseId) return;
-                reorderExpenseByDrag(draggingExpenseId, exp.id, cat);
+                const insertIndex = getLaneInsertIndexFromY(cat, e.clientY);
+                reorderExpenseByInsert(draggingExpenseId, cat, insertIndex);
                 onExpenseDragEnd();
               }}
               onDragLeave={(e) => {
                 if (e.currentTarget.contains(e.relatedTarget)) return;
-                if (!isDragging) setDragOverExpenseId(null);
                 resetExpensePreviewToOrigin();
               }}
               style={{
                 background: lanePreviewingMove
                   ? `linear-gradient(120deg, ${CATEGORY_BG[cat]} 0%, ${CATEGORY_BG[cat]} 40%, ${previewTint} 72%, ${CATEGORY_BG[previewCategory]} 100%)`
                   : CATEGORY_BG[cat],
-                border: `1px solid ${isDropTarget ? `${CATEGORY_COLORS[cat]}99` : lanePreviewingMove ? `${CATEGORY_COLORS[previewCategory]}66` : "#1e1e1e"}`,
+                border: `1px solid ${lanePreviewingMove ? `${CATEGORY_COLORS[previewCategory]}66` : "#1e1e1e"}`,
                 borderRadius: "6px",
                 padding: "10px 12px",
                 marginBottom: "6px",
-                opacity: isDragging ? 0.92 : 1,
+                position: "relative",
+                opacity: isDragging ? 0.72 : 1,
                 cursor: isEditing ? "default" : (isExpenseDropLane ? (isDragging ? "grabbing" : "grab") : "default"),
-                transform: isDragging ? "scale(1.015) rotate(-1deg)" : "scale(1)",
+                transform: isDragging ? "scale(0.94)" : "scale(1)",
                 boxShadow: isDragging
-                  ? `0 10px 20px rgba(0,0,0,0.35), 0 0 0 1px ${CATEGORY_COLORS[previewCategory]}66`
+                  ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}33 inset`
                   : lanePreviewingMove ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}44 inset` : "none",
                 transition: "background 220ms ease, border-color 220ms ease, box-shadow 220ms ease, opacity 150ms ease, transform 150ms ease",
                 touchAction: isExpenseDropLane ? "pan-y" : "auto",
@@ -756,6 +791,20 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 WebkitUserSelect: isExpenseDropLane ? "none" : "auto",
               }}
             >
+              {showInsertLineBefore && <div
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  left: "12px",
+                  right: "12px",
+                  top: "-5px",
+                  height: "4px",
+                  borderRadius: "999px",
+                  background: "#fff",
+                  boxShadow: "0 0 0 1px rgba(255,255,255,0.2)",
+                  opacity: 0.96,
+                }}
+              />}
               {isEditing ? <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <span style={{ fontSize: "12px" }}>{exp.label}</span>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
@@ -823,6 +872,18 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               </div>}
             </div>;
           })}
+          {isExpenseDropLane && draggingExpenseId && touchInsertLane === cat && touchInsertIndex === laneCardsExcludingDragged.length && <div
+            aria-hidden
+            style={{
+              height: "4px",
+              borderRadius: "999px",
+              margin: "2px 4px 8px",
+              background: "#ffffff",
+              boxShadow: "0 0 0 1px rgba(255,255,255,0.25)",
+              opacity: 0.94,
+              transition: "opacity 140ms ease",
+            }}
+          />}
           {loanItems.map(exp => {
             const effAmt = currentEffective(exp, ap);
             const meta = exp.loanMeta;

@@ -126,6 +126,17 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const wr = weeklyIncome - ts;
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
+  const overviewCatOrder = ["Needs", "Lifestyle", "Transfers"];
+  const overviewCats = cats
+    .slice()
+    .sort((a, b) => {
+      const aIdx = overviewCatOrder.indexOf(a);
+      const bIdx = overviewCatOrder.indexOf(b);
+      const safeA = aIdx === -1 ? overviewCatOrder.length : aIdx;
+      const safeB = bIdx === -1 ? overviewCatOrder.length : bIdx;
+      if (safeA !== safeB) return safeA - safeB;
+      return a.localeCompare(b);
+    });
   const f = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -532,7 +543,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
     {/* OVERVIEW — expense list; loans rendered inside Needs */}
     {view === "overview" && <div>
-      {cats.map(cat => {
+      {overviewCats.map(cat => {
         const cExp = regularExpenses.filter(e => e.category === cat);
         const loanItems = cat === "Needs" ? loans : [];
         const cTot = cExp.reduce((s, e) => s + currentEffective(e, ap), 0)

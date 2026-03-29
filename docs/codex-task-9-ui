@@ -1,0 +1,268 @@
+Follow TASK_SPEC.
+
+Task: FEATURE_BRAND_SYSTEM_FLOW_FOUNDATION
+
+Objective:
+Create and apply a complete visual brand foundation for the finance app based on the "Flow" direction:
+- modern fintech
+- smooth, fluid UX
+- approachable but still polished
+- movement-oriented (money flow, life flow)
+- scalable to mass adoption
+- inspired by Chime/Cash App but more refined and systemized
+- avoids looking cheap, overly playful, or overly corporate
+
+This task is strictly visual/branding.
+Do not add features or modify business logic.
+
+---
+
+TODO LIST
+
+1. Establish the Flow visual identity foundation
+- Brand should feel:
+  - smooth
+  - lightweight
+  - modern
+  - financially intuitive
+  - slightly optimistic
+- Users should feel:
+  - “my money is moving clearly”
+  - “this is easy to use daily”
+- Avoid heavy, rigid, or overly serious tone (contrast with Apex)
+
+2. Implement the Flow color system
+
+Core backgrounds:
+- bg.primary = #07130F
+- bg.secondary = #0D1F19
+
+Gradient system:
+- gradient.primary = linear(180deg, #0F2A21 → #07130F)
+
+Accent system:
+- accent.primary = #00C896
+- accent.soft = #4ADE80
+
+Text:
+- text.primary = #E6F4EF
+- text.secondary = #7FA39A
+
+Semantic:
+- success = #22C55E
+- danger = #EF4444
+- warning = #F59E0B
+
+Color rules:
+- Gradients are allowed but must be subtle (no loud transitions)
+- Green is the primary identity but must feel controlled, not neon
+- Avoid full-screen bright green (do not copy Cash App)
+- Maintain a layered dark-green system like Chime, but smoother
+
+3. Build the “flow-based” UI feel
+
+Core principle:
+- The UI should feel like movement, not static control panels
+
+UI traits:
+- soft gradients
+- floating cards
+- rounded corners (12–16px)
+- layered depth
+- smooth transitions
+
+Avoid:
+- rigid grid-heavy layouts (too enterprise)
+- ultra-dense dashboards (too Apex-like)
+- harsh contrast
+
+4. Introduce the progression system (Flow version)
+
+Rename XP → **“Flow Score”**
+
+Concept:
+- measures financial consistency and movement
+- weekly or rolling progress
+
+Implementation guidance:
+- use line graphs, soft fills, or flowing progress indicators
+- subtle animations preferred
+- no badges, no “level up” screens
+
+Avoid:
+- game-style progress bars
+- numeric “level” systems
+- loud reward feedback
+
+5. Create the logo direction exploration
+
+Logo direction:
+- fluid upward curve or wave
+- represents motion, liquidity, and life progression
+- should feel:
+  - continuous
+  - smooth
+  - minimal
+
+Avoid:
+- rigid geometric-only shapes (too Apex)
+- literal finance symbols
+- cartoon wave shapes
+- anything that looks like a fitness app logo
+
+Logo must:
+- scale to app icon
+- be simple and recognizable
+- work in monochrome + accent
+
+6. Define typography behavior
+
+Typography direction:
+- Headings: Inter or General Sans
+- Body: Inter
+
+Style:
+- slightly more open spacing than Apex
+- softer presentation
+- less aggressive density
+
+Rules:
+- maintain readability over style
+- avoid futuristic fonts
+- avoid overly playful rounded fonts
+
+7. Build the Flow dashboard style
+
+Dashboard goals:
+- emphasize clarity of movement (money in/out)
+- show financial state without feeling heavy
+- feel like a daily-use tool
+
+Styling:
+- gradient header or background zones
+- floating cards with soft elevation
+- rounded containers
+- subtle shadow layering
+
+Suggested structure:
+- top: balance + movement indicator
+- middle: financial tools (cards)
+- bottom: activity / flow tracking
+
+8. Introduce motion principles
+
+This system depends more on motion than Apex.
+
+Guidelines:
+- transitions should feel fluid (ease-in-out, not snappy)
+- progress should animate gently
+- card transitions should feel like sliding/flowing
+
+Avoid:
+- bouncy animations
+- gamified motion
+- delayed laggy transitions
+
+9. Prepare for ecosystem expansion
+
+Even though this is finance:
+- design should extend into:
+  - fitness (activity flow)
+  - life planning (goal flow)
+  - family systems (shared flow)
+
+System requirement:
+- Flow becomes a universal metaphor across apps
+
+10. Avoid the following visual mistakes
+
+Do not introduce:
+- neon green overload
+- Cash App clones
+- overly bright UI
+- cartoonish fluid shapes
+- game-like UI elements
+- overly flat design (needs depth)
+- overly dark/flat black (loses Flow identity)
+
+---
+
+IMPLEMENTATION STEPS
+
+1. Audit current finance UI for areas to apply Flow system
+2. Add/update theme tokens for green system + gradients
+3. Apply gradient backgrounds to key surfaces (header, containers if appropriate)
+4. Restyle cards:
+   - increase radius
+   - soften shadows
+   - introduce floating feel
+5. Adjust spacing system for more breathing room
+6. Update typography hierarchy to feel more open and accessible
+7. Introduce Flow Score visualization if any progress UI exists
+8. Apply accent green only where meaningful (CTA, highlights, active states)
+9. Ensure UI feels cohesive and not fragmented
+10. Keep all changes scoped to visual layer only
+
+---
+
+CONSTRAINTS
+
+- No business logic changes
+- No new feature additions
+- No navigation restructuring
+- No large refactors outside visual scope
+- Do not replace entire component architecture
+- Do not introduce experimental UI patterns
+- Maintain production-ready implementation quality
+- Keep system consistent across screens touched
+
+---
+
+AFFECTED AREAS
+- theme tokens → risk of inconsistency across components
+- dashboard layout → risk of breaking hierarchy clarity
+- card components → risk of shadow/radius inconsistency
+- text contrast → risk of readability loss in green tones
+- gradients → risk of banding or poor rendering
+
+---
+
+RISK AREAS
+- green overuse → cheap fintech clone feel
+- gradients → can feel dated if too strong
+- motion → can feel gimmicky if overdone
+- spacing changes → can break alignment consistency
+- floating cards → may reduce perceived structure
+
+---
+
+POTENTIAL BUGS
+- gradient rendering differences across devices
+- text contrast failing accessibility thresholds
+- hover/focus states inconsistent after restyle
+- card overflow issues with increased radius/padding
+- inconsistent dark mode application across screens
+
+---
+
+VALIDATION CHECKLIST
+- UI renders without console errors
+- No type errors introduced
+- Gradient usage is subtle and clean
+- Green accent is controlled and not overwhelming
+- Dashboard remains readable and scannable
+- UI feels smooth and modern, not game-like
+- No unrelated files modified
+- No business logic changed
+- Layout holds across standard mobile screen sizes
+
+---
+
+RETURN
+- files_changed
+- changes_made
+- design_tokens_added_or_updated
+- gradient_usage_summary
+- motion_or_animation_changes
+- new_risks_detected
+- validation_result

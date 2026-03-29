@@ -36,11 +36,11 @@ function useCountUp(target, duration = 1200) {
 // SHARED UI PRIMITIVES
 // ─────────────────────────────────────────────────────────────
 
-export const iS = { background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", color: "var(--color-text-primary)", padding: "10px 12px", borderRadius: "8px", fontSize: "16px", width: "100%", boxSizing: "border-box", fontFamily: "'JetBrains Mono', 'Courier New', monospace", minHeight: "44px" };
+export const iS = { background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", color: "var(--color-text-primary)", padding: "10px 12px", borderRadius: "10px", fontSize: "16px", width: "100%", boxSizing: "border-box", fontFamily: "'JetBrains Mono', 'Courier New', monospace", minHeight: "44px" };
 export const lS = { fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "4px", display: "block", fontFamily: "var(--font-sans)" };
 
-export function NT({ label, active, onClick }) { return <button onClick={onClick} style={{ padding: "10px 18px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontFamily: "var(--font-sans)", background: active ? "var(--color-gold)" : "var(--color-bg-surface)", color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)", border: "1px solid " + (active ? "var(--color-gold)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{label}</button>; }
-export function VT({ label, active, onClick }) { return <button onClick={onClick} style={{ padding: "10px 16px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontFamily: "var(--font-sans)", background: active ? "var(--color-gold)" : "var(--color-bg-surface)", color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)", border: "1px solid " + (active ? "var(--color-gold)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{label}</button>; }
+export function NT({ label, active, onClick }) { return <button onClick={onClick} style={{ padding: "10px 18px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontFamily: "var(--font-sans)", background: active ? "rgba(91,140,255,0.18)" : "var(--color-bg-surface)", color: active ? "var(--color-accent-primary)" : "var(--color-text-secondary)", border: "1px solid " + (active ? "var(--color-border-accent)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{label}</button>; }
+export function VT({ label, active, onClick }) { return <button onClick={onClick} style={{ padding: "10px 16px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontFamily: "var(--font-sans)", background: active ? "rgba(124,92,255,0.16)" : "var(--color-bg-surface)", color: active ? "#b9a8ff" : "var(--color-text-secondary)", border: "1px solid " + (active ? "rgba(124,92,255,0.4)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{label}</button>; }
 
 // ─────────────────────────────────────────────────────────────
 // METRIC CARD
@@ -58,9 +58,9 @@ export function VT({ label, active, onClick }) { return <button onClick={onClick
 // ─────────────────────────────────────────────────────────────
 
 const METRIC_STATUS = {
-  green: { bg: "rgba(76,175,125,0.10)", border: "rgba(76,175,125,0.22)", val: "var(--color-green)" },
-  gold:  { bg: "rgba(201,168,76,0.10)", border: "rgba(201,168,76,0.22)", val: "var(--color-gold)" },
-  red:   { bg: "rgba(224,92,92,0.10)",  border: "rgba(224,92,92,0.22)",  val: "var(--color-red)" },
+  green: { bg: "linear-gradient(180deg, rgba(34,197,94,0.12), rgba(34,197,94,0.05))", border: "rgba(34,197,94,0.28)", val: "var(--color-success)" },
+  gold:  { bg: "linear-gradient(180deg, rgba(91,140,255,0.16), rgba(91,140,255,0.06))", border: "rgba(91,140,255,0.3)", val: "var(--color-accent-primary)" },
+  red:   { bg: "linear-gradient(180deg, rgba(239,68,68,0.14), rgba(239,68,68,0.06))", border: "rgba(239,68,68,0.3)", val: "var(--color-danger)" },
 };
 
 // fmt$ used by MetricCard to display counted dollar values
@@ -80,7 +80,7 @@ const _fmt$ = (n) => {
 //   rawVal        — raw number for countup + flash (pass only for $ values)
 //   entranceIndex — stagger index (0-based) for HomePanel grid entrance
 // ─────────────────────────────────────────────────────────────
-export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex }) {
+export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, trend }) {
   const [pressed,  setPressed]  = useState(false);
   const [flashing, setFlashing] = useState(false);
   const prevRaw = useRef(null);
@@ -113,8 +113,8 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
     gridColumn: span === 2 ? "span 2" : undefined,
     background: s ? s.bg : "var(--color-bg-surface)",
     border: `1px solid ${s ? s.border : "var(--color-border-subtle)"}`,
-    borderRadius: "16px",
-    padding: isButton ? "16px 18px" : "18px 16px",
+    borderRadius: "14px",
+    padding: isButton ? "16px 16px" : "16px 14px",
     textAlign: "left",
     color: "inherit",
     minWidth: 0,
@@ -122,7 +122,8 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
     ...(isButton && {
       cursor: "pointer",
       transform: pressed ? "scale(0.97)" : "scale(1)",
-      transition: "transform 80ms ease",
+      transition: "transform 80ms ease, box-shadow 220ms ease",
+      boxShadow: pressed ? "0 0 0 1px rgba(124,92,255,0.4)" : "inset 0 1px 0 rgba(255,255,255,0.02)",
       minHeight: "88px",
       display: "flex",
       flexDirection: "column",
@@ -147,6 +148,12 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
       {sub && (
         <div style={{ fontSize: isButton ? "10px" : "11px", color: "var(--color-text-secondary)", marginTop: isButton ? "auto" : "5px", paddingTop: isButton ? "6px" : 0, fontFamily: "var(--font-sans)" }}>
           {sub}
+        </div>
+      )}
+      {trend && (
+        <div style={{ marginTop: "8px", display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "9px", letterSpacing: "1.2px", textTransform: "uppercase", color: trend.dir === "down" ? "var(--color-danger)" : trend.dir === "up" ? "var(--color-accent-primary)" : "var(--color-text-secondary)", background: trend.dir === "down" ? "rgba(239,68,68,0.13)" : trend.dir === "up" ? "rgba(91,140,255,0.14)" : "rgba(143,144,166,0.14)", border: "1px solid " + (trend.dir === "down" ? "rgba(239,68,68,0.35)" : trend.dir === "up" ? "rgba(91,140,255,0.34)" : "rgba(143,144,166,0.28)"), borderRadius: "999px", padding: "3px 8px" }}>
+          <span style={{ fontSize: "10px", lineHeight: 1 }}>{trend.dir === "down" ? "↘" : trend.dir === "up" ? "↗" : "→"}</span>
+          <span>{trend.text}</span>
         </div>
       )}
     </>

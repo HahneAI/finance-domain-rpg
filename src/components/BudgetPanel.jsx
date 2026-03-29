@@ -265,6 +265,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   };
   const onExpenseTouchStart = (e, exp) => {
     if (!e.target?.closest?.("[data-expense-drag-handle]")) return;
+    e.preventDefault();
     if (expenseTouchHoldTimerRef.current) clearTimeout(expenseTouchHoldTimerRef.current);
     const point = e.touches?.[0];
     if (!point) return;
@@ -685,7 +686,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   style={{
                     background: pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}22` : "transparent",
                     color: pendingExpenseTouchId === exp.id ? CATEGORY_COLORS[cat] : "#666",
-                    border: `1px solid ${pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}66` : "#2a2a2a"}`,
+                    border: `1px solid ${pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}66` : "#444"}`,
                     borderRadius: "8px",
                     width: "26px",
                     height: "26px",
@@ -697,6 +698,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                     fontSize: "11px",
                     cursor: isEditing ? "default" : "grab",
                     touchAction: "none",
+                    userSelect: "none",
+                    WebkitUserSelect: "none",
+                    WebkitTouchCallout: "none",
                   }}
                 >
                   ⋮⋮

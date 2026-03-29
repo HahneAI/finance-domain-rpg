@@ -1,0 +1,178 @@
+# Codex Task Specification
+
+This file is both:
+1. Human-readable documentation
+2. Machine-readable instruction format for Codex
+
+Codex MUST follow only the `TASK_SPEC` block.
+
+---
+
+## GLOBAL RULES
+
+- One task = one PR
+- Never mix FEATURE and BUG logic
+- Do not modify files outside declared scope
+- Prefer minimal, surgical edits
+- Preserve existing architecture unless explicitly told otherwise
+
+---
+
+# =========================
+# TASK_SPEC (MACHINE READABLE)
+# =========================
+
+```json
+{
+  "task_id": "FEATURE_drag_reorder_expense_cards_with_category_preview",
+  "task_type": "FEATURE",
+  "status": "PENDING",
+
+  "objective": "Enable users to click and drag expense cards to re-order them, and show a live category transition fade on the card when dragging between Expenses and Lifestyle before the card is dropped.",
+
+  "scope": {
+    "allowed_files": [
+      "expense list drag-and-drop UI components",
+      "expense card component",
+      "lifestyle card/list component",
+      "drag-and-drop state management for budget items",
+      "category styling or card visual state logic"
+    ],
+    "restricted_files": [
+      "database schema",
+      "backend API routes",
+      "authentication logic",
+      "unrelated dashboard pages",
+      "global theme system unless required for this card preview effect"
+    ],
+    "entry_points": [
+      "expense list rendering",
+      "lifestyle list rendering",
+      "shared draggable card component",
+      "drag hover / drag over handlers"
+    ],
+    "out_of_scope": [
+      "creating new categories",
+      "editing expense values",
+      "changing persistence model unless current reorder flow already persists order",
+      "mobile gesture redesign beyond supporting the existing drag interaction",
+      "large UI refactors"
+    ]
+  },
+
+  "implementation": {
+    "steps": [
+      "Inspect the current expense and lifestyle card rendering flow and identify the drag-and-drop implementation or nearest interaction layer.",
+      "Add support for re-ordering expense cards via click-and-drag within their list using the existing architecture if possible.",
+      "Support dragging cards between Expenses and Lifestyle if that interaction already exists or is intended by the current UI structure.",
+      "While a dragged card is hovering over a different category zone, apply a live visual preview on the dragged card showing a transition fade toward the destination category color before drop.",
+      "Ensure the preview state updates on drag enter / drag over and resets cleanly on drag leave, cancel, or drop.",
+      "Keep the effect lightweight and localized to the dragged card and hovered destination state.",
+      "Do not modify unrelated business logic or styling outside what is required for drag preview and reordering."
+    ],
+    "constraints": [
+      "Do not modify unrelated logic",
+      "Preserve existing TypeScript types",
+      "Do not change styling outside the drag-preview interaction unless necessary",
+      "Use the app's current drag-and-drop pattern if one already exists",
+      "Keep transitions smooth but minimal",
+      "Do not introduce unnecessary dependencies if the current project already has a drag-and-drop solution"
+    ]
+  },
+
+  "change_log": {
+    "expected_changes": [
+      {
+        "file": "expense/lifestyle drag list component(s)",
+        "change": "Add or refine drag-and-drop reorder handling and cross-category hover state tracking"
+      },
+      {
+        "file": "expense card component",
+        "change": "Add visual drag-preview styling that fades toward the destination category color while hovering before drop"
+      },
+      {
+        "file": "shared drag state or helper logic",
+        "change": "Track current dragged item, hovered destination category, and cleanup behavior on drag end"
+      }
+    ]
+  },
+
+  "impact_analysis": {
+    "affected_areas": [
+      "expense card ordering",
+      "lifestyle card ordering",
+      "cross-category drag interactions",
+      "card hover and transition visuals"
+    ],
+    "risk_areas": [
+      "drag state cleanup",
+      "incorrect hover category detection",
+      "visual state persisting after drop or cancel",
+      "order index updates",
+      "desktop versus touch interaction differences"
+    ],
+    "potential_bugs": [
+      {
+        "area": "drag preview styling",
+        "risk": "card may stay faded after drag ends or after leaving a category zone"
+      },
+      {
+        "area": "reordering logic",
+        "risk": "items may reorder incorrectly or snap back unexpectedly"
+      },
+      {
+        "area": "cross-category movement",
+        "risk": "hover color preview may show wrong destination category"
+      },
+      {
+        "area": "render performance",
+        "risk": "multiple cards may re-render or flicker during drag"
+      },
+      {
+        "area": "drop handling",
+        "risk": "drop may update visual state without correctly updating underlying category/order data"
+      }
+    ]
+  },
+
+  "post_commit_review": {
+    "issue_summary": "A previous agent run incorrectly applied a split drag-and-drop category layout (Expense Goals and Lifestyle containers) to the Goals tab instead of limiting that behavior to the Expenses tab.",
+    "root_cause_focus": [
+      "Trace where task scope was misapplied from Expenses tab requirements into Goals tab rendering.",
+      "Identify the commit(s) that introduced Goals tab container splitting behavior.",
+      "Confirm whether shared drag-and-drop components were reused without tab-specific guards."
+    ],
+    "required_follow_up": [
+      "Restore the Goals panel to a single-section layout.",
+      "Remove the unintended Expense Goals/Lifestyle split containers from the Goals tab only.",
+      "Keep the new Goals timeline bar behavior exactly as currently implemented (no regressions, no visual rollback).",
+      "Ensure drag-and-drop category interaction remains scoped to the Expenses tab where intended."
+    ],
+    "validation_addendum": [
+      "Goals tab renders as one section only.",
+      "Goals timeline bar remains unchanged from current implementation.",
+      "Expenses tab retains intended drag/drop category behavior.",
+      "No cross-tab UI coupling introduces category containers into Goals again."
+    ]
+  },
+
+  "validation": {
+    "checks": [
+      "Expense cards can be reordered by drag-and-drop",
+      "Dragging across Expenses and Lifestyle shows a live color transition preview before drop",
+      "Preview resets correctly on cancel, drop, or drag leave",
+      "No console errors",
+      "No TypeScript errors",
+      "No unintended file changes"
+    ]
+  },
+
+  "output_format": {
+    "require_summary": true,
+    "summary_fields": [
+      "files_changed",
+      "changes_made",
+      "new_risks_detected"
+    ]
+  }
+}

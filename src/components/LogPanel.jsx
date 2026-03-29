@@ -346,18 +346,12 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       </div>
     </div>}
 
-    {/* Summary cards */}
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "12px", marginBottom: "20px" }}>
-      <Card label="Total Gross Lost" val={f(tot.gL)} color="var(--color-red)" />
-      <Card label="Total Net Lost"   val={f(tot.nL)} color="var(--color-red)" />
-      <Card label="Adjusted Take-Home"    val={f0(adjTH)} color="var(--color-green)" />
-      <Card label="Adj. Weekly Unalloc." val={f(adjWA)}  color={adjWA > 0 ? "var(--color-green)" : "var(--color-red)"} />
+    {/* Hero cards */}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
+      <Card label="Total Net Lost" val={f(tot.nL)} color="var(--color-red)" />
+      <Card label="PTO Accrual Lost" val={`${(tot.pto / 20).toFixed(1)} hrs`} sub={`${tot.pto}h ÷ 20`} color="#888" />
+      <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`} sub="Unapproved absences" color="#e8622a" />
     </div>
-    {(tot.k4 > 0 || tot.bucket > 0) && <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
-      {tot.k4 > 0    && <Card label="401k Lost"          val={f(tot.k4)}                              sub="Events after May 15"     color="#7a8bbf" />}
-      {tot.pto > 0   && <Card label="PTO Accrual Lost"   val={`${(tot.pto / 20).toFixed(1)} hrs`}     sub={`${tot.pto}h ÷ 20`}      color="#888" />}
-      {tot.bucket > 0 && <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`}                     sub="Unapproved absences"     color="#e8622a" />}
-    </div>}
 
     {/* Compact bucket status widget */}
     {bucketModel && (() => {
@@ -390,9 +384,30 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       );
     })()}
 
-    {/* Goals impact */}
-    <div style={{ background: ok ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${ok ? "var(--color-green)" : "var(--color-red)"}`, borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+    {/* Consolidated pre-log summary */}
+    <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
+      <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "10px" }}>
+        Log Effect Summary
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: "10px 14px", marginBottom: "10px" }}>
+        <div>
+          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Total Gross Lost</div>
+          <div style={{ fontSize: "14px", color: "var(--color-red)", fontWeight: "bold" }}>{f(tot.gL)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adjusted Take-Home</div>
+          <div style={{ fontSize: "14px", color: "var(--color-green)", fontWeight: "bold" }}>{f0(adjTH)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adj. Weekly Unalloc.</div>
+          <div style={{ fontSize: "14px", color: adjWA > 0 ? "var(--color-green)" : "var(--color-red)", fontWeight: "bold" }}>{f(adjWA)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Lost</div>
+          <div style={{ fontSize: "14px", color: "#7a8bbf", fontWeight: "bold" }}>{f(tot.k4)}</div>
+        </div>
+      </div>
+      <div style={{ borderTop: "1px solid #1f1f1f", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
         <div>
           <div style={{ fontSize: "10px", letterSpacing: "2px", color: ok ? "var(--color-green)" : "var(--color-red)", textTransform: "uppercase", marginBottom: "4px" }}>Goals Impact</div>
           <div style={{ fontSize: "12px", color: "#aaa" }}>Adj. savings: <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f0(projS)}</span> · Goals: <span style={{ color: "var(--color-gold)" }}>{f0(totGoals)}</span></div>
@@ -470,7 +485,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
                     const col = pct >= 0.3 ? "var(--color-red)" : pct >= 0.15 ? "var(--color-gold)" : "var(--color-text-secondary)";
                     return (
                       <div key={day} style={{ display: "flex", alignItems: "center", gap: "5px", background: "var(--color-bg-raised)", padding: "4px 10px", borderRadius: "12px" }}>
-                        <span style={{ fontSize: "10px", color: isWeekend ? "var(--color-gold)" : col, fontWeight: pct >= 0.2 ? "bold" : "normal", textTransform: "uppercase", letterSpacing: "1px" }}>{day}</span>
+                        <span style={{ fontSize: "10px", color: isWeekend ? "var(--color-gold)" : col, fontWeight: pct >= 0.2 ? "bold" : "normal", textTransform: "uppercase", letterSpacing: "1px" }}>{day.toUpperCase()}</span>
                         <span style={{ fontSize: "11px", color: col, fontFamily: "var(--font-mono)", fontWeight: "bold" }}>{count}</span>
                       </div>
                     );
@@ -636,8 +651,5 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       </div>;
     })}
 
-    <div style={{ marginTop: "24px", padding: "12px", background: "var(--color-bg-surface)", borderRadius: "6px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: "2" }}>
-      Missed (approved) = projected − actual gross. Unapproved = hours × base rate + bucket hit. Partial (approved) = hours lost × base rate, no bucket deduction. PTO accrues while on PTO. FICA {(config.ficaRate * 100).toFixed(2)}% always applied. 401k impact on events after {config.k401StartDate}.
-    </div>
   </div>);
 }

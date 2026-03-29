@@ -1,0 +1,168 @@
+# Codex Task Specification
+
+This file is both:
+1. Human-readable documentation
+2. Machine-readable instruction format for Codex
+
+Codex MUST follow only the `TASK_SPEC` block.
+
+---
+
+## GLOBAL RULES
+
+- One task = one PR
+- Never mix FEATURE and BUG logic
+- Do not modify files outside declared scope
+- Prefer minimal, surgical edits
+- Preserve existing architecture unless explicitly told otherwise
+
+---
+
+# =========================
+# TASK_SPEC (MACHINE READABLE)
+# =========================
+
+```json
+{
+  "task_id": "FEATURE_expense_inline_editor_pay_cycle_math",
+  "task_type": "FEATURE",
+  "status": "PENDING",
+
+  "objective": "Update the expense inline editor so the primary input flow captures the expense amount and a payment frequency dropdown, then automatically calculate how much should be set aside per paycheck based on that expense pay cycle. This auto-start math must only begin from the day the expense is created or edited and move forward from that date.",
+
+  "scope": {
+    "allowed_files": [
+      "expense inline editor component",
+      "expense form/input components",
+      "expense calculation helpers/services",
+      "expense model/type definitions related to amount, frequency, and per-paycheck calculations",
+      "paycheck allocation display logic for expense cards/details",
+      "date handling logic related to expense effective start date on create/edit"
+    ],
+    "restricted_files": [
+      "authentication logic",
+      "unrelated dashboard pages/components",
+      "global theme system",
+      "database schema unless required for storing frequency/effective date fields already expected by the current architecture",
+      "income/paycheck setup flows unless directly needed to consume existing paycheck schedule data"
+    ],
+    "entry_points": [
+      "expense inline editor open/edit flow",
+      "expense create/update submit handler",
+      "expense math/allocation helper functions",
+      "expense card/detail rendering where per-paycheck amount is displayed"
+    ],
+    "out_of_scope": [
+      "full budgeting system redesign",
+      "new category system behavior",
+      "historical backfill before the create/edit date",
+      "editing paycheck schedule architecture",
+      "large UI refactors outside the inline editor"
+    ]
+  },
+
+  "implementation": {
+    "steps": [
+      "Inspect the current expense inline editor and identify the existing primary input fields and how expense math is currently computed.",
+      "Change the main inline-editor input flow so the user enters the expense/bill amount as the primary value.",
+      "Add a payment frequency dropdown with practical options such as weekly, biweekly, monthly/30-day cycle, and yearly, matching current app terminology where possible.",
+      "Store or derive the selected expense pay cycle in the expense data model using the current architecture.",
+      "Implement calculation logic that determines how much should be needed per paycheck for that expense based on the selected pay frequency and the user's existing paycheck cadence.",
+      "Ensure the expense auto-start math uses the create/edit day as the effective start date, and only allocates forward from that date rather than backfilling earlier periods.",
+      "When an existing expense is edited, reset or recalculate the forward-looking allocation from the edit date according to the new values.",
+      "Update relevant UI surfaces so the per-paycheck amount and frequency-driven calculation are clearly reflected without changing unrelated budget logic."
+    ],
+    "constraints": [
+      "Do not modify unrelated logic",
+      "Preserve existing TypeScript types",
+      "Prefer minimal edits over architecture refactors",
+      "Do not backfill historical allocation prior to the create/edit date",
+      "Reuse the app's existing paycheck cadence logic if already present",
+      "Keep frequency labels user-friendly and consistent with the current UI"
+    ]
+  },
+
+  "change_log": {
+    "expected_changes": [
+      {
+        "file": "expense inline editor component",
+        "change": "Replace or reorder the main input flow so amount and payment frequency are the primary editable fields"
+      },
+      {
+        "file": "expense form/model types",
+        "change": "Add or refine fields for expense payment frequency and effective calculation start date"
+      },
+      {
+        "file": "expense math helper/service",
+        "change": "Compute per-paycheck allocation based on expense cycle and only from the create/edit date forward"
+      },
+      {
+        "file": "expense card/detail display",
+        "change": "Show updated per-paycheck amount derived from the selected expense pay cycle"
+      }
+    ]
+  },
+
+  "impact_analysis": {
+    "affected_areas": [
+      "expense creation flow",
+      "expense editing flow",
+      "expense inline editor UI",
+      "per-paycheck budgeting math",
+      "date-based allocation behavior"
+    ],
+    "risk_areas": [
+      "monthly versus 30-day cycle interpretation",
+      "weekly and biweekly math alignment with paycheck cadence",
+      "effective start date handling on edit",
+      "display consistency between stored expense amount and computed per-paycheck amount",
+      "rounding behavior for cents"
+    ],
+    "potential_bugs": [
+      {
+        "area": "frequency math",
+        "risk": "weekly, biweekly, monthly, or yearly calculations may produce incorrect per-paycheck amounts"
+      },
+      {
+        "area": "edit flow",
+        "risk": "editing an expense may incorrectly preserve old allocation logic instead of restarting from the edit date"
+      },
+      {
+        "area": "effective start date",
+        "risk": "allocation may incorrectly backfill before the day the expense was created or edited"
+      },
+      {
+        "area": "UI display",
+        "risk": "inline editor may show one amount while cards/details show a conflicting derived amount"
+      },
+      {
+        "area": "rounding",
+        "risk": "per-paycheck allocation may drift by a few cents across cycles if rounding is inconsistent"
+      }
+    ]
+  },
+
+  "validation": {
+    "checks": [
+      "Inline editor prioritizes expense amount and payment frequency",
+      "Users can select a payment cycle such as weekly, biweekly, monthly/30-day, or yearly",
+      "Per-paycheck amount is calculated correctly from the selected expense cycle",
+      "Calculation uses the create/edit date as the forward-only effective start date",
+      "Editing an expense recalculates from the edit day forward",
+      "No historical backfill occurs before the create/edit date",
+      "No console errors",
+      "No TypeScript errors",
+      "No unintended file changes"
+    ]
+  },
+
+  "output_format": {
+    "require_summary": true,
+    "summary_fields": [
+      "files_changed",
+      "changes_made",
+      "calculation_rules_applied",
+      "new_risks_detected"
+    ]
+  }
+}

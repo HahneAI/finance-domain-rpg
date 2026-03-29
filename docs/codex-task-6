@@ -1,0 +1,137 @@
+# Codex Task Specification
+
+# =========================
+# TASK_SPEC (MACHINE READABLE)
+# =========================
+
+```json
+{
+  "task_id": "BUG_expense_pay_period_vs_monthly_math_audit",
+  "task_type": "BUG",
+  "status": "PENDING",
+
+  "objective": "Audit the expense math and UI display to determine whether the monthly expense amount is being incorrectly inflated relative to the pay-period chunk, or whether the issue is only a display/UI inconsistency. Confirm whether this is a real budgeting/math error or a UI fluke, and fix it if the source is identified.",
+
+  "scope": {
+    "allowed_files": [
+      "expense card component",
+      "expense math helper/utilities",
+      "expense summary display logic",
+      "pay period calculation helpers",
+      "relevant state selectors/hooks feeding expense display values"
+    ],
+    "restricted_files": [
+      "authentication logic",
+      "income/goals logic",
+      "tax payback logic",
+      "database schema",
+      "unrelated dashboard tabs/pages",
+      "global theme system"
+    ],
+    "entry_points": [
+      "expense card render flow",
+      "monthly cost display logic",
+      "weekly/biweekly pay-period chunk calculation",
+      "expense amount normalization helpers"
+    ],
+    "out_of_scope": [
+      "full expense system redesign",
+      "new budgeting features",
+      "broad UI refactors",
+      "changes unrelated to expense display/calculation consistency"
+    ]
+  },
+
+  "implementation": {
+    "steps": [
+      "Inspect the expense card/component where weekly cost, biweekly cost, and monthly cost are displayed.",
+      "Trace the source values used for pay-period chunk and monthly cost rendering.",
+      "Confirm whether monthly cost is derived correctly from the same underlying source as the pay-period chunk.",
+      "Check expected rules: if pay period is weekly, monthly should align with weekly cost multiplied by 4; if pay period is biweekly, monthly should align with biweekly cost multiplied by 2, unless the app intentionally uses a different documented monthly normalization rule.",
+      "Determine whether the discrepancy is caused by real calculation logic, hidden percentage/adjustment logic, rounding drift, or a UI display mismatch.",
+      "If this is a real math bug, fix the calculation so displayed values stay internally consistent.",
+      "If the math is correct but the UI is misleading, fix the UI labeling/display so the relationship is clear.",
+      "Return a clear audit result stating whether the issue was a crucial budgeting/math error or just a UI fluke."
+    ],
+    "constraints": [
+      "Keep the task focused on auditing and fixing this specific inconsistency",
+      "Preserve existing TypeScript types",
+      "Do not modify unrelated budgeting systems",
+      "Prefer minimal changes",
+      "Be explicit in the final output about whether the bug was mathematical or visual"
+    ]
+  },
+
+  "change_log": {
+    "expected_changes": [
+      {
+        "file": "expense display component",
+        "change": "Audit and potentially correct the displayed relationship between pay-period chunk and monthly cost"
+      },
+      {
+        "file": "expense math helper(s)",
+        "change": "Fix monthly/pay-period derivation only if a real underlying math inconsistency is found"
+      },
+      {
+        "file": "display labels or formatting logic",
+        "change": "Clarify values if the issue is caused by misleading UI presentation rather than wrong math"
+      }
+    ]
+  },
+
+  "impact_analysis": {
+    "affected_areas": [
+      "expense card display",
+      "monthly cost display",
+      "weekly/biweekly pay-period amount display",
+      "budgeting trust/accuracy"
+    ],
+    "risk_areas": [
+      "monthly normalization may intentionally differ from simple x4/x2 logic",
+      "rounding may create small differences that look larger in UI",
+      "display labels may not match actual calculation basis",
+      "fixing UI only may leave real hidden math issues unresolved if audit is incomplete"
+    ],
+    "potential_bugs": [
+      {
+        "area": "expense math",
+        "risk": "monthly cost may actually be inflated by a hidden multiplier or incorrect normalization rule"
+      },
+      {
+        "area": "UI display",
+        "risk": "the values may be mathematically correct but rendered/labeled in a misleading way"
+      },
+      {
+        "area": "rounding",
+        "risk": "rounding or formatting may make amounts appear inconsistent"
+      },
+      {
+        "area": "pay-period mapping",
+        "risk": "weekly vs biweekly logic may be using the wrong user pay cadence"
+      }
+    ]
+  },
+
+  "validation": {
+    "checks": [
+      "Audit confirms whether the issue is real math or only UI",
+      "Monthly and pay-period values are internally consistent after fix",
+      "Weekly and biweekly display rules match intended budgeting behavior",
+      "No hidden percentage or unexplained adjustment remains in displayed values",
+      "No console errors",
+      "No TypeScript errors",
+      "No unintended file changes"
+    ]
+  },
+
+  "output_format": {
+    "require_summary": true,
+    "summary_fields": [
+      "files_changed",
+      "audit_result_math_vs_ui",
+      "fix_applied",
+      "calculation_rule_confirmed",
+      "remaining_edge_cases"
+    ]
+  }
+}

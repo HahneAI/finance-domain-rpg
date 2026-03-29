@@ -139,6 +139,44 @@ Inactive icon: text-secondary
 Label: text-[10px] tracking-wide uppercase
 ```
 
+### Modal Shell (overlay dialogs)
+
+```
+Backdrop: rgba(0,0,0,0.72)+, full-viewport fixed overlay
+Container: bg-bg-surface, border border-border-subtle, rounded-2xl, p-5
+Header: text-xs tracking-widest uppercase text-secondary
+Primary action: green/gold solid fill with dark text
+Secondary action: bg-bg-raised + subtle border
+```
+
+### Auth Shell (login/recovery)
+
+```
+Full-screen centered card on bg-bg-base
+Card: max-width ~360px, bg-bg-surface, rounded-xl+, border-border-subtle
+Brand eyebrow: gold uppercase tracking
+Field labels: lS pattern, inputs: iS pattern
+OAuth + credential actions use shared uppercase button rhythm
+```
+
+### Wizard Step Shell (setup/life-events)
+
+```
+Single-column step card flow, generous vertical gap (12–20px)
+Pill/toggle controls use raised backgrounds + accent borders on active
+Two-column field rows collapse to one column on smaller screens (future-proof)
+Step actions pinned consistently at bottom of viewport/card
+```
+
+### Profile Detail Surfaces
+
+```
+BackBar: compact top row with gold back affordance + uppercase section title
+DetailCard: grouped rows with subtle separators and rounded surface container
+DetailRow: label left (text-secondary), value right (text-primary/status color)
+Danger action (sign out): red border/accent, high-contrast icon + label
+```
+
 -----
 
 ## Animations (Framer Motion)

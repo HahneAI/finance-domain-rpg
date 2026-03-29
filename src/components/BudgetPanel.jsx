@@ -33,6 +33,10 @@ const EXPENSE_DRAG_PREVIEW_TINT = {
   Needs: "rgba(217, 112, 112, 0.26)",
   Lifestyle: "rgba(122, 139, 191, 0.3)",
 };
+const EXPENSE_TOUCH_OVERLAY_BG = {
+  Needs: "#d97070",
+  Lifestyle: "#7a8bbf",
+};
 
 const EXPENSE_CYCLE_OPTIONS = [
   { value: "weekly", label: "Weekly", days: 7 },
@@ -98,18 +102,21 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const [draggingExpenseId, setDraggingExpenseId] = useState(null);
   const [dragOverExpenseId, setDragOverExpenseId] = useState(null);
   const [dragPreviewExpenseCategory, setDragPreviewExpenseCategory] = useState(null);
+  const [touchDragOverlay, setTouchDragOverlay] = useState({ visible: false, x: 0, y: 0, label: "", sourceCategory: "Needs" });
   const expenseTouchDraggingRef = useRef(false);
   const expenseTouchHoverLaneRef = useRef(null);
   const expenseTouchHoverIdRef = useRef(null);
   const expenseTouchHoldTimerRef = useRef(null);
   const expenseTouchHoldMetaRef = useRef(null);
   const expenseTouchAutoScrollRef = useRef({ rafId: null, direction: 0, speed: 0 });
+  const expenseTouchOverlayExitTimerRef = useRef(null);
   const [pendingExpenseTouchId, setPendingExpenseTouchId] = useState(null);
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const EXPENSE_TOUCH_HOLD_MS = 450;
   const TOUCH_SCROLL_CANCEL_PX = 12;
   const TOUCH_EDGE_AUTOSCROLL_ZONE_PX = 92;
   const TOUCH_MAX_AUTOSCROLL_SPEED_PX = 18;
+  const TOUCH_OVERLAY_EXIT_MS = 130;
   // Resolve the current effective amount for an expense at the active phase
   const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
 
@@ -218,7 +225,37 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   }, []);
   useEffect(() => () => {
     if (expenseTouchAutoScrollRef.current.rafId) cancelAnimationFrame(expenseTouchAutoScrollRef.current.rafId);
+    if (expenseTouchOverlayExitTimerRef.current) clearTimeout(expenseTouchOverlayExitTimerRef.current);
   }, []);
+  const showTouchDragOverlay = (point, exp) => {
+    if (!point || !exp) return;
+    if (expenseTouchOverlayExitTimerRef.current) {
+      clearTimeout(expenseTouchOverlayExitTimerRef.current);
+      expenseTouchOverlayExitTimerRef.current = null;
+    }
+    setTouchDragOverlay({
+      visible: true,
+      x: point.clientX,
+      y: point.clientY,
+      label: exp.label ?? "",
+      sourceCategory: exp.category === "Lifestyle" ? "Lifestyle" : "Needs",
+    });
+  };
+  const updateTouchDragOverlayPosition = (point) => {
+    if (!point) return;
+    setTouchDragOverlay(prev => prev.label ? { ...prev, x: point.clientX, y: point.clientY } : prev);
+  };
+  const hideTouchDragOverlay = () => {
+    if (expenseTouchOverlayExitTimerRef.current) {
+      clearTimeout(expenseTouchOverlayExitTimerRef.current);
+      expenseTouchOverlayExitTimerRef.current = null;
+    }
+    setTouchDragOverlay(prev => (prev.label ? { ...prev, visible: false } : prev));
+    expenseTouchOverlayExitTimerRef.current = setTimeout(() => {
+      setTouchDragOverlay({ visible: false, x: 0, y: 0, label: "", sourceCategory: "Needs" });
+      expenseTouchOverlayExitTimerRef.current = null;
+    }, TOUCH_OVERLAY_EXIT_MS);
+  };
   const stopTouchAutoScroll = () => {
     if (expenseTouchAutoScrollRef.current.rafId) cancelAnimationFrame(expenseTouchAutoScrollRef.current.rafId);
     expenseTouchAutoScrollRef.current = { rafId: null, direction: 0, speed: 0 };
@@ -295,6 +332,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     expenseTouchHoverLaneRef.current = null;
     expenseTouchHoverIdRef.current = null;
     stopTouchAutoScroll();
+    hideTouchDragOverlay();
     setDraggingExpenseId(null);
     setDragOverExpenseId(null);
     setDragPreviewExpenseCategory(null);
@@ -316,6 +354,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       expenseTouchHoverIdRef.current = null;
       setPendingExpenseTouchId(null);
       onExpenseDragStart(exp);
+      showTouchDragOverlay({ clientX: meta.x, clientY: meta.y }, exp);
     }, EXPENSE_TOUCH_HOLD_MS);
   };
   const onExpenseTouchMove = (e) => {
@@ -340,6 +379,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     const point = e.touches?.[0];
     if (!point) return;
     e.preventDefault();
+    updateTouchDragOverlayPosition(point);
     const edgeTop = TOUCH_EDGE_AUTOSCROLL_ZONE_PX;
     const edgeBottom = window.innerHeight - TOUCH_EDGE_AUTOSCROLL_ZONE_PX;
     if (point.clientY < edgeTop) {
@@ -1367,6 +1407,34 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         </div> : <button onClick={() => setAddingLoan(true)} style={{ background: "#1a1a14", color: "var(--color-gold)", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</button>}
       </div>;
     })()}
+    {touchDragOverlay.label && <div
+      aria-hidden="true"
+      style={{
+        position: "fixed",
+        left: touchDragOverlay.x,
+        top: touchDragOverlay.y,
+        transform: `translate(-50%, -130%) scale(${touchDragOverlay.visible ? 1 : 0.96}) ${touchDragOverlay.visible ? "rotate(-1deg)" : "rotate(0deg)"}`,
+        transformOrigin: "center bottom",
+        opacity: touchDragOverlay.visible ? 1 : 0,
+        transition: "opacity 120ms ease, transform 140ms cubic-bezier(.2,.75,.2,1)",
+        background: EXPENSE_TOUCH_OVERLAY_BG[touchDragOverlay.sourceCategory] ?? CATEGORY_COLORS[touchDragOverlay.sourceCategory] ?? "#7a8bbf",
+        color: "#fff",
+        borderRadius: "999px",
+        padding: "8px 12px",
+        fontSize: "12px",
+        fontWeight: 700,
+        letterSpacing: "0.2px",
+        boxShadow: "0 8px 18px rgba(0,0,0,0.28), 0 1px 0 rgba(255,255,255,0.12) inset",
+        pointerEvents: "none",
+        zIndex: 9999,
+        whiteSpace: "nowrap",
+        maxWidth: "72vw",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}
+    >
+      {touchDragOverlay.label}
+    </div>}
   </div>);
 }
 

@@ -1,4 +1,4 @@
-import { MetricCard } from "./ui.jsx";
+import { FlowSparklineCard, MetricCard } from "./ui.jsx";
 
 const fmt$ = (n) => {
   if (n == null || isNaN(n)) return "$—";
@@ -28,6 +28,12 @@ export function HomePanel({
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
   const nextWeekNet = futureWeekNets?.[0];
   const flowScore = Math.min(100, Math.round(Math.max(0, (1 - spendRatio) * 55 + (adjustedWeeklyAvg > 0 ? 25 : 10) + (goals.length ? (goals.filter(g => g.completed).length / goals.length) * 20 : 0))));
+  const flowTrendSource = [adjustedWeeklyAvg, ...(futureWeekNets || []).slice(0, 5)].filter((v) => v != null);
+  const flowTrendPoints = (flowTrendSource.length > 1 ? flowTrendSource : [adjustedWeeklyAvg, weeklyIncome * 0.92, weeklyIncome * 0.98, weeklyIncome * 1.04, weeklyIncome * 1.09, weeklyIncome * 1.12])
+    .map((amount) => {
+      const base = Math.max(1, weeklyIncome || 1);
+      return Math.max(5, Math.min(98, Math.round(50 + ((amount - base * 0.9) / (base * 0.9)) * 22)));
+    });
 
   const completedGoals = goals.filter(g => g.completed);
   const totalGoalTarget = goals.reduce((s, g) => s + g.target, 0);
@@ -135,15 +141,12 @@ export function HomePanel({
         <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", lineHeight: 1.6 }}>
           {subtitle}
         </div>
-        <div style={{ marginTop: "12px", maxWidth: "260px", marginInline: "auto", textAlign: "left" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px", fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-soft)" }}>
-            <span>Flow Score</span>
-            <span>{flowScore}</span>
-          </div>
-          <div style={{ height: "6px", background: "rgba(127,163,154,0.2)", borderRadius: "999px", overflow: "hidden" }}>
-            <div style={{ width: `${flowScore}%`, height: "100%", background: "linear-gradient(90deg, var(--color-accent-primary), var(--color-accent-soft))", borderRadius: "999px", transition: "width 0.45s ease-in-out" }} />
-          </div>
-        </div>
+        <FlowSparklineCard
+          label="Flow Score"
+          score={flowScore}
+          points={flowTrendPoints}
+          trendLabel={`Projected pace · ${flowTrendPoints.length} checkpoints`}
+        />
       </div>
 
       {/* 2-column tile grid */}

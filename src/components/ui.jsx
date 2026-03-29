@@ -171,5 +171,76 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
 // Backward-compat alias — all existing <Card> usages continue to work
 export const Card = MetricCard;
 
+export function FlowSparklineCard({
+  label = "Flow Score",
+  score = 0,
+  points = [],
+  trendLabel,
+}) {
+  const width = 260;
+  const height = 72;
+  const padX = 6;
+  const padY = 8;
+  const safePoints = (Array.isArray(points) ? points : []).slice(0, 7);
+  const fallbackPoints = safePoints.length > 1 ? safePoints : [35, 44, 52, 58, 63, 70];
+  const min = Math.min(...fallbackPoints);
+  const max = Math.max(...fallbackPoints);
+  const range = Math.max(1, max - min);
+  const stepX = (width - padX * 2) / (fallbackPoints.length - 1);
+
+  const pointPairs = fallbackPoints.map((p, i) => {
+    const x = padX + i * stepX;
+    const norm = (p - min) / range;
+    const y = height - padY - norm * (height - padY * 2);
+    return [x, y];
+  });
+
+  const linePath = pointPairs
+    .map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`)
+    .join(" ");
+  const areaPath = `${linePath} L${(width - padX).toFixed(1)} ${(height - padY).toFixed(1)} L${padX.toFixed(1)} ${(height - padY).toFixed(1)} Z`;
+  const [lastX, lastY] = pointPairs[pointPairs.length - 1];
+  const clampedScore = Math.max(0, Math.min(100, Math.round(score || 0)));
+
+  return (
+    <div
+      style={{
+        marginTop: "14px",
+        borderRadius: "16px",
+        border: "1px solid rgba(0, 200, 150, 0.24)",
+        background: "linear-gradient(180deg, rgba(15,42,33,0.72), rgba(7,19,15,0.94))",
+        padding: "12px",
+        boxShadow: "0 10px 26px rgba(0,0,0,0.24)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
+        <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>{label}</div>
+        <div style={{ fontSize: "23px", lineHeight: 1, fontWeight: 700, color: "var(--color-accent-soft)", fontFamily: "var(--font-display)" }}>{clampedScore}</div>
+      </div>
+
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="72" role="img" aria-label="Flow trend">
+        <defs>
+          <linearGradient id="flow-area" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="rgba(74,222,128,0.35)" />
+            <stop offset="100%" stopColor="rgba(74,222,128,0)" />
+          </linearGradient>
+          <linearGradient id="flow-line" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stopColor="var(--color-accent-primary)" />
+            <stop offset="100%" stopColor="var(--color-accent-soft)" />
+          </linearGradient>
+        </defs>
+
+        <path d={areaPath} fill="url(#flow-area)" />
+        <path d={linePath} fill="none" stroke="url(#flow-line)" strokeWidth="3" strokeLinecap="round" />
+        <circle cx={lastX} cy={lastY} r="4" fill="var(--color-accent-soft)" />
+      </svg>
+
+      <div style={{ marginTop: "7px", fontSize: "10px", color: "var(--color-text-secondary)", letterSpacing: "0.4px" }}>
+        {trendLabel ?? "Consistency trend · last 6 projected cycles"}
+      </div>
+    </div>
+  );
+}
+
 export function SmBtn({ children, onClick, c = "var(--color-text-secondary)", bg = "var(--color-bg-surface)" }) { return <button onClick={onClick} style={{ background: bg, color: c, border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "10px 14px", minHeight: "44px", fontSize: "11px", fontFamily: "var(--font-sans)", cursor: "pointer", }}>{children}</button>; }
 export function SH({ children, color, right }) { const c = color || "var(--color-gold)"; return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "4px" }}><div style={{ display: "flex", alignItems: "center", gap: "12px" }}><div style={{ width: "3px", height: "18px", background: c, borderRadius: "2px", flexShrink: 0 }} /><div style={{ fontSize: "11px", letterSpacing: "3px", color: c, textTransform: "uppercase", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{children}</div></div>{right != null && <div style={{ fontSize: "12px", color: c, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{right}</div>}</div>; }

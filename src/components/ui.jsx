@@ -194,6 +194,85 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
 
 export const Card = MetricCard;
 
+function toneFromStatus(status) {
+  if (status === "green") {
+    return {
+      border: "rgba(34,197,94,0.34)",
+      bg: "rgba(34,197,94,0.08)",
+      text: "var(--color-success)",
+    };
+  }
+  if (status === "red") {
+    return {
+      border: "rgba(239,68,68,0.34)",
+      bg: "rgba(239,68,68,0.08)",
+      text: "var(--color-danger)",
+    };
+  }
+  return {
+    border: "rgba(110,91,255,0.40)",
+    bg: "rgba(110,91,255,0.10)",
+    text: "var(--color-accent-soft)",
+  };
+}
+
+export function ExecutivePulseCard({ title = "Executive Pulse", summary, tags = [], status = "gold", detail }) {
+  const tone = toneFromStatus(status);
+  return (
+    <div
+      style={{
+        marginBottom: "12px",
+        borderRadius: "18px",
+        border: `1px solid ${tone.border}`,
+        background: "linear-gradient(165deg, rgba(18,18,26,0.96) 0%, rgba(18,18,26,0.74) 100%)",
+        padding: "15px 16px",
+        boxShadow: "0 8px 28px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.03)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
+        <div style={{ fontSize: "10px", letterSpacing: "2.8px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+          {title}
+        </div>
+        <div style={{ padding: "4px 9px", borderRadius: "999px", border: `1px solid ${tone.border}`, background: tone.bg, color: tone.text, fontSize: "10px", letterSpacing: "1.2px", textTransform: "uppercase", fontWeight: 600 }}>
+          {status === "green" ? "Stable" : status === "red" ? "Needs Focus" : "Building"}
+        </div>
+      </div>
+
+      <div style={{ color: "var(--color-text-primary)", fontSize: "14px", lineHeight: 1.55, marginBottom: tags.length ? "12px" : "4px" }}>
+        {summary}
+      </div>
+
+      {tags.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              style={{
+                fontSize: "10px",
+                letterSpacing: "1.2px",
+                textTransform: "uppercase",
+                color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border-subtle)",
+                borderRadius: "999px",
+                padding: "5px 9px",
+                background: "rgba(255,255,255,0.02)",
+              }}
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {detail && (
+        <div style={{ marginTop: "12px", fontSize: "11px", color: "var(--color-text-secondary)", letterSpacing: "0.3px" }}>
+          {detail}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SmBtn({ children, onClick, c = "var(--color-text-secondary)", bg = "var(--color-bg-secondary)" }) {
   return <button onClick={onClick} style={{ background: bg, color: c, border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "10px 14px", minHeight: "44px", fontSize: "11px", fontFamily: "var(--font-sans)", cursor: "pointer" }}>{children}</button>;
 }

@@ -1,4 +1,4 @@
-import { MetricCard } from "./ui.jsx";
+import { ExecutivePulseCard, MetricCard } from "./ui.jsx";
 
 const fmt$ = (n) => {
   if (n == null || isNaN(n)) return "$—";
@@ -32,6 +32,23 @@ export function HomePanel({
   const totalGoalTarget = goals.reduce((s, g) => s + g.target, 0);
   const completedGoalValue = completedGoals.reduce((s, g) => s + g.target, 0);
   const momentumProgress = goals.length > 0 ? completedGoals.length / goals.length : 0;
+  const runwayWeeks = adjustedWeeklyAvg > 0 ? Math.floor(Math.max(0, totalGoalTarget - completedGoalValue) / adjustedWeeklyAvg) : null;
+  const runwayLabel = runwayWeeks == null ? "Runway paused" : runwayWeeks <= 0 ? "Goal runway complete" : `${runwayWeeks} week runway`;
+  const pulseStatus = adjustedWeeklyAvg > 150 && spendRatio < 0.7
+    ? "green"
+    : adjustedWeeklyAvg < 0 || spendRatio >= 0.9
+      ? "red"
+      : "gold";
+  const pulseTags = [
+    `Weekly left ${fmt$(adjustedWeeklyAvg)}`,
+    `Spend ratio ${fmtPct(spendRatio)}`,
+    goals.length ? `${Math.round(momentumProgress * 100)}% momentum` : "No goals yet",
+  ];
+  const pulseSummary = pulseStatus === "green"
+    ? "Your current operating rhythm is strong: spending remains contained and weekly net cash stays positive."
+    : pulseStatus === "red"
+      ? "Your financial system is under pressure this cycle. Shift focus to short-term cost control before adding new goals."
+      : "You are on a controlled trajectory. Keep execution steady and prioritize consistency over aggressive changes.";
 
   // Subtitle: "Another beautiful day, {Weekday} the {Nth}. You are working on your {goal} goal"
   const topGoal = goals.find(g => !g.completed)?.label?.toLowerCase() ?? "financial";
@@ -137,6 +154,13 @@ export function HomePanel({
           {subtitle}
         </div>
       </div>
+
+      <ExecutivePulseCard
+        summary={pulseSummary}
+        tags={pulseTags}
+        status={pulseStatus}
+        detail={`Momentum outlook · ${runwayLabel}`}
+      />
 
       {/* 2-column tile grid */}
       <div style={{

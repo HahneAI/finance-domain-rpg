@@ -5,12 +5,13 @@ import { computeNet, dhlEmployerMatchRate, toLocalIso } from "../lib/finance.js"
 import { deriveRollingIncomeWeeks, progressiveScale } from "../lib/rollingTimeline.js";
 import { Card, VT, SH, iS, lS } from "./ui.jsx";
 
-export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, logNetLost, logNetGained, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today }) {
+export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today }) {
   const [view, setView] = useState("summary");
   const [subview, setSubview] = useState("overview");
   const [editCfg, setEditCfg] = useState(null);
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
+  const [showEventLossInfo, setShowEventLossInfo] = useState(false);
 
   // ── Sharpen Rates modal state ──────────────────────────────────────────────
   const [sg1, setSg1] = useState("");
@@ -66,7 +67,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     };
   });
   const yG = allWeeks.filter(w => w.active).reduce((s, w) => s + w.grossPay, 0);
-  const yN = projectedAnnualNet;
+  const yN = adjustedTakeHome;
   const yE = allWeeks.reduce((s, w) => s + w.k401kEmployee, 0);
   const yT = allWeeks.reduce((s, w) => s + w.k401kEmployee + w.k401kEmployer, 0);
   const sc = t => t ? "#7a8bbf" : "var(--color-green)", sb = t => t ? "#1e1e3a" : "#1e4a30", sbd = t => t ? "#7a8bbf" : "var(--color-green)";
@@ -194,6 +195,58 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       </div>
     )}
 
+    {/* ── Missed event day take-home modal ───────────────────────────────────── */}
+    {showEventLossInfo && (
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 210,
+        background: "rgba(0,0,0,0.75)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "24px 16px",
+      }} onClick={() => setShowEventLossInfo(false)}>
+        <div style={{
+          width: "100%", maxWidth: "420px",
+          background: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border-subtle)",
+          borderRadius: "16px", padding: "20px",
+          display: "flex", flexDirection: "column", gap: "12px",
+        }} onClick={e => e.stopPropagation()}>
+          <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>
+            Missed Event Day Impact
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+            Breakdown includes only take-home loss from missed event day logs.
+          </div>
+          <div style={{ background: "var(--color-bg-raised)", borderRadius: "10px", padding: "12px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "12px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+              <span style={{ color: "var(--color-text-secondary)" }}>Projected net (before events)</span>
+              <strong>{f(projectedAnnualNet)}</strong>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+              <span style={{ color: "var(--color-text-secondary)" }}>Missed event day take-home loss</span>
+              <strong style={{ color: "var(--color-red)" }}>-{f(missedEventDayNetLost)}</strong>
+            </div>
+            <div style={{ borderTop: "1px solid var(--color-border-subtle)", paddingTop: "8px", display: "flex", justifyContent: "space-between", gap: "8px" }}>
+              <span style={{ color: "var(--color-text-secondary)" }}>Adjusted net shown on card</span>
+              <strong style={{ color: "var(--color-gold)" }}>{f(adjustedTakeHome)}</strong>
+            </div>
+          </div>
+          <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>
+            Card and modal both use the same adjusted net event-impact source.
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button onClick={() => setShowEventLossInfo(false)} style={{
+              background: "var(--color-bg-raised)", color: "var(--color-text-secondary)",
+              border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
+              padding: "8px 16px", fontSize: "10px", letterSpacing: "2px",
+              textTransform: "uppercase", cursor: "pointer",
+            }}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* ── Estimated rates banner ──────────────────────────────────────────────── */}
     {config.taxRatesEstimated && (
       <div style={{
@@ -218,22 +271,21 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     )}
 
     <div style={{ background: "#111", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "16px", marginBottom: "20px" }}>
-      <SH>Year Summary</SH>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: (logNetLost > 0 || logNetGained > 0) ? "14px" : "0" }}>
+      <SH right={<button
+        onClick={() => setShowEventLossInfo(true)}
+        aria-label="Show missed event day loss details"
+        style={{
+          width: "24px", height: "24px", borderRadius: "999px", border: "1px solid var(--color-border-subtle)",
+          background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", cursor: "pointer",
+          display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "12px", lineHeight: 1
+        }}
+      >i</button>}>Year Summary</SH>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px" }}>
         <Card label="Gross (Year)" val={f(yG)} />
-        <Card label="Projected Net" val={f(yN)} color="var(--color-green)" />
+        <Card label="Adjusted Net" val={f(yN)} color="var(--color-green)" sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : undefined} />
         <Card label="Your 401k" val={f(yE)} color="#7a8bbf" />
         <Card label="401k w/ Match" val={f(yT)} color="var(--color-gold)" />
       </div>
-      {(logNetLost > 0 || logNetGained > 0) && <div style={{ background: logNetLost > logNetGained ? "#2d1a1a" : "#1a2d1e", border: `1px solid ${logNetLost > logNetGained ? "rgba(224,92,92,0.33)" : "rgba(76,175,125,0.33)"}`, borderRadius: "6px", padding: "11px 14px", marginTop: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <span>Event log:</span>
-          {logNetLost > 0 && <span style={{ color: "var(--color-red)", fontWeight: "bold" }}>-{f(logNetLost)} lost</span>}
-          {logNetGained > 0 && <span style={{ color: "var(--color-green)", fontWeight: "bold" }}>+{f(logNetGained)} gained</span>}
-          <span>· Adjusted take-home:</span>
-        </div>
-        <div style={{ fontSize: "18px", fontWeight: "bold", color: "var(--color-gold)" }}>{f(adjustedTakeHome)}</div>
-      </div>}
     </div>
     <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
       {["summary", "401k", "config"].map(v => <VT key={v} label={v} active={view === v} onClick={() => setView(v)} />)}

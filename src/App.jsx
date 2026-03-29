@@ -312,12 +312,15 @@ export default function App() {
     const futureWeekCount = futureWeeks.length || 1;
     const weeklyNetAdjustments = {};
     const futureEventDeductionsByWeek = {};
-    let nL = 0, nG = 0, k4L = 0, k4ML = 0, k4G = 0, k4MG = 0, ptoL = 0, bucket = 0;
+    let nL = 0, nG = 0, k4L = 0, k4ML = 0, k4G = 0, k4MG = 0, ptoL = 0, bucket = 0, missedEventDayNetLost = 0;
     const grossDeltaByWeek = {};
 
     logs.forEach(e => {
       const i = calcEventImpact(e, config);
       nL += i.netLost; nG += i.netGained;
+      if ((e.type === "missed_unpaid" || e.type === "missed_unapproved") && i.netLost) {
+        missedEventDayNetLost += i.netLost;
+      }
       k4L += i.k401kLost; k4ML += i.k401kMatchLost;
       k4G += i.k401kGained; k4MG += i.k401kMatchGained;
       ptoL += i.hoursLostForPTO; bucket += i.bucketHoursDeducted;
@@ -337,6 +340,7 @@ export default function App() {
     const totalNetAdjustment = Object.values(weeklyNetAdjustments).reduce((s, v) => s + v, 0);
     return {
       netLost: nL, netGained: nG,
+      missedEventDayNetLost,
       k401kLost: k4L, k401kMatchLost: k4ML,
       k401kGained: k4G, k401kMatchGained: k4MG,
       ptoHoursLost: ptoL, bucketHours: bucket,
@@ -401,6 +405,7 @@ export default function App() {
   const logTotals = useMemo(() => ({
     netLost: eventImpact.netLost,
     netGained: eventImpact.netGained,
+    missedEventDayNetLost: eventImpact.missedEventDayNetLost,
     k401kLost: eventImpact.k401kLost,
     k401kMatchLost: eventImpact.k401kMatchLost,
     k401kGained: eventImpact.k401kGained,
@@ -479,8 +484,7 @@ export default function App() {
         allWeeks={allWeeks} config={config} setConfig={setConfig}
         showExtra={showExtra} setShowExtra={setShowExtra}
         taxDerived={taxDerived}
-        logNetLost={logTotals.netLost}
-        logNetGained={logTotals.netGained}
+        missedEventDayNetLost={logTotals.missedEventDayNetLost}
         adjustedTakeHome={logTotals.adjustedTakeHome}
         projectedAnnualNet={projectedAnnualNet}
         currentWeek={currentWeek}

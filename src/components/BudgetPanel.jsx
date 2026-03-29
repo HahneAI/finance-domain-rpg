@@ -35,10 +35,10 @@ const EXPENSE_DRAG_PREVIEW_TINT = {
 };
 
 const EXPENSE_CYCLE_OPTIONS = [
-  { value: "weekly", label: "Every week", days: 7 },
-  { value: "biweekly", label: "Every 2 weeks", days: 14 },
+  { value: "weekly", label: "Weekly", days: 7 },
+  { value: "biweekly", label: "Biweekly", days: 14 },
   { value: "every30days", label: "Every 30 days", days: 30 },
-  { value: "yearly", label: "Every year", days: 365 },
+  { value: "yearly", label: "Yearly", days: 365 },
 ];
 
 const cycleByValue = EXPENSE_CYCLE_OPTIONS.reduce((acc, opt) => {
@@ -46,14 +46,16 @@ const cycleByValue = EXPENSE_CYCLE_OPTIONS.reduce((acc, opt) => {
   return acc;
 }, {});
 
-const weeklyFromCycle = (amount, cycle) => {
-  const days = cycleByValue[cycle]?.days ?? 7;
-  return days > 0 ? (amount * 7) / days : 0;
+const PAYCHECK_CADENCE_DAYS = 7; // existing app cadence: one paycheck per fiscal week
+
+const perPaycheckFromCycle = (amount, cycle) => {
+  const days = cycleByValue[cycle]?.days ?? PAYCHECK_CADENCE_DAYS;
+  return days > 0 ? (amount * PAYCHECK_CADENCE_DAYS) / days : 0;
 };
 
-const cycleAmountFromWeekly = (weekly, cycle) => {
-  const days = cycleByValue[cycle]?.days ?? 7;
-  return days > 0 ? (weekly * days) / 7 : weekly;
+const cycleAmountFromPerPaycheck = (perPaycheck, cycle) => {
+  const days = cycleByValue[cycle]?.days ?? PAYCHECK_CADENCE_DAYS;
+  return days > 0 ? (perPaycheck * days) / PAYCHECK_CADENCE_DAYS : perPaycheck;
 };
 
 export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, futureWeeks, futureWeekNets, futureEventDeductions, currentWeek, today }) {
@@ -130,42 +132,46 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     const anchorWeekly = latest.weekly[0] ?? 0;
     setEditId(exp.id);
     setEditVals({
-      amount: cycleAmountFromWeekly(anchorWeekly, cycle).toFixed(2),
+      amount: cycleAmountFromPerPaycheck(anchorWeekly, cycle).toFixed(2),
       cycle,
     });
   };
   const saveEditExp = (id) => {
     const cycle = editVals.cycle ?? "every30days";
     const amount = parseFloat(editVals.amount) || 0;
-    const weekly = weeklyFromCycle(amount, cycle);
-    const newWeekly = [weekly, weekly, weekly, weekly];
+    const perPaycheck = perPaycheckFromCycle(amount, cycle);
+    const newWeekly = [perPaycheck, perPaycheck, perPaycheck, perPaycheck];
     setExpenses(prev => prev.map(e => {
       if (e.id !== id) return e;
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
       const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
       if (daysDiff <= 3) {
-        return { ...e, history: existing.map(entry =>
-          entry.effectiveFrom === latest.effectiveFrom
-            ? { effectiveFrom: TODAY_ISO, weekly: newWeekly }
-            : entry
-        ), billingMeta: { amount, cycle }};
+        return {
+          ...e,
+          history: existing.map(entry =>
+            entry.effectiveFrom === latest.effectiveFrom
+              ? { effectiveFrom: TODAY_ISO, weekly: newWeekly }
+              : entry
+          ),
+          billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO }
+        };
       }
-      return { ...e, history: [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }], billingMeta: { amount, cycle } };
+      return { ...e, history: [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }], billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO } };
     }));
     setEditId(null);
   };
   const addExp = () => {
     const amount = parseFloat(newExp.amount) || 0;
     const cycle = newExp.cycle ?? "every30days";
-    const weekly = weeklyFromCycle(amount, cycle);
+    const perPaycheck = perPaycheckFromCycle(amount, cycle);
     setExpenses(prev => [...prev, {
       id: `exp_${Date.now()}`,
       category: newExp.category,
       label: newExp.label,
       note: [newExp.note, newExp.note, newExp.note, newExp.note],
-      billingMeta: { amount, cycle },
-      history: [{ effectiveFrom: TODAY_ISO, weekly: [weekly, weekly, weekly, weekly] }]
+      billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO },
+      history: [{ effectiveFrom: TODAY_ISO, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }]
     }]);
     setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   };
@@ -609,7 +615,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   </div>
                 </div>
                 <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
-                  Per-check reserve: {f2(weeklyFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days"))}
+                  Per-paycheck reserve: {f2(perPaycheckFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days"))}
                 </div>
                 <div style={{ display: "flex", gap: "6px" }}>
                   <button onClick={() => saveEditExp(exp.id)} style={{ background: "var(--color-green)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", flex: 1 }}>SAVE</button>
@@ -646,7 +652,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                     <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
                     <div style={{ fontSize: "10px", color: "#777" }}>{f(effAmt * 52 / 12)}/mo</div>
                     {exp.billingMeta && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>{f2(exp.billingMeta.amount ?? 0)} · {cycleByValue[exp.billingMeta.cycle]?.label ?? "Custom cycle"}</div>}
-                    {latestEntry && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "1px" }}>since {latestEntry.effectiveFrom}</div>}
+                    {latestEntry && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "1px" }}>reserve started {exp.billingMeta?.effectiveFrom ?? latestEntry.effectiveFrom}</div>}
                   </div>
                   <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
                   {delExpId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
@@ -711,7 +717,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           <div><label style={lS}>Paid Every</label><select value={newExp.cycle} onChange={e => setNewExp(v => ({ ...v, cycle: e.target.value }))} style={iS}>{EXPENSE_CYCLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></div>
           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note (optional)</label><input type="text" value={newExp.note} onChange={e => setNewExp(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Short description" /></div>
           <div style={{ gridColumn: "1/-1", fontSize: "10px", color: "var(--color-text-secondary)" }}>
-            This sets aside {f2(weeklyFromCycle(parseFloat(newExp.amount) || 0, newExp.cycle))} from each paycheck.
+            This sets aside {f2(perPaycheckFromCycle(parseFloat(newExp.amount) || 0, newExp.cycle))} from each paycheck.
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>

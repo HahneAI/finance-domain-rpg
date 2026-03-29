@@ -58,6 +58,15 @@ const cycleAmountFromPerPaycheck = (perPaycheck, cycle) => {
   return days > 0 ? (perPaycheck * days) / PAYCHECK_CADENCE_DAYS : perPaycheck;
 };
 
+const MONTH_SUBDIVISIONS = 4;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const clamp01 = (n) => Math.min(1, Math.max(0, n));
+const safeDate = (raw) => {
+  if (!raw) return null;
+  const d = raw instanceof Date ? raw : new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
 export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, futureWeeks, futureWeekNets, futureEventDeductions, currentWeek, today }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
@@ -431,27 +440,53 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   };
 
   const weeksLeft = futureWeeks?.length ?? 44;
-  const timelineMonthSegments = useMemo(() => {
-    if (!futureWeeks?.length) return [];
-    const buckets = [];
-    futureWeeks.forEach((week, weekOffset) => {
-      const rawWeekEnd = week?.weekEnd;
-      const d = rawWeekEnd instanceof Date ? rawWeekEnd : new Date(rawWeekEnd);
-      if (Number.isNaN(d.getTime())) return;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const label = d.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
-      const existing = buckets[buckets.length - 1];
-      if (!existing || existing.key !== key) {
-        buckets.push({ key, label, start: weekOffset, end: weekOffset + 1 });
-      } else {
-        existing.end = weekOffset + 1;
-      }
-    });
-    if (!buckets.length) {
-      return [{ key: "fallback", label: "WEEKS", start: 0, end: Math.max(futureWeeks.length, 1) }];
-    }
-    return buckets;
+  const timelineBounds = useMemo(() => {
+    if (!futureWeeks?.length) return null;
+    const validWeeks = futureWeeks
+      .map((week) => ({
+        start: safeDate(week?.weekStart),
+        end: safeDate(week?.weekEnd),
+      }))
+      .filter((week) => week.start && week.end && week.end > week.start);
+    if (!validWeeks.length) return null;
+    const startMs = Math.min(...validWeeks.map(week => week.start.getTime()));
+    const endMs = Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS;
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
+    return { startMs, endMs, spanMs: endMs - startMs };
   }, [futureWeeks]);
+
+  const timelineMonthSegments = useMemo(() => {
+    if (!timelineBounds) return [];
+    const segments = [];
+    const timelineStart = new Date(timelineBounds.startMs);
+    const timelineEnd = new Date(timelineBounds.endMs);
+    const cursor = new Date(timelineStart.getFullYear(), timelineStart.getMonth(), 1);
+
+    while (cursor < timelineEnd) {
+      const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+      const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      const segStart = Math.max(monthStart.getTime(), timelineBounds.startMs);
+      const segEnd = Math.min(monthEnd.getTime(), timelineBounds.endMs);
+      if (segEnd > segStart) {
+        const leftPct = ((segStart - timelineBounds.startMs) / timelineBounds.spanMs) * 100;
+        const widthPct = ((segEnd - segStart) / timelineBounds.spanMs) * 100;
+        const blockWidthPct = widthPct / MONTH_SUBDIVISIONS;
+        segments.push({
+          key: `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, "0")}`,
+          label: monthStart.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
+          leftPct,
+          widthPct,
+          subdivisions: Array.from({ length: MONTH_SUBDIVISIONS }, (_, idx) => ({
+            key: idx,
+            leftPct: leftPct + (blockWidthPct * idx),
+            widthPct: blockWidthPct,
+          })),
+        });
+      }
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return segments;
+  }, [timelineBounds]);
 
   // Goal timeline — computed at component level so useEffect can read it
   const tl = useMemo(
@@ -846,7 +881,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             <div style={{ fontSize: "10px", color: "#666" }}>{laneGoals.length}</div>
           </div>
           {!laneGoals.length && <div style={{ border: `1px dashed ${GOAL_LANES[lane].border}`, borderRadius: "8px", padding: "10px 12px", fontSize: "10px", color: "#666", letterSpacing: "1px", textTransform: "uppercase" }}>Drop a goal here</div>}
-          {laneGoals.map((g) => {
+          {laneGoals.map((g, i) => {
           const ok = g.eW !== null && g.eW <= weeksLeft;
           const isEditing = editGoalId === g.id;
           const celebrating = fundingId === g.id;
@@ -927,11 +962,21 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               {(() => {
                 const nWeeks = Math.max(weeksLeft, 1);
                 const rawStart = Number.isFinite(g.sW) ? g.sW : 0;
-                const rawSpan = Number.isFinite(g.wN) ? g.wN : 0;
-                const startWeek = Math.max(0, Math.floor(rawStart));
-                const endWeek = Math.max(startWeek, Math.min(nWeeks, Math.ceil(rawStart + rawSpan)));
-                const weeklyChunks = [];
-                for (let wk = startWeek; wk < endWeek; wk++) weeklyChunks.push(wk);
+                const projectedEnd = Number.isFinite(g.eW) ? g.eW : rawStart + (Number.isFinite(g.wN) ? g.wN : 0);
+                const startWeek = Math.min(nWeeks, Math.max(0, rawStart));
+                const endWeek = Math.min(nWeeks, Math.max(startWeek, projectedEnd));
+                const fallbackLeftPct = (startWeek / nWeeks) * 100;
+                const fallbackWidthPct = Math.max(((endWeek - startWeek) / nWeeks) * 100, 0);
+                let goalLeftPct = fallbackLeftPct;
+                let goalWidthPct = fallbackWidthPct;
+                if (timelineBounds?.spanMs) {
+                  const weekMs = timelineBounds.spanMs / nWeeks;
+                  const startMs = timelineBounds.startMs + (startWeek * weekMs);
+                  const endMs = timelineBounds.startMs + (endWeek * weekMs);
+                  goalLeftPct = clamp01((startMs - timelineBounds.startMs) / timelineBounds.spanMs) * 100;
+                  goalWidthPct = Math.max(clamp01((endMs - startMs) / timelineBounds.spanMs) * 100, 0);
+                }
+                const visibleWidthPct = goalWidthPct > 0 && goalWidthPct < 0.45 ? 0.45 : goalWidthPct;
                 return <div style={{ marginBottom: "8px" }}>
                   <div style={{
                     height: "16px",
@@ -942,37 +987,45 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                     overflow: "hidden",
                     marginBottom: "6px"
                   }}>
-                    {/* Month overlays + four-week subdivisions */}
+                    {/* Month overlays + subtle 4-block week chunks */}
                     {timelineMonthSegments.map(seg => {
-                      const left = (seg.start / nWeeks) * 100;
-                      const width = ((seg.end - seg.start) / nWeeks) * 100;
                       return <div key={seg.key} style={{
                         position: "absolute",
                         top: 0,
-                        left: `${left}%`,
-                        width: `${width}%`,
+                        left: `${seg.leftPct}%`,
+                        width: `${seg.widthPct}%`,
                         height: "100%",
-                        borderLeft: "1px solid #242424",
-                        backgroundImage: "repeating-linear-gradient(to right, transparent 0%, transparent 24%, rgba(255,255,255,0.07) 25%, transparent 26%)",
-                        opacity: 0.45,
+                        borderLeft: "1px solid #232323",
+                        borderRight: "1px solid #1a1a1a",
+                        opacity: 0.7,
                         pointerEvents: "none"
-                      }} />;
+                      }}>
+                        {seg.subdivisions.map((sub) => (
+                          <div key={`${seg.key}-sub-${sub.key}`} style={{
+                            position: "absolute",
+                            top: "1px",
+                            bottom: "1px",
+                            left: `${sub.leftPct - seg.leftPct}%`,
+                            width: `${sub.widthPct}%`,
+                            borderRight: sub.key < MONTH_SUBDIVISIONS - 1 ? "1px solid rgba(255,255,255,0.07)" : "none",
+                            background: sub.key % 2 === 0 ? "rgba(255,255,255,0.015)" : "rgba(255,255,255,0.03)",
+                          }} />
+                        ))}
+                      </div>;
                     })}
-                    {/* Weekly chunk funding fill */}
-                    {weeklyChunks.map(wk => (
-                      <div key={wk} style={{
-                        position: "absolute",
-                        top: "2px",
-                        left: `${(wk / nWeeks) * 100}%`,
-                        width: `${Math.max((1 / nWeeks) * 100 - 0.12, 0.18)}%`,
-                        height: "calc(100% - 4px)",
-                        borderRadius: "2px",
-                        background: celebrating ? "var(--color-green)" : g.color,
-                        opacity: celebrating ? 1 : (ok ? 0.95 : 0.55),
-                        boxShadow: celebrating ? "0 0 10px rgba(76,175,125,0.55)" : "none",
-                        transition: "background 0.35s ease-out, opacity 0.35s ease-out"
-                      }} />
-                    ))}
+                    {/* Continuous goal bar with partial month positioning */}
+                    {visibleWidthPct > 0 && <div style={{
+                      position: "absolute",
+                      top: "2px",
+                      left: `${goalLeftPct}%`,
+                      width: `${visibleWidthPct}%`,
+                      height: "calc(100% - 4px)",
+                      borderRadius: "3px",
+                      background: celebrating ? "var(--color-green)" : g.color,
+                      opacity: celebrating ? 1 : (ok ? 0.96 : 0.58),
+                      boxShadow: celebrating ? "0 0 10px rgba(76,175,125,0.55)" : "none",
+                      transition: "background 0.35s ease-out, opacity 0.35s ease-out"
+                    }} />}
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 8px", flex: 1 }}>
@@ -988,7 +1041,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                       ))}
                     </div>
                     <span style={{ fontSize: "8px", letterSpacing: "1.5px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
-                      weekly chunks
+                      4 week blocks / month
                     </span>
                   </div>
                 </div>;

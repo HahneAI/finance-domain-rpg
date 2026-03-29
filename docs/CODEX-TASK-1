@@ -135,6 +135,27 @@ Codex MUST follow only the `TASK_SPEC` block.
     ]
   },
 
+  "post_commit_review": {
+    "issue_summary": "A previous agent run incorrectly applied a split drag-and-drop category layout (Expense Goals and Lifestyle containers) to the Goals tab instead of limiting that behavior to the Expenses tab.",
+    "root_cause_focus": [
+      "Trace where task scope was misapplied from Expenses tab requirements into Goals tab rendering.",
+      "Identify the commit(s) that introduced Goals tab container splitting behavior.",
+      "Confirm whether shared drag-and-drop components were reused without tab-specific guards."
+    ],
+    "required_follow_up": [
+      "Restore the Goals panel to a single-section layout.",
+      "Remove the unintended Expense Goals/Lifestyle split containers from the Goals tab only.",
+      "Keep the new Goals timeline bar behavior exactly as currently implemented (no regressions, no visual rollback).",
+      "Ensure drag-and-drop category interaction remains scoped to the Expenses tab where intended."
+    ],
+    "validation_addendum": [
+      "Goals tab renders as one section only.",
+      "Goals timeline bar remains unchanged from current implementation.",
+      "Expenses tab retains intended drag/drop category behavior.",
+      "No cross-tab UI coupling introduces category containers into Goals again."
+    ]
+  },
+
   "validation": {
     "checks": [
       "Expense cards can be reordered by drag-and-drop",

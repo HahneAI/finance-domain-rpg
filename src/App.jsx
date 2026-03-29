@@ -79,6 +79,17 @@ const BOTTOM_NAV = [
   },
 ];
 
+
+function BrandMark({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="12" width="4" height="9" rx="1.5" fill="var(--color-accent-soft)" />
+      <rect x="10" y="7" width="4" height="14" rx="1.5" fill="var(--color-accent-primary)" />
+      <rect x="17" y="3" width="4" height="18" rx="1.5" fill="var(--color-text-primary)" opacity="0.88" />
+    </svg>
+  );
+}
+
 function SidebarNavItem({ item, active, onClick }) {
   return (
     <button
@@ -93,7 +104,7 @@ function SidebarNavItem({ item, active, onClick }) {
         textTransform: "uppercase",
        
         background: active ? "var(--color-bg-surface)" : "transparent",
-        color: active ? "var(--color-gold)" : "#888",
+        color: active ? "var(--color-accent-primary)" : "var(--color-text-secondary)",
         borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
         border: "none",
         cursor: "pointer",
@@ -108,7 +119,7 @@ function SidebarNavItem({ item, active, onClick }) {
 function FullScreenLoadingState({ label = "Loading your dashboard" }) {
   return (
     <div style={{
-      background: "var(--color-bg-base)",
+      background: "linear-gradient(180deg, #0f0f18 0%, var(--color-bg-base) 40%)",
       minHeight: "100vh",
       color: "var(--color-text-primary)",
       display: "flex",
@@ -121,14 +132,14 @@ function FullScreenLoadingState({ label = "Loading your dashboard" }) {
         maxWidth: "420px",
         border: "1px solid var(--color-border-subtle)",
         borderRadius: "16px",
-        background: "var(--color-bg-surface)",
+        background: "rgba(18,18,26,0.92)",
         padding: "18px",
       }}>
         <div style={{
           fontSize: "11px",
           letterSpacing: "3px",
           textTransform: "uppercase",
-          color: "var(--color-gold)",
+          color: "var(--color-accent-primary)",
           marginBottom: "12px",
         }}>
           {label}
@@ -536,7 +547,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ background: "var(--color-bg-base)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
+    <div style={{ background: "linear-gradient(180deg, #0f0f18 0%, var(--color-bg-base) 40%)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
       <style>{`
         /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
            but injecting it here as well catches any future SSR or shadow-DOM edge
@@ -624,8 +635,8 @@ export default function App() {
         style={{
           width: "190px",
           minWidth: "190px",
-          background: "var(--color-bg-surface)",
-          borderRight: "1px solid #222",
+          background: "rgba(18,18,26,0.92)",
+          borderRight: "1px solid var(--color-border-subtle)",
           position: "sticky",
           top: 0,
           height: "100vh",
@@ -634,11 +645,14 @@ export default function App() {
           zIndex: 10,
         }}
       >
-        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #222" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-              <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
+        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid var(--color-border-subtle)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+            <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+              <div style={{ marginTop: "1px" }}><BrandMark size={14} /></div>
+              <div>
+              <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-accent-primary)", textTransform: "uppercase", marginBottom: "4px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+              <div style={{ fontSize: "14px", fontWeight: 600, lineHeight: "1.3", marginBottom: "8px" }}>Apex Finance</div>
+              </div>
             </div>
             <button
               title="Sign out"
@@ -652,7 +666,7 @@ export default function App() {
               </svg>
             </button>
           </div>
-          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
+          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(110,91,255,0.14)", color: "var(--color-accent-soft)", border: "1px solid rgba(110,91,255,0.4)", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
@@ -667,7 +681,7 @@ export default function App() {
             <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
           {/* ── Life Events (re-entry wizard) ── */}
-          <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
+          <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginTop: "8px", paddingTop: "8px" }}>
             <button
               onClick={() => setLifeEventMenu(p => !p)}
               style={{
@@ -675,7 +689,7 @@ export default function App() {
                 padding: "14px 20px", fontSize: "11px",
                 letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
-                color: lifeEventMenu ? "var(--color-gold)" : "#888",
+                color: lifeEventMenu ? "var(--color-accent-primary)" : "var(--color-text-secondary)",
                 borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
@@ -718,8 +732,8 @@ export default function App() {
           className="mobile-header"
           style={{
             display: "none",
-            borderBottom: "2px solid #c8a84b",
-            background: "var(--color-bg-base)",
+            borderBottom: "1px solid rgba(110,91,255,0.42)",
+            background: "linear-gradient(180deg, #0f0f18 0%, var(--color-bg-base) 40%)",
             position: "sticky",
             top: 0,
             zIndex: 30,
@@ -747,7 +761,7 @@ export default function App() {
             style={{
               background: "transparent",
               border: "none",
-              color: "var(--color-gold)",
+              color: "var(--color-accent-primary)",
               cursor: "pointer",
               width: "44px",
               height: "44px",
@@ -760,18 +774,18 @@ export default function App() {
             }}
             aria-label="Open navigation"
           >
-            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-gold)", borderRadius: "1px" }} />
-            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-gold)", borderRadius: "1px" }} />
-            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-gold)", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-accent-soft)", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-accent-soft)", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-accent-soft)", borderRadius: "1px" }} />
           </button>
 
           {/* ── Title block — center ── */}
           <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-accent-primary)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(110,91,255,0.14)", color: "var(--color-accent-soft)", border: "1px solid rgba(110,91,255,0.4)", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
             </div>
-            <div style={{ fontSize: "14px", fontWeight: "bold" }}>Finance Dashboard</div>
+            <div style={{ fontSize: "14px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}><BrandMark size={13} />Apex Finance</div>
           </div>
 
           {/* ── Notification bell — top RIGHT (Chime-style) ── */}
@@ -780,7 +794,7 @@ export default function App() {
             style={{
               background: "transparent",
               border: "none",
-              color: unconfirmedCount > 0 ? "var(--color-red)" : "#555",
+              color: unconfirmedCount > 0 ? "var(--color-red)" : "var(--color-text-disabled)",
               cursor: "pointer",
               width: "44px",
               height: "44px",
@@ -832,7 +846,7 @@ export default function App() {
         style={{
           position: "fixed",
           inset: 0,
-          background: "rgba(0,0,0,0.65)",
+          background: "rgba(8,8,12,0.68)",
           zIndex: 40,
         }}
       />
@@ -846,18 +860,18 @@ export default function App() {
           left: 0,
           width: "260px",
           height: "100dvh",
-          background: "var(--color-bg-surface)",
-          borderRight: "1px solid #2a2a2a",
+          background: "rgba(18,18,26,0.92)",
+          borderRight: "1px solid var(--color-border-subtle)",
           zIndex: 50,
           display: "flex",
           flexDirection: "column",
         }}
       >
         {/* Drawer header */}
-        <div style={{ padding: "16px 18px", borderBottom: "1px solid #222", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
+        <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--color-border-subtle)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
-            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-            <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
+            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-accent-primary)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+            <div style={{ fontSize: "15px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}><BrandMark size={14} />Apex Finance</div>
           </div>
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <button
@@ -888,7 +902,7 @@ export default function App() {
             <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
           {/* ── Life Events (re-entry wizard) ── */}
-          <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
+          <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginTop: "8px", paddingTop: "8px" }}>
             <button
               onClick={() => setLifeEventMenu(p => !p)}
               style={{
@@ -896,7 +910,7 @@ export default function App() {
                 padding: "14px 20px", fontSize: "11px",
                 letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
-                color: lifeEventMenu ? "var(--color-gold)" : "#888",
+                color: lifeEventMenu ? "var(--color-accent-primary)" : "var(--color-text-secondary)",
                 borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
@@ -931,8 +945,8 @@ export default function App() {
         </nav>
 
         {/* Active section indicator at bottom */}
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: "10px", color: "#555", letterSpacing: "1px", textTransform: "uppercase" }}>
-          Viewing: <span style={{ color: "var(--color-gold)" }}>{currentView}</span>
+        <div style={{ padding: "16px 20px", borderTop: "1px solid var(--color-border-subtle)", fontSize: "10px", color: "var(--color-text-disabled)", letterSpacing: "1px", textTransform: "uppercase" }}>
+          Viewing: <span style={{ color: "var(--color-accent-primary)" }}>{currentView}</span>
         </div>
       </div>
 
@@ -947,9 +961,9 @@ export default function App() {
           right: 0,
           height: "calc(62px + env(safe-area-inset-bottom, 0px))",
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
-          background: "var(--color-bg-surface)",
-          borderTop: "1px solid #222",
-          boxShadow: "0 -4px 24px rgba(0,0,0,0.9)",
+          background: "rgba(18,18,26,0.92)",
+          borderTop: "1px solid var(--color-border-subtle)",
+          boxShadow: "0 -10px 36px rgba(0,0,0,0.55)",
           zIndex: 20,
           // fixed creates a containing block — the absolute-positioned indicator
           // is anchored to this bar, not the viewport.
@@ -968,7 +982,7 @@ export default function App() {
               left: `${activeIdx * pct}%`,
               width: `${pct}%`,
               height: "2px",
-              background: "var(--color-gold)",
+              background: "var(--color-accent-soft)",
               transition: "left 0.3s ease",
               borderRadius: "0 0 1px 1px",
             }} />
@@ -985,7 +999,7 @@ export default function App() {
                 height: "100%",
                 background: "transparent",
                 border: "none",
-                color: active ? "var(--color-gold)" : "#555",
+                color: active ? "var(--color-accent-primary)" : "var(--color-text-disabled)",
                 cursor: "pointer",
                 display: "flex",
                 flexDirection: "column",

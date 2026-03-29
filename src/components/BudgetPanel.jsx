@@ -31,13 +31,16 @@ const GOAL_LANES = {
 };
 
 const EXPENSE_DRAG_PREVIEW_TINT = {
-  Needs: "rgba(217, 112, 112, 0.26)",
-  Lifestyle: "rgba(122, 139, 191, 0.3)",
+  Needs: "rgba(217, 112, 112, 0.2)",
+  Lifestyle: "rgba(122, 139, 191, 0.22)",
 };
 const EXPENSE_TOUCH_OVERLAY_BG = {
   Needs: "#d97070",
   Lifestyle: "#7a8bbf",
 };
+const EXPENSE_DRAG_EASE = "cubic-bezier(.22,.7,.2,1)";
+const EXPENSE_INSERT_MARKER_BG = "rgba(255,255,255,0.72)";
+const EXPENSE_INSERT_MARKER_BORDER = "rgba(255,255,255,0.14)";
 
 const EXPENSE_CYCLE_OPTIONS = [
   { value: "weekly", label: "Weekly", days: 7 },
@@ -713,12 +716,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             padding: isExpenseDropLane ? "8px" : 0,
             borderRadius: isExpenseDropLane ? "10px" : 0,
             border: isExpenseDropLane
-              ? `1px solid ${dragPreviewExpenseCategory === cat ? `${CATEGORY_COLORS[cat]}44` : "#1f1f1f"}`
+              ? `1px solid ${dragPreviewExpenseCategory === cat ? `${CATEGORY_COLORS[cat]}33` : "#1f1f1f"}`
               : "none",
             background: isExpenseDropLane
-              ? (dragPreviewExpenseCategory === cat ? "rgba(20,20,20,0.35)" : "transparent")
+              ? (dragPreviewExpenseCategory === cat ? "rgba(20,20,20,0.24)" : "transparent")
               : "transparent",
-            transition: "background 220ms ease, border-color 220ms ease",
+            transition: `background 300ms ${EXPENSE_DRAG_EASE}, border-color 320ms ${EXPENSE_DRAG_EASE}`,
           }}
         >
           <SH color={CATEGORY_COLORS[cat]} right={f2(cTot) + "/wk"}>{cat}</SH>
@@ -783,15 +786,16 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 cursor: isEditing ? "default" : (isExpenseDropLane ? (isDragging ? "grabbing" : "grab") : "default"),
                 transform: isDragging ? "scale(0.94)" : "scale(1)",
                 boxShadow: isDragging
-                  ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}33 inset`
-                  : lanePreviewingMove ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}44 inset` : "none",
-                transition: "background 220ms ease, border-color 220ms ease, box-shadow 220ms ease, opacity 150ms ease, transform 150ms ease",
+                  ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}2a inset`
+                  : lanePreviewingMove ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}33 inset` : "none",
+                transition: `background 280ms ${EXPENSE_DRAG_EASE}, border-color 300ms ${EXPENSE_DRAG_EASE}, box-shadow 300ms ${EXPENSE_DRAG_EASE}, opacity 220ms ${EXPENSE_DRAG_EASE}, transform 220ms ${EXPENSE_DRAG_EASE}`,
                 touchAction: isExpenseDropLane ? "pan-y" : "auto",
                 userSelect: isExpenseDropLane ? "none" : "auto",
                 WebkitUserSelect: isExpenseDropLane ? "none" : "auto",
+                willChange: draggingExpenseId ? "transform, opacity" : "auto",
               }}
             >
-              {showInsertLineBefore && <div
+              <div
                 aria-hidden
                 style={{
                   position: "absolute",
@@ -800,11 +804,15 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   top: "-5px",
                   height: "4px",
                   borderRadius: "999px",
-                  background: "#fff",
-                  boxShadow: "0 0 0 1px rgba(255,255,255,0.2)",
-                  opacity: 0.96,
+                  background: EXPENSE_INSERT_MARKER_BG,
+                  boxShadow: `0 0 0 1px ${EXPENSE_INSERT_MARKER_BORDER}`,
+                  opacity: showInsertLineBefore ? 0.74 : 0,
+                  transform: showInsertLineBefore ? "scaleX(1)" : "scaleX(0.9)",
+                  transformOrigin: "center",
+                  transition: `opacity 180ms ${EXPENSE_DRAG_EASE}, transform 220ms ${EXPENSE_DRAG_EASE}`,
+                  pointerEvents: "none",
                 }}
-              />}
+              />
               {isEditing ? <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <span style={{ fontSize: "12px" }}>{exp.label}</span>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
@@ -872,16 +880,19 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               </div>}
             </div>;
           })}
-          {isExpenseDropLane && draggingExpenseId && touchInsertLane === cat && touchInsertIndex === laneCardsExcludingDragged.length && <div
+          {isExpenseDropLane && draggingExpenseId && touchInsertLane === cat && <div
             aria-hidden
             style={{
               height: "4px",
               borderRadius: "999px",
               margin: "2px 4px 8px",
-              background: "#ffffff",
-              boxShadow: "0 0 0 1px rgba(255,255,255,0.25)",
-              opacity: 0.94,
-              transition: "opacity 140ms ease",
+              background: EXPENSE_INSERT_MARKER_BG,
+              boxShadow: `0 0 0 1px ${EXPENSE_INSERT_MARKER_BORDER}`,
+              opacity: touchInsertIndex === laneCardsExcludingDragged.length ? 0.72 : 0,
+              transform: touchInsertIndex === laneCardsExcludingDragged.length ? "scaleX(1)" : "scaleX(0.9)",
+              transformOrigin: "center",
+              transition: `opacity 180ms ${EXPENSE_DRAG_EASE}, transform 220ms ${EXPENSE_DRAG_EASE}`,
+              pointerEvents: "none",
             }}
           />}
           {loanItems.map(exp => {

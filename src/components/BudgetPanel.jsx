@@ -137,8 +137,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     const latest = exp.history?.length
       ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b)
       : { weekly: exp.weekly ?? [0, 0, 0, 0] };
-    const cycle = exp.billingMeta?.cycle ?? "every30days";
-    const anchorWeekly = latest.weekly[0] ?? 0;
+    const phaseBillingMeta = exp.billingMeta?.byPhase?.[ap];
+    const cycle = phaseBillingMeta?.cycle ?? exp.billingMeta?.cycle ?? "every30days";
+    const anchorWeekly = latest.weekly[ap] ?? latest.weekly[0] ?? 0;
     setEditId(exp.id);
     setEditVals({
       amount: cycleAmountFromPerPaycheck(anchorWeekly, cycle).toFixed(2),
@@ -149,11 +150,18 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     const cycle = editVals.cycle ?? "every30days";
     const amount = parseFloat(editVals.amount) || 0;
     const perPaycheck = perPaycheckFromCycle(amount, cycle);
-    const newWeekly = [perPaycheck, perPaycheck, perPaycheck, perPaycheck];
     setExpenses(prev => prev.map(e => {
       if (e.id !== id) return e;
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
       const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
+      const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
+      const newWeekly = [baseWeekly[0] ?? 0, baseWeekly[1] ?? 0, baseWeekly[2] ?? 0, baseWeekly[3] ?? 0];
+      newWeekly[ap] = perPaycheck;
+      const byPhase = {
+        ...(e.billingMeta?.byPhase ?? {}),
+        [ap]: { amount, cycle, effectiveFrom: TODAY_ISO },
+      };
+      const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO, byPhase };
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
       if (daysDiff <= 3) {
         return {
@@ -163,10 +171,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               ? { effectiveFrom: TODAY_ISO, weekly: newWeekly }
               : entry
           ),
-          billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO }
+          billingMeta
         };
       }
-      return { ...e, history: [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }], billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO } };
+      return { ...e, history: [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }], billingMeta };
     }));
     setEditId(null);
   };
@@ -579,6 +587,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           {cExp.map(exp => {
             const effAmt = currentEffective(exp, ap);
             const latestEntry = exp.history?.length ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b) : null;
+            const phaseBillingMeta = exp.billingMeta?.byPhase?.[ap];
+            const activeBillingMeta = phaseBillingMeta ?? exp.billingMeta;
             const isEditing = editId === exp.id;
             const isDragging = draggingExpenseId === exp.id;
             const isDropTarget = dragOverExpenseId === exp.id;
@@ -686,8 +696,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
                     <div style={{ fontSize: "10px", color: "#777" }}>{f(effAmt * 52 / 12)}/mo</div>
-                    {exp.billingMeta && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>{f2(exp.billingMeta.amount ?? 0)} · {cycleByValue[exp.billingMeta.cycle]?.label ?? "Custom cycle"}</div>}
-                    {latestEntry && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "1px" }}>reserve started {exp.billingMeta?.effectiveFrom ?? latestEntry.effectiveFrom}</div>}
+                    {activeBillingMeta && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>{f2(activeBillingMeta.amount ?? 0)} · {cycleByValue[activeBillingMeta.cycle]?.label ?? "Custom cycle"}</div>}
+                    {latestEntry && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "1px" }}>reserve started {activeBillingMeta?.effectiveFrom ?? latestEntry.effectiveFrom}</div>}
                   </div>
                   <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
                   {delExpId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>

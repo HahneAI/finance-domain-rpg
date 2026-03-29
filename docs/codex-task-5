@@ -1,0 +1,151 @@
+# Codex Task Specification
+
+# =========================
+# TASK_SPEC (MACHINE READABLE)
+# =========================
+
+```json
+{
+  "task_id": "BUGFIX_budget_events_takehome_math_goals_audit_tax_payback_adjustment",
+  "task_type": "BUG",
+  "status": "PENDING",
+
+  "objective": "Fix the adjusted weekly take-home-from-events math in the budget tab so it updates correctly in the UI, audit and confirm that the corrected value is being consumed by the goals timeline logic where applicable, and incorporate this corrected adjusted income into the tax payback math so missed work days reduce projected tax owed on taxed checks.",
+
+  "scope": {
+    "allowed_files": [
+      "budget tab component",
+      "adjusted weekly take-home UI component",
+      "income/events calculation helpers",
+      "goals timeline data-mapping or dependency logic",
+      "tax payback calculation helpers/components",
+      "shared budget math utilities",
+      "relevant state selectors/hooks feeding budget and goals values"
+    ],
+    "restricted_files": [
+      "authentication logic",
+      "expense editor logic",
+      "unrelated dashboard tabs/pages",
+      "global theme system",
+      "database schema unless absolutely required by current architecture",
+      "broad goals tab visualization logic outside the audit/consumption path"
+    ],
+    "entry_points": [
+      "budget tab render flow",
+      "adjusted weekly take-home component state/computation",
+      "events income calculation pipeline",
+      "goals timeline dependency wiring",
+      "tax payback math pipeline"
+    ],
+    "out_of_scope": [
+      "full budget engine redesign",
+      "new goals timeline visuals",
+      "tax filing feature redesign",
+      "broad refactors unrelated to income adjustment and tax projection logic"
+    ]
+  },
+
+  "implementation": {
+    "steps": [
+      "Inspect the current adjusted weekly take-home-from-events calculation in the budget tab and identify why the UI value is rigid or not updating when event/day inputs change.",
+      "Fix the adjusted weekly take-home math so it recomputes reliably from the current event/day data and updates reactively in the budget tab UI.",
+      "Audit the data flow to confirm whether the goals timeline currently consumes the adjusted weekly take-home value directly, indirectly, or not at all.",
+      "If the goals timeline is intended to depend on this adjusted income math, wire the corrected value into the existing goals timeline calculation path without changing unrelated timeline visuals.",
+      "Inspect the tax payback math that estimates extra taxes owed on taxed checks.",
+      "Update the tax payback projection so it uses the corrected adjusted weekly take-home/events-derived income rather than a rigid full-attendance assumption.",
+      "Ensure missed days or reduced event income lower the projected tax owed appropriately, instead of keeping tax payback estimates artificially high.",
+      "Keep the math pipeline internally consistent so the same corrected adjusted-income source is used across budget, goals audit path, and tax payback logic where intended."
+    ],
+    "constraints": [
+      "Fix only the described math/update issues and dependent audits",
+      "Preserve existing TypeScript types",
+      "Do not redesign unrelated UI",
+      "Prefer minimal, traceable fixes over broad refactors",
+      "If goals timeline should only be audited and not behaviorally changed, keep code changes there minimal and explicit",
+      "Use one consistent source of truth for adjusted event-based income where possible"
+    ]
+  },
+
+  "change_log": {
+    "expected_changes": [
+      {
+        "file": "adjusted weekly take-home component or helper",
+        "change": "Fix reactive recalculation so event-based take-home updates correctly in the budget tab UI"
+      },
+      {
+        "file": "budget math utilities/state selectors",
+        "change": "Normalize the adjusted-income computation path and remove rigid or stale assumptions"
+      },
+      {
+        "file": "goals timeline dependency logic",
+        "change": "Audit and, if intended by current architecture, ensure corrected adjusted-income values are being checked/consumed properly"
+      },
+      {
+        "file": "tax payback calculation helper/component",
+        "change": "Use corrected adjusted income so missed days reduce projected extra tax owed on taxed checks"
+      }
+    ]
+  },
+
+  "impact_analysis": {
+    "affected_areas": [
+      "budget tab income summary",
+      "event-based adjusted take-home math",
+      "goals timeline dependency path",
+      "tax payback projection math"
+    ],
+    "risk_areas": [
+      "UI may update visually while using stale underlying memoized values",
+      "goals timeline may depend on a different income source than expected",
+      "tax payback math may mix gross and net values incorrectly",
+      "missed-day adjustments may create double-counting or undercounting in projections",
+      "shared budget math changes may affect nearby summary widgets"
+    ],
+    "potential_bugs": [
+      {
+        "area": "budget tab UI updates",
+        "risk": "adjusted weekly take-home may still appear rigid if state dependencies or memoization are incomplete"
+      },
+      {
+        "area": "events income math",
+        "risk": "reduced days/events may recalculate incorrectly or at the wrong frequency"
+      },
+      {
+        "area": "goals timeline audit",
+        "risk": "timeline may still read an old income source or not reflect corrected adjusted values where expected"
+      },
+      {
+        "area": "tax payback math",
+        "risk": "projected extra taxes may remain too high or swing too low if adjusted income is applied inconsistently"
+      },
+      {
+        "area": "source-of-truth consistency",
+        "risk": "budget tab, goals, and tax payback may each use slightly different adjusted-income formulas"
+      }
+    ]
+  },
+
+  "validation": {
+    "checks": [
+      "Adjusted weekly take-home-from-events updates correctly when relevant event/day inputs change",
+      "Budget tab UI reflects the corrected adjusted-income math reactively",
+      "Goals timeline dependency path is audited and confirmed",
+      "If intended by architecture, goals timeline now uses the corrected adjusted-income source",
+      "Tax payback math decreases projected tax owed when missed days reduce taxable income projections",
+      "No console errors",
+      "No TypeScript errors",
+      "No unintended file changes"
+    ]
+  },
+
+  "output_format": {
+    "require_summary": true,
+    "summary_fields": [
+      "files_changed",
+      "fix_applied",
+      "goals_timeline_audit_result",
+      "tax_payback_rules_updated",
+      "remaining_edge_cases"
+    ]
+  }
+}

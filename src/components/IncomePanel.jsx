@@ -2,7 +2,7 @@ import { useState } from "react";
 import { MONTH_FULL } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet, dhlEmployerMatchRate, toLocalIso } from "../lib/finance.js";
-import { deriveRollingIncomeWeeks } from "../lib/rollingTimeline.js";
+import { deriveRollingIncomeWeeks, progressiveScale } from "../lib/rollingTimeline.js";
 import { Card, VT, SH, iS, lS } from "./ui.jsx";
 
 export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, logNetLost, logNetGained, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today }) {
@@ -74,7 +74,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
   const rollingWeekly = deriveRollingIncomeWeeks(allWeeks, todayIso, 4);
   const weeklyRows = rollingWeekly.visibleWeeks;
   const archivedWeeklyRows = rollingWeekly.hiddenWeeks;
-  const weeklyDensityScale = archivedWeeklyRows.length > 0 ? 1.06 : 1;
+  const weeklyDensityScale = progressiveScale(rollingWeekly.scaleProgress, 0.15);
 
   // Tax schedule toggle
   const toggleWeek = (idx) => setConfig(prev => {
@@ -285,7 +285,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     {view === "summary" && subview === "weekly" && <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>
-          Active Rolling Window · {weeklyRows.length} visible
+          Rolling Window · last 4 completed + rest of year ({weeklyRows.length} visible)
         </span>
         <button onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(201,168,76,0.35)", textTransform: "uppercase" }}>⊞ Full Detail</button>
       </div>
@@ -302,7 +302,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       </table>
       {archivedWeeklyRows.length > 0 && (
         <div style={{ marginTop: "8px", fontSize: "10px", color: "var(--color-text-disabled)" }}>
-          {archivedWeeklyRows.length} older active week(s) hidden in rolling view (preserved for future full-year review).
+          {archivedWeeklyRows.length} older active week(s) hidden (view keeps last 4 completed weeks + rest of year; archived for future full-year review).
         </div>
       )}
     </div>}

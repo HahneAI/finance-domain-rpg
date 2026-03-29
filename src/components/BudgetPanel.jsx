@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
+import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { Card, VT, SmBtn, SH, iS, lS } from "./ui.jsx";
 
 // TODO: tune — total particle count (12); must divide evenly into rings below
@@ -556,7 +557,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       }))
       .filter((week) => week.start && week.end && week.end > week.start);
     if (!validWeeks.length) return null;
-    const startMs = Math.min(...validWeeks.map(week => week.start.getTime()));
+    const timelineEnd = new Date(Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS);
+    const startOfYear = new Date(timelineEnd.getFullYear(), 0, 1);
+    const startMs = startOfYear.getTime();
     const endMs = Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS;
     if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
     return { startMs, endMs, spanMs: endMs - startMs };
@@ -594,6 +597,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     }
     return segments;
   }, [timelineBounds]);
+  const rollingGoalTimeline = useMemo(
+    () => deriveRollingTimelineMonths(timelineMonthSegments, TODAY_ISO, 1),
+    [timelineMonthSegments, TODAY_ISO]
+  );
+  const visibleTimelineSegments = rollingGoalTimeline.visibleMonths;
+  const archivedTimelineSegments = rollingGoalTimeline.hiddenMonths;
+  const goalTimelineScale = progressiveScale(rollingGoalTimeline.scaleProgress, 0.15);
 
   // Goal timeline — computed at component level so useEffect can read it
   const tl = useMemo(
@@ -1065,17 +1075,18 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 const fallbackWidthPct = Math.max(((endWeek - startWeek) / nWeeks) * 100, 0);
                 let goalLeftPct = fallbackLeftPct;
                 let goalWidthPct = fallbackWidthPct;
-                if (timelineBounds?.spanMs) {
-                  const weekMs = timelineBounds.spanMs / nWeeks;
-                  const startMs = timelineBounds.startMs + (startWeek * weekMs);
-                  const endMs = timelineBounds.startMs + (endWeek * weekMs);
+                if (timelineBounds?.spanMs && futureWeeks?.length) {
+                  const anchorStart = safeDate(futureWeeks[0]?.weekStart)?.getTime() ?? timelineBounds.startMs;
+                  const weekMs = 7 * DAY_MS;
+                  const startMs = anchorStart + (startWeek * weekMs);
+                  const endMs = anchorStart + (endWeek * weekMs);
                   goalLeftPct = clamp01((startMs - timelineBounds.startMs) / timelineBounds.spanMs) * 100;
                   goalWidthPct = Math.max(clamp01((endMs - startMs) / timelineBounds.spanMs) * 100, 0);
                 }
                 const visibleWidthPct = goalWidthPct > 0 && goalWidthPct < 0.45 ? 0.45 : goalWidthPct;
                 return <div style={{ marginBottom: "8px" }}>
                   <div style={{
-                    height: "16px",
+                    height: `${Math.round(16 * goalTimelineScale)}px`,
                     borderRadius: "6px",
                     border: "1px solid #232323",
                     background: "#111",
@@ -1084,7 +1095,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                     marginBottom: "6px"
                   }}>
                     {/* Month overlays + subtle 4-block week chunks */}
-                    {timelineMonthSegments.map(seg => {
+                    {visibleTimelineSegments.map(seg => {
                       return <div key={seg.key} style={{
                         position: "absolute",
                         top: 0,
@@ -1125,9 +1136,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 8px", flex: 1 }}>
-                      {timelineMonthSegments.map(seg => (
+                      {visibleTimelineSegments.map(seg => (
                         <span key={`${seg.key}-label`} style={{
-                          fontSize: "8px",
+                          fontSize: `${(8 * goalTimelineScale).toFixed(1)}px`,
                           letterSpacing: "1.5px",
                           color: "#5f5f5f",
                           textTransform: "uppercase"
@@ -1136,10 +1147,15 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                         </span>
                       ))}
                     </div>
-                    <span style={{ fontSize: "8px", letterSpacing: "1.5px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
+                    <span style={{ fontSize: `${(8 * goalTimelineScale).toFixed(1)}px`, letterSpacing: "1.5px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
                       4 week blocks / month
                     </span>
                   </div>
+                  {archivedTimelineSegments.length > 0 && (
+                    <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "8px" }}>
+                      {archivedTimelineSegments.length} older month segment(s) hidden (view keeps previous month + rest of year; archived for future full-year review).
+                    </div>
+                  )}
                 </div>;
               })()}
               {celebrating && <>

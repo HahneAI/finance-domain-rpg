@@ -1,0 +1,262 @@
+Follow TASK_SPEC.
+
+Task: FEATURE_BRAND_SYSTEM_APEX_FOUNDATION
+
+Objective:
+Create and apply a complete visual brand foundation for the finance app based on the "Apex" direction:
+- premium
+- controlled
+- dark-first
+- Apple-like clarity
+- subtle progression / life-OS feel
+- no cheesy gaming aesthetic
+- no literal fintech clichés
+- no cartoon sapling visuals
+
+This task is for brand-system implementation and exploratory UI direction only.
+Do not redesign unrelated product flows.
+Do not add new app features.
+Do not change business logic.
+
+---
+
+TODO LIST
+
+1. Establish the Apex visual identity foundation
+- Define the finance app as a premium life-optimization finance product
+- Brand tone should feel:
+  - controlled
+  - intelligent
+  - calm
+  - structured
+  - aspirational without feeling flashy
+- The app should suggest personal progression and growth without looking like a game
+
+2. Implement the Apex color system
+Use this as the design-token baseline:
+
+Core backgrounds:
+- bg.primary = #0B0B0F
+- bg.secondary = #12121A
+
+Text:
+- text.primary = #F7F7F5
+- text.secondary = #A1A1AA
+
+Accent purple:
+- accent.primary = #6E5BFF
+- accent.soft = #8B7CFF
+
+Semantic:
+- success = #22C55E
+- danger = #EF4444
+- warning = #F59E0B
+
+Color rules:
+- UI should be 85–90% neutral surfaces
+- Purple is for focus states, CTA emphasis, active nav, highlights, selected states
+- Do not use full-screen purple backgrounds
+- Do not use saturated playful purple
+- Do not use neon gaming gradients
+- Maintain a premium dark-system feel similar in polish quality to Chime dark mode, but more refined and more neutral-led
+
+3. Build the brand feel into the finance UI
+Apply the design language so the interface feels like:
+- premium personal operating system
+- not a bank clone
+- not a stock-trading dopamine app
+- not a gamer dashboard
+
+UI traits:
+- dark layered backgrounds
+- restrained contrast
+- strong typography hierarchy
+- large stat presentation
+- clean spacing
+- soft radius
+- low-noise surfaces
+- minimal visual clutter
+
+4. Introduce the progression system language
+Translate the “life XP” idea into mature product language.
+
+Use:
+- “Momentum” as the progression concept label
+
+Avoid:
+- XP
+- Level up
+- badges
+- gamer rewards language
+- arcade effects
+- childish progress indicators
+
+Progression guidance:
+- Use thin progress bars, subtle rings, or understated segmented progress visuals
+- Progress should feel like performance tracking, not game scoring
+- Any progression component should read as disciplined self-improvement
+
+5. Create the logo direction exploration inside the app branding
+Implement or mock a logo direction that fits this concept:
+
+Logo direction:
+- abstract vertical growth mark
+- geometric but slightly organic
+- can hint at upward development, branching, or structured growth
+- should not be a literal leaf icon unless extremely simplified and premium
+- should not use dollar signs, coins, shields, rockets, or generic finance marks
+
+Logo feel:
+- luxury-tech
+- scalable
+- recognizable as an app icon
+- compatible with future ecosystem expansion across finance, fitness, life planning, and family planning
+
+6. Define typography behavior
+Use a typography system that feels premium and controlled.
+
+Recommended direction:
+- Headings: Inter Tight or SF Pro Display style
+- Body: Inter or SF Pro Text style
+
+Typography rules:
+- large balances and key metrics
+- clean spacing
+- avoid overly playful rounded type
+- avoid futuristic sci-fi fonts
+- avoid overly condensed aggressive fintech typography
+
+7. Create the signature finance dashboard styling
+Build or restyle the finance home/dashboard around the Apex direction.
+
+Dashboard goals:
+- strong top-level financial clarity
+- premium cards
+- calm dark surfaces
+- subtle accent usage
+- emphasis on control and overview
+
+Preferred styling:
+- modular cards
+- restrained elevation
+- soft border contrast
+- large number presentation
+- purple only where it adds meaning or focus
+
+8. Prepare this system to scale into a multi-app brand family
+Even though this task is finance-only, the design should anticipate future sibling apps:
+- finance
+- fitness
+- life planning
+- family planning
+
+System requirement:
+- the parent company identity should be able to sit above multiple domain apps
+- finance should feel like the first product in a broader life-system ecosystem
+
+9. Avoid the following visual mistakes
+Do not introduce:
+- cheesy RPG visuals
+- glowing game HUD effects
+- crypto-style branding
+- oversaturated gradients
+- cartoon plant logos
+- generic bank blue
+- loud Cash App green clones
+- literal game stat bars
+- excessive glassmorphism
+- cluttered dashboard density
+
+10. Produce a polished first-pass implementation or mock-ready UI foundation
+The output should feel like a real premium finance app direction, not a moodboard.
+Prioritize:
+- token consistency
+- component consistency
+- premium spacing
+- brand clarity
+- subtle progression cues
+
+---
+
+IMPLEMENTATION STEPS
+
+1. Audit current finance screen styling and identify the minimum set of files needed for a brand-system pass
+2. Add or update theme/design tokens for Apex colors, text, and semantic states
+3. Restyle core surfaces:
+- app background
+- cards
+- buttons
+- nav states
+- primary stat areas
+4. Introduce purple accent usage only in controlled, meaningful places
+5. Update typography hierarchy for balances, labels, and section headings
+6. Add subtle “Momentum” visual treatment where appropriate if a progress element already exists
+7. Add or mock a brand mark/logo placement if the UI supports it
+8. Ensure the result feels coherent across dark mode and major finance surfaces
+9. Keep edits minimal and scoped to branding/theming/presentation
+10. Do not touch unrelated flows or logic
+
+---
+
+CONSTRAINTS
+
+- Keep this task strictly visual-brand-system focused
+- Do not add unrelated product features
+- Do not re-architect navigation
+- Do not rewrite business logic
+- Do not refactor unrelated components
+- Do not change data models
+- Do not introduce game terminology in user-facing UI except “Momentum” if contextually appropriate
+- Keep the implementation production-feasible, not concept-art style
+- Prefer subtlety over spectacle
+
+---
+
+AFFECTED AREAS
+- theme tokens / color system → risk of inconsistent inheritance
+- finance dashboard surfaces → risk of readability regressions
+- buttons / nav active states → risk of overusing accent purple
+- typography hierarchy → risk of breaking spacing or truncation
+- card styling → risk of contrast becoming too low in dark mode
+
+---
+
+RISK AREAS
+- dark theme contrast → inaccessible text if secondary text gets too dim
+- purple accent usage → can become cheap if over-applied
+- progression visuals → can feel gamified if too obvious
+- logo treatment → can become generic if too literal
+- dashboard restyle → can reduce scannability if aesthetics override hierarchy
+
+---
+
+POTENTIAL BUGS
+- theme token replacement → legacy components may retain old colors
+- dark surface updates → icons may lose contrast
+- CTA styling changes → disabled/hover/focus states may become inconsistent
+- typography resizing → overflow or wrapping on smaller mobile widths
+- nav/state styling → selected states may become ambiguous
+
+---
+
+VALIDATION CHECKLIST
+- Finance screens render without console errors
+- No type errors introduced
+- Main dashboard remains readable in dark mode
+- Accent purple is used sparingly and intentionally
+- The app feels premium, calm, and structured
+- The UI does not feel like a game
+- The UI does not feel like a Chime or Cash App clone
+- No unrelated files were modified
+- No business logic changed
+- No broken layout on common mobile viewport sizes
+
+---
+
+RETURN
+- files_changed
+- changes_made
+- design_tokens_added_or_updated
+- any_logo_or_brandmark_work_applied
+- new_risks_detected
+- validation_result

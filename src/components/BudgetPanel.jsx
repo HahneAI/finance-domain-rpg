@@ -55,6 +55,7 @@ const cycleByValue = EXPENSE_CYCLE_OPTIONS.reduce((acc, opt) => {
 }, {});
 
 const PAYCHECK_CADENCE_DAYS = 7; // existing app cadence: one paycheck per fiscal week
+const PAYCHECKS_PER_MONTH = 4; // UI monthly rollup is paycheck-based (4 checks ~= month)
 
 const perPaycheckFromCycle = (amount, cycle) => {
   const days = cycleByValue[cycle]?.days ?? PAYCHECK_CADENCE_DAYS;
@@ -65,6 +66,7 @@ const cycleAmountFromPerPaycheck = (perPaycheck, cycle) => {
   const days = cycleByValue[cycle]?.days ?? PAYCHECK_CADENCE_DAYS;
   return days > 0 ? (perPaycheck * days) / PAYCHECK_CADENCE_DAYS : perPaycheck;
 };
+const monthlyFromPerPaycheck = (perPaycheck) => perPaycheck * PAYCHECKS_PER_MONTH;
 
 const MONTH_SUBDIVISIONS = 4;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -867,7 +869,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                   {pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
-                    <div style={{ fontSize: "10px", color: "#777" }}>{f(effAmt * 52 / 12)}/mo</div>
+                    <div style={{ fontSize: "10px", color: "#777" }}>{f(monthlyFromPerPaycheck(effAmt))}/mo</div>
                     {activeBillingMeta && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>{f2(activeBillingMeta.amount ?? 0)} · {cycleByValue[activeBillingMeta.cycle]?.label ?? "Custom cycle"}</div>}
                     {latestEntry && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "1px" }}>reserve started {activeBillingMeta?.effectiveFrom ?? latestEntry.effectiveFrom}</div>}
                   </div>
@@ -925,7 +927,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "#555" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
-                    <div style={{ fontSize: "10px", color: "#777" }}>{f(effAmt * 52 / 12)}/mo</div>
+                    <div style={{ fontSize: "10px", color: "#777" }}>{f(monthlyFromPerPaycheck(effAmt))}/mo</div>
                   </div>
                   <SmBtn onClick={() => startEditLoan(exp)} c="var(--color-gold)">EDIT</SmBtn>
                   {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>

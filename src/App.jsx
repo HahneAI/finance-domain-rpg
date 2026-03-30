@@ -13,32 +13,6 @@ import { SetupWizard } from "./components/SetupWizard.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
 
-function AuthorityLogo({ size = 32, radius = 7, style = {} }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 1000 1000"
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ borderRadius: radius, flexShrink: 0, display: "block", ...style }}
-    >
-      <defs>
-        <linearGradient id="afLogo_g1" x1="0%" y1="100%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#00C896"/>
-          <stop offset="100%" stopColor="#4ADE80"/>
-        </linearGradient>
-      </defs>
-      <path d="M260 700 C360 520, 600 360, 740 260"
-            stroke="url(#afLogo_g1)"
-            strokeWidth="64"
-            strokeLinecap="round"
-            fill="none"/>
-      <circle cx="380" cy="540" r="28" fill="#5B8CFF"/>
-      <circle cx="620" cy="360" r="22" fill="#7C5CFF"/>
-    </svg>
-  );
-}
-
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
   { key: "budget",   label: "Budget" },
@@ -668,7 +642,6 @@ export default function App() {
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid var(--color-border-subtle)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <AuthorityLogo size={36} radius={8} />
               <div>
                 <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
                 <div style={{ fontSize: "13px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>Authority Finance</div>
@@ -801,7 +774,6 @@ export default function App() {
 
           {/* ── Title block — center ── */}
           <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
-            <AuthorityLogo size={32} radius={7} />
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>

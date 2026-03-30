@@ -1,18 +1,58 @@
-# React + Vite
+# Authority Finance
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Personal finance dashboard — the flagship module of Authority OS.
 
-Currently, two official plugins are available:
+Built for individuals who want clarity over their income, spending, and goals in one place. Not a budgeting app. Not a tracker. A system.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## What it does
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+- **Income modeling** — projects your full-year net take-home based on your pay structure, schedule, tax rates, and deductions
+- **Budget management** — tracks expenses by category with drag-and-drop reordering; supports multiple billing cycles (weekly through yearly) with automatic per-paycheck allocation
+- **Goal timelines** — maps savings goals against projected weekly surplus, showing realistic completion dates on a month/week grid
+- **Event logging** — records schedule changes (missed days, bonuses, adjustments) that cascade through take-home, tax projections, and goal timelines in real time
+- **Rolling views** — active periods scale and age progressively; historical data preserved for future review
 
-Note: This will impact Vite dev & build performances.
+---
 
-## Expanding the ESLint configuration
+## Tech stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+| Layer | Technology |
+|-------|-----------|
+| UI | React + Vite |
+| Styling | Tailwind CSS + CSS custom properties |
+| Auth | Supabase Auth |
+| Persistence | localStorage (MVP) → Supabase (multi-user) |
+| Hosting | Vercel |
+
+---
+
+## Design system
+
+Flow shell + Pulse overlay (Authority OS dual-layer system).
+
+- **Flow** — dark green surfaces, smooth transitions, fintech feel
+- **Pulse** — intelligence signal layer (trend indicators, insight context) — Phase 2
+
+---
+
+## Running locally
+
+```bash
+npm install
+npm run dev
+```
+
+Requires a `.env` with Supabase credentials:
+
+```
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+```
+
+---
+
+## Status
+
+Active development. Finance pillar in MVP. Additional Authority OS modules planned.

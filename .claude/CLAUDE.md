@@ -4,6 +4,38 @@
 
 ---
 
+## Agent Delegation Guide
+
+Two agents work this codebase. Route tasks correctly when logging to the backlog.
+
+### Claude Code (CC)
+Handles anything requiring planning, reasoning, or cross-file awareness.
+- Multi-file changes or cascading logic
+- Architectural decisions
+- Core engine work (`finance.js`, `App.jsx`, `rollingTimeline.js`)
+- Fuzzy or iterative tasks that need conversation
+- Anything that could break the income/tax/goals pipeline
+
+### Codex
+Best for scoped, self-contained execution with a clear spec.
+- Single component builds or rewrites
+- Tokenizing hardcoded colors/styles
+- Adding a panel, modal, or UI element with clear inputs/outputs
+- Isolated refactors that don't touch core state
+- Anything where a task spec can fully describe the job in one shot
+
+### Tagging Convention (todo backlog)
+- `[CC]` — Claude Code must handle this
+- `[CODEX]` — Good Codex candidate, write a task spec before firing
+- `[CODEX?]` — Probably Codex but verify scope first before delegating
+
+### Codex Handoff Rule
+Before delegating a `[CODEX]` task, ensure `docs/CODEX_MEMORY.md` is current.
+Claude Code should update it at the end of any session that changes
+architecture, state shape, or core logic.
+
+---
+
 ## Product
 
 **Company:** Authority | **Product:** Authority OS | **Tagline:** *"You are missing out… on you."*

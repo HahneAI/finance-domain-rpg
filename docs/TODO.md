@@ -390,6 +390,13 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 
 - [ ] **Calendar Tab** — visual calendar mapping all expense due dates, loan payment dates, and goal milestones
 
+### Authority OS — Branding & Design System
+
+- [ ] **Add Pulse signal tokens to `src/index.css`** — `--color-signal-blue: #5B8CFF` and `--color-signal-purple: #7C5CFF` alongside existing Flow tokens; these are Pulse-only and must never be used on Flow UI elements
+- [ ] **Rename "Life RPG" references to Authority OS** — sweep `CLAUDE.md`, README, any visible UI strings; product pillars rename: Finance → A:Fin, Career/Education → A:Intel, Fitness → A:Perf, Family Planning → A:Legacy
+- [ ] **Insight Row component (first Pulse deliverable)** — trend arrow (↑ ↓ →) + delta value + short label; signal blue/purple only; always renders below primary metric, never replaces it
+- [ ] **Replace XP/score/gamification language with Momentum** — no levels, no badges, subtle directional visualization only
+
 ### Statements Tab
 
 - [ ] **Statements Tab** — personal finance statements for download and AI-powered insights:

@@ -308,9 +308,9 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 - [x] **Status color consistency** — audit all `status` props on `MetricCard`; confirm green/gold/red always mean the same thing (positive/neutral-attention/negative) across all panels
 
 ### Auth Providers
-- [ ] **Decide on supported auth methods** — email/password (already built), Google OAuth, Apple Sign In; Apple required for iOS App Store; pick which to support at launch
 - [ ] **Wire Google OAuth** — `supabase.auth.signInWithOAuth({ provider: 'google' })`; add Google button to `LoginScreen.jsx`; configure provider in Supabase dashboard
-- [ ] **Wire Apple Sign In** — `supabase.auth.signInWithOAuth({ provider: 'apple' })`; add Apple button to `LoginScreen.jsx`; configure provider in Supabase dashboard; required for iOS App Store compliance
+- [ ] **Wire Apple Sign In** — requires Apple Developer Program membership ($99/yr); holding until app revenue covers it; when ready: `supabase.auth.signInWithOAuth({ provider: 'apple' })`, add Apple button to `LoginScreen.jsx`, configure in Supabase dashboard; required for iOS App Store compliance
+- [x] **LoginScreen layout update** — OAuth button slots + divider in place
 - [x] **LoginScreen layout update** — add OAuth buttons below email/password form with a divider ("or continue with"); style per platform guidelines (Apple button must be black/white)
 
 ### Benefits → Deductions Pipeline
@@ -351,21 +351,17 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 ### Near-Term Product Sprint Backlog
 
 - [x] **Goal card drag + cross-category preview** — support click-and-drag reordering for goals; while dragging between **Expenses** and **Lifestyle**, preview the destination with a live color-fade transition before drop
-- [ ] **Expense editor pay-cycle model** — inline expense editor should capture (1) amount and (2) pay cycle via dropdown (weekly, biweekly, every 30 days, yearly); compute per-paycheck set-aside from the selected cycle; apply auto-start math from the input/edit date forward only
+- [x] **Expense editor pay-cycle model** — inline expense editor should capture (1) amount and (2) pay cycle via dropdown (weekly, biweekly, every 30 days, yearly); compute per-paycheck set-aside from the selected cycle; apply auto-start math from the input/edit date forward only
 - [x] **Goal timeline monthly/weekly scale refresh** — switch to a monthly notated bar with subtle four-week sub-divisions; render goal progress in weekly chunks so mid-month targets visually stop at the midpoint of that month
-- [ ] **Income Summary monthly cleanup** — remove all 401(k) card references from the monthly tab
-- [ ] **Income Summary weekly modal fix** — full-details modal is clipped top/bottom and currently traps users; fix vertical scrolling and exit behavior
-- [ ] **Rolling year progression system (weekly + goal timeline)** — for Income Summary (weekly) and Goals timeline:
-  - [ ] show only the current window plus the previous 4 weeks on-screen
-  - [ ] as older weeks/months roll off, keep data in storage but hide from view (do not delete)
-  - [ ] slightly scale visible timeline elements forward over time while preserving consistent proportions
-  - [ ] design persistence update if needed (parent/child timeline tables keyed to user id)
-- [ ] **Adjusted weekly take-home from events: fix + audit** — repair budget-tab UI math so adjusted take-home updates correctly; audit that the corrected value is consumed by goals timeline math
-- [ ] **Tax payback math integration** — incorporate missed-day event impact into extra tax payback projections (if days are missed, projected owed taxes should decrease appropriately)
-- [ ] **Year Summary net card behavior** — replace projected net display with adjusted net (post-event math); add info icon + modal that explains take-home loss from missed-event logs; remove separate adjusted take-home UI component
-- [ ] **Benefits tab recovery** — investigate and fix broken Benefits tab behavior
-- [ ] **Log tab simplification** — keep only `Net Loss`, `PTO Loss`, and `Bucket Hour Loss` cards
-- [ ] **Log tab data consolidation card** — merge all remaining pre-history log metrics into one large clean card (no heavy visual separators between data points); define and label these grouped data chunks consistently
+- [x] **Income Summary monthly cleanup** — 401(k) references removed from monthly tab
+- [x] **Income Summary weekly modal fix** — vertical scrolling and exit behavior fixed
+- [x] **Rolling year progression system (weekly + goal timeline)** — `deriveRollingIncomeWeeks` + `deriveRollingTimelineMonths` + `progressiveScale` shipped in `src/lib/rollingTimeline.js`; data preserved in hiddenWeeks/hiddenMonths for future full-year review tab
+- [x] **Adjusted weekly take-home from events: fix + audit** — `adjustedWeeklyDelta` wired through `eventImpact` memo in App.jsx; feeds `adjustedWeeklyAvg` to BudgetPanel and LogPanel
+- [x] **Tax payback math integration** — `adjustedTaxableGrossByWeek` applies `grossDeltaByWeek` from event logs; missed days reduce federal + state liability → lowers `extraPerCheck`
+- [x] **Year Summary net card behavior** — IncomePanel shows `adjustedTakeHome` as Adjusted Net card; `missedEventDayNetLost` shown as sublabel; old standalone adjusted take-home component removed
+- [x] **Benefits tab recovery** — resolved
+- [x] **Log tab simplification** — net loss, PTO loss, and bucket hours loss cards retained; others removed
+- [x] **Log tab data consolidation card** — Log Effect Summary card ships in LogPanel with adjTH, adjWA, projS; no internal background separation
 
 ---
 
@@ -376,7 +372,7 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 - [x] **Fiscal week awareness** — app knows current week of the fiscal year (Week X of 52); `today` state ticks at midnight and cascades reactively through all panels; `FISCAL_YEAR_START` centralized constant; week badge in header, log, benefits, budget phase all in sync
   - [ ] Goals needing to be marked complete when funded
   - [ ] Confirmation of days worked vs. projected schedule each week
-  - [ ] Goal timeline surplus math — swap flat `weeklyIncome` average for actual per-week `computeNet()` so taxed vs. non-taxed weeks produce accurate surplus and goal sequencing reflects real pay variation
+  - [x] Goal timeline surplus math — `futureWeekNets[]` (per-week `computeNet()` output, buffer-excluded) feeds `computeGoalTimeline()` directly; flat average no longer used
 
 ### Theoretical Tab
 
@@ -389,13 +385,6 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 ### Calendar Tab
 
 - [ ] **Calendar Tab** — visual calendar mapping all expense due dates, loan payment dates, and goal milestones
-
-### Authority OS — Branding & Design System
-
-- [ ] **Add Pulse signal tokens to `src/index.css`** — `--color-signal-blue: #5B8CFF` and `--color-signal-purple: #7C5CFF` alongside existing Flow tokens; these are Pulse-only and must never be used on Flow UI elements
-- [ ] **Rename "Life RPG" references to Authority OS** — sweep `CLAUDE.md`, README, any visible UI strings; product pillars rename: Finance → A:Fin, Career/Education → A:Intel, Fitness → A:Perf, Family Planning → A:Legacy
-- [ ] **Insight Row component (first Pulse deliverable)** — trend arrow (↑ ↓ →) + delta value + short label; signal blue/purple only; always renders below primary metric, never replaces it
-- [ ] **Replace XP/score/gamification language with Momentum** — no levels, no badges, subtle directional visualization only
 
 ### Statements Tab
 
@@ -418,11 +407,11 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 
 This section tracks incremental migration from the old "Dark Wealth" gold-based spec to the live Flow shell + future Pulse overlay system. Work is ordered by visual impact and risk.
 
-### Green Alignment (immediate — visual quality fix)
+### Green Alignment
 
-- [ ] **`ui.jsx` — fix METRIC_STATUS green.val** — change from `var(--color-accent-soft)` (#4ADE80 lime) to `var(--color-green)` (#22C55E); this is the primary visible clash: lime on positive metric cards vs teal on tabs/headers
-- [ ] **`index.css` — update `--color-gold-bright` flash token** — change `#4ade80` to `#33e0b0` (bright tint of `#00c896`) so value flash stays in same hue family as the accent instead of firing lime
-- [ ] **Audit foreground use of `--color-accent-soft`** — after above fix, lime should not appear as any foreground text or value color; only valid in background tints
+- [x] **`ui.jsx` — fix METRIC_STATUS green.val** — changed from `var(--color-accent-soft)` to `var(--color-green)` (#22C55E)
+- [x] **`index.css` — update `--color-gold-bright` flash token** — changed from `#4ade80` to `#33e0b0`
+- [x] **Audit foreground use of `--color-accent-soft`** — lime no longer used as any foreground text or value color
 
 ### Token Debt — Hardcoded Colors in Components
 
@@ -430,10 +419,10 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
 - [ ] **`LoginScreen.jsx` — tokenize remaining raw values** — align border/separator shades and button sizing to dashboard card radius/padding scale
 - [ ] **`ProfilePanel.jsx` — tokenize mixed values** — currently uses a mix of tokens + raw hex; extract to shared "settings surface" pattern consistent with rest of app
 
-### Doc Updates
+### Remaining Rename + Cleanup
 
-- [ ] **Update `finance-dashboard-ui-impl.md`** — currently documents the old gold/DM Serif system; needs a pass to reflect current Flow state (Inter fonts, teal accent, new token names)
-- [ ] **Archive `finance-dashboard-ui-spec`** — original Dark Wealth spec is superseded by `authority-design-system`; keep for historical reference but add a deprecation header so neither Claude nor Codex treat it as authoritative
+- [x] **Finish Authority OS rename** — `index.html` title + PWA label updated, `package.json` name updated, "Life RPG" eyebrow in `LoginScreen.jsx` updated
+- [x] **Remove dead Google Fonts load in `index.html`** — DM Serif Display + DM Sans removed; JetBrains Mono only remains
 
 ### Pulse Layer (when ready — Phase 2)
 

@@ -19,24 +19,31 @@ const BURST_PARTICLES = Array.from({ length: 12 }, (_, i) => {
 
 const GOAL_LANES = {
   Expenses: {
-    tint: "rgba(217, 112, 112, 0.16)",
-    border: "rgba(217, 112, 112, 0.45)",
-    text: "#d97070",
+    tint: "rgba(201, 96, 96, 0.16)",
+    border: "rgba(201, 96, 96, 0.4)",
+    text: "#c96060",
   },
   Lifestyle: {
-    tint: "rgba(122, 139, 191, 0.16)",
-    border: "rgba(122, 139, 191, 0.45)",
-    text: "#7a8bbf",
+    tint: "rgba(91, 140, 255, 0.14)",
+    border: "rgba(91, 140, 255, 0.38)",
+    text: "#5B8CFF",
   },
 };
 
 const EXPENSE_DRAG_PREVIEW_TINT = {
-  Needs: "rgba(217, 112, 112, 0.2)",
-  Lifestyle: "rgba(122, 139, 191, 0.22)",
+  Needs: "rgba(201, 96, 96, 0.18)",
+  Lifestyle: "rgba(91, 140, 255, 0.18)",
 };
 const EXPENSE_TOUCH_OVERLAY_BG = {
-  Needs: "#d97070",
-  Lifestyle: "#7a8bbf",
+  Needs: "#c96060",
+  Lifestyle: "#5B8CFF",
+};
+
+// Card background gradients: dark green base → category accent tint
+const CAT_GRADIENT = {
+  Needs:      "linear-gradient(135deg, #091a11 0%, #1a0b0b 100%)",
+  Lifestyle:  "linear-gradient(135deg, #091a11 0%, #0c1228 100%)",
+  Transfers:  "linear-gradient(135deg, #091a11 0%, #111111 100%)",
 };
 const EXPENSE_DRAG_EASE = "cubic-bezier(.22,.7,.2,1)";
 const EXPENSE_INSERT_MARKER_BG = "rgba(255,255,255,0.72)";
@@ -729,9 +736,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           <SH color={CATEGORY_COLORS[cat]} right={f2(cTot) + "/wk"}>{cat}</SH>
           {cExp.map(exp => {
             const effAmt = currentEffective(exp, ap);
-            const latestEntry = exp.history?.length ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b) : null;
-            const phaseBillingMeta = exp.billingMeta?.byPhase?.[ap];
-            const activeBillingMeta = phaseBillingMeta ?? exp.billingMeta;
             const isEditing = editId === exp.id;
             const isDragging = draggingExpenseId === exp.id;
             const previewCategory = dragPreviewExpenseCategory ?? exp.category;
@@ -778,7 +782,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               style={{
                 background: lanePreviewingMove
                   ? `linear-gradient(120deg, ${CATEGORY_BG[cat]} 0%, ${CATEGORY_BG[cat]} 40%, ${previewTint} 72%, ${CATEGORY_BG[previewCategory]} 100%)`
-                  : CATEGORY_BG[cat],
+                  : CAT_GRADIENT[cat] ?? CATEGORY_BG[cat],
                 border: `1px solid ${lanePreviewingMove ? `${CATEGORY_COLORS[previewCategory]}66` : "#1e1e1e"}`,
                 borderRadius: "6px",
                 padding: "10px 12px",
@@ -864,14 +868,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 >
                   ⋮⋮
                 </button>
-                <div><div style={{ fontSize: "13px" }}>{exp.label}</div>{exp.note[ap] && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{exp.note[ap]}</div>}</div>
+                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: "13px" }}>{exp.label}</div></div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   {pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
-                    <div style={{ fontSize: "10px", color: "#777" }}>{f(monthlyFromPerPaycheck(effAmt))}/mo</div>
-                    {activeBillingMeta && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>{f2(activeBillingMeta.amount ?? 0)} · {cycleByValue[activeBillingMeta.cycle]?.label ?? "Custom cycle"}</div>}
-                    {latestEntry && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "1px" }}>reserve started {activeBillingMeta?.effectiveFrom ?? latestEntry.effectiveFrom}</div>}
+                    <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{f(monthlyFromPerPaycheck(effAmt))}/mo</div>
                   </div>
                   <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
                   {delExpId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>

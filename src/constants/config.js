@@ -201,6 +201,6 @@ export const EVENT_TYPES = {
   other_loss:        { label: "Other Income Loss",              color: "#888",    icon: "−" },
 };
 
-export const CATEGORY_COLORS = { Needs: "var(--color-red)", Lifestyle: "#7a8bbf", Transfers: "#888" };
-export const CATEGORY_BG = { Needs: "#2a1a16", Lifestyle: "#1a1a2d", Transfers: "#1e1e1e" };
+export const CATEGORY_COLORS = { Needs: "#c96060", Lifestyle: "#5B8CFF", Transfers: "#888" };
+export const CATEGORY_BG = { Needs: "#130a0a", Lifestyle: "#0b1022", Transfers: "#111" };
 export const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];

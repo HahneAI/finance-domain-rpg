@@ -73,8 +73,8 @@ function Step0({ lifeEvent, onLifeEventChange }) {
             style={{
               display: "flex", flexDirection: "column", alignItems: "flex-start",
               gap: "3px", textAlign: "left",
-              background: active ? "rgba(201,168,76,0.10)" : "var(--color-bg-raised)",
-              border: `1px solid ${active ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"}`,
+              background: active ? "rgba(0,200,150,0.08)" : "var(--color-bg-raised)",
+              border: `1px solid ${active ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
               borderRadius: "12px",
               padding: "12px 14px",
               cursor: "pointer",
@@ -107,9 +107,9 @@ function Pill({ label, active, onClick }) {
       style={{
         padding: "7px 14px",
         fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
-        background: active ? "rgba(201,168,76,0.12)" : "var(--color-bg-raised)",
+        background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
         color: active ? "var(--color-gold)" : "var(--color-text-secondary)",
-        border: `1px solid ${active ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"}`,
+        border: `1px solid ${active ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
         borderRadius: "10px", cursor: "pointer",
         transition: "background 0.15s, border-color 0.15s, color 0.15s",
       }}
@@ -436,9 +436,9 @@ const BENEFIT_DEFS = [
 function BenefitCard({ def, selected, formData, onChange, onToggle }) {
   return (
     <div style={{
-      border: `1px solid ${selected ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"}`,
+      border: `1px solid ${selected ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
       borderRadius: "12px",
-      background: selected ? "rgba(201,168,76,0.06)" : "var(--color-bg-raised)",
+      background: selected ? "rgba(0,200,150,0.05)" : "var(--color-bg-raised)",
       overflow: "hidden",
       transition: "border-color 0.15s, background 0.15s",
     }}>
@@ -478,7 +478,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
       {selected && (
         <div style={{
           padding: "12px 14px 14px",
-          borderTop: "1px solid rgba(201,168,76,0.12)",
+          borderTop: "1px solid rgba(0,200,150,0.10)",
           display: "flex", flexDirection: "column", gap: "12px",
         }}>
           {def.type === "weekly" && (
@@ -845,8 +845,8 @@ function Step4({ formData, onChange }) {
       {isDHL && !hasRates && formData.userState === "MO" && (
         <div style={{
           padding: "12px 14px",
-          background: "rgba(201,168,76,0.06)",
-          border: "1px solid rgba(201,168,76,0.2)",
+          background: "rgba(0,200,150,0.05)",
+          border: "1px solid rgba(0,200,150,0.15)",
           borderRadius: "10px",
         }}>
           <div style={{ fontSize: "12px", color: "var(--color-text-primary)", marginBottom: "4px" }}>
@@ -859,8 +859,8 @@ function Step4({ formData, onChange }) {
             Night shift paystub-derived. Flagged as estimated until you confirm with your own stub.
           </div>
           <button onClick={loadDHLPreset} style={{
-            background: "rgba(201,168,76,0.12)", color: "var(--color-gold)",
-            border: "1px solid rgba(201,168,76,0.4)", borderRadius: "10px",
+            background: "rgba(0,200,150,0.10)", color: "var(--color-gold)",
+            border: "1px solid rgba(0,200,150,0.28)", borderRadius: "10px",
             padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
             textTransform: "uppercase", cursor: "pointer",
           }}>
@@ -914,11 +914,11 @@ function Step4({ formData, onChange }) {
               fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
               padding: "2px 8px", borderRadius: "6px",
               background: formData.taxRatesEstimated
-                ? "rgba(201,168,76,0.12)" : "rgba(76,175,125,0.12)",
+                ? "rgba(0,200,150,0.10)" : "rgba(76,175,125,0.12)",
               color: formData.taxRatesEstimated
                 ? "var(--color-gold)" : "var(--color-green)",
               border: `1px solid ${formData.taxRatesEstimated
-                ? "rgba(201,168,76,0.3)" : "rgba(76,175,125,0.3)"}`,
+                ? "rgba(0,200,150,0.22)" : "rgba(76,175,125,0.3)"}`,
             }}>
               {formData.taxRatesEstimated ? "Estimated" : "Confirmed"}
             </span>
@@ -1065,8 +1065,8 @@ function Step5({ formData }) {
         <div style={{
           fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.6",
           padding: "10px 12px",
-          background: "rgba(201,168,76,0.06)",
-          border: "1px solid rgba(201,168,76,0.2)",
+          background: "rgba(0,200,150,0.05)",
+          border: "1px solid rgba(0,200,150,0.15)",
           borderRadius: "8px",
         }}>
           Rates marked <strong style={{ color: "var(--color-gold)" }}>est.</strong> are estimates —
@@ -1543,7 +1543,7 @@ function Step8({ formData, onChange }) {
       {!accepted ? (
         <div style={{
           background: "var(--color-bg-raised)", borderRadius: "12px", padding: "18px 16px",
-          border: "1px dashed rgba(201,168,76,0.3)",
+          border: "1px dashed rgba(0,200,150,0.22)",
           display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -1684,7 +1684,7 @@ function StepStub({ title, sprint }) {
 //                      receives taxedWeeks auto-populated + setupComplete: true
 //   lifeEvent        — null (first-run) | "lost_job" | "changed_jobs" | "commission_job"
 // ─────────────────────────────────────────────────────────────────────────────
-export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = null }) {
+export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null }) {
   const [stepIdx,   setStepIdx]   = useState(0);
   const [formData,  setFormData]  = useState({ ...config });
   const [lifeEvent, setLifeEvent] = useState(initialLifeEvent);
@@ -1779,6 +1779,22 @@ export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = 
 
         {/* ── Navigation ── */}
         <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              style={{
+                marginRight: "auto",
+                background: "var(--color-bg-raised)",
+                color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border-subtle)",
+                borderRadius: "12px", padding: "7px 14px",
+                fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          )}
           {stepIdx > 0 && (
             <button
               onClick={handleBack}

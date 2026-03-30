@@ -305,7 +305,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                     display: "flex", alignItems: "center",
                     padding: "9px 20px",
                     borderBottom: "1px solid #161616",
-                    borderTop: isPayStart ? "1px solid rgba(201,168,76,0.18)" : undefined,
+                    borderTop: isPayStart ? "1px solid rgba(0,200,150,0.15)" : undefined,
                   }}>
                     {/* Day + date */}
                     <div style={{ width: "86px" }}>
@@ -522,7 +522,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                       const h = parseFloat(eventVals.hoursLost) || 0;
                       const expected = s * config.shiftHours;
                       return expected > 0 && Math.abs(h - expected) > 0.01 ? (
-                        <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(201,168,76,0.08)", borderRadius: "4px" }}>
+                        <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
                           ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h
                         </div>
                       ) : (

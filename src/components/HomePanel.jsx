@@ -118,8 +118,8 @@ export function HomePanel({
         <div style={{
           marginBottom: "14px",
           padding: "12px 14px",
-          background: "rgba(201,168,76,0.08)",
-          border: "1px solid rgba(201,168,76,0.24)",
+          background: "rgba(0,200,150,0.07)",
+          border: "1px solid rgba(0,200,150,0.18)",
           borderRadius: "10px",
           fontSize: "12px",
           color: "var(--color-text-secondary)",
@@ -141,12 +141,6 @@ export function HomePanel({
         <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", lineHeight: 1.6 }}>
           {subtitle}
         </div>
-        <FlowSparklineCard
-          label="Flow Score"
-          score={flowScore}
-          points={flowTrendPoints}
-          trendLabel={`Projected pace · ${flowTrendPoints.length} checkpoints`}
-        />
       </div>
 
       {/* 2-column tile grid */}
@@ -170,6 +164,14 @@ export function HomePanel({
           />
         ))}
       </div>
+
+      {/* Flow Score — placeholder, revisit later */}
+      <FlowSparklineCard
+        label="Flow Score"
+        score={flowScore}
+        points={flowTrendPoints}
+        trendLabel={`Projected pace · ${flowTrendPoints.length} checkpoints`}
+      />
     </div>
   );
 }

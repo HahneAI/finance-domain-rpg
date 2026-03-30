@@ -531,6 +531,11 @@ export default function App() {
         authedUser={authedUser}
         config={config}
         setConfig={setConfig}
+        allWeeks={allWeeks}
+        taxDerived={taxDerived}
+        showExtra={showExtra}
+        setShowExtra={setShowExtra}
+        isAdmin={isAdmin}
       />}
     </>
   );

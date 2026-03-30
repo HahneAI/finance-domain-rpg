@@ -1,0 +1,134 @@
+# Codex Task Specification
+
+# =========================
+# TASK_SPEC (MACHINE READABLE)
+# =========================
+
+```json
+{
+  "task_id": "AUDIT_complete_goal_funded_completion_and_days_worked_confirmation",
+  "task_type": "FEATURE",
+  "status": "PENDING",
+
+  "objective": "Audit and complete two fiscal-week roadmap items if they are not fully live: (1) goals automatically or intentionally marked complete when funded, and (2) weekly confirmation of actual days worked versus projected schedule.",
+
+  "scope": {
+    "allowed_files": [
+      "goals tab/page component",
+      "goal status/completion logic",
+      "goal funding/progress calculation helpers",
+      "income or work-schedule weekly tracking components",
+      "weekly confirmation UI flow",
+      "shared fiscal week helpers",
+      "relevant state selectors/hooks for goals and worked-day tracking"
+    ],
+    "restricted_files": [
+      "authentication logic",
+      "unrelated dashboard tabs/pages",
+      "global theme system",
+      "database schema unless existing architecture requires a minimal addition for weekly confirmation persistence",
+      "broad layout refactors"
+    ],
+    "entry_points": [
+      "goal completion status calculation/render flow",
+      "goal funding/progress pipeline",
+      "current fiscal week state helpers",
+      "weekly schedule/worked-days UI and state flow"
+    ],
+    "out_of_scope": [
+      "full goals system redesign",
+      "new goal categories",
+      "major calendar/scheduling system rewrite",
+      "theoretical tab implementation"
+    ]
+  },
+
+  "implementation": {
+    "steps": [
+      "Audit whether goals are already being marked complete when funding thresholds are met.",
+      "If not fully live, implement goal completion behavior tied to the existing funded/progress logic.",
+      "Ensure goal completion does not break timeline/history views and is reflected consistently in goal UI/state.",
+      "Audit whether the app has a weekly confirmation flow for actual days worked versus projected schedule.",
+      "If missing or partial, implement a user-facing weekly confirmation mechanism scoped to the current fiscal week.",
+      "Ensure the weekly confirmation flow compares projected days versus actual worked days clearly.",
+      "If persistence is needed, use the current architecture and add only minimal storage changes after inspecting the real schema.",
+      "Keep both features in sync with the centralized fiscal week awareness already described in the roadmap."
+    ],
+    "constraints": [
+      "Preserve existing TypeScript types",
+      "Prefer auditing existing logic before adding new logic",
+      "Keep UI additions minimal and consistent with current app patterns",
+      "Do not refactor unrelated income/budget/goal systems",
+      "If schema changes are needed, keep them minimal and scoped"
+    ]
+  },
+
+  "change_log": {
+    "expected_changes": [
+      {
+        "file": "goal completion logic/UI",
+        "change": "Audit and complete funded-goal completion behavior if missing"
+      },
+      {
+        "file": "weekly worked-days confirmation UI/logic",
+        "change": "Audit and complete projected-vs-actual days worked confirmation flow"
+      },
+      {
+        "file": "shared fiscal week helpers/state",
+        "change": "Ensure both features align with current fiscal week awareness"
+      }
+    ]
+  },
+
+  "impact_analysis": {
+    "affected_areas": [
+      "goal completion state",
+      "goal progress UX",
+      "weekly work confirmation UX",
+      "fiscal week-dependent behaviors"
+    ],
+    "risk_areas": [
+      "goal completion may trigger too early or too late",
+      "worked-day confirmation may use the wrong week boundary",
+      "existing goal timeline/progress views may not reflect completed state cleanly",
+      "weekly confirmation state may not persist correctly if added"
+    ],
+    "potential_bugs": [
+      {
+        "area": "goal completion",
+        "risk": "goals may not mark complete exactly when funded or may re-open incorrectly"
+      },
+      {
+        "area": "weekly confirmation",
+        "risk": "actual days worked may be compared against the wrong projected week"
+      },
+      {
+        "area": "fiscal week sync",
+        "risk": "confirmation/reset behavior may drift from centralized fiscal week state"
+      }
+    ]
+  },
+
+  "validation": {
+    "checks": [
+      "Audit clearly states whether each roadmap item was already live, partial, or missing",
+      "Goals are marked complete when funded if that feature was missing",
+      "Weekly actual-days-vs-projected confirmation exists and works if it was missing",
+      "Both features align with fiscal week awareness",
+      "No console errors",
+      "No TypeScript errors",
+      "No unintended file changes"
+    ]
+  },
+
+  "output_format": {
+    "require_summary": true,
+    "summary_fields": [
+      "files_changed",
+      "audit_result",
+      "features_completed",
+      "schema_changes_needed",
+      "remaining_edge_cases"
+    ]
+  }
+}

@@ -161,3 +161,30 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
 **Known gap:** `buildYear()` only applies `ltd` + `k401kEmployee` to pre-tax deductions. Insurance premiums and HSA/FSA contributions collected in config but not subtracted → taxable gross overstated. Tracked in TODO §8.
 
 **Persistence:** localStorage via `src/lib/db.js`. Supabase for multi-user (auth live). No schema changes made by Tasks 1–8.
+
+---
+
+## Setup Wizard
+
+**File:** `src/components/SetupWizard.jsx` — shipped.
+
+**Entry:** `App.jsx` checks `!config.setupComplete` on load → renders wizard. On completion writes `setupComplete: true` and redirects to income view. Re-accessible from sidebar "Life Events" menu for job changes without wiping unrelated config.
+
+**Steps:** Welcome → Pay Structure → Schedule → Deductions → Tax Rates → Tax Summary → Other Deductions → Paycheck Buffer → Tax Exempt Gate.
+
+**Employer preset:** `employerPreset: "DHL"` flag activates bucket attendance model, rotation-based scheduling, and dual withholding rates. Standard users get flat weekly hours model. Pattern is designed to extend to other employer presets (UPS, Amazon, etc.).
+
+**Tax rates policy:** Paystub not required at setup. Step 4 pre-fills from `STATE_TAX_TABLE` so the app is immediately useful with estimates. Users sharpen rates later via "Sharpen your tax rates" entry in Settings — same calculator UI, no full wizard re-run.
+
+**Benefits gate:** Three states — enrolled, not yet eligible (with projected start date), no benefits — control whether LTD and 401k fields appear and when they activate in `buildYear()`.
+
+---
+
+## Rolling Active Views — QA Notes
+
+Testing requires manual date simulation (no date override utility yet):
+1. Near year start — minimal hidden periods, scale near 1.00x
+2. Mid-year — some hidden periods, subtle scale increase visible
+3. Near EOY — many hidden periods, scale near 1.15x cap
+
+Hidden weeks/months preserved in `hiddenWeeks` / `hiddenMonths` arrays from `rollingTimeline.js` — ready for a future full-year review tab without data migration.

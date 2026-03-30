@@ -1,222 +1,163 @@
 # Authority OS — Active Systems Reference
 
-Living document. Describes what is currently built and how each system works.
-Updated incrementally as Codex task audits complete.
-
-**Last updated:** 2026-03-30
-**App:** Authority Finance (A:Fin) — flagship pillar
-**Design system:** Flow shell + Pulse overlay (see `authority-design-system`)
-
----
-
-## How to use this doc
-
-Each section covers one feature system: what it does, how the data flows,
-known behavior rules, and any open issues. This is the reference point for
-both human developers and AI agents working on the codebase.
+Living doc. Describes what is built, how it works, and known issues.
+**Guardrail: keep under 300 lines. Summarize; do not transcribe.**
+Last updated: 2026-03-30 | App: Authority Finance (A:Fin)
 
 ---
 
 ## System Index
 
-| # | System | Source Task | Status |
-|---|--------|------------|--------|
-| 1 | Expense Drag-and-Drop Reorder | Task 1 | Audited — known issue logged |
-| 2 | Expense Inline Editor + Pay Cycle Math | Task 2 | Pending audit |
-| 3 | Goals Timeline — Monthly/Weekly Grid | Task 3 | Pending audit |
-| 4 | Rolling Active Views + Progressive Scaling | Task 4 | Pending audit |
-| 5 | Budget Events / Adjusted Take-Home / Tax Payback | Task 5 | Pending audit |
-| 6 | Expense Pay Period vs Monthly Math | Task 6 | Pending audit |
-| 7 | Year Summary Card — Adjusted Net + Event Loss Modal | Task 7 | Pending audit |
-| 8 | Log Tab Layout — Hero Cleanup + Log Effect Summary | Task 8 | Pending audit |
-
----
+| # | System | Files | Status |
+|---|--------|-------|--------|
+| 1 | Expense Drag-and-Drop Reorder | `BudgetPanel.jsx` | Live — open issue |
+| 2 | Expense Inline Editor + Pay Cycle Math | `BudgetPanel.jsx` | Live |
+| 3 | Goals Timeline — Monthly/Weekly Grid | `BudgetPanel.jsx`, `finance.js` | Live |
+| 4 | Rolling Active Views + Progressive Scaling | `rollingTimeline.js`, `IncomePanel.jsx`, `BudgetPanel.jsx` | Live |
+| 5 | Adjusted Take-Home / Tax Payback Pipeline | `App.jsx`, `IncomePanel.jsx` | Live |
+| 6 | Expense Pay Period vs Monthly Display | `BudgetPanel.jsx` | Resolved (by design) |
+| 7 | Year Summary — Adjusted Net + Event Loss | `IncomePanel.jsx`, `App.jsx` | Live |
+| 8 | Log Tab — Hero + Log Effect Summary | `LogPanel.jsx` | Live |
 
 ---
 
 ## 1. Expense Drag-and-Drop Reorder
 
-**Source task:** `FEATURE_drag_reorder_expense_cards_with_category_preview`
-**Type:** Feature
-**Files affected:** Expense list components, expense card component, drag state logic
+Supports both mouse drag and touch (450ms hold-to-drag) within the Expenses tab.
 
-### What it does
+**Mouse drag:** `onExpenseDragStart` → `EXPENSE_DRAG_PREVIEW_TINT` fades card toward destination category color on hover → `reorderExpenseByInsert()` splices dragged card into the correct insert-index position and updates `category` if cross-lane. Preview resets on drop/leave/cancel.
 
-Allows users to reorder expense cards within their list via click-and-drag.
-When a card is dragged across a category boundary (Expenses → Lifestyle or
-vice versa), the dragged card shows a live visual color fade preview toward
-the destination category before the card is dropped.
+**Touch drag:** Ghost overlay follows finger. Edge proximity triggers `runTouchAutoScroll` (rAF loop, max 18px/frame). Drop resolves via `expenseTouchInsertRef` position. Exit fade on 130ms timer.
 
-### Behavior rules
+**Reorder logic:** `reorderExpenseByInsert(draggedId, lane, insertIndex)` — walks `regularExpenses` to find the correct splice point, mutates category to `targetLane`, preserves loan ordering separately.
 
-- Drag-and-drop is scoped to the **Expenses tab only**
-- Reorder persists within the expense list order
-- Cross-category drag (Expenses ↔ Lifestyle) shows a color transition preview
-  on the dragged card while hovering over the destination zone
-- Preview resets cleanly on: drop, drag cancel, drag leave
-- No new dependencies introduced — built on the app's existing drag pattern
+**Categories:** Needs / Lifestyle (cross-lane drag supported). Goals tab uses `GOAL_LANES` colors for inline labels only — not split containers.
 
-### Category preview logic
-
-- On `dragenter` / `dragover` into a destination category zone: apply fade
-  toward destination category color on the dragged card
-- On `dragleave`, `drop`, or `dragend`: reset card to original color state
-- Preview is localized to the dragged card only — other cards do not animate
-
-### Known issue — Goals tab contamination (post-commit)
-
-The initial implementation accidentally applied the Expenses/Lifestyle split
-container layout to the **Goals tab** as well. The Goals tab should be a
-single-section layout — it does not have Expense Goals / Lifestyle containers.
-
-**Required fix (tracked in TODO):**
-- Restore Goals panel to single-section layout
-- Remove unintended Expense Goals / Lifestyle split containers from Goals tab
-- The Goals timeline bar must remain unchanged — no visual rollback
-- Drag-and-drop category interaction must remain scoped to Expenses tab only
-
-**Validation when fixed:**
-- Goals tab renders as one section
-- Goals timeline bar unchanged
-- Expenses tab retains drag/drop category behavior
-- No cross-tab UI coupling
-
----
+**Open issue:** Task 1 post-commit noted Goals tab was accidentally given Expenses/Lifestyle split containers. Code audit shows Goals renders as a single list with lane badges inline per card — appears resolved, but needs visual QA confirmation.
 
 ---
 
 ## 2. Expense Inline Editor + Pay Cycle Math
 
-**Source task:** `FEATURE_expense_inline_editor_pay_cycle_math`
-**Status:** Pending audit
+**Cycle options:** weekly (7d), biweekly (14d), every30days, yearly (365d).
+`PAYCHECK_CADENCE_DAYS = 7` — one check per fiscal week.
 
-*To be documented after Task 2 code review.*
+**Core formula:**
+```
+perPaycheck = amount × 7 / cycleDays
+monthly     = perPaycheck × 4   (PAYCHECKS_PER_MONTH, not calendar days)
+```
+
+**Effective start date:** new expenses use `TODAY_ISO` as `effectiveFrom`. Edit: if last history entry is ≤3 days old, updates in place; otherwise appends a new history entry. No backfill.
+
+**Phase-aware:** `billingMeta.byPhase[ap]` stores per-phase `{amount, cycle, effectiveFrom}`. `getEffectiveAmount()` resolves the correct history entry for the active phase and date.
+
+**Edit flow:** `startEditExp` reverse-converts stored `perPaycheck → cycle amount` via `cycleAmountFromPerPaycheck` for display in the inline editor.
 
 ---
 
 ## 3. Goals Timeline — Monthly/Weekly Grid
 
-**Source task:** `FEATURE_goals_timeline_monthly_weekly_grid_rebuild`
-**Status:** Pending audit
+**Location:** `BudgetPanel.jsx` Goals view, uses `computeGoalTimeline()` from `finance.js`.
 
-*Confirmed shipped per CODEX_MEMORY entry (2026-03-28):*
-> "Replaced the single continuous goal fill bar with a month-notated track in
-> BudgetPanel: timeline now builds month segments from futureWeeks, applies
-> subtle 4-part visual subdivisions per month, and labels each month on the
-> goal card. Goal funding fill now renders as discrete weekly chunks."
+**Timeline structure:** Month-labeled track built from `futureWeeks`. Each month renders `MONTH_SUBDIVISIONS = 4` subtle internal blocks. `deriveRollingTimelineMonths()` filters visible months (see System 4).
 
-*Full behavior documentation pending deeper code audit.*
+**Goal bar positioning:** `computeGoalTimeline()` runs week-by-week surplus sequencing — each loop week: `weeklyNets[weekOffset] - futureEventDeductions - effectiveNonTransferSpend - smearedPastLoss + smearedGain`. Goals funded in list order. Start week `sW` and duration `wN` map to month position proportionally, including mid-month stops.
+
+**Known gap:** `wN` fallback for unfunded goals uses `remaining / avgNet` approximation — can diverge from true week-by-week surplus under volatile checks (partial-year extrapolation).
 
 ---
 
 ## 4. Rolling Active Views + Progressive Scaling
 
-**Source task:** `FEATURE_rolling_active_view_hide_old_data_prepare_full_year_review`
-**Status:** Pending audit
+**Library:** `src/lib/rollingTimeline.js` — three pure exports.
 
-*Rules documented in `docs/rolling-active-view-scaling.md`:*
+**Weekly (IncomePanel):**
+`deriveRollingIncomeWeeks(allWeeks, todayIso, 4)` → shows last 4 completed weeks + current week + all remaining weeks through EOY. Older weeks hidden; data preserved in `hiddenWeeks`.
 
-**Weekly timelines:**
-- Show last 4 completed weeks + current week + all remaining weeks through EOY
-- Older completed weeks hidden from main view (data preserved)
+**Monthly (BudgetPanel goals):**
+`deriveRollingTimelineMonths(monthSegments, todayIso, 1)` → shows previous month + current month + all remaining months through EOY. Older months in `hiddenMonths`.
 
-**Monthly timelines (goals):**
-- Show previous month + current month + all remaining months through EOY
-- Older months hidden from main view (data preserved)
+**Progressive scaling:**
+`progressiveScale(scaleProgress, 0.15)` → `1 + (progress × 0.15)`. Returns 1.00x at year start, 1.15x at EOY. `scaleProgress` = hidden periods / max possible hidden periods. Applied as `weeklyDensityScale` in IncomePanel weekly rows.
 
-**Progressive scaling:** ~1.00x early year → ~1.15x EOY cap, gradual increment
-
-*Full behavior documentation pending deeper code audit.*
+**Hidden data** preserved in derived structures for future full-year review tab.
 
 ---
 
-## 5. Budget Events / Adjusted Take-Home / Tax Payback
+## 5. Adjusted Take-Home / Tax Payback Pipeline
 
-**Source task:** `BUGFIX_budget_events_takehome_math_goals_audit_tax_payback_adjustment`
-**Status:** Pending audit
+**Event impact engine (`App.jsx` `eventImpact` memo):**
+Loops all logs → `calcEventImpact(e, config)` per entry → accumulates:
+- `netLost` / `netGained` — total net delta
+- `missedEventDayNetLost` — absence-type events only (feeds Task 7 modal)
+- `weeklyNetAdjustments[idx]` — per-week net delta map
+- `grossDeltaByWeek[idx]` — per-week gross delta (feeds tax recalc)
+- `futureEventDeductionsByWeek[idx]` — future weeks only (feeds goal surplus)
 
-*To be documented after Task 5 code review.*
+**Tax payback adjustment:**
+`adjustedTaxableGrossByWeek[idx] = taxableGross + grossDeltaByWeek[idx]`
+Feeds full federal (`fedTax`) and state (`stateTax`) liability recalculation → recomputes `fedGap`, `moGap` → `extraPerCheck = targetExtraTotal / taxedWeekCount`. Missed days reduce gross → lower projected tax owed.
 
----
-
-## 6. Expense Pay Period vs Monthly Math
-
-**Source task:** `BUG_expense_pay_period_vs_monthly_math_audit`
-**Status:** Pending audit
-
-*To be documented after Task 6 code review.*
-
----
-
-## 7. Year Summary Card — Adjusted Net + Event Loss Modal
-
-**Source task:** `FEATURE_year_summary_use_adjusted_net_with_event_loss_info_modal`
-**Status:** Pending audit
-
-*To be documented after Task 7 code review.*
+**Downstream consumers:**
+- `adjustedWeeklyAvg = baseWeeklyUnallocated + (totalNetAdjustment / futureWeekCount)`
+- `futureWeekNets[]` — per-week spendable net, buffer-excluded, fed to `computeGoalTimeline`
+- `logTotals.adjustedTakeHome = projectedAnnualNet + totalNetAdjustment`
 
 ---
 
-## 8. Log Tab — Hero Cleanup + Log Effect Summary
+## 6. Expense Pay Period vs Monthly Display
 
-**Source task:** `FEATURE_log_tab_hero_cleanup_and_effect_summary_card`
-**Status:** Pending audit
-
-*To be documented after Task 8 code review.*
+**Resolved — by design.** Monthly cost = `perPaycheck × 4` (paycheck-based month, not calendar). This is intentional: app runs on weekly fiscal cadence, so 4 checks = 1 "month." Not a math error. `cycleAmountFromPerPaycheck` reverse-converts for editor display. Documented as resolved in task audit.
 
 ---
 
+## 7. Year Summary — Adjusted Net + Event Loss
+
+**IncomePanel** receives `adjustedTakeHome` and `missedEventDayNetLost` as props (from `App.jsx` `logTotals`).
+
+**Year Summary card:** Displays `adjustedTakeHome` (not raw projected net) as "Adjusted Net" with `missedEventDayNetLost` as sublabel: `"$X missed-day loss"` shown in red when non-zero.
+
+**Inline breakdown row** (IncomePanel lines 226–230): Shows missed-day loss in red and adjusted take-home in gold as a consolidated callout — replaces the old separate yellow/red adjusted take-home component.
+
+**Source of truth:** `adjustedTakeHome = projectedAnnualNet + eventImpact.totalNetAdjustment`. Card and breakdown row use same prop — no divergence risk.
+
 ---
 
-## Core Architecture Notes
+## 8. Log Tab — Hero + Log Effect Summary
 
-### Data flow overview (current understanding)
+**Three hero cards:** net loss (`tot.nL`), PTO loss (`tot.pto` hours), bucket hours lost (`tot.bucket`). Larger week-naming card and bucket hour bar card preserved.
+
+**Log Effect Summary card** (single card, no internal background separation):
+- `adjTH = projectedAnnualNet - tot.nL + tot.nG` — adjusted annual take-home
+- `adjWA = baseWeeklyUnallocated - (tot.nL / weeksLeft) + (tot.nG / weeksLeft)` — adjusted weekly avg
+- `projS = adjWA × weeksLeft` — projected savings
+- Displays: adjusted take-home, adjusted weekly avg, projected savings vs total unfunded goals, weeks-to-fund estimate
+
+**Attendance history** section: groups absence-type logs by calendar month, counts unpaid shifts, unapproved days, partial shifts. Day-of-week miss frequency sorted descending. Explanatory text box removed.
+
+---
+
+## Core Architecture
 
 ```
-SetupWizard (config input)
+SetupWizard → config
     ↓
-buildYear() → per-week paycheck projections (52-week array)
+buildYear() → allWeeks[] (52 weeks, taxableGross, grossPay per week)
     ↓
-computeNet() → per-check net after taxes, deductions, events
+computeNet(week, config, extraPerCheck) → per-check net
     ↓
-futureWeekNets[] → fed into BudgetPanel
+projectedAnnualNet → weeklyIncome → baseWeeklyUnallocated
     ↓
-computeGoalTimeline() → per-week surplus → goal funding sequences
+eventImpact (logs) → adjustedWeeklyDelta, grossDeltaByWeek
+    ↓
+taxDerived (adjustedTaxableGross) → extraPerCheck (feeds back into computeNet)
+    ↓
+futureWeekNets[] → computeGoalTimeline() → goal fund sequences
 ```
 
-**Known gap (from CODEX_MEMORY 2026-03-28):**
-`buildYear()` pre-tax deduction pool currently only applies `cfg.ltd` and
-`k401kEmployee`. Insurance premiums (`healthPremium`, `dentalPremium`,
-`visionPremium`, `stdWeekly`, `lifePremium`) and account contributions
-(`hsaWeekly`, `fsaWeekly`) are collected in config but NOT applied — causing
-taxable income and take-home projections to be overstated. Tracked in
-TODO section 8 (Benefits → Deductions Pipeline).
+**Key constants:** `FISCAL_YEAR_START`, `PAYCHECK_CADENCE_DAYS = 7`, `PAYCHECKS_PER_MONTH = 4`
 
-### Key files
+**Known gap:** `buildYear()` only applies `ltd` + `k401kEmployee` to pre-tax deductions. Insurance premiums and HSA/FSA contributions collected in config but not subtracted → taxable gross overstated. Tracked in TODO §8.
 
-| File | Role |
-|------|------|
-| `src/App.jsx` | Root shell, nav routing, auth gate, week state |
-| `src/components/ui.jsx` | All shared primitives: MetricCard, NT, VT, SmBtn, SH, iS, lS |
-| `src/components/HomePanel.jsx` | Dashboard home — interactive metric tiles |
-| `src/components/IncomePanel.jsx` | Income breakdown — Overview/Monthly/Weekly/Tax tabs |
-| `src/components/BudgetPanel.jsx` | Expenses/Goals/Loans tabs + goal timeline |
-| `src/components/BenefitsPanel.jsx` | 401k + PTO tracking |
-| `src/components/LogPanel.jsx` | Event log — hero cards + Log Effect Summary + history |
-| `src/components/WeekConfirmModal.jsx` | Weekly schedule confirmation + event logging |
-| `src/components/SetupWizard.jsx` | Multi-step onboarding (pay structure, schedule, deductions, tax) |
-| `src/components/LoginScreen.jsx` | Auth shell (sign in, sign up, password recovery) |
-| `src/components/ProfilePanel.jsx` | Account + employment settings |
-| `src/index.css` | All design tokens (`@theme` block) — single source of truth |
-
-### Fiscal year model
-
-- `FISCAL_YEAR_START` is a centralized constant
-- App tracks current fiscal week (Week X of 52)
-- `today` state ticks at midnight and cascades reactively through all panels
-- Week badge shown in header, log, benefits, budget phase — all in sync
-
----
-
-*This document grows as each Codex task is audited. See `audit-TODO.md` for
-remaining work and `authority-design-system` for the visual/brand layer.*
+**Persistence:** localStorage via `src/lib/db.js`. Supabase for multi-user (auth live). No schema changes made by Tasks 1–8.

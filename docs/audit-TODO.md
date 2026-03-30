@@ -13,14 +13,14 @@ One entry per task. For each: read the spec, confirm what shipped, document the
 live behavior and any known issues.
 
 - [x] Task 1 — `FEATURE_drag_reorder_expense_cards_with_category_preview`
-- [ ] Task 2 — `FEATURE_expense_inline_editor_pay_cycle_math`
-- [ ] Task 3 — `FEATURE_goals_timeline_monthly_weekly_grid_rebuild`
-- [ ] Task 4 — `FEATURE_rolling_active_view_hide_old_data_prepare_full_year_review`
-- [ ] Task 5 — `BUGFIX_budget_events_takehome_math_goals_audit_tax_payback_adjustment`
-- [ ] Task 6 — `BUG_expense_pay_period_vs_monthly_math_audit`
-- [ ] Task 7 — `FEATURE_year_summary_use_adjusted_net_with_event_loss_info_modal`
-- [ ] Task 8 — `FEATURE_log_tab_hero_cleanup_and_effect_summary_card`
-- [ ] Task 9 (UI/Flow) — already captured in `authority-design-system`
+- [x] Task 2 — `FEATURE_expense_inline_editor_pay_cycle_math`
+- [x] Task 3 — `FEATURE_goals_timeline_monthly_weekly_grid_rebuild`
+- [x] Task 4 — `FEATURE_rolling_active_view_hide_old_data_prepare_full_year_review`
+- [x] Task 5 — `BUGFIX_budget_events_takehome_math_goals_audit_tax_payback_adjustment`
+- [x] Task 6 — `BUG_expense_pay_period_vs_monthly_math_audit`
+- [x] Task 7 — `FEATURE_year_summary_use_adjusted_net_with_event_loss_info_modal`
+- [x] Task 8 — `FEATURE_log_tab_hero_cleanup_and_effect_summary_card`
+- [x] Task 9 (UI/Flow) — captured in `authority-design-system`
 
 ---
 

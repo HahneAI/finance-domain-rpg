@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { MetricCard, Card, NT, VT, SmBtn, SH, iS, lS } from '../../components/ui.jsx'
+import { MetricCard, Card, NT, VT, SmBtn, SH, FlowSparklineCard, iS, lS } from '../../components/ui.jsx'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Style token objects (iS, lS)
@@ -200,5 +200,14 @@ describe('MetricCard — status tinting', () => {
   it('renders with status="gold" without throwing', () => {
     render(<MetricCard label="Goal" val="75%" status="gold" />)
     expect(screen.getByText('Goal')).toBeTruthy()
+  })
+})
+
+describe('FlowSparklineCard', () => {
+  it('renders score and trend label', () => {
+    render(<FlowSparklineCard score={72} trendLabel="Projected pace" points={[41, 45, 52, 61, 66, 72]} />)
+    expect(screen.getByText('72')).toBeTruthy()
+    expect(screen.getByText('Projected pace')).toBeTruthy()
+    expect(screen.getByRole('img', { name: /flow trend/i })).toBeTruthy()
   })
 })

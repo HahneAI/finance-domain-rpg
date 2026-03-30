@@ -6,8 +6,6 @@
     </linearGradient>
   </defs>
 
-  <rect width="1000" height="1000" fill="#07130F"/>
-
   <path d="M260 700 C360 520, 600 360, 740 260"
         stroke="url(#g1)"
         stroke-width="64"

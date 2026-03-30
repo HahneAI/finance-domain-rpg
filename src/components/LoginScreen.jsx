@@ -18,6 +18,32 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { iS, lS } from "./ui.jsx";
 
+function AuthorityLogo({ size = 64, radius = 14 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 1000 1000"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ borderRadius: radius, display: "block", margin: "0 auto 10px" }}
+    >
+      <defs>
+        <linearGradient id="loginLogo_g1" x1="0%" y1="100%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#00C896"/>
+          <stop offset="100%" stopColor="#4ADE80"/>
+        </linearGradient>
+      </defs>
+      <path d="M260 700 C360 520, 600 360, 740 260"
+            stroke="url(#loginLogo_g1)"
+            strokeWidth="64"
+            strokeLinecap="round"
+            fill="none"/>
+      <circle cx="380" cy="540" r="28" fill="#5B8CFF"/>
+      <circle cx="620" cy="360" r="22" fill="#7C5CFF"/>
+    </svg>
+  );
+}
+
 // ── OAuth provider button ────────────────────────────────────────────────────
 
 function OAuthBtn({ provider, label, icon, onClick }) {
@@ -170,7 +196,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone }) {
       <div style={{ minHeight: "100vh", background: "var(--color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
         <div style={{ width: "100%", maxWidth: "360px", background: "var(--color-bg-surface)", border: "1px solid #222", borderRadius: "12px", padding: "32px 28px" }}>
           <div style={{ marginBottom: "28px", textAlign: "center" }}>
-            <img src="/src/assets/logo.svg" alt="Authority Finance" style={{ width: "64px", height: "64px", borderRadius: "14px", display: "block", margin: "0 auto 10px" }} />
+            <AuthorityLogo size={64} radius={14} />
             <div style={{ fontSize: "11px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>Authority Finance</div>
             <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-primary)", textAlign: "left" }}>{title}</div>
             {subtitle && <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "4px", textAlign: "left" }}>{subtitle}</div>}

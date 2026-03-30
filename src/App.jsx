@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso } from "./lib/finance.js";
+import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData } from "./lib/db.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
@@ -267,9 +268,7 @@ export default function App() {
   }, [allWeeks, today]);
 
   // ── Current week: first active week whose end date >= today ──
-  const currentWeek = useMemo(() => {
-    return allWeeks.find(w => w.active && toLocalIso(w.weekEnd) >= today) ?? null;
-  }, [allWeeks, today]);
+  const currentWeek = useMemo(() => getCurrentFiscalWeek(allWeeks, today), [allWeeks, today]);
 
   // confirmDismissed: session-only flag; set when user clicks "Skip for now".
   // Cleared by badge click so the modal re-opens. Resets to false on page reload.
@@ -303,9 +302,8 @@ export default function App() {
   }, [allWeeks, today, weekConfirmations]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
-  const currentWeekNumber = currentWeek
-    ? { num: currentWeek.idx, total: 52 }
-    : null;
+  const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);
+  const currentWeekLabel = formatFiscalWeekLabel(currentWeekNumber);
 
   // ── Event impact summary (single source for adjusted income math) ──
   const eventImpact = useMemo(() => {
@@ -478,6 +476,7 @@ export default function App() {
         goals={goals}
         futureWeekNets={futureWeekNets}
         currentWeek={currentWeek}
+        fiscalWeekInfo={currentWeekNumber}
         today={today}
       />}
       {currentView === "income" && <IncomePanel
@@ -503,6 +502,7 @@ export default function App() {
         futureWeekNets={futureWeekNets}
         futureEventDeductions={futureEventDeductions}
         currentWeek={currentWeek}
+        fiscalWeekInfo={currentWeekNumber}
         today={today}
       />}
       {currentView === "benefits" && <BenefitsPanel
@@ -513,6 +513,7 @@ export default function App() {
         logK401kMatchGained={logTotals.k401kMatchGained}
         logPTOHoursLost={logTotals.ptoHoursLost}
         currentWeek={currentWeek}
+        fiscalWeekInfo={currentWeekNumber}
         bucketModel={bucketModel}
         ptoGoal={ptoGoal}
         setPtoGoal={setPtoGoal}
@@ -524,6 +525,7 @@ export default function App() {
         futureWeeks={futureWeeks}
         allWeeks={allWeeks}
         currentWeek={currentWeek}
+        fiscalWeekInfo={currentWeekNumber}
         goals={goals}
         bucketModel={bucketModel}
       />}
@@ -652,7 +654,7 @@ export default function App() {
               </svg>
             </button>
           </div>
-          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
+          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px" }}>{currentWeekLabel}</div>}
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
@@ -769,7 +771,7 @@ export default function App() {
           <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
               <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>{currentWeekLabel.replace("Week ", "Wk ").replace(" of ", "/")}</div>}
             </div>
             <div style={{ fontSize: "14px", fontWeight: "bold" }}>Finance Dashboard</div>
           </div>

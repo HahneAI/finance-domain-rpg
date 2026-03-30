@@ -1,0 +1,266 @@
+Follow TASK_SPEC.
+
+Task: FEATURE_BRAND_SYSTEM_PULSE_FOUNDATION
+
+Objective:
+Create and apply a complete visual brand foundation for the finance app based on the "Pulse" direction:
+- intelligent
+- data-driven
+- AI-adjacent
+- performance-oriented
+- futuristic but restrained
+- focused on insight over emotion
+- represents a “life analytics engine,” not a traditional finance app
+
+This task is strictly visual/branding.
+Do not add features or modify business logic.
+
+---
+
+TODO LIST
+
+1. Establish the Pulse visual identity foundation
+- Brand should feel:
+  - precise
+  - analytical
+  - intelligent
+  - slightly futuristic
+  - performance-driven
+- Users should feel:
+  - “this understands my life metrics”
+  - “this is optimizing me”
+- Avoid:
+  - cold, lifeless dashboards
+  - sci-fi gimmicks
+  - hacker-style aesthetics
+
+2. Implement the Pulse color system
+
+Core backgrounds:
+- bg.primary = #050507
+- bg.secondary = #0D0D14
+
+Accent system:
+- accent.primary = #5B8CFF
+- accent.secondary = #7C5CFF
+
+Glow system:
+- accent.glow = rgba(124,92,255,0.25)
+
+Text:
+- text.primary = #EAEAF0
+- text.secondary = #8F90A6
+
+Semantic:
+- success = #22C55E
+- danger = #EF4444
+- warning = #F59E0B
+
+Color rules:
+- Primary UI is near-black with subtle tonal layering
+- Accents should feel “signal-like” (small, intentional)
+- Glow effects must be extremely subtle (no neon UI)
+- Avoid full-screen gradients or heavy glow
+
+3. Build the “analytics-first” UI feel
+
+Core principle:
+- The UI should feel like a system analyzing your life
+
+UI traits:
+- grid-based layouts
+- structured data presentation
+- modular panels
+- minimal decoration
+- emphasis on information clarity
+
+Avoid:
+- overly soft, rounded consumer UI (too Flow-like)
+- rigid corporate tables (too enterprise)
+- noisy dashboards
+
+4. Introduce the progression system (Pulse version)
+
+Rename XP → **“Performance” or “Signal”**
+
+Concept:
+- measures efficiency, discipline, and consistency
+- communicates insight, not reward
+
+Implementation guidance:
+- show metric changes (e.g., +8%, -3%)
+- use trend indicators (arrows, small graphs)
+- emphasize comparative insight (this week vs last)
+
+Avoid:
+- progress bars as primary UI
+- levels, tiers, or badges
+- reward-driven UX
+
+5. Create the logo direction exploration
+
+Logo direction:
+- node/network system
+- interconnected points forming upward or expanding structure
+
+Symbol meaning:
+- systems thinking
+- interconnected life domains
+- intelligence network
+
+Avoid:
+- literal brain icons
+- neural network clichés
+- overly complex node clusters
+- generic tech logos
+
+Logo must:
+- be simple and scalable
+- work as app icon
+- feel intelligent and structured
+
+6. Define typography behavior
+
+Typography direction:
+- Headings: Sora or Space Grotesk
+- Body: Inter
+
+Style:
+- clean, slightly technical
+- strong hierarchy for metrics
+- balanced spacing (not too tight, not too loose)
+
+Avoid:
+- overly stylized futuristic fonts
+- overly soft consumer fonts
+
+7. Build the Pulse dashboard style
+
+Dashboard goals:
+- present financial data as part of a larger system
+- emphasize insight over raw numbers
+
+Styling:
+- panel/grid layout
+- metric clusters
+- subtle separators (not heavy borders)
+- minimal shadows
+
+Suggested structure:
+- top: key metrics (balance, change, trends)
+- middle: categorized panels (spending, savings, performance)
+- bottom: insights or comparisons
+
+8. Introduce insight-driven UI elements
+
+This system differentiates via intelligence, not visuals.
+
+Guidelines:
+- show contextual insights:
+  - “Spending decreased 12% vs last week”
+  - “Savings rate trending upward”
+- highlight trends, not just values
+- prioritize clarity over decoration
+
+Avoid:
+- generic stat cards without context
+- overuse of charts without meaning
+
+9. Prepare for ecosystem expansion
+
+This system should extend into:
+- fitness → performance metrics
+- life planning → goal efficiency
+- family → shared system insights
+
+System requirement:
+- Pulse acts as the intelligence layer across all domains
+
+10. Avoid the following visual mistakes
+
+Do not introduce:
+- heavy glow UI
+- neon cyberpunk styles
+- crypto-dashboard aesthetics
+- cluttered graphs
+- excessive data density
+- confusing metric hierarchies
+- overly sterile UI (must still feel usable)
+
+---
+
+IMPLEMENTATION STEPS
+
+1. Audit current finance UI for areas to apply Pulse system
+2. Add/update theme tokens for dark system + blue/purple accents
+3. Restyle surfaces:
+   - panels instead of cards where appropriate
+   - reduce visual noise
+4. Update typography hierarchy for metric clarity
+5. Introduce subtle accent usage for signals and highlights
+6. Add trend indicators where UI already supports metrics
+7. Ensure layout emphasizes structured information
+8. Maintain minimalism while preserving usability
+9. Keep all changes scoped to visual and presentation layers
+10. Validate consistency across affected screens
+
+---
+
+CONSTRAINTS
+
+- No business logic changes
+- No new features added
+- No navigation restructuring
+- No large refactors outside visual scope
+- Do not replace entire component system
+- Maintain production-ready implementation
+- Keep changes minimal and controlled
+
+---
+
+AFFECTED AREAS
+- theme tokens → risk of inconsistent application
+- dashboard layout → risk of breaking scan patterns
+- metric components → risk of unclear hierarchy
+- accent usage → risk of visual noise
+- typography → risk of spacing or truncation issues
+
+---
+
+RISK AREAS
+- too analytical → UI feels cold/unapproachable
+- accent misuse → becomes crypto-style UI
+- grid layouts → can feel rigid if not balanced
+- insight elements → may confuse if poorly structured
+- reduced decoration → may feel “unfinished”
+
+---
+
+POTENTIAL BUGS
+- inconsistent token application across components
+- contrast issues in near-black backgrounds
+- metric text overflow after typography changes
+- inconsistent accent application in states
+- layout shifts in responsive views
+
+---
+
+VALIDATION CHECKLIST
+- UI renders without console errors
+- No type errors introduced
+- Dashboard remains readable and scannable
+- Accent usage is subtle and intentional
+- UI feels intelligent, not gimmicky
+- No unrelated files modified
+- No business logic changed
+- Layout holds across mobile sizes
+
+---
+
+RETURN
+- files_changed
+- changes_made
+- design_tokens_added_or_updated
+- insight_elements_added_or_updated
+- new_risks_detected
+- validation_result

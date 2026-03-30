@@ -414,7 +414,35 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 
 ---
 
-## 10. Optional Deductions Mapping (Post-Setup Wizard)
+## 10. Authority OS — Design System Migration
+
+This section tracks incremental migration from the old "Dark Wealth" gold-based spec to the live Flow shell + future Pulse overlay system. Work is ordered by visual impact and risk.
+
+### Green Alignment (immediate — visual quality fix)
+
+- [ ] **`ui.jsx` — fix METRIC_STATUS green.val** — change from `var(--color-accent-soft)` (#4ADE80 lime) to `var(--color-green)` (#22C55E); this is the primary visible clash: lime on positive metric cards vs teal on tabs/headers
+- [ ] **`index.css` — update `--color-gold-bright` flash token** — change `#4ade80` to `#33e0b0` (bright tint of `#00c896`) so value flash stays in same hue family as the accent instead of firing lime
+- [ ] **Audit foreground use of `--color-accent-soft`** — after above fix, lime should not appear as any foreground text or value color; only valid in background tints
+
+### Token Debt — Hardcoded Colors in Components
+
+- [ ] **`WeekConfirmModal.jsx` — full tokenization** — replace hardcoded `#111`, `#2a2a2a`, `#222`, `#444`, `#888`, `#1e1e1e`, `#161616` with CSS vars; these are leftover pre-Flow colors visibly clashing with the green-dark backgrounds
+- [ ] **`LoginScreen.jsx` — tokenize remaining raw values** — align border/separator shades and button sizing to dashboard card radius/padding scale
+- [ ] **`ProfilePanel.jsx` — tokenize mixed values** — currently uses a mix of tokens + raw hex; extract to shared "settings surface" pattern consistent with rest of app
+
+### Doc Updates
+
+- [ ] **Update `finance-dashboard-ui-impl.md`** — currently documents the old gold/DM Serif system; needs a pass to reflect current Flow state (Inter fonts, teal accent, new token names)
+- [ ] **Archive `finance-dashboard-ui-spec`** — original Dark Wealth spec is superseded by `authority-design-system`; keep for historical reference but add a deprecation header so neither Claude nor Codex treat it as authoritative
+
+### Pulse Layer (when ready — Phase 2)
+
+- [ ] **Add Pulse signal tokens to `index.css`** — `--color-signal-blue: #5B8CFF`, `--color-signal-purple: #7C5CFF`, `--color-signal-glow: rgba(124,92,255,0.25)`
+- [ ] **Build `InsightRow` component** — trend arrow + delta + label; signal-blue/purple only; always below primary metric; export from `ui.jsx`
+
+---
+
+## 11. Optional Deductions Mapping (Post-Setup Wizard)
 
 - [ ] **Itemized deductions module** — optional advanced setup for users who want more accurate year-end tax projections beyond the standard deduction assumption:
   - [ ] Entry point: "Advanced" link shown on the Annual Tax Strategy step of the setup wizard, and accessible anytime from Settings

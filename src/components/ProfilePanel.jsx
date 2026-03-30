@@ -276,37 +276,94 @@ function PayDetail({ config, onBack }) {
   );
 }
 
-function BenefitsDetail({ config, onBack }) {
+function BenefitsDetail({ config, setConfig, onBack }) {
   const isDHL     = config.employerPreset === "DHL";
   const has401k   = config.k401Rate > 0;
   const matchRate = isDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
   const enrolled  = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
 
+  const [editing, setEditing]   = useState(false);
+  const [k401Rate, setK401Rate] = useState(String(config.k401Rate ?? ""));
+  const [k401Match, setK401Match] = useState(String(config.k401MatchRate ?? ""));
+  const [k401Start, setK401Start] = useState(config.k401StartDate ?? "");
+
+  function handleSave() {
+    setConfig(prev => ({
+      ...prev,
+      k401Rate:      parseFloat(k401Rate)  || 0,
+      k401MatchRate: parseFloat(k401Match) || 0,
+      k401StartDate: k401Start || prev.k401StartDate,
+    }));
+    setEditing(false);
+  }
+
   return (
     <>
       <BackBar onBack={onBack} title="Retirement & Benefits" />
-      <DetailCard>
-        <DetailRow
-          label="401k Employee"
-          value={has401k ? `${(config.k401Rate * 100).toFixed(0)}%` : "Not enrolled"}
-          valueColor={has401k ? undefined : "var(--color-text-disabled)"}
-        />
-        {has401k && (
+
+      {/* 401k section */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+        <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", paddingLeft: "4px" }}>401k</div>
+        {!editing && (
+          <button onClick={() => setEditing(true)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(201,168,76,0.4)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</button>
+        )}
+      </div>
+
+      {!editing ? (
+        <DetailCard>
           <DetailRow
-            label="Employer Match"
-            value={`${(matchRate * 100).toFixed(1)}%${isDHL ? " (tiered)" : ""}`}
-            valueColor="var(--color-green)"
+            label="Employee Rate"
+            value={has401k ? `${(config.k401Rate * 100).toFixed(0)}%` : "Not enrolled"}
+            valueColor={has401k ? undefined : "var(--color-text-disabled)"}
           />
-        )}
-        {config.k401StartDate && (
-          <DetailRow label="401k Active Since" value={fmt(config.k401StartDate)} />
-        )}
+          {!isDHL && (
+            <DetailRow
+              label="Employer Match"
+              value={has401k ? `${(matchRate * 100).toFixed(1)}%` : "—"}
+              valueColor={has401k ? "var(--color-green)" : "var(--color-text-disabled)"}
+            />
+          )}
+          {isDHL && has401k && (
+            <DetailRow label="Employer Match" value="Tiered (DHL formula)" valueColor="var(--color-green)" />
+          )}
+          <DetailRow label="Active Since" value={config.k401StartDate ? fmt(config.k401StartDate) : "—"} last />
+        </DetailCard>
+      ) : (
+        <DetailCard>
+          <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              <div>
+                <label style={lS}>Employee % (decimal)</label>
+                <input type="number" step="0.01" min="0" max="1" value={k401Rate} onChange={e => setK401Rate(e.target.value)} style={iS} />
+              </div>
+              {!isDHL && (
+                <div>
+                  <label style={lS}>Match % (decimal)</label>
+                  <input type="number" step="0.01" min="0" max="1" value={k401Match} onChange={e => setK401Match(e.target.value)} style={iS} />
+                </div>
+              )}
+              <div>
+                <label style={lS}>Start Date</label>
+                <input type="date" value={k401Start} onChange={e => setK401Start(e.target.value)} style={iS} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => setEditing(false)} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleSave} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</button>
+            </div>
+          </div>
+        </DetailCard>
+      )}
+
+      {/* Benefits enrollment (read-only) */}
+      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px", paddingLeft: "4px", marginTop: "20px" }}>Benefits Enrollment</div>
+      <DetailCard>
         {config.benefitsStartDate && (
           <DetailRow label="Benefits Start" value={fmt(config.benefitsStartDate)} />
         )}
         <DetailRow
-          label="Benefits"
-          value={enrolled.length > 0 ? `${enrolled.length} enrolled` : "None enrolled"}
+          label="Enrolled"
+          value={enrolled.length > 0 ? `${enrolled.length} plan${enrolled.length !== 1 ? "s" : ""}` : "None enrolled"}
           valueColor={enrolled.length > 0 ? undefined : "var(--color-text-disabled)"}
           last={enrolled.length === 0}
         />
@@ -494,7 +551,7 @@ export function ProfilePanel({ authedUser, config, setConfig, allWeeks, taxDeriv
     return <PayDetail config={config} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "retirement") {
-    return <BenefitsDetail config={config} onBack={() => setActiveSection(null)} />;
+    return <BenefitsDetail config={config} setConfig={setConfig} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "preferences") {
     return <PreferencesDetail config={config} onBack={() => setActiveSection(null)} />;

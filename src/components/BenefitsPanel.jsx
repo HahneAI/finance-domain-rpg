@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Card, iS, lS, SmBtn } from "./ui.jsx";
+import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const fmtMonth = yyyyMM => {
@@ -25,12 +26,15 @@ const EMPTY_FORM = { label: "", hoursNeeded: "", targetDate: "", negativeBalance
 
 export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kMatchLost,
   logK401kGained, logK401kMatchGained, logPTOHoursLost, currentWeek, bucketModel,
-  ptoGoal, setPtoGoal }) {
+  ptoGoal, setPtoGoal, fiscalWeekInfo }) {
 
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const now = new Date();
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  const fiscalWeekLabel = formatFiscalWeekLabel(fiscalWeekInfo);
+
 
   // ── 401k computations ──────────────────────────────────────────────────────
   const bE = allWeeks.reduce((s, w) => s + w.k401kEmployee, 0);
@@ -96,6 +100,11 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
   }
 
   return (<div>
+
+    {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+      <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
+      <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{currentWeek.rotation} · ends {fmtDate(toLocalIso(currentWeek.weekEnd))}</div>
+    </div>}
 
     {/* ── 401k status banner ── */}
     {currentWeek && <div style={{ background: k401Active ? "#1a3a20" : "#1e1e2a", border: `1px solid ${k401Active ? "rgba(76,175,125,0.27)" : "#7a8bbf44"}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>

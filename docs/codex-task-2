@@ -1,0 +1,174 @@
+# Codex Task Specification
+
+# =========================
+# TASK_SPEC (MACHINE READABLE)
+# =========================
+
+```json
+{
+  "task_id": "AUDIT_complete_all_fiscal_week_features_roadmap_items",
+  "task_type": "FEATURE",
+  "status": "PENDING",
+
+  "objective": "Audit and complete all 4 Fiscal Week Features roadmap items: (1) fiscal week awareness across the app, (2) goals being marked complete when funded, (3) weekly confirmation of days worked versus projected schedule, and (4) goal timeline surplus math using per-week future net outputs instead of a flat average.",
+
+  "scope": {
+    "allowed_files": [
+      "shared fiscal week/date helpers",
+      "centralized FISCAL_YEAR_START constant/config",
+      "header week badge component",
+      "log tab week badge/state integration",
+      "benefits tab week badge/state integration",
+      "budget tab phase/week integration",
+      "goals tab/page component",
+      "goal completion status logic",
+      "goal funding/progress helpers",
+      "goal timeline math helpers",
+      "computeNet or equivalent per-week net calculation helpers",
+      "computeGoalTimeline or equivalent goal timeline helper",
+      "weekly schedule/worked-days confirmation components",
+      "relevant selectors/hooks for fiscal week state, goals, and projected/actual work days"
+    ],
+    "restricted_files": [
+      "authentication logic",
+      "unrelated dashboard tabs/pages outside header/log/benefits/budget/goals surfaces directly tied to fiscal week awareness",
+      "global theme system",
+      "database schema unless minimal persistence is truly required for weekly confirmation data",
+      "broad app-wide layout refactors"
+    ],
+    "entry_points": [
+      "current date/today state logic",
+      "midnight rollover logic",
+      "central fiscal week calculation helper",
+      "header/log/benefits/budget week display pipelines",
+      "goal funded/completion pipeline",
+      "weekly worked-days confirmation flow",
+      "futureWeekNets / computeNet / computeGoalTimeline calculation path"
+    ],
+    "out_of_scope": [
+      "theoretical tab work",
+      "full goals system redesign",
+      "full scheduling/calendar redesign",
+      "major navigation changes",
+      "unrelated budgeting or auth features"
+    ]
+  },
+
+  "implementation": {
+    "steps": [
+      "Audit the current implementation status of all 4 Fiscal Week Features roadmap items and classify each as live, partial, or missing.",
+      "Verify fiscal week awareness exists as a centralized app-wide system using a shared fiscal-year start constant and reactive current-date logic.",
+      "If incomplete, implement or fix fiscal week awareness so the app knows the current fiscal week (Week X of 52), the today state ticks at midnight, and the header, log, benefits, and budget surfaces stay in sync.",
+      "Audit whether goals are marked complete when they become funded.",
+      "If incomplete, implement goal completion behavior tied to the existing funded/progress logic without breaking goal history or timeline views.",
+      "Audit whether users can confirm actual days worked versus projected schedule each week.",
+      "If incomplete, implement a weekly confirmation flow tied to the current fiscal week, with clear projected-versus-actual comparison and appropriate persistence only if the current architecture requires it.",
+      "Audit whether goal timeline surplus math is driven by per-week future net outputs rather than a flat average.",
+      "If incomplete or incorrect, ensure futureWeekNets or the equivalent per-week computeNet output, excluding buffer if that is the current intended rule, feeds computeGoalTimeline directly and the flat-average approach is no longer used.",
+      "Keep all four features aligned to the same fiscal week system and avoid duplicate date logic."
+    ],
+    "constraints": [
+      "Preserve existing TypeScript types",
+      "Audit existing logic before adding new logic",
+      "Prefer centralized fiscal week/date logic over duplicated per-tab calculations",
+      "Keep UI additions minimal and consistent with existing app patterns",
+      "Only add schema changes if truly required after inspecting the real current data model",
+      "Do not regress existing working fiscal week or goal timeline behavior"
+    ]
+  },
+
+  "change_log": {
+    "expected_changes": [
+      {
+        "file": "shared fiscal week helper/config",
+        "change": "Audit and complete centralized fiscal week awareness, including FISCAL_YEAR_START and current-week calculation"
+      },
+      {
+        "file": "header/log/benefits/budget integrations",
+        "change": "Ensure week badge and fiscal phase/state stay in sync across these surfaces"
+      },
+      {
+        "file": "goal funding/completion logic",
+        "change": "Audit and complete automatic or intended completion behavior when goals become funded"
+      },
+      {
+        "file": "weekly confirmation flow",
+        "change": "Audit and complete projected-vs-actual worked-days confirmation for each fiscal week"
+      },
+      {
+        "file": "goal timeline surplus math helpers",
+        "change": "Audit and complete direct use of per-week future net outputs in computeGoalTimeline, replacing flat-average logic"
+      }
+    ]
+  },
+
+  "impact_analysis": {
+    "affected_areas": [
+      "shared fiscal week awareness",
+      "header week badge",
+      "log tab",
+      "benefits tab",
+      "budget tab",
+      "goal completion state",
+      "weekly worked-day confirmation UX",
+      "goal timeline surplus calculations"
+    ],
+    "risk_areas": [
+      "midnight rollover may not update all panels consistently",
+      "header/log/benefits/budget may drift if they do not share the same week source",
+      "goals may mark complete too early or too late when funded",
+      "worked-day confirmation may use the wrong fiscal week boundaries",
+      "goal timeline surplus math may still mix flat averages with per-week values",
+      "buffer handling in futureWeekNets/computeNet may be inconsistently applied"
+    ],
+    "potential_bugs": [
+      {
+        "area": "fiscal week awareness",
+        "risk": "current week badge may show different values across header, log, benefits, and budget"
+      },
+      {
+        "area": "midnight tick",
+        "risk": "today state may not cascade reactively across all panels at day rollover"
+      },
+      {
+        "area": "goals funded completion",
+        "risk": "goals may not close when funded or may reopen incorrectly after status refresh"
+      },
+      {
+        "area": "days worked confirmation",
+        "risk": "actual worked days may be stored or compared against the wrong projected week"
+      },
+      {
+        "area": "goal timeline surplus math",
+        "risk": "computeGoalTimeline may still use flat-average assumptions instead of per-week future net outputs"
+      }
+    ]
+  },
+
+  "validation": {
+    "checks": [
+      "Audit clearly reports live, partial, or missing status for all 4 fiscal week roadmap items",
+      "App knows current fiscal week as Week X of 52 using centralized logic",
+      "Today state ticks at midnight and updates dependent panels reactively",
+      "Header, log, benefits, and budget week/phase displays are in sync",
+      "Goals are marked complete when funded if that feature was incomplete",
+      "Users can confirm days worked versus projected schedule for each fiscal week if that feature was incomplete",
+      "Goal timeline surplus math is driven directly by per-week future net outputs instead of a flat average",
+      "No console errors",
+      "No TypeScript errors",
+      "No unintended file changes"
+    ]
+  },
+
+  "output_format": {
+    "require_summary": true,
+    "summary_fields": [
+      "files_changed",
+      "audit_result_by_feature",
+      "features_completed",
+      "fiscal_week_sync_rules",
+      "schema_changes_needed",
+      "remaining_edge_cases"
+    ]
+  }
+}

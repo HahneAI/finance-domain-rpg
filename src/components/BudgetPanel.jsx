@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
+import { formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { Card, VT, SmBtn, SH, iS, lS } from "./ui.jsx";
 
 // TODO: tune — total particle count (12); must divide evenly into rings below
@@ -84,11 +85,12 @@ const safeDate = (raw) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, futureWeeks, futureWeekNets, futureEventDeductions, currentWeek, today }) {
+export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, futureWeeks, futureWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
 
   const currentPhaseIdx = useMemo(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0, [currentWeek]);
+  const fiscalWeekLabel = formatFiscalWeekLabel(fiscalWeekInfo);
   const [ap, setAp] = useState(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0);
   const [view, setView] = useState("overview");
   // Expense CRUD state
@@ -660,6 +662,21 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     }));
   }, [tl, currentWeek, setGoals]);
 
+
+  useEffect(() => {
+    const fundedNow = tl.filter(g => g.eW !== null && g.eW <= 0).map(g => g.id);
+    if (!fundedNow.length) return;
+    setGoals(prev => {
+      let changed = false;
+      const next = prev.map(goal => {
+        if (!fundedNow.includes(goal.id) || goal.completed) return goal;
+        changed = true;
+        return { ...goal, completed: true, completedAt: goal.completedAt ?? new Date().toISOString() };
+      });
+      return changed ? next : prev;
+    });
+  }, [tl, setGoals]);
+
   return (<div>
     {/* Phase tabs */}
     <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
@@ -1037,11 +1054,15 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
     {/* GOALS */}
     {view === "goals" && (() => {
-      const nowIdx = currentWeek?.idx ?? 0;
+      const nowIdx = getFiscalWeekNumber(currentWeek?.idx ?? 0) ?? 1;
       const totG = goals.reduce((s, g) => !g.completed ? s + g.target : s, 0);
       const projS = adjustedWeeklyAvg * weeksLeft;
       const lastGoalEW = tl.length ? (tl[tl.length - 1].eW ?? weeksLeft + 1) : 0;
       return <div>
+        {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
+          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{currentWeek.rotation} · ends {toLocalIso(currentWeek.weekEnd)}</div>
+        </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Adj. Weekly Available" val={f2(adjustedWeeklyAvg)} color="var(--color-green)" />
           <Card label="Active Goals Total" val={f(totG)} color="var(--color-gold)" />
@@ -1136,7 +1157,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 </div>
                 <div style={{ textAlign: "right", marginLeft: "12px" }}>
                   <div style={{ fontSize: "18px", fontWeight: "bold", color: g.color }}>{f(g.target)}</div>
-                  <div style={{ fontSize: "10px", color: ok ? "var(--color-green)" : "var(--color-red)" }}>{ok ? `Wk ${nowIdx + Math.ceil(g.eW)} of 52` : `Wk ${nowIdx + Math.ceil(g.sW + g.wN)} of 52`}</div>
+                  <div style={{ fontSize: "10px", color: ok ? "var(--color-green)" : "var(--color-red)" }}>{ok ? `Wk ${Math.min(nowIdx + Math.ceil(g.eW), 52)} of 52` : `Wk ${Math.min(nowIdx + Math.ceil(g.sW + g.wN), 52)} of 52`}</div>
                   {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                 </div>
               </div>
@@ -1357,6 +1378,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       const weeksToDebtFree = debtFreeDate ? Math.max(Math.ceil((new Date(debtFreeDate) - new Date(TODAY_ISO)) / (7 * 24 * 60 * 60 * 1000)), 0) : 0;
 
       return <div>
+        {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
+          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{currentWeek.rotation} · ends {toLocalIso(currentWeek.weekEnd)}</div>
+        </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Total Loan Balance" val={f(totalOwed)} color="var(--color-gold)" />
           <Card label="Weekly Committed" val={f2(weeklyCommitted)} color="var(--color-red)" />

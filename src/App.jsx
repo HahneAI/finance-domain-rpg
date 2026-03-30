@@ -108,7 +108,7 @@ function SidebarNavItem({ item, active, onClick }) {
 function FullScreenLoadingState({ label = "Loading your dashboard" }) {
   return (
     <div style={{
-      background: "var(--color-bg-base)",
+      background: "var(--color-bg-gradient)",
       minHeight: "100vh",
       color: "var(--color-text-primary)",
       display: "flex",
@@ -536,7 +536,7 @@ export default function App() {
   );
 
   return (
-    <div style={{ background: "var(--color-bg-base)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
+    <div style={{ background: "var(--color-bg-gradient)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
       <style>{`
         /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
            but injecting it here as well catches any future SSR or shadow-DOM edge
@@ -625,7 +625,7 @@ export default function App() {
           width: "190px",
           minWidth: "190px",
           background: "var(--color-bg-surface)",
-          borderRight: "1px solid #222",
+          borderRight: "1px solid var(--color-border-subtle)",
           position: "sticky",
           top: 0,
           height: "100vh",
@@ -634,7 +634,7 @@ export default function App() {
           zIndex: 10,
         }}
       >
-        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #222" }}>
+        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid var(--color-border-subtle)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
@@ -652,7 +652,7 @@ export default function App() {
               </svg>
             </button>
           </div>
-          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
+          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
@@ -718,8 +718,8 @@ export default function App() {
           className="mobile-header"
           style={{
             display: "none",
-            borderBottom: "2px solid #c8a84b",
-            background: "var(--color-bg-base)",
+            borderBottom: "1px solid var(--color-border-accent)",
+            background: "var(--color-bg-gradient)",
             position: "sticky",
             top: 0,
             zIndex: 30,
@@ -760,16 +760,16 @@ export default function App() {
             }}
             aria-label="Open navigation"
           >
-            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-gold)", borderRadius: "1px" }} />
-            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-gold)", borderRadius: "1px" }} />
-            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-gold)", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-accent-primary)", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-accent-primary)", borderRadius: "1px" }} />
+            <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-accent-primary)", borderRadius: "1px" }} />
           </button>
 
           {/* ── Title block — center ── */}
           <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
               <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "#1a3a20", color: "var(--color-green)", border: "1px solid #6dbf8a55", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
             </div>
             <div style={{ fontSize: "14px", fontWeight: "bold" }}>Finance Dashboard</div>
           </div>
@@ -854,7 +854,7 @@ export default function App() {
         }}
       >
         {/* Drawer header */}
-        <div style={{ padding: "16px 18px", borderBottom: "1px solid #222", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
+        <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--color-border-subtle)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
             <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
@@ -948,8 +948,8 @@ export default function App() {
           height: "calc(62px + env(safe-area-inset-bottom, 0px))",
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
           background: "var(--color-bg-surface)",
-          borderTop: "1px solid #222",
-          boxShadow: "0 -4px 24px rgba(0,0,0,0.9)",
+          borderTop: "1px solid var(--color-border-subtle)",
+          boxShadow: "0 -12px 32px rgba(0,0,0,0.45)",
           zIndex: 20,
           // fixed creates a containing block — the absolute-positioned indicator
           // is anchored to this bar, not the viewport.
@@ -968,7 +968,7 @@ export default function App() {
               left: `${activeIdx * pct}%`,
               width: `${pct}%`,
               height: "2px",
-              background: "var(--color-gold)",
+              background: "var(--color-accent-primary)",
               transition: "left 0.3s ease",
               borderRadius: "0 0 1px 1px",
             }} />
@@ -985,7 +985,7 @@ export default function App() {
                 height: "100%",
                 background: "transparent",
                 border: "none",
-                color: active ? "var(--color-gold)" : "#555",
+                color: active ? "var(--color-accent-primary)" : "var(--color-text-disabled)",
                 cursor: "pointer",
                 display: "flex",
                 flexDirection: "column",

@@ -1028,6 +1028,7 @@ export default function App() {
         <SetupWizard
           config={config}
           onComplete={handleWizardComplete}
+          onCancel={wizardEntry !== false ? () => setWizardEntry(null) : undefined}
           lifeEvent={wizardEntry === false ? null : wizardEntry}
         />
       )}

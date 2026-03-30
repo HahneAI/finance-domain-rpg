@@ -1684,7 +1684,7 @@ function StepStub({ title, sprint }) {
 //                      receives taxedWeeks auto-populated + setupComplete: true
 //   lifeEvent        — null (first-run) | "lost_job" | "changed_jobs" | "commission_job"
 // ─────────────────────────────────────────────────────────────────────────────
-export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = null }) {
+export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null }) {
   const [stepIdx,   setStepIdx]   = useState(0);
   const [formData,  setFormData]  = useState({ ...config });
   const [lifeEvent, setLifeEvent] = useState(initialLifeEvent);
@@ -1779,6 +1779,22 @@ export function SetupWizard({ config, onComplete, lifeEvent: initialLifeEvent = 
 
         {/* ── Navigation ── */}
         <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              style={{
+                marginRight: "auto",
+                background: "var(--color-bg-raised)",
+                color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border-subtle)",
+                borderRadius: "12px", padding: "7px 14px",
+                fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          )}
           {stepIdx > 0 && (
             <button
               onClick={handleBack}

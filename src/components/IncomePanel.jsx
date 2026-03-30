@@ -235,8 +235,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         gap: "12px", padding: "10px 14px", marginBottom: "16px",
-        background: "rgba(201,168,76,0.07)",
-        border: "1px solid rgba(201,168,76,0.25)",
+        background: "rgba(0,200,150,0.06)",
+        border: "1px solid rgba(0,200,150,0.18)",
         borderRadius: "8px",
       }}>
         <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
@@ -245,7 +245,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         <button onClick={() => setShowSharpener(true)} style={{
           fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase",
           background: "transparent", color: "var(--color-gold)",
-          border: "1px solid rgba(201,168,76,0.4)", borderRadius: "10px",
+          border: "1px solid rgba(0,200,150,0.28)", borderRadius: "10px",
           padding: "5px 12px", cursor: "pointer", flexShrink: 0,
         }}>
           Sharpen Rates
@@ -274,7 +274,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
 
     {/* SUMMARY — subtabs */}
     {view === "summary" && <div style={{ display: "flex", gap: "6px", marginBottom: "18px", flexWrap: "wrap" }}>
-      {["monthly", "weekly"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "#2a2318" : "transparent", color: subview === v ? "var(--color-gold)" : "#555", border: "1px solid " + (subview === v ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{v}</button>)}
+      {["monthly", "weekly"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "rgba(0,200,150,0.10)" : "transparent", color: subview === v ? "var(--color-gold)" : "#555", border: "1px solid " + (subview === v ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{v}</button>)}
     </div>}
 
     {/* MONTHLY */}
@@ -282,7 +282,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       {mo.filter(m => m.n > 0).map(m => <div key={m.name} style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-gold)" }}>{m.name.slice(0, 3)}</div>
-          <span style={{ fontSize: "9px", padding: "3px 7px", borderRadius: "12px", background: m.ex === m.n ? "#1e4a30" : m.tx === m.n ? "#1e1e3a" : "#3a3210", color: m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)", border: "1px solid " + (m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)") }}>{m.ex === m.n ? "EXEMPT" : m.tx === m.n ? "TAXED" : "MIXED"}</span>
+          <span style={{ fontSize: "9px", padding: "3px 7px", borderRadius: "12px", background: m.ex === m.n ? "#1e4a30" : m.tx === m.n ? "#1e1e3a" : "rgba(0,200,150,0.10)", color: m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)", border: "1px solid " + (m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)") }}>{m.ex === m.n ? "EXEMPT" : m.tx === m.n ? "TAXED" : "MIXED"}</span>
         </div>
         {m.wks.map(w => <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #1e1e1e" }}>
           <div><div style={{ fontSize: "11px", color: "#777" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div><div style={{ fontSize: "10px", color: "#999" }}>{w.rotation} · {w.totalHours}h</div></div>
@@ -300,10 +300,10 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>
           Rolling Window · last 4 completed + rest of year ({weeklyRows.length} visible)
         </span>
-        <button onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(201,168,76,0.35)", textTransform: "uppercase" }}>⊞ Full Detail</button>
+        <button onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase" }}>⊞ Full Detail</button>
       </div>
       <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
-        <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+        <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
           <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
         </tr></thead>
         <tbody>{weeklyRows.map(w => { const isCurrent = currentWeek && w.idx === currentWeek.idx; return <tr key={w.idx} style={{ borderBottom: "1px solid #161616", background: isCurrent ? "#1a2a14" : "transparent" }} onMouseEnter={e => { e.currentTarget.style.background = isCurrent ? "#1e3018" : "var(--color-bg-surface)"; }} onMouseLeave={e => e.currentTarget.style.background = isCurrent ? "#1a2a14" : "transparent"}>
@@ -341,7 +341,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
                 fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
                 background: "transparent",
                 color: config.taxRatesEstimated ? "var(--color-gold)" : "var(--color-text-disabled)",
-                border: `1px solid ${config.taxRatesEstimated ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"}`,
+                border: `1px solid ${config.taxRatesEstimated ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
                 borderRadius: "8px", padding: "4px 10px", cursor: "pointer", marginBottom: "12px",
               }}>
                 {config.taxRatesEstimated ? "⚠ Sharpen" : "Recalculate"}
@@ -399,7 +399,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
           <button onClick={() => setShowWeekDetail(false)} style={{ background: "transparent", border: "none", color: "#888", fontSize: "16px", cursor: "pointer", padding: "4px 8px" }}>✕</button>
         </div>
         <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}><table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
-          <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+          <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
             <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Hrs</th><th style={{ textAlign: "center", padding: "8px 4px" }}>OT</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Wknd</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
           </tr></thead>
           <tbody>{weeklyRows.map(w => { const isCurrent = currentWeek && w.idx === currentWeek.idx; return <tr key={w.idx} style={{ borderBottom: "1px solid #161616", background: isCurrent ? "#1a2a14" : "transparent" }} onMouseEnter={e => { e.currentTarget.style.background = isCurrent ? "#1e3018" : "var(--color-bg-surface)"; }} onMouseLeave={e => e.currentTarget.style.background = isCurrent ? "#1a2a14" : "transparent"}>

@@ -180,10 +180,10 @@ export const FED_BRACKETS = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [Infi
 // STATIC DATA
 // ─────────────────────────────────────────────────────────────
 export const PHASES = [
-  { id: "q1", label: "Jan–Mar", description: "Jan 1 → Mar 31", color: "#7eb8c9" },
-  { id: "q2", label: "Apr–Jun", description: "Apr 1 → Jun 30", color: "#c9a96e" },
-  { id: "q3", label: "Jul–Sep", description: "Jul 1 → Sep 30", color: "#a96ec9" },
-  { id: "q4", label: "Oct–Dec", description: "Oct 1 → Dec 31", color: "var(--color-green)" },
+  { id: "q1", label: "Jan–Mar", description: "Jan 1 → Mar 31", color: "#00c896" },
+  { id: "q2", label: "Apr–Jun", description: "Apr 1 → Jun 30", color: "#00c896" },
+  { id: "q3", label: "Jul–Sep", description: "Jul 1 → Sep 30", color: "#00c896" },
+  { id: "q4", label: "Oct–Dec", description: "Oct 1 → Dec 31", color: "#00c896" },
 ];
 
 export const INITIAL_EXPENSES = [];

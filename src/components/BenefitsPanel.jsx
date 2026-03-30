@@ -141,7 +141,7 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
         return (
           <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}>
             <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "360px" }}>
-              <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+              <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
                 <th style={{ textAlign: "left", padding: "8px 4px" }}>Month</th>
                 <th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th>
                 <th style={{ textAlign: "right", padding: "8px 4px" }}>Your {(config.k401Rate * 100).toFixed(0)}%</th>
@@ -159,7 +159,7 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
                   <td style={{ padding: "7px 4px", textAlign: "right", color: "var(--color-gold)", fontWeight: "bold" }}>{f2(m.running)}</td>
                 </tr>
               ))}</tbody>
-              <tfoot><tr style={{ borderTop: "2px solid #c8a84b", fontWeight: "bold", color: "var(--color-gold)" }}>
+              <tfoot><tr style={{ borderTop: "2px solid var(--color-accent-primary)", fontWeight: "bold", color: "var(--color-gold)" }}>
                 <td colSpan={2} style={{ padding: "10px 4px" }}>Year-End Total</td>
                 <td style={{ padding: "10px 4px", textAlign: "right", color: "#7a8bbf" }}>{f(bE)}</td>
                 <td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(bM)}</td>

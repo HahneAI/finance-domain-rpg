@@ -641,9 +641,12 @@ export default function App() {
       >
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid var(--color-border-subtle)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-              <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <img src="/src/assets/logo.svg" alt="Authority Finance" style={{ width: "36px", height: "36px", borderRadius: "8px", flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                <div style={{ fontSize: "13px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>Authority Finance</div>
+              </div>
             </div>
             <button
               title="Sign out"
@@ -771,12 +774,15 @@ export default function App() {
           </button>
 
           {/* ── Title block — center ── */}
-          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
+            <img src="/src/assets/logo.svg" alt="Authority Finance" style={{ width: "32px", height: "32px", borderRadius: "7px", flexShrink: 0 }} />
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+              </div>
+              <div style={{ fontSize: "14px", fontWeight: "bold" }}>Authority Finance</div>
             </div>
-            <div style={{ fontSize: "14px", fontWeight: "bold" }}>Finance Dashboard</div>
           </div>
 
           {/* ── Notification bell — top RIGHT (Chime-style) ── */}

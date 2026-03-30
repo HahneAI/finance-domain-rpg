@@ -1,24 +1,52 @@
-# UI Launch Decisions (Locked 2026-03-28)
+# UI Design System — Authority Finance
 
-## Final Color Palette
+Design token source of truth. All values confirmed against `src/index.css` `@theme` block.
+**Never use raw hex for accent, green, or red. Always reference tokens.**
 
-Final token palette is locked for first external-user launch and lives in `src/index.css` under the `@theme` block.
+---
 
-- Backgrounds: `--color-bg-base`, `--color-bg-surface`, `--color-bg-raised`
-- Primary accent: `--color-gold`
-- Positive status: `--color-green`
-- Negative status: `--color-red`
-- Text hierarchy: `--color-text-primary`, `--color-text-secondary`, `--color-text-disabled`
-- Borders: `--color-border-subtle`, `--color-border-accent`
+## Color Tokens (live in `src/index.css`)
 
-No token hue changes were required in this polish pass.
+| Token | Value | Role |
+|-------|-------|------|
+| `--color-bg-base` | `#07130f` | App shell / page background |
+| `--color-bg-surface` | `#0d1f19` | Card background |
+| `--color-bg-raised` | `#123027` | Elevated surfaces, button hover |
+| `--color-bg-gradient` | `linear-gradient(180deg, #0f2a21, #07130f)` | Header / container gradient |
+| `--color-gold` | `#00c896` | Legacy alias → maps to `--color-accent-primary` |
+| `--color-accent-primary` | `#00c896` | Flow identity: active tabs, CTAs, section bars |
+| `--color-green` | `#22c55e` | Semantic positive: income values, healthy status |
+| `--color-red` | `#ef4444` | Negative / spend / risk |
+| `--color-warning` | `#f59e0b` | Warning / attention |
+| `--color-text-primary` | `#e6f4ef` | Body text |
+| `--color-text-secondary` | `#7fa39a` | Labels, sublabels |
+| `--color-text-disabled` | `#4a645c` | Inactive / disabled |
+| `--color-border-subtle` | `#1f3b31` | Card borders |
+| `--color-border-accent` | `rgba(0,200,150,0.28)` | Accent-highlighted borders |
+| `--font-display` | `'Inter'` | Metric values, headings |
+| `--font-sans` | `'Inter'` | All UI body text |
+| `--font-mono` | `'JetBrains Mono'` | Inputs + data table cells only |
+
+**Note:** `index.html` still loads DM Serif Display + DM Sans via Google Fonts — dead weight, tracked for cleanup.
+
+---
 
 ## Status Color Semantics (Global)
 
-Status colors are standardized across dashboard metric cards:
+Applied via `status` prop on `MetricCard` and inline throughout panels:
 
 - **green** = positive / healthy / ahead
 - **gold** = neutral attention / mixed / watchlist
 - **red** = negative / risk / behind
 
-This mapping is the launch baseline and should be preserved unless a future design system migration explicitly changes semantics app-wide.
+---
+
+## Pulse Signal Tokens (Phase 2 — not yet in `index.css`)
+
+Reserved for the intelligence overlay layer. Do not use on Flow UI elements.
+
+| Token | Value | Role |
+|-------|-------|------|
+| `--color-signal-blue` | `#5B8CFF` | Trend indicators, insight labels |
+| `--color-signal-purple` | `#7C5CFF` | AI-generated insight moments |
+| `--color-signal-glow` | `rgba(124,92,255,0.25)` | Subtle glow on AI insight surfaces |

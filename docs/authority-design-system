@@ -1,0 +1,172 @@
+# Authority OS — Flow + Pulse Design System
+
+**Status:** Flow shipped (Codex Task 9). Pulse layer is next.
+
+---
+
+## Overview
+
+Authority OS uses a **dual-layer visual system**. These two layers are not interchangeable — they have separate roles, separate colors, and a strict hierarchy.
+
+| Layer | Role | Emotional Outcome |
+|---|---|---|
+| **Flow** | Primary UI shell — daily usability and feel | Calm, controlled, easy to engage with |
+| **Pulse** | Intelligence overlay — insight and context signals | Informed, aware, improving |
+
+**Rule:** Flow dominates visually. Pulse enhances meaning. Pulse must never overpower Flow.
+
+---
+
+## Layer 1 — Flow (Primary Experience)
+
+### Identity
+Flow makes the product feel natural, fluid, and usable every day. It's the fintech shell users interact with constantly. Inspired by Chime/Cash App but more refined and systemized.
+
+### Color Tokens (live in `src/index.css`)
+
+| Token | Value | Use |
+|---|---|---|
+| `--color-bg-base` | `#07130F` | App shell / page background |
+| `--color-bg-surface` | `#0D1F19` | Card background |
+| `--color-bg-raised` | `#123027` | Elevated surfaces, button hover |
+| `--color-bg-gradient` | `linear-gradient(180deg, #0F2A21, #07130F)` | Header / container zones |
+| `--color-accent-primary` | `#00C896` | Primary CTAs, active states, highlights |
+| `--color-accent-soft` | `#4ADE80` | Soft positive indicators |
+| `--color-gold` | `#00C896` | Legacy alias — maps to accent-primary |
+| `--color-green` | `#22C55E` | Semantic success |
+| `--color-red` | `#EF4444` | Semantic danger |
+| `--color-warning` | `#F59E0B` | Semantic warning |
+| `--color-text-primary` | `#E6F4EF` | Body text |
+| `--color-text-secondary` | `#7FA39A` | Labels, sublabels |
+| `--color-text-disabled` | `#4A645C` | Inactive / disabled |
+| `--color-border-subtle` | `#1F3B31` | Card borders |
+| `--color-border-accent` | `rgba(0,200,150,0.28)` | Accent-highlighted borders |
+
+### Typography
+- Headings: Inter (or General Sans)
+- Body: Inter
+- Mono: JetBrains Mono (inputs and data table cells only)
+- Style: clean hierarchy, large numeric emphasis for metrics, open spacing
+
+### Component Style
+- Cards: floating, rounded (12–16px), soft shadows, minimal borders
+- Layout: grid-based, 12px gap, 20px section margins
+- Spacing: more breathing room than dense dashboards
+
+### Motion Rules
+- Transitions: smooth, ease-in-out — motion feels like flow, not reward
+- No bounce, no arcade effects, no scale-up on mount
+- Press state: `scale(0.97)` only
+- All durations ≤ 500ms (except countup at 1200ms)
+- Entrance stagger: `fadeSlideUp` 400ms, 80ms/card delay, capped at 400ms
+
+### What to Avoid
+- neon green overload or Cash App clone feel
+- loud gradients or banding
+- overly flat design (needs depth)
+- gamified motion or reward feedback
+- rigid enterprise table layouts
+
+---
+
+## Layer 2 — Pulse (Intelligence Layer)
+
+### Identity
+Pulse makes the product feel intelligent and valuable. It surfaces the "life analytics engine" dimension — not through heavy UI, but through small, intentional signal elements that appear alongside Flow surfaces.
+
+### Color Tokens (to be added to `src/index.css`)
+
+| Token | Value | Use |
+|---|---|---|
+| `--color-signal-blue` | `#5B8CFF` | Primary Pulse accent — trend indicators, insight labels |
+| `--color-signal-purple` | `#7C5CFF` | Secondary Pulse accent — AI-generated insight moments |
+| `--color-signal-glow` | `rgba(124,92,255,0.25)` | Subtle glow on AI insight surfaces only |
+
+**Critical rule:** Signal blue/purple is Pulse-only. Never apply these to Flow UI elements. Green is the financial identity. Blue/purple is the intelligence signal.
+
+### Pulse Components
+
+#### Insight Row
+The primary Pulse UI element. Always renders *below* a primary metric, never replaces it.
+
+Structure:
+```
+[arrow] [delta] [label]
+↓ 12% vs last week
+↑ Savings improving
+→ On track
+```
+
+Rules:
+- trend arrow: ↑ ↓ → only
+- delta: percentage or value change
+- label: short, contextual, plain language
+- color: `--color-signal-blue` or `--color-signal-purple`
+- font size: secondary emphasis only
+- placement: always subordinate to primary data
+
+#### Data Hierarchy (per card/metric)
+1. Primary metric (balance, score, value)
+2. Secondary label (context, period)
+3. Insight Row (Pulse layer)
+
+### UX Behavior
+- trend indicators on metrics that have history
+- contextual comparisons: "this week vs last week," "on track / behind"
+- emphasis on direction and trajectory, not raw numbers
+
+### What to Avoid
+- Pulse accents on navigation, cards, or structural UI (Flow owns those)
+- Heavy glow or neon effects
+- Pulse elements that appear without real data to back them (no fake insight)
+- Overuse of signal color — it must feel rare and meaningful
+- Crypto-dashboard or hacker aesthetics
+
+---
+
+## Progression System — Momentum
+
+**Term:** Momentum (not XP, not Score, not Level)
+
+Momentum measures consistency and improvement across all Authority OS domains. It communicates direction, not reward.
+
+Rules:
+- no XP, no levels, no badges, no "level up" screens
+- subtle visualization only — trend lines, small percentage deltas
+- represents where you're headed, not what you've earned
+- shown as a comparative: "up this week," "down vs last month"
+
+---
+
+## Product Pillars
+
+| Public Name | App Label | Domain |
+|---|---|---|
+| Authority Finance | A:Fin | Money, budgeting, financial clarity |
+| Authority Intelligence | A:Intel | Education, knowledge systems |
+| Authority Performance | A:Perf | Fitness, physical optimization |
+| Authority Legacy | A:Legacy | Family planning, long-term structure |
+
+Finance (A:Fin) is the flagship — built first, all design system decisions validated here before expanding to other pillars.
+
+---
+
+## Phase Roadmap for This System
+
+| Phase | What ships |
+|---|---|
+| **1 (now)** | Flow shell complete. Pulse tokens added. Insight Row component built. |
+| **2** | Pulse intelligence layer fully realized — insights appear across A:Fin |
+| **3** | System expands to A:Perf, A:Legacy, A:Intel with shared Flow/Pulse tokens |
+| **4** | Unified Authority OS — cross-domain Pulse insights ("your fitness is affecting your focus") |
+
+---
+
+## Design Principles
+
+- Flow dominates. Pulse assists. Authority empowers.
+- Never sacrifice clarity for aesthetics.
+- Never gamify at the expense of trust.
+- Always prioritize insight over raw data display.
+- Build systems, not features.
+- Pulse elements only appear when backed by real data.

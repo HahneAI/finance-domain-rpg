@@ -170,7 +170,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone }) {
       <div style={{ minHeight: "100vh", background: "var(--color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
         <div style={{ width: "100%", maxWidth: "360px", background: "var(--color-bg-surface)", border: "1px solid #222", borderRadius: "12px", padding: "32px 28px" }}>
           <div style={{ marginBottom: "28px" }}>
-            <div style={{ fontSize: "9px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "6px" }}>Life RPG</div>
+            <div style={{ fontSize: "9px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "6px" }}>Authority Finance</div>
             <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-primary)" }}>{title}</div>
             {subtitle && <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "4px" }}>{subtitle}</div>}
           </div>

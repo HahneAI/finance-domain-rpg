@@ -353,13 +353,13 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 - [x] **Goal card drag + cross-category preview** — support click-and-drag reordering for goals; while dragging between **Expenses** and **Lifestyle**, preview the destination with a live color-fade transition before drop
 - [x] **Expense editor pay-cycle model** — inline expense editor should capture (1) amount and (2) pay cycle via dropdown (weekly, biweekly, every 30 days, yearly); compute per-paycheck set-aside from the selected cycle; apply auto-start math from the input/edit date forward only
 - [x] **Goal timeline monthly/weekly scale refresh** — switch to a monthly notated bar with subtle four-week sub-divisions; render goal progress in weekly chunks so mid-month targets visually stop at the midpoint of that month
-- [ ] **Income Summary monthly cleanup** — remove all 401(k) card references from the monthly tab
-- [ ] **Income Summary weekly modal fix** — full-details modal is clipped top/bottom and currently traps users; fix vertical scrolling and exit behavior
+- [x] **Income Summary monthly cleanup** — 401(k) references removed from monthly tab
+- [x] **Income Summary weekly modal fix** — vertical scrolling and exit behavior fixed
 - [x] **Rolling year progression system (weekly + goal timeline)** — `deriveRollingIncomeWeeks` + `deriveRollingTimelineMonths` + `progressiveScale` shipped in `src/lib/rollingTimeline.js`; data preserved in hiddenWeeks/hiddenMonths for future full-year review tab
 - [x] **Adjusted weekly take-home from events: fix + audit** — `adjustedWeeklyDelta` wired through `eventImpact` memo in App.jsx; feeds `adjustedWeeklyAvg` to BudgetPanel and LogPanel
 - [x] **Tax payback math integration** — `adjustedTaxableGrossByWeek` applies `grossDeltaByWeek` from event logs; missed days reduce federal + state liability → lowers `extraPerCheck`
 - [x] **Year Summary net card behavior** — IncomePanel shows `adjustedTakeHome` as Adjusted Net card; `missedEventDayNetLost` shown as sublabel; old standalone adjusted take-home component removed
-- [ ] **Benefits tab recovery** — investigate and fix broken Benefits tab behavior
+- [x] **Benefits tab recovery** — resolved
 - [x] **Log tab simplification** — net loss, PTO loss, and bucket hours loss cards retained; others removed
 - [x] **Log tab data consolidation card** — Log Effect Summary card ships in LogPanel with adjTH, adjWA, projS; no internal background separation
 
@@ -421,8 +421,8 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
 
 ### Remaining Rename + Cleanup
 
-- [ ] **Finish Authority OS rename** — `index.html` title ("2026 Financial Dashboard" → "Authority Finance"), PWA label ("Finance RPG" → "Authority Finance"), `package.json` name field ("life-rpg" → "authority-finance"), any visible UI strings in app
-- [ ] **Remove dead Google Fonts load in `index.html`** — DM Serif Display + DM Sans still loaded; Inter is the active font via CSS vars; remove the `<link>` tags
+- [x] **Finish Authority OS rename** — `index.html` title + PWA label updated, `package.json` name updated, "Life RPG" eyebrow in `LoginScreen.jsx` updated
+- [x] **Remove dead Google Fonts load in `index.html`** — DM Serif Display + DM Sans removed; JetBrains Mono only remains
 
 ### Pulse Layer (when ready — Phase 2)
 

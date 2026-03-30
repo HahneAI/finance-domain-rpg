@@ -7,7 +7,7 @@ import { Card, VT, SH, iS, lS } from "./ui.jsx";
 
 export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today }) {
   const [view, setView] = useState("summary");
-  const [subview, setSubview] = useState("overview");
+  const [subview, setSubview] = useState("monthly");
   const [editCfg, setEditCfg] = useState(null);
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
@@ -77,18 +77,6 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
   const archivedWeeklyRows = rollingWeekly.hiddenWeeks;
   const weeklyDensityScale = progressiveScale(rollingWeekly.scaleProgress, 0.15);
 
-  // Tax schedule toggle
-  const toggleWeek = (idx) => setConfig(prev => {
-    const s = new Set(prev.taxedWeeks);
-    s.has(idx) ? s.delete(idx) : s.add(idx);
-    return { ...prev, taxedWeeks: [...s].sort((a, b) => a - b) };
-  });
-
-  // Active weeks grouped by month for schedule view
-  const scheduleByMonth = MONTH_FULL.map((name, mi) => {
-    const wks = allWeeks.filter(w => w.active && w.weekEnd.getFullYear() === 2026 && w.weekEnd.getMonth() === mi);
-    return { name, wks };
-  }).filter(m => m.wks.length > 0);
 
   return (<div>
 
@@ -293,28 +281,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
 
     {/* SUMMARY — subtabs */}
     {view === "summary" && <div style={{ display: "flex", gap: "6px", marginBottom: "18px", flexWrap: "wrap" }}>
-      {["overview", "monthly", "weekly", ...(isAdmin ? ["tax schedule"] : [])].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "#2a2318" : "transparent", color: subview === v ? "var(--color-gold)" : "#555", border: "1px solid " + (subview === v ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{v}</button>)}
+      {["monthly", "weekly"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "#2a2318" : "transparent", color: subview === v ? "var(--color-gold)" : "#555", border: "1px solid " + (subview === v ? "rgba(201,168,76,0.4)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{v}</button>)}
     </div>}
-
-    {/* OVERVIEW */}
-    {view === "summary" && subview === "overview" && <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}><table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-      <thead><tr style={{ borderBottom: "1px solid #c8a84b", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
-        <th style={{ textAlign: "left", padding: "8px 6px", width: "4px", paddingLeft: 0 }}></th><th style={{ textAlign: "left", padding: "8px 6px" }}>Month</th><th style={{ textAlign: "center", padding: "8px 6px" }}>Chks</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 6px" }}>Take Home</th>
-      </tr></thead>
-      <tbody>{mo.map(m => {
-        const statusColor = m.n === 0 ? "var(--color-border-subtle)" : m.tx === m.n ? "#7a8bbf" : m.ex === m.n ? "var(--color-green)" : "var(--color-gold)";
-        return <tr key={m.name} style={{ borderBottom: "1px solid #1a1a1a" }} onMouseEnter={e => e.currentTarget.style.background = "var(--color-bg-surface)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-          <td style={{ padding: 0, width: "4px", backgroundColor: statusColor, borderRadius: "2px 0 0 2px" }}></td>
-          <td style={{ padding: "10px 6px", fontWeight: "bold" }}>{m.name}</td>
-          <td style={{ padding: "10px 6px", textAlign: "center", color: "#aaa" }}>{m.n}</td>
-          <td style={{ padding: "10px 6px", textAlign: "right" }}>{m.gross > 0 ? f(m.gross) : "—"}</td>
-          <td style={{ padding: "10px 6px", textAlign: "right", color: m.ex === m.n ? "var(--color-green)" : "var(--color-text-primary)" }}>{m.net > 0 ? f(m.net) : "—"}</td>
-        </tr>;
-      })}</tbody>
-      <tfoot><tr style={{ borderTop: "2px solid #c8a84b", fontWeight: "bold", color: "var(--color-gold)" }}>
-        <td style={{ padding: 0 }}></td><td style={{ padding: "10px 6px" }}>TOTAL</td><td style={{ padding: "10px 6px", textAlign: "center", color: "#aaa" }}>{allWeeks.filter(w => w.active).length}</td><td style={{ padding: "10px 6px", textAlign: "right" }}>{f(yG)}</td><td style={{ padding: "10px 6px", textAlign: "right", color: "var(--color-green)" }}>{f(yN)}</td>
-      </tr></tfoot>
-    </table></div>}
 
     {/* MONTHLY */}
     {view === "summary" && subview === "monthly" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "14px" }}>
@@ -390,89 +358,6 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
           </tr></tfoot>
         </table></div>;
       })()}
-    </div>}
-
-    {/* TAX SCHEDULE — debt overview + per-week toggle (admin only) */}
-    {isAdmin && view === "summary" && subview === "tax schedule" && <div>
-      {/* Extra withholding quick-toggle */}
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", padding: "10px 14px", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flex: 1 }}>Apply extra withholding <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerCheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
-        <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "#3a3210" : "var(--color-bg-surface)", color: showExtra ? "var(--color-gold)" : "#aaa", border: "1px solid " + (showExtra ? "var(--color-gold)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</button>
-      </div>
-      {/* Summary cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "12px", marginBottom: "20px" }}>
-        <Card label="Full Year Fed Liability" val={f(fedLiability)} sub={`On ${f(fedAGI)} AGI`} color="var(--color-red)" size="20px" />
-        <Card label="Full Year MO Liability" val={f(moLiability)} sub="4.7% flat" color="var(--color-gold)" size="20px" />
-        <Card label="FICA (Always Paid)" val={f(ficaTotal)} sub="7.65% every check" color="#888" size="20px" />
-      </div>
-
-      {/* Tax gap analysis */}
-      <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
-        <SH>Tax Gap Analysis</SH>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "13px" }}>
-          {[{ l: "Fed withheld (taxed weeks)", v: f(fedWithheldBase), c: "var(--color-green)" }, { l: "MO withheld (taxed weeks)", v: f(moWithheldBase), c: "var(--color-green)" }, { l: "Federal gap", v: f(fedGap), c: "var(--color-red)" }, { l: "Missouri gap", v: f(moGap), c: "var(--color-red)" }, { l: "Total income tax gap", v: f(totalGap), c: "var(--color-red)" }, { l: "Target owed at filing", v: f(config.targetOwedAtFiling), c: "var(--color-gold)" }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "#777" }}>{r.l}</span><span style={{ fontWeight: "bold", color: r.c }}>{r.v}</span></div>)}
-        </div>
-      </div>
-
-      {/* Extra withholding plan */}
-      <div style={{ background: "var(--color-bg-surface)", border: "1px solid #c8a84b", borderRadius: "8px", padding: "20px", marginBottom: "28px" }}>
-        <SH>Extra Withholding Plan</SH>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: "12px", marginBottom: "16px" }}>
-          {[{ l: "Extra Needed", v: f(targetExtraTotal), c: "var(--color-red)" }, { l: "Taxed Checks", v: taxedWeekCount, c: "var(--color-text-primary)" }, { l: "Extra Per Check", v: f2(extraPerCheck), c: "var(--color-gold)" }].map(c => <div key={c.l} style={{ textAlign: "center", padding: "12px", background: "var(--color-bg-base)", borderRadius: "6px" }}><div style={{ fontSize: "9px", letterSpacing: "2px", color: "#aaa", textTransform: "uppercase", marginBottom: "6px" }}>{c.l}</div><div style={{ fontSize: "20px", fontWeight: "bold", color: c.c }}>{c.v}</div></div>)}
-        </div>
-        <div style={{ fontSize: "11px", color: "#aaa", lineHeight: "1.8" }}>Add <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerCheck)}</span> extra federal withholding on each of your <span style={{ color: "var(--color-gold)" }}>{taxedWeekCount} taxed checks</span>.</div>
-      </div>
-
-      {/* Per-week toggle schedule */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
-        <SH>Weekly Tax Schedule</SH>
-        <div style={{ display: "flex", gap: "10px", fontSize: "10px" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "#7a8bbf", display: "inline-block" }} />Taxed weeks: <strong style={{ color: "var(--color-red)" }}>{config.taxedWeeks.length}</strong></span>
-          <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "var(--color-green)", display: "inline-block" }} />Exempt weeks: <strong style={{ color: "var(--color-green)" }}>{allWeeks.filter(w => w.active).length - config.taxedWeeks.length}</strong></span>
-        </div>
-      </div>
-
-      {scheduleByMonth.map(m => <div key={m.name} style={{ marginBottom: "20px" }}>
-        <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "8px" }}>{m.name.slice(0, 3)}</div>
-        {m.wks.map(w => {
-          const taxed = config.taxedWeeks.includes(w.idx);
-          return <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--color-bg-surface)", border: `1px solid ${taxed ? "#7a8bbf22" : "rgba(76,175,125,0.13)"}`, borderRadius: "6px", marginBottom: "6px" }}>
-            <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: "12px", fontWeight: "bold" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
-                <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{w.rotation} · {w.totalHours}h · idx {w.idx}{w.has401k ? " · 401k✓" : ""}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{f2(w.grossPay)} gross</div>
-                <div style={{ fontSize: "11px", color: taxed ? "var(--color-text-primary)" : "var(--color-green)" }}>{f2(gN(w))} net</div>
-              </div>
-            </div>
-            {/* Two-segment toggle pill */}
-            <div style={{ display: "flex", background: "var(--color-bg-base)", border: "1px solid #2a2a2a", borderRadius: "5px", overflow: "hidden" }}>
-              <button onClick={() => !taxed && toggleWeek(w.idx)} style={{
-                padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
-                border: "none", cursor: taxed ? "default" : "pointer",
-                background: taxed ? "#1e1e3a" : "transparent",
-                color: taxed ? "#7a8bbf" : "var(--color-border-subtle)",
-                fontWeight: taxed ? "bold" : "normal",
-                transition: "all 0.12s",
-              }}>Taxed</button>
-              <div style={{ width: "1px", background: "var(--color-border-subtle)" }} />
-              <button onClick={() => taxed && toggleWeek(w.idx)} style={{
-                padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
-                border: "none", cursor: !taxed ? "default" : "pointer",
-                background: !taxed ? "#1e4a30" : "transparent",
-                color: !taxed ? "var(--color-green)" : "var(--color-border-subtle)",
-                fontWeight: !taxed ? "bold" : "normal",
-                transition: "all 0.12s",
-              }}>Exempt</button>
-            </div>
-          </div>;
-        })}
-      </div>)}
-      <div style={{ padding: "12px", background: "var(--color-bg-surface)", borderRadius: "6px", fontSize: "10px", color: "#444", lineHeight: "1.9" }}>
-        Toggling a week instantly recalculates projected net, tax gap, extra withholding per check, and all downstream totals.
-      </div>
     </div>}
 
     {/* CONFIG */}

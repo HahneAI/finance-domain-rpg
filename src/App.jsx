@@ -531,6 +531,11 @@ export default function App() {
         authedUser={authedUser}
         config={config}
         setConfig={setConfig}
+        allWeeks={allWeeks}
+        taxDerived={taxDerived}
+        showExtra={showExtra}
+        setShowExtra={setShowExtra}
+        isAdmin={isAdmin}
       />}
     </>
   );
@@ -1028,6 +1033,7 @@ export default function App() {
         <SetupWizard
           config={config}
           onComplete={handleWizardComplete}
+          onCancel={wizardEntry !== false ? () => setWizardEntry(null) : undefined}
           lifeEvent={wizardEntry === false ? null : wizardEntry}
         />
       )}

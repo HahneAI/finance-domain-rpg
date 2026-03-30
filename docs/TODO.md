@@ -308,9 +308,9 @@ Currently 7 cards: Take Home, Weekly Left, Net Worth Trend, Budget Health, Emerg
 - [x] **Status color consistency** — audit all `status` props on `MetricCard`; confirm green/gold/red always mean the same thing (positive/neutral-attention/negative) across all panels
 
 ### Auth Providers
-- [ ] **Decide on supported auth methods** — email/password (already built), Google OAuth, Apple Sign In; Apple required for iOS App Store; pick which to support at launch
 - [ ] **Wire Google OAuth** — `supabase.auth.signInWithOAuth({ provider: 'google' })`; add Google button to `LoginScreen.jsx`; configure provider in Supabase dashboard
-- [ ] **Wire Apple Sign In** — `supabase.auth.signInWithOAuth({ provider: 'apple' })`; add Apple button to `LoginScreen.jsx`; configure provider in Supabase dashboard; required for iOS App Store compliance
+- [ ] **Wire Apple Sign In** — requires Apple Developer Program membership ($99/yr); holding until app revenue covers it; when ready: `supabase.auth.signInWithOAuth({ provider: 'apple' })`, add Apple button to `LoginScreen.jsx`, configure in Supabase dashboard; required for iOS App Store compliance
+- [x] **LoginScreen layout update** — OAuth button slots + divider in place
 - [x] **LoginScreen layout update** — add OAuth buttons below email/password form with a divider ("or continue with"); style per platform guidelines (Apple button must be black/white)
 
 ### Benefits → Deductions Pipeline

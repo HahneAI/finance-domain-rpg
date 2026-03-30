@@ -241,7 +241,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
             const h = parseFloat(vals.hoursLost) || 0;
             const expected = s * config.shiftHours;
             return expected > 0 && Math.abs(h - expected) > 0.01 ? (
-              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(201,168,76,0.08)", borderRadius: "4px" }}>
+              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
                 ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h
               </div>
             ) : (
@@ -278,7 +278,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
             const h = parseFloat(vals.hoursLost) || 0;
             const expected = s * config.shiftHours;
             return expected > 0 && Math.abs(h - expected) > 0.01 ? (
-              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(201,168,76,0.08)", borderRadius: "4px" }}>
+              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
                 ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h · bucket hit uses override amount
               </div>
             ) : null;
@@ -507,7 +507,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
     </div>
 
     {/* Add form */}
-    {adding && <div style={{ background: "var(--color-bg-surface)", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
+    {adding && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
       <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Event</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
         <FormFields vals={nEv} set={setNEv} onWeekEndChange={handleWeekEndChange} />

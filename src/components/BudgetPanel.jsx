@@ -19,24 +19,31 @@ const BURST_PARTICLES = Array.from({ length: 12 }, (_, i) => {
 
 const GOAL_LANES = {
   Expenses: {
-    tint: "rgba(217, 112, 112, 0.16)",
-    border: "rgba(217, 112, 112, 0.45)",
-    text: "#d97070",
+    tint: "rgba(201, 96, 96, 0.16)",
+    border: "rgba(201, 96, 96, 0.4)",
+    text: "#c96060",
   },
   Lifestyle: {
-    tint: "rgba(122, 139, 191, 0.16)",
-    border: "rgba(122, 139, 191, 0.45)",
-    text: "#7a8bbf",
+    tint: "rgba(91, 140, 255, 0.14)",
+    border: "rgba(91, 140, 255, 0.38)",
+    text: "#5B8CFF",
   },
 };
 
 const EXPENSE_DRAG_PREVIEW_TINT = {
-  Needs: "rgba(217, 112, 112, 0.2)",
-  Lifestyle: "rgba(122, 139, 191, 0.22)",
+  Needs: "rgba(201, 96, 96, 0.18)",
+  Lifestyle: "rgba(91, 140, 255, 0.18)",
 };
 const EXPENSE_TOUCH_OVERLAY_BG = {
-  Needs: "#d97070",
-  Lifestyle: "#7a8bbf",
+  Needs: "#c96060",
+  Lifestyle: "#5B8CFF",
+};
+
+// Card background gradients: dark green base → category accent tint
+const CAT_GRADIENT = {
+  Needs:      "linear-gradient(135deg, #091a11 0%, #1a0b0b 100%)",
+  Lifestyle:  "linear-gradient(135deg, #091a11 0%, #0c1228 100%)",
+  Transfers:  "linear-gradient(135deg, #091a11 0%, #111111 100%)",
 };
 const EXPENSE_DRAG_EASE = "cubic-bezier(.22,.7,.2,1)";
 const EXPENSE_INSERT_MARKER_BG = "rgba(255,255,255,0.72)";
@@ -729,9 +736,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           <SH color={CATEGORY_COLORS[cat]} right={f2(cTot) + "/wk"}>{cat}</SH>
           {cExp.map(exp => {
             const effAmt = currentEffective(exp, ap);
-            const latestEntry = exp.history?.length ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b) : null;
-            const phaseBillingMeta = exp.billingMeta?.byPhase?.[ap];
-            const activeBillingMeta = phaseBillingMeta ?? exp.billingMeta;
             const isEditing = editId === exp.id;
             const isDragging = draggingExpenseId === exp.id;
             const previewCategory = dragPreviewExpenseCategory ?? exp.category;
@@ -778,7 +782,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               style={{
                 background: lanePreviewingMove
                   ? `linear-gradient(120deg, ${CATEGORY_BG[cat]} 0%, ${CATEGORY_BG[cat]} 40%, ${previewTint} 72%, ${CATEGORY_BG[previewCategory]} 100%)`
-                  : CATEGORY_BG[cat],
+                  : CAT_GRADIENT[cat] ?? CATEGORY_BG[cat],
                 border: `1px solid ${lanePreviewingMove ? `${CATEGORY_COLORS[previewCategory]}66` : "#1e1e1e"}`,
                 borderRadius: "6px",
                 padding: "10px 12px",
@@ -864,14 +868,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 >
                   ⋮⋮
                 </button>
-                <div><div style={{ fontSize: "13px" }}>{exp.label}</div>{exp.note[ap] && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{exp.note[ap]}</div>}</div>
+                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: "13px" }}>{exp.label}</div></div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   {pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
-                    <div style={{ fontSize: "10px", color: "#777" }}>{f(monthlyFromPerPaycheck(effAmt))}/mo</div>
-                    {activeBillingMeta && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>{f2(activeBillingMeta.amount ?? 0)} · {cycleByValue[activeBillingMeta.cycle]?.label ?? "Custom cycle"}</div>}
-                    {latestEntry && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "1px" }}>reserve started {activeBillingMeta?.effectiveFrom ?? latestEntry.effectiveFrom}</div>}
+                    <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{f(monthlyFromPerPaycheck(effAmt))}/mo</div>
                   </div>
                   <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
                   {delExpId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
@@ -912,7 +914,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <span style={{ fontSize: "13px" }}>{exp.label}</span>
-                    <span style={{ fontSize: "9px", background: "rgba(201,168,76,0.13)", color: "var(--color-gold)", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
+                    <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-gold)", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
                     {inRunway && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
                     {isPaidOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>✓ PAID OFF</span>}
                     {!isPaidOff && !inRunway && dropsOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>drops off {payoffDate}</span>}
@@ -942,7 +944,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       })}
 
       {/* Add expense form */}
-      {addingExp ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
+      {addingExp ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
         <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Expense Line</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
           <div><label style={lS}>Label</label><input type="text" value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Insurance" /></div>
@@ -958,7 +960,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>ADD</button>
           <button onClick={() => { setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
         </div>
-      </div> : <button onClick={() => setAddingExp(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
+      </div> : <button onClick={() => setAddingExp(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
     </div>}
 
     {/* BREAKDOWN */}
@@ -989,7 +991,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               <td style={{ padding: "8px 4px" }}>
                 <span style={{ fontSize: "10px", color: isLoan ? "var(--color-gold)" : CATEGORY_COLORS[exp.category], marginRight: "6px" }}>▸</span>
                 {exp.label}
-                {isLoan && <span style={{ fontSize: "9px", background: "rgba(201,168,76,0.13)", color: "var(--color-gold)", padding: "1px 4px", borderRadius: "2px", marginLeft: "5px" }}>LOAN</span>}
+                {isLoan && <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-gold)", padding: "1px 4px", borderRadius: "2px", marginLeft: "5px" }}>LOAN</span>}
               </td>
               <td style={{ padding: "8px 4px", textAlign: "right", color: isLoan ? "var(--color-gold)" : CATEGORY_COLORS[exp.category] }}>{f2(weeklyAvg)}</td>
               <td style={{ padding: "8px 4px", textAlign: "right", color: "var(--color-text-secondary)" }}>{f(annual / 12)}</td>
@@ -1020,7 +1022,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "#666" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{((checkingTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
           </div>
-          {loans.length > 0 && <div style={{ background: "#1a1a14", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
+          {loans.length > 0 && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "#666" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-gold)" }}>{f2(loansTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{((loansTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
           </div>}
           <div style={{ background: CATEGORY_BG["Transfers"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
@@ -1265,7 +1267,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         })}
         </div>
 
-        {addingGoal ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
+        {addingGoal ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
           <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Goal</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={e => setNewGoal(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Emergency Fund" /></div>
@@ -1284,7 +1286,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             <button onClick={addGoal} disabled={!newGoal.label || !newGoal.target} style={{ background: (newGoal.label && newGoal.target) ? "var(--color-green)" : "var(--color-border-subtle)", color: (newGoal.label && newGoal.target) ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newGoal.label && newGoal.target) ? "pointer" : "default", fontWeight: "bold" }}>ADD GOAL</button>
             <button onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", color: "var(--color-gold)", note: "", category: "Expenses" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
           </div>
-        </div> : <button onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</button>}
+        </div> : <button onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</button>}
 
         {completedGoals.length > 0 && <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden" }}>
           {/* Toggle header */}
@@ -1389,7 +1391,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                     <span style={{ fontSize: "14px", fontWeight: "bold" }}>{exp.label}</span>
-                    <span style={{ fontSize: "9px", background: "rgba(201,168,76,0.13)", color: "var(--color-gold)", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
+                    <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-gold)", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
                     {inRunway && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
                     {isPaidOff && <span style={{ fontSize: "9px", background: "rgba(76,175,125,0.13)", color: "var(--color-green)", padding: "2px 6px", borderRadius: "2px" }}>✓ PAID OFF</span>}
                   </div>
@@ -1454,7 +1456,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         })}
 
         {/* Add loan form */}
-        {addingLoan ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
+        {addingLoan ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
           <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Loan</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Loan Name</label><input type="text" value={newLoan.label} onChange={e => setNewLoan(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Note" /></div>
@@ -1482,7 +1484,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             const total = Math.ceil(meta.totalAmount / meta.paymentAmount);
             const weeklyAmt = loanWeeklyAmount(meta);
             const freqLabel = { weekly: "week", biweekly: "2 weeks", monthly: "month" }[meta.paymentFrequency];
-            return <div style={{ background: "#1a1a14", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px", fontSize: "11px" }}>
+            return <div style={{ background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px", fontSize: "11px" }}>
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
                 <span style={{ color: "#666" }}>Weekly cost: <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(weeklyAmt)}/wk</span></span>
                 <span style={{ color: "#666" }}>{total} payments ({freqLabel})</span>
@@ -1494,7 +1496,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
             <button onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-green)" : "var(--color-border-subtle)", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontWeight: "bold" }}>ADD LOAN</button>
             <button onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
           </div>
-        </div> : <button onClick={() => setAddingLoan(true)} style={{ background: "#1a1a14", color: "var(--color-gold)", border: "1px solid #c8a84b44", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</button>}
+        </div> : <button onClick={() => setAddingLoan(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</button>}
       </div>;
     })()}
     {touchDragOverlay.label && <div

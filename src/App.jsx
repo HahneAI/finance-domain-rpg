@@ -110,34 +110,72 @@ function FullScreenLoadingState({ label = "Loading your dashboard" }) {
     <div style={{
       background: "var(--color-bg-gradient)",
       minHeight: "100vh",
-      color: "var(--color-text-primary)",
       display: "flex",
+      flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      padding: "24px",
+      gap: "32px",
     }}>
+      <style>{`
+        @keyframes afPulse {
+          0%, 100% { opacity: 0.25; transform: scale(0.85); }
+          50%       { opacity: 1;    transform: scale(1);    }
+        }
+        @keyframes afBar {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(400%);  }
+        }
+      `}</style>
+
+      {/* Brand label */}
       <div style={{
-        width: "100%",
-        maxWidth: "420px",
-        border: "1px solid var(--color-border-subtle)",
-        borderRadius: "16px",
-        background: "var(--color-bg-surface)",
-        padding: "18px",
+        fontSize: "10px",
+        letterSpacing: "4px",
+        textTransform: "uppercase",
+        color: "var(--color-text-disabled)",
+      }}>
+        Authority Finance
+      </div>
+
+      {/* Three breathing dots */}
+      <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{
+            width: "8px",
+            height: "8px",
+            borderRadius: "50%",
+            background: "var(--color-accent-primary)",
+            animation: `afPulse 1.4s ease-in-out ${i * 0.22}s infinite`,
+          }} />
+        ))}
+      </div>
+
+      {/* Progress bar track */}
+      <div style={{
+        width: "160px",
+        height: "2px",
+        background: "var(--color-border-subtle)",
+        borderRadius: "2px",
+        overflow: "hidden",
       }}>
         <div style={{
-          fontSize: "11px",
-          letterSpacing: "3px",
-          textTransform: "uppercase",
-          color: "var(--color-gold)",
-          marginBottom: "12px",
-        }}>
-          {label}
-        </div>
-        <div style={{ display: "grid", gap: "10px" }}>
-          <div style={{ height: "56px", borderRadius: "12px", background: "var(--color-bg-raised)" }} />
-          <div style={{ height: "56px", borderRadius: "12px", background: "var(--color-bg-raised)" }} />
-          <div style={{ height: "56px", borderRadius: "12px", background: "var(--color-bg-raised)" }} />
-        </div>
+          width: "40%",
+          height: "100%",
+          background: "var(--color-accent-primary)",
+          borderRadius: "2px",
+          animation: "afBar 1.6s ease-in-out infinite",
+          opacity: 0.8,
+        }} />
+      </div>
+
+      {/* Status label */}
+      <div style={{
+        fontSize: "11px",
+        letterSpacing: "1.5px",
+        textTransform: "uppercase",
+        color: "var(--color-text-disabled)",
+      }}>
+        {label}
       </div>
     </div>
   );
@@ -641,9 +679,11 @@ export default function App() {
       >
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid var(--color-border-subtle)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-              <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div>
+                <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                <div style={{ fontSize: "13px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>Authority Finance</div>
+              </div>
             </div>
             <button
               title="Sign out"
@@ -771,12 +811,14 @@ export default function App() {
           </button>
 
           {/* ── Title block — center ── */}
-          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+              </div>
+              <div style={{ fontSize: "14px", fontWeight: "bold" }}>Authority Finance</div>
             </div>
-            <div style={{ fontSize: "14px", fontWeight: "bold" }}>Finance Dashboard</div>
           </div>
 
           {/* ── Notification bell — top RIGHT (Chime-style) ── */}

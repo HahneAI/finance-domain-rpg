@@ -68,25 +68,128 @@ function AccountDetail({ authedUser, config, onBack }) {
   const setupBorder = config.setupComplete ? "rgba(76,175,125,0.3)"         : "rgba(201,168,76,0.3)";
   const setupLabel  = config.setupComplete ? "Setup complete"               : "Setup pending";
 
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [newEmail, setNewEmail] = useState(authedUser?.email ?? "");
+  const [emailStatus, setEmailStatus] = useState({ error: null, success: null, loading: false });
+
   const [showPwForm, setShowPwForm] = useState(false);
+  const [currentPw, setCurrentPw]   = useState("");
   const [newPw, setNewPw]           = useState("");
   const [confirmPw, setConfirmPw]   = useState("");
   const [pwError, setPwError]       = useState(null);
   const [pwSaved, setPwSaved]       = useState(false);
   const [pwLoading, setPwLoading]   = useState(false);
 
+  const [globalSignoutState, setGlobalSignoutState] = useState({ error: null, success: null, loading: false });
+
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteText, setDeleteText] = useState("");
+  const [deleteState, setDeleteState] = useState({ error: null, loading: false });
+
+  async function handleChangeEmail(e) {
+    e.preventDefault();
+    const trimmed = newEmail.trim();
+    setEmailStatus({ error: null, success: null, loading: false });
+
+    if (!trimmed || !trimmed.includes("@")) {
+      setEmailStatus({ error: "Enter a valid email address.", success: null, loading: false });
+      return;
+    }
+    if (trimmed.toLowerCase() === (authedUser?.email ?? "").toLowerCase()) {
+      setEmailStatus({ error: "That email is already on your account.", success: null, loading: false });
+      return;
+    }
+
+    setEmailStatus({ error: null, success: null, loading: true });
+    const { error } = await supabase.auth.updateUser({ email: trimmed });
+    if (error) {
+      setEmailStatus({ error: error.message, success: null, loading: false });
+      return;
+    }
+
+    setEmailStatus({
+      error: null,
+      success: "Confirmation sent. Check your new inbox and confirm before the email change takes effect.",
+      loading: false,
+    });
+    setShowEmailForm(false);
+  }
+
   async function handleChangePw(e) {
     e.preventDefault();
     setPwError(null);
-    if (newPw !== confirmPw) { setPwError("Passwords don't match."); return; }
-    if (newPw.length < 6)    { setPwError("Must be at least 6 characters."); return; }
+
+    if (!currentPw)            { setPwError("Enter your current password."); return; }
+    if (newPw !== confirmPw)   { setPwError("New passwords don't match."); return; }
+    if (newPw.length < 8)      { setPwError("Use at least 8 characters for your new password."); return; }
+    if (newPw === currentPw)   { setPwError("New password must be different from your current password."); return; }
+
     setPwLoading(true);
+
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: authedUser?.email ?? "",
+      password: currentPw,
+    });
+
+    if (verifyError) {
+      setPwLoading(false);
+      setPwError("Current password is incorrect.");
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({ password: newPw });
     setPwLoading(false);
-    if (error) { setPwError(error.message); return; }
+
+    if (error) {
+      setPwError(error.message);
+      return;
+    }
+
     setPwSaved(true);
-    setNewPw(""); setConfirmPw("");
+    setCurrentPw("");
+    setNewPw("");
+    setConfirmPw("");
     setTimeout(() => { setPwSaved(false); setShowPwForm(false); }, 2000);
+  }
+
+  async function handleGlobalSignOut() {
+    setGlobalSignoutState({ error: null, success: null, loading: true });
+    const { error } = await supabase.auth.signOut({ scope: "global" });
+    if (error) {
+      setGlobalSignoutState({ error: error.message, success: null, loading: false });
+      return;
+    }
+    setGlobalSignoutState({ error: null, success: "Signed out from all devices.", loading: false });
+  }
+
+  async function handleDeleteAccount() {
+    setDeleteState({ error: null, loading: true });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      setDeleteState({ error: "No active session found.", loading: false });
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/delete-account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ confirmationText: deleteText }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setDeleteState({ error: payload?.error || "Failed to delete account.", loading: false });
+        return;
+      }
+      await supabase.auth.signOut({ scope: "global" });
+    } catch {
+      setDeleteState({ error: "Failed to delete account.", loading: false });
+    }
   }
 
   return (
@@ -101,7 +204,41 @@ function AccountDetail({ authedUser, config, onBack }) {
         } />
       </DetailCard>
 
-      {/* Change password */}
+      <DetailCard>
+        {!showEmailForm ? (
+          <button
+            onClick={() => setShowEmailForm(true)}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "14px 16px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
+          >
+            <span style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500" }}>Change Email</span>
+            <span style={{ fontSize: "18px", color: "#555", lineHeight: 1 }}>›</span>
+          </button>
+        ) : (
+          <form onSubmit={handleChangeEmail} style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", fontWeight: "600" }}>Change Email</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={lS}>New Email</label>
+              <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required autoComplete="email" style={{ ...iS, borderRadius: "8px" }} />
+            </div>
+            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+              Supabase will send a confirmation email to the new address.
+            </div>
+            {emailStatus.error && (
+              <div style={{ fontSize: "11px", color: "var(--color-red)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{emailStatus.error}</div>
+            )}
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button type="button" onClick={() => { setShowEmailForm(false); setEmailStatus({ error: null, success: null, loading: false }); setNewEmail(authedUser?.email ?? ""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button type="submit" disabled={emailStatus.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: emailStatus.loading ? "default" : "pointer" }}>{emailStatus.loading ? "..." : "Save"}</button>
+            </div>
+          </form>
+        )}
+        {emailStatus.success && (
+          <div style={{ padding: "0 16px 14px", fontSize: "11px", color: "var(--color-green)" }}>
+            {emailStatus.success}
+          </div>
+        )}
+      </DetailCard>
+
       <DetailCard>
         {!showPwForm ? (
           <button
@@ -115,11 +252,15 @@ function AccountDetail({ authedUser, config, onBack }) {
           <form onSubmit={handleChangePw} style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", fontWeight: "600" }}>Change Password</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={lS}>New Password</label>
-              <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="At least 6 characters" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+              <label style={lS}>Current Password</label>
+              <input type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} placeholder="Required to verify" required autoComplete="current-password" style={{ ...iS, borderRadius: "8px" }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={lS}>Confirm Password</label>
+              <label style={lS}>New Password</label>
+              <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="At least 8 characters" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={lS}>Confirm New Password</label>
               <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
             </div>
             {pwError && (
@@ -129,11 +270,41 @@ function AccountDetail({ authedUser, config, onBack }) {
               <div style={{ fontSize: "11px", color: "var(--color-green)" }}>Password updated.</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button type="button" onClick={() => { setShowPwForm(false); setPwError(null); setNewPw(""); setConfirmPw(""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button type="button" onClick={() => { setShowPwForm(false); setPwError(null); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
               <button type="submit" disabled={pwLoading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: pwLoading ? "default" : "pointer" }}>{pwLoading ? "..." : "Save"}</button>
             </div>
           </form>
         )}
+      </DetailCard>
+
+      <DetailCard>
+        <button
+          onClick={handleGlobalSignOut}
+          disabled={globalSignoutState.loading}
+          style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", textAlign: "left", cursor: globalSignoutState.loading ? "default" : "pointer" }}
+        >
+          <div style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500", marginBottom: "4px" }}>Sign Out All Devices</div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+            Ends active sessions on every device for this account.
+          </div>
+        </button>
+        {(globalSignoutState.error || globalSignoutState.success) && (
+          <div style={{ padding: "0 16px 12px", fontSize: "11px", color: globalSignoutState.error ? "var(--color-red)" : "var(--color-green)" }}>
+            {globalSignoutState.error || globalSignoutState.success}
+          </div>
+        )}
+      </DetailCard>
+
+      <DetailCard style={{ borderColor: "rgba(224,92,92,0.32)" }}>
+        <button
+          onClick={() => { setDeleteText(""); setDeleteState({ error: null, loading: false }); setShowDeleteDialog(true); }}
+          style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", textAlign: "left", cursor: "pointer" }}
+        >
+          <div style={{ fontSize: "14px", color: "var(--color-red)", fontWeight: "600", marginBottom: "4px" }}>Delete Account</div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+            This permanently deletes your account and dashboard data.
+          </div>
+        </button>
       </DetailCard>
 
       <button
@@ -145,8 +316,30 @@ function AccountDetail({ authedUser, config, onBack }) {
           <polyline points="16 17 21 12 16 7"/>
           <line x1="21" y1="12" x2="9" y2="12"/>
         </svg>
-        Sign Out
+        Sign Out (This Device)
       </button>
+
+      {showDeleteDialog && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
+          <div style={{ width: "100%", maxWidth: "430px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-red)" }}>Delete Account</div>
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.55" }}>
+              This action is irreversible. Your account, profile, and stored dashboard data will be permanently deleted.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={lS}>Type DELETE to confirm</label>
+              <input type="text" value={deleteText} onChange={e => setDeleteText(e.target.value)} placeholder="DELETE" style={{ ...iS, borderRadius: "8px" }} />
+            </div>
+            {deleteState.error && (
+              <div style={{ fontSize: "11px", color: "var(--color-red)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{deleteState.error}</div>
+            )}
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => setShowDeleteDialog(false)} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-red)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -85,7 +85,7 @@ const safeDate = (raw) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, futureWeeks, futureWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo }) {
+export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
 
@@ -684,7 +684,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     </div>
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
-      <Card label="Weekly Income" val={f2(weeklyIncome)} color="#7eb8c9" />
+      <Card label="Last Paycheck" val={f2(prevWeekNet ?? weeklyIncome)} sub="prev week net" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
       <Card label="Weekly Spend" val={f2(ts)} color="var(--color-red)" />
       <Card label="Weekly Left" val={f2(wr)} color={wr >= 0 ? "var(--color-green)" : "var(--color-red)"} />
     </div>

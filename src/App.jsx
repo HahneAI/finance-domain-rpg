@@ -426,6 +426,26 @@ export default function App() {
   const bufferPerWeek = (config.bufferEnabled ?? true) ? (config.paycheckBuffer ?? 50) : 0;
   const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
 
+  // ── Previous week's actual paycheck (what you'll receive this payday) ──
+  // Shows the specific prior week's computeNet (high vs low week), not an annual
+  // average. Adjusted for any event log entries confirmed for that week
+  // (e.g. missed shifts logged via WeekConfirmModal). Falls back to weeklyIncome
+  // average when no past weeks exist (first week of fiscal year).
+  const prevWeekNet = useMemo(() => {
+    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
+    if (!pastWeeks.length) return weeklyIncome;
+    const prevWeek = pastWeeks[pastWeeks.length - 1];
+    const baseNet = computeNet(prevWeek, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek;
+    // Apply any confirmed event log adjustments specific to this week
+    const weekAdjustment = logs
+      .filter(e => e.weekIdx === prevWeek.idx)
+      .reduce((sum, e) => {
+        const impact = calcEventImpact(e, config);
+        return sum + impact.netGained - impact.netLost;
+      }, 0);
+    return baseNet + weekAdjustment;
+  }, [allWeeks, today, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs]);
+
   const futureWeekNets = useMemo(
     // Buffer excluded per week — feeds BudgetPanel goal timelines and HomePanel
     // "Next Week" tile; both should show spendable net, not raw paycheck amount.
@@ -536,6 +556,7 @@ export default function App() {
         logNetLost={logTotals.netLost}
         logNetGained={logTotals.netGained}
         weeklyIncome={weeklyIncome}
+        prevWeekNet={prevWeekNet}
         futureWeeks={futureWeeks}
         futureWeekNets={futureWeekNets}
         futureEventDeductions={futureEventDeductions}

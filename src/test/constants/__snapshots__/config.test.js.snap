@@ -16,7 +16,7 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
   "dhlNightShift": true,
   "dhlOtOnWeekend": false,
   "dhlTeam": null,
-  "diffRate": 3,
+  "diffRate": 1.75,
   "employerPreset": null,
   "fedRateHigh": 0.1283,
   "fedRateLow": 0.0784,

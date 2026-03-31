@@ -101,7 +101,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
   const toggleDay = (day, vals, set) => {
     const prev = normalizeDays(vals.missedDays);
     const next = prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day];
-    const weekendShifts = next.filter(d => d === "Sat" || d === "Sun").length;
+    const weekendShifts = next.filter(d => d === "Fri" || d === "Sat" || d === "Sun").length;
     set(v => ({
       ...v,
       missedDays: next,

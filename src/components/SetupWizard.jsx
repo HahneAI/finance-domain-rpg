@@ -21,7 +21,7 @@
 import { useState } from "react";
 import { buildYear, dhlEmployerMatchRate } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
-import { FISCAL_YEAR_START, DHL_PRESET } from "../constants/config.js";
+import { FISCAL_YEAR_START, DHL_PRESET, DHL_BENEFIT_OPTIONS } from "../constants/config.js";
 
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 
@@ -421,17 +421,7 @@ function Step2({ formData, onChange }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 3 — Deductions
 // ─────────────────────────────────────────────────────────────────────────────
-const BENEFIT_DEFS = [
-  { id: "health", label: "Health / Medical",      sub: "Medical insurance premium",                    type: "weekly", field: "healthPremium", placeholder: "e.g. 18.50" },
-  { id: "dental", label: "Dental",                sub: "Dental insurance premium",                     type: "weekly", field: "dentalPremium", placeholder: "e.g. 4.00"  },
-  { id: "vision", label: "Vision",                sub: "Vision insurance premium",                     type: "weekly", field: "visionPremium", placeholder: "e.g. 2.00"  },
-  { id: "ltd",    label: "Long-Term Disability",  sub: "LTD insurance — flat weekly deduction",        type: "weekly", field: "ltd",           placeholder: "e.g. 2.00"  },
-  { id: "std",    label: "Short-Term Disability", sub: "STD insurance — flat weekly deduction",        type: "weekly", field: "stdWeekly",     placeholder: "e.g. 1.50"  },
-  { id: "life",   label: "Life / AD&D",           sub: "Group life insurance premium",                 type: "weekly", field: "lifePremium",   placeholder: "e.g. 1.00"  },
-  { id: "k401",   label: "401(k) / Retirement",   sub: "Pre-tax contribution + employer match",        type: "k401"                                                        },
-  { id: "hsa",    label: "HSA",                   sub: "Health Savings Account — weekly contribution", type: "weekly", field: "hsaWeekly",     placeholder: "e.g. 15.00" },
-  { id: "fsa",    label: "FSA",                   sub: "Flexible Spending Account — weekly contribution", type: "weekly", field: "fsaWeekly", placeholder: "e.g. 10.00" },
-];
+const BENEFIT_DEFS = DHL_BENEFIT_OPTIONS;
 
 function BenefitCard({ def, selected, formData, onChange, onToggle }) {
   return (

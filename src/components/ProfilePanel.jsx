@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { dhlEmployerMatchRate, computeNet } from "../lib/finance.js";
-import { DHL_PRESET, MONTH_FULL } from "../constants/config.js";
+import { DHL_BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, SH } from "./ui.jsx";
 
 const BENEFIT_LABELS = {
@@ -473,21 +473,44 @@ function BenefitsDetail({ config, setConfig, onBack }) {
   const isDHL     = config.employerPreset === "DHL";
   const has401k   = config.k401Rate > 0;
   const matchRate = isDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
-  const enrolled  = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
+  const enrolledConfig = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
 
   const [editing, setEditing]   = useState(false);
+  const [selectedBenefits, setSelectedBenefits] = useState(new Set(enrolledConfig));
   const [k401Rate, setK401Rate] = useState(String(config.k401Rate ?? ""));
   const [k401Match, setK401Match] = useState(String(config.k401MatchRate ?? ""));
   const [k401Start, setK401Start] = useState(config.k401StartDate ?? "");
+  const [benefitsStartDate, setBenefitsStartDate] = useState(config.benefitsStartDate ?? "");
+  const [weeklyValues, setWeeklyValues] = useState(
+    DHL_BENEFIT_OPTIONS
+      .filter(b => b.type === "weekly")
+      .reduce((acc, b) => ({ ...acc, [b.field]: String(config[b.field] ?? "") }), {})
+  );
 
   function handleSave() {
+    const nextSelected = [...selectedBenefits];
+    const weeklyPatch = DHL_BENEFIT_OPTIONS
+      .filter(b => b.type === "weekly")
+      .reduce((acc, b) => ({ ...acc, [b.field]: parseFloat(weeklyValues[b.field]) || 0 }), {});
     setConfig(prev => ({
       ...prev,
       k401Rate:      parseFloat(k401Rate)  || 0,
       k401MatchRate: parseFloat(k401Match) || 0,
-      k401StartDate: k401Start || prev.k401StartDate,
+      k401StartDate: k401Start || null,
+      benefitsStartDate: benefitsStartDate || null,
+      selectedBenefits: nextSelected,
+      ...weeklyPatch,
     }));
     setEditing(false);
+  }
+
+  function toggleBenefit(id) {
+    setSelectedBenefits(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   return (
@@ -524,6 +547,34 @@ function BenefitsDetail({ config, setConfig, onBack }) {
       ) : (
         <DetailCard>
           <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+              Payroll-Deduction Benefits ({DHL_BENEFIT_OPTIONS.length})
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+              {DHL_BENEFIT_OPTIONS.map((benefit) => (
+                <button
+                  key={benefit.id}
+                  onClick={() => toggleBenefit(benefit.id)}
+                  style={{
+                    fontSize: "10px",
+                    letterSpacing: "1px",
+                    textTransform: "uppercase",
+                    padding: "6px 8px",
+                    borderRadius: "8px",
+                    border: `1px solid ${selectedBenefits.has(benefit.id) ? "rgba(76,175,125,0.32)" : "var(--color-border-subtle)"}`,
+                    background: selectedBenefits.has(benefit.id) ? "rgba(76,175,125,0.10)" : "var(--color-bg-raised)",
+                    color: selectedBenefits.has(benefit.id) ? "var(--color-green)" : "var(--color-text-secondary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {selectedBenefits.has(benefit.id) ? "✓ " : ""}{BENEFIT_LABELS[benefit.id] ?? benefit.id}
+                </button>
+              ))}
+            </div>
+            <div>
+              <label style={lS}>Benefits Start Date</label>
+              <input type="date" value={benefitsStartDate} onChange={e => setBenefitsStartDate(e.target.value)} style={iS} />
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
               <div>
                 <label style={lS}>Employee % (decimal)</label>
@@ -539,6 +590,22 @@ function BenefitsDetail({ config, setConfig, onBack }) {
                 <label style={lS}>Start Date</label>
                 <input type="date" value={k401Start} onChange={e => setK401Start(e.target.value)} style={iS} />
               </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly").map((benefit) => (
+                <div key={benefit.id}>
+                  <label style={lS}>{benefit.label} ($ / week)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={weeklyValues[benefit.field]}
+                    placeholder={benefit.placeholder}
+                    onChange={e => setWeeklyValues(v => ({ ...v, [benefit.field]: e.target.value }))}
+                    style={iS}
+                  />
+                </div>
+              ))}
             </div>
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={() => setEditing(false)} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
@@ -556,14 +623,14 @@ function BenefitsDetail({ config, setConfig, onBack }) {
         )}
         <DetailRow
           label="Enrolled"
-          value={enrolled.length > 0 ? `${enrolled.length} plan${enrolled.length !== 1 ? "s" : ""}` : "None enrolled"}
-          valueColor={enrolled.length > 0 ? undefined : "var(--color-text-disabled)"}
-          last={enrolled.length === 0}
+          value={enrolledConfig.length > 0 ? `${enrolledConfig.length} plan${enrolledConfig.length !== 1 ? "s" : ""}` : "None enrolled"}
+          valueColor={enrolledConfig.length > 0 ? undefined : "var(--color-text-disabled)"}
+          last={enrolledConfig.length === 0}
         />
-        {enrolled.length > 0 && (
+        {enrolledConfig.length > 0 && (
           <div style={{ padding: "10px 16px 14px" }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-              {enrolled.map(id => (
+              {enrolledConfig.map(id => (
                 <span key={id} style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(76,175,125,0.08)", color: "var(--color-green)", border: "1px solid rgba(76,175,125,0.2)", borderRadius: "12px" }}>
                   {BENEFIT_LABELS[id] ?? id}
                 </span>

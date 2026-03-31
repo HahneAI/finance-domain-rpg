@@ -684,8 +684,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
       <Card label="Last Paycheck" val={f2(prevWeekNet ?? weeklyIncome)} sub="prev week net" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
-      <Card label="Weekly Spend" val={f2(ts)} color="var(--color-red)" />
-      <Card label="Weekly Left" val={f2(wr)} color={wr >= 0 ? "var(--color-green)" : "var(--color-red)"} />
+      <Card label="Weekly Spend" val={f2(ts)} rawVal={ts} color="var(--color-red)" />
+      <Card label="Weekly Left" val={f2(wr)} rawVal={wr} color={wr >= 0 ? "var(--color-green)" : "var(--color-red)"} />
     </div>
     {logNetLost > 0 && <div style={{ background: "#1a1a2d", border: "1px solid #7a8bbf44", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
       <span style={{ color: "var(--color-text-secondary)" }}>Adj. weekly unallocated (after events):</span>
@@ -1058,8 +1058,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{currentWeek.rotation} · ends {toLocalIso(currentWeek.weekEnd)}</div>
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <Card label="Adj. Weekly Available" val={f2(adjustedWeeklyAvg)} color="var(--color-green)" />
-          <Card label="Active Goals Total" val={f(totG)} color="var(--color-gold)" />
+          <Card label="Adj. Weekly Available" val={f2(adjustedWeeklyAvg)} rawVal={adjustedWeeklyAvg} color="var(--color-green)" />
+          <Card label="Active Goals Total" val={f(totG)} rawVal={totG} color="var(--color-gold)" />
           <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projS >= totG ? "var(--color-green)" : "var(--color-red)"} />
         </div>
         {adjustedWeeklyAvg < baseWeeklyUnallocated && <div style={{ background: "#2d1a1a", border: "1px solid #e8856a44", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", fontSize: "11px", color: "var(--color-text-secondary)" }}>Event log reduced avg by <span style={{ color: "var(--color-red)", fontWeight: "bold" }}>{f2(baseWeeklyUnallocated - adjustedWeeklyAvg)}/wk</span></div>}
@@ -1377,8 +1377,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{currentWeek.rotation} · ends {toLocalIso(currentWeek.weekEnd)}</div>
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <Card label="Total Loan Balance" val={f(totalOwed)} color="var(--color-gold)" />
-          <Card label="Weekly Committed" val={f2(weeklyCommitted)} color="var(--color-red)" />
+          <Card label="Total Loan Balance" val={f(totalOwed)} rawVal={totalOwed} color="var(--color-gold)" />
+          <Card label="Weekly Committed" val={f2(weeklyCommitted)} rawVal={weeklyCommitted} color="var(--color-red)" />
           <Card label="Debt-Free In" val={debtFreeDate ? `${weeksToDebtFree} wks` : "—"} color={debtFreeDate && debtFreeDate <= fiscalYearEnd ? "var(--color-green)" : "var(--color-gold)"} />
         </div>
 

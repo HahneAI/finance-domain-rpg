@@ -40,10 +40,10 @@ const EXPENSE_TOUCH_OVERLAY_BG = {
   Lifestyle: "#5B8CFF",
 };
 
-// Card background gradients: dark green base → category accent tint
+// Card backgrounds: use the same tint as the GOAL_LANES top-of-gradient color
 const CAT_GRADIENT = {
-  Needs:      "linear-gradient(135deg, #091a11 0%, #1a0b0b 100%)",
-  Lifestyle:  "linear-gradient(135deg, #091a11 0%, #0c1228 100%)",
+  Needs:      GOAL_LANES["Expenses"].tint,
+  Lifestyle:  GOAL_LANES["Lifestyle"].tint,
   Transfers:  "linear-gradient(135deg, #091a11 0%, #111111 100%)",
 };
 const EXPENSE_DRAG_EASE = "cubic-bezier(.22,.7,.2,1)";

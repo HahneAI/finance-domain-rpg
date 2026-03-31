@@ -40,10 +40,10 @@ const EXPENSE_TOUCH_OVERLAY_BG = {
   Lifestyle: "#5B8CFF",
 };
 
-// Card background gradients: dark green base → category accent tint
+// Card backgrounds: use the same tint as the GOAL_LANES top-of-gradient color
 const CAT_GRADIENT = {
-  Needs:      "linear-gradient(135deg, #091a11 0%, #1a0b0b 100%)",
-  Lifestyle:  "linear-gradient(135deg, #091a11 0%, #0c1228 100%)",
+  Needs:      GOAL_LANES["Expenses"].tint,
+  Lifestyle:  GOAL_LANES["Lifestyle"].tint,
   Transfers:  "linear-gradient(135deg, #091a11 0%, #111111 100%)",
 };
 const EXPENSE_DRAG_EASE = "cubic-bezier(.22,.7,.2,1)";
@@ -745,12 +745,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               ? `1px solid ${dragPreviewExpenseCategory === cat ? `${CATEGORY_COLORS[cat]}33` : "#1f1f1f"}`
               : "none",
             background: isExpenseDropLane
-              ? (dragPreviewExpenseCategory === cat ? "rgba(20,20,20,0.24)" : "transparent")
+              ? (dragPreviewExpenseCategory === cat ? "rgba(20,20,20,0.24)" : (CAT_GRADIENT[cat] ?? "transparent"))
               : "transparent",
             transition: `background 300ms ${EXPENSE_DRAG_EASE}, border-color 320ms ${EXPENSE_DRAG_EASE}`,
           }}
         >
-          <SH color={CATEGORY_COLORS[cat]} right={f2(cTot) + "/wk"}>{cat}</SH>
+          <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot) + "/wk"}>{cat}</SH>
           {cExp.map(exp => {
             const effAmt = currentEffective(exp, ap);
             const isEditing = editId === exp.id;

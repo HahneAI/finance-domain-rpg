@@ -529,7 +529,6 @@ export default function App() {
         navigate={navigate}
         weeklyIncome={weeklyIncome}
         adjustedTakeHome={logTotals.adjustedTakeHome}
-        adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
         remainingSpend={remainingSpend}
         goals={goals}
         futureWeekNets={futureWeekNets}
@@ -551,8 +550,6 @@ export default function App() {
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
         goals={goals} setGoals={setGoals}
-        adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
-        baseWeeklyUnallocated={baseWeeklyUnallocated}
         logNetLost={logTotals.netLost}
         logNetGained={logTotals.netGained}
         weeklyIncome={weeklyIncome}

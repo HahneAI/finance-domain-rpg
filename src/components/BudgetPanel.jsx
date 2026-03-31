@@ -85,7 +85,7 @@ const safeDate = (raw) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWeeklyAvg, baseWeeklyUnallocated, logNetLost, logNetGained, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo }) {
+export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost, logNetGained, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
 
@@ -150,7 +150,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
 
   const ph = PHASES[ap];
   const ts = expenses.filter(e => e.category !== "Transfers").reduce((s, e) => s + currentEffective(e, ap), 0);
-  const wr = weeklyIncome - ts;
+  const incomingWeekNet = futureWeekNets?.[0] ?? prevWeekNet ?? weeklyIncome;
+  const wr = incomingWeekNet - ts;
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
   const overviewCatOrder = ["Needs", "Lifestyle", "Transfers"];
@@ -688,10 +689,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
       <Card label="Weekly Spend" val={f2(ts)} color="var(--color-red)" />
       <Card label="Weekly Left" val={f2(wr)} color={wr >= 0 ? "var(--color-green)" : "var(--color-red)"} />
     </div>
-    {logNetLost > 0 && <div style={{ background: "#1a1a2d", border: "1px solid #7a8bbf44", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
-      <span style={{ color: "var(--color-text-secondary)" }}>Adj. weekly unallocated (after events):</span>
-      <span style={{ fontWeight: "bold", color: "var(--color-gold)" }}>{f2(adjustedWeeklyAvg)}/wk</span>
-    </div>}
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#aaa", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "var(--color-red)" : "var(--color-green)" }}>{sp.toFixed(1)}%</span></div>
@@ -1026,7 +1023,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     {/* CASHFLOW */}
     {view === "cashflow" && <div>
       <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Weekly Take-Home</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(weeklyIncome)}</div></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", textAlign: "right" }}>Live from<br />income engine</div></div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Incoming Paycheck</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(incomingWeekNet)}</div></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", textAlign: "right" }}>Running week<br />net pay</div></div>
       </div>
       {(() => {
         const checkingTot = regularExpenses.filter(e => e.category !== "Transfers").reduce((s, e) => s + currentEffective(e, ap), 0);
@@ -1037,13 +1034,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         const transferDesc = regularExpenses.filter(e => e.category === "Transfers").map(e => e.label).join(", ");
         return <>
           <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "#666" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{((checkingTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "#666" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((checkingTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
           </div>
           {loans.length > 0 && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "#666" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-gold)" }}>{f2(loansTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{((loansTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "#666" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-gold)" }}>{f2(loansTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((loansTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
           </div>}
           <div style={{ background: CATEGORY_BG["Transfers"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Transfers"], marginBottom: "4px" }}>CashApp Transfer</div><div style={{ fontSize: "10px", color: "#666" }}>{transferDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Transfers"] }}>{f2(transferTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{((transferTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Transfers"], marginBottom: "4px" }}>CashApp Transfer</div><div style={{ fontSize: "10px", color: "#666" }}>{transferDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Transfers"] }}>{f2(transferTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((transferTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
           </div>
         </>;
       })()}
@@ -1056,7 +1053,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     {view === "goals" && (() => {
       const nowIdx = getFiscalWeekNumber(currentWeek?.idx ?? 0) ?? 1;
       const totG = goals.reduce((s, g) => !g.completed ? s + g.target : s, 0);
-      const projS = adjustedWeeklyAvg * weeksLeft;
+      const projS = wr * weeksLeft;
       const lastGoalEW = tl.length ? (tl[tl.length - 1].eW ?? weeksLeft + 1) : 0;
       return <div>
         {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
@@ -1064,11 +1061,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{currentWeek.rotation} · ends {toLocalIso(currentWeek.weekEnd)}</div>
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <Card label="Adj. Weekly Available" val={f2(adjustedWeeklyAvg)} color="var(--color-green)" />
+          <Card label="Weekly Available" val={f2(wr)} color="var(--color-green)" />
           <Card label="Active Goals Total" val={f(totG)} color="var(--color-gold)" />
           <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projS >= totG ? "var(--color-green)" : "var(--color-red)"} />
         </div>
-        {adjustedWeeklyAvg < baseWeeklyUnallocated && <div style={{ background: "#2d1a1a", border: "1px solid #e8856a44", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", fontSize: "11px", color: "var(--color-text-secondary)" }}>Event log reduced avg by <span style={{ color: "var(--color-red)", fontWeight: "bold" }}>{f2(baseWeeklyUnallocated - adjustedWeeklyAvg)}/wk</span></div>}
 
         <div
           style={{
@@ -1271,7 +1267,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               </>}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
-                <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: g.color }}>{f2(adjustedWeeklyAvg)}/wk</span> · {g.wN.toFixed(1)} weeks to fund</div>
+                <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: g.color }}>{f2(wr)}/wk</span> · {g.wN.toFixed(1)} weeks to fund</div>
                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
                   <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>

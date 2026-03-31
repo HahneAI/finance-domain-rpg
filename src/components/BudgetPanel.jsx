@@ -745,12 +745,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
               ? `1px solid ${dragPreviewExpenseCategory === cat ? `${CATEGORY_COLORS[cat]}33` : "#1f1f1f"}`
               : "none",
             background: isExpenseDropLane
-              ? (dragPreviewExpenseCategory === cat ? "rgba(20,20,20,0.24)" : "transparent")
+              ? (dragPreviewExpenseCategory === cat ? "rgba(20,20,20,0.24)" : (CAT_GRADIENT[cat] ?? "transparent"))
               : "transparent",
             transition: `background 300ms ${EXPENSE_DRAG_EASE}, border-color 320ms ${EXPENSE_DRAG_EASE}`,
           }}
         >
-          <SH color={CATEGORY_COLORS[cat]} right={f2(cTot) + "/wk"}>{cat}</SH>
+          <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot) + "/wk"}>{cat}</SH>
           {cExp.map(exp => {
             const effAmt = currentEffective(exp, ap);
             const isEditing = editId === exp.id;

@@ -44,7 +44,6 @@ const EXPENSE_TOUCH_OVERLAY_BG = {
 const CAT_GRADIENT = {
   Needs:      GOAL_LANES["Expenses"].tint,
   Lifestyle:  GOAL_LANES["Lifestyle"].tint,
-  Transfers:  "linear-gradient(135deg, #091a11 0%, #111111 100%)",
 };
 const EXPENSE_DRAG_EASE = "cubic-bezier(.22,.7,.2,1)";
 const EXPENSE_INSERT_MARKER_BG = "rgba(255,255,255,0.72)";
@@ -149,11 +148,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
   const regularExpenses = expenses.filter(e => e.type !== "loan");
 
   const ph = PHASES[ap];
-  const ts = expenses.filter(e => e.category !== "Transfers").reduce((s, e) => s + currentEffective(e, ap), 0);
+  const ts = expenses.reduce((s, e) => s + currentEffective(e, ap), 0);
   const wr = weeklyIncome - ts;
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
-  const overviewCatOrder = ["Needs", "Lifestyle", "Transfers"];
+  const overviewCatOrder = ["Needs", "Lifestyle"];
   const overviewCats = cats
     .slice()
     .sort((a, b) => {
@@ -965,7 +964,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Expense Line</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
           <div><label style={lS}>Label</label><input type="text" value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Insurance" /></div>
-          <div><label style={lS}>Category</label><select value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))} style={iS}><option>Needs</option><option>Lifestyle</option><option>Transfers</option></select></div>
+          <div><label style={lS}>Category</label><select value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))} style={iS}><option>Needs</option><option>Lifestyle</option></select></div>
           <div><label style={lS}>Bill Amount ($)</label><input type="number" min="0" step="0.01" value={newExp.amount} onChange={e => setNewExp(v => ({ ...v, amount: e.target.value }))} style={iS} /></div>
           <div><label style={lS}>Paid Every</label><select value={newExp.cycle} onChange={e => setNewExp(v => ({ ...v, cycle: e.target.value }))} style={iS}>{EXPENSE_CYCLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></div>
           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note (optional)</label><input type="text" value={newExp.note} onChange={e => setNewExp(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Short description" /></div>
@@ -983,12 +982,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
     {/* BREAKDOWN */}
     {view === "breakdown" && (() => {
       // Full-year figures — independent of the selected quarter tab
-      const tsAnnual = expenses.filter(e => e.category !== "Transfers").reduce((s, e) => s + yearlyExpenseCost(e), 0);
+      const tsAnnual = expenses.reduce((s, e) => s + yearlyExpenseCost(e), 0);
       const tsWeeklyAvg = tsAnnual / 52;
       const wrAnnual = weeklyIncome * 52 - tsAnnual;
       const wrWeeklyAvg = wrAnnual / 52;
       return <div>
-        {cats.filter(c => c !== "Transfers").map(cat => {
+        {cats.map(cat => {
           const cT = regularExpenses.filter(e => e.category === cat).reduce((s, e) => s + yearlyExpenseCost(e) / 52, 0);
           const pct = (cT / weeklyIncome) * 100;
           return <div key={cat} style={{ marginBottom: "16px" }}>
@@ -1029,12 +1028,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Weekly Take-Home</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(weeklyIncome)}</div></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", textAlign: "right" }}>Live from<br />income engine</div></div>
       </div>
       {(() => {
-        const checkingTot = regularExpenses.filter(e => e.category !== "Transfers").reduce((s, e) => s + currentEffective(e, ap), 0);
-        const checkingDesc = regularExpenses.filter(e => e.category !== "Transfers").map(e => e.label).join(", ");
+        const checkingTot = regularExpenses.reduce((s, e) => s + currentEffective(e, ap), 0);
+        const checkingDesc = regularExpenses.map(e => e.label).join(", ");
         const loansTot = loans.reduce((s, e) => s + currentEffective(e, ap), 0);
         const loansDesc = loans.map(e => e.label).join(", ");
-        const transferTot = regularExpenses.filter(e => e.category === "Transfers").reduce((s, e) => s + currentEffective(e, ap), 0);
-        const transferDesc = regularExpenses.filter(e => e.category === "Transfers").map(e => e.label).join(", ");
         return <>
           <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "#666" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{((checkingTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
@@ -1042,9 +1039,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, adjustedWe
           {loans.length > 0 && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "#666" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-gold)" }}>{f2(loansTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{((loansTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
           </div>}
-          <div style={{ background: CATEGORY_BG["Transfers"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Transfers"], marginBottom: "4px" }}>CashApp Transfer</div><div style={{ fontSize: "10px", color: "#666" }}>{transferDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Transfers"] }}>{f2(transferTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{((transferTot / weeklyIncome) * 100).toFixed(1)}%</div></div></div>
-          </div>
         </>;
       })()}
       <div style={{ background: wr >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wr >= 0 ? "var(--color-green)" : "var(--color-red)"}`, borderRadius: "6px", padding: "14px" }}>

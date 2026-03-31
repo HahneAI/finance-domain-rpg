@@ -18,11 +18,11 @@ export const STATE_TAX_TABLE = {
   AK: { model: "NONE", name: "Alaska" },
   FL: { model: "NONE", name: "Florida" },
   NV: { model: "NONE", name: "Nevada" },
-  NH: { model: "NONE", name: "New Hampshire" },  // wages only; investment income taxed separately
+  NH: { model: "NONE", name: "New Hampshire" },
   SD: { model: "NONE", name: "South Dakota" },
   TN: { model: "NONE", name: "Tennessee" },
   TX: { model: "NONE", name: "Texas" },
-  WA: { model: "NONE", name: "Washington" },     // wages exempt; capital gains taxed separately
+  WA: { model: "NONE", name: "Washington" },     // wage income exempt; separate capital gains tax exists
   WY: { model: "NONE", name: "Wyoming" },
 
   // ── Flat tax ───────────────────────────────────────────────
@@ -35,12 +35,11 @@ export const STATE_TAX_TABLE = {
   IA: { model: "FLAT", name: "Iowa",          flatRate: 0.038  },
   KY: { model: "FLAT", name: "Kentucky",      flatRate: 0.04   },
   LA: { model: "FLAT", name: "Louisiana",     flatRate: 0.03   },
-  MA: { model: "FLAT", name: "Massachusetts", flatRate: 0.05   },  // high-income surtax irrelevant at this income level
+  // Massachusetts applies a 4% surtax on taxable income above $1M.
+  // Modeled as marginal brackets so top-income portions are not flattened.
   MI: { model: "FLAT", name: "Michigan",      flatRate: 0.0425 },
   MS: { model: "FLAT", name: "Mississippi",   flatRate: 0.047  },  // transitioning system; revisit
-  MO: { model: "FLAT", name: "Missouri",      flatRate: 0.047  },
   NC: { model: "FLAT", name: "North Carolina", flatRate: 0.045 },
-  OH: { model: "FLAT", name: "Ohio",          flatRate: 0.035  },  // simplified; verify brackets at target income
   PA: { model: "FLAT", name: "Pennsylvania",  flatRate: 0.0307 },
   UT: { model: "FLAT", name: "Utah",          flatRate: 0.0465 },
 
@@ -135,6 +134,22 @@ export const STATE_TAX_TABLE = {
     { max: 183340,   rate: 0.0785 },
     { max: Infinity, rate: 0.0985 },
   ]},
+  MA: { model: "PROGRESSIVE", name: "Massachusetts", brackets: [
+    { max: 1000000,  rate: 0.05 },
+    { max: Infinity, rate: 0.09 },
+  ]},
+  MO: { model: "PROGRESSIVE", name: "Missouri", brackets: [
+    // 2025 individual income tax table: top marginal rate reduced to 4.7%.
+    // Brackets are marginal; only income above each threshold is taxed at that rate.
+    { max: 1273,     rate: 0.00 },
+    { max: 2546,     rate: 0.02 },
+    { max: 3819,     rate: 0.025 },
+    { max: 5092,     rate: 0.03 },
+    { max: 6365,     rate: 0.035 },
+    { max: 7638,     rate: 0.04 },
+    { max: 8911,     rate: 0.045 },
+    { max: Infinity, rate: 0.047 },
+  ]},
   MT: { model: "PROGRESSIVE", name: "Montana", brackets: [
     { max: 20500,    rate: 0.047 },
     { max: Infinity, rate: 0.059 },
@@ -171,6 +186,11 @@ export const STATE_TAX_TABLE = {
     { max: 5000000,  rate: 0.0965 },
     { max: 25000000, rate: 0.103  },
     { max: Infinity, rate: 0.109  },
+  ]},
+  OH: { model: "PROGRESSIVE", name: "Ohio", brackets: [
+    { max: 26050,    rate: 0.00 },
+    { max: 100000,   rate: 0.0275 },
+    { max: Infinity, rate: 0.035 },
   ]},
   ND: { model: "PROGRESSIVE", name: "North Dakota", brackets: [
     { max: 44725,    rate: 0.0195 },

@@ -296,6 +296,13 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
 
     {/* WEEKLY — slimmed to 4 cols; full detail available via modal */}
     {view === "summary" && subview === "weekly" && <div>
+      <style>{`
+        @media (max-width: 767px) {
+          .income-weekly-sticky th {
+            top: calc(56px + env(safe-area-inset-top, 0px)) !important;
+          }
+        }
+      `}</style>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>
           Rolling Window · last 4 completed + rest of year ({weeklyRows.length} visible)
@@ -303,7 +310,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         <button onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase" }}>⊞ Full Detail</button>
       </div>
       <div style={{ position: "relative", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-        <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
+        <table className="data-table income-weekly-sticky" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
           <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
             <th style={{ textAlign: "left", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Wk End</th>
             <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Gross</th>

@@ -130,7 +130,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
     setEventVals(v => {
       const prev = Array.isArray(v.missedDays) ? v.missedDays : [];
       const next = prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day];
-      const weekendShifts = next.filter(d => d === "Sat" || d === "Sun").length;
+      const weekendShifts = next.filter(d => d === "Fri" || d === "Sat" || d === "Sun").length;
       return { ...v, missedDays: next, shiftsLost: next.length, weekendShifts, hoursLost: next.length * config.shiftHours };
     });
   };
@@ -188,7 +188,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       type: isDeficit ? "missed_unpaid" : "bonus",
       missedDays: isDeficit ? missedScheduledDays : [],
       shiftsLost: isDeficit ? missedScheduledDays.length : 0,
-      weekendShifts: isDeficit ? missedScheduledDays.filter(d => d === "Sat" || d === "Sun").length : 0,
+      weekendShifts: isDeficit ? missedScheduledDays.filter(d => d === "Fri" || d === "Sat" || d === "Sun").length : 0,
       hoursLost: isDeficit ? missedScheduledDays.length * config.shiftHours : 0,
       // Surplus: estimate gross (pre-tax) from pickup shifts so the amount field
       // has a useful starting value. User should verify the actual payout.
@@ -211,7 +211,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       type: "missed_unpaid",
       missedDays: missedScheduledDays,
       shiftsLost: missedScheduledDays.length,
-      weekendShifts: missedScheduledDays.filter(d => d === "Sat" || d === "Sun").length,
+      weekendShifts: missedScheduledDays.filter(d => d === "Fri" || d === "Sat" || d === "Sun").length,
       hoursLost: missedScheduledDays.length * config.shiftHours,
       shiftsGained: pickupDays.length,
       hoursGained: pickupDays.length * config.shiftHours,

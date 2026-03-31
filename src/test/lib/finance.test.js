@@ -159,14 +159,14 @@ describe('buildYear', () => {
     expect(fourDay.totalHours).toBe(48)
   })
 
-  it('6-Day weeks include 2 weekend shifts (24 weekend hours)', () => {
+  it('6-Day weeks include 3 weekend shifts (36 weekend hours — Fri/Sat/Sun)', () => {
     const sixDay = weeks.find(w => w.rotation === '6-Day')
-    expect(sixDay.weekendHours).toBe(24)
+    expect(sixDay.weekendHours).toBe(36)
   })
 
-  it('4-Day weeks have zero weekend hours', () => {
+  it('4-Day weeks have 12 weekend hours (Fri shift earns diff)', () => {
     const fourDay = weeks.find(w => w.rotation === '4-Day')
-    expect(fourDay.weekendHours).toBe(0)
+    expect(fourDay.weekendHours).toBe(12)
   })
 
   it('6-Day active weeks have higher grossPay than 4-Day active weeks', () => {
@@ -175,16 +175,16 @@ describe('buildYear', () => {
     expect(sixDay.grossPay).toBeGreaterThan(fourDay.grossPay)
   })
 
-  it('computes correct grossPay for an active 4-Day week (40 regular + 8 OT + 48h night diff)', () => {
+  it('computes correct grossPay for an active 4-Day week (40 regular + 8 OT + 12h weekend diff + 48h night diff)', () => {
     const cfg = DHL_CONFIG
-    const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier + 48 * cfg.nightDiffRate
+    const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier + 12 * cfg.diffRate + 48 * cfg.nightDiffRate
     const fourDay = weeks.find(w => w.rotation === '4-Day' && w.active)
     expect(fourDay.grossPay).toBeCloseTo(expected)
   })
 
-  it('computes correct grossPay for an active 6-Day week (40 regular + 32 OT + 24 weekend + 72h night diff)', () => {
+  it('computes correct grossPay for an active 6-Day week (40 regular + 32 OT + 36 weekend + 72h night diff)', () => {
     const cfg = DHL_CONFIG
-    const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 24 * cfg.diffRate + 72 * cfg.nightDiffRate
+    const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 36 * cfg.diffRate + 72 * cfg.nightDiffRate
     const sixDay = weeks.find(w => w.rotation === '6-Day' && w.active)
     expect(sixDay.grossPay).toBeCloseTo(expected)
   })
@@ -356,13 +356,13 @@ describe('projectedGross', () => {
     expect(projectedGross(true, cfg)).toBeGreaterThan(projectedGross(false, cfg))
   })
 
-  it('calculates correct gross for 6-Day (40 regular + 32 OT + 24 weekend hours)', () => {
-    const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 2 * cfg.shiftHours * cfg.diffRate
+  it('calculates correct gross for 6-Day (40 regular + 32 OT + 36 weekend hours — Fri/Sat/Sun)', () => {
+    const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 3 * cfg.shiftHours * cfg.diffRate
     expect(projectedGross(true, cfg)).toBeCloseTo(expected)
   })
 
-  it('calculates correct gross for 4-Day (40 regular + 8 OT, no weekend)', () => {
-    const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier
+  it('calculates correct gross for 4-Day (40 regular + 8 OT + 12 weekend hours — Fri)', () => {
+    const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier + 1 * cfg.shiftHours * cfg.diffRate
     expect(projectedGross(false, cfg)).toBeCloseTo(expected)
   })
 

@@ -2,10 +2,10 @@
 
 @theme {
   /* ── Flow foundations ── */
-  --color-bg-base:    #07130f;
-  --color-bg-surface: #0d1f19;
-  --color-bg-raised:  #123027;
-  --color-bg-gradient: linear-gradient(180deg, #0f2a21 0%, #07130f 100%);
+  --color-bg-base:    #05100c;
+  --color-bg-surface: #112c1f;
+  --color-bg-raised:  #163828;
+  --color-bg-gradient: linear-gradient(180deg, #091a11 0%, #05100c 100%);
 
   --color-accent-primary: #00c896;
   --color-accent-soft:    #4ade80;

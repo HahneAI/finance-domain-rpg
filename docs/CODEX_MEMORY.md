@@ -1,5 +1,17 @@
 # Codex Memory
 
+## Agent Routing Reference
+
+| Tag | Meaning |
+|-----|---------|
+| `[CC]` | Claude Code — multi-file, reasoning, or pipeline-touching work |
+| `[CODEX]` | Codex — scoped, spec-able, single component or isolated refactor |
+| `[CODEX?]` | Probably Codex — verify scope before delegating |
+
+**Before any `[CODEX]` handoff:** confirm this file is current. CC updates it after any session touching architecture, state shape, or core logic.
+
+---
+
 ## 2026-03-28 — Benefits/Deductions math wiring audit (first entry)
 - Reviewed `buildYear()` and `computeNet()` to map how wizard deduction fields flow into taxable gross and take-home pay.
 - Current pre-tax deduction pool in `buildYear()` only includes `cfg.ltd` and `k401kEmployee`; insurance premiums (`healthPremium`, `dentalPremium`, `visionPremium`, `stdWeekly`, `lifePremium`) and account contributions (`hsaWeekly`, `fsaWeekly`) are collected in config but not applied.

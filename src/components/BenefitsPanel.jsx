@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Card, iS, lS, SmBtn } from "./ui.jsx";
+import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
+import { dhlEmployerMatchRate } from "../lib/finance.js";
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const fmtMonth = yyyyMM => {
@@ -25,12 +27,15 @@ const EMPTY_FORM = { label: "", hoursNeeded: "", targetDate: "", negativeBalance
 
 export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kMatchLost,
   logK401kGained, logK401kMatchGained, logPTOHoursLost, currentWeek, bucketModel,
-  ptoGoal, setPtoGoal }) {
+  ptoGoal, setPtoGoal, fiscalWeekInfo }) {
 
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const now = new Date();
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  const fiscalWeekLabel = formatFiscalWeekLabel(fiscalWeekInfo);
+
 
   // ── 401k computations ──────────────────────────────────────────────────────
   const bE = allWeeks.reduce((s, w) => s + w.k401kEmployee, 0);
@@ -97,6 +102,11 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
 
   return (<div>
 
+    {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+      <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
+      <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{currentWeek.rotation} · ends {fmtDate(toLocalIso(currentWeek.weekEnd))}</div>
+    </div>}
+
     {/* ── 401k status banner ── */}
     {currentWeek && <div style={{ background: k401Active ? "#1a3a20" : "#1e1e2a", border: `1px solid ${k401Active ? "rgba(76,175,125,0.27)" : "#7a8bbf44"}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Status</div>
@@ -120,6 +130,55 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
         <Card label="Adj. Employer Match" val={f(aM)} sub={[logK401kMatchLost > 0 && `-${f(logK401kMatchLost)} lost`, logK401kMatchGained > 0 && `+${f(logK401kMatchGained)} bonus`].filter(Boolean).join(" · ")} color="var(--color-green)" size="18px" />
         <Card label="Adj. Total Balance" val={f(aE + aM)} color="var(--color-gold)" size="18px" />
       </div>}
+
+      {/* Monthly breakdown table */}
+      {(() => {
+        const matchRate = config.employerPreset === "DHL" ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
+        let r401 = 0;
+        const mo401 = allWeeks
+          .reduce((acc, w) => {
+            if (!w.active) return acc;
+            const mi = w.weekEnd.getMonth();
+            if (!acc[mi]) acc[mi] = { name: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][mi], gross: 0, k4E: 0, k4M: 0 };
+            acc[mi].gross += w.grossPay;
+            acc[mi].k4E  += w.k401kEmployee;
+            acc[mi].k4M  += w.k401kEmployer;
+            return acc;
+          }, {});
+        const rows = Object.values(mo401).filter(m => m.k4E > 0).map(m => { r401 += m.k4E + m.k4M; return { ...m, running: r401 }; });
+        if (!rows.length) return null;
+        return (
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}>
+            <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "360px" }}>
+              <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+                <th style={{ textAlign: "left", padding: "8px 4px" }}>Month</th>
+                <th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th>
+                <th style={{ textAlign: "right", padding: "8px 4px" }}>Your {(config.k401Rate * 100).toFixed(0)}%</th>
+                <th style={{ textAlign: "right", padding: "8px 4px" }}>Match {(matchRate * 100).toFixed(1)}%</th>
+                <th style={{ textAlign: "right", padding: "8px 4px" }}>Mo Total</th>
+                <th style={{ textAlign: "right", padding: "8px 4px" }}>Running</th>
+              </tr></thead>
+              <tbody>{rows.map(m => (
+                <tr key={m.name} style={{ borderBottom: "1px solid #161616" }} onMouseEnter={e => e.currentTarget.style.background = "var(--color-bg-surface)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <td style={{ padding: "7px 4px", fontWeight: "bold", color: "var(--color-gold)" }}>{m.name}</td>
+                  <td style={{ padding: "7px 4px", textAlign: "right" }}>{f(m.gross)}</td>
+                  <td style={{ padding: "7px 4px", textAlign: "right", color: "#7a8bbf" }}>{f2(m.k4E)}</td>
+                  <td style={{ padding: "7px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(m.k4M)}</td>
+                  <td style={{ padding: "7px 4px", textAlign: "right" }}>{f2(m.k4E + m.k4M)}</td>
+                  <td style={{ padding: "7px 4px", textAlign: "right", color: "var(--color-gold)", fontWeight: "bold" }}>{f2(m.running)}</td>
+                </tr>
+              ))}</tbody>
+              <tfoot><tr style={{ borderTop: "2px solid var(--color-accent-primary)", fontWeight: "bold", color: "var(--color-gold)" }}>
+                <td colSpan={2} style={{ padding: "10px 4px" }}>Year-End Total</td>
+                <td style={{ padding: "10px 4px", textAlign: "right", color: "#7a8bbf" }}>{f(bE)}</td>
+                <td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(bM)}</td>
+                <td style={{ padding: "10px 4px", textAlign: "right" }}>{f(bE + bM)}</td>
+                <td style={{ padding: "10px 4px", textAlign: "right" }}>{f(bE + bM)}</td>
+              </tr></tfoot>
+            </table>
+          </div>
+        );
+      })()}
     </div>
 
     {/* ── PTO Accrual + Leave Goal — DHL users only ── */}

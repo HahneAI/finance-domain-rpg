@@ -1,0 +1,163 @@
+# Codex Task Specification
+
+# =========================
+# TASK_SPEC (MACHINE READABLE)
+# =========================
+
+```json
+{
+  "task_id": "FEATURE_profile_tab_auth_actions_audit_and_completion",
+  "task_type": "FEATURE",
+  "status": "PENDING",
+
+  "objective": "Audit and complete the Profile tab account management features (change email, change password with confirmation gate, delete account, and sign out all devices) based on the current partially implemented or missing flows, ensuring each action is fully functional, secure, and properly wired to Supabase auth.",
+
+  "scope": {
+    "allowed_files": [
+      "profile tab/page component",
+      "account settings/profile settings components",
+      "auth action forms (change email, change password, delete account)",
+      "supabase auth integration layer",
+      "backend route if needed for secure delete account flow",
+      "shared modal/dialog components",
+      "form validation and confirmation UI logic"
+    ],
+    "restricted_files": [
+      "budget tab",
+      "goals tab",
+      "log tab",
+      "income tab",
+      "global app layout outside profile/settings",
+      "unrelated database tables"
+    ],
+    "entry_points": [
+      "profile tab render flow",
+      "account settings section",
+      "auth action handlers (supabase.auth.*)",
+      "confirmation modal flows",
+      "backend route for destructive actions if applicable"
+    ],
+    "out_of_scope": [
+      "redesigning the entire profile UI",
+      "changing authentication provider setup",
+      "non-auth related profile features",
+      "analytics or tracking features"
+    ]
+  },
+
+  "implementation": {
+    "steps": [
+      "Audit the current Profile tab against the TODO spec: change email, change password, delete account, and sign out all devices.",
+      
+      "Change Email:",
+      "Implement a UI form for updating user email.",
+      "Wire to supabase.auth.updateUser({ email: newEmail }).",
+      "Ensure confirmation email flow is triggered and user is informed of pending confirmation.",
+      
+      "Change Password:",
+      "Ensure supabase.auth.updateUser({ password: newPassword }) is used.",
+      "Add a required current-password confirmation input before allowing password change.",
+      "Block submission if current password is not validated (client-side + server-side if applicable).",
+      
+      "Delete Account:",
+      "Create a destructive action flow with a confirmation input requiring user to type 'DELETE'.",
+      "On confirmation, remove user-related data (e.g., user_data row) first.",
+      "Then call supabase.auth.admin.deleteUser() via a secure backend route (do NOT expose directly on client).",
+      "Add irreversible warning UI.",
+      
+      "Sign Out All Devices:",
+      "Implement supabase.auth.signOut({ scope: 'global' }).",
+      "Add UI action for global logout distinct from standard logout.",
+      
+      "Ensure each feature has proper loading states, error handling, and success feedback.",
+      "Ensure all actions are accessible from the Profile tab UI and not just defined in code."
+    ],
+    "constraints": [
+      "Do not expose admin deleteUser directly on client",
+      "Preserve existing TypeScript types",
+      "Use existing modal/dialog patterns",
+      "Require explicit confirmation for destructive actions",
+      "Keep UI changes minimal and focused on functionality",
+      "Ensure all auth actions are actually reachable via UI (not just implemented in code)"
+    ]
+  },
+
+  "change_log": {
+    "expected_changes": [
+      {
+        "file": "profile tab component",
+        "change": "Add or complete UI sections for email change, password change, delete account, and global sign-out"
+      },
+      {
+        "file": "auth form components",
+        "change": "Add validation, confirmation inputs, and proper submission handlers"
+      },
+      {
+        "file": "supabase auth integration",
+        "change": "Ensure correct usage of updateUser, signOut(global), and secure deleteUser flow"
+      },
+      {
+        "file": "backend route (if needed)",
+        "change": "Secure endpoint for account deletion using supabase admin API"
+      }
+    ]
+  },
+
+  "impact_analysis": {
+    "affected_areas": [
+      "profile tab UX",
+      "authentication flows",
+      "account security",
+      "user data lifecycle"
+    ],
+    "risk_areas": [
+      "improper password confirmation handling",
+      "unsafe delete account implementation",
+      "email change flow confusion if confirmation is not clear",
+      "global sign-out not properly invalidating sessions"
+    ],
+    "potential_bugs": [
+      {
+        "area": "change email",
+        "risk": "user may not understand confirmation flow or email may not update correctly"
+      },
+      {
+        "area": "change password",
+        "risk": "password change allowed without verifying current password"
+      },
+      {
+        "area": "delete account",
+        "risk": "user data may not be fully removed or deletion may fail silently"
+      },
+      {
+        "area": "global sign out",
+        "risk": "sessions may remain active on other devices if scope not applied correctly"
+      }
+    ]
+  },
+
+  "validation": {
+    "checks": [
+      "User can change email and receives confirmation flow",
+      "User must enter current password to change password",
+      "User can delete account only after typing 'DELETE' and sees irreversible warning",
+      "Delete account removes user data and auth record safely",
+      "User can sign out of all devices using global sign-out",
+      "All actions are accessible via UI",
+      "No console errors",
+      "No TypeScript errors",
+      "No unintended file changes"
+    ]
+  },
+
+  "output_format": {
+    "require_summary": true,
+    "summary_fields": [
+      "files_changed",
+      "features_implemented",
+      "security_checks_added",
+      "backend_routes_created",
+      "remaining_edge_cases"
+    ]
+  }
+}

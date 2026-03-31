@@ -189,3 +189,21 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
     console.error("Failed to save user data:", error.message);
   }
 }
+
+/**
+ * Called on every SIGNED_IN auth event. Does two things:
+ *   1. Seeds a user_data row for OAuth users (email sign-up does this explicitly;
+ *      OAuth sign-in does not — this closes that gap).
+ *   2. Syncs Google profile metadata (full_name, avatar_url) into the row so the
+ *      ProfilePanel can surface them without a separate API call.
+ * Safe to call for email/password users — no-op if no metadata present.
+ */
+export async function syncUserProfile(user) {
+  if (!user?.id) return;
+  const meta = user.user_metadata ?? {};
+  const patch = { user_id: user.id };
+  if (meta.full_name)  patch.display_name = meta.full_name;
+  if (meta.avatar_url) patch.avatar_url   = meta.avatar_url;
+  const { error } = await supabase.from("user_data").upsert(patch, { onConflict: "user_id" });
+  if (error) console.warn("syncUserProfile failed:", error.message);
+}

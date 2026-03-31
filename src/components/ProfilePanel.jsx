@@ -86,6 +86,10 @@ function AccountDetail({ authedUser, config, onBack }) {
   const [deleteText, setDeleteText] = useState("");
   const [deleteState, setDeleteState] = useState({ error: null, loading: false });
 
+  const [linkState, setLinkState] = useState({ loading: false, error: null });
+  const hasGoogleLinked = authedUser?.identities?.some(id => id.provider === "google") ?? false;
+  const displayName = authedUser?.user_metadata?.full_name ?? null;
+
   async function handleChangeEmail(e) {
     e.preventDefault();
     const trimmed = newEmail.trim();
@@ -162,6 +166,16 @@ function AccountDetail({ authedUser, config, onBack }) {
     setGlobalSignoutState({ error: null, success: "Signed out from all devices.", loading: false });
   }
 
+  async function handleLinkGoogle() {
+    setLinkState({ loading: true, error: null });
+    const { error } = await supabase.auth.linkIdentity({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    // On success the browser redirects — only reaches here on error.
+    if (error) setLinkState({ loading: false, error: error.message });
+  }
+
   async function handleDeleteAccount() {
     setDeleteState({ error: null, loading: true });
     const { data: sessionData } = await supabase.auth.getSession();
@@ -196,12 +210,43 @@ function AccountDetail({ authedUser, config, onBack }) {
     <>
       <BackBar onBack={onBack} title="Account" />
       <DetailCard>
+        {displayName && <DetailRow label="Name" value={displayName} />}
         <DetailRow label="Email" value={authedUser?.email ?? "—"} />
         <DetailRow label="Setup" last value={
           <span style={{ fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 10px", background: setupBg, color: setupColor, border: `1px solid ${setupBorder}`, borderRadius: "12px" }}>
             {setupLabel}
           </span>
         } />
+      </DetailCard>
+
+      <DetailCard>
+        <div style={{ padding: "13px 16px" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "10px" }}>Connected Accounts</div>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {authedUser?.identities?.some(id => id.provider === "email") && (
+              <span style={{ fontSize: "11px", padding: "3px 10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "20px", color: "var(--color-text-secondary)" }}>
+                Email / Password
+              </span>
+            )}
+            {hasGoogleLinked && (
+              <span style={{ fontSize: "11px", padding: "3px 10px", background: "rgba(66,133,244,0.1)", border: "1px solid rgba(66,133,244,0.28)", borderRadius: "20px", color: "#4285F4" }}>
+                Google
+              </span>
+            )}
+          </div>
+          {!hasGoogleLinked && (
+            <button
+              onClick={handleLinkGoogle}
+              disabled={linkState.loading}
+              style={{ marginTop: "12px", padding: "8px 14px", background: "transparent", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "12px", cursor: linkState.loading ? "default" : "pointer" }}
+            >
+              {linkState.loading ? "Redirecting to Google…" : "Link Google Account"}
+            </button>
+          )}
+          {linkState.error && (
+            <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-red)" }}>{linkState.error}</div>
+          )}
+        </div>
       </DetailCard>
 
       <DetailCard>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { MONTH_FULL } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet, toLocalIso } from "../lib/finance.js";
@@ -12,6 +12,47 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
+
+  // ── JS sticky header for weekly chart (CSS sticky broken by overflow-x:hidden on html/body) ──
+  const weeklyTableRef = useRef(null);
+  const [stickyHdr, setStickyHdr] = useState(null); // null = hidden; {top,left,width,cols} = visible
+  useEffect(() => {
+    if (view !== "summary" || subview !== "weekly") {
+      setStickyHdr(s => s !== null ? null : s);
+      return;
+    }
+    const update = () => {
+      const table = weeklyTableRef.current;
+      if (!table) return;
+      const thead = table.querySelector("thead");
+      if (!thead) return;
+      const r = thead.getBoundingClientRect();
+      const isMob = window.innerWidth < 768;
+      const threshold = isMob ? 57 : 1;
+      if (r.top < threshold) {
+        const ths = Array.from(table.querySelectorAll("thead th"));
+        const tr = table.getBoundingClientRect();
+        setStickyHdr({
+          top: isMob ? "calc(56px + env(safe-area-inset-top, 0px))" : "0px",
+          left: tr.left,
+          width: tr.width,
+          cols: ths.map(th => th.getBoundingClientRect().width),
+        });
+      } else {
+        setStickyHdr(s => s !== null ? null : s);
+      }
+    };
+    const mc = document.querySelector(".main-content");
+    window.addEventListener("scroll", update, { passive: true });
+    mc?.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update, { passive: true });
+    update();
+    return () => {
+      window.removeEventListener("scroll", update);
+      mc?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [view, subview]);
 
   // ── Sharpen Rates modal state ──────────────────────────────────────────────
   const [sg1, setSg1] = useState("");
@@ -309,7 +350,20 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         </span>
         <button onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase" }}>⊞ Full Detail</button>
       </div>
-      <table className="data-table income-weekly-sticky" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
+      {stickyHdr && (
+        <div style={{ position: "fixed", top: stickyHdr.top, left: stickyHdr.left, width: stickyHdr.width, zIndex: 25, background: "var(--color-bg-base)", borderBottom: "1px solid var(--color-accent-primary)", boxShadow: "0 4px 16px rgba(0,0,0,0.6)", pointerEvents: "none" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+            <colgroup>{stickyHdr.cols.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}</colgroup>
+            <thead><tr style={{ color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+              <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th>
+              <th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th>
+              <th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th>
+              <th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
+            </tr></thead>
+          </table>
+        </div>
+      )}
+      <table ref={weeklyTableRef} className="data-table income-weekly-sticky" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
         <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
           <th style={{ textAlign: "left", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Wk End</th>
           <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Gross</th>

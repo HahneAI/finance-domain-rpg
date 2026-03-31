@@ -16,7 +16,6 @@ export function HomePanel({
   navigate,
   weeklyIncome,
   adjustedTakeHome,
-  adjustedWeeklyAvg,
   remainingSpend,
   goals,
   futureWeekNets,
@@ -24,12 +23,14 @@ export function HomePanel({
   today,
 }) {
   const avgWeeklySpend = remainingSpend?.avgWeeklySpend ?? 0;
-  const annualSavings = adjustedWeeklyAvg * 52;
+  const incomingWeekNet = futureWeekNets?.[0] ?? weeklyIncome;
+  const weeklyLeft = incomingWeekNet - avgWeeklySpend;
+  const annualSavings = weeklyLeft * 52;
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
   const nextWeekNet = futureWeekNets?.[0];
-  const flowScore = Math.min(100, Math.round(Math.max(0, (1 - spendRatio) * 55 + (adjustedWeeklyAvg > 0 ? 25 : 10) + (goals.length ? (goals.filter(g => g.completed).length / goals.length) * 20 : 0))));
-  const flowTrendSource = [adjustedWeeklyAvg, ...(futureWeekNets || []).slice(0, 5)].filter((v) => v != null);
-  const flowTrendPoints = (flowTrendSource.length > 1 ? flowTrendSource : [adjustedWeeklyAvg, weeklyIncome * 0.92, weeklyIncome * 0.98, weeklyIncome * 1.04, weeklyIncome * 1.09, weeklyIncome * 1.12])
+  const flowScore = Math.min(100, Math.round(Math.max(0, (1 - spendRatio) * 55 + (weeklyLeft > 0 ? 25 : 10) + (goals.length ? (goals.filter(g => g.completed).length / goals.length) * 20 : 0))));
+  const flowTrendSource = [weeklyLeft, ...(futureWeekNets || []).slice(0, 5)].filter((v) => v != null);
+  const flowTrendPoints = (flowTrendSource.length > 1 ? flowTrendSource : [weeklyLeft, weeklyIncome * 0.92, weeklyIncome * 0.98, weeklyIncome * 1.04, weeklyIncome * 1.09, weeklyIncome * 1.12])
     .map((amount) => {
       const base = Math.max(1, weeklyIncome || 1);
       return Math.max(5, Math.min(98, Math.round(50 + ((amount - base * 0.9) / (base * 0.9)) * 22)));
@@ -58,10 +59,10 @@ export function HomePanel({
   const tiles = [
     {
       title: "Weekly Left",
-      value: fmt$(adjustedWeeklyAvg),
-      rawVal: adjustedWeeklyAvg,
-      sub: "after all expenses",
-      status: adjustedWeeklyAvg > 100 ? "green" : adjustedWeeklyAvg >= 0 ? "gold" : "red",
+      value: fmt$(weeklyLeft),
+      rawVal: weeklyLeft,
+      sub: "next paycheck after avg spend",
+      status: weeklyLeft > 100 ? "green" : weeklyLeft >= 0 ? "gold" : "red",
       span: 2,
       key: "budget",
     },

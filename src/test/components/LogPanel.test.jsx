@@ -44,7 +44,7 @@ const mkUnpaid = (weekEnd, shiftsLost, missedDays = []) => ({
   weekRotation: '6-Day',
   type: 'missed_unpaid',
   shiftsLost,
-  weekendShifts: missedDays.filter(d => d === 'Sat' || d === 'Sun').length,
+  weekendShifts: missedDays.filter(d => d === 'Fri' || d === 'Sat' || d === 'Sun').length,
   ptoHours: 0,
   hoursLost: shiftsLost * 12,
   amount: 0,

@@ -86,6 +86,10 @@ function AccountDetail({ authedUser, config, onBack }) {
   const [deleteText, setDeleteText] = useState("");
   const [deleteState, setDeleteState] = useState({ error: null, loading: false });
 
+  const [linkState, setLinkState] = useState({ loading: false, error: null });
+  const hasGoogleLinked = authedUser?.identities?.some(id => id.provider === "google") ?? false;
+  const displayName = authedUser?.user_metadata?.full_name ?? null;
+
   async function handleChangeEmail(e) {
     e.preventDefault();
     const trimmed = newEmail.trim();
@@ -162,6 +166,16 @@ function AccountDetail({ authedUser, config, onBack }) {
     setGlobalSignoutState({ error: null, success: "Signed out from all devices.", loading: false });
   }
 
+  async function handleLinkGoogle() {
+    setLinkState({ loading: true, error: null });
+    const { error } = await supabase.auth.linkIdentity({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    // On success the browser redirects — only reaches here on error.
+    if (error) setLinkState({ loading: false, error: error.message });
+  }
+
   async function handleDeleteAccount() {
     setDeleteState({ error: null, loading: true });
     const { data: sessionData } = await supabase.auth.getSession();
@@ -196,12 +210,43 @@ function AccountDetail({ authedUser, config, onBack }) {
     <>
       <BackBar onBack={onBack} title="Account" />
       <DetailCard>
+        {displayName && <DetailRow label="Name" value={displayName} />}
         <DetailRow label="Email" value={authedUser?.email ?? "—"} />
         <DetailRow label="Setup" last value={
           <span style={{ fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 10px", background: setupBg, color: setupColor, border: `1px solid ${setupBorder}`, borderRadius: "12px" }}>
             {setupLabel}
           </span>
         } />
+      </DetailCard>
+
+      <DetailCard>
+        <div style={{ padding: "13px 16px" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "10px" }}>Connected Accounts</div>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {authedUser?.identities?.some(id => id.provider === "email") && (
+              <span style={{ fontSize: "11px", padding: "3px 10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "20px", color: "var(--color-text-secondary)" }}>
+                Email / Password
+              </span>
+            )}
+            {hasGoogleLinked && (
+              <span style={{ fontSize: "11px", padding: "3px 10px", background: "rgba(66,133,244,0.1)", border: "1px solid rgba(66,133,244,0.28)", borderRadius: "20px", color: "#4285F4" }}>
+                Google
+              </span>
+            )}
+          </div>
+          {!hasGoogleLinked && (
+            <button
+              onClick={handleLinkGoogle}
+              disabled={linkState.loading}
+              style={{ marginTop: "12px", padding: "8px 14px", background: "transparent", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "12px", cursor: linkState.loading ? "default" : "pointer" }}
+            >
+              {linkState.loading ? "Redirecting to Google…" : "Link Google Account"}
+            </button>
+          )}
+          {linkState.error && (
+            <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-red)" }}>{linkState.error}</div>
+          )}
+        </div>
       </DetailCard>
 
       <DetailCard>
@@ -661,7 +706,7 @@ function PreferencesDetail({ config, onBack }) {
         />
       </DetailCard>
       <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
-        Buffer and tax settings can be adjusted in the Income panel or via Life Events.
+        Buffer is managed in the Income panel. Tax settings are managed in Account → Tax Plan or via Life Events.
       </div>
     </>
   );
@@ -674,6 +719,7 @@ function TaxPlanDetail({ config, setConfig, allWeeks, taxDerived, showExtra, set
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gN = w => computeNet(w, config, extraPerCheck, showExtra);
+  const [taxDraft, setTaxDraft] = useState(null);
 
   const toggleWeek = (idx) => setConfig(prev => {
     const s = new Set(prev.taxedWeeks);
@@ -696,11 +742,43 @@ function TaxPlanDetail({ config, setConfig, allWeeks, taxDerived, showExtra, set
         <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)", color: showExtra ? "var(--color-gold)" : "#aaa", border: "1px solid " + (showExtra ? "var(--color-gold)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</button>
       </div>
 
+      <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", gap: "10px" }}>
+          <SH>Tax Strategy & Planning</SH>
+          {taxDraft === null ? (
+            <button onClick={() => setTaxDraft({
+              fedStdDeduction: config.fedStdDeduction,
+              moFlatRate: config.moFlatRate,
+              targetOwedAtFiling: config.targetOwedAtFiling,
+              firstActiveIdx: config.firstActiveIdx,
+            })} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Edit Tax Plan</button>
+          ) : (
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => { setConfig(prev => ({ ...prev, ...taxDraft })); setTaxDraft(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</button>
+              <button onClick={() => setTaxDraft(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+            </div>
+          )}
+        </div>
+
+        {taxDraft === null ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "13px" }}>
+            {[{ l: "Federal Std Deduction", v: f(config.fedStdDeduction) }, ...(config.userState ? [] : [{ l: "State Rate (fallback)", v: `${(config.moFlatRate * 100).toFixed(1)}%` }]), { l: "Target Owed at Filing", v: f(config.targetOwedAtFiling) }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "#777" }}>{r.l}</span><span style={{ fontWeight: "bold", color: "var(--color-text-primary)" }}>{r.v}</span></div>)}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+            <div><label style={lS}>Federal Std Deduction ($)</label><input type="number" step="100" value={taxDraft.fedStdDeduction} onChange={e => setTaxDraft(v => ({ ...v, fedStdDeduction: parseFloat(e.target.value) || 0 }))} style={iS} /></div>
+            {!config.userState && <div><label style={lS}>State Rate (fallback)</label><input type="number" step="0.001" value={taxDraft.moFlatRate} onChange={e => setTaxDraft(v => ({ ...v, moFlatRate: parseFloat(e.target.value) || 0 }))} style={iS} /></div>}
+            <div><label style={lS}>Target Owed at Filing ($)</label><input type="number" step="100" value={taxDraft.targetOwedAtFiling} onChange={e => setTaxDraft(v => ({ ...v, targetOwedAtFiling: parseFloat(e.target.value) || 0 }))} style={iS} /></div>
+            <div><label style={lS}>First Active Week Index</label><input type="number" step="1" value={taxDraft.firstActiveIdx} onChange={e => setTaxDraft(v => ({ ...v, firstActiveIdx: parseFloat(e.target.value) || 0 }))} style={iS} /></div>
+          </div>
+        )}
+      </div>
+
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "12px", marginBottom: "20px" }}>
-        <Card label="Full Year Fed Liability" val={f(fedLiability)} sub={`On ${f(fedAGI)} AGI`} color="var(--color-red)" size="20px" />
-        <Card label="Full Year MO Liability" val={f(moLiability)} sub="4.7% flat" color="var(--color-gold)" size="20px" />
-        <Card label="FICA (Always Paid)" val={f(ficaTotal)} sub="7.65% every check" color="#888" size="20px" />
+        <Card label="Full Year Fed Liability" val={f(fedLiability)} rawVal={fedLiability} sub={`On ${f(fedAGI)} AGI`} color="var(--color-red)" size="20px" />
+        <Card label="Full Year MO Liability" val={f(moLiability)} rawVal={moLiability} sub="4.7% flat" color="var(--color-gold)" size="20px" />
+        <Card label="FICA (Always Paid)" val={f(ficaTotal)} rawVal={ficaTotal} sub="7.65% every check" color="#888" size="20px" />
       </div>
 
       {/* Tax gap analysis */}

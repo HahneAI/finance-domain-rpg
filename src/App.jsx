@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso } from "./lib/finance.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile } from "./lib/db.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
@@ -246,6 +246,9 @@ export default function App() {
     return onAuthChange((event, user) => {
       if (event === "PASSWORD_RECOVERY") setPendingPasswordReset(true);
       else setPendingPasswordReset(false);
+      // Seed user_data row + sync OAuth profile metadata on every sign-in.
+      // Critical for Google OAuth users who have no row yet; safe no-op for email users.
+      if (event === "SIGNED_IN" && user) syncUserProfile(user);
       setAuthedUser(user);
     });
   }, []);
@@ -529,7 +532,6 @@ export default function App() {
         navigate={navigate}
         weeklyIncome={weeklyIncome}
         adjustedTakeHome={logTotals.adjustedTakeHome}
-        adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
         remainingSpend={remainingSpend}
         goals={goals}
         futureWeekNets={futureWeekNets}
@@ -551,8 +553,6 @@ export default function App() {
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
         goals={goals} setGoals={setGoals}
-        adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
-        baseWeeklyUnallocated={baseWeeklyUnallocated}
         logNetLost={logTotals.netLost}
         logNetGained={logTotals.netGained}
         weeklyIncome={weeklyIncome}

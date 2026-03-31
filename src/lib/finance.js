@@ -201,11 +201,10 @@ export function getEffectiveAmount(expense, weekEndDate, phaseIdx) {
 
 export function computeRemainingSpend(expenses, futureWeeks) {
   if (!futureWeeks.length) return { totalRemainingSpend: 0, avgWeeklySpend: 0, weekCount: 0 };
-  const nonTransfer = expenses.filter(e => e.category !== "Transfers");
   let total = 0;
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
-    for (const exp of nonTransfer) total += getEffectiveAmount(exp, week.weekEnd, pi);
+    for (const exp of expenses) total += getEffectiveAmount(exp, week.weekEnd, pi);
   }
   return { totalRemainingSpend: total, avgWeeklySpend: total / futureWeeks.length, weekCount: futureWeeks.length };
 }
@@ -225,7 +224,7 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
     let spend = 0;
-    for (const exp of expenses.filter(e => e.category !== "Transfers"))
+    for (const exp of expenses)
       spend += getEffectiveAmount(exp, week.weekEnd, pi);
     // ── Targeted deduction: current/future-week events hit their specific week ──
     const weekDeduction = futureEventDeductions[week.idx] ?? 0;

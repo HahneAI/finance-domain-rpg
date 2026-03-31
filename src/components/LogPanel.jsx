@@ -350,7 +350,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
 
     {/* Hero cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
-      <Card label="Total Net Lost" val={f(tot.nL)} color="var(--color-red)" />
+      <Card label="Total Net Lost" val={f(tot.nL)} rawVal={tot.nL} color="var(--color-red)" />
       <Card label="PTO Accrual Lost" val={`${(tot.pto / 20).toFixed(1)} hrs`} sub={`${tot.pto}h ÷ 20`} color="#888" />
       <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`} sub="Unapproved absences" color="#e8622a" />
     </div>

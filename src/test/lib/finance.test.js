@@ -469,14 +469,14 @@ describe('computeRemainingSpend', () => {
     expect(result.weekCount).toBe(2)
   })
 
-  it('excludes Transfers category from spend totals', () => {
+  it('includes all expense categories in spend totals', () => {
     const expenses = [
       { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [100, 100, 100, 100] }] },
-      { category: 'Transfers', history: [{ effectiveFrom: '2026-01-05', weekly: [125, 125, 125, 125] }] },
+      { category: 'Lifestyle', history: [{ effectiveFrom: '2026-01-05', weekly: [125, 125, 125, 125] }] },
     ]
     const futureWeeks = [{ weekEnd: new Date(2026, 0, 12), idx: 1 }]
     const result = computeRemainingSpend(expenses, futureWeeks)
-    expect(result.totalRemainingSpend).toBeCloseTo(100)
+    expect(result.totalRemainingSpend).toBeCloseTo(225)
   })
 })
 

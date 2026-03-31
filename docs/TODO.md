@@ -480,4 +480,11 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
 
 ---
 
-*Last updated: 2026-03-26 — §8 Pre-Launch Polish added (UI tune, color scheme decision, auth providers, wizard tune, profile/account management). Old §8 Post-Auth Roadmap renumbered to §9; Old §9 Optional Deductions renumbered to §10.*
+---
+
+### Countup Animation Scope (2026-03-31)
+
+- [x] **Countup animation rolled out to all dollar cards** — `rawVal` prop added to every dollar-amount `Card`/`MetricCard` across Income, Budget, Benefits, and Log panels. Previously only HomePanel cards animated.
+- [ ] **[CC] Scope countup to first tab visit per session only (non-Home tabs)** — currently the 0→target countup fires every time a non-Home tab is mounted (i.e. every tab switch). If this feels like too much motion in practice, gate the animation so it only runs on the *first* visit to each tab within a session. Implementation sketch: track a `Set<panelName>` in App-level state (or a session-scoped ref), pass a `skipCountup` boolean into each panel, and suppress `rawVal` on `Card` if the panel has already been visited this session. Home tab always animates (no gate). The `rawVal` flash-on-change behavior should still fire on data changes regardless of the gate.
+
+*Last updated: 2026-03-31*

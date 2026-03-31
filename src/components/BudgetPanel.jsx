@@ -149,7 +149,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
 
   const ph = PHASES[ap];
   const ts = expenses.reduce((s, e) => s + currentEffective(e, ap), 0);
-  const wr = weeklyIncome - ts;
+  const incomingWeekNet = futureWeekNets?.[0] ?? prevWeekNet ?? weeklyIncome;
+  const wr = incomingWeekNet - ts;
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
   const overviewCatOrder = ["Needs", "Lifestyle"];

@@ -932,14 +932,31 @@ describe('stateTax', () => {
     expect(stateTax(50000, undefined)).toBe(0)
   })
 
-  it('calculates flat tax correctly for MO (4.7%)', () => {
+  it('calculates progressive tax correctly for MO (top marginal 4.7%)', () => {
     const cfg = STATE_TAX_TABLE['MO']
-    expect(cfg.model).toBe('FLAT')
-    expect(stateTax(50000, cfg)).toBeCloseTo(50000 * 0.047, 5)
+    expect(cfg.model).toBe('PROGRESSIVE')
+    // MO 2025 bracket math:
+    // 0-1273: 0%
+    // 1273-2546: 2%
+    // 2546-3819: 2.5%
+    // 3819-5092: 3%
+    // 5092-6365: 3.5%
+    // 6365-7638: 4%
+    // 7638-8911: 4.5%
+    // 8911+: 4.7%
+    const expected =
+      (2546 - 1273) * 0.02 +
+      (3819 - 2546) * 0.025 +
+      (5092 - 3819) * 0.03 +
+      (6365 - 5092) * 0.035 +
+      (7638 - 6365) * 0.04 +
+      (8911 - 7638) * 0.045 +
+      (50000 - 8911) * 0.047
+    expect(stateTax(50000, cfg)).toBeCloseTo(expected, 5)
   })
 
   it('flat tax: zero income returns 0', () => {
-    expect(stateTax(0, STATE_TAX_TABLE['MO'])).toBe(0)
+    expect(stateTax(0, STATE_TAX_TABLE['IL'])).toBe(0)
   })
 
   it('calculates progressive tax within first bracket (AL — $400 @ 2%)', () => {
@@ -977,7 +994,7 @@ describe('getStateConfig', () => {
   it('returns the correct config for a known state (MO)', () => {
     const cfg = getStateConfig('MO')
     expect(cfg).toBe(STATE_TAX_TABLE['MO'])
-    expect(cfg.model).toBe('FLAT')
+    expect(cfg.model).toBe('PROGRESSIVE')
   })
 
   it('returns a config with a model field for common states', () => {

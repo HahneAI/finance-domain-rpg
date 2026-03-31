@@ -95,9 +95,12 @@ describe('STATE_TAX_TABLE — structural integrity', () => {
     }
   })
 
-  it('MO is a FLAT state at 4.7%', () => {
-    expect(STATE_TAX_TABLE['MO'].model).toBe('FLAT')
-    expect(STATE_TAX_TABLE['MO'].flatRate).toBe(0.047)
+  it('MO is a PROGRESSIVE state with a 4.7% top marginal rate', () => {
+    expect(STATE_TAX_TABLE['MO'].model).toBe('PROGRESSIVE')
+    const moBrackets = STATE_TAX_TABLE['MO'].brackets
+    const last = moBrackets[moBrackets.length - 1]
+    expect(last.max).toBe(Infinity)
+    expect(last.rate).toBe(0.047)
   })
 
   it('TX is a NONE state', () => {
@@ -106,6 +109,23 @@ describe('STATE_TAX_TABLE — structural integrity', () => {
 
   it('CA is a PROGRESSIVE state', () => {
     expect(STATE_TAX_TABLE['CA'].model).toBe('PROGRESSIVE')
+  })
+
+  it('state tax models match audited classifications', () => {
+    const expectedByModel = {
+      NONE: ['AK', 'FL', 'NV', 'NH', 'SD', 'TN', 'TX', 'WA', 'WY'],
+      FLAT: ['AZ', 'CO', 'GA', 'IA', 'ID', 'IL', 'IN', 'KY', 'LA', 'MI', 'MS', 'NC', 'PA', 'UT'],
+      PROGRESSIVE: [
+        'AL', 'AR', 'CA', 'CT', 'DC', 'DE', 'HI', 'KS', 'MA', 'MD', 'ME', 'MN', 'MO', 'MT', 'ND', 'NE',
+        'NJ', 'NM', 'NY', 'OH', 'OK', 'OR', 'RI', 'SC', 'VA', 'VT', 'WI', 'WV',
+      ],
+    }
+
+    for (const [model, codes] of Object.entries(expectedByModel)) {
+      for (const code of codes) {
+        expect(STATE_TAX_TABLE[code]?.model, `${code} should be ${model}`).toBe(model)
+      }
+    }
   })
 })
 

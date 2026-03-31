@@ -1054,7 +1054,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{currentWeek.rotation} · ends {toLocalIso(currentWeek.weekEnd)}</div>
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <Card label="Adj. Weekly Available" val={f2(adjustedWeeklyAvg)} rawVal={adjustedWeeklyAvg} color="var(--color-green)" />
+          <Card label="Weekly Available" val={f2(wr)} rawVal={wr} color="var(--color-green)" />
           <Card label="Active Goals Total" val={f(totG)} rawVal={totG} color="var(--color-gold)" />
           <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projS >= totG ? "var(--color-green)" : "var(--color-red)"} />
         </div>

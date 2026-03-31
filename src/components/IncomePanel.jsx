@@ -264,8 +264,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         }}
       >i</button>}>Year Summary</SH>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px" }}>
-        <Card label="Gross (Year)" val={f(yG)} />
-        <Card label="Adjusted Net" val={f(yN)} color="var(--color-green)" sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : undefined} />
+        <Card label="Gross (Year)" val={f(yG)} rawVal={yG} />
+        <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)" sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : undefined} />
       </div>
     </div>
     <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
@@ -329,7 +329,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         </div>
         {[
           { section: "Pay Structure", rows: [{ l: "Base Hourly Rate", v: `$${config.baseRate}/hr` }, { l: "Shift Length", v: `${config.shiftHours}h` }, { l: "Weekend Differential", v: `+$${config.diffRate}/hr` }, ...(config.dhlNightShift ? [{ l: "Night Differential", v: `+$${config.nightDiffRate}/hr` }] : []), { l: "OT Threshold", v: `${config.otThreshold}h/wk` }, { l: "OT Multiplier", v: `${config.otMultiplier}×` }] },
-          { section: "Deductions", rows: [{ l: "LTD (weekly)", v: `$${config.ltd}` }] },
+          { section: "Deductions", rows: [{ l: "Benefits editing", v: "Use Account → Retirement & Benefits" }] },
           { section: "Tax Rates (from paychecks)", rows: [{ l: `Long / ${isVariable ? "High" : "Only"} Fed`, v: `${(config.fedRateHigh * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` }, { l: `Long / ${isVariable ? "High" : "Only"} State`, v: `${(config.stateRateHigh * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` }, { l: "Short / Low Fed", v: isVariable ? `${(config.fedRateLow * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` : "—" }, { l: "Short / Low State", v: isVariable ? `${(config.stateRateLow * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` : "—" }, { l: "FICA", v: `${(config.ficaRate * 100).toFixed(2)}%` }] },
           { section: "Annual Tax Strategy", rows: [{ l: "Federal Std Deduction", v: `$${config.fedStdDeduction.toLocaleString()}` }, ...(config.userState ? [] : [{ l: "State Rate (fallback)", v: `${(config.moFlatRate * 100).toFixed(1)}%` }]), { l: "Target Owed at Filing", v: `$${config.targetOwedAtFiling}` }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }] },
           { section: "Paycheck Buffer", rows: [{ l: "Buffer Enabled", v: config.bufferEnabled ? "On" : "Off" }, ...(config.bufferEnabled ? [{ l: "Buffer Per Check", v: `$${config.paycheckBuffer}` }] : [])] },
@@ -366,7 +366,6 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
             { l: "Night Diff ($/hr)", f: "nightDiffRate", t: "number", s: "0.01" },
             { l: "OT Threshold (hrs/wk)", f: "otThreshold", t: "number", s: "1" },
             { l: "OT Multiplier", f: "otMultiplier", t: "number", s: "0.1" },
-            { l: "LTD Weekly ($)", f: "ltd", t: "number", s: "0.01" },
             { l: "First Active Week Index", f: "firstActiveIdx", t: "number", s: "1" },
             { l: "Long / High Fed Rate", f: "w2FedRate", t: "number", s: "0.0001" },
             { l: "Long / High State Rate", f: "w2StateRate", t: "number", s: "0.0001" },

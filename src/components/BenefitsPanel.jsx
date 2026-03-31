@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, iS, lS, SmBtn } from "./ui.jsx";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
-import { dhlEmployerMatchRate } from "../lib/finance.js";
+import { dhlEmployerMatchRate, toLocalIso } from "../lib/finance.js";
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const fmtMonth = yyyyMM => {
@@ -121,14 +121,14 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
     <div style={{ marginBottom: "24px" }}>
       <SH>401k Projections</SH>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
-        <Card label="Base Your Contributions" val={f(bE)} color="#7a8bbf" size="18px" />
-        <Card label="Base Employer Match" val={f(bM)} color="var(--color-green)" size="18px" />
-        <Card label="Base Total Balance" val={f(bE + bM)} color="var(--color-gold)" size="18px" />
+        <Card label="Base Your Contributions" val={f(bE)} rawVal={bE} color="#7a8bbf" size="18px" />
+        <Card label="Base Employer Match" val={f(bM)} rawVal={bM} color="var(--color-green)" size="18px" />
+        <Card label="Base Total Balance" val={f(bE + bM)} rawVal={bE + bM} color="var(--color-gold)" size="18px" />
       </div>
       {(logK401kLost > 0 || logK401kMatchLost > 0 || logK401kGained > 0 || logK401kMatchGained > 0) && <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
-        <Card label="Adj. Your Contributions" val={f(aE)} sub={[logK401kLost > 0 && `-${f(logK401kLost)} lost`, logK401kGained > 0 && `+${f(logK401kGained)} bonus`].filter(Boolean).join(" · ")} color="#7a8bbf" size="18px" />
-        <Card label="Adj. Employer Match" val={f(aM)} sub={[logK401kMatchLost > 0 && `-${f(logK401kMatchLost)} lost`, logK401kMatchGained > 0 && `+${f(logK401kMatchGained)} bonus`].filter(Boolean).join(" · ")} color="var(--color-green)" size="18px" />
-        <Card label="Adj. Total Balance" val={f(aE + aM)} color="var(--color-gold)" size="18px" />
+        <Card label="Adj. Your Contributions" val={f(aE)} rawVal={aE} sub={[logK401kLost > 0 && `-${f(logK401kLost)} lost`, logK401kGained > 0 && `+${f(logK401kGained)} bonus`].filter(Boolean).join(" · ")} color="#7a8bbf" size="18px" />
+        <Card label="Adj. Employer Match" val={f(aM)} rawVal={aM} sub={[logK401kMatchLost > 0 && `-${f(logK401kMatchLost)} lost`, logK401kMatchGained > 0 && `+${f(logK401kMatchGained)} bonus`].filter(Boolean).join(" · ")} color="var(--color-green)" size="18px" />
+        <Card label="Adj. Total Balance" val={f(aE + aM)} rawVal={aE + aM} color="var(--color-gold)" size="18px" />
       </div>}
 
       {/* Monthly breakdown table */}

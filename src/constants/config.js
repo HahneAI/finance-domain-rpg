@@ -174,6 +174,20 @@ export const DHL_PRESET = {
   },
 };
 
+// DHL payroll-deduction benefit options (single source of truth for setup/profile flows).
+// Count: 9 options total (8 weekly-dollar deductions + 401k rate-based deduction).
+export const DHL_BENEFIT_OPTIONS = [
+  { id: "health", label: "Health / Medical", sub: "Medical insurance premium", type: "weekly", field: "healthPremium", placeholder: "e.g. 18.50" },
+  { id: "dental", label: "Dental", sub: "Dental insurance premium", type: "weekly", field: "dentalPremium", placeholder: "e.g. 4.00" },
+  { id: "vision", label: "Vision", sub: "Vision insurance premium", type: "weekly", field: "visionPremium", placeholder: "e.g. 2.00" },
+  { id: "ltd", label: "Long-Term Disability", sub: "LTD insurance — flat weekly deduction", type: "weekly", field: "ltd", placeholder: "e.g. 2.00" },
+  { id: "std", label: "Short-Term Disability", sub: "STD insurance — flat weekly deduction", type: "weekly", field: "stdWeekly", placeholder: "e.g. 1.50" },
+  { id: "life", label: "Life / AD&D", sub: "Group life insurance premium", type: "weekly", field: "lifePremium", placeholder: "e.g. 1.00" },
+  { id: "k401", label: "401(k) / Retirement", sub: "Pre-tax contribution + employer match", type: "k401" },
+  { id: "hsa", label: "HSA", sub: "Health Savings Account — weekly contribution", type: "weekly", field: "hsaWeekly", placeholder: "e.g. 15.00" },
+  { id: "fsa", label: "FSA", sub: "Flexible Spending Account — weekly contribution", type: "weekly", field: "fsaWeekly", placeholder: "e.g. 10.00" },
+];
+
 export const FED_BRACKETS = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [Infinity, 0.24]];
 
 // ─────────────────────────────────────────────────────────────
@@ -201,6 +215,6 @@ export const EVENT_TYPES = {
   other_loss:        { label: "Other Income Loss",              color: "#888",    icon: "−" },
 };
 
-export const CATEGORY_COLORS = { Needs: "#c96060", Lifestyle: "#5B8CFF", Transfers: "#888" };
-export const CATEGORY_BG = { Needs: "#130a0a", Lifestyle: "#0b1022", Transfers: "#111" };
+export const CATEGORY_COLORS = { Needs: "#c96060", Lifestyle: "#5B8CFF" };
+export const CATEGORY_BG = { Needs: "#130a0a", Lifestyle: "#0b1022" };
 export const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];

@@ -261,10 +261,11 @@ describe('computeNet', () => {
     })
   })
 
-  it('deducts only FICA, LTD, and 401k on non-taxed active weeks', () => {
+  it('deducts FICA, 401k, and all weekly benefit deductions on non-taxed active weeks', () => {
     const week = weeks.find(w => w.active && !w.taxedBySchedule)
     const cfg = DHL_CONFIG
-    const expected = week.grossPay - week.grossPay * cfg.ficaRate - cfg.ltd - week.k401kEmployee
+    const benefits = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly
+    const expected = week.grossPay - week.grossPay * cfg.ficaRate - benefits - week.k401kEmployee
     expect(computeNet(week, cfg)).toBeCloseTo(expected)
   })
 
@@ -272,7 +273,7 @@ describe('computeNet', () => {
     const week = weeks.find(w => w.active && w.taxedBySchedule && w.rotation === '4-Day')
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
-    const ded = cfg.ltd + week.k401kEmployee
+    const ded = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly + week.k401kEmployee
     const fed = week.taxableGross * cfg.fedRateLow  // 4-Day = short = fedRateLow
     const st = week.taxableGross * cfg.stateRateLow
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
@@ -282,7 +283,7 @@ describe('computeNet', () => {
     const week = weeks.find(w => w.active && w.taxedBySchedule && w.rotation === '6-Day')
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
-    const ded = cfg.ltd + week.k401kEmployee
+    const ded = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly + week.k401kEmployee
     const fed = week.taxableGross * cfg.fedRateHigh  // 6-Day = long = fedRateHigh
     const st = week.taxableGross * cfg.stateRateHigh
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
@@ -294,6 +295,53 @@ describe('computeNet', () => {
     const taxedRatio = computeNet(taxed4, DHL_CONFIG) / taxed4.grossPay
     const nonTaxedRatio = computeNet(nonTaxed4, DHL_CONFIG) / nonTaxed4.grossPay
     expect(taxedRatio).toBeLessThan(nonTaxedRatio)
+  })
+
+  it('reduces taxableGross when weekly benefit deductions increase', () => {
+    const withBenefits = buildYear({
+      ...DHL_CONFIG,
+      healthPremium: 25,
+      dentalPremium: 5,
+      visionPremium: 3,
+      stdWeekly: 2,
+      lifePremium: 1,
+      hsaWeekly: 10,
+      fsaWeekly: 9,
+      ltd: 4,
+    }).find(w => w.active && w.taxedBySchedule)
+    const baseline = buildYear({
+      ...DHL_CONFIG,
+      healthPremium: 0,
+      dentalPremium: 0,
+      visionPremium: 0,
+      stdWeekly: 0,
+      lifePremium: 0,
+      hsaWeekly: 0,
+      fsaWeekly: 0,
+      ltd: 0,
+    }).find(w => w.idx === withBenefits.idx)
+    expect(withBenefits.taxableGross).toBeLessThan(baseline.taxableGross)
+    expect(computeNet(withBenefits, {
+      ...DHL_CONFIG,
+      healthPremium: 25,
+      dentalPremium: 5,
+      visionPremium: 3,
+      stdWeekly: 2,
+      lifePremium: 1,
+      hsaWeekly: 10,
+      fsaWeekly: 9,
+      ltd: 4,
+    })).toBeLessThan(computeNet(baseline, {
+      ...DHL_CONFIG,
+      healthPremium: 0,
+      dentalPremium: 0,
+      visionPremium: 0,
+      stdWeekly: 0,
+      lifePremium: 0,
+      hsaWeekly: 0,
+      fsaWeekly: 0,
+      ltd: 0,
+    }))
   })
 })
 
@@ -421,14 +469,14 @@ describe('computeRemainingSpend', () => {
     expect(result.weekCount).toBe(2)
   })
 
-  it('excludes Transfers category from spend totals', () => {
+  it('includes all expense categories in spend totals', () => {
     const expenses = [
       { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [100, 100, 100, 100] }] },
-      { category: 'Transfers', history: [{ effectiveFrom: '2026-01-05', weekly: [125, 125, 125, 125] }] },
+      { category: 'Lifestyle', history: [{ effectiveFrom: '2026-01-05', weekly: [125, 125, 125, 125] }] },
     ]
     const futureWeeks = [{ weekEnd: new Date(2026, 0, 12), idx: 1 }]
     const result = computeRemainingSpend(expenses, futureWeeks)
-    expect(result.totalRemainingSpend).toBeCloseTo(100)
+    expect(result.totalRemainingSpend).toBeCloseTo(225)
   })
 })
 

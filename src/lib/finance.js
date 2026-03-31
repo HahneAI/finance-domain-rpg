@@ -23,6 +23,19 @@ export function dhlEmployerMatchRate(k401Rate) {
   return tier1 + tier2;
 }
 
+function weeklyBenefitDeductions(cfg) {
+  return (
+    (cfg.healthPremium || 0) +
+    (cfg.dentalPremium || 0) +
+    (cfg.visionPremium || 0) +
+    (cfg.ltd || 0) +
+    (cfg.stdWeekly || 0) +
+    (cfg.lifePremium || 0) +
+    (cfg.hsaWeekly || 0) +
+    (cfg.fsaWeekly || 0)
+  );
+}
+
 export function fedTax(income) {
   let tax = 0, prev = 0;
   for (const [limit, rate] of FED_BRACKETS) { if (income <= prev) break; tax += (Math.min(income, limit) - prev) * rate; prev = limit; }
@@ -126,7 +139,7 @@ export function buildYear(cfg) {
       ? dhlEmployerMatchRate(cfg.k401Rate)
       : cfg.k401MatchRate;
     const k401kEmployer = has401k ? grossPay * effectiveMatchRate : 0;
-    const taxableGross = active ? grossPay - cfg.ltd - k401kEmployee : 0;
+    const taxableGross = active ? Math.max(grossPay - weeklyBenefitDeductions(cfg) - k401kEmployee, 0) : 0;
     const isTaxed = active && taxedSet.has(idx);
     weeks.push({
       idx, weekEnd, weekStart, rotation, isHighWeek,
@@ -141,7 +154,8 @@ export function buildYear(cfg) {
 
 export function computeNet(w, cfg, extraPerCheck, showExtra) {
   if (!w.active) return 0;
-  const fica = w.grossPay * cfg.ficaRate, ded = cfg.ltd + w.k401kEmployee;
+  const fica = w.grossPay * cfg.ficaRate;
+  const ded = weeklyBenefitDeductions(cfg) + w.k401kEmployee;
   if (!w.taxedBySchedule) return w.grossPay - fica - ded;
   // Use generalized rate fields; fall back to legacy w1/w2 fields for pre-wizard rows.
   const fedLow  = cfg.fedRateLow   ?? cfg.w1FedRate;
@@ -187,11 +201,10 @@ export function getEffectiveAmount(expense, weekEndDate, phaseIdx) {
 
 export function computeRemainingSpend(expenses, futureWeeks) {
   if (!futureWeeks.length) return { totalRemainingSpend: 0, avgWeeklySpend: 0, weekCount: 0 };
-  const nonTransfer = expenses.filter(e => e.category !== "Transfers");
   let total = 0;
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
-    for (const exp of nonTransfer) total += getEffectiveAmount(exp, week.weekEnd, pi);
+    for (const exp of expenses) total += getEffectiveAmount(exp, week.weekEnd, pi);
   }
   return { totalRemainingSpend: total, avgWeeklySpend: total / futureWeeks.length, weekCount: futureWeeks.length };
 }
@@ -211,7 +224,7 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
     let spend = 0;
-    for (const exp of expenses.filter(e => e.category !== "Transfers"))
+    for (const exp of expenses)
       spend += getEffectiveAmount(exp, week.weekEnd, pi);
     // ── Targeted deduction: current/future-week events hit their specific week ──
     const weekDeduction = futureEventDeductions[week.idx] ?? 0;

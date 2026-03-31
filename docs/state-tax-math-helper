@@ -1,0 +1,12 @@
+⚠️ Common Mistakes in Apps
+	•	❌ Applying top bracket to full income
+	•	❌ Treating progressive states like flat
+	•	❌ Ignoring standard deductions
+	•	❌ Not updating bracket thresholds yearly
+	•	❌ Mixing effective rate vs marginal rate
+
+⸻
+
+🧠 Summary (For Your Codex Docs)
+
+State income tax systems fall into three categories: no tax, flat tax, and progressive bracket systems. Flat tax states apply a single rate across all income, while progressive states like Missouri use marginal brackets where portions of income are taxed at increasing rates. Missouri specifically uses a progressive system topping around 4.95%, meaning users never pay that rate on their entire income—only the top portion. For accurate financial modeling, your app must calculate taxes using marginal bracket logic, not flat approximations, and ensure each state is correctly classified to avoid major projection errors.

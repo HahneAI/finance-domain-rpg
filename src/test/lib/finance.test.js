@@ -159,14 +159,14 @@ describe('buildYear', () => {
     expect(fourDay.totalHours).toBe(48)
   })
 
-  it('6-Day weeks include 2 weekend shifts (24 weekend hours)', () => {
+  it('6-Day weeks include 3 weekend shifts (36 weekend hours — Fri/Sat/Sun)', () => {
     const sixDay = weeks.find(w => w.rotation === '6-Day')
-    expect(sixDay.weekendHours).toBe(24)
+    expect(sixDay.weekendHours).toBe(36)
   })
 
-  it('4-Day weeks have zero weekend hours', () => {
+  it('4-Day weeks have 12 weekend hours (Fri shift earns diff)', () => {
     const fourDay = weeks.find(w => w.rotation === '4-Day')
-    expect(fourDay.weekendHours).toBe(0)
+    expect(fourDay.weekendHours).toBe(12)
   })
 
   it('6-Day active weeks have higher grossPay than 4-Day active weeks', () => {
@@ -175,16 +175,16 @@ describe('buildYear', () => {
     expect(sixDay.grossPay).toBeGreaterThan(fourDay.grossPay)
   })
 
-  it('computes correct grossPay for an active 4-Day week (40 regular + 8 OT + 48h night diff)', () => {
+  it('computes correct grossPay for an active 4-Day week (40 regular + 8 OT + 12h weekend diff + 48h night diff)', () => {
     const cfg = DHL_CONFIG
-    const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier + 48 * cfg.nightDiffRate
+    const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier + 12 * cfg.diffRate + 48 * cfg.nightDiffRate
     const fourDay = weeks.find(w => w.rotation === '4-Day' && w.active)
     expect(fourDay.grossPay).toBeCloseTo(expected)
   })
 
-  it('computes correct grossPay for an active 6-Day week (40 regular + 32 OT + 24 weekend + 72h night diff)', () => {
+  it('computes correct grossPay for an active 6-Day week (40 regular + 32 OT + 36 weekend + 72h night diff)', () => {
     const cfg = DHL_CONFIG
-    const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 24 * cfg.diffRate + 72 * cfg.nightDiffRate
+    const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 36 * cfg.diffRate + 72 * cfg.nightDiffRate
     const sixDay = weeks.find(w => w.rotation === '6-Day' && w.active)
     expect(sixDay.grossPay).toBeCloseTo(expected)
   })
@@ -261,10 +261,11 @@ describe('computeNet', () => {
     })
   })
 
-  it('deducts only FICA, LTD, and 401k on non-taxed active weeks', () => {
+  it('deducts FICA, 401k, and all weekly benefit deductions on non-taxed active weeks', () => {
     const week = weeks.find(w => w.active && !w.taxedBySchedule)
     const cfg = DHL_CONFIG
-    const expected = week.grossPay - week.grossPay * cfg.ficaRate - cfg.ltd - week.k401kEmployee
+    const benefits = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly
+    const expected = week.grossPay - week.grossPay * cfg.ficaRate - benefits - week.k401kEmployee
     expect(computeNet(week, cfg)).toBeCloseTo(expected)
   })
 
@@ -272,7 +273,7 @@ describe('computeNet', () => {
     const week = weeks.find(w => w.active && w.taxedBySchedule && w.rotation === '4-Day')
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
-    const ded = cfg.ltd + week.k401kEmployee
+    const ded = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly + week.k401kEmployee
     const fed = week.taxableGross * cfg.fedRateLow  // 4-Day = short = fedRateLow
     const st = week.taxableGross * cfg.stateRateLow
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
@@ -282,7 +283,7 @@ describe('computeNet', () => {
     const week = weeks.find(w => w.active && w.taxedBySchedule && w.rotation === '6-Day')
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
-    const ded = cfg.ltd + week.k401kEmployee
+    const ded = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly + week.k401kEmployee
     const fed = week.taxableGross * cfg.fedRateHigh  // 6-Day = long = fedRateHigh
     const st = week.taxableGross * cfg.stateRateHigh
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
@@ -294,6 +295,53 @@ describe('computeNet', () => {
     const taxedRatio = computeNet(taxed4, DHL_CONFIG) / taxed4.grossPay
     const nonTaxedRatio = computeNet(nonTaxed4, DHL_CONFIG) / nonTaxed4.grossPay
     expect(taxedRatio).toBeLessThan(nonTaxedRatio)
+  })
+
+  it('reduces taxableGross when weekly benefit deductions increase', () => {
+    const withBenefits = buildYear({
+      ...DHL_CONFIG,
+      healthPremium: 25,
+      dentalPremium: 5,
+      visionPremium: 3,
+      stdWeekly: 2,
+      lifePremium: 1,
+      hsaWeekly: 10,
+      fsaWeekly: 9,
+      ltd: 4,
+    }).find(w => w.active && w.taxedBySchedule)
+    const baseline = buildYear({
+      ...DHL_CONFIG,
+      healthPremium: 0,
+      dentalPremium: 0,
+      visionPremium: 0,
+      stdWeekly: 0,
+      lifePremium: 0,
+      hsaWeekly: 0,
+      fsaWeekly: 0,
+      ltd: 0,
+    }).find(w => w.idx === withBenefits.idx)
+    expect(withBenefits.taxableGross).toBeLessThan(baseline.taxableGross)
+    expect(computeNet(withBenefits, {
+      ...DHL_CONFIG,
+      healthPremium: 25,
+      dentalPremium: 5,
+      visionPremium: 3,
+      stdWeekly: 2,
+      lifePremium: 1,
+      hsaWeekly: 10,
+      fsaWeekly: 9,
+      ltd: 4,
+    })).toBeLessThan(computeNet(baseline, {
+      ...DHL_CONFIG,
+      healthPremium: 0,
+      dentalPremium: 0,
+      visionPremium: 0,
+      stdWeekly: 0,
+      lifePremium: 0,
+      hsaWeekly: 0,
+      fsaWeekly: 0,
+      ltd: 0,
+    }))
   })
 })
 
@@ -308,13 +356,13 @@ describe('projectedGross', () => {
     expect(projectedGross(true, cfg)).toBeGreaterThan(projectedGross(false, cfg))
   })
 
-  it('calculates correct gross for 6-Day (40 regular + 32 OT + 24 weekend hours)', () => {
-    const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 2 * cfg.shiftHours * cfg.diffRate
+  it('calculates correct gross for 6-Day (40 regular + 32 OT + 36 weekend hours — Fri/Sat/Sun)', () => {
+    const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 3 * cfg.shiftHours * cfg.diffRate
     expect(projectedGross(true, cfg)).toBeCloseTo(expected)
   })
 
-  it('calculates correct gross for 4-Day (40 regular + 8 OT, no weekend)', () => {
-    const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier
+  it('calculates correct gross for 4-Day (40 regular + 8 OT + 12 weekend hours — Fri)', () => {
+    const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier + 1 * cfg.shiftHours * cfg.diffRate
     expect(projectedGross(false, cfg)).toBeCloseTo(expected)
   })
 
@@ -421,14 +469,14 @@ describe('computeRemainingSpend', () => {
     expect(result.weekCount).toBe(2)
   })
 
-  it('excludes Transfers category from spend totals', () => {
+  it('includes all expense categories in spend totals', () => {
     const expenses = [
       { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [100, 100, 100, 100] }] },
-      { category: 'Transfers', history: [{ effectiveFrom: '2026-01-05', weekly: [125, 125, 125, 125] }] },
+      { category: 'Lifestyle', history: [{ effectiveFrom: '2026-01-05', weekly: [125, 125, 125, 125] }] },
     ]
     const futureWeeks = [{ weekEnd: new Date(2026, 0, 12), idx: 1 }]
     const result = computeRemainingSpend(expenses, futureWeeks)
-    expect(result.totalRemainingSpend).toBeCloseTo(100)
+    expect(result.totalRemainingSpend).toBeCloseTo(225)
   })
 })
 
@@ -932,14 +980,31 @@ describe('stateTax', () => {
     expect(stateTax(50000, undefined)).toBe(0)
   })
 
-  it('calculates flat tax correctly for MO (4.7%)', () => {
+  it('calculates progressive tax correctly for MO (top marginal 4.7%)', () => {
     const cfg = STATE_TAX_TABLE['MO']
-    expect(cfg.model).toBe('FLAT')
-    expect(stateTax(50000, cfg)).toBeCloseTo(50000 * 0.047, 5)
+    expect(cfg.model).toBe('PROGRESSIVE')
+    // MO 2025 bracket math:
+    // 0-1273: 0%
+    // 1273-2546: 2%
+    // 2546-3819: 2.5%
+    // 3819-5092: 3%
+    // 5092-6365: 3.5%
+    // 6365-7638: 4%
+    // 7638-8911: 4.5%
+    // 8911+: 4.7%
+    const expected =
+      (2546 - 1273) * 0.02 +
+      (3819 - 2546) * 0.025 +
+      (5092 - 3819) * 0.03 +
+      (6365 - 5092) * 0.035 +
+      (7638 - 6365) * 0.04 +
+      (8911 - 7638) * 0.045 +
+      (50000 - 8911) * 0.047
+    expect(stateTax(50000, cfg)).toBeCloseTo(expected, 5)
   })
 
   it('flat tax: zero income returns 0', () => {
-    expect(stateTax(0, STATE_TAX_TABLE['MO'])).toBe(0)
+    expect(stateTax(0, STATE_TAX_TABLE['IL'])).toBe(0)
   })
 
   it('calculates progressive tax within first bracket (AL — $400 @ 2%)', () => {
@@ -977,7 +1042,7 @@ describe('getStateConfig', () => {
   it('returns the correct config for a known state (MO)', () => {
     const cfg = getStateConfig('MO')
     expect(cfg).toBe(STATE_TAX_TABLE['MO'])
-    expect(cfg.model).toBe('FLAT')
+    expect(cfg.model).toBe('PROGRESSIVE')
   })
 
   it('returns a config with a model field for common states', () => {

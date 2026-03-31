@@ -130,7 +130,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
     setEventVals(v => {
       const prev = Array.isArray(v.missedDays) ? v.missedDays : [];
       const next = prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day];
-      const weekendShifts = next.filter(d => d === "Sat" || d === "Sun").length;
+      const weekendShifts = next.filter(d => d === "Fri" || d === "Sat" || d === "Sun").length;
       return { ...v, missedDays: next, shiftsLost: next.length, weekendShifts, hoursLost: next.length * config.shiftHours };
     });
   };
@@ -188,7 +188,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       type: isDeficit ? "missed_unpaid" : "bonus",
       missedDays: isDeficit ? missedScheduledDays : [],
       shiftsLost: isDeficit ? missedScheduledDays.length : 0,
-      weekendShifts: isDeficit ? missedScheduledDays.filter(d => d === "Sat" || d === "Sun").length : 0,
+      weekendShifts: isDeficit ? missedScheduledDays.filter(d => d === "Fri" || d === "Sat" || d === "Sun").length : 0,
       hoursLost: isDeficit ? missedScheduledDays.length * config.shiftHours : 0,
       // Surplus: estimate gross (pre-tax) from pickup shifts so the amount field
       // has a useful starting value. User should verify the actual payout.
@@ -211,7 +211,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       type: "missed_unpaid",
       missedDays: missedScheduledDays,
       shiftsLost: missedScheduledDays.length,
-      weekendShifts: missedScheduledDays.filter(d => d === "Sat" || d === "Sun").length,
+      weekendShifts: missedScheduledDays.filter(d => d === "Fri" || d === "Sat" || d === "Sun").length,
       hoursLost: missedScheduledDays.length * config.shiftHours,
       shiftsGained: pickupDays.length,
       hoursGained: pickupDays.length * config.shiftHours,
@@ -305,7 +305,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                     display: "flex", alignItems: "center",
                     padding: "9px 20px",
                     borderBottom: "1px solid var(--color-border-subtle)",
-                    borderTop: isPayStart ? "1px solid rgba(201,168,76,0.18)" : undefined,
+                    borderTop: isPayStart ? "1px solid rgba(0,200,150,0.15)" : undefined,
                   }}>
                     {/* Day + date */}
                     <div style={{ width: "86px" }}>
@@ -522,7 +522,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                       const h = parseFloat(eventVals.hoursLost) || 0;
                       const expected = s * config.shiftHours;
                       return expected > 0 && Math.abs(h - expected) > 0.01 ? (
-                        <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(201,168,76,0.08)", borderRadius: "4px" }}>
+                        <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
                           ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h
                         </div>
                       ) : (

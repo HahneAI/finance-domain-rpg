@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { EVENT_TYPES } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
+import { formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { Card, iS, lS } from "./ui.jsx";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -11,7 +12,7 @@ const normalizeDays = (v) =>
 
 const LOG_MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals, bucketModel }) {
+export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals, bucketModel, fiscalWeekInfo }) {
   const blank = {
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
     shiftsLost: 0, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0,
@@ -30,6 +31,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
 
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const f0 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  const fiscalWeekLabel = formatFiscalWeekLabel(fiscalWeekInfo);
 
   const weeksLeft = futureWeeks.length || 1;
   const tot = logs.reduce((a, e) => {
@@ -99,7 +101,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
   const toggleDay = (day, vals, set) => {
     const prev = normalizeDays(vals.missedDays);
     const next = prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day];
-    const weekendShifts = next.filter(d => d === "Sat" || d === "Sun").length;
+    const weekendShifts = next.filter(d => d === "Fri" || d === "Sat" || d === "Sun").length;
     set(v => ({
       ...v,
       missedDays: next,
@@ -194,14 +196,14 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
           const endFmt   = w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
           return (
             <option key={endStr} value={endStr}>
-              Wk {w.idx} · {startFmt} – {endFmt} ({w.rotation})
+              Wk {getFiscalWeekNumber(w.idx) ?? "—"} · {startFmt} – {endFmt} ({w.rotation})
             </option>
           );
         })}
       </select>
       {vals.weekEnd && (
         <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
-          {vals.weekRotation} · week {vals.weekIdx} of 52
+          {vals.weekRotation} · week {getFiscalWeekNumber(Number(vals.weekIdx)) ?? "—"} of 52
           {scheduledDaysFor(vals.weekEnd).length > 0 && ` · scheduled: ${scheduledDaysFor(vals.weekEnd).join(", ")}`}
         </div>
       )}
@@ -241,7 +243,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
             const h = parseFloat(vals.hoursLost) || 0;
             const expected = s * config.shiftHours;
             return expected > 0 && Math.abs(h - expected) > 0.01 ? (
-              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(201,168,76,0.08)", borderRadius: "4px" }}>
+              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
                 ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h
               </div>
             ) : (
@@ -278,7 +280,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
             const h = parseFloat(vals.hoursLost) || 0;
             const expected = s * config.shiftHours;
             return expected > 0 && Math.abs(h - expected) > 0.01 ? (
-              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(201,168,76,0.08)", borderRadius: "4px" }}>
+              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
                 ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h · bucket hit uses override amount
               </div>
             ) : null;
@@ -342,13 +344,13 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       <div style={{ display: "flex", gap: "16px", alignItems: "center", fontSize: "11px" }}>
         <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>Week ending {currentWeek.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
         <span style={{ color: "#666" }}>{currentWeek.rotation}</span>
-        <span style={{ color: "var(--color-green)", fontWeight: "bold" }}>Week {currentWeek.idx} of 52</span>
+        <span style={{ color: "var(--color-green)", fontWeight: "bold" }}>{fiscalWeekLabel}</span>
       </div>
     </div>}
 
     {/* Hero cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
-      <Card label="Total Net Lost" val={f(tot.nL)} color="var(--color-red)" />
+      <Card label="Total Net Lost" val={f(tot.nL)} rawVal={tot.nL} color="var(--color-red)" />
       <Card label="PTO Accrual Lost" val={`${(tot.pto / 20).toFixed(1)} hrs`} sub={`${tot.pto}h ÷ 20`} color="#888" />
       <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`} sub="Unapproved absences" color="#e8622a" />
     </div>
@@ -507,7 +509,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
     </div>
 
     {/* Add form */}
-    {adding && <div style={{ background: "var(--color-bg-surface)", border: "1px solid #c8a84b", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
+    {adding && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
       <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Event</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
         <FormFields vals={nEv} set={setNEv} onWeekEndChange={handleWeekEndChange} />

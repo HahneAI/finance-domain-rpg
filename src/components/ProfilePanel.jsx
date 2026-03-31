@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { dhlEmployerMatchRate, computeNet } from "../lib/finance.js";
-import { DHL_PRESET, MONTH_FULL } from "../constants/config.js";
+import { DHL_BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, SH } from "./ui.jsx";
 
 const BENEFIT_LABELS = {
@@ -64,35 +64,153 @@ function DetailCard({ children, style }) {
 
 function AccountDetail({ authedUser, config, onBack }) {
   const setupColor  = config.setupComplete ? "var(--color-green)"           : "var(--color-gold)";
-  const setupBg     = config.setupComplete ? "rgba(76,175,125,0.12)"        : "rgba(201,168,76,0.10)";
-  const setupBorder = config.setupComplete ? "rgba(76,175,125,0.3)"         : "rgba(201,168,76,0.3)";
+  const setupBg     = config.setupComplete ? "rgba(76,175,125,0.12)"        : "rgba(0,200,150,0.08)";
+  const setupBorder = config.setupComplete ? "rgba(76,175,125,0.3)"         : "rgba(0,200,150,0.22)";
   const setupLabel  = config.setupComplete ? "Setup complete"               : "Setup pending";
 
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [newEmail, setNewEmail] = useState(authedUser?.email ?? "");
+  const [emailStatus, setEmailStatus] = useState({ error: null, success: null, loading: false });
+
   const [showPwForm, setShowPwForm] = useState(false);
+  const [currentPw, setCurrentPw]   = useState("");
   const [newPw, setNewPw]           = useState("");
   const [confirmPw, setConfirmPw]   = useState("");
   const [pwError, setPwError]       = useState(null);
   const [pwSaved, setPwSaved]       = useState(false);
   const [pwLoading, setPwLoading]   = useState(false);
 
+  const [globalSignoutState, setGlobalSignoutState] = useState({ error: null, success: null, loading: false });
+
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteText, setDeleteText] = useState("");
+  const [deleteState, setDeleteState] = useState({ error: null, loading: false });
+
+  const [linkState, setLinkState] = useState({ loading: false, error: null });
+  const hasGoogleLinked = authedUser?.identities?.some(id => id.provider === "google") ?? false;
+  const displayName = authedUser?.user_metadata?.full_name ?? null;
+
+  async function handleChangeEmail(e) {
+    e.preventDefault();
+    const trimmed = newEmail.trim();
+    setEmailStatus({ error: null, success: null, loading: false });
+
+    if (!trimmed || !trimmed.includes("@")) {
+      setEmailStatus({ error: "Enter a valid email address.", success: null, loading: false });
+      return;
+    }
+    if (trimmed.toLowerCase() === (authedUser?.email ?? "").toLowerCase()) {
+      setEmailStatus({ error: "That email is already on your account.", success: null, loading: false });
+      return;
+    }
+
+    setEmailStatus({ error: null, success: null, loading: true });
+    const { error } = await supabase.auth.updateUser({ email: trimmed });
+    if (error) {
+      setEmailStatus({ error: error.message, success: null, loading: false });
+      return;
+    }
+
+    setEmailStatus({
+      error: null,
+      success: "Confirmation sent. Check your new inbox and confirm before the email change takes effect.",
+      loading: false,
+    });
+    setShowEmailForm(false);
+  }
+
   async function handleChangePw(e) {
     e.preventDefault();
     setPwError(null);
-    if (newPw !== confirmPw) { setPwError("Passwords don't match."); return; }
-    if (newPw.length < 6)    { setPwError("Must be at least 6 characters."); return; }
+
+    if (!currentPw)            { setPwError("Enter your current password."); return; }
+    if (newPw !== confirmPw)   { setPwError("New passwords don't match."); return; }
+    if (newPw.length < 8)      { setPwError("Use at least 8 characters for your new password."); return; }
+    if (newPw === currentPw)   { setPwError("New password must be different from your current password."); return; }
+
     setPwLoading(true);
+
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: authedUser?.email ?? "",
+      password: currentPw,
+    });
+
+    if (verifyError) {
+      setPwLoading(false);
+      setPwError("Current password is incorrect.");
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({ password: newPw });
     setPwLoading(false);
-    if (error) { setPwError(error.message); return; }
+
+    if (error) {
+      setPwError(error.message);
+      return;
+    }
+
     setPwSaved(true);
-    setNewPw(""); setConfirmPw("");
+    setCurrentPw("");
+    setNewPw("");
+    setConfirmPw("");
     setTimeout(() => { setPwSaved(false); setShowPwForm(false); }, 2000);
+  }
+
+  async function handleGlobalSignOut() {
+    setGlobalSignoutState({ error: null, success: null, loading: true });
+    const { error } = await supabase.auth.signOut({ scope: "global" });
+    if (error) {
+      setGlobalSignoutState({ error: error.message, success: null, loading: false });
+      return;
+    }
+    setGlobalSignoutState({ error: null, success: "Signed out from all devices.", loading: false });
+  }
+
+  async function handleLinkGoogle() {
+    setLinkState({ loading: true, error: null });
+    const { error } = await supabase.auth.linkIdentity({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    // On success the browser redirects — only reaches here on error.
+    if (error) setLinkState({ loading: false, error: error.message });
+  }
+
+  async function handleDeleteAccount() {
+    setDeleteState({ error: null, loading: true });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      setDeleteState({ error: "No active session found.", loading: false });
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/delete-account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ confirmationText: deleteText }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setDeleteState({ error: payload?.error || "Failed to delete account.", loading: false });
+        return;
+      }
+      await supabase.auth.signOut({ scope: "global" });
+    } catch {
+      setDeleteState({ error: "Failed to delete account.", loading: false });
+    }
   }
 
   return (
     <>
       <BackBar onBack={onBack} title="Account" />
       <DetailCard>
+        {displayName && <DetailRow label="Name" value={displayName} />}
         <DetailRow label="Email" value={authedUser?.email ?? "—"} />
         <DetailRow label="Setup" last value={
           <span style={{ fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 10px", background: setupBg, color: setupColor, border: `1px solid ${setupBorder}`, borderRadius: "12px" }}>
@@ -101,7 +219,71 @@ function AccountDetail({ authedUser, config, onBack }) {
         } />
       </DetailCard>
 
-      {/* Change password */}
+      <DetailCard>
+        <div style={{ padding: "13px 16px" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "10px" }}>Connected Accounts</div>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {authedUser?.identities?.some(id => id.provider === "email") && (
+              <span style={{ fontSize: "11px", padding: "3px 10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "20px", color: "var(--color-text-secondary)" }}>
+                Email / Password
+              </span>
+            )}
+            {hasGoogleLinked && (
+              <span style={{ fontSize: "11px", padding: "3px 10px", background: "rgba(66,133,244,0.1)", border: "1px solid rgba(66,133,244,0.28)", borderRadius: "20px", color: "#4285F4" }}>
+                Google
+              </span>
+            )}
+          </div>
+          {!hasGoogleLinked && (
+            <button
+              onClick={handleLinkGoogle}
+              disabled={linkState.loading}
+              style={{ marginTop: "12px", padding: "8px 14px", background: "transparent", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "12px", cursor: linkState.loading ? "default" : "pointer" }}
+            >
+              {linkState.loading ? "Redirecting to Google…" : "Link Google Account"}
+            </button>
+          )}
+          {linkState.error && (
+            <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-red)" }}>{linkState.error}</div>
+          )}
+        </div>
+      </DetailCard>
+
+      <DetailCard>
+        {!showEmailForm ? (
+          <button
+            onClick={() => setShowEmailForm(true)}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "14px 16px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
+          >
+            <span style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500" }}>Change Email</span>
+            <span style={{ fontSize: "18px", color: "#555", lineHeight: 1 }}>›</span>
+          </button>
+        ) : (
+          <form onSubmit={handleChangeEmail} style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", fontWeight: "600" }}>Change Email</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={lS}>New Email</label>
+              <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required autoComplete="email" style={{ ...iS, borderRadius: "8px" }} />
+            </div>
+            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+              Supabase will send a confirmation email to the new address.
+            </div>
+            {emailStatus.error && (
+              <div style={{ fontSize: "11px", color: "var(--color-red)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{emailStatus.error}</div>
+            )}
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button type="button" onClick={() => { setShowEmailForm(false); setEmailStatus({ error: null, success: null, loading: false }); setNewEmail(authedUser?.email ?? ""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button type="submit" disabled={emailStatus.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: emailStatus.loading ? "default" : "pointer" }}>{emailStatus.loading ? "..." : "Save"}</button>
+            </div>
+          </form>
+        )}
+        {emailStatus.success && (
+          <div style={{ padding: "0 16px 14px", fontSize: "11px", color: "var(--color-green)" }}>
+            {emailStatus.success}
+          </div>
+        )}
+      </DetailCard>
+
       <DetailCard>
         {!showPwForm ? (
           <button
@@ -115,11 +297,15 @@ function AccountDetail({ authedUser, config, onBack }) {
           <form onSubmit={handleChangePw} style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", fontWeight: "600" }}>Change Password</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={lS}>New Password</label>
-              <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="At least 6 characters" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+              <label style={lS}>Current Password</label>
+              <input type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} placeholder="Required to verify" required autoComplete="current-password" style={{ ...iS, borderRadius: "8px" }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={lS}>Confirm Password</label>
+              <label style={lS}>New Password</label>
+              <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="At least 8 characters" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={lS}>Confirm New Password</label>
               <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
             </div>
             {pwError && (
@@ -129,11 +315,41 @@ function AccountDetail({ authedUser, config, onBack }) {
               <div style={{ fontSize: "11px", color: "var(--color-green)" }}>Password updated.</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button type="button" onClick={() => { setShowPwForm(false); setPwError(null); setNewPw(""); setConfirmPw(""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button type="button" onClick={() => { setShowPwForm(false); setPwError(null); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
               <button type="submit" disabled={pwLoading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: pwLoading ? "default" : "pointer" }}>{pwLoading ? "..." : "Save"}</button>
             </div>
           </form>
         )}
+      </DetailCard>
+
+      <DetailCard>
+        <button
+          onClick={handleGlobalSignOut}
+          disabled={globalSignoutState.loading}
+          style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", textAlign: "left", cursor: globalSignoutState.loading ? "default" : "pointer" }}
+        >
+          <div style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500", marginBottom: "4px" }}>Sign Out All Devices</div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+            Ends active sessions on every device for this account.
+          </div>
+        </button>
+        {(globalSignoutState.error || globalSignoutState.success) && (
+          <div style={{ padding: "0 16px 12px", fontSize: "11px", color: globalSignoutState.error ? "var(--color-red)" : "var(--color-green)" }}>
+            {globalSignoutState.error || globalSignoutState.success}
+          </div>
+        )}
+      </DetailCard>
+
+      <DetailCard style={{ borderColor: "rgba(224,92,92,0.32)" }}>
+        <button
+          onClick={() => { setDeleteText(""); setDeleteState({ error: null, loading: false }); setShowDeleteDialog(true); }}
+          style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", textAlign: "left", cursor: "pointer" }}
+        >
+          <div style={{ fontSize: "14px", color: "var(--color-red)", fontWeight: "600", marginBottom: "4px" }}>Delete Account</div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+            This permanently deletes your account and dashboard data.
+          </div>
+        </button>
       </DetailCard>
 
       <button
@@ -145,8 +361,30 @@ function AccountDetail({ authedUser, config, onBack }) {
           <polyline points="16 17 21 12 16 7"/>
           <line x1="21" y1="12" x2="9" y2="12"/>
         </svg>
-        Sign Out
+        Sign Out (This Device)
       </button>
+
+      {showDeleteDialog && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
+          <div style={{ width: "100%", maxWidth: "430px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-red)" }}>Delete Account</div>
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.55" }}>
+              This action is irreversible. Your account, profile, and stored dashboard data will be permanently deleted.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={lS}>Type DELETE to confirm</label>
+              <input type="text" value={deleteText} onChange={e => setDeleteText(e.target.value)} placeholder="DELETE" style={{ ...iS, borderRadius: "8px" }} />
+            </div>
+            {deleteState.error && (
+              <div style={{ fontSize: "11px", color: "var(--color-red)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{deleteState.error}</div>
+            )}
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => setShowDeleteDialog(false)} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-red)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -219,7 +457,7 @@ function EmploymentDetail({ config, setConfig, onBack }) {
                   style={{
                     flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid",
                     borderColor: dhlTeam === t ? "var(--color-gold)" : "var(--color-border-subtle)",
-                    background: dhlTeam === t ? "rgba(201,168,76,0.12)" : "var(--color-bg-base)",
+                    background: dhlTeam === t ? "rgba(0,200,150,0.10)" : "var(--color-bg-base)",
                     color: dhlTeam === t ? "var(--color-gold)" : "var(--color-text-secondary)",
                     fontWeight: "bold", fontSize: "14px", cursor: "pointer",
                   }}
@@ -276,44 +514,168 @@ function PayDetail({ config, onBack }) {
   );
 }
 
-function BenefitsDetail({ config, onBack }) {
+function BenefitsDetail({ config, setConfig, onBack }) {
   const isDHL     = config.employerPreset === "DHL";
   const has401k   = config.k401Rate > 0;
   const matchRate = isDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
-  const enrolled  = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
+  const enrolledConfig = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
+
+  const [editing, setEditing]   = useState(false);
+  const [selectedBenefits, setSelectedBenefits] = useState(new Set(enrolledConfig));
+  const [k401Rate, setK401Rate] = useState(String(config.k401Rate ?? ""));
+  const [k401Match, setK401Match] = useState(String(config.k401MatchRate ?? ""));
+  const [k401Start, setK401Start] = useState(config.k401StartDate ?? "");
+  const [benefitsStartDate, setBenefitsStartDate] = useState(config.benefitsStartDate ?? "");
+  const [weeklyValues, setWeeklyValues] = useState(
+    DHL_BENEFIT_OPTIONS
+      .filter(b => b.type === "weekly")
+      .reduce((acc, b) => ({ ...acc, [b.field]: String(config[b.field] ?? "") }), {})
+  );
+
+  function handleSave() {
+    const nextSelected = [...selectedBenefits];
+    const weeklyPatch = DHL_BENEFIT_OPTIONS
+      .filter(b => b.type === "weekly")
+      .reduce((acc, b) => ({ ...acc, [b.field]: parseFloat(weeklyValues[b.field]) || 0 }), {});
+    setConfig(prev => ({
+      ...prev,
+      k401Rate:      parseFloat(k401Rate)  || 0,
+      k401MatchRate: parseFloat(k401Match) || 0,
+      k401StartDate: k401Start || null,
+      benefitsStartDate: benefitsStartDate || null,
+      selectedBenefits: nextSelected,
+      ...weeklyPatch,
+    }));
+    setEditing(false);
+  }
+
+  function toggleBenefit(id) {
+    setSelectedBenefits(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <>
       <BackBar onBack={onBack} title="Retirement & Benefits" />
-      <DetailCard>
-        <DetailRow
-          label="401k Employee"
-          value={has401k ? `${(config.k401Rate * 100).toFixed(0)}%` : "Not enrolled"}
-          valueColor={has401k ? undefined : "var(--color-text-disabled)"}
-        />
-        {has401k && (
+
+      {/* 401k section */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+        <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", paddingLeft: "4px" }}>401k</div>
+        {!editing && (
+          <button onClick={() => setEditing(true)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</button>
+        )}
+      </div>
+
+      {!editing ? (
+        <DetailCard>
           <DetailRow
-            label="Employer Match"
-            value={`${(matchRate * 100).toFixed(1)}%${isDHL ? " (tiered)" : ""}`}
-            valueColor="var(--color-green)"
+            label="Employee Rate"
+            value={has401k ? `${(config.k401Rate * 100).toFixed(0)}%` : "Not enrolled"}
+            valueColor={has401k ? undefined : "var(--color-text-disabled)"}
           />
-        )}
-        {config.k401StartDate && (
-          <DetailRow label="401k Active Since" value={fmt(config.k401StartDate)} />
-        )}
+          {!isDHL && (
+            <DetailRow
+              label="Employer Match"
+              value={has401k ? `${(matchRate * 100).toFixed(1)}%` : "—"}
+              valueColor={has401k ? "var(--color-green)" : "var(--color-text-disabled)"}
+            />
+          )}
+          {isDHL && has401k && (
+            <DetailRow label="Employer Match" value="Tiered (DHL formula)" valueColor="var(--color-green)" />
+          )}
+          <DetailRow label="Active Since" value={config.k401StartDate ? fmt(config.k401StartDate) : "—"} last />
+        </DetailCard>
+      ) : (
+        <DetailCard>
+          <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+              Payroll-Deduction Benefits ({DHL_BENEFIT_OPTIONS.length})
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+              {DHL_BENEFIT_OPTIONS.map((benefit) => (
+                <button
+                  key={benefit.id}
+                  onClick={() => toggleBenefit(benefit.id)}
+                  style={{
+                    fontSize: "10px",
+                    letterSpacing: "1px",
+                    textTransform: "uppercase",
+                    padding: "6px 8px",
+                    borderRadius: "8px",
+                    border: `1px solid ${selectedBenefits.has(benefit.id) ? "rgba(76,175,125,0.32)" : "var(--color-border-subtle)"}`,
+                    background: selectedBenefits.has(benefit.id) ? "rgba(76,175,125,0.10)" : "var(--color-bg-raised)",
+                    color: selectedBenefits.has(benefit.id) ? "var(--color-green)" : "var(--color-text-secondary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {selectedBenefits.has(benefit.id) ? "✓ " : ""}{BENEFIT_LABELS[benefit.id] ?? benefit.id}
+                </button>
+              ))}
+            </div>
+            <div>
+              <label style={lS}>Benefits Start Date</label>
+              <input type="date" value={benefitsStartDate} onChange={e => setBenefitsStartDate(e.target.value)} style={iS} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              <div>
+                <label style={lS}>Employee % (decimal)</label>
+                <input type="number" step="0.01" min="0" max="1" value={k401Rate} onChange={e => setK401Rate(e.target.value)} style={iS} />
+              </div>
+              {!isDHL && (
+                <div>
+                  <label style={lS}>Match % (decimal)</label>
+                  <input type="number" step="0.01" min="0" max="1" value={k401Match} onChange={e => setK401Match(e.target.value)} style={iS} />
+                </div>
+              )}
+              <div>
+                <label style={lS}>Start Date</label>
+                <input type="date" value={k401Start} onChange={e => setK401Start(e.target.value)} style={iS} />
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly").map((benefit) => (
+                <div key={benefit.id}>
+                  <label style={lS}>{benefit.label} ($ / week)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={weeklyValues[benefit.field]}
+                    placeholder={benefit.placeholder}
+                    onChange={e => setWeeklyValues(v => ({ ...v, [benefit.field]: e.target.value }))}
+                    style={iS}
+                  />
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => setEditing(false)} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleSave} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</button>
+            </div>
+          </div>
+        </DetailCard>
+      )}
+
+      {/* Benefits enrollment (read-only) */}
+      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px", paddingLeft: "4px", marginTop: "20px" }}>Benefits Enrollment</div>
+      <DetailCard>
         {config.benefitsStartDate && (
           <DetailRow label="Benefits Start" value={fmt(config.benefitsStartDate)} />
         )}
         <DetailRow
-          label="Benefits"
-          value={enrolled.length > 0 ? `${enrolled.length} enrolled` : "None enrolled"}
-          valueColor={enrolled.length > 0 ? undefined : "var(--color-text-disabled)"}
-          last={enrolled.length === 0}
+          label="Enrolled"
+          value={enrolledConfig.length > 0 ? `${enrolledConfig.length} plan${enrolledConfig.length !== 1 ? "s" : ""}` : "None enrolled"}
+          valueColor={enrolledConfig.length > 0 ? undefined : "var(--color-text-disabled)"}
+          last={enrolledConfig.length === 0}
         />
-        {enrolled.length > 0 && (
+        {enrolledConfig.length > 0 && (
           <div style={{ padding: "10px 16px 14px" }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-              {enrolled.map(id => (
+              {enrolledConfig.map(id => (
                 <span key={id} style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(76,175,125,0.08)", color: "var(--color-green)", border: "1px solid rgba(76,175,125,0.2)", borderRadius: "12px" }}>
                   {BENEFIT_LABELS[id] ?? id}
                 </span>
@@ -344,7 +706,7 @@ function PreferencesDetail({ config, onBack }) {
         />
       </DetailCard>
       <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
-        Buffer and tax settings can be adjusted in the Income panel or via Life Events.
+        Buffer is managed in the Income panel. Tax settings are managed in Account → Tax Plan or via Life Events.
       </div>
     </>
   );
@@ -357,6 +719,7 @@ function TaxPlanDetail({ config, setConfig, allWeeks, taxDerived, showExtra, set
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gN = w => computeNet(w, config, extraPerCheck, showExtra);
+  const [taxDraft, setTaxDraft] = useState(null);
 
   const toggleWeek = (idx) => setConfig(prev => {
     const s = new Set(prev.taxedWeeks);
@@ -376,14 +739,46 @@ function TaxPlanDetail({ config, setConfig, allWeeks, taxDerived, showExtra, set
       {/* Extra withholding quick-toggle */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", padding: "10px 14px", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
         <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flex: 1 }}>Apply extra withholding <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerCheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
-        <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "#3a3210" : "var(--color-bg-surface)", color: showExtra ? "var(--color-gold)" : "#aaa", border: "1px solid " + (showExtra ? "var(--color-gold)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</button>
+        <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)", color: showExtra ? "var(--color-gold)" : "#aaa", border: "1px solid " + (showExtra ? "var(--color-gold)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</button>
+      </div>
+
+      <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", gap: "10px" }}>
+          <SH>Tax Strategy & Planning</SH>
+          {taxDraft === null ? (
+            <button onClick={() => setTaxDraft({
+              fedStdDeduction: config.fedStdDeduction,
+              moFlatRate: config.moFlatRate,
+              targetOwedAtFiling: config.targetOwedAtFiling,
+              firstActiveIdx: config.firstActiveIdx,
+            })} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Edit Tax Plan</button>
+          ) : (
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => { setConfig(prev => ({ ...prev, ...taxDraft })); setTaxDraft(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</button>
+              <button onClick={() => setTaxDraft(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+            </div>
+          )}
+        </div>
+
+        {taxDraft === null ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "13px" }}>
+            {[{ l: "Federal Std Deduction", v: f(config.fedStdDeduction) }, ...(config.userState ? [] : [{ l: "State Rate (fallback)", v: `${(config.moFlatRate * 100).toFixed(1)}%` }]), { l: "Target Owed at Filing", v: f(config.targetOwedAtFiling) }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "#777" }}>{r.l}</span><span style={{ fontWeight: "bold", color: "var(--color-text-primary)" }}>{r.v}</span></div>)}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+            <div><label style={lS}>Federal Std Deduction ($)</label><input type="number" step="100" value={taxDraft.fedStdDeduction} onChange={e => setTaxDraft(v => ({ ...v, fedStdDeduction: parseFloat(e.target.value) || 0 }))} style={iS} /></div>
+            {!config.userState && <div><label style={lS}>State Rate (fallback)</label><input type="number" step="0.001" value={taxDraft.moFlatRate} onChange={e => setTaxDraft(v => ({ ...v, moFlatRate: parseFloat(e.target.value) || 0 }))} style={iS} /></div>}
+            <div><label style={lS}>Target Owed at Filing ($)</label><input type="number" step="100" value={taxDraft.targetOwedAtFiling} onChange={e => setTaxDraft(v => ({ ...v, targetOwedAtFiling: parseFloat(e.target.value) || 0 }))} style={iS} /></div>
+            <div><label style={lS}>First Active Week Index</label><input type="number" step="1" value={taxDraft.firstActiveIdx} onChange={e => setTaxDraft(v => ({ ...v, firstActiveIdx: parseFloat(e.target.value) || 0 }))} style={iS} /></div>
+          </div>
+        )}
       </div>
 
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "12px", marginBottom: "20px" }}>
-        <Card label="Full Year Fed Liability" val={f(fedLiability)} sub={`On ${f(fedAGI)} AGI`} color="var(--color-red)" size="20px" />
-        <Card label="Full Year MO Liability" val={f(moLiability)} sub="4.7% flat" color="var(--color-gold)" size="20px" />
-        <Card label="FICA (Always Paid)" val={f(ficaTotal)} sub="7.65% every check" color="#888" size="20px" />
+        <Card label="Full Year Fed Liability" val={f(fedLiability)} rawVal={fedLiability} sub={`On ${f(fedAGI)} AGI`} color="var(--color-red)" size="20px" />
+        <Card label="Full Year MO Liability" val={f(moLiability)} rawVal={moLiability} sub="4.7% flat" color="var(--color-gold)" size="20px" />
+        <Card label="FICA (Always Paid)" val={f(ficaTotal)} rawVal={ficaTotal} sub="7.65% every check" color="#888" size="20px" />
       </div>
 
       {/* Tax gap analysis */}
@@ -395,7 +790,7 @@ function TaxPlanDetail({ config, setConfig, allWeeks, taxDerived, showExtra, set
       </div>
 
       {/* Extra withholding plan */}
-      <div style={{ background: "var(--color-bg-surface)", border: "1px solid #c8a84b", borderRadius: "8px", padding: "20px", marginBottom: "28px" }}>
+      <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "20px", marginBottom: "28px" }}>
         <SH>Extra Withholding Plan</SH>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: "12px", marginBottom: "16px" }}>
           {[{ l: "Extra Needed", v: f(targetExtraTotal), c: "var(--color-red)" }, { l: "Taxed Checks", v: taxedWeekCount, c: "var(--color-text-primary)" }, { l: "Extra Per Check", v: f2(extraPerCheck), c: "var(--color-gold)" }].map(c => <div key={c.l} style={{ textAlign: "center", padding: "12px", background: "var(--color-bg-base)", borderRadius: "6px" }}><div style={{ fontSize: "9px", letterSpacing: "2px", color: "#aaa", textTransform: "uppercase", marginBottom: "6px" }}>{c.l}</div><div style={{ fontSize: "20px", fontWeight: "bold", color: c.c }}>{c.v}</div></div>)}
@@ -494,7 +889,7 @@ export function ProfilePanel({ authedUser, config, setConfig, allWeeks, taxDeriv
     return <PayDetail config={config} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "retirement") {
-    return <BenefitsDetail config={config} onBack={() => setActiveSection(null)} />;
+    return <BenefitsDetail config={config} setConfig={setConfig} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "preferences") {
     return <PreferencesDetail config={config} onBack={() => setActiveSection(null)} />;

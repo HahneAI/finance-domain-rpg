@@ -9,10 +9,10 @@ Design token source of truth. All values confirmed against `src/index.css` `@the
 
 | Token | Value | Role |
 |-------|-------|------|
-| `--color-bg-base` | `#07130f` | App shell / page background |
-| `--color-bg-surface` | `#0d1f19` | Card background |
-| `--color-bg-raised` | `#123027` | Elevated surfaces, button hover |
-| `--color-bg-gradient` | `linear-gradient(180deg, #0f2a21, #07130f)` | Header / container gradient |
+| `--color-bg-base` | `#05100c` | App shell / page background |
+| `--color-bg-surface` | `#112c1f` | Card background |
+| `--color-bg-raised` | `#163828` | Elevated surfaces, button hover |
+| `--color-bg-gradient` | `linear-gradient(180deg, #091a11, #05100c)` | Header / container gradient |
 | `--color-gold` | `#00c896` | Legacy alias → maps to `--color-accent-primary` |
 | `--color-accent-primary` | `#00c896` | Flow identity: active tabs, CTAs, section bars |
 | `--color-green` | `#22c55e` | Semantic positive: income values, healthy status |

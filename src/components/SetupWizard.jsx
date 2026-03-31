@@ -17,7 +17,7 @@
 import { useState } from "react";
 import { buildYear, dhlEmployerMatchRate } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
-import { FISCAL_YEAR_START, DHL_PRESET } from "../constants/config.js";
+import { FISCAL_YEAR_START, DHL_PRESET, DHL_BENEFIT_OPTIONS } from "../constants/config.js";
 
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 
@@ -69,8 +69,8 @@ function Step0({ lifeEvent, onLifeEventChange }) {
             style={{
               display: "flex", flexDirection: "column", alignItems: "flex-start",
               gap: "3px", textAlign: "left",
-              background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
-              border: `1px solid ${active ? "rgba(0,200,150,0.4)" : "var(--color-border-subtle)"}`,
+              background: active ? "rgba(0,200,150,0.08)" : "var(--color-bg-raised)",
+              border: `1px solid ${active ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
               borderRadius: "12px",
               padding: "12px 14px",
               cursor: "pointer",
@@ -103,9 +103,9 @@ function Pill({ label, active, onClick }) {
       style={{
         padding: "7px 14px",
         fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
-        background: active ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)",
+        background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
         color: active ? "var(--color-gold)" : "var(--color-text-secondary)",
-        border: `1px solid ${active ? "rgba(0,200,150,0.4)" : "var(--color-border-subtle)"}`,
+        border: `1px solid ${active ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
         borderRadius: "10px", cursor: "pointer",
         transition: "background 0.15s, border-color 0.15s, color 0.15s",
       }}
@@ -507,24 +507,14 @@ function Step2({ formData, onChange }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 3 — Deductions
 // ─────────────────────────────────────────────────────────────────────────────
-const BENEFIT_DEFS = [
-  { id: "health", label: "Health / Medical",      sub: "Medical insurance premium",                    type: "weekly", field: "healthPremium", placeholder: "e.g. 18.50" },
-  { id: "dental", label: "Dental",                sub: "Dental insurance premium",                     type: "weekly", field: "dentalPremium", placeholder: "e.g. 4.00"  },
-  { id: "vision", label: "Vision",                sub: "Vision insurance premium",                     type: "weekly", field: "visionPremium", placeholder: "e.g. 2.00"  },
-  { id: "ltd",    label: "Long-Term Disability",  sub: "LTD insurance — flat weekly deduction",        type: "weekly", field: "ltd",           placeholder: "e.g. 2.00"  },
-  { id: "std",    label: "Short-Term Disability", sub: "STD insurance — flat weekly deduction",        type: "weekly", field: "stdWeekly",     placeholder: "e.g. 1.50"  },
-  { id: "life",   label: "Life / AD&D",           sub: "Group life insurance premium",                 type: "weekly", field: "lifePremium",   placeholder: "e.g. 1.00"  },
-  { id: "k401",   label: "401(k) / Retirement",   sub: "Pre-tax contribution + employer match",        type: "k401"                                                        },
-  { id: "hsa",    label: "HSA",                   sub: "Health Savings Account — weekly contribution", type: "weekly", field: "hsaWeekly",     placeholder: "e.g. 15.00" },
-  { id: "fsa",    label: "FSA",                   sub: "Flexible Spending Account — weekly contribution", type: "weekly", field: "fsaWeekly", placeholder: "e.g. 10.00" },
-];
+const BENEFIT_DEFS = DHL_BENEFIT_OPTIONS;
 
 function BenefitCard({ def, selected, formData, onChange, onToggle }) {
   return (
     <div style={{
-      border: `1px solid ${selected ? "rgba(0,200,150,0.4)" : "var(--color-border-subtle)"}`,
+      border: `1px solid ${selected ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
       borderRadius: "12px",
-      background: selected ? "rgba(0,200,150,0.06)" : "var(--color-bg-raised)",
+      background: selected ? "rgba(0,200,150,0.05)" : "var(--color-bg-raised)",
       overflow: "hidden",
       transition: "border-color 0.15s, background 0.15s",
     }}>
@@ -564,7 +554,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
       {selected && (
         <div style={{
           padding: "12px 14px 14px",
-          borderTop: "1px solid rgba(0,200,150,0.12)",
+          borderTop: "1px solid rgba(0,200,150,0.10)",
           display: "flex", flexDirection: "column", gap: "12px",
         }}>
           {def.type === "weekly" && (
@@ -1033,8 +1023,8 @@ function Step4({ formData, onChange }) {
       {isDHL && !hasRates && formData.userState === "MO" && (
         <div style={{
           padding: "12px 14px",
-          background: "rgba(0,200,150,0.06)",
-          border: "1px solid rgba(0,200,150,0.2)",
+          background: "rgba(0,200,150,0.05)",
+          border: "1px solid rgba(0,200,150,0.15)",
           borderRadius: "10px",
         }}>
           <div style={{ fontSize: "12px", color: "var(--color-text-primary)", marginBottom: "4px" }}>
@@ -1047,8 +1037,8 @@ function Step4({ formData, onChange }) {
             Night shift paystub-derived. Flagged as estimated until you confirm with your own stub.
           </div>
           <button onClick={loadDHLPreset} style={{
-            background: "rgba(0,200,150,0.12)", color: "var(--color-gold)",
-            border: "1px solid rgba(0,200,150,0.4)", borderRadius: "10px",
+            background: "rgba(0,200,150,0.10)", color: "var(--color-gold)",
+            border: "1px solid rgba(0,200,150,0.28)", borderRadius: "10px",
             padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
             textTransform: "uppercase", cursor: "pointer",
           }}>

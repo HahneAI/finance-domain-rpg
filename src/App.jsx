@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso } from "./lib/finance.js";
-import { loadUserData, saveUserData } from "./lib/db.js";
+import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
+import { loadUserData, saveUserData, syncUserProfile } from "./lib/db.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
@@ -110,34 +111,72 @@ function FullScreenLoadingState({ label = "Loading your dashboard" }) {
     <div style={{
       background: "var(--color-bg-gradient)",
       minHeight: "100vh",
-      color: "var(--color-text-primary)",
       display: "flex",
+      flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      padding: "24px",
+      gap: "32px",
     }}>
+      <style>{`
+        @keyframes afPulse {
+          0%, 100% { opacity: 0.25; transform: scale(0.85); }
+          50%       { opacity: 1;    transform: scale(1);    }
+        }
+        @keyframes afBar {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(400%);  }
+        }
+      `}</style>
+
+      {/* Brand label */}
       <div style={{
-        width: "100%",
-        maxWidth: "420px",
-        border: "1px solid var(--color-border-subtle)",
-        borderRadius: "16px",
-        background: "var(--color-bg-surface)",
-        padding: "18px",
+        fontSize: "10px",
+        letterSpacing: "4px",
+        textTransform: "uppercase",
+        color: "var(--color-text-disabled)",
+      }}>
+        Authority Finance
+      </div>
+
+      {/* Three breathing dots */}
+      <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{
+            width: "8px",
+            height: "8px",
+            borderRadius: "50%",
+            background: "var(--color-accent-primary)",
+            animation: `afPulse 1.4s ease-in-out ${i * 0.22}s infinite`,
+          }} />
+        ))}
+      </div>
+
+      {/* Progress bar track */}
+      <div style={{
+        width: "160px",
+        height: "2px",
+        background: "var(--color-border-subtle)",
+        borderRadius: "2px",
+        overflow: "hidden",
       }}>
         <div style={{
-          fontSize: "11px",
-          letterSpacing: "3px",
-          textTransform: "uppercase",
-          color: "var(--color-gold)",
-          marginBottom: "12px",
-        }}>
-          {label}
-        </div>
-        <div style={{ display: "grid", gap: "10px" }}>
-          <div style={{ height: "56px", borderRadius: "12px", background: "var(--color-bg-raised)" }} />
-          <div style={{ height: "56px", borderRadius: "12px", background: "var(--color-bg-raised)" }} />
-          <div style={{ height: "56px", borderRadius: "12px", background: "var(--color-bg-raised)" }} />
-        </div>
+          width: "40%",
+          height: "100%",
+          background: "var(--color-accent-primary)",
+          borderRadius: "2px",
+          animation: "afBar 1.6s ease-in-out infinite",
+          opacity: 0.8,
+        }} />
+      </div>
+
+      {/* Status label */}
+      <div style={{
+        fontSize: "11px",
+        letterSpacing: "1.5px",
+        textTransform: "uppercase",
+        color: "var(--color-text-disabled)",
+      }}>
+        {label}
       </div>
     </div>
   );
@@ -207,6 +246,9 @@ export default function App() {
     return onAuthChange((event, user) => {
       if (event === "PASSWORD_RECOVERY") setPendingPasswordReset(true);
       else setPendingPasswordReset(false);
+      // Seed user_data row + sync OAuth profile metadata on every sign-in.
+      // Critical for Google OAuth users who have no row yet; safe no-op for email users.
+      if (event === "SIGNED_IN" && user) syncUserProfile(user);
       setAuthedUser(user);
     });
   }, []);
@@ -267,9 +309,7 @@ export default function App() {
   }, [allWeeks, today]);
 
   // ── Current week: first active week whose end date >= today ──
-  const currentWeek = useMemo(() => {
-    return allWeeks.find(w => w.active && toLocalIso(w.weekEnd) >= today) ?? null;
-  }, [allWeeks, today]);
+  const currentWeek = useMemo(() => getCurrentFiscalWeek(allWeeks, today), [allWeeks, today]);
 
   // confirmDismissed: session-only flag; set when user clicks "Skip for now".
   // Cleared by badge click so the modal re-opens. Resets to false on page reload.
@@ -303,9 +343,8 @@ export default function App() {
   }, [allWeeks, today, weekConfirmations]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
-  const currentWeekNumber = currentWeek
-    ? { num: currentWeek.idx, total: 52 }
-    : null;
+  const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);
+  const currentWeekLabel = formatFiscalWeekLabel(currentWeekNumber);
 
   // ── Event impact summary (single source for adjusted income math) ──
   const eventImpact = useMemo(() => {
@@ -390,6 +429,26 @@ export default function App() {
   const bufferPerWeek = (config.bufferEnabled ?? true) ? (config.paycheckBuffer ?? 50) : 0;
   const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
 
+  // ── Previous week's actual paycheck (what you'll receive this payday) ──
+  // Shows the specific prior week's computeNet (high vs low week), not an annual
+  // average. Adjusted for any event log entries confirmed for that week
+  // (e.g. missed shifts logged via WeekConfirmModal). Falls back to weeklyIncome
+  // average when no past weeks exist (first week of fiscal year).
+  const prevWeekNet = useMemo(() => {
+    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
+    if (!pastWeeks.length) return weeklyIncome;
+    const prevWeek = pastWeeks[pastWeeks.length - 1];
+    const baseNet = computeNet(prevWeek, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek;
+    // Apply any confirmed event log adjustments specific to this week
+    const weekAdjustment = logs
+      .filter(e => e.weekIdx === prevWeek.idx)
+      .reduce((sum, e) => {
+        const impact = calcEventImpact(e, config);
+        return sum + impact.netGained - impact.netLost;
+      }, 0);
+    return baseNet + weekAdjustment;
+  }, [allWeeks, today, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs]);
+
   const futureWeekNets = useMemo(
     // Buffer excluded per week — feeds BudgetPanel goal timelines and HomePanel
     // "Next Week" tile; both should show spendable net, not raw paycheck amount.
@@ -473,11 +532,11 @@ export default function App() {
         navigate={navigate}
         weeklyIncome={weeklyIncome}
         adjustedTakeHome={logTotals.adjustedTakeHome}
-        adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
         remainingSpend={remainingSpend}
         goals={goals}
         futureWeekNets={futureWeekNets}
         currentWeek={currentWeek}
+        fiscalWeekInfo={currentWeekNumber}
         today={today}
       />}
       {currentView === "income" && <IncomePanel
@@ -494,15 +553,15 @@ export default function App() {
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
         goals={goals} setGoals={setGoals}
-        adjustedWeeklyAvg={logTotals.adjustedWeeklyAvg}
-        baseWeeklyUnallocated={baseWeeklyUnallocated}
         logNetLost={logTotals.netLost}
         logNetGained={logTotals.netGained}
         weeklyIncome={weeklyIncome}
+        prevWeekNet={prevWeekNet}
         futureWeeks={futureWeeks}
         futureWeekNets={futureWeekNets}
         futureEventDeductions={futureEventDeductions}
         currentWeek={currentWeek}
+        fiscalWeekInfo={currentWeekNumber}
         today={today}
       />}
       {currentView === "benefits" && <BenefitsPanel
@@ -513,6 +572,7 @@ export default function App() {
         logK401kMatchGained={logTotals.k401kMatchGained}
         logPTOHoursLost={logTotals.ptoHoursLost}
         currentWeek={currentWeek}
+        fiscalWeekInfo={currentWeekNumber}
         bucketModel={bucketModel}
         ptoGoal={ptoGoal}
         setPtoGoal={setPtoGoal}
@@ -524,6 +584,7 @@ export default function App() {
         futureWeeks={futureWeeks}
         allWeeks={allWeeks}
         currentWeek={currentWeek}
+        fiscalWeekInfo={currentWeekNumber}
         goals={goals}
         bucketModel={bucketModel}
       />}
@@ -641,9 +702,11 @@ export default function App() {
       >
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid var(--color-border-subtle)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "4px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-              <div style={{ fontSize: "14px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>2026 Financial Dashboard</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div>
+                <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                <div style={{ fontSize: "13px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>Authority Finance</div>
+              </div>
             </div>
             <button
               title="Sign out"
@@ -657,7 +720,7 @@ export default function App() {
               </svg>
             </button>
           </div>
-          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px" }}>Week {currentWeekNumber.num} of {currentWeekNumber.total}</div>}
+          {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px" }}>{currentWeekLabel}</div>}
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
@@ -771,12 +834,14 @@ export default function App() {
           </button>
 
           {/* ── Title block — center ── */}
-          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-              {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+          <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+              </div>
+              <div style={{ fontSize: "14px", fontWeight: "bold" }}>Authority Finance</div>
             </div>
-            <div style={{ fontSize: "14px", fontWeight: "bold" }}>Finance Dashboard</div>
           </div>
 
           {/* ── Notification bell — top RIGHT (Chime-style) ── */}

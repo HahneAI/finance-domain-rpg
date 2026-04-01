@@ -166,17 +166,25 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
 
 ## Setup Wizard
 
-**File:** `src/components/SetupWizard.jsx` — shipped.
+**File:** `src/components/SetupWizard.jsx` — shipped. Consolidated from 10 steps → 6 (2026-03-31).
 
 **Entry:** `App.jsx` checks `!config.setupComplete` on load → renders wizard. On completion writes `setupComplete: true` and redirects to income view. Re-accessible from sidebar "Life Events" menu for job changes without wiping unrelated config.
 
-**Steps:** Welcome → Pay Structure → Schedule → Deductions → Tax Rates → Tax Summary → Other Deductions → Paycheck Buffer → Tax Exempt Gate.
+**6-step flow:**
+1. **Welcome** — first-run intro or life event select (lost job / changed jobs / commission)
+2. **Pay Structure** — base rate, shift hours, OT threshold/multiplier, weekend diff; DHL users also complete team A/B, shift type (night/morning), rotation, and OT day preference inline (was separate Step 15)
+3. **Schedule** — job start date → `firstActiveIdx`, rotation week (DHL short/long), pay period close day
+4. **Deductions** — benefits multi-select with inline config (401k, health, dental, vision, LTD, STD, life, HSA, FSA), benefits start date, freeform other-deductions rows, attendance policy gate (merged from old Step 6)
+5. **Tax Rates** — state dropdown, paystub calculator (skippable), rate summary card now shows FICA + standard deduction inline (old Step 5 absorbed here)
+6. **Wrap Up** — live estimated net breakdown, paycheck buffer toggle ($0–200/wk), tax-exempt week disclaimer gate (non-blocking; merged from old Steps 7+8)
 
-**Employer preset:** `employerPreset: "DHL"` flag activates bucket attendance model, rotation-based scheduling, and dual withholding rates. Standard users get flat weekly hours model. Pattern is designed to extend to other employer presets (UPS, Amazon, etc.).
+**`STEP_DEFS` shape:** `{ id, title, showIf(formData, lifeEvent), isValid(formData, lifeEvent), skippable?, component }`. `activeSteps = STEP_DEFS.filter(showIf)` — progress bar and step counter derived from that filtered array. Life event routing gates Steps 3 and 6 (`null` | `changed_jobs` only).
 
-**Tax rates policy:** Paystub not required at setup. Step 4 pre-fills from `STATE_TAX_TABLE` so the app is immediately useful with estimates. Users sharpen rates later via "Sharpen your tax rates" entry in Settings — same calculator UI, no full wizard re-run.
+**Employer preset:** `employerPreset: "DHL"` activates bucket attendance model, rotation-based scheduling, dual withholding rates, and DHL team/shift fields in Step 2. `isValid` for Step 2 requires `dhlTeam !== null` when DHL. Standard users get flat weekly hours model.
 
-**Benefits gate:** Three states — enrolled, not yet eligible (with projected start date), no benefits — control whether LTD and 401k fields appear and when they activate in `buildYear()`.
+**Tax rates policy:** Paystub not required. Step 5 pre-fills from `STATE_TAX_TABLE`; users sharpen later via Income → Sharpen Rates (same calc UI, no wizard re-run).
+
+**Token standard:** All rgba values use teal `rgba(0,200,150,...)` and green `rgba(34,197,94,...)` — old amber `rgba(201,168,76,...)` and old green `rgba(76,175,125,...)` fully removed.
 
 ---
 

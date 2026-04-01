@@ -23,7 +23,7 @@
  *   onConfirm(confirmation, logEntry|null) — called on confirm; logEntry is null for net-zero
  *   onDismiss() — session-only skip; badge persists in sidebar until confirmed
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { EVENT_TYPES } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
@@ -71,9 +71,9 @@ function DayPicker({ scheduledDays, missedDays, onToggle }) {
             <button key={day} type="button" onClick={() => isScheduled && onToggle(day)} style={{
               padding: "6px 10px", borderRadius: "3px", fontSize: "10px", letterSpacing: "1px",
               cursor: isScheduled ? "pointer" : "default",
-              border: isMissed ? "1px solid #e8856a" : isScheduled ? "1px solid #444" : "1px solid #222",
-              background: isMissed ? "rgba(224,92,92,0.13)" : isScheduled ? "var(--color-bg-surface)" : "#111",
-              color: isMissed ? "var(--color-red)" : isScheduled ? "#888" : "var(--color-border-subtle)",
+              border: isMissed ? "1px solid var(--color-red)" : isScheduled ? "1px solid var(--color-text-disabled)" : "1px solid var(--color-border-subtle)",
+              background: isMissed ? "rgba(239,68,68,0.13)" : isScheduled ? "var(--color-bg-surface)" : "var(--color-bg-base)",
+              color: isMissed ? "var(--color-red)" : isScheduled ? "var(--color-text-secondary)" : "var(--color-text-disabled)",
               fontWeight: isMissed ? "bold" : "normal", textTransform: "uppercase",
             }}>
               {day}
@@ -98,6 +98,8 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
 
   // ── Layer 2 form state (mirrors LogPanel's blank event shape) ─────────────
   const [eventVals, setEventVals] = useState({});
+  // DHL short-week OT confirmation — null = unanswered, "missed" or a day name
+  const [otDay, setOtDay] = useState(null);
 
   const scheduledDays = week.workedDayNames;
   const missedScheduledDays = scheduledDays.filter(d => dayToggles[d] === false);
@@ -107,6 +109,35 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
   const dayDates = weekDayDates(week.weekStart);
   // Pay period starts the day after payPeriodEndDay (e.g. end=Sun→start=Mon=1)
   const payPeriodStartDow = ((config.payPeriodEndDay ?? 0) + 1) % 7;
+
+  // DHL short-week OT tracking
+  const isDhlShortWeek = config.employerPreset === "DHL" && scheduledDays.length <= 3;
+  const otDayCandidates = DAY_NAMES.filter(d => !scheduledDays.includes(d));
+  const otDayIsWeekend = otDay != null && otDay !== "missed" && ["Sat", "Sun"].includes(otDay);
+
+  useEffect(() => {
+    if (!isDhlShortWeek && otDay !== null) {
+      setOtDay(null);
+    }
+  }, [isDhlShortWeek, otDay]);
+
+  const selectOtDay = (value) => {
+    setOtDay(value);
+    setDayToggles(prev => {
+      const next = { ...prev };
+      if (value === "missed") {
+        otDayCandidates.forEach(day => {
+          next[day] = null;
+        });
+      } else if (value) {
+        next[value] = true;
+      }
+      return next;
+    });
+  };
+
+  const otSelectionMissing = isDhlShortWeek && otDay === null;
+  const logSwapDisabled = otSelectionMissing || (isDhlShortWeek && otDay === "missed");
 
   // ── Toggle handler: 3 states ──────────────────────────────────────────────
   const toggleDay = (day) => {
@@ -171,12 +202,36 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
   //     Surplus → type: "bonus", amount pre-filled as gross pickup estimate
   //   User can change any field before confirming. Goes to Layer 2.
   const handleSave = () => {
+    if (otSelectionMissing) {
+      return;
+    }
+    // DHL short week: missed OT → pre-fill Layer 2 as unapproved miss (hits bucket hours)
+    if (isDhlShortWeek && otDay === "missed") {
+      setEventVals({
+        weekEnd: toLocalIso(week.weekEnd),
+        weekIdx: week.idx,
+        weekRotation: week.rotation,
+        type: "missed_unapproved",
+        missedDays: [],
+        shiftsLost: 1,
+        weekendShifts: 0,
+        hoursLost: config.shiftHours,
+        amount: 0,
+        ptoHours: 0,
+        note: "Mandatory OT shift not worked",
+      });
+      setLayer(2);
+      setWentToLayer2(true);
+      return;
+    }
+
     if (netShiftDelta === 0) {
       // Net-zero: same total hours regardless of which days — confirm clean
       onConfirm({
         confirmedAt: new Date().toISOString(),
         dayToggles, scheduledDays, missedScheduledDays, pickupDays,
         netShiftDelta: 0, eventId: null,
+        ...(isDhlShortWeek ? { otDay, otDayIsWeekend } : {}),
       }, null);
       return;
     }
@@ -194,7 +249,9 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       // has a useful starting value. User should verify the actual payout.
       amount: !isDeficit ? pickupDays.length * config.shiftHours * config.baseRate : 0,
       ptoHours: 0,
-      note: "",
+      note: isDhlShortWeek && otDay && otDay !== "missed"
+        ? `OT day: ${otDay}${otDayIsWeekend ? " (weekend — diff applies)" : ""}`
+        : "",
     });
     setLayer(2);
     setWentToLayer2(true);
@@ -204,6 +261,9 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
   // Net-zero means equal shift count but different days — may affect pay (e.g.
   // missed weekday Mon, worked weekend Sun earns diffRate). Lets the user log it.
   const handleLogSwap = () => {
+    if (logSwapDisabled) {
+      return;
+    }
     setEventVals({
       weekEnd: toLocalIso(week.weekEnd),
       weekIdx: week.idx,
@@ -243,6 +303,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       confirmedAt: new Date().toISOString(),
       dayToggles, scheduledDays, missedScheduledDays, pickupDays,
       netShiftDelta, eventId: logEntry.id,
+      ...(isDhlShortWeek ? { otDay, otDayIsWeekend } : {}),
     }, logEntry);
   };
 
@@ -257,13 +318,13 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       padding: "16px",
     }}>
       <div style={{
-        background: "#111", border: "1px solid #2a2a2a", borderRadius: "10px",
+        background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px",
         width: "100%", maxWidth: "460px",
         overflow: "hidden", maxHeight: "90vh", display: "flex", flexDirection: "column",
       }}>
 
         {/* ── Header ── */}
-        <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #1e1e1e", flexShrink: 0 }}>
+        <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "5px" }}>
@@ -273,7 +334,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                 {weekStartDate} — {weekEndDate}
               </div>
             </div>
-            <span style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-secondary)", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", padding: "4px 9px", borderRadius: "3px", textTransform: "uppercase", marginTop: "2px" }}>
+            <span style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-secondary)", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", padding: "4px 9px", borderRadius: "3px", textTransform: "uppercase", marginTop: "2px" }}>
               {week.rotation}
             </span>
           </div>
@@ -288,7 +349,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
         {layer === 1 && (
           <>
             <div style={{ overflowY: "auto", flex: 1 }}>
-              <div style={{ padding: "6px 20px 4px", fontSize: "9px", color: "#444", letterSpacing: "1.5px", textTransform: "uppercase" }}>
+              <div style={{ padding: "6px 20px 4px", fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
                 Mark your actual week — tap any day to update
               </div>
 
@@ -304,18 +365,18 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                   <div key={day} style={{
                     display: "flex", alignItems: "center",
                     padding: "9px 20px",
-                    borderBottom: "1px solid #161616",
+                    borderBottom: "1px solid var(--color-border-subtle)",
                     borderTop: isPayStart ? "1px solid rgba(0,200,150,0.15)" : undefined,
                   }}>
                     {/* Day + date */}
                     <div style={{ width: "86px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                        <div style={{ fontSize: "11px", fontWeight: "bold", color: isScheduled ? "var(--color-text-primary)" : "#555", letterSpacing: "1px" }}>{day}</div>
+                        <div style={{ fontSize: "11px", fontWeight: "bold", color: isScheduled ? "var(--color-text-primary)" : "var(--color-text-disabled)", letterSpacing: "1px" }}>{day}</div>
                         {isPayStart && (
                           <span style={{ fontSize: "7px", letterSpacing: "1.5px", color: "var(--color-gold)", textTransform: "uppercase", opacity: 0.7 }}>pay start</span>
                         )}
                       </div>
-                      <div style={{ fontSize: "9px", color: "#444" }}>{fmtDate(date)}</div>
+                      <div style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>{fmtDate(date)}</div>
                     </div>
 
                     {/* Shift label */}
@@ -323,28 +384,28 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                       {isScheduled
                         ? <span style={{ fontSize: "9px", color: "var(--color-text-disabled)", textTransform: "uppercase", letterSpacing: "1px" }}>{config.shiftHours}h shift</span>
                         : isPickup
-                          ? <span style={{ fontSize: "9px", color: "rgba(76,175,125,0.53)", textTransform: "uppercase", letterSpacing: "1px" }}>pickup</span>
-                          : <span style={{ fontSize: "9px", color: "#2e2e2e", textTransform: "uppercase", letterSpacing: "1px" }}>off</span>
+                          ? <span style={{ fontSize: "9px", color: "rgba(34,197,94,0.53)", textTransform: "uppercase", letterSpacing: "1px" }}>pickup</span>
+                          : <span style={{ fontSize: "9px", color: "var(--color-text-disabled)", textTransform: "uppercase", letterSpacing: "1px" }}>off</span>
                       }
                     </div>
 
                     {/* Scheduled day — Worked / Missed pill */}
                     {isScheduled && (
-                      <div style={{ display: "flex", borderRadius: "4px", overflow: "hidden", border: "1px solid #2a2a2a" }}>
+                      <div style={{ display: "flex", borderRadius: "4px", overflow: "hidden", border: "1px solid var(--color-border-subtle)" }}>
                         <button onClick={() => setDayToggles(t => ({ ...t, [day]: true }))} style={{
                           padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
-                          cursor: "pointer", border: "none", borderRight: "1px solid #2a2a2a",
+                          cursor: "pointer", border: "none", borderRight: "1px solid var(--color-border-subtle)",
                           fontWeight: toggle === true ? "bold" : "normal",
-                          background: toggle === true ? "rgba(76,175,125,0.13)" : "var(--color-bg-surface)",
-                          color: toggle === true ? "var(--color-green)" : "#444",
+                          background: toggle === true ? "rgba(34,197,94,0.13)" : "var(--color-bg-surface)",
+                          color: toggle === true ? "var(--color-green)" : "var(--color-text-disabled)",
                           transition: "background 0.15s, color 0.15s",
                         }}>Worked</button>
                         <button onClick={() => setDayToggles(t => ({ ...t, [day]: false }))} style={{
                           padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
                           cursor: "pointer", border: "none",
                           fontWeight: toggle === false ? "bold" : "normal",
-                          background: toggle === false ? "rgba(224,92,92,0.13)" : "var(--color-bg-surface)",
-                          color: toggle === false ? "var(--color-red)" : "#444",
+                          background: toggle === false ? "rgba(239,68,68,0.13)" : "var(--color-bg-surface)",
+                          color: toggle === false ? "var(--color-red)" : "var(--color-text-disabled)",
                           transition: "background 0.15s, color 0.15s",
                         }}>Missed</button>
                       </div>
@@ -354,10 +415,10 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                     {!isScheduled && (
                       <button onClick={() => toggleDay(day)} style={{
                         padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
-                        cursor: "pointer", border: `1px solid ${isPickup ? "rgba(76,175,125,0.33)" : "#222"}`,
+                        cursor: "pointer", border: `1px solid ${isPickup ? "rgba(34,197,94,0.33)" : "var(--color-border-subtle)"}`,
                         borderRadius: "4px",
                         background: isPickup ? "rgba(76,175,125,0.09)" : "var(--color-bg-base)",
-                        color: isPickup ? "var(--color-green)" : "#2e2e2e",
+                        color: isPickup ? "var(--color-green)" : "var(--color-text-disabled)",
                         transition: "background 0.15s, color 0.15s, border-color 0.15s",
                       }}>
                         {isPickup ? "✓ Pickup" : "+ Pickup"}
@@ -371,7 +432,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                   Shows the running delta so the user can see the impact before saving.
                   "Net hours unchanged" copy is intentionally calm — it's good news. */}
               {(missedScheduledDays.length > 0 || pickupDays.length > 0) && (
-                <div style={{ margin: "10px 20px", padding: "10px 14px", background: "var(--color-bg-base)", border: "1px solid #1e1e1e", borderRadius: "6px", fontSize: "10px" }}>
+                <div style={{ margin: "10px 20px", padding: "10px 14px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", fontSize: "10px" }}>
                   {missedScheduledDays.length > 0 && (
                     <div style={{ color: "var(--color-red)", marginBottom: pickupDays.length ? "4px" : 0 }}>
                       − {missedScheduledDays.length} missed: {missedScheduledDays.join(", ")}
@@ -392,13 +453,93 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                   )}
                 </div>
               )}
+
+              {isDhlShortWeek && (
+                <div style={{ margin: "12px 20px 0", padding: "12px 14px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "6px" }}>
+                    Mandatory OT shift
+                  </div>
+                  <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5", marginBottom: "10px" }}>
+                    DHL short weeks include a required fourth shift. Pick the day you worked or mark "Missed". Weekend selections automatically apply the differential.
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    {otDayCandidates.map(day => {
+                      const active = otDay === day;
+                      const weekend = day === "Sat" || day === "Sun";
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => selectOtDay(day)}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: "4px",
+                            fontSize: "9px",
+                            letterSpacing: "1px",
+                            textTransform: "uppercase",
+                            border: active ? "1px solid rgba(34,197,94,0.6)" : "1px solid var(--color-border-subtle)",
+                            background: active ? "rgba(34,197,94,0.12)" : "var(--color-bg-surface)",
+                            color: weekend ? "var(--color-green)" : "var(--color-text-secondary)",
+                            fontWeight: active ? "bold" : "normal",
+                            cursor: "pointer",
+                            display: "flex",
+                            gap: "6px",
+                            alignItems: "center",
+                          }}
+                        >
+                          {active ? "✓" : "+"} {day}
+                          {weekend && (
+                            <span style={{ fontSize: "8px", letterSpacing: "1px", color: "var(--color-text-disabled)" }}>
+                              weekend
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => selectOtDay("missed")}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "4px",
+                        fontSize: "9px",
+                        letterSpacing: "1px",
+                        textTransform: "uppercase",
+                        border: otDay === "missed" ? "1px solid rgba(239,68,68,0.6)" : "1px solid var(--color-border-subtle)",
+                        background: otDay === "missed" ? "rgba(239,68,68,0.12)" : "var(--color-bg-surface)",
+                        color: otDay === "missed" ? "var(--color-red)" : "var(--color-text-secondary)",
+                        fontWeight: otDay === "missed" ? "bold" : "normal",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {otDay === "missed" ? "✓ Missed OT" : "Missed OT"}
+                    </button>
+                  </div>
+                  <div style={{
+                    marginTop: "8px",
+                    fontSize: "10px",
+                    color: otDay === "missed"
+                      ? "var(--color-red)"
+                      : otDay
+                        ? (otDayIsWeekend ? "var(--color-green)" : "var(--color-text-secondary)")
+                        : "var(--color-text-disabled)",
+                    letterSpacing: "0.5px",
+                  }}>
+                    {otDay === "missed"
+                      ? "Missed OT will be logged for approval and hits bucket hours unless cleared."
+                      : otDay
+                        ? (otDayIsWeekend ? "Weekend OT earns your diff rate automatically." : "Weekday OT does not include the differential.")
+                        : "Required — select the OT day or mark it missed to continue."}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Layer 1 footer */}
-            <div style={{ padding: "14px 20px", borderTop: "1px solid #1e1e1e", flexShrink: 0 }}>
+            <div style={{ padding: "14px 20px", borderTop: "1px solid var(--color-border-subtle)", flexShrink: 0 }}>
               {skipWarning ? (
                 /* Abandon warning — shown when user tries to skip after starting Layer 2 */
-                <div style={{ padding: "12px 14px", background: "#2d1a1a", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "6px" }}>
+                <div style={{ padding: "12px 14px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px" }}>
                   <div style={{ fontSize: "10px", color: "var(--color-red)", marginBottom: "8px" }}>
                     You started logging an event — skip anyway?
                   </div>
@@ -410,7 +551,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                       ← Keep logging
                     </button>
                     <button onClick={onDismiss} style={{
-                      background: "var(--color-red)", color: "#0a0a0a", border: "none",
+                      background: "var(--color-red)", color: "var(--color-bg-base)", border: "none",
                       borderRadius: "4px", padding: "8px 16px", fontSize: "10px",
                       letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold",
                     }}>
@@ -421,7 +562,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
               ) : (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <button onClick={() => wentToLayer2 ? setSkipWarning(true) : onDismiss()} style={{
-                    background: "transparent", border: "none", color: "#444",
+                    background: "transparent", border: "none", color: "var(--color-text-disabled)",
                     fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
                     cursor: "pointer", padding: "6px 0",
                   }}>
@@ -429,28 +570,34 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                   </button>
               {netShiftDelta === 0 && (missedScheduledDays.length > 0 || pickupDays.length > 0) ? (
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button onClick={handleSave} style={{
-                    background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333",
+                  <button onClick={handleSave} disabled={otSelectionMissing} style={{
+                    background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)",
                     borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
-                    letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                    letterSpacing: "2px", textTransform: "uppercase",
+                    cursor: otSelectionMissing ? "not-allowed" : "pointer",
+                    opacity: otSelectionMissing ? 0.5 : 1,
                   }}>
                     Confirm Clean
                   </button>
-                  <button onClick={handleLogSwap} style={{
-                    background: "var(--color-gold)", color: "#0a0a0a", border: "none",
+                  <button onClick={handleLogSwap} disabled={logSwapDisabled} style={{
+                    background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
-                    letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                    letterSpacing: "2px", textTransform: "uppercase",
+                    cursor: logSwapDisabled ? "not-allowed" : "pointer",
+                    opacity: logSwapDisabled ? 0.5 : 1,
                     fontWeight: "bold",
                   }}>
                     Log Swap →
                   </button>
                 </div>
               ) : (
-                <button onClick={handleSave} style={{
-                  background: "var(--color-gold)", color: "#0a0a0a", border: "none",
+                <button onClick={handleSave} disabled={otSelectionMissing} style={{
+                  background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
                   borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
-                  letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                  letterSpacing: "2px", textTransform: "uppercase",
+                  cursor: otSelectionMissing ? "not-allowed" : "pointer",
                   fontWeight: "bold",
+                  opacity: otSelectionMissing ? 0.5 : 1,
                 }}>
                   {netShiftDelta !== 0 ? "Next →" : "Confirm Week"}
                 </button>
@@ -473,8 +620,8 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
               {/* Net delta summary — non-interactive; reminds user why they're here */}
               <div style={{
                 marginBottom: "16px", padding: "10px 14px",
-                background: netShiftDelta < 0 ? "#2d1a1a" : "#1a2d1e",
-                border: `1px solid ${netShiftDelta < 0 ? "rgba(224,92,92,0.27)" : "rgba(76,175,125,0.27)"}`,
+                background: netShiftDelta < 0 ? "rgba(239,68,68,0.08)" : "var(--color-bg-raised)",
+                border: `1px solid ${netShiftDelta < 0 ? "rgba(239,68,68,0.27)" : "rgba(34,197,94,0.27)"}`,
                 borderRadius: "6px", fontSize: "10px",
                 color: netShiftDelta < 0 ? "var(--color-red)" : "var(--color-green)",
               }}>
@@ -597,14 +744,14 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                   The "estimated actual" line derives from baseGross ± gross impact —
                   this is a rough estimate since tax withholding varies by week type. */}
               {previewImpact && (previewImpact.netLost > 0 || previewImpact.netGained > 0) && (
-                <div style={{ padding: "10px 14px", background: "var(--color-bg-base)", border: "1px solid #1e1e1e", borderRadius: "6px", fontSize: "11px" }}>
+                <div style={{ padding: "10px 14px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", fontSize: "11px" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "8px" }}>Pay impact</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px" }}>
-                    <div style={{ color: "#666" }}>Projected week</div>
+                    <div style={{ color: "var(--color-text-secondary)" }}>Projected week</div>
                     <div style={{ textAlign: "right", color: "var(--color-text-secondary)" }}>{f2(previewImpact.baseGross)}</div>
-                    <div style={{ color: "#666" }}>Estimated actual</div>
+                    <div style={{ color: "var(--color-text-secondary)" }}>Estimated actual</div>
                     <div style={{ textAlign: "right", color: "var(--color-gold)" }}>{f2(previewImpact.netLost > 0 ? previewImpact.baseGross - previewImpact.grossLost : previewImpact.baseGross + previewImpact.grossGained)}</div>
-                    <div style={{ gridColumn: "1/-1", borderTop: "1px solid #1e1e1e", paddingTop: "5px", marginTop: "2px", display: "flex", justifyContent: "space-between", color: previewImpact.netLost > 0 ? "var(--color-red)" : "var(--color-green)", fontWeight: "bold" }}>
+                    <div style={{ gridColumn: "1/-1", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "5px", marginTop: "2px", display: "flex", justifyContent: "space-between", color: previewImpact.netLost > 0 ? "var(--color-red)" : "var(--color-green)", fontWeight: "bold" }}>
                       <span>Net {previewImpact.netLost > 0 ? "lost" : "gained"}</span>
                       <span>{previewImpact.netLost > 0 ? "−" : "+"}{f2(previewImpact.netLost || previewImpact.netGained)}</span>
                     </div>
@@ -613,7 +760,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
               )}
               {/* Vacuous event warning — no days, no hours on a missed type */}
               {isVacuousEvent && !confirming && (
-                <div style={{ marginTop: "12px", padding: "10px 12px", background: "#2d1a1a", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "6px", fontSize: "10px", color: "var(--color-red)", display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ marginTop: "12px", padding: "10px 12px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", fontSize: "10px", color: "var(--color-red)", display: "flex", alignItems: "center", gap: "8px" }}>
                   <span>⚠</span>
                   <span>No shifts or hours selected — choose days above or enter hours before confirming.</span>
                 </div>
@@ -621,10 +768,10 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
 
               {/* Confirmation block — shown after first click of "Log & Confirm" */}
               {confirming && (
-                <div style={{ marginTop: "16px", padding: "14px", background: "#1a2d1e", border: "1px solid rgba(76,175,125,0.4)", borderRadius: "6px" }}>
+                <div style={{ marginTop: "16px", padding: "14px", background: "var(--color-bg-raised)", border: "1px solid rgba(34,197,94,0.4)", borderRadius: "6px" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "10px" }}>Confirm entry</div>
                   <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.9" }}>
-                    <div><span style={{ color: "#555" }}>Type:</span> {EVENT_TYPES[eventVals.type]?.label ?? eventVals.type}</div>
+                    <div><span style={{ color: "var(--color-text-disabled)" }}>Type:</span> {EVENT_TYPES[eventVals.type]?.label ?? eventVals.type}</div>
                     {(eventVals.type === "missed_unpaid" || eventVals.type === "missed_unapproved") && (() => {
                       const s = parseInt(eventVals.shiftsLost) || 0;
                       const h = parseFloat(eventVals.hoursLost) || 0;
@@ -632,21 +779,21 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                       const overridden = expected > 0 && Math.abs(h - expected) > 0.01;
                       return (
                         <>
-                          <div><span style={{ color: "#555" }}>Shifts missed:</span> <span style={{ color: "var(--color-text-primary)" }}>{s}</span></div>
+                          <div><span style={{ color: "var(--color-text-disabled)" }}>Shifts missed:</span> <span style={{ color: "var(--color-text-primary)" }}>{s}</span></div>
                           <div>
-                            <span style={{ color: "#555" }}>Hours missed:</span>{" "}
+                            <span style={{ color: "var(--color-text-disabled)" }}>Hours missed:</span>{" "}
                             <span style={{ color: overridden ? "var(--color-gold)" : "var(--color-text-primary)" }}>{h}h</span>
                             {overridden && <span style={{ color: "var(--color-gold)", fontSize: "9px", marginLeft: "6px" }}>⚠ manually overridden (expected {expected}h)</span>}
                           </div>
-                          {(eventVals.missedDays ?? []).length > 0 && <div><span style={{ color: "#555" }}>Days:</span> {eventVals.missedDays.join(", ")}</div>}
+                          {(eventVals.missedDays ?? []).length > 0 && <div><span style={{ color: "var(--color-text-disabled)" }}>Days:</span> {eventVals.missedDays.join(", ")}</div>}
                         </>
                       );
                     })()}
                     {eventVals.type === "bonus" && (
                       <>
-                        <div><span style={{ color: "#555" }}>Amount:</span> <span style={{ color: "var(--color-green)" }}>{f2(parseFloat(eventVals.amount) || 0)}</span></div>
-                        <div><span style={{ color: "#555" }}>Shifts gained:</span> {eventVals.shiftsGained !== undefined ? eventVals.shiftsGained : pickupDays.length}</div>
-                        <div><span style={{ color: "#555" }}>Hours gained:</span> {eventVals.hoursGained !== undefined ? eventVals.hoursGained : pickupDays.length * config.shiftHours}h</div>
+                        <div><span style={{ color: "var(--color-text-disabled)" }}>Amount:</span> <span style={{ color: "var(--color-green)" }}>{f2(parseFloat(eventVals.amount) || 0)}</span></div>
+                        <div><span style={{ color: "var(--color-text-disabled)" }}>Shifts gained:</span> {eventVals.shiftsGained !== undefined ? eventVals.shiftsGained : pickupDays.length}</div>
+                        <div><span style={{ color: "var(--color-text-disabled)" }}>Hours gained:</span> {eventVals.hoursGained !== undefined ? eventVals.hoursGained : pickupDays.length * config.shiftHours}h</div>
                       </>
                     )}
                   </div>
@@ -655,7 +802,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
             </div>
 
             {/* Layer 2 footer */}
-            <div style={{ padding: "14px 20px", borderTop: "1px solid #1e1e1e", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+            <div style={{ padding: "14px 20px", borderTop: "1px solid var(--color-border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               {!confirming ? (
                 <>
                   <button onClick={() => { setLayer(1); setConfirming(false); }} style={{
@@ -667,7 +814,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                   </button>
                   <button onClick={() => !isVacuousEvent && setConfirming(true)} disabled={isVacuousEvent} style={{
                     background: isVacuousEvent ? "var(--color-text-disabled)" : "var(--color-green)",
-                    color: isVacuousEvent ? "#222" : "#0a0a0a", border: "none",
+                    color: isVacuousEvent ? "var(--color-bg-surface)" : "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase",
                     cursor: isVacuousEvent ? "not-allowed" : "pointer",
@@ -686,7 +833,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                     ← Edit
                   </button>
                   <button onClick={handleConfirmLayer2} style={{
-                    background: "var(--color-green)", color: "#0a0a0a", border: "none",
+                    background: "var(--color-green)", color: "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
                     fontWeight: "bold",

@@ -219,6 +219,7 @@ export function projectedGross(isWeek2, cfg) {
   const nonWkndH = totalH - wkndH;
   const regWknd = Math.max(0, Math.min(wkndH, cfg.otThreshold - nonWkndH));
   const otWknd  = wkndH - regWknd;
+  const isDHL = cfg.employerPreset === "DHL";
   const nightDiff = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
   return reg     * (cfg.baseRate + nightDiff)
        + regWknd * cfg.diffRate

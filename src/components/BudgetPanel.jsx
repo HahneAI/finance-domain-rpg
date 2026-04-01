@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
-import { formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
+import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { Card, VT, SmBtn, SH, iS, lS } from "./ui.jsx";
 
 // TODO: tune — total particle count (12); must divide evenly into rings below
@@ -18,19 +18,6 @@ const BURST_PARTICLES = Array.from({ length: 12 }, (_, i) => {
   };
 });
 
-const GOAL_LANES = {
-  Expenses: {
-    tint: "rgba(201, 96, 96, 0.16)",
-    border: "rgba(201, 96, 96, 0.4)",
-    text: "#c96060",
-  },
-  Lifestyle: {
-    tint: "rgba(91, 140, 255, 0.14)",
-    border: "rgba(91, 140, 255, 0.38)",
-    text: "#5B8CFF",
-  },
-};
-
 const EXPENSE_DRAG_PREVIEW_TINT = {
   Needs: "rgba(201, 96, 96, 0.18)",
   Lifestyle: "rgba(91, 140, 255, 0.18)",
@@ -40,10 +27,9 @@ const EXPENSE_TOUCH_OVERLAY_BG = {
   Lifestyle: "#5B8CFF",
 };
 
-// Card backgrounds: use the same tint as the GOAL_LANES top-of-gradient color
 const CAT_GRADIENT = {
-  Needs:      GOAL_LANES["Expenses"].tint,
-  Lifestyle:  GOAL_LANES["Lifestyle"].tint,
+  Needs: "rgba(201, 96, 96, 0.16)",
+  Lifestyle: "rgba(91, 140, 255, 0.14)",
 };
 const EXPENSE_DRAG_EASE = "cubic-bezier(.22,.7,.2,1)";
 const EXPENSE_INSERT_MARKER_BG = "rgba(255,255,255,0.72)";
@@ -130,11 +116,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const [editGoalId, setEditGoalId] = useState(null);
   const [editGoalVals, setEditGoalVals] = useState({});
   const [addingGoal, setAddingGoal] = useState(false);
-  const [newGoal, setNewGoal] = useState({ label: "", target: "", color: "var(--color-gold)", note: "", category: "Expenses" });
+  const [newGoal, setNewGoal] = useState({ label: "", target: "", color: "var(--color-gold)", note: "" });
   const [delGoalId, setDelGoalId] = useState(null);
   const [draggingGoalId, setDraggingGoalId] = useState(null);
   const [dragOverGoalId, setDragOverGoalId] = useState(null);
-  const [dragPreviewCategory, setDragPreviewCategory] = useState(null);
   const [draggingExpenseId, setDraggingExpenseId] = useState(null);
   const [dragPreviewExpenseCategory, setDragPreviewExpenseCategory] = useState(null);
   const [expenseInsertLane, setExpenseInsertLane] = useState(null);
@@ -150,7 +135,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const expenseDragFinalizedRef = useRef(false);
   const [pendingExpenseTouchId, setPendingExpenseTouchId] = useState(null);
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
-  const goalInsertRef = useRef({ targetId: null, insertIndex: null, lane: null });
+  const goalInsertRef = useRef({ targetId: null, insertIndex: null });
   const goalDragFinalizedRef = useRef(false);
   const EXPENSE_TOUCH_HOLD_MS = 450;
   const TOUCH_SCROLL_CANCEL_PX = 12;
@@ -561,14 +546,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const deleteLoan = (id) => { setExpenses(p => p.filter(e => e.id !== id)); setDelLoanId(null); };
 
   // Goal helpers
-  const activeGoals = goals.filter(g => !g.completed).map(g => ({ ...g, category: g.category === "Lifestyle" ? "Lifestyle" : "Expenses" }));
+  const activeGoals = goals.filter(g => !g.completed);
   const completedGoals = goals.filter(g => g.completed);
-  const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, color: g.color, note: g.note, category: g.category === "Lifestyle" ? "Lifestyle" : "Expenses" }); };
+  const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, color: g.color, note: g.note }); };
   const saveEditGoal = (id) => {
     setGoals(p => p.map(g => g.id === id ? {
       ...g,
       ...editGoalVals,
-      category: editGoalVals.category === "Lifestyle" ? "Lifestyle" : "Expenses",
       target: parseFloat(editGoalVals.target) || 0,
     } : g));
     setEditGoalId(null);
@@ -580,10 +564,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       target: parseFloat(newGoal.target) || 0,
       color: newGoal.color || "var(--color-gold)",
       note: newGoal.note,
-      category: newGoal.category === "Lifestyle" ? "Lifestyle" : "Expenses",
       completed: false
     }]);
-    setAddingGoal(false); setNewGoal({ label: "", target: "", color: "var(--color-gold)", note: "", category: "Expenses" });
+    setAddingGoal(false); setNewGoal({ label: "", target: "", color: "var(--color-gold)", note: "" });
   };
   const deleteGoal = (id) => { setGoals(p => p.filter(g => g.id !== id)); setDelGoalId(null); };
   const toggleComplete = (id) => setGoals(p => p.map(g => g.id === id ? { ...g, completed: !g.completed } : g));
@@ -609,16 +592,14 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       return arr;
     });
   };
-  const reorderGoalByDrag = (draggedId, overId, lane, insertIndexOverride = null) => {
+  const reorderGoalByDrag = (draggedId, overId, insertIndexOverride = null) => {
     setGoals(prev => {
-      const active = prev.filter(g => !g.completed).map(g => ({ ...g, category: g.category === "Lifestyle" ? "Lifestyle" : "Expenses" }));
+      const active = prev.filter(g => !g.completed);
       const completed = prev.filter(g => g.completed);
       const dragged = active.find(g => g.id === draggedId);
       if (!dragged) return prev;
 
-      const targetLane = lane ?? dragged.category;
       const activeWithoutDragged = active.filter(g => g.id !== draggedId);
-      const draggedNext = { ...dragged, category: targetLane };
 
       const explicitIndex = typeof insertIndexOverride === "number" && !Number.isNaN(insertIndexOverride)
         ? Math.max(0, Math.min(insertIndexOverride, activeWithoutDragged.length))
@@ -629,42 +610,33 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       } else if (overId) {
         const overIndex = activeWithoutDragged.findIndex(g => g.id === overId);
         if (overIndex !== -1) insertIndex = overIndex;
-      } else {
-        const laneLastIndex = activeWithoutDragged.reduce((lastIdx, goal, idx) =>
-          goal.category === targetLane ? idx : lastIdx, -1);
-        insertIndex = laneLastIndex + 1;
       }
 
       const reordered = [...activeWithoutDragged];
-      reordered.splice(insertIndex, 0, draggedNext);
+      reordered.splice(insertIndex, 0, dragged);
       return [...reordered, ...completed];
     });
   };
   const finalizeGoalDrag = () => {
     if (!draggingGoalId || goalDragFinalizedRef.current) return false;
-    const { targetId, insertIndex, lane } = goalInsertRef.current;
+    const { targetId, insertIndex } = goalInsertRef.current;
     const hasInsertTarget = targetId || typeof insertIndex === "number";
     if (!hasInsertTarget) return false;
-    const draggedGoal = goals.find(g => g.id === draggingGoalId);
-    const fallbackLane = draggedGoal?.category === "Lifestyle" ? "Lifestyle" : "Expenses";
-    const resolvedLane = lane ?? dragPreviewCategory ?? fallbackLane;
     goalDragFinalizedRef.current = true;
-    reorderGoalByDrag(draggingGoalId, targetId, resolvedLane, insertIndex);
+    reorderGoalByDrag(draggingGoalId, targetId, insertIndex);
     return true;
   };
   const cleanupGoalDragState = () => {
-    goalInsertRef.current = { targetId: null, insertIndex: null, lane: null };
+    goalInsertRef.current = { targetId: null, insertIndex: null };
     goalDragFinalizedRef.current = false;
     setDraggingGoalId(null);
     setDragOverGoalId(null);
-    setDragPreviewCategory(null);
   };
   const onGoalDragStart = (goal, evt) => {
     setDraggingGoalId(goal.id);
     goalDragFinalizedRef.current = false;
-    setDragPreviewCategory(goal.category);
     const activeIndex = activeGoals.findIndex(g => g.id === goal.id);
-    goalInsertRef.current = { targetId: goal.id, insertIndex: activeIndex === -1 ? 0 : activeIndex, lane: goal.category };
+    goalInsertRef.current = { targetId: goal.id, insertIndex: activeIndex === -1 ? 0 : activeIndex };
     if (evt?.dataTransfer) {
       try {
         evt.dataTransfer.setData("text/plain", goal.id);
@@ -1136,6 +1108,38 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       const totG = goals.reduce((s, g) => !g.completed ? s + g.target : s, 0);
       const projS = wr * weeksLeft;
       const lastGoalEW = tl.length ? (tl[tl.length - 1].eW ?? weeksLeft + 1) : 0;
+      const ordinalSuffix = (day) => {
+        if (day % 100 >= 11 && day % 100 <= 13) return "th";
+        const mod = day % 10;
+        if (mod === 1) return "st";
+        if (mod === 2) return "nd";
+        if (mod === 3) return "rd";
+        return "th";
+      };
+      const formatGoalFinishDate = (rawDate) => {
+        const parsed = safeDate(rawDate);
+        if (!parsed) return null;
+        const month = parsed.toLocaleDateString("en-US", { month: "short" });
+        const day = parsed.getDate();
+        return `${month} ${day}${ordinalSuffix(day)}`;
+      };
+      const buildGoalFinishLabel = (offsetRaw) => {
+        if (!Number.isFinite(offsetRaw)) return null;
+        const offset = Math.max(Math.ceil(offsetRaw), 0);
+        const weekNumber = Math.min(nowIdx + offset, FISCAL_WEEKS_PER_YEAR);
+        const finishIdx = futureWeeks?.length ? Math.min(offset, futureWeeks.length - 1) : null;
+        const finishDate = finishIdx != null ? futureWeeks[finishIdx]?.weekEnd : null;
+        const dateLabel = formatGoalFinishDate(finishDate);
+        return dateLabel ? `By ${dateLabel}, week ${weekNumber}` : `Week ${weekNumber}`;
+      };
+      const resolveGoalFinishLabel = (goal) => {
+        const primary = Number.isFinite(goal.eW) ? buildGoalFinishLabel(goal.eW) : null;
+        if (primary) return primary;
+        const startOffset = Number.isFinite(goal.sW) ? goal.sW : 0;
+        const duration = Number.isFinite(goal.wN) ? goal.wN : null;
+        if (!Number.isFinite(duration)) return null;
+        return buildGoalFinishLabel(startOffset + duration);
+      };
       return <div>
         {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
@@ -1158,9 +1162,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           onDragLeave={(e) => {
             if (!draggingGoalId) return;
             if (e.currentTarget.contains(e.relatedTarget)) return;
-            goalInsertRef.current = { targetId: null, insertIndex: null, lane: null };
+            goalInsertRef.current = { targetId: null, insertIndex: null };
             setDragOverGoalId(null);
-            setDragPreviewCategory(null);
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0" }}>
@@ -1174,8 +1177,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
         const celebrating = fundingId === g.id;
         const isDragging = draggingGoalId === g.id;
           const isDropTarget = dragOverGoalId === g.id;
-          const previewLane = dragPreviewCategory ?? g.category;
-          const lanePreviewingMove = isDragging && previewLane !== g.category;
+          const finishLabel = resolveGoalFinishLabel(g) ?? "Timeline pending";
           // TODO: tune — card glow animation duration (1.8s) and easing (ease-out)
           return <div
             key={g.id}
@@ -1186,12 +1188,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               e.preventDefault();
               e.stopPropagation();
               setDragOverGoalId(g.id);
-              setDragPreviewCategory(g.category);
               const activeIndex = activeGoals.findIndex(goal => goal.id === g.id);
               goalInsertRef.current = {
                 targetId: g.id,
-                insertIndex: activeIndex === -1 ? 0 : activeIndex,
-                lane: g.category
+                insertIndex: activeIndex === -1 ? 0 : activeIndex
               };
             }}
             onDrop={(e) => {
@@ -1201,12 +1201,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               const activeIndex = activeGoals.findIndex(goal => goal.id === g.id);
               goalInsertRef.current = {
                 targetId: g.id,
-                insertIndex: activeIndex === -1 ? 0 : activeIndex,
-                lane: g.category
+                insertIndex: activeIndex === -1 ? 0 : activeIndex
               };
             }}
             style={{
-              background: lanePreviewingMove ? GOAL_LANES[previewLane].tint : "var(--color-bg-surface)",
+              background: "var(--color-bg-surface)",
               border: `1px solid ${isDropTarget ? "var(--color-gold)" : (celebrating ? "var(--color-green)" : g.color + "33")}`,
               borderRadius: "8px",
               padding: "16px",
@@ -1225,7 +1224,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={editGoalVals.label} onChange={e => setEditGoalVals(v => ({ ...v, label: e.target.value }))} style={iS} /></div>
                 <div><label style={lS}>Target ($)</label><input type="number" value={editGoalVals.target} onChange={e => setEditGoalVals(v => ({ ...v, target: e.target.value }))} style={iS} /></div>
-                <div><label style={lS}>Category</label><select value={editGoalVals.category} onChange={e => setEditGoalVals(v => ({ ...v, category: e.target.value }))} style={iS}><option value="Expenses">Expenses</option><option value="Lifestyle">Lifestyle</option></select></div>
                 <div><label style={lS}>Color (hex)</label>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     <input type="text" value={editGoalVals.color} onChange={e => setEditGoalVals(v => ({ ...v, color: e.target.value }))} style={{ ...iS, flex: 1 }} />
@@ -1244,14 +1242,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                     <span style={{ fontSize: "10px", background: g.color + "22", color: g.color, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
-                    <span style={{ fontSize: "9px", background: GOAL_LANES[g.category].tint, color: GOAL_LANES[g.category].text, padding: "2px 7px", borderRadius: "12px", letterSpacing: "1px", textTransform: "uppercase" }}>{g.category}</span>
                     <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
                   </div>
                   <div style={{ fontSize: "10px", color: "#777" }}>{g.note}</div>
                 </div>
                 <div style={{ textAlign: "right", marginLeft: "12px" }}>
                   <div style={{ fontSize: "18px", fontWeight: "bold", color: g.color }}>{f(g.target)}</div>
-                  <div style={{ fontSize: "10px", color: ok ? "var(--color-green)" : "var(--color-red)" }}>{ok ? `Wk ${Math.min(nowIdx + Math.ceil(g.eW), 52)} of 52` : `Wk ${Math.min(nowIdx + Math.ceil(g.sW + g.wN), 52)} of 52`}</div>
+                  <div style={{ fontSize: "10px", color: ok ? "var(--color-green)" : "var(--color-red)" }}>{finishLabel}</div>
                   {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                 </div>
               </div>
@@ -1387,21 +1384,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
             e.preventDefault();
             e.stopPropagation();
             setDragOverGoalId(null);
-            const draggedGoal = goals.find(goal => goal.id === draggingGoalId);
-            const fallbackLane = draggedGoal?.category === "Lifestyle" ? "Lifestyle" : "Expenses";
-            const lane = dragPreviewCategory ?? fallbackLane;
-            setDragPreviewCategory(lane);
-            goalInsertRef.current = { targetId: null, insertIndex: activeGoals.length, lane };
+            goalInsertRef.current = { targetId: null, insertIndex: activeGoals.length };
           }}
           onDrop={(e) => {
             if (!draggingGoalId) return;
             e.preventDefault();
             e.stopPropagation();
-            const draggedGoal = goals.find(goal => goal.id === draggingGoalId);
-            const fallbackLane = draggedGoal?.category === "Lifestyle" ? "Lifestyle" : "Expenses";
-            const lane = dragPreviewCategory ?? fallbackLane;
-            setDragPreviewCategory(lane);
-            goalInsertRef.current = { targetId: null, insertIndex: activeGoals.length, lane };
+            goalInsertRef.current = { targetId: null, insertIndex: activeGoals.length };
           }}
           style={{
             height: draggingGoalId ? "10px" : "0px",
@@ -1419,7 +1408,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={e => setNewGoal(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Emergency Fund" /></div>
             <div><label style={lS}>Target ($)</label><input type="number" value={newGoal.target} onChange={e => setNewGoal(v => ({ ...v, target: e.target.value }))} style={iS} /></div>
-            <div><label style={lS}>Category</label><select value={newGoal.category} onChange={e => setNewGoal(v => ({ ...v, category: e.target.value }))} style={iS}><option value="Expenses">Expenses</option><option value="Lifestyle">Lifestyle</option></select></div>
             <div><label style={lS}>Color (hex)</label>
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                 <input type="text" value={newGoal.color} onChange={e => setNewGoal(v => ({ ...v, color: e.target.value }))} style={{ ...iS, flex: 1 }} />
@@ -1431,7 +1419,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
             <button onClick={addGoal} disabled={!newGoal.label || !newGoal.target} style={{ background: (newGoal.label && newGoal.target) ? "var(--color-green)" : "var(--color-border-subtle)", color: (newGoal.label && newGoal.target) ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newGoal.label && newGoal.target) ? "pointer" : "default", fontWeight: "bold" }}>ADD GOAL</button>
-            <button onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", color: "var(--color-gold)", note: "", category: "Expenses" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
+            <button onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", color: "var(--color-gold)", note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
           </div>
         </div> : <button onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</button>}
 

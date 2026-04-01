@@ -215,11 +215,29 @@ export default function App() {
 
   const currentView = viewStack[viewStack.length - 1];
   const canGoBack = viewStack.length > 1;
+  const mainContentRef = useRef(null);
+
+  const jumpToPanelTop = () => {
+    const scrollToTop = () => {
+      const container = mainContentRef.current;
+      if (container) {
+        if (typeof container.scrollTo === "function") container.scrollTo({ top: 0, left: 0, behavior: "auto" });
+        else container.scrollTop = 0;
+      }
+      if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      }
+    };
+
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(scrollToTop);
+    else scrollToTop();
+  };
 
   // Push a panel onto the stack (used by tiles and within-panel navigation)
   const navigate = (key) => {
     setViewStack(prev => [...prev, key]);
     setDrawerOpen(false);
+    jumpToPanelTop();
   };
 
   // Pop back one level (back arrow)
@@ -233,6 +251,7 @@ export default function App() {
   const navigateDirect = (key) => {
     setViewStack(key === "home" ? ["home"] : ["home", key]);
     setDrawerOpen(false);
+    jumpToPanelTop();
   };
 
   // ── Auth: check existing session on mount, subscribe to changes ──
@@ -900,7 +919,7 @@ export default function App() {
         </div>
 
         {/* Panel content */}
-        <div className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
+        <div ref={mainContentRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
           {activePanel}
         </div>
       </div>

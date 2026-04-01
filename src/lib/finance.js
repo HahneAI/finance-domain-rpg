@@ -36,6 +36,42 @@ function weeklyBenefitDeductions(cfg) {
   );
 }
 
+function dhlWeekendHoursForDate(date, shiftHours) {
+  const dow = date.getDay();
+  if (dow === 6 || dow === 0) return shiftHours; // Sat/Sun full shift earns diff
+  if (dow === 5) return shiftHours / 2;          // Fri night: midnight→Sat 6am only
+  return 0;
+}
+
+function dhlWeekendHoursPerDayName(dayName, shiftHours) {
+  if (dayName === "Sat" || dayName === "Sun") return shiftHours;
+  if (dayName === "Fri") return shiftHours / 2;
+  return 0;
+}
+
+function dhlTotalWeekendHours(isWeek2, shiftHours) {
+  const friday = shiftHours / 2;
+  return isWeek2 ? (friday + 2 * shiftHours) : friday;
+}
+
+function dhlWeekendHoursFromDays(dayNames, shiftHours) {
+  if (!Array.isArray(dayNames) || dayNames.length === 0) return 0;
+  return dayNames.reduce((sum, day) => sum + dhlWeekendHoursPerDayName(day, shiftHours), 0);
+}
+
+function dhlWeekendHoursFromShiftCount(count, isWeek2, shiftHours) {
+  if (!count) return 0;
+  const contributions = isWeek2 ? [shiftHours / 2, shiftHours, shiftHours] : [shiftHours / 2];
+  let remaining = count;
+  let total = 0;
+  for (const hours of contributions) {
+    if (remaining <= 0) break;
+    total += hours;
+    remaining -= 1;
+  }
+  return total;
+}
+
 export function fedTax(income) {
   let tax = 0, prev = 0;
   for (const [limit, rate] of FED_BRACKETS) { if (income <= prev) break; tax += (Math.min(income, limit) - prev) * rate; prev = limit; }
@@ -114,8 +150,8 @@ export function buildYear(cfg) {
       }
       rotation = isHighWeek ? "6-Day" : "4-Day";
       totalHours = worked.length * cfg.shiftHours;
-      // Weekend pay: Fri midnight → Mon 6am (= Fri, Sat, Sun shifts earn diffRate)
-      weekendHours = worked.filter(w => w.getDay() === 0 || w.getDay() === 5 || w.getDay() === 6).length * cfg.shiftHours;
+      // Weekend pay: Sat 12:00am → Mon 6:00am (Fri nights only count midnight→6am Sat)
+      weekendHours = worked.reduce((sum, day) => sum + dhlWeekendHoursForDate(day, cfg.shiftHours), 0);
     } else {
       // Standard path: flat weekly hours, no rotation concept.
       isHighWeek = false;
@@ -176,11 +212,10 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
 }
 
 export function projectedGross(isWeek2, cfg) {
-  const isDHL = cfg.employerPreset === "DHL";
   const ns = isWeek2 ? 6 : 4, totalH = ns * cfg.shiftHours;
   const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
-  // Anthony custom: long (Tue–Sun) has Fri+Sat+Sun = 3 weekend shifts; short (Mon/Wed/Thu/Fri) has Fri = 1
-  const wkndH = isWeek2 ? 3 * cfg.shiftHours : 1 * cfg.shiftHours;
+  // Long (Tue–Sun) has Fri (half shift) + Sat + Sun; short (Mon/Wed/Thu/Fri) only earns half-shift diff on Fri night.
+  const wkndH = dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
   const nonWkndH = totalH - wkndH;
   const regWknd = Math.max(0, Math.min(wkndH, cfg.otThreshold - nonWkndH));
   const otWknd  = wkndH - regWknd;
@@ -421,16 +456,21 @@ export function calcEventImpact(event, cfg) {
   const isDHL = cfg.employerPreset === "DHL";
   const nightDiffPerHour = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
   const isWeek2 = event.weekRotation === "6-Day" || event.weekRotation === "Week 2"; // "Week 2" kept for backward compat with stored data
-  // Long (Tue–Sun): Fri+Sat+Sun = 3 weekend shifts. Short (Mon/Wed/Thu/Fri): Fri = 1 weekend shift.
-  const normalShifts = isWeek2 ? 6 : 4, normalWeekendShifts = isWeek2 ? 3 : 1;
+  const normalShifts = isWeek2 ? 6 : 4;
+  const normalWeekendHours = dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
   const baseGross = projectedGross(isWeek2, cfg);
   let grossLost = 0, grossGained = 0, hoursLostForPTO = 0;
   if (event.type === "missed_unpaid") {
     const actualShifts = Math.max(normalShifts - (event.shiftsLost || 0), 0);
     const actualHours = actualShifts * cfg.shiftHours;
-    const actualWkndShifts = Math.max(normalWeekendShifts - (event.weekendShifts || 0), 0);
-    const actualWkndH    = actualWkndShifts * cfg.shiftHours;
-    const actualNonWkndH = actualHours - actualWkndH;
+    const hasDayResolution = Array.isArray(event.missedDays) && event.missedDays.length > 0;
+    const wkndHoursLostFromDays = hasDayResolution ? dhlWeekendHoursFromDays(event.missedDays, cfg.shiftHours) : 0;
+    const wkndHoursLostFallback = hasDayResolution
+      ? 0
+      : dhlWeekendHoursFromShiftCount(event.weekendShifts || 0, isWeek2, cfg.shiftHours);
+    const weekendHoursRemaining = Math.max(normalWeekendHours - wkndHoursLostFromDays - wkndHoursLostFallback, 0);
+    const actualWkndH = Math.min(actualHours, weekendHoursRemaining);
+    const actualNonWkndH = Math.max(actualHours - actualWkndH, 0);
     const actualRegWkndH = Math.max(0, Math.min(actualWkndH, cfg.otThreshold - actualNonWkndH));
     const actualOTWkndH  = actualWkndH - actualRegWkndH;
     const actualReg = Math.min(actualHours, cfg.otThreshold), actualOT = Math.max(actualHours - cfg.otThreshold, 0);

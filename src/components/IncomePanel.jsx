@@ -5,7 +5,7 @@ import { computeNet, toLocalIso } from "../lib/finance.js";
 import { deriveRollingIncomeWeeks, progressiveScale } from "../lib/rollingTimeline.js";
 import { Card, VT, SH, iS, lS } from "./ui.jsx";
 
-export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today }) {
+export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {} }) {
   const [view, setView] = useState("summary");
   const [subview, setSubview] = useState("monthly");
   const [editCfg, setEditCfg] = useState(null);
@@ -97,10 +97,17 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
   const f = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gN = w => computeNet(w, config, extraPerCheck, showExtra);
+  const resolveWeekNet = (week) => {
+    const meta = weekNetLookup?.[week.idx];
+    if (meta) return meta.adjustedNet;
+    return gN(week);
+  };
   const mo = MONTH_FULL.map((name, mi) => {
     const wks = allWeeks.filter(w => w.active && w.weekEnd.getFullYear() === 2026 && w.weekEnd.getMonth() === mi);
     return {
-      name, gross: wks.reduce((s, w) => s + w.grossPay, 0), net: wks.reduce((s, w) => s + gN(w), 0),
+      name,
+      gross: wks.reduce((s, w) => s + w.grossPay, 0),
+      net: wks.reduce((s, w) => s + resolveWeekNet(w), 0),
       wks, n: wks.length, tx: wks.filter(w => w.taxedBySchedule).length, ex: wks.filter(w => !w.taxedBySchedule).length
     };
   });
@@ -325,10 +332,18 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
           <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-gold)" }}>{m.name.slice(0, 3)}</div>
           <span style={{ fontSize: "9px", padding: "3px 7px", borderRadius: "12px", background: m.ex === m.n ? "#1e4a30" : m.tx === m.n ? "#1e1e3a" : "rgba(0,200,150,0.10)", color: m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)", border: "1px solid " + (m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)") }}>{m.ex === m.n ? "EXEMPT" : m.tx === m.n ? "TAXED" : "MIXED"}</span>
         </div>
-        {m.wks.map(w => <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #1e1e1e" }}>
-          <div><div style={{ fontSize: "11px", color: "#777" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div><div style={{ fontSize: "10px", color: "#999" }}>{w.rotation} · {w.totalHours}h</div></div>
-          <div style={{ textAlign: "right" }}><div style={{ fontSize: "13px", fontWeight: "bold", color: w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)" }}>{f2(gN(w))}</div><div style={{ fontSize: "9px", color: sc(w.taxedBySchedule) }}>{w.taxedBySchedule ? "TAXED" : "EXEMPT"}</div></div>
-        </div>)}
+        {m.wks.map(w => {
+          const isPast = toLocalIso(w.weekEnd) < todayIso;
+          return (
+            <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #1e1e1e", opacity: isPast ? 0.75 : 1 }}>
+              <div><div style={{ fontSize: "11px", color: "#777" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div><div style={{ fontSize: "10px", color: "#999" }}>{w.rotation} · {w.totalHours}h</div></div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: "13px", fontWeight: "bold", color: isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)") }}>{f2(resolveWeekNet(w))}</div>
+                <div style={{ fontSize: "9px", color: sc(w.taxedBySchedule) }}>{w.taxedBySchedule ? "TAXED" : "EXEMPT"}</div>
+              </div>
+            </div>
+          );
+        })}
         <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px", fontSize: "11px" }}>
           <span style={{ color: "#aaa" }}>Gross: {f(m.gross)}</span><span style={{ color: "var(--color-green)", textAlign: "right" }}>Net: {f(m.net)}</span>
         </div>
@@ -370,12 +385,41 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
           <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Take Home</th>
           <th style={{ textAlign: "center", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Status</th>
         </tr></thead>
-        <tbody>{weeklyRows.map(w => { const isCurrent = currentWeek && w.idx === currentWeek.idx; return <tr key={w.idx} style={{ borderBottom: "1px solid #161616", background: isCurrent ? "#1a2a14" : "transparent" }} onMouseEnter={e => { e.currentTarget.style.background = isCurrent ? "#1e3018" : "var(--color-bg-surface)"; }} onMouseLeave={e => e.currentTarget.style.background = isCurrent ? "#1a2a14" : "transparent"}>
-          <td style={{ padding: `${Math.round(7 * weeklyDensityScale)}px 4px` }}><span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>{isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}</td>
-          <td style={{ padding: "7px 4px", textAlign: "right" }}>{w.active ? f2(w.grossPay) : "—"}</td>
-          <td style={{ padding: "7px 4px", textAlign: "right", color: w.active ? (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)") : "#666" }}>{w.active ? f2(gN(w)) : "—"}</td>
-          <td style={{ padding: "7px 4px", textAlign: "center" }}>{w.active && <span style={{ fontSize: "8px", padding: "2px 6px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule) }}>{w.taxedBySchedule ? "TX" : "EX"}</span>}</td>
-        </tr>; })}</tbody>
+        <tbody>{weeklyRows.map(w => {
+          const isCurrent = currentWeek && w.idx === currentWeek.idx;
+          const isPast = toLocalIso(w.weekEnd) < todayIso;
+          const baseBg = isCurrent ? "#1a2a14" : isPast ? "#111111" : "transparent";
+          const hoverBg = isCurrent ? "#1e3018" : isPast ? "#1a1a1a" : "var(--color-bg-surface)";
+          const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)");
+          const displayNet = w.active ? f2(resolveWeekNet(w)) : "—";
+          return (
+            <tr
+              key={w.idx}
+              style={{ borderBottom: "1px solid #161616", background: baseBg }}
+              onMouseEnter={e => { e.currentTarget.style.background = hoverBg; }}
+              onMouseLeave={e => { e.currentTarget.style.background = baseBg; }}
+            >
+              <td style={{ padding: `${Math.round(7 * weeklyDensityScale)}px 4px`, color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
+                <span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
+              </td>
+              <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{w.active ? f2(w.grossPay) : "—"}</td>
+              <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{displayNet}</td>
+              <td style={{ padding: "7px 4px", textAlign: "center" }}>
+                {w.active && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
+                    <span style={{ fontSize: "8px", padding: "2px 6px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule) }}>
+                      {w.taxedBySchedule ? "TX" : "EX"}
+                    </span>
+                    <span style={{ fontSize: "8px", letterSpacing: "0.5px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-secondary)" }}>
+                      {isPast ? "ACTUAL" : "PROJECTED"}
+                    </span>
+                  </div>
+                )}
+              </td>
+            </tr>
+          );
+        })}</tbody>
       </table>
       {archivedWeeklyRows.length > 0 && (
         <div style={{ marginTop: "8px", fontSize: "10px", color: "var(--color-text-disabled)" }}>
@@ -460,16 +504,44 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
           <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
             <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Hrs</th><th style={{ textAlign: "center", padding: "8px 4px" }}>OT</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Wknd</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
           </tr></thead>
-          <tbody>{weeklyRows.map(w => { const isCurrent = currentWeek && w.idx === currentWeek.idx; return <tr key={w.idx} style={{ borderBottom: "1px solid #161616", background: isCurrent ? "#1a2a14" : "transparent" }} onMouseEnter={e => { e.currentTarget.style.background = isCurrent ? "#1e3018" : "var(--color-bg-surface)"; }} onMouseLeave={e => e.currentTarget.style.background = isCurrent ? "#1a2a14" : "transparent"}>
-            <td style={{ padding: "7px 4px" }}><span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>{isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}</td>
-            <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-disabled)" }}>{w.rotation === "6-Day" ? "Long" : w.rotation === "4-Day" ? "Short" : "Std"}</td>
-            <td style={{ padding: "7px 4px", textAlign: "center", color: "var(--color-text-secondary)" }}>{w.active ? w.totalHours : "—"}</td>
-            <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "var(--color-red)" : "#666" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
-            <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "var(--color-gold)" : "#666" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>
-            <td style={{ padding: "7px 4px", textAlign: "right" }}>{w.active ? f2(w.grossPay) : "—"}</td>
-            <td style={{ padding: "7px 4px", textAlign: "right", color: w.active ? (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)") : "#666" }}>{w.active ? f2(gN(w)) : "—"}</td>
-            <td style={{ padding: "7px 4px", textAlign: "center" }}>{w.active && <span style={{ fontSize: "8px", padding: "2px 6px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule) }}>{w.taxedBySchedule ? "TX" : "EX"}</span>}</td>
-          </tr>; })}</tbody>
+          <tbody>{weeklyRows.map(w => {
+            const isCurrent = currentWeek && w.idx === currentWeek.idx;
+            const isPast = toLocalIso(w.weekEnd) < todayIso;
+            const baseBg = isCurrent ? "#1a2a14" : isPast ? "#111111" : "transparent";
+            const hoverBg = isCurrent ? "#1e3018" : isPast ? "#1a1a1a" : "var(--color-bg-surface)";
+            const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)");
+            return (
+              <tr
+                key={w.idx}
+                style={{ borderBottom: "1px solid #161616", background: baseBg }}
+                onMouseEnter={e => { e.currentTarget.style.background = hoverBg; }}
+                onMouseLeave={e => { e.currentTarget.style.background = baseBg; }}
+              >
+                <td style={{ padding: "7px 4px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
+                  <span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                  {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
+                </td>
+                <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-disabled)" }}>{w.rotation === "6-Day" ? "Long" : w.rotation === "4-Day" ? "Short" : "Std"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "center", color: "var(--color-text-secondary)" }}>{w.active ? w.totalHours : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "var(--color-red)" : "#666" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "var(--color-gold)" : "#666" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{w.active ? f2(w.grossPay) : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{w.active ? f2(resolveWeekNet(w)) : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "center" }}>
+                  {w.active && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
+                      <span style={{ fontSize: "8px", padding: "2px 6px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule) }}>
+                        {w.taxedBySchedule ? "TX" : "EX"}
+                      </span>
+                      <span style={{ fontSize: "8px", letterSpacing: "0.5px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-secondary)" }}>
+                        {isPast ? "ACTUAL" : "PROJECTED"}
+                      </span>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}</tbody>
         </table></div>
       </div>
     </div>}

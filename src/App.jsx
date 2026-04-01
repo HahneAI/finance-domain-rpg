@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso } from "./lib/finance.js";
+import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek } from "./lib/finance.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile } from "./lib/db.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -390,7 +390,8 @@ export default function App() {
       const grossDelta = (i.grossGained || 0) - (i.grossLost || 0);
       if (grossDelta !== 0) grossDeltaByWeek[idx] = (grossDeltaByWeek[idx] || 0) + grossDelta;
 
-      if (e.weekEnd && e.weekEnd >= today && i.netLost) {
+      const weekEndIso = typeof e.weekEnd === "string" ? e.weekEnd : (e.weekEnd ? toLocalIso(e.weekEnd) : null);
+      if (weekEndIso && isFutureWeek(weekEndIso, today) && i.netLost) {
         futureEventDeductionsByWeek[idx] = (futureEventDeductionsByWeek[idx] || 0) + i.netLost;
       }
     });
@@ -468,11 +469,32 @@ export default function App() {
     return baseNet + weekAdjustment;
   }, [allWeeks, today, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs]);
 
+  const weekNetLookup = useMemo(() => {
+    const adjustments = eventImpact.weeklyNetAdjustments || {};
+    const result = {};
+    allWeeks.forEach(w => {
+      const baseNet = computeNet(w, config, taxDerived.extraPerCheck, showExtra);
+      const spendable = baseNet - bufferPerWeek;
+      const adjustment = adjustments[w.idx] || 0;
+      result[w.idx] = {
+        baseNet,
+        adjustedNet: baseNet + adjustment,
+        spendable,
+        adjustedSpendable: spendable + adjustment,
+        adjustment,
+      };
+    });
+    return result;
+  }, [allWeeks, config, taxDerived.extraPerCheck, showExtra, bufferPerWeek, eventImpact.weeklyNetAdjustments]);
+
+  const futureWeekNetsRaw = useMemo(
+    () => futureWeeks.map(w => weekNetLookup[w.idx]?.spendable ?? (computeNet(w, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek)),
+    [futureWeeks, weekNetLookup, config, taxDerived, showExtra, bufferPerWeek]
+  );
+
   const futureWeekNets = useMemo(
-    // Buffer excluded per week — feeds BudgetPanel goal timelines and HomePanel
-    // "Next Week" tile; both should show spendable net, not raw paycheck amount.
-    () => futureWeeks.map(w => computeNet(w, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek),
-    [futureWeeks, config, taxDerived, showExtra, bufferPerWeek]
+    () => futureWeeks.map((w, idx) => weekNetLookup[w.idx]?.adjustedSpendable ?? futureWeekNetsRaw[idx] ?? 0),
+    [futureWeeks, weekNetLookup, futureWeekNetsRaw]
   );
 
   // ── Week-by-week remaining spend using history-aware amounts ──
@@ -554,6 +576,7 @@ export default function App() {
         remainingSpend={remainingSpend}
         goals={goals}
         futureWeekNets={futureWeekNets}
+        prevWeekNet={prevWeekNet}
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
         today={today}
@@ -568,6 +591,7 @@ export default function App() {
         currentWeek={currentWeek}
         isAdmin={isAdmin}
         today={today}
+        weekNetLookup={weekNetLookup}
       />}
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
@@ -578,6 +602,7 @@ export default function App() {
         prevWeekNet={prevWeekNet}
         futureWeeks={futureWeeks}
         futureWeekNets={futureWeekNets}
+        timelineWeekNets={futureWeekNetsRaw}
         futureEventDeductions={futureEventDeductions}
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}

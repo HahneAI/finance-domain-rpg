@@ -20,6 +20,7 @@ export function HomePanel({
   remainingSpend,
   goals,
   futureWeekNets,
+  prevWeekNet,
   currentWeek,
   today,
 }) {
@@ -28,7 +29,10 @@ export function HomePanel({
   const weeklyLeft = incomingWeekNet - avgWeeklySpend;
   const annualSavings = weeklyLeft * 52;
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
-  const nextWeekNet = futureWeekNets?.[0];
+  const nextWeekNet = futureWeekNets?.[0] ?? null;
+  const fallbackSource = nextWeekNet != null ? null : (prevWeekNet != null ? "prev" : "avg");
+  const fallbackNet = fallbackSource === "prev" ? prevWeekNet : weeklyIncome;
+  const nextWeekDisplay = nextWeekNet ?? fallbackNet;
   const flowScore = Math.min(100, Math.round(Math.max(0, (1 - spendRatio) * 55 + (weeklyLeft > 0 ? 25 : 10) + (goals.length ? (goals.filter(g => g.completed).length / goals.length) * 20 : 0))));
   const flowTrendSource = [weeklyLeft, ...(futureWeekNets || []).slice(0, 5)].filter((v) => v != null);
   const flowTrendPoints = (flowTrendSource.length > 1 ? flowTrendSource : [weeklyLeft, weeklyIncome * 0.92, weeklyIncome * 0.98, weeklyIncome * 1.04, weeklyIncome * 1.09, weeklyIncome * 1.12])
@@ -100,17 +104,16 @@ export function HomePanel({
       key: "budget",
     },
     {
-      title: "Next Week",
-      value: nextWeekNet != null ? fmt$(nextWeekNet) : fmt$(weeklyIncome),
-      rawVal: nextWeekNet ?? weeklyIncome,
+      title: "Next Week Takehome",
+      value: fmt$(nextWeekDisplay),
+      rawVal: nextWeekDisplay,
       sub: nextWeekNet != null
         ? (nextWeekNet < weeklyIncome * 0.80 ? "below avg · check log"
           : nextWeekNet < weeklyIncome * 0.95 ? "slightly below avg"
           : "on track")
-        : "projected average",
-      status: nextWeekNet == null ? "green"
-            : nextWeekNet >= weeklyIncome * 0.95 ? "green"
-            : nextWeekNet >= weeklyIncome * 0.80 ? "gold" : "red",
+        : `${fallbackSource === "prev" ? "last confirmed pay" : "projected average"} (projected)`,
+      status: nextWeekDisplay >= weeklyIncome * 0.95 ? "green"
+            : nextWeekDisplay >= weeklyIncome * 0.80 ? "gold" : "red",
       span: 2,
       key: "log",
     },

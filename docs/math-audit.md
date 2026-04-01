@@ -9,7 +9,7 @@
 
 | Issue | Severity | Location | Status |
 |---|---|---|---|
-| "Every 30 days" monthly display is wrong ($560 shows, $600 correct) | HIGH | `BudgetPanel`, `monthlyFromPerPaycheck()` | ⚡ Decision needed |
+| "Every 30 days" monthly display is wrong ($560 shows, $600 correct) | HIGH | `BudgetPanel`, `monthlyFromPerPaycheck()` | ✅ Fixed — BudgetPanel.jsx now keeps 30-day expenses at their entered amount (2026-04-01) |
 | Past event can double-count in goal timeline | HIGH | `App.jsx` event memo + `computeGoalTimeline` | ⚡ Decision needed |
 | "Next Week" tile shows projected net, not labeled as such | MEDIUM | `HomePanel` | ⚡ Decision needed |
 | Monthly income table mixes actual + projected with no visual split | MEDIUM | `IncomePanel` | ⚡ Decision needed |
@@ -60,7 +60,7 @@ net: wks.reduce((s, w) => s + gN(w), 0)
 const bE = allWeeks.reduce((s, w) => s + w.k401kEmployee, 0);
 ```
 - Sums all 52 weeks. The card label says nothing about it being a year-end forecast.
-
+- **Deferred fix (2026-04-01):** Keep the projection path so logs can still show gains/losses, but we owe current balance cards (PTO + 401k) plus Setup/Profile nudges whenever `benefitsStartDate` is blank. Capture those UI/UX pieces in the next sprint and leave this math-only pass as-is for now.
 ### ⚡ Architecture decision needed
 
 Choose a labeling convention and apply it everywhere:
@@ -137,6 +137,10 @@ For weekly: monthly = `perPaycheck × 4.333`.
 Each cycle type uses its own exact conversion.
 
 **Recommendation:** Option B for weekly-derived display, Option C if you want per-cycle precision. Option A is the most honest but requires the most work.
+- **Remediation options queued for sprint:**  
+  - **Rolling average:** replace the constant with `PAYCHECKS_PER_YEAR[payscale] / 12` so weekly becomes 4.333 and biweekly 2.167 — minimal change, good enough for budgeting.  
+  - **Calendar-true:** derive the exact number of occurrences per calendar month from `futureWeeks` and show what will actually hit that month (perfect accuracy, more UI churn).  
+  - **Dual labels:** keep per-cycle totals for familiarity (“$600 every 30 days”) but add an “Avg month: $607” secondary label so the buffer gap is explicit. Each option trades clarity vs. implementation time; decision deferred to the UI sprint.
 
 ---
 

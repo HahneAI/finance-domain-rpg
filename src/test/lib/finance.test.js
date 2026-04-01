@@ -19,6 +19,7 @@ import {
   getStateConfig,
   loanRunwayStartDate,
   dhlEmployerMatchRate,
+  isFutureWeek,
 } from '../../lib/finance.js'
 import { STATE_TAX_TABLE } from '../../constants/stateTaxTable.js'
 import { DEFAULT_CONFIG } from '../../constants/config.js'
@@ -570,6 +571,34 @@ describe('computeGoalTimeline', () => {
     if (result[0].eW !== null && result[1].sW !== null) {
       expect(result[1].sW).toBeGreaterThanOrEqual(Math.floor(result[0].eW))
     }
+  })
+
+  it('does not double-count future event deductions when nets stay raw', () => {
+    const goals = [{ id: 'g1', target: 500, label: 'Catch-up' }]
+    const futureWeeks = [
+      { idx: 1, weekEnd: new Date(2026, 0, 7) },
+      { idx: 2, weekEnd: new Date(2026, 0, 14) },
+    ]
+    const weeklyNets = [500, 500]
+    const futureEventDeductions = { 2: 200 }
+    const result = computeGoalTimeline(goals, futureWeeks, weeklyNets, [], 200, 0, futureEventDeductions)
+    expect(result[0].eW).not.toBeNull()
+    expect(result[0].eW).toBeCloseTo(1, 3)
+  })
+})
+
+describe('isFutureWeek', () => {
+  it('returns false when week end matches today', () => {
+    expect(isFutureWeek('2026-04-01', '2026-04-01')).toBe(false)
+  })
+
+  it('returns true when week end is after today', () => {
+    expect(isFutureWeek('2026-04-08', '2026-04-01')).toBe(true)
+  })
+
+  it('handles missing values gracefully', () => {
+    expect(isFutureWeek(null, '2026-04-01')).toBe(false)
+    expect(isFutureWeek('2026-04-02', null)).toBe(false)
   })
 })
 

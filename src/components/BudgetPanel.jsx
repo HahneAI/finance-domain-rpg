@@ -91,7 +91,7 @@ const safeDate = (raw) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost, logNetGained, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo, userPaySchedule }) {
+export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost, logNetGained, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, timelineWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo, userPaySchedule }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
@@ -711,8 +711,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
 
   // Goal timeline — computed at component level so useEffect can read it
   const tl = useMemo(
-    () => computeGoalTimeline(activeGoals, futureWeeks ?? [], futureWeekNets ?? [], expenses, logNetLost, logNetGained ?? 0, futureEventDeductions ?? {}),
-    [activeGoals, futureWeeks, futureWeekNets, expenses, logNetLost, logNetGained, futureEventDeductions]
+    () => computeGoalTimeline(activeGoals, futureWeeks ?? [], timelineWeekNets ?? [], expenses, logNetLost, logNetGained ?? 0, futureEventDeductions ?? {}),
+    [activeGoals, futureWeeks, timelineWeekNets, expenses, logNetLost, logNetGained, futureEventDeductions]
   );
 
   // Auto-set dueWeek (fiscal week) on goals that have a projection but no stored due date

@@ -296,6 +296,11 @@ export function computeRemainingSpend(expenses, futureWeeks) {
   return { totalRemainingSpend: total, avgWeeklySpend: total / futureWeeks.length, weekCount: futureWeeks.length };
 }
 
+export function isFutureWeek(weekEndIso, todayIso) {
+  if (!weekEndIso || !todayIso) return false;
+  return weekEndIso > todayIso;
+}
+
 export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expenses, logNetLost, logNetGained, futureEventDeductions = {}) {
   if (!futureWeeks.length || !activeGoals.length)
     return activeGoals.map(g => ({ ...g, sW: 0, eW: 0, wN: 0 }));

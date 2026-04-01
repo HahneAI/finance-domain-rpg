@@ -40,6 +40,7 @@ const nextWeekNet = futureWeekNets?.[0] ?? weeklyIncome;
 - If not → falls back to `weeklyIncome` (annual average ÷ 52)
 - These are different concepts. No label distinguishes them.
 - Subtitle compares projected week against annual average, not against `prevWeekNet` (what user actually got last week).
+- **Audit check (2026-04-01):** Verified that Home + Log cards rely on `logTotals.adjustedTakeHome` (`projectedAnnualNet + eventImpact.totalNetAdjustment`), so yearly net already drops when events are logged. No UI change needed; this entry is now marked as observed/accurate.
 
 **BudgetPanel — Goal Timeline**
 ```js
@@ -61,6 +62,7 @@ const bE = allWeeks.reduce((s, w) => s + w.k401kEmployee, 0);
 ```
 - Sums all 52 weeks. The card label says nothing about it being a year-end forecast.
 - **Deferred fix (2026-04-01):** Keep the projection path so logs can still show gains/losses, but we owe current balance cards (PTO + 401k) plus Setup/Profile nudges whenever `benefitsStartDate` is blank. Capture those UI/UX pieces in the next sprint and leave this math-only pass as-is for now.
+- Profile → Retirement & Benefits now opens in edit mode so benefit start dates, payroll deductions, and enrolled plans can be updated immediately (needed for benefits-start gating accuracy).
 ### ⚡ Architecture decision needed
 
 Choose a labeling convention and apply it everywhere:

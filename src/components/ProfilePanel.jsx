@@ -528,7 +528,7 @@ function BenefitsDetail({ config, setConfig, onBack }) {
   const matchRate = isDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
   const enrolledConfig = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
 
-  const [editing, setEditing]   = useState(false);
+  const [editing, setEditing]   = useState(true);
   const [selectedBenefits, setSelectedBenefits] = useState(new Set(enrolledConfig));
   const [k401Rate, setK401Rate] = useState(String(config.k401Rate ?? ""));
   const [k401Match, setK401Match] = useState(String(config.k401MatchRate ?? ""));

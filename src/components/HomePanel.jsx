@@ -1,4 +1,4 @@
-import { FlowSparklineCard, MetricCard } from "./ui.jsx";
+﻿import { FlowSparklineCard, MetricCard } from "./ui.jsx";
 import { FISCAL_WEEKS_PER_YEAR, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 
 const fmt$ = (n) => {
@@ -105,15 +105,17 @@ export function HomePanel({
     },
     {
       title: "Next Week Takehome",
-      value: fmt$(nextWeekDisplay),
-      rawVal: nextWeekDisplay,
+      value: nextWeekDisplay != null ? fmt$(nextWeekDisplay) : fmt$(weeklyIncome),
+      rawVal: nextWeekDisplay ?? weeklyIncome,
       sub: nextWeekNet != null
         ? (nextWeekNet < weeklyIncome * 0.80 ? "below avg · check log"
           : nextWeekNet < weeklyIncome * 0.95 ? "slightly below avg"
           : "on track")
         : `${fallbackSource === "prev" ? "last confirmed pay" : "projected average"} (projected)`,
-      status: nextWeekDisplay >= weeklyIncome * 0.95 ? "green"
-            : nextWeekDisplay >= weeklyIncome * 0.80 ? "gold" : "red",
+      status: nextWeekDisplay != null
+            ? (nextWeekDisplay >= weeklyIncome * 0.95 ? "green"
+              : nextWeekDisplay >= weeklyIncome * 0.80 ? "gold" : "red")
+            : "green",
       span: 2,
       key: "log",
     },

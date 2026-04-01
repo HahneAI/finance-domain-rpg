@@ -73,7 +73,8 @@ const cycleAmountFromPerPaycheck = (perPaycheck, cycle) => {
   const days = cycleByValue[cycle]?.days ?? PAYCHECK_CADENCE_DAYS;
   return days > 0 ? (perPaycheck * days) / PAYCHECK_CADENCE_DAYS : perPaycheck;
 };
-const monthlyFromPerPaycheck = (perPaycheck) => perPaycheck * PAYCHECKS_PER_MONTH;
+const normalizeCycle = (cycle) => cycleByValue[cycle] ? cycle : "every30days";
+const perCycleAmount = (perPaycheck, cycle) => cycleAmountFromPerPaycheck(perPaycheck, normalizeCycle(cycle));
 
 const MONTH_SUBDIVISIONS = 4;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -171,12 +172,16 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const fiscalYearEnd = futureWeeks?.length ? toLocalIso(futureWeeks[futureWeeks.length - 1].weekEnd) : "2027-01-04";
 
   // Expense helpers
+  const resolveExpenseCycle = (exp, phaseIdx) => {
+    const phaseBillingMeta = exp.billingMeta?.byPhase?.[phaseIdx];
+    return normalizeCycle(phaseBillingMeta?.cycle ?? exp.billingMeta?.cycle ?? exp.cycle ?? "every30days");
+  };
+
   const startEditExp = (exp) => {
     const latest = exp.history?.length
       ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b)
       : { weekly: exp.weekly ?? [0, 0, 0, 0] };
-    const phaseBillingMeta = exp.billingMeta?.byPhase?.[ap];
-    const cycle = phaseBillingMeta?.cycle ?? exp.billingMeta?.cycle ?? "every30days";
+    const cycle = resolveExpenseCycle(exp, ap);
     const anchorWeekly = latest.weekly[ap] ?? latest.weekly[0] ?? 0;
     setEditId(exp.id);
     setEditVals({
@@ -185,7 +190,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     });
   };
   const saveEditExp = (id) => {
-    const cycle = editVals.cycle ?? "every30days";
+    const cycle = normalizeCycle(editVals.cycle ?? "every30days");
     const amount = parseFloat(editVals.amount) || 0;
     const perPaycheck = perPaycheckFromCycle(amount, cycle);
     setExpenses(prev => prev.map(e => {
@@ -749,6 +754,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot) + "/wk"}>{cat}</SH>
           {cExp.map(exp => {
             const effAmt = currentEffective(exp, ap);
+            const expCycle = resolveExpenseCycle(exp, ap);
+            const monthlyDisplay = expCycle === "every30days"
+              ? `${f(perCycleAmount(effAmt, expCycle))}/mo`
+              : `${f(monthlyFromPerPaycheck(effAmt))}/mo`;
             const isEditing = editId === exp.id;
             const isDragging = draggingExpenseId === exp.id;
             const previewCategory = dragPreviewExpenseCategory ?? exp.category;
@@ -886,7 +895,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                   {pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
-                    <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{f(monthlyFromPerPaycheck(effAmt))}/mo</div>
+                    <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{monthlyDisplay}</div>
                   </div>
                   <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
                   {delExpId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>

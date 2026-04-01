@@ -1,4 +1,4 @@
-import { FED_BRACKETS, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START } from "../constants/config.js";
+import { FED_BRACKETS, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -10,6 +10,12 @@ function toLocalIso(date) {
   return `${y}-${m}-${d}`;
 }
 export { toLocalIso };
+
+function parseIsoDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 
 // ─── DHL 401k tiered employer match ─────────────────────────────────────────
 // DHL matches 100% up to 4%, then 50¢ per $1 from 4%→6%, capped at 5% match.
@@ -23,7 +29,9 @@ export function dhlEmployerMatchRate(k401Rate) {
   return tier1 + tier2;
 }
 
-function weeklyBenefitDeductions(cfg) {
+const checksPerYearFor = (schedule) => PAYCHECKS_PER_YEAR[schedule ?? "weekly"] ?? 52;
+
+function perPaycheckBenefitDeductions(cfg) {
   return (
     (cfg.healthPremium || 0) +
     (cfg.dentalPremium || 0) +
@@ -34,6 +42,57 @@ function weeklyBenefitDeductions(cfg) {
     (cfg.hsaWeekly || 0) +
     (cfg.fsaWeekly || 0)
   );
+}
+
+function weeklyBenefitDeductions(cfg) {
+  const perCheck = perPaycheckBenefitDeductions(cfg);
+  const checksPerYear = checksPerYearFor(cfg.userPaySchedule);
+  return perCheck * (checksPerYear / 52);
+}
+
+function otherPostTaxDeductions(cfg) {
+  const perCheck = (cfg.otherDeductions ?? []).reduce((sum, row) => {
+    const amt = row?.weeklyAmount;
+    return sum + (typeof amt === "number" ? amt : 0);
+  }, 0);
+  const checksPerYear = checksPerYearFor(cfg.userPaySchedule);
+  return perCheck * (checksPerYear / 52);
+}
+
+function dhlWeekendHoursForDate(date, shiftHours) {
+  const dow = date.getDay();
+  if (dow === 6 || dow === 0) return shiftHours; // Sat/Sun full shift earns diff
+  if (dow === 5) return shiftHours / 2;          // Fri night: midnight→Sat 6am only
+  return 0;
+}
+
+function dhlWeekendHoursPerDayName(dayName, shiftHours) {
+  if (dayName === "Sat" || dayName === "Sun") return shiftHours;
+  if (dayName === "Fri") return shiftHours / 2;
+  return 0;
+}
+
+function dhlTotalWeekendHours(isWeek2, shiftHours) {
+  const friday = shiftHours / 2;
+  return isWeek2 ? (friday + 2 * shiftHours) : friday;
+}
+
+function dhlWeekendHoursFromDays(dayNames, shiftHours) {
+  if (!Array.isArray(dayNames) || dayNames.length === 0) return 0;
+  return dayNames.reduce((sum, day) => sum + dhlWeekendHoursPerDayName(day, shiftHours), 0);
+}
+
+function dhlWeekendHoursFromShiftCount(count, isWeek2, shiftHours) {
+  if (!count) return 0;
+  const contributions = isWeek2 ? [shiftHours / 2, shiftHours, shiftHours] : [shiftHours / 2];
+  let remaining = count;
+  let total = 0;
+  for (const hours of contributions) {
+    if (remaining <= 0) break;
+    total += hours;
+    remaining -= 1;
+  }
+  return total;
 }
 
 export function fedTax(income) {
@@ -83,6 +142,7 @@ export function getStateConfig(userState) {
 export function buildYear(cfg) {
   const weeks = [], k401Start = new Date(cfg.k401StartDate), taxedSet = new Set(cfg.taxedWeeks);
   const isDHL = cfg.employerPreset === "DHL";
+  const benefitsStart = parseIsoDate(cfg.benefitsStartDate);
   // Derive loop bounds from FISCAL_YEAR_START so the range stays in sync with the
   // constant rather than being duplicated as a hardcoded literal.
   const [fyY, fyM, fyD] = FISCAL_YEAR_START.split('-').map(Number);
@@ -114,8 +174,8 @@ export function buildYear(cfg) {
       }
       rotation = isHighWeek ? "6-Day" : "4-Day";
       totalHours = worked.length * cfg.shiftHours;
-      // Weekend pay: Fri midnight → Mon 6am (= Fri, Sat, Sun shifts earn diffRate)
-      weekendHours = worked.filter(w => w.getDay() === 0 || w.getDay() === 5 || w.getDay() === 6).length * cfg.shiftHours;
+      // Weekend pay: Sat 12:00am → Mon 6:00am (Fri nights only count midnight→6am Sat)
+      weekendHours = worked.reduce((sum, day) => sum + dhlWeekendHoursForDate(day, cfg.shiftHours), 0);
     } else {
       // Standard path: flat weekly hours, no rotation concept.
       isHighWeek = false;
@@ -140,6 +200,8 @@ export function buildYear(cfg) {
              + otWkndH       * cfg.diffRate * cfg.otMultiplier;
 
     const active = idx >= cfg.firstActiveIdx;
+    const benefitsActive = !benefitsStart || weekEnd >= benefitsStart;
+    const benefitsDeduction = benefitsActive ? weeklyBenefitDeductions(cfg) : 0;
     const has401k = active && weekEnd >= k401Start;
     const k401kEmployee = has401k ? grossPay * cfg.k401Rate : 0;
     // DHL match is formula-driven (tiered); other employers use stored flat k401MatchRate.
@@ -147,13 +209,21 @@ export function buildYear(cfg) {
       ? dhlEmployerMatchRate(cfg.k401Rate)
       : cfg.k401MatchRate;
     const k401kEmployer = has401k ? grossPay * effectiveMatchRate : 0;
-    const taxableGross = active ? Math.max(grossPay - weeklyBenefitDeductions(cfg) - k401kEmployee, 0) : 0;
+    const taxableGross = active ? Math.max(grossPay - benefitsDeduction - k401kEmployee, 0) : 0;
     const isTaxed = active && taxedSet.has(idx);
     weeks.push({
       idx, weekEnd, weekStart, rotation, isHighWeek,
       workedDayNames: worked.map(w => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][w.getDay()]),
       totalHours, regularHours, overtimeHours, weekendHours,
-      grossPay: active ? grossPay : 0, taxableGross, active, has401k, k401kEmployee, k401kEmployer, taxedBySchedule: isTaxed
+      grossPay: active ? grossPay : 0,
+      taxableGross,
+      active,
+      has401k,
+      k401kEmployee,
+      k401kEmployer,
+      taxedBySchedule: isTaxed,
+      benefitsDeduction,
+      benefitsActive,
     });
     d.setDate(d.getDate() + 7); idx++;
   }
@@ -163,8 +233,10 @@ export function buildYear(cfg) {
 export function computeNet(w, cfg, extraPerCheck, showExtra) {
   if (!w.active) return 0;
   const fica = w.grossPay * cfg.ficaRate;
-  const ded = weeklyBenefitDeductions(cfg) + w.k401kEmployee;
-  if (!w.taxedBySchedule) return w.grossPay - fica - ded;
+  const benefitDeduction = w.benefitsDeduction ?? (w.active ? weeklyBenefitDeductions(cfg) : 0);
+  const ded = benefitDeduction + w.k401kEmployee;
+  const otherPostTax = otherPostTaxDeductions(cfg);
+  if (!w.taxedBySchedule) return (w.grossPay - fica - ded) - otherPostTax;
   // Use generalized rate fields; fall back to legacy w1/w2 fields for pre-wizard rows.
   const fedLow  = cfg.fedRateLow   ?? cfg.w1FedRate;
   const fedHigh = cfg.fedRateHigh  ?? cfg.w2FedRate;
@@ -172,18 +244,18 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
   const stHigh  = cfg.stateRateHigh ?? cfg.w2StateRate;
   const fed = w.taxableGross * (w.isHighWeek ? fedHigh : fedLow) + (showExtra ? extraPerCheck : 0);
   const st = w.taxableGross * (w.isHighWeek ? stHigh : stLow);
-  return w.grossPay - fed - st - fica - ded;
+  return (w.grossPay - fed - st - fica - ded) - otherPostTax;
 }
 
 export function projectedGross(isWeek2, cfg) {
-  const isDHL = cfg.employerPreset === "DHL";
   const ns = isWeek2 ? 6 : 4, totalH = ns * cfg.shiftHours;
   const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
-  // Anthony custom: long (Tue–Sun) has Fri+Sat+Sun = 3 weekend shifts; short (Mon/Wed/Thu/Fri) has Fri = 1
-  const wkndH = isWeek2 ? 3 * cfg.shiftHours : 1 * cfg.shiftHours;
+  // Long (Tue–Sun) has Fri (half shift) + Sat + Sun; short (Mon/Wed/Thu/Fri) only earns half-shift diff on Fri night.
+  const wkndH = dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
   const nonWkndH = totalH - wkndH;
   const regWknd = Math.max(0, Math.min(wkndH, cfg.otThreshold - nonWkndH));
   const otWknd  = wkndH - regWknd;
+  const isDHL = cfg.employerPreset === "DHL";
   const nightDiff = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
   return reg     * (cfg.baseRate + nightDiff)
        + regWknd * cfg.diffRate
@@ -421,16 +493,21 @@ export function calcEventImpact(event, cfg) {
   const isDHL = cfg.employerPreset === "DHL";
   const nightDiffPerHour = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
   const isWeek2 = event.weekRotation === "6-Day" || event.weekRotation === "Week 2"; // "Week 2" kept for backward compat with stored data
-  // Long (Tue–Sun): Fri+Sat+Sun = 3 weekend shifts. Short (Mon/Wed/Thu/Fri): Fri = 1 weekend shift.
-  const normalShifts = isWeek2 ? 6 : 4, normalWeekendShifts = isWeek2 ? 3 : 1;
+  const normalShifts = isWeek2 ? 6 : 4;
+  const normalWeekendHours = dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
   const baseGross = projectedGross(isWeek2, cfg);
   let grossLost = 0, grossGained = 0, hoursLostForPTO = 0;
   if (event.type === "missed_unpaid") {
     const actualShifts = Math.max(normalShifts - (event.shiftsLost || 0), 0);
     const actualHours = actualShifts * cfg.shiftHours;
-    const actualWkndShifts = Math.max(normalWeekendShifts - (event.weekendShifts || 0), 0);
-    const actualWkndH    = actualWkndShifts * cfg.shiftHours;
-    const actualNonWkndH = actualHours - actualWkndH;
+    const hasDayResolution = Array.isArray(event.missedDays) && event.missedDays.length > 0;
+    const wkndHoursLostFromDays = hasDayResolution ? dhlWeekendHoursFromDays(event.missedDays, cfg.shiftHours) : 0;
+    const wkndHoursLostFallback = hasDayResolution
+      ? 0
+      : dhlWeekendHoursFromShiftCount(event.weekendShifts || 0, isWeek2, cfg.shiftHours);
+    const weekendHoursRemaining = Math.max(normalWeekendHours - wkndHoursLostFromDays - wkndHoursLostFallback, 0);
+    const actualWkndH = Math.min(actualHours, weekendHoursRemaining);
+    const actualNonWkndH = Math.max(actualHours - actualWkndH, 0);
     const actualRegWkndH = Math.max(0, Math.min(actualWkndH, cfg.otThreshold - actualNonWkndH));
     const actualOTWkndH  = actualWkndH - actualRegWkndH;
     const actualReg = Math.min(actualHours, cfg.otThreshold), actualOT = Math.max(actualHours - cfg.otThreshold, 0);

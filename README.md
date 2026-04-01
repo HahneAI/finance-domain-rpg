@@ -53,6 +53,21 @@ VITE_SUPABASE_ANON_KEY=...
 
 ---
 
+## Testing
+
+```bash
+npm run test:run      # single pass — use this to verify a change
+npm test              # watch mode
+npm run test:coverage
+npx vitest run -u     # update snapshots after intentional config changes
+```
+
+Tests live in `src/test/`. Runner is Vitest 4 with a dedicated `vitest.config.js` (separate from `vite.config.js`). The test config intentionally omits Tailwind, LightningCSS, and the React Compiler — none are needed for unit/component tests, and their native binaries fail in sandboxed environments.
+
+**Do not use `npm run test -- --runInBand`.** That flag is Jest-specific; Vitest ignores it. Use `npm run test:run` for a single serial pass.
+
+---
+
 ## Status
 
 Active development. Finance pillar in MVP. Additional Authority OS modules planned.

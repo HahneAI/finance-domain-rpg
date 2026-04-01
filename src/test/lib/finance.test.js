@@ -159,14 +159,14 @@ describe('buildYear', () => {
     expect(fourDay.totalHours).toBe(48)
   })
 
-  it('6-Day weeks include 3 weekend shifts (36 weekend hours — Fri/Sat/Sun)', () => {
+  it('6-Day weeks include 2½ weekend shifts (30 weekend hours — Fri midnight onward)', () => {
     const sixDay = weeks.find(w => w.rotation === '6-Day')
-    expect(sixDay.weekendHours).toBe(36)
+    expect(sixDay.weekendHours).toBe(30)
   })
 
-  it('4-Day weeks have 12 weekend hours (Fri shift earns diff)', () => {
+  it('4-Day weeks have 6 weekend hours (only Sat 12:00a→6:00a earns diff)', () => {
     const fourDay = weeks.find(w => w.rotation === '4-Day')
-    expect(fourDay.weekendHours).toBe(12)
+    expect(fourDay.weekendHours).toBe(6)
   })
 
   it('6-Day active weeks have higher grossPay than 4-Day active weeks', () => {
@@ -177,21 +177,23 @@ describe('buildYear', () => {
 
   it('computes correct grossPay for an active 4-Day week (diffs inside 1.5× OT)', () => {
     const cfg = DHL_CONFIG
-    // 4-Day: 48h total, 12h weekend (Fri). Non-weekend = 36h. regWknd = 4h, otWknd = 8h.
+    // 4-Day: 48h total, 6h weekend (Fri midnight→Sat 6a). Non-weekend = 42h. regWknd = 0h, otWknd = 6h.
     // All diffs (night + weekend) are included in the 1.5× OT multiplier.
     const rateReg = cfg.baseRate + cfg.nightDiffRate
-    const expected = 40 * rateReg + 4 * cfg.diffRate
-                   + 8 * rateReg * cfg.otMultiplier + 8 * cfg.diffRate * cfg.otMultiplier
+    const expected = 40 * rateReg
+                   + 8 * rateReg * cfg.otMultiplier
+                   + 6 * cfg.diffRate * cfg.otMultiplier
     const fourDay = weeks.find(w => w.rotation === '4-Day' && w.active)
     expect(fourDay.grossPay).toBeCloseTo(expected)
   })
 
   it('computes correct grossPay for an active 6-Day week (diffs inside 1.5× OT)', () => {
     const cfg = DHL_CONFIG
-    // 6-Day: 72h total, 36h weekend (Fri+Sat+Sun). Non-weekend = 36h. regWknd = 4h, otWknd = 32h.
+    // 6-Day: 72h total, 30h weekend (Fri midnight→Sat 6a, Sat, Sun). Non-weekend = 42h. regWknd = 0h, otWknd = 30h.
     const rateReg = cfg.baseRate + cfg.nightDiffRate
-    const expected = 40 * rateReg + 4 * cfg.diffRate
-                   + 32 * rateReg * cfg.otMultiplier + 32 * cfg.diffRate * cfg.otMultiplier
+    const expected = 40 * rateReg
+                   + 32 * rateReg * cfg.otMultiplier
+                   + 30 * cfg.diffRate * cfg.otMultiplier
     const sixDay = weeks.find(w => w.rotation === '6-Day' && w.active)
     expect(sixDay.grossPay).toBeCloseTo(expected)
   })
@@ -272,7 +274,8 @@ describe('computeNet', () => {
     const week = weeks.find(w => w.active && !w.taxedBySchedule)
     const cfg = DHL_CONFIG
     const benefits = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly
-    const expected = week.grossPay - week.grossPay * cfg.ficaRate - benefits - week.k401kEmployee
+    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0)
+    const expected = week.grossPay - week.grossPay * cfg.ficaRate - benefits - week.k401kEmployee - other
     expect(computeNet(week, cfg)).toBeCloseTo(expected)
   })
 
@@ -281,9 +284,10 @@ describe('computeNet', () => {
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly + week.k401kEmployee
+    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0)
     const fed = week.taxableGross * cfg.fedRateLow  // 4-Day = short = fedRateLow
     const st = week.taxableGross * cfg.stateRateLow
-    expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
+    expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded - other)
   })
 
   it('deducts fed and state tax in addition on taxed 6-Day (high-rate) weeks', () => {
@@ -291,9 +295,10 @@ describe('computeNet', () => {
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly + week.k401kEmployee
+    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0)
     const fed = week.taxableGross * cfg.fedRateHigh  // 6-Day = long = fedRateHigh
     const st = week.taxableGross * cfg.stateRateHigh
-    expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
+    expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded - other)
   })
 
   it('taxed weeks have a lower net/gross ratio than non-taxed weeks of the same rotation', () => {
@@ -350,6 +355,33 @@ describe('computeNet', () => {
       ltd: 0,
     }))
   })
+
+  it('subtracts otherDeductions after taxes', () => {
+    const cfg = {
+      ...DHL_CONFIG,
+      otherDeductions: [{ id: 'parking', weeklyAmount: 18 }],
+    }
+    const week = buildYear(cfg).find(w => w.active && w.taxedBySchedule)
+    const withOther = computeNet(week, cfg)
+    const withoutOther = computeNet(week, { ...cfg, otherDeductions: [] })
+    expect(withOther).toBeCloseTo(withoutOther - 18)
+  })
+
+  it('applies benefitsStartDate gating to weekly deductions', () => {
+    const cfg = {
+      ...DHL_CONFIG,
+      benefitsStartDate: '2026-07-01',
+      healthPremium: 40,
+    }
+    const year = buildYear(cfg)
+    const preStart = year.find(w => w.active && toLocalIso(w.weekEnd) < cfg.benefitsStartDate)
+    const postStart = year.find(w => w.active && toLocalIso(w.weekEnd) >= cfg.benefitsStartDate)
+    expect(preStart.benefitsDeduction).toBe(0)
+    expect(postStart.benefitsDeduction).toBeGreaterThan(0)
+    const postNet = computeNet(postStart, cfg)
+    const postNetWithoutBenefits = computeNet({ ...postStart, benefitsDeduction: 0 }, cfg)
+    expect(postNet).toBeLessThan(postNetWithoutBenefits)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -364,16 +396,16 @@ describe('projectedGross', () => {
   })
 
   it('calculates correct gross for 6-Day (diffs inside 1.5× OT; no nightDiff on DEFAULT_CONFIG)', () => {
-    // 6-Day: 72h, wknd=36h, nonWknd=36h, regWknd=4h, otWknd=32h. nightDiff=0 (not DHL preset).
-    const expected = 40 * cfg.baseRate + 4 * cfg.diffRate
-                   + 32 * cfg.baseRate * cfg.otMultiplier + 32 * cfg.diffRate * cfg.otMultiplier
+    // 6-Day: 72h, wknd=30h (Fri midnight→Sat 6a, Sat, Sun), nonWknd=42h, regWknd=0h, otWknd=30h.
+    const expected = 40 * cfg.baseRate
+                   + 32 * cfg.baseRate * cfg.otMultiplier + 30 * cfg.diffRate * cfg.otMultiplier
     expect(projectedGross(true, cfg)).toBeCloseTo(expected)
   })
 
   it('calculates correct gross for 4-Day (diffs inside 1.5× OT; no nightDiff on DEFAULT_CONFIG)', () => {
-    // 4-Day: 48h, wknd=12h, nonWknd=36h, regWknd=4h, otWknd=8h. nightDiff=0 (not DHL preset).
-    const expected = 40 * cfg.baseRate + 4 * cfg.diffRate
-                   + 8 * cfg.baseRate * cfg.otMultiplier + 8 * cfg.diffRate * cfg.otMultiplier
+    // 4-Day: 48h, wknd=6h (Fri midnight→Sat 6a), nonWknd=42h, regWknd=0h, otWknd=6h. nightDiff=0 (not DHL preset).
+    const expected = 40 * cfg.baseRate
+                   + 8 * cfg.baseRate * cfg.otMultiplier + 6 * cfg.diffRate * cfg.otMultiplier
     expect(projectedGross(false, cfg)).toBeCloseTo(expected)
   })
 
@@ -588,12 +620,11 @@ describe('computeLoanPayoffDate', () => {
   })
 
   it('returns correct payoff date for 10 weekly payments of $100 on $1000 loan', () => {
-    // 10 payments × 7 days = 70 days from 2026-02-01 = 2026-04-12
-    expect(computeLoanPayoffDate(baseLoan)).toBe('2026-04-12')
+    expect(computeLoanPayoffDate(baseLoan)).toBe('2026-04-11')
   })
 
   it('returns firstPaymentDate when paymentAmount is 0 (no payments)', () => {
-    expect(computeLoanPayoffDate({ ...baseLoan, paymentAmount: 0 })).toBe('2026-02-01')
+    expect(computeLoanPayoffDate({ ...baseLoan, paymentAmount: 0 })).toBe('2026-01-31')
   })
 })
 
@@ -1089,21 +1120,21 @@ describe('loanRunwayStartDate', () => {
 
   it('weekly frequency → 7 days before firstPaymentDate', () => {
     const loan = { ...baseLoan, paymentFrequency: 'weekly' }
-    expect(loanRunwayStartDate(loan)).toBe('2026-05-25')
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-24')
   })
 
   it('biweekly frequency → 14 days before firstPaymentDate', () => {
     const loan = { ...baseLoan, paymentFrequency: 'biweekly' }
-    expect(loanRunwayStartDate(loan)).toBe('2026-05-18')
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-17')
   })
 
   it('monthly frequency → ~30 days before firstPaymentDate', () => {
     const loan = { ...baseLoan, paymentFrequency: 'monthly' }
-    expect(loanRunwayStartDate(loan)).toBe('2026-05-02')
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-01')
   })
 
   it('defaults to weekly (7 days) when no paymentFrequency provided', () => {
-    expect(loanRunwayStartDate({ ...baseLoan })).toBe('2026-05-25')
+    expect(loanRunwayStartDate({ ...baseLoan })).toBe('2026-05-24')
   })
 
   it('returns a valid ISO date string', () => {

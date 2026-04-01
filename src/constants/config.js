@@ -2,6 +2,8 @@
 // CONFIG — all income constants, fully editable
 // taxedWeeks replaces taxedRanges — flat array, togglable per week
 // ─────────────────────────────────────────────────────────────
+export const PAYCHECKS_PER_YEAR = { weekly: 52, biweekly: 26, monthly: 12, salary: 26 };
+
 export const DEFAULT_CONFIG = {
   // ── Wizard gate fields ──────────────────────────────────────
   setupComplete: false,        // true once setup wizard completes; gates first-run flow
@@ -32,21 +34,21 @@ export const DEFAULT_CONFIG = {
   // ── Deductions / benefits ────────────────────────────────────
   // selectedBenefits: array of benefit IDs the user has enrolled in (wizard step 3)
   selectedBenefits: [],
-  // Per-benefit weekly dollar deductions (0 = not enrolled / not tracked)
-  healthPremium: 0,   // Health / Medical insurance weekly premium
-  dentalPremium: 0,   // Dental insurance weekly premium
-  visionPremium: 0,   // Vision insurance weekly premium
-  ltd: 0,             // Long-Term Disability flat weekly deduction
-  stdWeekly: 0,       // Short-Term Disability flat weekly deduction
-  lifePremium: 0,     // Life / AD&D insurance weekly premium
-  hsaWeekly: 0,       // HSA contribution per week
-  fsaWeekly: 0,       // FSA contribution per week
+  // Per-benefit per-paycheck dollar deductions (0 = not enrolled / not tracked)
+  healthPremium: 0,   // Health / Medical insurance deduction per paycheck
+  dentalPremium: 0,   // Dental insurance deduction per paycheck
+  visionPremium: 0,   // Vision insurance deduction per paycheck
+  ltd: 0,             // Long-Term Disability deduction per paycheck
+  stdWeekly: 0,       // Short-Term Disability deduction per paycheck
+  lifePremium: 0,     // Life / AD&D deduction per paycheck
+  hsaWeekly: 0,       // HSA contribution per paycheck
+  fsaWeekly: 0,       // FSA contribution per paycheck
   // 401(k) — rate fields + start date
   k401Rate: 0, k401MatchRate: 0, k401StartDate: null,
   // Benefits start date — when health/dental/vision coverage activates
   benefitsStartDate: null,        // "YYYY-MM-DD" | null = already active / not enrolled
   // Other recurring deductions not covered by preset benefit fields
-  // Array of { id, label, weeklyAmount } — user-defined, add/remove from wizard
+  // Array of { id, label, weeklyAmount } — each entry stores a per-paycheck amount
   otherDeductions: [],
   // Attendance policy — whether employer uses a formal points/hours-based system
   // null = not yet answered (wizard gate); true = bucket model active; false = log-only
@@ -94,6 +96,8 @@ export const DEFAULT_CONFIG = {
 
   // ── Pay period ───────────────────────────────────────────────
   payPeriodEndDay: 0,          // day-of-week pay period closes: 0=Sun, 1=Mon, ..., 6=Sat
+  userPaySchedule: "weekly",   // how often the user receives a paycheck: "weekly" | "biweekly" | "monthly" | "salary"
+  annualSalary: null,          // salary workers only: gross annual pay; baseRate is auto-derived (annualSalary / 2080)
 };
 
 export const FISCAL_YEAR_START = "2026-01-05"; // week 0 end date — first Monday of the fiscal year
@@ -127,7 +131,7 @@ export const DHL_PRESET = {
       days: [1, 4, 5],            // Mon, Thu, Fri
       label: "3-Day (Mon / Thu / Fri)",
       baseHours: 36,              // 3 × 12h
-      weekendShifts: 1,           // Fri earns diffRate (weekend starts Fri midnight)
+      weekendShifts: 1,           // Fri overnight earns diff only from Sat 12:00a–6:00a (½ shift)
     },
     // Long week — 4 required shifts
     long: {
@@ -160,7 +164,7 @@ export const DHL_PRESET = {
     bucketCap: 128,
     bucketPayoutRate: 9.825,
     baseRate: 19.65,             // DHL base hourly rate (MO, supply chain)
-    diffRate: 1.75,              // weekend shift differential (Fri midnight → Mon 6am)
+    diffRate: 1.75,              // weekend shift differential (Sat 12:00a → Mon 6am window)
     nightDiffRate: 1.50,         // night shift differential; wizard Step 15 writes 0 for morning shift
     dhlNightShift: true,         // default assumption; wizard Step 15 overrides
     // ── Tax rate preset — MO supply chain, night shift (paystub-derived from Anthony's setup)
@@ -180,12 +184,12 @@ export const DHL_BENEFIT_OPTIONS = [
   { id: "health", label: "Health / Medical", sub: "Medical insurance premium", type: "weekly", field: "healthPremium", placeholder: "e.g. 18.50" },
   { id: "dental", label: "Dental", sub: "Dental insurance premium", type: "weekly", field: "dentalPremium", placeholder: "e.g. 4.00" },
   { id: "vision", label: "Vision", sub: "Vision insurance premium", type: "weekly", field: "visionPremium", placeholder: "e.g. 2.00" },
-  { id: "ltd", label: "Long-Term Disability", sub: "LTD insurance — flat weekly deduction", type: "weekly", field: "ltd", placeholder: "e.g. 2.00" },
-  { id: "std", label: "Short-Term Disability", sub: "STD insurance — flat weekly deduction", type: "weekly", field: "stdWeekly", placeholder: "e.g. 1.50" },
-  { id: "life", label: "Life / AD&D", sub: "Group life insurance premium", type: "weekly", field: "lifePremium", placeholder: "e.g. 1.00" },
+  { id: "ltd", label: "Long-Term Disability", sub: "LTD insurance — per-paycheck deduction", type: "weekly", field: "ltd", placeholder: "e.g. 12.00" },
+  { id: "std", label: "Short-Term Disability", sub: "STD insurance — per-paycheck deduction", type: "weekly", field: "stdWeekly", placeholder: "e.g. 6.50" },
+  { id: "life", label: "Life / AD&D", sub: "Group life insurance premium", type: "weekly", field: "lifePremium", placeholder: "e.g. 5.00" },
   { id: "k401", label: "401(k) / Retirement", sub: "Pre-tax contribution + employer match", type: "k401" },
-  { id: "hsa", label: "HSA", sub: "Health Savings Account — weekly contribution", type: "weekly", field: "hsaWeekly", placeholder: "e.g. 15.00" },
-  { id: "fsa", label: "FSA", sub: "Flexible Spending Account — weekly contribution", type: "weekly", field: "fsaWeekly", placeholder: "e.g. 10.00" },
+  { id: "hsa", label: "HSA", sub: "Health Savings Account — per-paycheck contribution", type: "weekly", field: "hsaWeekly", placeholder: "e.g. 25.00" },
+  { id: "fsa", label: "FSA", sub: "Flexible Spending Account — per-paycheck contribution", type: "weekly", field: "fsaWeekly", placeholder: "e.g. 18.00" },
 ];
 
 export const FED_BRACKETS = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [Infinity, 0.24]];

@@ -563,6 +563,7 @@ export default function App() {
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
         today={today}
+        userPaySchedule={config.userPaySchedule ?? "weekly"}
       />}
       {currentView === "benefits" && <BenefitsPanel
         allWeeks={allWeeks} config={config} isDHL={isDHL}
@@ -602,12 +603,12 @@ export default function App() {
   );
 
   return (
-    <div style={{ background: "var(--color-bg-gradient)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
-      <style>{`
-        /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
-           but injecting it here as well catches any future SSR or shadow-DOM edge
-           cases where the external stylesheet might not apply in time. */
-        html, body, #root { max-width: 100vw; overflow-x: hidden; }
+      <div style={{ background: "var(--color-bg-gradient)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
+        <style>{`
+          /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
+             but injecting it here as well catches any future SSR or shadow-DOM edge
+             cases where the external stylesheet might not apply in time. */
+          html, body, #root { max-width: 100vw; overflow-x: hidden; }
 
         /* DEBUG: global box-sizing reset — ensures padding/border are included in
            element width calculations. Without this, an element with width:100% and
@@ -619,12 +620,14 @@ export default function App() {
            Above 768px: sidebar shows, mobile chrome hides.
            If you change this breakpoint, also update the drawer width (260px in JSX)
            and the desktop sidebar width (190px) so nothing overlaps. */
-        @media (max-width: 767px) {
-          .sidebar { display: none !important; }
-          .mobile-header { display: flex !important; }
-          .mobile-bottom-nav { display: flex !important; }
-          /* Bottom nav is always visible on mobile (including home screen), so
-             content needs padding to clear the nav bar on all views. */
+          .main-content { min-height: 0; }
+
+          @media (max-width: 767px) {
+            .sidebar { display: none !important; }
+            .mobile-header { display: flex !important; }
+            .mobile-bottom-nav { display: flex !important; }
+            /* Bottom nav is always visible on mobile (including home screen), so
+               content needs padding to clear the nav bar on all views. */
           .main-content {
             padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
           }
@@ -638,22 +641,24 @@ export default function App() {
             flex-direction: column !important;
           }
         }
-        @media (min-width: 768px) {
-          .mobile-header { display: none !important; }
-          .mobile-bottom-nav { display: none !important; }
-          /* DEBUG: overlay also hides on desktop so a half-open drawer doesn't
-             ghost behind the sidebar if the user resizes the window. */
-          .mobile-drawer-overlay { display: none !important; }
-          /* DEBUG DESKTOP SCROLL: sidebar has height:100vh which makes the root
-             flex container exactly 100vh tall. Without overflow-y:auto here,
-             the main-content stretches to 100vh via align-items:stretch and
-             content that exceeds that height overflows without a scroll target —
-             the window never grows past 100vh. This rule makes main-content the
-             scroll container on desktop so mouse-wheel scroll works. */
-          .main-content {
-            overflow-y: auto;
+          @media (min-width: 768px) {
+            .mobile-header { display: none !important; }
+            .mobile-bottom-nav { display: none !important; }
+            /* DEBUG: overlay also hides on desktop so a half-open drawer doesn't
+               ghost behind the sidebar if the user resizes the window. */
+            .mobile-drawer-overlay { display: none !important; }
+            /* DEBUG DESKTOP SCROLL: sidebar has height:100vh which makes the root
+               flex container exactly 100vh tall. Without overflow-y:auto here,
+               the main-content stretches to 100vh via align-items:stretch and
+               content that exceeds that height overflows without a scroll target —
+               the window never grows past 100vh. This rule makes main-content the
+               scroll container on desktop so mouse-wheel scroll works. */
+            .main-content {
+              height: 100vh;
+              overflow-y: auto;
+              -webkit-overflow-scrolling: touch;
+            }
           }
-        }
         /* DEBUG DRAWER: translateX(-100%) hides the drawer fully off-screen left.
            The .open class moves it to x=0. If the drawer flickers on load,
            add will-change:transform to force GPU compositing. */
@@ -890,7 +895,7 @@ export default function App() {
         </div>
 
         {/* Panel content */}
-        <div className="main-content" style={{ padding: "18px 16px", flex: 1 }}>
+        <div className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
           {activePanel}
         </div>
       </div>

@@ -296,7 +296,8 @@ describe('FISCAL_YEAR_START', () => {
   })
 
   it('is a Monday (first workday of fiscal year)', () => {
-    // 2026-01-05 is a Monday (getDay() === 1)
-    expect(new Date(FISCAL_YEAR_START).getDay()).toBe(1)
+    // Parse via year/month/day to avoid UTC shifts in jsdom/node
+    const [y, m, d] = FISCAL_YEAR_START.split('-').map(Number)
+    expect(new Date(y, m - 1, d).getDay()).toBe(1)
   })
 })

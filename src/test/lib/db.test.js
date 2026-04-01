@@ -373,6 +373,20 @@ describe('loadUserData — misc fields', () => {
     const result = await loadUserData()
     expect(result.weekConfirmations).toEqual({})
   })
+
+  it('maps pto_goal column to the ptoGoal field', async () => {
+    const ptoGoal = { targetHours: 96, accruedHours: 24 }
+    setupLoadMock(makeRow({ pto_goal: ptoGoal }))
+
+    const result = await loadUserData()
+    expect(result.ptoGoal).toEqual(ptoGoal)
+  })
+
+  it('defaults ptoGoal to null when Supabase row omits the column', async () => {
+    setupLoadMock(makeRow())
+    const result = await loadUserData()
+    expect(result.ptoGoal).toBeNull()
+  })
 })
 
 describe('saveUserData', () => {
@@ -408,6 +422,35 @@ describe('saveUserData', () => {
 
     const [upsertData] = mockUpsert.mock.calls[0]
     expect(upsertData.is_dhl).toBe(false)
+  })
+
+  it('persists ptoGoal payloads as pto_goal during save', async () => {
+    const mockUpsert = vi.fn().mockResolvedValue({ error: null })
+    supabase.from.mockReturnValue({ upsert: mockUpsert })
+
+    const ptoGoal = { targetHours: 120, accruedHours: 32 }
+    await saveUserData({
+      config: DEFAULT_CONFIG,
+      expenses: [], goals: [], logs: [], showExtra: true,
+      weekConfirmations: {}, ptoGoal,
+    })
+
+    const [upsertData] = mockUpsert.mock.calls[0]
+    expect(upsertData.pto_goal).toEqual(ptoGoal)
+  })
+
+  it('writes null to pto_goal when ptoGoal is undefined', async () => {
+    const mockUpsert = vi.fn().mockResolvedValue({ error: null })
+    supabase.from.mockReturnValue({ upsert: mockUpsert })
+
+    await saveUserData({
+      config: DEFAULT_CONFIG,
+      expenses: [], goals: [], logs: [], showExtra: true,
+      weekConfirmations: {},
+    })
+
+    const [upsertData] = mockUpsert.mock.calls[0]
+    expect(upsertData.pto_goal).toBeNull()
   })
 
   it('logs error message when upsert fails (line 149 error branch)', async () => {

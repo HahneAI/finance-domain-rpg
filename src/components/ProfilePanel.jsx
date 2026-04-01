@@ -487,6 +487,13 @@ function EmploymentDetail({ config, setConfig, onBack }) {
   );
 }
 
+const PAY_SCHEDULE_LABELS = {
+  weekly:   "Weekly",
+  biweekly: "Biweekly",
+  monthly:  "Monthly",
+  salary:   "Salary (biweekly)",
+};
+
 function PayDetail({ config, onBack }) {
   const isDHL = config.employerPreset === "DHL";
   const scheduleLabel = config.scheduleIsVariable
@@ -497,6 +504,7 @@ function PayDetail({ config, onBack }) {
     <>
       <BackBar onBack={onBack} title="Pay Structure" />
       <DetailCard>
+        <DetailRow label="Pay Schedule"   value={PAY_SCHEDULE_LABELS[config.userPaySchedule] ?? "Weekly"} />
         <DetailRow label="Base Rate"      value={`$${config.baseRate}/hr`}  valueColor="var(--color-gold)" />
         {config.shiftHours > 0 && <DetailRow label="Shift Length" value={`${config.shiftHours}h`} />}
         <DetailRow label="Schedule" value={scheduleLabel} />

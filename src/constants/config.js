@@ -127,7 +127,7 @@ export const DHL_PRESET = {
       days: [1, 4, 5],            // Mon, Thu, Fri
       label: "3-Day (Mon / Thu / Fri)",
       baseHours: 36,              // 3 × 12h
-      weekendShifts: 1,           // Fri earns diffRate (weekend starts Fri midnight)
+      weekendShifts: 1,           // Fri overnight earns diff only from Sat 12:00a–6:00a (½ shift)
     },
     // Long week — 4 required shifts
     long: {
@@ -160,7 +160,7 @@ export const DHL_PRESET = {
     bucketCap: 128,
     bucketPayoutRate: 9.825,
     baseRate: 19.65,             // DHL base hourly rate (MO, supply chain)
-    diffRate: 1.75,              // weekend shift differential (Fri midnight → Mon 6am)
+    diffRate: 1.75,              // weekend shift differential (Sat 12:00a → Mon 6am window)
     nightDiffRate: 1.50,         // night shift differential; wizard Step 15 writes 0 for morning shift
     dhlNightShift: true,         // default assumption; wizard Step 15 overrides
     // ── Tax rate preset — MO supply chain, night shift (paystub-derived from Anthony's setup)

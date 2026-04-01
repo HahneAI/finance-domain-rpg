@@ -1,0 +1,662 @@
+
+> authority-finance@0.0.0 test:run
+> vitest run
+
+
+ RUN  v4.1.1 C:/Users/antho/Documents/life-rpg
+
+ ❯ src/test/constants/config.test.js (42 tests | 1 failed) 36ms
+     × matches snapshot (guards against accidental mutations) 14ms
+ ❯ src/test/components/WeekConfirmModal.test.jsx (43 tests | 2 failed) 4172ms
+     × renders the week header with correct index and date range 187ms
+     × shows negative net shift count in summary row 82ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/test/components/WeekConfirmModal.test.jsx > WeekConfirmModal — Layer 1 initial render > renders the week header with correct index and date range
+TestingLibraryElementError: Found multiple elements with the text: /mar 16/i
+
+Here are the matching elements:
+
+Ignored nodes: comments, script, style
+<div
+  style="font-size: 16px; font-weight: bold; color: var(--color-text-primary);"
+>
+  Mar 16
+   — 
+  Mar 22
+</div>
+
+Ignored nodes: comments, script, style
+<div
+  style="font-size: 9px; color: var(--color-text-disabled);"
+>
+  Mar 16
+</div>
+
+(If this is intentional, then use the `*AllBy*` variant of the query (like `queryAllByText`, `getAllByText`, or `findAllByText`)).
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      style="position: fixed; inset: 0px; z-index: 60; background: rgba(0, 0, 0, 0.78); display: flex; align-items: center; justify-content: center; padding: 16px;"
+    >
+      <div
+        style="background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-radius: 10px; width: 100%; max-width: 460px; overflow: hidden; max-height: 90vh; display: flex; flex-direction: column;"
+      >
+        <div
+          style="padding: 18px 20px 14px; border-bottom: 1px solid var(--color-border-subtle); flex-shrink: 0;"
+        >
+          <div
+            style="display: flex; justify-content: space-between; align-items: flex-start;"
+          >
+            <div>
+              <div
+                style="font-size: 9px; letter-spacing: 3px; color: var(--color-gold); text-transform: uppercase; margin-bottom: 5px;"
+              >
+                Week 
+                7
+                 Check-In
+              </div>
+              <div
+                style="font-size: 16px; font-weight: bold; color: var(--color-text-primary);"
+              >
+                Mar 16
+                 — 
+                Mar 22
+              </div>
+            </div>
+            <span
+              style="font-size: 9px; letter-spacing: 2px; color: var(--color-text-secondary); background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); padding: 4px 9px; border-radius: 3px; text-transform: uppercase; margin-top: 2px;"
+            >
+              6-Day
+            </span>
+          </div>
+        </div>
+        <div
+          style="overflow-y: auto; flex: 1 1 0%;"
+        >
+          <div
+            style="padding: 6px 20px 4px; font-size: 9px; color: var(--color-text-disabled); letter-spacing: 1.5px; text-transform: uppercase;"
+          >
+            Mark your actual week — tap any day to update
+          </div>
+          <div
+            style="display: flex; align-items: center; padding: 9px 20px; border-bottom: 1px solid var(--color-border-subtle); border-top: 1px solid rgba(0, 200, 150, 0.15);"
+          >
+            <div
+              style="width: 86px;"
+            >
+              <div
+                style="display: flex; align-items: center; gap: 5px;"
+              >
+                <div
+                  style="font-size: 11px; font-weight: bold; color: var(--color-text-primary); letter-spacing: 1px;"
+                >
+                  Mon
+                </div>
+                <span
+                  style="font-size: 7px; letter-spacing: 1.5px; color: var(--color-gold); text-transform: uppercase; opacity: 0.7;"
+                >
+                  pay start
+                </span>
+              </div>
+              <div
+                style="font-size: 9px; color: var(--color-text-disabled);"
+              >
+                Mar 16
+              </div>
+            </div>
+            <div
+              style="flex: 1 1 0%;"
+            >
+              <span
+                style="font-size: 9px; color: var(--color-text-disabled); text-transform: uppercase; letter-spacing: 1px;"
+              >
+                12
+                h shift
+              </span>
+            </div>
+            <div
+              style="display: flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--color-border-subtle);"
+            >
+              <button
+                style="padding: 5px 12px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; border-top: medium; border-right: 1px solid var(--color-border-subtle); border-bottom: medium; border-left: medium; border-image: none; font-weight: bold; background: rgba(34, 197, 94, 0.13); color: var(--color-green); transition: background 0.15s, color 0.15s;"
+              >
+                Worked
+              </button>
+              <button
+                style="padding: 5px 12px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; border: medium; font-weight: normal; background: var(--color-bg-surface); color: var(--color-text-disabled); transition: background 0.15s, color 0.15s;"
+              >
+                Missed
+              </button>
+            </div>
+          </div>
+          <div
+            style="display: flex; align-items: center; padding: 9px 20px; border-bottom: 1px solid var(--color-border-subtle);"
+          >
+            <div
+              style="width: 86px;"
+            >
+              <div
+                style="display: flex; align-items: center; gap: 5px;"
+              >
+                <div
+                  style="font-size: 11px; font-weight: bold; color: var(--color-text-primary); letter-spacing: 1px;"
+                >
+                  Tue
+                </div>
+              </div>
+              <div
+                style="font-size: 9px; color: var(--color-text-disabled);"
+              >
+                Mar 17
+              </div>
+            </div>
+            <div
+              style="flex: 1 1 0%;"
+            >
+              <span
+                style="font-size: 9px; color: var(--color-text-disabled); text-transform: uppercase; letter-spacing: 1px;"
+              >
+                12
+                h shift
+              </span>
+            </div>
+            <div
+              style="display: flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--color-border-subtle);"
+            >
+              <button
+                style...
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ getElementError node_modules/@testing-library/dom/dist/query-helpers.js:20:35
+ ❯ getMultipleElementsFoundError node_modules/@testing-library/dom/dist/query-helpers.js:23:10
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:55:13
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/test/components/WeekConfirmModal.test.jsx:59:19
+     57|     expect(screen.getByText(/week 7 check-in/i)).toBeTruthy()
+     58|     // Date range appears in the header
+     59|     expect(screen.getByText(/mar 16/i)).toBeTruthy()
+       |                   ^
+     60|     expect(screen.getByText(/mar 22/i)).toBeTruthy()
+     61|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/test/components/WeekConfirmModal.test.jsx > WeekConfirmModal — Layer 1 day toggles > shows negative net shift count in summary row
+TestingLibraryElementError: Unable to find an element with the text: /2 fewer shifts than scheduled this week/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      style="position: fixed; inset: 0px; z-index: 60; background: rgba(0, 0, 0, 0.78); display: flex; align-items: center; justify-content: center; padding: 16px;"
+    >
+      <div
+        style="background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); border-radius: 10px; width: 100%; max-width: 460px; overflow: hidden; max-height: 90vh; display: flex; flex-direction: column;"
+      >
+        <div
+          style="padding: 18px 20px 14px; border-bottom: 1px solid var(--color-border-subtle); flex-shrink: 0;"
+        >
+          <div
+            style="display: flex; justify-content: space-between; align-items: flex-start;"
+          >
+            <div>
+              <div
+                style="font-size: 9px; letter-spacing: 3px; color: var(--color-gold); text-transform: uppercase; margin-bottom: 5px;"
+              >
+                Week 
+                7
+                 Check-In
+              </div>
+              <div
+                style="font-size: 16px; font-weight: bold; color: var(--color-text-primary);"
+              >
+                Mar 16
+                 — 
+                Mar 22
+              </div>
+            </div>
+            <span
+              style="font-size: 9px; letter-spacing: 2px; color: var(--color-text-secondary); background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle); padding: 4px 9px; border-radius: 3px; text-transform: uppercase; margin-top: 2px;"
+            >
+              6-Day
+            </span>
+          </div>
+        </div>
+        <div
+          style="overflow-y: auto; flex: 1 1 0%;"
+        >
+          <div
+            style="padding: 6px 20px 4px; font-size: 9px; color: var(--color-text-disabled); letter-spacing: 1.5px; text-transform: uppercase;"
+          >
+            Mark your actual week — tap any day to update
+          </div>
+          <div
+            style="display: flex; align-items: center; padding: 9px 20px; border-bottom: 1px solid var(--color-border-subtle); border-top: 1px solid rgba(0, 200, 150, 0.15);"
+          >
+            <div
+              style="width: 86px;"
+            >
+              <div
+                style="display: flex; align-items: center; gap: 5px;"
+              >
+                <div
+                  style="font-size: 11px; font-weight: bold; color: var(--color-text-primary); letter-spacing: 1px;"
+                >
+                  Mon
+                </div>
+                <span
+                  style="font-size: 7px; letter-spacing: 1.5px; color: var(--color-gold); text-transform: uppercase; opacity: 0.7;"
+                >
+                  pay start
+                </span>
+              </div>
+              <div
+                style="font-size: 9px; color: var(--color-text-disabled);"
+              >
+                Mar 16
+              </div>
+            </div>
+            <div
+              style="flex: 1 1 0%;"
+            >
+              <span
+                style="font-size: 9px; color: var(--color-text-disabled); text-transform: uppercase; letter-spacing: 1px;"
+              >
+                12
+                h shift
+              </span>
+            </div>
+            <div
+              style="display: flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--color-border-subtle);"
+            >
+              <button
+                style="padding: 5px 12px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; border-top: medium; border-right: 1px solid var(--color-border-subtle); border-bottom: medium; border-left: medium; border-image: none; font-weight: normal; background: var(--color-bg-surface); color: var(--color-text-disabled); transition: background 0.15s, color 0.15s;"
+              >
+                Worked
+              </button>
+              <button
+                style="padding: 5px 12px; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; border: medium; font-weight: bold; background: rgba(239, 68, 68, 0.13); color: var(--color-red); transition: background 0.15s, color 0.15s; background-image: none; background-position: 0% 0%; background-size: auto; background-repeat: repeat; background-origin: padding-box; background-clip: border-box; background-attachment: scroll; background-color: rgba(239, 68, 68, 0.13);"
+              >
+                Missed
+              </button>
+            </div>
+          </div>
+          <div
+            style="display: flex; align-items: center; padding: 9px 20px; border-bottom: 1px solid var(--color-border-subtle);"
+          >
+            <div
+              style="width: 86px;"
+            >
+              <div
+                style="display: flex; align-items: center; gap: 5px;"
+              >
+                <div
+                  style="font-size: 11px; font-weight: bold; color: var(--color-text-primary); letter-spacing: 1px;"
+                >
+                  Tue
+                </div>
+              </div>
+              <div
+                style="font-size: 9px; color: var(--color-text-disabled);"
+              >
+                Mar 17
+              </div>
+            </div>
+            <div
+              style="flex: 1 1 0%;"
+            >
+              <span
+                style="font-size: 9px; color: var(--color-text-disabled); text-transform: uppercase; letter-spacing: 1px;"
+              >
+                12
+                h shift
+              </span>
+            </div>
+            <di...
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/test/components/WeekConfirmModal.test.jsx:134:19
+    132|     fireEvent.click(missedBtns[0]) // miss Mon
+    133|     fireEvent.click(missedBtns[1]) // miss Tue
+    134|     expect(screen.getByText(/2 fewer shifts than scheduled this week/i…
+       |                   ^
+    135|   })
+    136|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/test/constants/config.test.js > DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
+Error: Snapshot `DEFAULT_CONFIG > matches snapshot (guards against accidental mutations) 1` mismatched
+
+- Expected
++ Received
+
+@@ -1,8 +1,8 @@
+  {
+-   "attendanceBucketEnabled": null,
+-   "annualSalary": null,
++   "annualSalary": null,
++   "attendanceBucketEnabled": null,
+    "baseRate": 19.65,
+    "benefitsStartDate": null,
+    "bucketCap": 128,
+    "bucketPayoutRate": 9.825,
+    "bucketStartBalance": 64,
+@@ -34,11 +34,10 @@
+    "otMultiplier": 1.5,
+    "otThreshold": 40,
+    "otherDeductions": [],
+    "payPeriodEndDay": 0,
+    "paycheckBuffer": 50,
+-   "userPaySchedule": "weekly",
+    "scheduleIsVariable": false,
+    "selectedBenefits": [],
+    "setupComplete": false,
+    "shiftHours": 12,
+    "standardWeeklyHours": 40,
+@@ -72,10 +71,11 @@
+      49,
+      50,
+      51,
+      52,
+    ],
++   "userPaySchedule": "weekly",
+    "userState": "MO",
+    "visionPremium": 0,
+    "w1FedRate": 0.0784,
+    "w1StateRate": 0.0338,
+    "w2FedRate": 0.1283,
+
+ ❯ src/test/constants/config.test.js:57:28
+     55| describe('DEFAULT_CONFIG', () => {
+     56|   it('matches snapshot (guards against accidental mutations)', () => {
+     57|     expect(DEFAULT_CONFIG).toMatchSnapshot()
+       |                            ^
+     58|   })
+     59|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+  Snapshots  1 failed
+ Test Files  2 failed | 10 passed (12)
+      Tests  3 failed | 385 passed (388)
+   Start at  06:17:55
+   Duration  7.43s (transform 1.56s, setup 2.13s, import 3.68s, tests 8.14s, environment 25.35s)
+
+---LINT---
+
+================================================================================
+LINT (npm run lint — ESLint)
+================================================================================
+What this is: Static code analysis. Checks for unused variables, broken React
+hooks rules, impure functions in render, components defined inside render, etc.
+Does NOT run the app or execute any test assertions. Failures here = code style
+and correctness warnings, not broken test logic.
+================================================================================
+
+> authority-finance@0.0.0 lint
+> eslint .
+
+
+C:\Users\antho\Documents\life-rpg\src\App.jsx
+  217:9  error  'canGoBack' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  no-unused-vars
+  226:9  error  'navigateBack' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               no-unused-vars
+  259:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  257 |   useEffect(() => {
+  258 |     if (!authedUser) return;
+> 259 |     setLoading(true);
+      |     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  260 |     loadUserData().then((data) => {
+  261 |       setConfig(data.config);
+  262 |       setShowExtra(data.showExtra);  react-hooks/set-state-in-effect
+
+C:\Users\antho\Documents\life-rpg\src\components\BudgetPanel.jsx
+     3:133  error  'loanRunwayStartDate' is defined but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+   172:9    error  'ph' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u          no-unused-vars
+   778:19   error  'expCycle' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u    no-unused-vars
+  1336:37   error  'i' is defined but never used                                                               no-unused-vars
+  1377:74   error  '_dueWeek' is defined but never used                                                        no-unused-vars
+
+C:\Users\antho\Documents\life-rpg\src\components\HomePanel.jsx
+  18:3  error  'adjustedTakeHome' is defined but never used  no-unused-vars
+
+C:\Users\antho\Documents\life-rpg\src\components\IncomePanel.jsx
+   8:71   error  'setShowExtra' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            no-unused-vars
+   8:175  error  'isAdmin' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 no-unused-vars
+  21:7    error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  19 |   useEffect(() => {
+  20 |     if (view !== "summary" || subview !== "weekly") {
+> 21 |       setStickyHdr(s => s !== null ? null : s);
+     |       ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  22 |       return;
+  23 |     }
+  24 |     const update = () => {  react-hooks/set-state-in-effect
+  96:26   error  'taxedWeekCount' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      no-unused-vars
+  96:42   error  'fedLiability' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        no-unused-vars
+  96:56   error  'moLiability' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         no-unused-vars
+  96:69   error  'ficaTotal' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           no-unused-vars
+  96:80   error  'fedWithheldBase' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     no-unused-vars
+  96:97   error  'moWithheldBase' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      no-unused-vars
+  96:113  error  'fedGap' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              no-unused-vars
+  96:121  error  'moGap' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               no-unused-vars
+  96:128  error  'totalGap' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            no-unused-vars
+  96:138  error  'targetExtraTotal' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    no-unused-vars
+  96:156  error  'fedAGI' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              no-unused-vars
+
+C:\Users\antho\Documents\life-rpg\src\components\LogPanel.jsx
+  515:10  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  513 |       <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Event</div>
+  514 |       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+> 515 |         <FormFields vals={nEv} set={setNEv} onWeekEndChange={handleWeekEndChange} />
+      |          ^^^^^^^^^^ This component is created during render
+  516 |       </div>
+  517 |       {addConfirming && (
+  518 |         <div style={{ marginBottom: "10px", padding: "12px", background: "#1a2d1e", border: "1px solid rgba(76,175,125,0.4)", borderRadius: "6px", fontSize: "11px", color: "var(--color-text-secondary)" }}>
+
+  212 |
+  213 |   // ── Shared form fields ──
+> 214 |   const FormFields = ({ vals, set, onWeekEndChange }) => <>
+      |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 215 |     <WeekSelect vals={vals} onWeekEndChange={onWeekEndChange} />
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 216 |
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 336 |     </div>
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 337 |   </>;
+      | ^^^^^^ The component is created during render here
+  338 |
+  339 |   return (<div>
+  340 |  react-hooks/static-components
+
+C:\Users\antho\Documents\life-rpg\src\components\LoginScreen.jsx
+   23:21  error  'provider' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         no-unused-vars
+  187:8   error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  185 |   if (info) {
+  186 |     return (
+> 187 |       <Shell title="Check your email">
+      |        ^^^^^ This component is created during render
+  188 |         <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: 1.7 }}>{info}</div>
+  189 |         <button
+  190 |           onClick={() => { setInfo(null); setMode("signin"); }}
+
+  166 |   // ── Shared wrapper ────────────────────────────────────────────────────────
+  167 |
+> 168 |   function Shell({ title, subtitle, children }) {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 169 |     return (
+      | ^^^^^^^^^^^^
+> 170 |       <div style={{ minHeight: "100vh", background: "var(--color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+      …
+      | ^^^^^^^^^^^^
+> 180 |     );
+      | ^^^^^^^^^^^^
+> 181 |   }
+      | ^^^^ The component is created during render here
+  182 |
+  183 |   // ── Info / confirmation screen ────────────────────────────────────────────
+  184 |                                                                                                                   react-hooks/static-components
+  203:8   error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  201 |   if (recoveryMode) {
+  202 |     return (
+> 203 |       <Shell title="Set new password" subtitle="Enter and confirm your new password.">
+      |        ^^^^^ This component is created during render
+  204 |         <form onSubmit={handleSetNewPassword} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+  205 |           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+  206 |             <label style={lS}>New Password</label>
+
+  166 |   // ── Shared wrapper ────────────────────────────────────────────────────────
+  167 |
+> 168 |   function Shell({ title, subtitle, children }) {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 169 |     return (
+      | ^^^^^^^^^^^^
+> 170 |       <div style={{ minHeight: "100vh", background: "var(--color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+      …
+      | ^^^^^^^^^^^^
+> 180 |     );
+      | ^^^^^^^^^^^^
+> 181 |   }
+      | ^^^^ The component is created during render here
+  182 |
+  183 |   // ── Info / confirmation screen ────────────────────────────────────────────
+  184 |  react-hooks/static-components
+  224:8   error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  222 |   if (mode === "forgot") {
+  223 |     return (
+> 224 |       <Shell title="Reset password" subtitle="We'll email you a link to set a new password.">
+      |        ^^^^^ This component is created during render
+  225 |         <form onSubmit={handleForgot} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+  226 |           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+  227 |             <label style={lS}>Email</label>
+
+  166 |   // ── Shared wrapper ────────────────────────────────────────────────────────
+  167 |
+> 168 |   function Shell({ title, subtitle, children }) {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 169 |     return (
+      | ^^^^^^^^^^^^
+> 170 |       <div style={{ minHeight: "100vh", background: "var(--color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+      …
+      | ^^^^^^^^^^^^
+> 180 |     );
+      | ^^^^^^^^^^^^
+> 181 |   }
+      | ^^^^ The component is created during render here
+  182 |
+  183 |   // ── Info / confirmation screen ────────────────────────────────────────────
+  184 |     react-hooks/static-components
+  243:6   error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+  241 |
+  242 |   return (
+> 243 |     <Shell title={isSignUp ? "Create account" : "Sign in"}>
+      |      ^^^^^ This component is created during render
+  244 |       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "4px" }}>
+  245 |
+  246 |         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+
+  166 |   // ── Shared wrapper ────────────────────────────────────────────────────────
+  167 |
+> 168 |   function Shell({ title, subtitle, children }) {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 169 |     return (
+      | ^^^^^^^^^^^^
+> 170 |       <div style={{ minHeight: "100vh", background: "var(--color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+      …
+      | ^^^^^^^^^^^^
+> 180 |     );
+      | ^^^^^^^^^^^^
+> 181 |   }
+      | ^^^^ The component is created during render here
+  182 |
+  183 |   // ── Info / confirmation screen ────────────────────────────────────────────
+  184 |                                                                                                    react-hooks/static-components
+
+C:\Users\antho\Documents\life-rpg\src\components\WeekConfirmModal.jsx
+  295:11  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+  293 |     const logEntry = {
+  294 |       ...eventVals,
+> 295 |       id: Date.now(),
+      |           ^^^^^^^^^^ Cannot call impure function
+  296 |       shiftsLost:   parseInt(eventVals.shiftsLost)   || 0,
+  297 |       weekendShifts: parseInt(eventVals.weekendShifts) || 0,
+  298 |       ptoHours:     parseFloat(eventVals.ptoHours)   || 0,  react-hooks/purity
+
+C:\Users\antho\Documents\life-rpg\src\components\ui.jsx
+  39:14  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-refresh/only-export-components
+  40:14  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-refresh/only-export-components
+  97:7   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+   95 |     if (prevRaw.current !== rawVal) {
+   96 |       prevRaw.current = rawVal;
+>  97 |       setFlashing(true);
+      |       ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+   98 |       const t = setTimeout(() => setFlashing(false), 150); // stays gold 150ms, CSS transition fades over 600ms
+   99 |       return () => clearTimeout(t);
+  100 |     }  react-hooks/set-state-in-effect
+
+C:\Users\antho\Documents\life-rpg\src\hooks\useLocalStorage.js
+  16:13  error  Empty block statement  no-empty
+
+C:\Users\antho\Documents\life-rpg\src\lib\finance.js
+  161:70  error  Redundant Boolean call  no-extra-boolean-cast
+
+C:\Users\antho\Documents\life-rpg\src\lib\supabase.js
+  22:13  error  Empty block statement  no-empty
+  23:60  error  Empty block statement  no-empty
+  27:60  error  Empty block statement  no-empty
+  34:13  error  Empty block statement  no-empty
+  37:56  error  Empty block statement  no-empty
+  38:65  error  Empty block statement  no-empty
+
+C:\Users\antho\Documents\life-rpg\src\test\components\WeekConfirmModal.test.jsx
+  176:26  error  'mockDismiss' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+✖ 42 problems (42 errors, 0 warnings)
+  1 error and 0 warnings potentially fixable with the `--fix` option.
+

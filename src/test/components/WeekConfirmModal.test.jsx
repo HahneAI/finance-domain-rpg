@@ -19,8 +19,8 @@ const BASE_CONFIG = {
 const SIX_DAY_WEEK = {
   idx: 7,
   rotation: '6-Day',
-  weekStart: new Date('2026-03-16'), // Monday
-  weekEnd:   new Date('2026-03-22'), // Sunday
+  weekStart: new Date(2026, 2, 16), // March 16, 2026 (local)
+  weekEnd:   new Date(2026, 2, 22), // March 22, 2026
   workedDayNames: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
 }
 
@@ -28,8 +28,8 @@ const SIX_DAY_WEEK = {
 const FOUR_DAY_WEEK = {
   idx: 8,
   rotation: '4-Day',
-  weekStart: new Date('2026-03-23'),
-  weekEnd:   new Date('2026-03-29'),
+  weekStart: new Date(2026, 2, 23),
+  weekEnd:   new Date(2026, 2, 29),
   workedDayNames: ['Mon', 'Tue', 'Fri', 'Sat'],
 }
 
@@ -55,9 +55,9 @@ describe('WeekConfirmModal — Layer 1 initial render', () => {
   it('renders the week header with correct index and date range', () => {
     renderModal()
     expect(screen.getByText(/week 7 check-in/i)).toBeTruthy()
-    // Date range appears in the header
-    expect(screen.getByText(/mar 16/i)).toBeTruthy()
-    expect(screen.getByText(/mar 22/i)).toBeTruthy()
+    // Date range appears in the header (also appears in day-row labels, so use getAllByText)
+    expect(screen.getAllByText(/mar 16/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/mar 22/i).length).toBeGreaterThan(0)
   })
 
   it('shows the rotation badge', () => {
@@ -131,7 +131,9 @@ describe('WeekConfirmModal — Layer 1 day toggles', () => {
     const missedBtns = screen.getAllByRole('button', { name: /^missed$/i })
     fireEvent.click(missedBtns[0]) // miss Mon
     fireEvent.click(missedBtns[1]) // miss Tue
-    expect(screen.getByText(/net:.*−2 shifts/i)).toBeTruthy()
+    // Layer 1 shows "Net: -2 shifts — review on next screen"
+    // ("fewer shifts than scheduled" text only appears after advancing to Layer 2)
+    expect(screen.getByText(/net:.*-2.*shift/i)).toBeTruthy()
   })
 
   it('toggling pickup on an unscheduled day shows "+ 1 pickup" in summary', () => {

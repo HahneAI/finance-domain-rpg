@@ -1,4 +1,4 @@
-import { FED_BRACKETS, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START } from "../constants/config.js";
+import { FED_BRACKETS, QUARTER_BOUNDARIES, DHL_PRESET, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -10,6 +10,12 @@ function toLocalIso(date) {
   return `${y}-${m}-${d}`;
 }
 export { toLocalIso };
+
+function parseIsoDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 
 // ─── DHL 401k tiered employer match ─────────────────────────────────────────
 // DHL matches 100% up to 4%, then 50¢ per $1 from 4%→6%, capped at 5% match.
@@ -23,7 +29,9 @@ export function dhlEmployerMatchRate(k401Rate) {
   return tier1 + tier2;
 }
 
-function weeklyBenefitDeductions(cfg) {
+const checksPerYearFor = (schedule) => PAYCHECKS_PER_YEAR[schedule ?? "weekly"] ?? 52;
+
+function perPaycheckBenefitDeductions(cfg) {
   return (
     (cfg.healthPremium || 0) +
     (cfg.dentalPremium || 0) +
@@ -34,6 +42,21 @@ function weeklyBenefitDeductions(cfg) {
     (cfg.hsaWeekly || 0) +
     (cfg.fsaWeekly || 0)
   );
+}
+
+function weeklyBenefitDeductions(cfg) {
+  const perCheck = perPaycheckBenefitDeductions(cfg);
+  const checksPerYear = checksPerYearFor(cfg.userPaySchedule);
+  return perCheck * (checksPerYear / 52);
+}
+
+function otherPostTaxDeductions(cfg) {
+  const perCheck = (cfg.otherDeductions ?? []).reduce((sum, row) => {
+    const amt = row?.weeklyAmount;
+    return sum + (typeof amt === "number" ? amt : 0);
+  }, 0);
+  const checksPerYear = checksPerYearFor(cfg.userPaySchedule);
+  return perCheck * (checksPerYear / 52);
 }
 
 function dhlWeekendHoursForDate(date, shiftHours) {
@@ -119,6 +142,7 @@ export function getStateConfig(userState) {
 export function buildYear(cfg) {
   const weeks = [], k401Start = new Date(cfg.k401StartDate), taxedSet = new Set(cfg.taxedWeeks);
   const isDHL = cfg.employerPreset === "DHL";
+  const benefitsStart = parseIsoDate(cfg.benefitsStartDate);
   // Derive loop bounds from FISCAL_YEAR_START so the range stays in sync with the
   // constant rather than being duplicated as a hardcoded literal.
   const [fyY, fyM, fyD] = FISCAL_YEAR_START.split('-').map(Number);
@@ -176,6 +200,8 @@ export function buildYear(cfg) {
              + otWkndH       * cfg.diffRate * cfg.otMultiplier;
 
     const active = idx >= cfg.firstActiveIdx;
+    const benefitsActive = !benefitsStart || weekEnd >= benefitsStart;
+    const benefitsDeduction = benefitsActive ? weeklyBenefitDeductions(cfg) : 0;
     const has401k = active && weekEnd >= k401Start;
     const k401kEmployee = has401k ? grossPay * cfg.k401Rate : 0;
     // DHL match is formula-driven (tiered); other employers use stored flat k401MatchRate.
@@ -183,13 +209,21 @@ export function buildYear(cfg) {
       ? dhlEmployerMatchRate(cfg.k401Rate)
       : cfg.k401MatchRate;
     const k401kEmployer = has401k ? grossPay * effectiveMatchRate : 0;
-    const taxableGross = active ? Math.max(grossPay - weeklyBenefitDeductions(cfg) - k401kEmployee, 0) : 0;
+    const taxableGross = active ? Math.max(grossPay - benefitsDeduction - k401kEmployee, 0) : 0;
     const isTaxed = active && taxedSet.has(idx);
     weeks.push({
       idx, weekEnd, weekStart, rotation, isHighWeek,
       workedDayNames: worked.map(w => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][w.getDay()]),
       totalHours, regularHours, overtimeHours, weekendHours,
-      grossPay: active ? grossPay : 0, taxableGross, active, has401k, k401kEmployee, k401kEmployer, taxedBySchedule: isTaxed
+      grossPay: active ? grossPay : 0,
+      taxableGross,
+      active,
+      has401k,
+      k401kEmployee,
+      k401kEmployer,
+      taxedBySchedule: isTaxed,
+      benefitsDeduction,
+      benefitsActive,
     });
     d.setDate(d.getDate() + 7); idx++;
   }
@@ -199,8 +233,10 @@ export function buildYear(cfg) {
 export function computeNet(w, cfg, extraPerCheck, showExtra) {
   if (!w.active) return 0;
   const fica = w.grossPay * cfg.ficaRate;
-  const ded = weeklyBenefitDeductions(cfg) + w.k401kEmployee;
-  if (!w.taxedBySchedule) return w.grossPay - fica - ded;
+  const benefitDeduction = w.benefitsDeduction ?? (w.active ? weeklyBenefitDeductions(cfg) : 0);
+  const ded = benefitDeduction + w.k401kEmployee;
+  const otherPostTax = otherPostTaxDeductions(cfg);
+  if (!w.taxedBySchedule) return (w.grossPay - fica - ded) - otherPostTax;
   // Use generalized rate fields; fall back to legacy w1/w2 fields for pre-wizard rows.
   const fedLow  = cfg.fedRateLow   ?? cfg.w1FedRate;
   const fedHigh = cfg.fedRateHigh  ?? cfg.w2FedRate;
@@ -208,7 +244,7 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
   const stHigh  = cfg.stateRateHigh ?? cfg.w2StateRate;
   const fed = w.taxableGross * (w.isHighWeek ? fedHigh : fedLow) + (showExtra ? extraPerCheck : 0);
   const st = w.taxableGross * (w.isHighWeek ? stHigh : stLow);
-  return w.grossPay - fed - st - fica - ded;
+  return (w.grossPay - fed - st - fica - ded) - otherPostTax;
 }
 
 export function projectedGross(isWeek2, cfg) {

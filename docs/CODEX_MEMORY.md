@@ -12,6 +12,28 @@
 
 ---
 
+## Test Infrastructure (read before running or writing tests)
+
+**Runner:** Vitest 4. Config: `vitest.config.js` (Vitest auto-prefers this over `vite.config.js`).
+
+**Correct command to run tests:**
+```bash
+npm run test:run
+```
+Do NOT use `npm run test -- --runInBand`. `--runInBand` is a Jest-only flag; Vitest silently ignores it and adds no value here.
+
+**Reporter:** `verbose` is set in `vitest.config.js`. This is intentional — Vitest 4's default reporter misreports collection errors as "no tests / 12 failed" even when most tests ran fine. Always interpret results from the per-file and per-test lines, not just the summary line.
+
+**Why `vitest.config.js` is separate from `vite.config.js`:**
+`vite.config.js` loads `@tailwindcss/vite`, `@rolldown/plugin-babel`, and LightningCSS. All three depend on native `.node` binaries that fail with `spawn EPERM` in sandboxed environments. `vitest.config.js` omits all three — only `@vitejs/plugin-react` is loaded for tests.
+
+**Updating snapshots:** After intentional changes to `DEFAULT_CONFIG` key order or values, run:
+```bash
+npx vitest run -u
+```
+
+---
+
 ## 2026-03-28 — Benefits/Deductions math wiring audit (first entry)
 - Reviewed `buildYear()` and `computeNet()` to map how wizard deduction fields flow into taxable gross and take-home pay.
 - Current pre-tax deduction pool in `buildYear()` only includes `cfg.ltd` and `k401kEmployee`; insurance premiums (`healthPremium`, `dentalPremium`, `visionPremium`, `stdWeekly`, `lifePremium`) and account contributions (`hsaWeekly`, `fsaWeekly`) are collected in config but not applied.
@@ -55,3 +77,13 @@
 - Replaced the single continuous goal fill bar with a month-notated track in `BudgetPanel`: timeline now builds month segments from `futureWeeks`, applies subtle 4-part visual subdivisions per month, and labels each month on the goal card.
 - Goal funding fill now renders as **discrete weekly chunks** (one chunk per funded/projection week between `sW` and `sW + wN`), preserving week-level surplus sequencing from `computeGoalTimeline()` while improving mid-month stop fidelity.
 - The update is visual-only for scale/readability: no changes were made to `computeGoalTimeline()` surplus math or goal funding order.
+
+## 2026-04-01 — Codex backlog + tooling guardrails
+- Upcoming `[CODEX]` tracks (per now deleted `docs/codex-task-1…6`):
+  1. **Profile tab auth flows** — finish change-email/password, destructive delete (via secure server route + Supabase admin API), and global sign-out, all surfaced in Profile tab.
+  2. **Fiscal week roadmap** — unify week awareness (Week X of 52), auto-complete funded goals, weekly “worked vs projected” confirmations, and feed per-week nets directly into `computeGoalTimeline()`.
+  3. **State tax audit** — classify all 50 states (none/flat/bracketed) and fix Missouri’s marginal brackets in the shared tax table + calculators.
+  4. **DHL benefits pipeline** — ensure every preset payroll deduction (medical, dental, vision, LTD, STD, life, HSA/FSA, 401k, etc.) can be edited in Profile, flows through storage, and reduces pre-net pay immediately.
+  5. **Tax plan relocation** — move tax strategy/planning sections out of Income tab config into Account › Tax Plan, reusing the existing form components/state.
+  6. **Income weekly overview sticky header** — add a subtle pinned header row to the weekly chart/table without altering chart math.
+- Vitest currently can’t run inside Codex because `vite`/`externalize-deps` tries to spawn a child process and Windows sandbox returns `EPERM`. All test runs need to happen on the host (or after relaxing sandbox) until Vite’s config can bundle without spawning.

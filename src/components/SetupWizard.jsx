@@ -17,7 +17,7 @@
 import { useState } from "react";
 import { buildYear, dhlEmployerMatchRate } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
-import { FISCAL_YEAR_START, DHL_PRESET, DHL_BENEFIT_OPTIONS } from "../constants/config.js";
+import { FISCAL_YEAR_START, DHL_PRESET, DHL_BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 
@@ -98,21 +98,23 @@ function Step0({ lifeEvent, onLifeEventChange }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS — shared across step components
 // ─────────────────────────────────────────────────────────────────────────────
-function Pill({ label, active, onClick }) {
+function Pill({ label, active, onClick, disabled }) {
   return (
     <button
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
       style={{
         padding: "7px 14px",
         fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
-        background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
-        color: active ? "var(--color-gold)" : "var(--color-text-secondary)",
-        border: `1px solid ${active ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
-        borderRadius: "10px", cursor: "pointer",
+        background: disabled ? "var(--color-bg-base)" : active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
+        color: disabled ? "var(--color-text-disabled)" : active ? "var(--color-gold)" : "var(--color-text-secondary)",
+        border: `1px solid ${disabled ? "var(--color-bg-raised)" : active ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
+        borderRadius: "10px", cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
         transition: "background 0.15s, border-color 0.15s, color 0.15s",
       }}
     >
-      {active && "✓ "}{label}
+      {!disabled && active && "✓ "}{label}
     </button>
   );
 }
@@ -156,7 +158,8 @@ function Step1({ formData, onChange, lifeEvent }) {
     (formData.commissionMonthly ?? 0) > 0
   );
 
-  const isDHL = formData.employerPreset === "DHL";
+  const isDHL    = formData.employerPreset === "DHL";
+  const isSalary = formData.userPaySchedule === "salary";
 
   function setDHL(yes) {
     setGateTouched(true);
@@ -275,7 +278,59 @@ function Step1({ formData, onChange, lifeEvent }) {
       {/* ── Pay fields (shown once gate answered) ── */}
       {gateTouched && (
         <>
-          <FieldRow>
+          {/* ── Pay Schedule ── */}
+          <Field label="How do you get paid?">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap", alignItems: "center" }}>
+              {isDHL ? (
+                <>
+                  <Pill label="Weekly"           active={formData.userPaySchedule === "weekly"}  onClick={() => onChange({ userPaySchedule: "weekly",  annualSalary: null })} />
+                  <Pill label="Salary (Biweekly)" active={formData.userPaySchedule === "salary"}  onClick={() => onChange({ userPaySchedule: "salary" })} />
+                </>
+              ) : (
+                <>
+                  <Pill label="Weekly"     active={formData.userPaySchedule === "weekly"}    onClick={() => onChange({ userPaySchedule: "weekly",    annualSalary: null })} />
+                  <Pill label="Biweekly"   active={formData.userPaySchedule === "biweekly"}  onClick={() => onChange({ userPaySchedule: "biweekly",  annualSalary: null })} />
+                  <Pill label="Monthly"    active={formData.userPaySchedule === "monthly"}   onClick={() => onChange({ userPaySchedule: "monthly",   annualSalary: null })} />
+                  <Pill label="Salary"     active={formData.userPaySchedule === "salary"}    onClick={() => onChange({ userPaySchedule: "salary" })} />
+                  <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                    <Pill label="Commission Only" active={false} onClick={() => {}} disabled />
+                    <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-disabled)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "4px", padding: "2px 5px" }}>Soon</span>
+                  </div>
+                </>
+              )}
+            </div>
+            {isSalary && (
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+                Paid every 2 weeks. Enter your annual salary and we'll derive your base rate.
+              </div>
+            )}
+          </Field>
+
+          {/* ── Rate fields — salary vs hourly ── */}
+          {isSalary ? (
+            <Field label="Annual Salary ($)">
+              <input
+                style={{ ...iS }}
+                type="number" min="0" step="1000"
+                value={formData.annualSalary ?? ""}
+                onChange={e => {
+                  const sal = e.target.value === "" ? null : parseFloat(e.target.value);
+                  onChange({
+                    annualSalary: sal,
+                    baseRate:     sal != null ? Math.round((sal / 2080) * 100) / 100 : null,
+                    shiftHours:   8,
+                  });
+                }}
+                placeholder="e.g. 52000"
+              />
+              {(formData.annualSalary ?? 0) > 0 && (
+                <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                  ≈ ${(formData.annualSalary / 26).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per check · ${(formData.annualSalary / 2080).toFixed(2)}/hr equivalent
+                </div>
+              )}
+            </Field>
+          ) : (
+            <FieldRow>
             <Field label="Base Rate ($/hr)">
               <input
                 style={{ ...iS }}
@@ -295,6 +350,7 @@ function Step1({ formData, onChange, lifeEvent }) {
               />
             </Field>
           </FieldRow>
+          )}
 
           {/* ── Weekend Differential ── directly configurable; 0 = no differential ── */}
           <Field label="Weekend Differential ($/hr)">
@@ -543,7 +599,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
           display: "flex", flexDirection: "column", gap: "12px",
         }}>
           {def.type === "weekly" && (
-            <Field label="Weekly Deduction ($)">
+            <Field label="Per-paycheck Deduction ($)">
               <input
                 style={{ ...iS }}
                 type="number" min="0" step="0.01"
@@ -693,7 +749,7 @@ function Step3({ formData, onChange }) {
 
       {/* ── Other recurring deductions ── */}
       <div>
-        <label style={lS}>Other Recurring Deductions</label>
+        <label style={lS}>Other Recurring Deductions (per paycheck)</label>
         <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
           {others.length === 0 && (
             <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", padding: "8px 0" }}>
@@ -715,7 +771,7 @@ function Step3({ formData, onChange }) {
               <input
                 style={{ ...iS }}
                 type="number" min="0" step="0.01"
-                placeholder="$/wk"
+                placeholder="$/check"
                 value={row.weeklyAmount || ""}
                 onChange={e => updateRow(row.id, { weeklyAmount: e.target.value === "" ? null : parseFloat(e.target.value) })}
               />
@@ -1199,12 +1255,18 @@ function StepWrapUp({ formData, onChange }) {
   const gross = estimateWeeklyGross(formData);
   const fica     = gross * (formData.ficaRate || 0.0765);
   const k401k    = gross * (formData.k401Rate || 0);
-  const benefits =
+  const baseBenefits =
     (formData.healthPremium || 0) + (formData.dentalPremium || 0) +
     (formData.visionPremium || 0) + (formData.stdWeekly || 0) +
     (formData.lifePremium || 0)   + (formData.hsaWeekly || 0) +
     (formData.fsaWeekly || 0)     + (formData.ltd || 0);
-  const other = (formData.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0);
+  const benefitsStart = formData.benefitsStartDate ? new Date(formData.benefitsStartDate) : null;
+  const benefitsActive = !benefitsStart || Number.isNaN(benefitsStart.getTime()) || benefitsStart <= new Date();
+  const checksPerYear = PAYCHECKS_PER_YEAR[formData.userPaySchedule ?? "weekly"] ?? 52;
+  const perWeekFactor = checksPerYear / 52;
+  const benefits = benefitsActive ? baseBenefits * perWeekFactor : 0;
+  const otherPerCheck = (formData.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0);
+  const other = otherPerCheck * perWeekFactor;
   const fed   = gross * (formData.fedRateLow || 0);
   const state = gross * (formData.stateRateLow || 0);
   const net   = gross - fica - k401k - benefits - other - fed - state;
@@ -1220,7 +1282,7 @@ function StepWrapUp({ formData, onChange }) {
     { label: "State Tax",     val: state,    sign: "−" },
     { label: "FICA",          val: fica,     sign: "−" },
     { label: "401(k)",        val: k401k,    sign: "−" },
-    { label: "Benefits",      val: benefits, sign: "−" },
+    { label: benefitsActive ? "Benefits" : "Benefits (start later)", val: benefits, sign: "−" },
     { label: "Other Deduct.", val: other,    sign: "−" },
   ];
 
@@ -1343,8 +1405,12 @@ const STEP_DEFS = [
   {
     id: 1, title: "Pay Structure",
     showIf: () => true,
-    isValid: (d) => d.baseRate > 0 && d.shiftHours > 0
-      && (d.employerPreset !== "DHL" || d.dhlTeam !== null),
+    isValid: (d) => {
+      if (!d.userPaySchedule) return false;
+      if (d.employerPreset === "DHL" && !d.dhlTeam) return false;
+      if (d.userPaySchedule === "salary") return (d.annualSalary ?? 0) > 0;
+      return (d.baseRate ?? 0) > 0 && (d.shiftHours ?? 0) > 0;
+    },
     component: Step1,
   },
   {

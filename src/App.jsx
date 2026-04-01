@@ -563,6 +563,7 @@ export default function App() {
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
         today={today}
+        userPaySchedule={config.userPaySchedule ?? "weekly"}
       />}
       {currentView === "benefits" && <BenefitsPanel
         allWeeks={allWeeks} config={config} isDHL={isDHL}

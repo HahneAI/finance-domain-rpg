@@ -170,13 +170,20 @@ After: commit (even if broken), one-sentence summary.
 
 ## Testing
 
-Runner: **Vitest**. Tests in `src/test/`.
+Runner: **Vitest**. Tests in `src/test/`. Config lives in `vitest.config.js` (separate from `vite.config.js` — Vitest auto-prefers it).
 
 ```bash
-npm test          # watch mode
-npm run test:run  # single pass
+npm test              # watch mode
+npm run test:run      # single pass  ← use this to verify a change
 npm run test:coverage
+npx vitest run -u     # update snapshots after intentional DEFAULT_CONFIG changes
 ```
+
+**Reporter is set to `verbose` in `vitest.config.js`.** Without `verbose`, Vitest 4's default reporter can misreport suite failures as "no tests" when collection errors exist — the verbose mode always shows accurate per-file and per-test counts.
+
+**Do not use `npm run test -- --runInBand`.** `--runInBand` is a Jest flag; Vitest ignores it. Use `npm run test:run` for a single serial pass.
+
+**`vitest.config.js` is sandbox-safe** — intentionally omits `@tailwindcss/vite`, `@rolldown/plugin-babel`, and CSS processing to avoid native `.node` binaries that fail in restricted environments (Codex, CI).
 
 ---
 

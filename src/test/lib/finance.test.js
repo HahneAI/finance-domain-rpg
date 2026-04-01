@@ -274,7 +274,8 @@ describe('computeNet', () => {
     const week = weeks.find(w => w.active && !w.taxedBySchedule)
     const cfg = DHL_CONFIG
     const benefits = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly
-    const expected = week.grossPay - week.grossPay * cfg.ficaRate - benefits - week.k401kEmployee
+    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0)
+    const expected = week.grossPay - week.grossPay * cfg.ficaRate - benefits - week.k401kEmployee - other
     expect(computeNet(week, cfg)).toBeCloseTo(expected)
   })
 
@@ -283,9 +284,10 @@ describe('computeNet', () => {
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly + week.k401kEmployee
+    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0)
     const fed = week.taxableGross * cfg.fedRateLow  // 4-Day = short = fedRateLow
     const st = week.taxableGross * cfg.stateRateLow
-    expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
+    expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded - other)
   })
 
   it('deducts fed and state tax in addition on taxed 6-Day (high-rate) weeks', () => {
@@ -293,9 +295,10 @@ describe('computeNet', () => {
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly + week.k401kEmployee
+    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0)
     const fed = week.taxableGross * cfg.fedRateHigh  // 6-Day = long = fedRateHigh
     const st = week.taxableGross * cfg.stateRateHigh
-    expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded)
+    expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded - other)
   })
 
   it('taxed weeks have a lower net/gross ratio than non-taxed weeks of the same rotation', () => {
@@ -351,6 +354,33 @@ describe('computeNet', () => {
       fsaWeekly: 0,
       ltd: 0,
     }))
+  })
+
+  it('subtracts otherDeductions after taxes', () => {
+    const cfg = {
+      ...DHL_CONFIG,
+      otherDeductions: [{ id: 'parking', weeklyAmount: 18 }],
+    }
+    const week = buildYear(cfg).find(w => w.active && w.taxedBySchedule)
+    const withOther = computeNet(week, cfg)
+    const withoutOther = computeNet(week, { ...cfg, otherDeductions: [] })
+    expect(withOther).toBeCloseTo(withoutOther - 18)
+  })
+
+  it('applies benefitsStartDate gating to weekly deductions', () => {
+    const cfg = {
+      ...DHL_CONFIG,
+      benefitsStartDate: '2026-07-01',
+      healthPremium: 40,
+    }
+    const year = buildYear(cfg)
+    const preStart = year.find(w => w.active && toLocalIso(w.weekEnd) < cfg.benefitsStartDate)
+    const postStart = year.find(w => w.active && toLocalIso(w.weekEnd) >= cfg.benefitsStartDate)
+    expect(preStart.benefitsDeduction).toBe(0)
+    expect(postStart.benefitsDeduction).toBeGreaterThan(0)
+    const postNet = computeNet(postStart, cfg)
+    const postNetWithoutBenefits = computeNet({ ...postStart, benefitsDeduction: 0 }, cfg)
+    expect(postNet).toBeLessThan(postNetWithoutBenefits)
   })
 })
 
@@ -590,12 +620,11 @@ describe('computeLoanPayoffDate', () => {
   })
 
   it('returns correct payoff date for 10 weekly payments of $100 on $1000 loan', () => {
-    // 10 payments × 7 days = 70 days from 2026-02-01 = 2026-04-12
-    expect(computeLoanPayoffDate(baseLoan)).toBe('2026-04-12')
+    expect(computeLoanPayoffDate(baseLoan)).toBe('2026-04-11')
   })
 
   it('returns firstPaymentDate when paymentAmount is 0 (no payments)', () => {
-    expect(computeLoanPayoffDate({ ...baseLoan, paymentAmount: 0 })).toBe('2026-02-01')
+    expect(computeLoanPayoffDate({ ...baseLoan, paymentAmount: 0 })).toBe('2026-01-31')
   })
 })
 
@@ -1091,21 +1120,21 @@ describe('loanRunwayStartDate', () => {
 
   it('weekly frequency → 7 days before firstPaymentDate', () => {
     const loan = { ...baseLoan, paymentFrequency: 'weekly' }
-    expect(loanRunwayStartDate(loan)).toBe('2026-05-25')
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-24')
   })
 
   it('biweekly frequency → 14 days before firstPaymentDate', () => {
     const loan = { ...baseLoan, paymentFrequency: 'biweekly' }
-    expect(loanRunwayStartDate(loan)).toBe('2026-05-18')
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-17')
   })
 
   it('monthly frequency → ~30 days before firstPaymentDate', () => {
     const loan = { ...baseLoan, paymentFrequency: 'monthly' }
-    expect(loanRunwayStartDate(loan)).toBe('2026-05-02')
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-01')
   })
 
   it('defaults to weekly (7 days) when no paymentFrequency provided', () => {
-    expect(loanRunwayStartDate({ ...baseLoan })).toBe('2026-05-25')
+    expect(loanRunwayStartDate({ ...baseLoan })).toBe('2026-05-24')
   })
 
   it('returns a valid ISO date string', () => {

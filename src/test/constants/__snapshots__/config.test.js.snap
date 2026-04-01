@@ -2,6 +2,7 @@
 
 exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations) 1`] = `
 {
+  "annualSalary": null,
   "attendanceBucketEnabled": null,
   "baseRate": 19.65,
   "benefitsStartDate": null,
@@ -75,6 +76,7 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
     51,
     52,
   ],
+  "userPaySchedule": "weekly",
   "userState": "MO",
   "visionPremium": 0,
   "w1FedRate": 0.0784,

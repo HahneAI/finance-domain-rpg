@@ -75,6 +75,7 @@ const cycleAmountFromPerPaycheck = (perPaycheck, cycle) => {
 };
 const normalizeCycle = (cycle) => cycleByValue[cycle] ? cycle : "every30days";
 const perCycleAmount = (perPaycheck, cycle) => cycleAmountFromPerPaycheck(perPaycheck, normalizeCycle(cycle));
+const monthlyFromPerPaycheck = (perPaycheck) => perPaycheck * PAYCHECKS_PER_MONTH;
 
 const MONTH_SUBDIVISIONS = 4;
 const DAY_MS = 24 * 60 * 60 * 1000;

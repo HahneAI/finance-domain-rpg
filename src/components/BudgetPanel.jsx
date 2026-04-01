@@ -137,18 +137,21 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const [dragPreviewCategory, setDragPreviewCategory] = useState(null);
   const [draggingExpenseId, setDraggingExpenseId] = useState(null);
   const [dragPreviewExpenseCategory, setDragPreviewExpenseCategory] = useState(null);
-  const [touchInsertLane, setTouchInsertLane] = useState(null);
-  const [touchInsertIndex, setTouchInsertIndex] = useState(null);
+  const [expenseInsertLane, setExpenseInsertLane] = useState(null);
+  const [expenseInsertIndex, setExpenseInsertIndex] = useState(null);
   const [touchDragOverlay, setTouchDragOverlay] = useState({ visible: false, x: 0, y: 0, label: "", sourceCategory: "Needs" });
   const expenseTouchDraggingRef = useRef(false);
   const expenseTouchHoverLaneRef = useRef(null);
-  const expenseTouchInsertRef = useRef({ lane: null, index: null });
+  const expenseInsertRef = useRef({ lane: null, index: null });
   const expenseTouchHoldTimerRef = useRef(null);
   const expenseTouchHoldMetaRef = useRef(null);
   const expenseTouchAutoScrollRef = useRef({ rafId: null, direction: 0, speed: 0 });
   const expenseTouchOverlayExitTimerRef = useRef(null);
+  const expenseDragFinalizedRef = useRef(false);
   const [pendingExpenseTouchId, setPendingExpenseTouchId] = useState(null);
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+  const goalInsertRef = useRef({ targetId: null, insertIndex: null, lane: null });
+  const goalDragFinalizedRef = useRef(false);
   const EXPENSE_TOUCH_HOLD_MS = 450;
   const TOUCH_SCROLL_CANCEL_PX = 12;
   const TOUCH_EDGE_AUTOSCROLL_ZONE_PX = 92;
@@ -355,6 +358,36 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       return prev.map(exp => exp.type === "loan" ? exp : reorderedRegular[regularIdx++]);
     });
   };
+  const finalizeExpenseDrag = () => {
+    if (!draggingExpenseId || expenseDragFinalizedRef.current) return false;
+    const { lane, index } = expenseInsertRef.current;
+    if (!lane) return false;
+    expenseDragFinalizedRef.current = true;
+    reorderExpenseByInsert(draggingExpenseId, lane, index);
+    return true;
+  };
+  const cleanupExpenseDragState = () => {
+    if (expenseTouchHoldTimerRef.current) {
+      clearTimeout(expenseTouchHoldTimerRef.current);
+      expenseTouchHoldTimerRef.current = null;
+    }
+    expenseTouchHoldMetaRef.current = null;
+    setPendingExpenseTouchId(null);
+    expenseTouchDraggingRef.current = false;
+    expenseTouchHoverLaneRef.current = null;
+    expenseInsertRef.current = { lane: null, index: null };
+    setExpenseInsertLane(null);
+    setExpenseInsertIndex(null);
+    stopTouchAutoScroll();
+    hideTouchDragOverlay();
+    setDraggingExpenseId(null);
+    setDragPreviewExpenseCategory(null);
+    expenseDragFinalizedRef.current = false;
+  };
+  const onExpenseDragEnd = () => {
+    finalizeExpenseDrag();
+    cleanupExpenseDragState();
+  };
   const getLaneInsertIndexFromY = (lane, clientY) => {
     if (!lane || typeof document === "undefined") return null;
     const laneEl = document.querySelector(`[data-expense-lane="${lane}"]`);
@@ -368,12 +401,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     }
     return laneCards.length;
   };
-  const setTouchInsertTarget = (lane, index) => {
-    expenseTouchInsertRef.current = { lane, index };
-    setTouchInsertLane(lane);
-    setTouchInsertIndex(index);
+  const setExpenseInsertTarget = (lane, index) => {
+    expenseInsertRef.current = { lane, index };
+    setExpenseInsertLane(lane);
+    setExpenseInsertIndex(index);
   };
-  const onExpenseDragStart = (exp) => {
+  const onExpenseDragStart = (exp, evt) => {
     if (expenseTouchHoldTimerRef.current) {
       clearTimeout(expenseTouchHoldTimerRef.current);
       expenseTouchHoldTimerRef.current = null;
@@ -381,34 +414,29 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     expenseTouchHoldMetaRef.current = null;
     setPendingExpenseTouchId(null);
     setDraggingExpenseId(exp.id);
+    expenseDragFinalizedRef.current = false;
     setDragPreviewExpenseCategory(exp.category);
-    const originLaneItems = regularExpenses.filter(e => e.id !== exp.id && e.category === exp.category);
-    setTouchInsertTarget(exp.category, originLaneItems.length);
+    const originLaneItems = regularExpenses.filter(e => e.category === exp.category);
+    const originLaneIndex = originLaneItems.findIndex(e => e.id === exp.id);
+    const normalizedOriginIndex = originLaneIndex === -1 ? originLaneItems.length : originLaneIndex;
+    setExpenseInsertTarget(exp.category, normalizedOriginIndex);
+    if (evt?.dataTransfer) {
+      try {
+        evt.dataTransfer.setData("text/plain", exp.id);
+        evt.dataTransfer.effectAllowed = "move";
+      } catch {
+        // Ignore browser quirks (e.g., Safari touch) — touch path handles overlay/ghost mode already.
+      }
+    }
   };
   const resetExpensePreviewToOrigin = () => {
     if (!draggingExpenseId) {
       setDragPreviewExpenseCategory(null);
+      setExpenseInsertTarget(null, null);
       return;
     }
     const origin = regularExpenses.find(e => e.id === draggingExpenseId)?.category ?? null;
     setDragPreviewExpenseCategory(origin);
-  };
-  const onExpenseDragEnd = () => {
-    if (expenseTouchHoldTimerRef.current) {
-      clearTimeout(expenseTouchHoldTimerRef.current);
-      expenseTouchHoldTimerRef.current = null;
-    }
-    expenseTouchHoldMetaRef.current = null;
-    setPendingExpenseTouchId(null);
-    expenseTouchDraggingRef.current = false;
-    expenseTouchHoverLaneRef.current = null;
-    expenseTouchInsertRef.current = { lane: null, index: null };
-    stopTouchAutoScroll();
-    hideTouchDragOverlay();
-    setDraggingExpenseId(null);
-    setDragPreviewExpenseCategory(null);
-    setTouchInsertLane(null);
-    setTouchInsertIndex(null);
   };
   const onExpenseTouchStart = (e, exp) => {
     if (!e.target?.closest?.("[data-expense-drag-handle]")) return;
@@ -424,7 +452,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       if (!meta || meta.expenseId !== exp.id) return;
       expenseTouchDraggingRef.current = true;
       expenseTouchHoverLaneRef.current = meta.category;
-      expenseTouchInsertRef.current = { lane: meta.category, index: null };
+      expenseInsertRef.current = { lane: meta.category, index: null };
       setPendingExpenseTouchId(null);
       onExpenseDragStart(exp);
       showTouchDragOverlay({ clientX: meta.x, clientY: meta.y }, exp);
@@ -471,11 +499,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       expenseTouchHoverLaneRef.current = lane;
       setDragPreviewExpenseCategory(lane);
       const insertIndex = getLaneInsertIndexFromY(lane, point.clientY);
-      setTouchInsertTarget(lane, insertIndex);
+      setExpenseInsertTarget(lane, insertIndex);
     } else {
       expenseTouchHoverLaneRef.current = null;
       resetExpensePreviewToOrigin();
-      setTouchInsertTarget(null, null);
+      setExpenseInsertTarget(null, null);
     }
   };
   const onExpenseTouchEnd = () => {
@@ -488,8 +516,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       return;
     }
     const lane = expenseTouchHoverLaneRef.current ?? dragPreviewExpenseCategory;
-    const insertIndex = expenseTouchInsertRef.current.lane === lane ? expenseTouchInsertRef.current.index : null;
-    reorderExpenseByInsert(draggingExpenseId, lane, insertIndex);
+    if (lane) {
+      const insertIndex = expenseInsertRef.current.lane === lane ? expenseInsertRef.current.index : null;
+      setExpenseInsertTarget(lane, insertIndex);
+    } else {
+      setExpenseInsertTarget(null, null);
+    }
     onExpenseDragEnd();
   };
 
@@ -577,7 +609,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       return arr;
     });
   };
-  const reorderGoalByDrag = (draggedId, overId, lane) => {
+  const reorderGoalByDrag = (draggedId, overId, lane, insertIndexOverride = null) => {
     setGoals(prev => {
       const active = prev.filter(g => !g.completed).map(g => ({ ...g, category: g.category === "Lifestyle" ? "Lifestyle" : "Expenses" }));
       const completed = prev.filter(g => g.completed);
@@ -588,8 +620,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       const activeWithoutDragged = active.filter(g => g.id !== draggedId);
       const draggedNext = { ...dragged, category: targetLane };
 
+      const explicitIndex = typeof insertIndexOverride === "number" && !Number.isNaN(insertIndexOverride)
+        ? Math.max(0, Math.min(insertIndexOverride, activeWithoutDragged.length))
+        : null;
       let insertIndex = activeWithoutDragged.length;
-      if (overId) {
+      if (explicitIndex !== null) {
+        insertIndex = explicitIndex;
+      } else if (overId) {
         const overIndex = activeWithoutDragged.findIndex(g => g.id === overId);
         if (overIndex !== -1) insertIndex = overIndex;
       } else {
@@ -603,14 +640,43 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       return [...reordered, ...completed];
     });
   };
-  const onGoalDragStart = (goal) => {
-    setDraggingGoalId(goal.id);
-    setDragPreviewCategory(goal.category);
+  const finalizeGoalDrag = () => {
+    if (!draggingGoalId || goalDragFinalizedRef.current) return false;
+    const { targetId, insertIndex, lane } = goalInsertRef.current;
+    const hasInsertTarget = targetId || typeof insertIndex === "number";
+    if (!hasInsertTarget) return false;
+    const draggedGoal = goals.find(g => g.id === draggingGoalId);
+    const fallbackLane = draggedGoal?.category === "Lifestyle" ? "Lifestyle" : "Expenses";
+    const resolvedLane = lane ?? dragPreviewCategory ?? fallbackLane;
+    goalDragFinalizedRef.current = true;
+    reorderGoalByDrag(draggingGoalId, targetId, resolvedLane, insertIndex);
+    return true;
   };
-  const onGoalDragEnd = () => {
+  const cleanupGoalDragState = () => {
+    goalInsertRef.current = { targetId: null, insertIndex: null, lane: null };
+    goalDragFinalizedRef.current = false;
     setDraggingGoalId(null);
     setDragOverGoalId(null);
     setDragPreviewCategory(null);
+  };
+  const onGoalDragStart = (goal, evt) => {
+    setDraggingGoalId(goal.id);
+    goalDragFinalizedRef.current = false;
+    setDragPreviewCategory(goal.category);
+    const activeIndex = activeGoals.findIndex(g => g.id === goal.id);
+    goalInsertRef.current = { targetId: goal.id, insertIndex: activeIndex === -1 ? 0 : activeIndex, lane: goal.category };
+    if (evt?.dataTransfer) {
+      try {
+        evt.dataTransfer.setData("text/plain", goal.id);
+        evt.dataTransfer.effectAllowed = "move";
+      } catch {
+        // Ignore unsupported drag sources (touch, older browsers); touch path handles movement separately.
+      }
+    }
+  };
+  const onGoalDragEnd = () => {
+    finalizeGoalDrag();
+    cleanupGoalDragState();
   };
 
   const weeksLeft = futureWeeks?.length ?? 44;
@@ -743,21 +809,21 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
             e.preventDefault();
             setDragPreviewExpenseCategory(cat);
             const insertIndex = getLaneInsertIndexFromY(cat, e.clientY);
-            setTouchInsertTarget(cat, insertIndex);
+            setExpenseInsertTarget(cat, insertIndex);
           }}
           onDrop={(e) => {
             if (!isExpenseDropLane) return;
             e.preventDefault();
+            e.stopPropagation();
             if (!draggingExpenseId) return;
             const insertIndex = getLaneInsertIndexFromY(cat, e.clientY);
-            reorderExpenseByInsert(draggingExpenseId, cat, insertIndex);
-            onExpenseDragEnd();
+            setExpenseInsertTarget(cat, insertIndex);
           }}
           onDragLeave={(e) => {
             if (!isExpenseDropLane) return;
             if (e.currentTarget.contains(e.relatedTarget)) return;
             resetExpensePreviewToOrigin();
-            setTouchInsertTarget(null, null);
+            setExpenseInsertTarget(null, null);
           }}
           style={{
             marginBottom: "24px",
@@ -785,13 +851,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
             const cardInsertIndex = laneCardsExcludingDragged.findIndex(item => item.id === exp.id);
             const showInsertLineBefore = isExpenseDropLane
               && draggingExpenseId
-              && touchInsertLane === cat
-              && touchInsertIndex === cardInsertIndex;
+              && expenseInsertLane === cat
+              && expenseInsertIndex === cardInsertIndex;
             return <div
               key={exp.id}
               data-expense-id={exp.id}
               draggable={!isEditing && isExpenseDropLane && !isCoarsePointer}
-              onDragStart={() => onExpenseDragStart(exp)}
+              onDragStart={(e) => onExpenseDragStart(exp, e)}
               onDragEnd={onExpenseDragEnd}
               onTouchStart={(e) => {
                 if (!isEditing && isExpenseDropLane) onExpenseTouchStart(e, exp);
@@ -805,7 +871,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                 e.stopPropagation();
                 setDragPreviewExpenseCategory(cat);
                 const insertIndex = getLaneInsertIndexFromY(cat, e.clientY);
-                setTouchInsertTarget(cat, insertIndex);
+                setExpenseInsertTarget(cat, insertIndex);
               }}
               onDrop={(e) => {
                 if (!isExpenseDropLane) return;
@@ -813,8 +879,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                 e.stopPropagation();
                 if (!draggingExpenseId) return;
                 const insertIndex = getLaneInsertIndexFromY(cat, e.clientY);
-                reorderExpenseByInsert(draggingExpenseId, cat, insertIndex);
-                onExpenseDragEnd();
+                setExpenseInsertTarget(cat, insertIndex);
               }}
               onDragLeave={(e) => {
                 if (e.currentTarget.contains(e.relatedTarget)) return;
@@ -925,7 +990,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               </div>}
             </div>;
           })}
-          {isExpenseDropLane && draggingExpenseId && touchInsertLane === cat && <div
+          {isExpenseDropLane && draggingExpenseId && expenseInsertLane === cat && <div
             aria-hidden
             style={{
               height: "4px",
@@ -933,8 +998,8 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               margin: "2px 4px 8px",
               background: EXPENSE_INSERT_MARKER_BG,
               boxShadow: `0 0 0 1px ${EXPENSE_INSERT_MARKER_BORDER}`,
-              opacity: touchInsertIndex === laneCardsExcludingDragged.length ? 0.72 : 0,
-              transform: touchInsertIndex === laneCardsExcludingDragged.length ? "scaleX(1)" : "scaleX(0.9)",
+              opacity: expenseInsertIndex === laneCardsExcludingDragged.length ? 0.72 : 0,
+              transform: expenseInsertIndex === laneCardsExcludingDragged.length ? "scaleX(1)" : "scaleX(0.9)",
               transformOrigin: "center",
               transition: `opacity 180ms ${EXPENSE_DRAG_EASE}, transform 220ms ${EXPENSE_DRAG_EASE}`,
               pointerEvents: "none",
@@ -1090,17 +1155,24 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
             border: "1px solid #222",
             background: "rgba(16,16,16,0.55)",
           }}
+          onDragLeave={(e) => {
+            if (!draggingGoalId) return;
+            if (e.currentTarget.contains(e.relatedTarget)) return;
+            goalInsertRef.current = { targetId: null, insertIndex: null, lane: null };
+            setDragOverGoalId(null);
+            setDragPreviewCategory(null);
+          }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>Active Goals</div>
             <div style={{ fontSize: "10px", color: "#666" }}>{tl.length}</div>
           </div>
           {!tl.length && <div style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", color: "#666", letterSpacing: "1px", textTransform: "uppercase" }}>No active goals yet</div>}
-          {tl.map((g, i) => {
-          const ok = g.eW !== null && g.eW <= weeksLeft;
-          const isEditing = editGoalId === g.id;
-          const celebrating = fundingId === g.id;
-          const isDragging = draggingGoalId === g.id;
+        {tl.map((g, i) => {
+        const ok = g.eW !== null && g.eW <= weeksLeft;
+        const isEditing = editGoalId === g.id;
+        const celebrating = fundingId === g.id;
+        const isDragging = draggingGoalId === g.id;
           const isDropTarget = dragOverGoalId === g.id;
           const previewLane = dragPreviewCategory ?? g.category;
           const lanePreviewingMove = isDragging && previewLane !== g.category;
@@ -1108,20 +1180,30 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           return <div
             key={g.id}
             draggable={!isEditing}
-            onDragStart={() => onGoalDragStart(g)}
+            onDragStart={(e) => onGoalDragStart(g, e)}
             onDragEnd={onGoalDragEnd}
             onDragOver={(e) => {
               e.preventDefault();
               e.stopPropagation();
               setDragOverGoalId(g.id);
               setDragPreviewCategory(g.category);
+              const activeIndex = activeGoals.findIndex(goal => goal.id === g.id);
+              goalInsertRef.current = {
+                targetId: g.id,
+                insertIndex: activeIndex === -1 ? 0 : activeIndex,
+                lane: g.category
+              };
             }}
             onDrop={(e) => {
               e.preventDefault();
               e.stopPropagation();
               if (!draggingGoalId) return;
-              reorderGoalByDrag(draggingGoalId, g.id);
-              onGoalDragEnd();
+              const activeIndex = activeGoals.findIndex(goal => goal.id === g.id);
+              goalInsertRef.current = {
+                targetId: g.id,
+                insertIndex: activeIndex === -1 ? 0 : activeIndex,
+                lane: g.category
+              };
             }}
             style={{
               background: lanePreviewingMove ? GOAL_LANES[previewLane].tint : "var(--color-bg-surface)",
@@ -1298,6 +1380,38 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
             </div>}
           </div>;
         })}
+        {tl.length > 0 && <div
+          aria-hidden
+          onDragOver={(e) => {
+            if (!draggingGoalId) return;
+            e.preventDefault();
+            e.stopPropagation();
+            setDragOverGoalId(null);
+            const draggedGoal = goals.find(goal => goal.id === draggingGoalId);
+            const fallbackLane = draggedGoal?.category === "Lifestyle" ? "Lifestyle" : "Expenses";
+            const lane = dragPreviewCategory ?? fallbackLane;
+            setDragPreviewCategory(lane);
+            goalInsertRef.current = { targetId: null, insertIndex: activeGoals.length, lane };
+          }}
+          onDrop={(e) => {
+            if (!draggingGoalId) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const draggedGoal = goals.find(goal => goal.id === draggingGoalId);
+            const fallbackLane = draggedGoal?.category === "Lifestyle" ? "Lifestyle" : "Expenses";
+            const lane = dragPreviewCategory ?? fallbackLane;
+            setDragPreviewCategory(lane);
+            goalInsertRef.current = { targetId: null, insertIndex: activeGoals.length, lane };
+          }}
+          style={{
+            height: draggingGoalId ? "10px" : "0px",
+            marginBottom: draggingGoalId ? "12px" : "0px",
+            borderRadius: "4px",
+            background: draggingGoalId ? "rgba(255,255,255,0.04)" : "transparent",
+            transition: "height 120ms ease, margin 120ms ease, background 120ms ease",
+            pointerEvents: draggingGoalId ? "auto" : "none"
+          }}
+        />}
         </div>
 
         {addingGoal ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>

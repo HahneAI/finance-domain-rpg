@@ -640,6 +640,11 @@ export default function App() {
             padding-top: env(safe-area-inset-top, 0px) !important;
             flex-direction: column !important;
           }
+          /* Drawer header inherits the same safe-area buffer as the mobile header so the Dynamic Island never overlaps text. */
+          .drawer-header {
+            padding-top: max(16px, env(safe-area-inset-top, 0px)) !important;
+            min-height: calc(56px + env(safe-area-inset-top, 0px)) !important;
+          }
         }
           @media (min-width: 768px) {
             .mobile-header { display: none !important; }
@@ -715,7 +720,7 @@ export default function App() {
             </div>
             <button
               title="Sign out"
-              onClick={async () => { await supabase.auth.signOut(); }}
+              onClick={async () => { await supabase.auth.signOut({ scope: "local" }); }}
               style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", padding: "2px 0", marginTop: "1px", lineHeight: 1, display: "flex", alignItems: "center" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -843,7 +848,7 @@ export default function App() {
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-                {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+                {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>{currentWeekLabel}</div>}
               </div>
               <div style={{ fontSize: "14px", fontWeight: "bold" }}>Authority Finance</div>
             </div>
@@ -929,7 +934,7 @@ export default function App() {
         }}
       >
         {/* Drawer header */}
-        <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--color-border-subtle)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
+        <div className="drawer-header" style={{ padding: "16px 18px", borderBottom: "1px solid var(--color-border-subtle)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
             <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
@@ -937,7 +942,7 @@ export default function App() {
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <button
               title="Sign out"
-              onClick={async () => { await supabase.auth.signOut(); setDrawerOpen(false); }}
+              onClick={async () => { await supabase.auth.signOut({ scope: "local" }); setDrawerOpen(false); }}
               style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

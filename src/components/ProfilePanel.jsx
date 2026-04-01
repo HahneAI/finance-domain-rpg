@@ -353,7 +353,7 @@ function AccountDetail({ authedUser, config, onBack }) {
       </DetailCard>
 
       <button
-        onClick={async () => { await supabase.auth.signOut(); }}
+        onClick={async () => { await supabase.auth.signOut({ scope: "local" }); }}
         style={{ width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-red)", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
       >
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

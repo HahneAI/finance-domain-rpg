@@ -64,7 +64,7 @@ describe('getFiscalWeekInfo', () => {
 describe('formatFiscalWeekLabel', () => {
   it('formats a human-friendly label', () => {
     const label = formatFiscalWeekLabel({ num: 5, total: 52 })
-    expect(label).toBe('Week 5 of 52')
+    expect(label).toBe('Week 5, 47 left')
   })
 
   it('returns an em dash placeholder when info missing', () => {

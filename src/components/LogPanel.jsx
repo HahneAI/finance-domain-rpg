@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { EVENT_TYPES } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
-import { formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
+import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { Card, iS, lS } from "./ui.jsx";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -201,12 +201,18 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
           );
         })}
       </select>
-      {vals.weekEnd && (
-        <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
-          {vals.weekRotation} · week {getFiscalWeekNumber(Number(vals.weekIdx)) ?? "—"} of 52
-          {scheduledDaysFor(vals.weekEnd).length > 0 && ` · scheduled: ${scheduledDaysFor(vals.weekEnd).join(", ")}`}
-        </div>
-      )}
+      {vals.weekEnd && (() => {
+        const inlineWeekNumber = getFiscalWeekNumber(Number(vals.weekIdx));
+        const inlineWeekLabel = inlineWeekNumber != null
+          ? `week ${inlineWeekNumber}, ${Math.max(FISCAL_WEEKS_PER_YEAR - inlineWeekNumber, 0)} left`
+          : "week —";
+        return (
+          <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
+            {vals.weekRotation} · {inlineWeekLabel}
+            {scheduledDaysFor(vals.weekEnd).length > 0 && ` · scheduled: ${scheduledDaysFor(vals.weekEnd).join(", ")}`}
+          </div>
+        );
+      })()}
     </div>
   );
 

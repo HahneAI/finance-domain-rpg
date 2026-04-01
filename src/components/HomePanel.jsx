@@ -1,4 +1,5 @@
 import { FlowSparklineCard, MetricCard } from "./ui.jsx";
+import { FISCAL_WEEKS_PER_YEAR, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 
 const fmt$ = (n) => {
   if (n == null || isNaN(n)) return "$—";
@@ -50,9 +51,11 @@ export function HomePanel({
               : dayNum === 2 || dayNum === 22 ? "nd"
               : dayNum === 3 || dayNum === 23 ? "rd" : "th")
     : null;
+  const weekNumber = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : null;
+  const weeksLeftCount = weekNumber != null ? Math.max(FISCAL_WEEKS_PER_YEAR - weekNumber, 0) : null;
   const subtitle = weekdayName && dayOrdinal
     ? `Another beautiful day, ${weekdayName} the ${dayOrdinal}. You are working on your ${topGoal} goal`
-    : currentWeek ? `Week ${currentWeek.idx} of 52 · ${currentWeek.rotation}` : "2026 Dashboard";
+    : weekNumber != null ? `Week ${weekNumber}, ${weeksLeftCount} left · ${currentWeek.rotation}` : "2026 Dashboard";
 
   // ── Tile definitions in display order ──
   // rawVal: raw number passed to MetricCard for countup + flash ($ tiles only)

@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(npm run:*)",
+      "Bash(npx vitest:*)"
     ]
   }
 }

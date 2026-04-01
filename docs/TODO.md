@@ -7,11 +7,10 @@
   - [x] Supabase Google provider configured (Client ID + Secret set by user in Supabase dashboard) — done
   - [x] Delete account clears OAuth identity — `admin.deleteUser()` in `api/delete-account.js` removes Supabase auth user + all linked OAuth identities (Google); already correct
   - [x] **Whitelist redirect URLs in Supabase Auth** — in Supabase Dashboard › Authentication › URL Configuration › Redirect URLs, add: `http://localhost:5173`, your Vercel production URL, and `https://*.vercel.app` wildcard; without this, OAuth redirect back to the app is blocked in prod (config step, no code change)
-  - [ ] **Seed `user_data` row on first Google sign-in** — add explicit upsert in App.jsx `onAuthChange` handler when `event === 'SIGNED_IN'` so new OAuth users get a `user_data` row immediately; current path relies on debounced save (works but racy on slow connections)
-  - [ ] **Sync Google profile metadata on sign-in** — read `user.user_metadata.full_name` and `user_metadata.avatar_url` from the Google auth payload; new migration `005_add_profile_metadata.sql` adds `display_name TEXT` and `avatar_url TEXT` columns to `user_data`; write metadata in the SIGNED_IN handler; surface display name + avatar in ProfilePanel Account view
-  - [ ] **Link Google OAuth to Anthony's existing email account** — add "Link Google Account" button in ProfilePanel Account sub-view (only shown when user has no Google identity linked); calls `supabase.auth.linkIdentity({ provider: 'google' })` which triggers an OAuth redirect and attaches Google to the existing account without losing data or re-running setup wizard; show currently linked providers (email / Google)
-  - [ ] **Test sign-up and sign-in flows end-to-end** — new Google account (no existing `user_data`) should hit setup wizard; returning Google user should go straight to dashboard; verify no flash or missing-row errors on first OAuth land
-- [ ] **Wire Apple Sign In** — requires Apple Developer Program membership ($99/yr); holding until app revenue covers it; when ready: `supabase.auth.signInWithOAuth({ provider: 'apple' })`, add Apple button to `LoginScreen.jsx`, configure in Supabase dashboard; required for iOS App Store compliance
+  - [x] **Seed `user_data` row on first Google sign-in** — add explicit upsert in App.jsx `onAuthChange` handler when `event === 'SIGNED_IN'` so new OAuth users get a `user_data` row immediately; current path relies on debounced save (works but racy on slow connections)
+  - [x] **Sync Google profile metadata on sign-in** — read `user.user_metadata.full_name` and `user_metadata.avatar_url` from the Google auth payload; new migration `005_add_profile_metadata.sql` adds `display_name TEXT` and `avatar_url TEXT` columns to `user_data`; write metadata in the SIGNED_IN handler; surface display name + avatar in ProfilePanel Account view
+  - [x] **Link Google OAuth to Anthony's existing email account** — add "Link Google Account" button in ProfilePanel Account sub-view (only shown when user has no Google identity linked); calls `supabase.auth.linkIdentity({ provider: 'google' })` which triggers an OAuth redirect and attaches Google to the existing account without losing data or re-running setup wizard; show currently linked providers (email / Google)
+  - [x] **Test sign-up and sign-in flows end-to-end** — new Google account (no existing `user_data`) should hit setup wizard; returning Google user should go straight to dashboard; verify no flash or missing-row errors on first OAuth land
 - [x] **LoginScreen layout update** — OAuth button slots + divider in place
 - [x] **LoginScreen layout update** — add OAuth buttons below email/password form with a divider ("or continue with"); style per platform guidelines (Apple button must be black/white)
 
@@ -20,15 +19,15 @@
 
 The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premiums and freeform `otherDeductions` into `config`, but **none of them are applied to take-home math**. Only `cfg.ltd` and `k401kEmployee` are deducted in `computeNet()` and `buildYear()`.
 
-- [ ] **Wire benefit premiums into `buildYear()` taxable gross** — `healthPremium`, `dentalPremium`, `visionPremium`, `stdWeekly`, `lifePremium` are pre-tax deductions; reduce taxable gross before fed/state/FICA are applied (same position as `cfg.ltd` today)
-  - Audit (2026-03-28): issue found — `taxableGross` currently subtracts only `cfg.ltd` + `k401kEmployee`.
-- [ ] **Wire HSA and FSA into `buildYear()` taxable gross** — both are pre-tax; add to the pre-tax deduction pool alongside insurance premiums
-  - Audit (2026-03-28): issue found — `hsaWeekly` and `fsaWeekly` are configured but not used in pay math.
-- [ ] **Wire `otherDeductions` array into `computeNet()`** — sum `otherDeductions[].weeklyAmount` and subtract post-tax (after FICA/fed/state, since arbitrary deductions may not be pre-tax); or allow a `preTax` flag per entry
-  - Audit (2026-03-28): issue found — `computeNet()` currently deducts only LTD + employee 401(k).
-- [ ] **Respect `benefitsStartDate`** — deductions should only apply to weeks on or after `config.benefitsStartDate`; weeks before that date skip all benefit/HSA/FSA deductions (same pattern as `k401StartDate` gate on 401k)
-  - Audit (2026-03-28): issue found — no `benefitsStartDate` gate is applied in `buildYear()`.
-- [ ] **Update wizard preview (Step 7 — Paycheck Buffer)** — the live net-per-check breakdown already shows a "Benefits" subtotal; verify it matches `buildYear()` after the fix and that the buffer step stays in sync
+- [x] **Wire benefit premiums into `buildYear()` taxable gross** — `healthPremium`, `dentalPremium`, `visionPremium`, `stdWeekly`, `lifePremium` now reduce taxable gross alongside `cfg.ltd` and employee 401k.
+  - Audit (2026-03-28): issue confirmed fixed — helper `weeklyBenefitDeductions()` feeds `taxableGross` today.
+- [x] **Wire HSA and FSA into `buildYear()` taxable gross** — both pre-tax buckets share the same helper and already reduce taxable income.
+  - Audit (2026-03-28): follow-up review confirmed `hsaWeekly`/`fsaWeekly` live in the same deduction pool.
+- [x] **Wire `otherDeductions` array into `computeNet()`** — `otherDeductions[].weeklyAmount` now subtracts after-tax in both taxed and untaxed weeks.
+  - Audit (2026-03-28): follow-up confirmed computeNet() mirrors the wizard preview subtotal for "Other Deduct."
+- [x] **Respect `benefitsStartDate`** — deductions only apply to weeks on/after `config.benefitsStartDate`; earlier weeks keep gross untouched.
+  - Audit (2026-03-28): buildYear() now stamps each week with `benefitsDeduction`, and computeNet() honors the per-week amount instead of blindly subtracting benefits.
+- [x] **Update wizard preview (Step 7 — Paycheck Buffer)** — Step 7 shows gated benefits (or labels them as "start later") so the preview matches take-home math.
 
 
 ## 3. Setup Wizard Tune

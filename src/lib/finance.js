@@ -127,10 +127,17 @@ export function buildYear(cfg) {
 
     regularHours = Math.min(totalHours, cfg.otThreshold);
     overtimeHours = Math.max(totalHours - cfg.otThreshold, 0);
-    // Weekend diff is universal — earned by all shifts (morning and night).
-    // Night diff stacks on top of all hours when DHL + dhlNightShift is active.
-    const nightDiffBonus = (isDHL && cfg.dhlNightShift) ? totalHours * (cfg.nightDiffRate ?? 0) : 0;
-    grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate + nightDiffBonus;
+    // OT: all differentials (weekend + night) are included in the 1.5× multiplier.
+    // Non-weekend shifts come earlier in the week; weekend (Fri+) begin at hour nonWeekendH+1,
+    // so weekend hours that push past the 40h threshold are fully at OT rate.
+    const nonWeekendH = totalHours - weekendHours;
+    const regWkndH = Math.max(0, Math.min(weekendHours, cfg.otThreshold - nonWeekendH));
+    const otWkndH  = weekendHours - regWkndH;
+    const nightDiffHr = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
+    grossPay = regularHours  * (cfg.baseRate + nightDiffHr)
+             + regWkndH      * cfg.diffRate
+             + overtimeHours * (cfg.baseRate + nightDiffHr) * cfg.otMultiplier
+             + otWkndH       * cfg.diffRate * cfg.otMultiplier;
 
     const active = idx >= cfg.firstActiveIdx;
     const has401k = active && weekEnd >= k401Start;
@@ -173,9 +180,15 @@ export function projectedGross(isWeek2, cfg) {
   const ns = isWeek2 ? 6 : 4, totalH = ns * cfg.shiftHours;
   const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
   // Anthony custom: long (Tue–Sun) has Fri+Sat+Sun = 3 weekend shifts; short (Mon/Wed/Thu/Fri) has Fri = 1
-  const wknd = isWeek2 ? 3 * cfg.shiftHours : 1 * cfg.shiftHours;
-  const nightDiff = (isDHL && cfg.dhlNightShift) ? totalH * (cfg.nightDiffRate ?? 0) : 0;
-  return reg * cfg.baseRate + ot * cfg.baseRate * cfg.otMultiplier + wknd * cfg.diffRate + nightDiff;
+  const wkndH = isWeek2 ? 3 * cfg.shiftHours : 1 * cfg.shiftHours;
+  const nonWkndH = totalH - wkndH;
+  const regWknd = Math.max(0, Math.min(wkndH, cfg.otThreshold - nonWkndH));
+  const otWknd  = wkndH - regWknd;
+  const nightDiff = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
+  return reg     * (cfg.baseRate + nightDiff)
+       + regWknd * cfg.diffRate
+       + ot      * (cfg.baseRate + nightDiff) * cfg.otMultiplier
+       + otWknd  * cfg.diffRate * cfg.otMultiplier;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -415,9 +428,16 @@ export function calcEventImpact(event, cfg) {
   if (event.type === "missed_unpaid") {
     const actualShifts = Math.max(normalShifts - (event.shiftsLost || 0), 0);
     const actualHours = actualShifts * cfg.shiftHours;
-    const actualWknd = Math.max(normalWeekendShifts - (event.weekendShifts || 0), 0);
+    const actualWkndShifts = Math.max(normalWeekendShifts - (event.weekendShifts || 0), 0);
+    const actualWkndH    = actualWkndShifts * cfg.shiftHours;
+    const actualNonWkndH = actualHours - actualWkndH;
+    const actualRegWkndH = Math.max(0, Math.min(actualWkndH, cfg.otThreshold - actualNonWkndH));
+    const actualOTWkndH  = actualWkndH - actualRegWkndH;
     const actualReg = Math.min(actualHours, cfg.otThreshold), actualOT = Math.max(actualHours - cfg.otThreshold, 0);
-    const actualGross = actualReg * cfg.baseRate + actualOT * cfg.baseRate * cfg.otMultiplier + actualWknd * cfg.shiftHours * cfg.diffRate + actualHours * nightDiffPerHour;
+    const actualGross = actualReg      * (cfg.baseRate + nightDiffPerHour)
+                      + actualRegWkndH * cfg.diffRate
+                      + actualOT       * (cfg.baseRate + nightDiffPerHour) * cfg.otMultiplier
+                      + actualOTWkndH  * cfg.diffRate * cfg.otMultiplier;
     grossLost = Math.max(baseGross - actualGross, 0); hoursLostForPTO = (event.shiftsLost || 0) * cfg.shiftHours;
   } else if (event.type === "pto") {
     const ptoH = event.ptoHours || 0, normalH = normalShifts * cfg.shiftHours;

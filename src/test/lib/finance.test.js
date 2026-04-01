@@ -175,16 +175,23 @@ describe('buildYear', () => {
     expect(sixDay.grossPay).toBeGreaterThan(fourDay.grossPay)
   })
 
-  it('computes correct grossPay for an active 4-Day week (40 regular + 8 OT + 12h weekend diff + 48h night diff)', () => {
+  it('computes correct grossPay for an active 4-Day week (diffs inside 1.5× OT)', () => {
     const cfg = DHL_CONFIG
-    const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier + 12 * cfg.diffRate + 48 * cfg.nightDiffRate
+    // 4-Day: 48h total, 12h weekend (Fri). Non-weekend = 36h. regWknd = 4h, otWknd = 8h.
+    // All diffs (night + weekend) are included in the 1.5× OT multiplier.
+    const rateReg = cfg.baseRate + cfg.nightDiffRate
+    const expected = 40 * rateReg + 4 * cfg.diffRate
+                   + 8 * rateReg * cfg.otMultiplier + 8 * cfg.diffRate * cfg.otMultiplier
     const fourDay = weeks.find(w => w.rotation === '4-Day' && w.active)
     expect(fourDay.grossPay).toBeCloseTo(expected)
   })
 
-  it('computes correct grossPay for an active 6-Day week (40 regular + 32 OT + 36 weekend + 72h night diff)', () => {
+  it('computes correct grossPay for an active 6-Day week (diffs inside 1.5× OT)', () => {
     const cfg = DHL_CONFIG
-    const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 36 * cfg.diffRate + 72 * cfg.nightDiffRate
+    // 6-Day: 72h total, 36h weekend (Fri+Sat+Sun). Non-weekend = 36h. regWknd = 4h, otWknd = 32h.
+    const rateReg = cfg.baseRate + cfg.nightDiffRate
+    const expected = 40 * rateReg + 4 * cfg.diffRate
+                   + 32 * rateReg * cfg.otMultiplier + 32 * cfg.diffRate * cfg.otMultiplier
     const sixDay = weeks.find(w => w.rotation === '6-Day' && w.active)
     expect(sixDay.grossPay).toBeCloseTo(expected)
   })
@@ -356,13 +363,17 @@ describe('projectedGross', () => {
     expect(projectedGross(true, cfg)).toBeGreaterThan(projectedGross(false, cfg))
   })
 
-  it('calculates correct gross for 6-Day (40 regular + 32 OT + 36 weekend hours — Fri/Sat/Sun)', () => {
-    const expected = 40 * cfg.baseRate + 32 * cfg.baseRate * cfg.otMultiplier + 3 * cfg.shiftHours * cfg.diffRate
+  it('calculates correct gross for 6-Day (diffs inside 1.5× OT; no nightDiff on DEFAULT_CONFIG)', () => {
+    // 6-Day: 72h, wknd=36h, nonWknd=36h, regWknd=4h, otWknd=32h. nightDiff=0 (not DHL preset).
+    const expected = 40 * cfg.baseRate + 4 * cfg.diffRate
+                   + 32 * cfg.baseRate * cfg.otMultiplier + 32 * cfg.diffRate * cfg.otMultiplier
     expect(projectedGross(true, cfg)).toBeCloseTo(expected)
   })
 
-  it('calculates correct gross for 4-Day (40 regular + 8 OT + 12 weekend hours — Fri)', () => {
-    const expected = 40 * cfg.baseRate + 8 * cfg.baseRate * cfg.otMultiplier + 1 * cfg.shiftHours * cfg.diffRate
+  it('calculates correct gross for 4-Day (diffs inside 1.5× OT; no nightDiff on DEFAULT_CONFIG)', () => {
+    // 4-Day: 48h, wknd=12h, nonWknd=36h, regWknd=4h, otWknd=8h. nightDiff=0 (not DHL preset).
+    const expected = 40 * cfg.baseRate + 4 * cfg.diffRate
+                   + 8 * cfg.baseRate * cfg.otMultiplier + 8 * cfg.diffRate * cfg.otMultiplier
     expect(projectedGross(false, cfg)).toBeCloseTo(expected)
   })
 

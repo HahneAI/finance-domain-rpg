@@ -21,6 +21,8 @@ import { FISCAL_YEAR_START, DHL_PRESET, DHL_BENEFIT_OPTIONS } from "../constants
 
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 
+const BUFFER_MAX = 200;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 0 — Welcome (first-run) / Life Event Select (re-entry)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -267,23 +269,6 @@ function Step1({ formData, onChange, lifeEvent }) {
             </div>
           </Field>
 
-          <Field label="Where do you typically take your OT shift?">
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "6px" }}>
-              <Pill
-                label="Weekday only"
-                active={formData.dhlOtOnWeekend === false}
-                onClick={() => onChange({ dhlOtOnWeekend: false })}
-              />
-              <Pill
-                label="Sometimes weekend (Sat / Sun)"
-                active={formData.dhlOtOnWeekend === true}
-                onClick={() => onChange({ dhlOtOnWeekend: true })}
-              />
-            </div>
-            <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
-              Weekend OT earns the shift differential — weekday OT does not.
-            </div>
-          </Field>
         </>
       )}
 
@@ -296,7 +281,7 @@ function Step1({ formData, onChange, lifeEvent }) {
                 style={{ ...iS }}
                 type="number" min="0" step="0.01"
                 value={formData.baseRate ?? ""}
-                onChange={e => onChange({ baseRate: parseFloat(e.target.value) || 0 })}
+                onChange={e => onChange({ baseRate: e.target.value === "" ? null : parseFloat(e.target.value) })}
                 placeholder="e.g. 19.65"
               />
             </Field>
@@ -305,7 +290,7 @@ function Step1({ formData, onChange, lifeEvent }) {
                 style={{ ...iS }}
                 type="number" min="1" step="0.5"
                 value={formData.shiftHours ?? ""}
-                onChange={e => onChange({ shiftHours: parseFloat(e.target.value) || 0 })}
+                onChange={e => onChange({ shiftHours: e.target.value === "" ? null : parseFloat(e.target.value) })}
                 placeholder="e.g. 10"
               />
             </Field>
@@ -317,7 +302,7 @@ function Step1({ formData, onChange, lifeEvent }) {
               style={{ ...iS }}
               type="number" min="0" step="0.25"
               value={formData.diffRate ?? ""}
-              onChange={e => onChange({ diffRate: parseFloat(e.target.value) || 0 })}
+              onChange={e => onChange({ diffRate: e.target.value === "" ? null : parseFloat(e.target.value) })}
               placeholder="0 = no differential"
             />
           </Field>
@@ -345,7 +330,7 @@ function Step1({ formData, onChange, lifeEvent }) {
                   style={{ ...iS }}
                   type="number" min="1" step="1"
                   value={formData.otThreshold ?? ""}
-                  onChange={e => onChange({ otThreshold: parseInt(e.target.value) || 40 })}
+                  onChange={e => onChange({ otThreshold: e.target.value === "" ? null : parseInt(e.target.value) })}
                   placeholder="e.g. 40"
                 />
               </div>
@@ -386,7 +371,7 @@ function Step1({ formData, onChange, lifeEvent }) {
                     style={{ ...iS }}
                     type="number" min="0" step="100"
                     value={formData.commissionMonthly ?? ""}
-                    onChange={e => onChange({ commissionMonthly: parseFloat(e.target.value) || 0 })}
+                    onChange={e => onChange({ commissionMonthly: e.target.value === "" ? null : parseFloat(e.target.value) })}
                     placeholder="e.g. 800"
                   />
                 </div>
@@ -470,7 +455,7 @@ function Step2({ formData, onChange }) {
             style={{ ...iS }}
             type="number" min="1" step="0.5"
             value={formData.standardWeeklyHours ?? ""}
-            onChange={e => onChange({ standardWeeklyHours: parseFloat(e.target.value) || 40 })}
+            onChange={e => onChange({ standardWeeklyHours: e.target.value === "" ? null : parseFloat(e.target.value) })}
             placeholder="e.g. 40"
           />
           <div style={{
@@ -563,7 +548,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
                 style={{ ...iS }}
                 type="number" min="0" step="0.01"
                 value={formData[def.field] ?? ""}
-                onChange={e => onChange({ [def.field]: parseFloat(e.target.value) || 0 })}
+                onChange={e => onChange({ [def.field]: e.target.value === "" ? null : parseFloat(e.target.value) })}
                 placeholder={def.placeholder}
               />
             </Field>
@@ -580,7 +565,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
                         ? +(formData.k401Rate * 100).toFixed(2)
                         : ""
                     }
-                    onChange={e => onChange({ k401Rate: (parseFloat(e.target.value) || 0) / 100 })}
+                    onChange={e => onChange({ k401Rate: e.target.value === "" ? null : parseFloat(e.target.value) / 100 })}
                     placeholder="e.g. 6"
                   />
                 </Field>
@@ -609,7 +594,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
                           ? +(formData.k401MatchRate * 100).toFixed(2)
                           : ""
                       }
-                      onChange={e => onChange({ k401MatchRate: (parseFloat(e.target.value) || 0) / 100 })}
+                      onChange={e => onChange({ k401MatchRate: e.target.value === "" ? null : parseFloat(e.target.value) / 100 })}
                       placeholder="e.g. 5"
                     />
                   </Field>
@@ -679,11 +664,7 @@ function Step3({ formData, onChange }) {
         }}>
           Select benefits deducted from your paycheck — skip if none yet.
         </p>
-        <div style={{
-          display: "flex", flexDirection: "column", gap: "8px",
-          maxHeight: "260px", overflowY: "auto",
-          paddingRight: "2px",
-        }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {BENEFIT_DEFS.map(def => (
             <BenefitCard
               key={def.id}
@@ -736,7 +717,7 @@ function Step3({ formData, onChange }) {
                 type="number" min="0" step="0.01"
                 placeholder="$/wk"
                 value={row.weeklyAmount || ""}
-                onChange={e => updateRow(row.id, { weeklyAmount: parseFloat(e.target.value) || 0 })}
+                onChange={e => updateRow(row.id, { weeklyAmount: e.target.value === "" ? null : parseFloat(e.target.value) })}
               />
               <button
                 onClick={() => removeRow(row.id)}
@@ -1298,7 +1279,7 @@ function StepWrapUp({ formData, onChange }) {
               style={{ ...iS }}
               type="number" min="0" max={BUFFER_MAX} step="1"
               value={buf || ""}
-              onChange={e => onChange({ paycheckBuffer: Math.min(parseFloat(e.target.value) || 0, BUFFER_MAX) })}
+              onChange={e => onChange({ paycheckBuffer: e.target.value === "" ? null : Math.min(parseFloat(e.target.value) || 0, BUFFER_MAX) })}
               placeholder="e.g. 50"
             />
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>

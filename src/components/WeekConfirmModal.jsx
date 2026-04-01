@@ -23,7 +23,7 @@
  *   onConfirm(confirmation, logEntry|null) — called on confirm; logEntry is null for net-zero
  *   onDismiss() — session-only skip; badge persists in sidebar until confirmed
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { EVENT_TYPES } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
@@ -98,6 +98,8 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
 
   // ── Layer 2 form state (mirrors LogPanel's blank event shape) ─────────────
   const [eventVals, setEventVals] = useState({});
+  // DHL short-week OT confirmation — null = unanswered, "missed" or a day name
+  const [otDay, setOtDay] = useState(null);
 
   const scheduledDays = week.workedDayNames;
   const missedScheduledDays = scheduledDays.filter(d => dayToggles[d] === false);
@@ -107,6 +109,35 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
   const dayDates = weekDayDates(week.weekStart);
   // Pay period starts the day after payPeriodEndDay (e.g. end=Sun→start=Mon=1)
   const payPeriodStartDow = ((config.payPeriodEndDay ?? 0) + 1) % 7;
+
+  // DHL short-week OT tracking
+  const isDhlShortWeek = config.employerPreset === "DHL" && scheduledDays.length <= 3;
+  const otDayCandidates = DAY_NAMES.filter(d => !scheduledDays.includes(d));
+  const otDayIsWeekend = otDay != null && otDay !== "missed" && ["Sat", "Sun"].includes(otDay);
+
+  useEffect(() => {
+    if (!isDhlShortWeek && otDay !== null) {
+      setOtDay(null);
+    }
+  }, [isDhlShortWeek, otDay]);
+
+  const selectOtDay = (value) => {
+    setOtDay(value);
+    setDayToggles(prev => {
+      const next = { ...prev };
+      if (value === "missed") {
+        otDayCandidates.forEach(day => {
+          next[day] = null;
+        });
+      } else if (value) {
+        next[value] = true;
+      }
+      return next;
+    });
+  };
+
+  const otSelectionMissing = isDhlShortWeek && otDay === null;
+  const logSwapDisabled = otSelectionMissing || (isDhlShortWeek && otDay === "missed");
 
   // ── Toggle handler: 3 states ──────────────────────────────────────────────
   const toggleDay = (day) => {
@@ -171,12 +202,36 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
   //     Surplus → type: "bonus", amount pre-filled as gross pickup estimate
   //   User can change any field before confirming. Goes to Layer 2.
   const handleSave = () => {
+    if (otSelectionMissing) {
+      return;
+    }
+    // DHL short week: missed OT → pre-fill Layer 2 as unapproved miss (hits bucket hours)
+    if (isDhlShortWeek && otDay === "missed") {
+      setEventVals({
+        weekEnd: toLocalIso(week.weekEnd),
+        weekIdx: week.idx,
+        weekRotation: week.rotation,
+        type: "missed_unapproved",
+        missedDays: [],
+        shiftsLost: 1,
+        weekendShifts: 0,
+        hoursLost: config.shiftHours,
+        amount: 0,
+        ptoHours: 0,
+        note: "Mandatory OT shift not worked",
+      });
+      setLayer(2);
+      setWentToLayer2(true);
+      return;
+    }
+
     if (netShiftDelta === 0) {
       // Net-zero: same total hours regardless of which days — confirm clean
       onConfirm({
         confirmedAt: new Date().toISOString(),
         dayToggles, scheduledDays, missedScheduledDays, pickupDays,
         netShiftDelta: 0, eventId: null,
+        ...(isDhlShortWeek ? { otDay, otDayIsWeekend } : {}),
       }, null);
       return;
     }
@@ -194,7 +249,9 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       // has a useful starting value. User should verify the actual payout.
       amount: !isDeficit ? pickupDays.length * config.shiftHours * config.baseRate : 0,
       ptoHours: 0,
-      note: "",
+      note: isDhlShortWeek && otDay && otDay !== "missed"
+        ? `OT day: ${otDay}${otDayIsWeekend ? " (weekend — diff applies)" : ""}`
+        : "",
     });
     setLayer(2);
     setWentToLayer2(true);
@@ -204,6 +261,9 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
   // Net-zero means equal shift count but different days — may affect pay (e.g.
   // missed weekday Mon, worked weekend Sun earns diffRate). Lets the user log it.
   const handleLogSwap = () => {
+    if (logSwapDisabled) {
+      return;
+    }
     setEventVals({
       weekEnd: toLocalIso(week.weekEnd),
       weekIdx: week.idx,
@@ -243,6 +303,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       confirmedAt: new Date().toISOString(),
       dayToggles, scheduledDays, missedScheduledDays, pickupDays,
       netShiftDelta, eventId: logEntry.id,
+      ...(isDhlShortWeek ? { otDay, otDayIsWeekend } : {}),
     }, logEntry);
   };
 
@@ -392,6 +453,86 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                   )}
                 </div>
               )}
+
+              {isDhlShortWeek && (
+                <div style={{ margin: "12px 20px 0", padding: "12px 14px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "6px" }}>
+                    Mandatory OT shift
+                  </div>
+                  <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5", marginBottom: "10px" }}>
+                    DHL short weeks include a required fourth shift. Pick the day you worked or mark "Missed". Weekend selections automatically apply the differential.
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    {otDayCandidates.map(day => {
+                      const active = otDay === day;
+                      const weekend = day === "Sat" || day === "Sun";
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => selectOtDay(day)}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: "4px",
+                            fontSize: "9px",
+                            letterSpacing: "1px",
+                            textTransform: "uppercase",
+                            border: active ? "1px solid rgba(34,197,94,0.6)" : "1px solid var(--color-border-subtle)",
+                            background: active ? "rgba(34,197,94,0.12)" : "var(--color-bg-surface)",
+                            color: weekend ? "var(--color-green)" : "var(--color-text-secondary)",
+                            fontWeight: active ? "bold" : "normal",
+                            cursor: "pointer",
+                            display: "flex",
+                            gap: "6px",
+                            alignItems: "center",
+                          }}
+                        >
+                          {active ? "✓" : "+"} {day}
+                          {weekend && (
+                            <span style={{ fontSize: "8px", letterSpacing: "1px", color: "var(--color-text-disabled)" }}>
+                              weekend
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => selectOtDay("missed")}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "4px",
+                        fontSize: "9px",
+                        letterSpacing: "1px",
+                        textTransform: "uppercase",
+                        border: otDay === "missed" ? "1px solid rgba(239,68,68,0.6)" : "1px solid var(--color-border-subtle)",
+                        background: otDay === "missed" ? "rgba(239,68,68,0.12)" : "var(--color-bg-surface)",
+                        color: otDay === "missed" ? "var(--color-red)" : "var(--color-text-secondary)",
+                        fontWeight: otDay === "missed" ? "bold" : "normal",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {otDay === "missed" ? "✓ Missed OT" : "Missed OT"}
+                    </button>
+                  </div>
+                  <div style={{
+                    marginTop: "8px",
+                    fontSize: "10px",
+                    color: otDay === "missed"
+                      ? "var(--color-red)"
+                      : otDay
+                        ? (otDayIsWeekend ? "var(--color-green)" : "var(--color-text-secondary)")
+                        : "var(--color-text-disabled)",
+                    letterSpacing: "0.5px",
+                  }}>
+                    {otDay === "missed"
+                      ? "Missed OT will be logged for approval and hits bucket hours unless cleared."
+                      : otDay
+                        ? (otDayIsWeekend ? "Weekend OT earns your diff rate automatically." : "Weekday OT does not include the differential.")
+                        : "Required — select the OT day or mark it missed to continue."}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Layer 1 footer */}
@@ -429,28 +570,34 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                   </button>
               {netShiftDelta === 0 && (missedScheduledDays.length > 0 || pickupDays.length > 0) ? (
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button onClick={handleSave} style={{
+                  <button onClick={handleSave} disabled={otSelectionMissing} style={{
                     background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)",
                     borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
-                    letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                    letterSpacing: "2px", textTransform: "uppercase",
+                    cursor: otSelectionMissing ? "not-allowed" : "pointer",
+                    opacity: otSelectionMissing ? 0.5 : 1,
                   }}>
                     Confirm Clean
                   </button>
-                  <button onClick={handleLogSwap} style={{
+                  <button onClick={handleLogSwap} disabled={logSwapDisabled} style={{
                     background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
-                    letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                    letterSpacing: "2px", textTransform: "uppercase",
+                    cursor: logSwapDisabled ? "not-allowed" : "pointer",
+                    opacity: logSwapDisabled ? 0.5 : 1,
                     fontWeight: "bold",
                   }}>
                     Log Swap →
                   </button>
                 </div>
               ) : (
-                <button onClick={handleSave} style={{
+                <button onClick={handleSave} disabled={otSelectionMissing} style={{
                   background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
                   borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
-                  letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                  letterSpacing: "2px", textTransform: "uppercase",
+                  cursor: otSelectionMissing ? "not-allowed" : "pointer",
                   fontWeight: "bold",
+                  opacity: otSelectionMissing ? 0.5 : 1,
                 }}>
                   {netShiftDelta !== 0 ? "Next →" : "Confirm Week"}
                 </button>

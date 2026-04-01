@@ -146,6 +146,14 @@ export async function loadUserData() {
     mergedConfig.baseRate = 19.65;
   }
 
+  // ── One-time diffRate correction (weekend differential corrected to $1.75) ───
+  // Prior to 2026-04 the weekend diff was assumed to be $3.00/hr. The actual rate
+  // is $1.75/hr (weekend) and $1.50/hr (night, tracked separately via nightDiffRate).
+  // Any stored value of exactly 3.00 is the old incorrect assumption.
+  if (data.is_dhl && mergedConfig.diffRate === 3) {
+    mergedConfig.diffRate = 1.75;
+  }
+
   return {
     config:             mergedConfig,
     expenses:           migratedExpenses,

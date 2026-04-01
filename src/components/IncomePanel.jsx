@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { MONTH_FULL } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet, toLocalIso } from "../lib/finance.js";
@@ -12,6 +12,47 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
+
+  // ── JS sticky header for weekly chart (CSS sticky broken by overflow-x:hidden on html/body) ──
+  const weeklyTableRef = useRef(null);
+  const [stickyHdr, setStickyHdr] = useState(null); // null = hidden; {top,left,width,cols} = visible
+  useEffect(() => {
+    if (view !== "summary" || subview !== "weekly") {
+      setStickyHdr(s => s !== null ? null : s);
+      return;
+    }
+    const update = () => {
+      const table = weeklyTableRef.current;
+      if (!table) return;
+      const thead = table.querySelector("thead");
+      if (!thead) return;
+      const r = thead.getBoundingClientRect();
+      const isMob = window.innerWidth < 768;
+      const threshold = isMob ? 57 : 1;
+      if (r.top < threshold) {
+        const ths = Array.from(table.querySelectorAll("thead th"));
+        const tr = table.getBoundingClientRect();
+        setStickyHdr({
+          top: isMob ? "calc(56px + env(safe-area-inset-top, 0px))" : "0px",
+          left: tr.left,
+          width: tr.width,
+          cols: ths.map(th => th.getBoundingClientRect().width),
+        });
+      } else {
+        setStickyHdr(s => s !== null ? null : s);
+      }
+    };
+    const mc = document.querySelector(".main-content");
+    window.addEventListener("scroll", update, { passive: true });
+    mc?.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update, { passive: true });
+    update();
+    return () => {
+      window.removeEventListener("scroll", update);
+      mc?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [view, subview]);
 
   // ── Sharpen Rates modal state ──────────────────────────────────────────────
   const [sg1, setSg1] = useState("");
@@ -264,8 +305,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         }}
       >i</button>}>Year Summary</SH>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px" }}>
-        <Card label="Gross (Year)" val={f(yG)} />
-        <Card label="Adjusted Net" val={f(yN)} color="var(--color-green)" sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : undefined} />
+        <Card label="Gross (Year)" val={f(yG)} rawVal={yG} />
+        <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)" sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : undefined} />
       </div>
     </div>
     <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
@@ -296,15 +337,38 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
 
     {/* WEEKLY — slimmed to 4 cols; full detail available via modal */}
     {view === "summary" && subview === "weekly" && <div>
+      <style>{`
+        @media (max-width: 767px) {
+          .income-weekly-sticky th {
+            top: calc(56px + env(safe-area-inset-top, 0px)) !important;
+          }
+        }
+      `}</style>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>
           Rolling Window · last 4 completed + rest of year ({weeklyRows.length} visible)
         </span>
         <button onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase" }}>⊞ Full Detail</button>
       </div>
-      <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
+      {stickyHdr && (
+        <div style={{ position: "fixed", top: stickyHdr.top, left: stickyHdr.left, width: stickyHdr.width, zIndex: 25, background: "var(--color-bg-base)", borderBottom: "1px solid var(--color-accent-primary)", boxShadow: "0 4px 16px rgba(0,0,0,0.6)", pointerEvents: "none" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+            <colgroup>{stickyHdr.cols.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}</colgroup>
+            <thead><tr style={{ color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+              <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th>
+              <th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th>
+              <th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th>
+              <th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
+            </tr></thead>
+          </table>
+        </div>
+      )}
+      <table ref={weeklyTableRef} className="data-table income-weekly-sticky" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
         <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
-          <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
+          <th style={{ textAlign: "left", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Wk End</th>
+          <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Gross</th>
+          <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Take Home</th>
+          <th style={{ textAlign: "center", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Status</th>
         </tr></thead>
         <tbody>{weeklyRows.map(w => { const isCurrent = currentWeek && w.idx === currentWeek.idx; return <tr key={w.idx} style={{ borderBottom: "1px solid #161616", background: isCurrent ? "#1a2a14" : "transparent" }} onMouseEnter={e => { e.currentTarget.style.background = isCurrent ? "#1e3018" : "var(--color-bg-surface)"; }} onMouseLeave={e => e.currentTarget.style.background = isCurrent ? "#1a2a14" : "transparent"}>
           <td style={{ padding: `${Math.round(7 * weeklyDensityScale)}px 4px` }}><span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>{isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}</td>
@@ -329,9 +393,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         </div>
         {[
           { section: "Pay Structure", rows: [{ l: "Base Hourly Rate", v: `$${config.baseRate}/hr` }, { l: "Shift Length", v: `${config.shiftHours}h` }, { l: "Weekend Differential", v: `+$${config.diffRate}/hr` }, ...(config.dhlNightShift ? [{ l: "Night Differential", v: `+$${config.nightDiffRate}/hr` }] : []), { l: "OT Threshold", v: `${config.otThreshold}h/wk` }, { l: "OT Multiplier", v: `${config.otMultiplier}×` }] },
-          { section: "Deductions", rows: [{ l: "LTD (weekly)", v: `$${config.ltd}` }] },
+          { section: "Deductions", rows: [{ l: "Benefits editing", v: "Use Account → Retirement & Benefits" }] },
           { section: "Tax Rates (from paychecks)", rows: [{ l: `Long / ${isVariable ? "High" : "Only"} Fed`, v: `${(config.fedRateHigh * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` }, { l: `Long / ${isVariable ? "High" : "Only"} State`, v: `${(config.stateRateHigh * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` }, { l: "Short / Low Fed", v: isVariable ? `${(config.fedRateLow * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` : "—" }, { l: "Short / Low State", v: isVariable ? `${(config.stateRateLow * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` : "—" }, { l: "FICA", v: `${(config.ficaRate * 100).toFixed(2)}%` }] },
-          { section: "Annual Tax Strategy", rows: [{ l: "Federal Std Deduction", v: `$${config.fedStdDeduction.toLocaleString()}` }, ...(config.userState ? [] : [{ l: "State Rate (fallback)", v: `${(config.moFlatRate * 100).toFixed(1)}%` }]), { l: "Target Owed at Filing", v: `$${config.targetOwedAtFiling}` }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }] },
           { section: "Paycheck Buffer", rows: [{ l: "Buffer Enabled", v: config.bufferEnabled ? "On" : "Off" }, ...(config.bufferEnabled ? [{ l: "Buffer Per Check", v: `$${config.paycheckBuffer}` }] : [])] },
         ].map(g => <div key={g.section} style={{ marginBottom: "20px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -366,16 +429,11 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
             { l: "Night Diff ($/hr)", f: "nightDiffRate", t: "number", s: "0.01" },
             { l: "OT Threshold (hrs/wk)", f: "otThreshold", t: "number", s: "1" },
             { l: "OT Multiplier", f: "otMultiplier", t: "number", s: "0.1" },
-            { l: "LTD Weekly ($)", f: "ltd", t: "number", s: "0.01" },
-            { l: "First Active Week Index", f: "firstActiveIdx", t: "number", s: "1" },
             { l: "Long / High Fed Rate", f: "w2FedRate", t: "number", s: "0.0001" },
             { l: "Long / High State Rate", f: "w2StateRate", t: "number", s: "0.0001" },
             { l: "Short / Low Fed Rate", f: "w1FedRate", t: "number", s: "0.0001" },
             { l: "Short / Low State Rate", f: "w1StateRate", t: "number", s: "0.0001" },
             { l: "FICA Rate", f: "ficaRate", t: "number", s: "0.0001" },
-            { l: "Federal Std Deduction ($)", f: "fedStdDeduction", t: "number", s: "100" },
-            { l: "State Rate (fallback)", f: "moFlatRate", t: "number", s: "0.001" },
-            { l: "Target Owed at Filing ($)", f: "targetOwedAtFiling", t: "number", s: "100" },
           ].map(fi => <div key={fi.f}><label style={lS}>{fi.l}</label><input type={fi.t} step={fi.s} value={editCfg[fi.f]} onChange={e => setEditCfg(v => ({ ...v, [fi.f]: fi.t === "number" ? parseFloat(e.target.value) || 0 : e.target.value }))} style={iS} /></div>)}
           {/* Buffer — boolean toggle + amount; rendered outside the map since it needs a checkbox */}
           <div style={{ display: "flex", alignItems: "center", gap: "10px", gridColumn: "span 2" }}>

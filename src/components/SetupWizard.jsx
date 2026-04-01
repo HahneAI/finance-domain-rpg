@@ -3,27 +3,25 @@
 //
 // BUILD STATUS (as of 2026-03-24)
 //
-// DONE — all 9 step components are built and wired:
-//   Step 0  (3b) Welcome / Life Event select
-//   Step 1  (3c) Pay Structure — base rate, shift hours, diff, OT
-//   Step 15 (3k) DHL Team Setup — team A/B, rotation type, night/morning shift
-//   Step 2  (3d) Schedule — job start date → firstActiveIdx, pay period end day
-//   Step 3  (3e) Deductions — 401k, LTD, benefits multi-select with inline config
-//   Step 4  (3f) Tax Rates — state dropdown, paystub calculator (skippable)
-//   Step 5  (3g) Tax Summary — read-only confirmation of computed tax picture
-//   Step 6  (3h) Other Deductions — benefits date, freeform rows, attendance gate
-//   Step 7  (3i) Paycheck Buffer — live net preview, optional toggle, $200 ceiling
-//   Step 8  (3j) Tax Exempt Gate — 3 UI variants (A/B/C) behind GATE_VARIANT const
+// 6-step wizard (consolidated from original 10):
+//   Step 0  Welcome / Life Event select
+//   Step 1  Pay Structure — base rate, shift, OT + DHL team/shift/rotation (merged from Step 15)
+//   Step 2  Schedule — job start date, rotation week, pay period close day
+//   Step 3  Deductions — benefits, start date, other deductions, attendance gate (merged from Step 6)
+//   Step 4  Tax Rates — state, paystub calc, rate summary w/ FICA + std deduction (Step 5 absorbed)
+//   Step 7  Wrap Up — live net preview, paycheck buffer, tax exempt gate (Steps 7+8 merged)
 //
-// All 9 step components are wired. Phase 4 App.jsx integration complete.
+// Steps 5, 6, 8, 15 removed from STEP_DEFS — content folded into adjacent steps.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from "react";
 import { buildYear, dhlEmployerMatchRate } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
-import { FISCAL_YEAR_START, DHL_PRESET } from "../constants/config.js";
+import { FISCAL_YEAR_START, DHL_PRESET, DHL_BENEFIT_OPTIONS } from "../constants/config.js";
 
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
+
+const BUFFER_MAX = 200;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 0 — Welcome (first-run) / Life Event Select (re-entry)
@@ -175,6 +173,23 @@ function Step1({ formData, onChange, lifeEvent }) {
     }
   }
 
+  function pickTeam(t) {
+    const preset = DHL_PRESET.teams[t];
+    const d      = DHL_PRESET.defaults;
+    onChange({
+      dhlTeam:            t,
+      startingWeekIsLong: preset.startsLong,
+      shiftHours:         d.shiftHours,
+      otThreshold:        d.otThreshold,
+      otMultiplier:       d.otMultiplier,
+      scheduleIsVariable: d.scheduleIsVariable,
+      payPeriodEndDay:    d.payPeriodEndDay,
+      bucketStartBalance: d.bucketStartBalance,
+      bucketCap:          d.bucketCap,
+      bucketPayoutRate:   d.bucketPayoutRate,
+    });
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
@@ -189,10 +204,73 @@ function Step1({ formData, onChange, lifeEvent }) {
             marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
             lineHeight: "1.5",
           }}>
-            Rotation, attendance, and dual-rate auto-configured. Weekend rate pre-filled — night shift differential set in the next step.
+            Rotation, attendance, and dual-rate auto-configured. Weekend rate pre-filled.
           </div>
         )}
       </Field>
+
+      {/* ── DHL: Team + shift ── */}
+      {isDHL && (
+        <>
+          <Field label="Which DHL team are you on?">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+              <Pill label="Team A" active={formData.dhlTeam === "A"} onClick={() => pickTeam("A")} />
+              <Pill label="Team B" active={formData.dhlTeam === "B"} onClick={() => pickTeam("B")} />
+            </div>
+            {formData.dhlTeam && (
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+                {DHL_PRESET.teams[formData.dhlTeam].startsLong
+                  ? `${DHL_PRESET.rotation.long.label} (your first active week)`
+                  : `${DHL_PRESET.rotation.short.label} (your first active week)`}. Teams alternate every week.
+              </div>
+            )}
+            {!formData.dhlTeam && (
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+                Team A starts short (Mon / Thu / Fri). Team B starts long (Tue / Wed / Sat / Sun).
+              </div>
+            )}
+          </Field>
+
+          <Field label="Which shift do you work?">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+              <Pill
+                label="Night shift (+diff)"
+                active={formData.dhlNightShift !== false}
+                onClick={() => onChange({ dhlNightShift: true, nightDiffRate: 1.50 })}
+              />
+              <Pill
+                label="Morning shift"
+                active={formData.dhlNightShift === false}
+                onClick={() => onChange({ dhlNightShift: false, nightDiffRate: 0 })}
+              />
+            </div>
+            <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+              Night shift adds +$1.50/hr on all hours (stacks with weekend differential).
+            </div>
+          </Field>
+
+          <Field label="Do you follow the standard DHL rotation?">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+              <Pill
+                label="Standard rotation"
+                active={formData.dhlCustomSchedule !== true}
+                onClick={() => onChange({ dhlCustomSchedule: false })}
+              />
+              <Pill
+                label="Custom schedule"
+                active={formData.dhlCustomSchedule === true}
+                onClick={() => onChange({ dhlCustomSchedule: true })}
+              />
+            </div>
+            <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+              {formData.dhlCustomSchedule
+                ? "Adjust days manually in Schedule."
+                : "Override per-week from Income for extra shifts."}
+            </div>
+          </Field>
+
+        </>
+      )}
 
       {/* ── Pay fields (shown once gate answered) ── */}
       {gateTouched && (
@@ -200,21 +278,19 @@ function Step1({ formData, onChange, lifeEvent }) {
           <FieldRow>
             <Field label="Base Rate ($/hr)">
               <input
-                {...iS}
                 style={{ ...iS }}
                 type="number" min="0" step="0.01"
                 value={formData.baseRate ?? ""}
-                onChange={e => onChange({ baseRate: parseFloat(e.target.value) || 0 })}
+                onChange={e => onChange({ baseRate: e.target.value === "" ? null : parseFloat(e.target.value) })}
                 placeholder="e.g. 19.65"
               />
             </Field>
             <Field label="Shift Length (hrs)">
               <input
-                {...iS}
                 style={{ ...iS }}
                 type="number" min="1" step="0.5"
                 value={formData.shiftHours ?? ""}
-                onChange={e => onChange({ shiftHours: parseFloat(e.target.value) || 0 })}
+                onChange={e => onChange({ shiftHours: e.target.value === "" ? null : parseFloat(e.target.value) })}
                 placeholder="e.g. 10"
               />
             </Field>
@@ -223,11 +299,10 @@ function Step1({ formData, onChange, lifeEvent }) {
           {/* ── Weekend Differential ── directly configurable; 0 = no differential ── */}
           <Field label="Weekend Differential ($/hr)">
             <input
-              {...iS}
               style={{ ...iS }}
               type="number" min="0" step="0.25"
               value={formData.diffRate ?? ""}
-              onChange={e => onChange({ diffRate: parseFloat(e.target.value) || 0 })}
+              onChange={e => onChange({ diffRate: e.target.value === "" ? null : parseFloat(e.target.value) })}
               placeholder="0 = no differential"
             />
           </Field>
@@ -252,11 +327,10 @@ function Step1({ formData, onChange, lifeEvent }) {
               <div style={{ marginTop: "10px" }}>
                 <label style={lS}>Hours/week</label>
                 <input
-                  {...iS}
                   style={{ ...iS }}
                   type="number" min="1" step="1"
                   value={formData.otThreshold ?? ""}
-                  onChange={e => onChange({ otThreshold: parseInt(e.target.value) || 40 })}
+                  onChange={e => onChange({ otThreshold: e.target.value === "" ? null : parseInt(e.target.value) })}
                   placeholder="e.g. 40"
                 />
               </div>
@@ -294,11 +368,10 @@ function Step1({ formData, onChange, lifeEvent }) {
                 <div style={{ marginTop: "10px" }}>
                   <label style={lS}>Monthly Average ($)</label>
                   <input
-                    {...iS}
                     style={{ ...iS }}
                     type="number" min="0" step="100"
                     value={formData.commissionMonthly ?? ""}
-                    onChange={e => onChange({ commissionMonthly: parseFloat(e.target.value) || 0 })}
+                    onChange={e => onChange({ commissionMonthly: e.target.value === "" ? null : parseFloat(e.target.value) })}
                     placeholder="e.g. 800"
                   />
                 </div>
@@ -340,7 +413,6 @@ function Step2({ formData, onChange }) {
       {/* ── Job start date ── */}
       <Field label="Job Start Date">
         <input
-          {...iS}
           style={{ ...iS }}
           type="date"
           value={formData.startDate ?? ""}
@@ -380,11 +452,10 @@ function Step2({ formData, onChange }) {
       ) : (
         <Field label="Standard Weekly Hours">
           <input
-            {...iS}
             style={{ ...iS }}
             type="number" min="1" step="0.5"
             value={formData.standardWeeklyHours ?? ""}
-            onChange={e => onChange({ standardWeeklyHours: parseFloat(e.target.value) || 40 })}
+            onChange={e => onChange({ standardWeeklyHours: e.target.value === "" ? null : parseFloat(e.target.value) })}
             placeholder="e.g. 40"
           />
           <div style={{
@@ -421,17 +492,7 @@ function Step2({ formData, onChange }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 3 — Deductions
 // ─────────────────────────────────────────────────────────────────────────────
-const BENEFIT_DEFS = [
-  { id: "health", label: "Health / Medical",      sub: "Medical insurance premium",                    type: "weekly", field: "healthPremium", placeholder: "e.g. 18.50" },
-  { id: "dental", label: "Dental",                sub: "Dental insurance premium",                     type: "weekly", field: "dentalPremium", placeholder: "e.g. 4.00"  },
-  { id: "vision", label: "Vision",                sub: "Vision insurance premium",                     type: "weekly", field: "visionPremium", placeholder: "e.g. 2.00"  },
-  { id: "ltd",    label: "Long-Term Disability",  sub: "LTD insurance — flat weekly deduction",        type: "weekly", field: "ltd",           placeholder: "e.g. 2.00"  },
-  { id: "std",    label: "Short-Term Disability", sub: "STD insurance — flat weekly deduction",        type: "weekly", field: "stdWeekly",     placeholder: "e.g. 1.50"  },
-  { id: "life",   label: "Life / AD&D",           sub: "Group life insurance premium",                 type: "weekly", field: "lifePremium",   placeholder: "e.g. 1.00"  },
-  { id: "k401",   label: "401(k) / Retirement",   sub: "Pre-tax contribution + employer match",        type: "k401"                                                        },
-  { id: "hsa",    label: "HSA",                   sub: "Health Savings Account — weekly contribution", type: "weekly", field: "hsaWeekly",     placeholder: "e.g. 15.00" },
-  { id: "fsa",    label: "FSA",                   sub: "Flexible Spending Account — weekly contribution", type: "weekly", field: "fsaWeekly", placeholder: "e.g. 10.00" },
-];
+const BENEFIT_DEFS = DHL_BENEFIT_OPTIONS;
 
 function BenefitCard({ def, selected, formData, onChange, onToggle }) {
   return (
@@ -484,11 +545,10 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
           {def.type === "weekly" && (
             <Field label="Weekly Deduction ($)">
               <input
-                {...iS}
                 style={{ ...iS }}
                 type="number" min="0" step="0.01"
                 value={formData[def.field] ?? ""}
-                onChange={e => onChange({ [def.field]: parseFloat(e.target.value) || 0 })}
+                onChange={e => onChange({ [def.field]: e.target.value === "" ? null : parseFloat(e.target.value) })}
                 placeholder={def.placeholder}
               />
             </Field>
@@ -498,7 +558,6 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
               <FieldRow>
                 <Field label="Your Contribution (%)">
                   <input
-                    {...iS}
                     style={{ ...iS }}
                     type="number" min="0" max="100" step="0.5"
                     value={
@@ -506,7 +565,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
                         ? +(formData.k401Rate * 100).toFixed(2)
                         : ""
                     }
-                    onChange={e => onChange({ k401Rate: (parseFloat(e.target.value) || 0) / 100 })}
+                    onChange={e => onChange({ k401Rate: e.target.value === "" ? null : parseFloat(e.target.value) / 100 })}
                     placeholder="e.g. 6"
                   />
                 </Field>
@@ -528,7 +587,6 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
                 ) : (
                   <Field label="Employer Match (%)">
                     <input
-                      {...iS}
                       style={{ ...iS }}
                       type="number" min="0" max="100" step="0.5"
                       value={
@@ -536,7 +594,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
                           ? +(formData.k401MatchRate * 100).toFixed(2)
                           : ""
                       }
-                      onChange={e => onChange({ k401MatchRate: (parseFloat(e.target.value) || 0) / 100 })}
+                      onChange={e => onChange({ k401MatchRate: e.target.value === "" ? null : parseFloat(e.target.value) / 100 })}
                       placeholder="e.g. 5"
                     />
                   </Field>
@@ -544,7 +602,6 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
               </FieldRow>
               <Field label="Enrollment / Start Date">
                 <input
-                  {...iS}
                   style={{ ...iS }}
                   type="date"
                   value={formData.k401StartDate ?? ""}
@@ -567,12 +624,13 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
 
 function Step3({ formData, onChange }) {
   const selected = new Set(formData.selectedBenefits ?? []);
+  const isDHL    = formData.employerPreset === "DHL";
+  const others   = formData.otherDeductions ?? [];
 
   function toggle(id) {
     const next = new Set(selected);
     if (next.has(id)) {
       next.delete(id);
-      // Zero out fields when deselected so they don't ghost into calculations
       const def = BENEFIT_DEFS.find(d => d.id === id);
       if (def?.type === "weekly") onChange({ [def.field]: 0 });
       if (def?.type === "k401") onChange({ k401Rate: 0, k401MatchRate: 0, k401StartDate: null });
@@ -582,30 +640,131 @@ function Step3({ formData, onChange }) {
     onChange({ selectedBenefits: [...next] });
   }
 
+  function addRow() {
+    const id = Date.now().toString(36);
+    onChange({ otherDeductions: [...others, { id, label: "", weeklyAmount: 0 }] });
+  }
+
+  function updateRow(id, patch) {
+    onChange({ otherDeductions: others.map(r => r.id === id ? { ...r, ...patch } : r) });
+  }
+
+  function removeRow(id) {
+    onChange({ otherDeductions: others.filter(r => r.id !== id) });
+  }
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-      <p style={{
-        fontSize: "13px", color: "var(--color-text-secondary)",
-        margin: "0 0 8px", lineHeight: "1.5",
-      }}>
-        Select benefits deducted from your paycheck — skip if none yet.
-      </p>
-      <div style={{
-        display: "flex", flexDirection: "column", gap: "8px",
-        maxHeight: "340px", overflowY: "auto",
-        paddingRight: "2px",          // prevent scrollbar overlap
-      }}>
-        {BENEFIT_DEFS.map(def => (
-          <BenefitCard
-            key={def.id}
-            def={def}
-            selected={selected.has(def.id)}
-            formData={formData}
-            onChange={onChange}
-            onToggle={() => toggle(def.id)}
-          />
-        ))}
+    <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+
+      {/* ── Benefits ── */}
+      <div>
+        <p style={{
+          fontSize: "13px", color: "var(--color-text-secondary)",
+          margin: "0 0 8px", lineHeight: "1.5",
+        }}>
+          Select benefits deducted from your paycheck — skip if none yet.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {BENEFIT_DEFS.map(def => (
+            <BenefitCard
+              key={def.id}
+              def={def}
+              selected={selected.has(def.id)}
+              formData={formData}
+              onChange={onChange}
+              onToggle={() => toggle(def.id)}
+            />
+          ))}
+        </div>
       </div>
+
+      {/* ── Benefits start date ── */}
+      <Field label="Benefits Start Date">
+        <input
+          style={{ ...iS }}
+          type="date"
+          value={formData.benefitsStartDate ?? ""}
+          onChange={e => onChange({ benefitsStartDate: e.target.value || null })}
+        />
+        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+          Leave blank if coverage is already active or not enrolled.
+        </div>
+      </Field>
+
+      {/* ── Other recurring deductions ── */}
+      <div>
+        <label style={lS}>Other Recurring Deductions</label>
+        <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
+          {others.length === 0 && (
+            <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", padding: "8px 0" }}>
+              Nothing added — examples: union dues, parking, equipment.
+            </div>
+          )}
+          {others.map(row => (
+            <div key={row.id} style={{
+              display: "grid", gridTemplateColumns: "1fr 120px 32px",
+              gap: "8px", alignItems: "center",
+            }}>
+              <input
+                style={{ ...iS }}
+                type="text"
+                placeholder="Label (e.g. Union Dues)"
+                value={row.label}
+                onChange={e => updateRow(row.id, { label: e.target.value })}
+              />
+              <input
+                style={{ ...iS }}
+                type="number" min="0" step="0.01"
+                placeholder="$/wk"
+                value={row.weeklyAmount || ""}
+                onChange={e => updateRow(row.id, { weeklyAmount: e.target.value === "" ? null : parseFloat(e.target.value) })}
+              />
+              <button
+                onClick={() => removeRow(row.id)}
+                style={{
+                  background: "transparent",
+                  color: "var(--color-text-disabled)",
+                  border: "1px solid var(--color-border-subtle)",
+                  borderRadius: "8px", width: "32px", height: "36px",
+                  cursor: "pointer", fontSize: "14px", lineHeight: 1,
+                }}
+              >×</button>
+            </div>
+          ))}
+          <button
+            onClick={addRow}
+            style={{
+              background: "transparent", color: "var(--color-text-secondary)",
+              border: "1px solid var(--color-border-subtle)", borderRadius: "10px",
+              padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+              textTransform: "uppercase", cursor: "pointer", alignSelf: "flex-start",
+            }}
+          >
+            + Add Deduction
+          </button>
+        </div>
+      </div>
+
+      {/* ── Attendance policy gate — standard users only ── */}
+      {!isDHL && (
+        <Field label="Does your employer track attendance with a formal policy?">
+          <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px", lineHeight: "1.5" }}>
+            Points systems, hours-based buckets, or similar.
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Pill
+              label="Yes — points or hours system"
+              active={formData.attendanceBucketEnabled === true}
+              onClick={() => onChange({ attendanceBucketEnabled: true })}
+            />
+            <Pill
+              label="No — standard time off"
+              active={formData.attendanceBucketEnabled === false}
+              onClick={() => onChange({ attendanceBucketEnabled: false })}
+            />
+          </div>
+        </Field>
+      )}
     </div>
   );
 }
@@ -668,17 +827,17 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
         <div style={hdrStyle}>{isVariable ? "Shorter Week Paystub" : "Typical Paycheck"}</div>
         <FieldRow>
           <Field label="Gross Pay ($)">
-            <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
+            <input style={{ ...iS }} type="number" min="0" step="0.01"
               value={g1} onChange={e => setG1(e.target.value)} placeholder="e.g. 1050" />
           </Field>
           <Field label="Fed Income Tax Withheld ($)">
-            <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
+            <input style={{ ...iS }} type="number" min="0" step="0.01"
               value={f1} onChange={e => setF1(e.target.value)} placeholder="e.g. 82" />
           </Field>
         </FieldRow>
         {!isNoTax && (
           <Field label="State Income Tax Withheld ($)">
-            <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
+            <input style={{ ...iS }} type="number" min="0" step="0.01"
               value={s1} onChange={e => setS1(e.target.value)} placeholder="e.g. 35" />
           </Field>
         )}
@@ -695,17 +854,17 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
           <div style={hdrStyle}>Longer Week Paystub</div>
           <FieldRow>
             <Field label="Gross Pay ($)">
-              <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
+              <input style={{ ...iS }} type="number" min="0" step="0.01"
                 value={g2} onChange={e => setG2(e.target.value)} placeholder="e.g. 1450" />
             </Field>
             <Field label="Fed Income Tax Withheld ($)">
-              <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
+              <input style={{ ...iS }} type="number" min="0" step="0.01"
                 value={f2} onChange={e => setF2(e.target.value)} placeholder="e.g. 186" />
             </Field>
           </FieldRow>
           {!isNoTax && (
             <Field label="State Income Tax Withheld ($)">
-              <input {...iS} style={{ ...iS }} type="number" min="0" step="0.01"
+              <input style={{ ...iS }} type="number" min="0" step="0.01"
                 value={s2} onChange={e => setS2(e.target.value)} placeholder="e.g. 58" />
             </Field>
           )}
@@ -895,438 +1054,62 @@ function Step4({ formData, onChange }) {
         </>
       )}
 
-      {/* Rate summary */}
+      {/* Rate summary — includes FICA + std deduction so Tax Summary step is not needed */}
       {hasRates && (
         <div style={{
           padding: "12px 14px", background: "var(--color-bg-raised)", borderRadius: "10px",
+          display: "flex", flexDirection: "column", gap: "6px",
         }}>
           <div style={{
             display: "flex", justifyContent: "space-between", alignItems: "center",
-            marginBottom: "10px",
+            marginBottom: "4px",
           }}>
             <div style={{
               fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
               color: "var(--color-text-disabled)",
             }}>
-              Current Rates
+              Tax Picture
             </div>
             <span style={{
               fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
               padding: "2px 8px", borderRadius: "6px",
               background: formData.taxRatesEstimated
-                ? "rgba(0,200,150,0.10)" : "rgba(76,175,125,0.12)",
+                ? "rgba(0,200,150,0.12)" : "rgba(34,197,94,0.12)",
               color: formData.taxRatesEstimated
                 ? "var(--color-gold)" : "var(--color-green)",
               border: `1px solid ${formData.taxRatesEstimated
-                ? "rgba(0,200,150,0.22)" : "rgba(76,175,125,0.3)"}`,
+                ? "rgba(0,200,150,0.3)" : "rgba(34,197,94,0.3)"}`,
             }}>
               {formData.taxRatesEstimated ? "Estimated" : "Confirmed"}
             </span>
           </div>
-          <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", fontSize: "11px",
-          }}>
-            <div style={{ color: "var(--color-text-secondary)" }}>
-              Fed {isVariable ? "(short)" : "rate"}:{" "}
-              <strong style={{ color: "var(--color-text-primary)" }}>
-                {pct(formData.fedRateLow)}
+          {[
+            { label: "Standard Deduction",             val: `$${(formData.fedStdDeduction ?? 15000).toLocaleString()}`, plain: true },
+            { label: "FICA (SS + Medicare)",           val: pct(formData.ficaRate ?? 0.0765),                          plain: true },
+            { label: `Fed ${isVariable ? "(short)" : "rate"}`, val: pct(formData.fedRateLow),               est: true },
+            ...(isVariable ? [{ label: "Fed (long)",   val: pct(formData.fedRateHigh),                                 est: true }] : []),
+            { label: `State ${isVariable ? "(short)" : "rate"}`, val: isNoTax ? "0% (no state tax)" : pct(formData.stateRateLow), est: !isNoTax },
+            ...(isVariable && !isNoTax ? [{ label: "State (long)", val: pct(formData.stateRateHigh),                  est: true }] : []),
+          ].map(r => (
+            <div key={r.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+              <span style={{ color: "var(--color-text-secondary)" }}>{r.label}</span>
+              <strong style={{
+                color: (r.est && formData.taxRatesEstimated)
+                  ? "var(--color-gold)" : "var(--color-text-primary)",
+              }}>
+                {r.val}{r.est && formData.taxRatesEstimated ? " est." : ""}
               </strong>
-            </div>
-            {isVariable && (
-              <div style={{ color: "var(--color-text-secondary)" }}>
-                Fed (long):{" "}
-                <strong style={{ color: "var(--color-text-primary)" }}>
-                  {pct(formData.fedRateHigh)}
-                </strong>
-              </div>
-            )}
-            <div style={{ color: "var(--color-text-secondary)" }}>
-              State {isVariable ? "(short)" : "rate"}:{" "}
-              <strong style={{ color: "var(--color-text-primary)" }}>
-                {isNoTax ? "0% (no state tax)" : pct(formData.stateRateLow)}
-              </strong>
-            </div>
-            {isVariable && !isNoTax && (
-              <div style={{ color: "var(--color-text-secondary)" }}>
-                State (long):{" "}
-                <strong style={{ color: "var(--color-text-primary)" }}>
-                  {pct(formData.stateRateHigh)}
-                </strong>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STEP 5 — Annual Tax Summary (read-only confirmation)
-//
-// No inputs. Shows the tax picture the app will use so the user can confirm
-// before finishing the wizard. Tax strategy (exempt juggling, extra withholding
-// tuning) is behind a feature gate — not part of the wizard.
-// ─────────────────────────────────────────────────────────────────────────────
-function Step5({ formData }) {
-  const stateConfig = formData.userState ? STATE_TAX_TABLE[formData.userState] : null;
-  const isNoTax     = stateConfig?.model === "NONE";
-  const isVariable  = formData.scheduleIsVariable;
-  const pct = n => (n * 100).toFixed(2) + "%";
-
-  const rowStyle = {
-    display: "flex", justifyContent: "space-between", alignItems: "center",
-    padding: "9px 0", borderBottom: "1px solid #1a1a1a",
-  };
-  const labelStyle = { fontSize: "12px", color: "var(--color-text-secondary)" };
-  const valStyle   = { fontSize: "12px", fontWeight: "bold", color: "var(--color-text-primary)" };
-  const estStyle   = { fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)" };
-
-  function Row({ label, value, estimated }) {
-    return (
-      <div style={rowStyle}>
-        <span style={labelStyle}>{label}</span>
-        <span style={estimated ? estStyle : valStyle}>
-          {value}{estimated ? " est." : ""}
-        </span>
-      </div>
-    );
-  }
-
-  const sectionStyle = {
-    background: "var(--color-bg-raised)", borderRadius: "10px",
-    padding: "14px 16px", display: "flex", flexDirection: "column",
-  };
-  const sectionHeader = {
-    fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
-    color: "var(--color-text-disabled)", marginBottom: "4px",
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-
-      <p style={{ fontSize: "13px", color: "var(--color-text-secondary)", margin: 0, lineHeight: "1.6" }}>
-        Your tax picture — refine anytime via Income → Sharpen Rates.
-      </p>
-
-      {/* Federal */}
-      <div style={sectionStyle}>
-        <div style={sectionHeader}>Federal Income Tax</div>
-        <Row label="Standard Deduction (2026)" value={`$${(formData.fedStdDeduction ?? 15000).toLocaleString()}`} />
-        <Row label="FICA (Social Security + Medicare)" value={pct(formData.ficaRate ?? 0.0765)} />
-        <Row
-          label={isVariable ? "Effective Rate — Short Weeks" : "Effective Rate"}
-          value={pct(formData.fedRateLow)}
-          estimated={formData.taxRatesEstimated}
-        />
-        {isVariable && (
-          <Row
-            label="Effective Rate — Long Weeks"
-            value={pct(formData.fedRateHigh)}
-            estimated={formData.taxRatesEstimated}
-          />
-        )}
-      </div>
-
-      {/* State */}
-      <div style={sectionStyle}>
-        <div style={sectionHeader}>
-          State Income Tax — {stateConfig?.name ?? formData.userState ?? "Not set"}
-        </div>
-        {isNoTax ? (
-          <div style={{ fontSize: "12px", color: "var(--color-text-disabled)", paddingTop: "6px" }}>
-            No state income tax. State rate is 0%.
-          </div>
-        ) : (
-          <>
-            <Row
-              label={isVariable ? "Effective Rate — Short Weeks" : "Effective Rate"}
-              value={pct(formData.stateRateLow)}
-              estimated={formData.taxRatesEstimated}
-            />
-            {isVariable && (
-              <Row
-                label="Effective Rate — Long Weeks"
-                value={pct(formData.stateRateHigh)}
-                estimated={formData.taxRatesEstimated}
-              />
-            )}
-            {stateConfig?.model === "PROGRESSIVE" && (
-              <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", paddingTop: "8px", lineHeight: "1.5" }}>
-                Progressive — effective rates (withheld ÷ gross), not marginal.
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Confirmation note */}
-      {formData.taxRatesEstimated && (
-        <div style={{
-          fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.6",
-          padding: "10px 12px",
-          background: "rgba(0,200,150,0.05)",
-          border: "1px solid rgba(0,200,150,0.15)",
-          borderRadius: "8px",
-        }}>
-          Rates marked <strong style={{ color: "var(--color-gold)" }}>est.</strong> are estimates —
-          confirm with a paystub via <strong style={{ color: "var(--color-gold)" }}>Sharpen Rates</strong> in Income.
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STEP 6 — Other Deductions & Attendance
-//
-// Remaining pieces after Step 3 already captured preset benefits:
-//   1. Benefits start date — when health/dental/vision activates
-//   2. Other deductions — freeform repeatable label + weekly amount rows
-//   3. Attendance gate — points/hours system? Skipped for DHL.
-// ─────────────────────────────────────────────────────────────────────────────
-function Step6({ formData, onChange }) {
-  const isDHL = formData.employerPreset === "DHL";
-  const others = formData.otherDeductions ?? [];
-
-  function addRow() {
-    const id = Date.now().toString(36);
-    onChange({ otherDeductions: [...others, { id, label: "", weeklyAmount: 0 }] });
-  }
-
-  function updateRow(id, patch) {
-    onChange({
-      otherDeductions: others.map(r => r.id === id ? { ...r, ...patch } : r),
-    });
-  }
-
-  function removeRow(id) {
-    onChange({ otherDeductions: others.filter(r => r.id !== id) });
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-
-      {/* ── Benefits start date ── */}
-      <Field label="Benefits Start Date">
-        <input
-          {...iS} style={{ ...iS }}
-          type="date"
-          value={formData.benefitsStartDate ?? ""}
-          onChange={e => onChange({ benefitsStartDate: e.target.value || null })}
-        />
-        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
-          Leave blank if coverage is already active or not enrolled.
-        </div>
-      </Field>
-
-      {/* ── Other recurring deductions ── */}
-      <div>
-        <label style={lS}>Other Recurring Deductions</label>
-        <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
-          {others.length === 0 && (
-            <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", padding: "8px 0" }}>
-              Nothing added — examples: union dues, parking, equipment.
-            </div>
-          )}
-          {others.map(row => (
-            <div key={row.id} style={{
-              display: "grid", gridTemplateColumns: "1fr 120px 32px",
-              gap: "8px", alignItems: "center",
-            }}>
-              <input
-                {...iS} style={{ ...iS }}
-                type="text"
-                placeholder="Label (e.g. Union Dues)"
-                value={row.label}
-                onChange={e => updateRow(row.id, { label: e.target.value })}
-              />
-              <input
-                {...iS} style={{ ...iS }}
-                type="number" min="0" step="0.01"
-                placeholder="$/wk"
-                value={row.weeklyAmount || ""}
-                onChange={e => updateRow(row.id, { weeklyAmount: parseFloat(e.target.value) || 0 })}
-              />
-              <button
-                onClick={() => removeRow(row.id)}
-                style={{
-                  background: "transparent",
-                  color: "var(--color-text-disabled)",
-                  border: "1px solid var(--color-border-subtle)",
-                  borderRadius: "8px", width: "32px", height: "36px",
-                  cursor: "pointer", fontSize: "14px", lineHeight: 1,
-                }}
-              >
-                ×
-              </button>
             </div>
           ))}
-          <button
-            onClick={addRow}
-            style={{
-              background: "transparent", color: "var(--color-text-secondary)",
-              border: "1px solid var(--color-border-subtle)", borderRadius: "10px",
-              padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
-              textTransform: "uppercase", cursor: "pointer", alignSelf: "flex-start",
-            }}
-          >
-            + Add Deduction
-          </button>
-        </div>
-      </div>
-
-      {/* ── Attendance policy gate — standard users only ── */}
-      {!isDHL && (
-        <Field label="Does your employer track attendance with a formal policy?">
-          <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px", lineHeight: "1.5" }}>
-            Points systems, hours-based buckets, or similar. Not just "you can call out."
-          </div>
-          <div style={{ display: "flex", gap: "8px" }}>
-            <Pill
-              label="Yes — points or hours system"
-              active={formData.attendanceBucketEnabled === true}
-              onClick={() => onChange({ attendanceBucketEnabled: true })}
-            />
-            <Pill
-              label="No — standard time off"
-              active={formData.attendanceBucketEnabled === false}
-              onClick={() => onChange({ attendanceBucketEnabled: false })}
-            />
-          </div>
-          {formData.attendanceBucketEnabled === true && (
-            <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
-              Bucket tracking on — configure rates and caps after setup.
+          {formData.taxRatesEstimated && (
+            <div style={{
+              marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5",
+            }}>
+              Confirm rates anytime via <strong style={{ color: "var(--color-gold)" }}>Sharpen Rates</strong> in Income.
             </div>
           )}
-        </Field>
+        </div>
       )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STEP 15 — DHL Team Setup  (sprint 3k)
-//
-// Only shown when employerPreset === "DHL" (Step 1 gate).
-// Captures four things:
-//   1. Team A or B → derives startingWeekIsHeavy; applies DHL_PRESET.defaults
-//   2. Standard rotation vs custom schedule → dhlCustomSchedule
-//   3. Night shift vs morning shift → stored as dhlNightShift for future
-//      night-differential tracking. No longer affects weekend diff — all shifts
-//      earn cfg.diffRate on weekend hours equally (corrected 2026-03-24).
-//   4. OT day preference → dhlOtOnWeekend
-// isValid blocks until dhlTeam is set.
-// ─────────────────────────────────────────────────────────────────────────────
-function Step15({ formData, onChange }) {
-  const team = formData.dhlTeam;
-  const isCustom = formData.dhlCustomSchedule === true;
-  const isNight = formData.dhlNightShift !== false; // default true
-
-  function pickTeam(t) {
-    const preset = DHL_PRESET.teams[t];
-    const d = DHL_PRESET.defaults;
-    onChange({
-      dhlTeam: t,
-      startingWeekIsLong: preset.startsLong,
-      // Apply preset defaults only for standard fields not yet wizard-confirmed
-      shiftHours:         d.shiftHours,
-      otThreshold:        d.otThreshold,
-      otMultiplier:       d.otMultiplier,
-      scheduleIsVariable: d.scheduleIsVariable,
-      payPeriodEndDay:    d.payPeriodEndDay,
-      bucketStartBalance: d.bucketStartBalance,
-      bucketCap:          d.bucketCap,
-      bucketPayoutRate:   d.bucketPayoutRate,
-    });
-  }
-
-  const firstWeekLabel = team
-    ? (DHL_PRESET.teams[team].startsLong
-        ? `${DHL_PRESET.rotation.long.label} (your first active week)`
-        : `${DHL_PRESET.rotation.short.label} (your first active week)`)
-    : null;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-
-      {/* ── Team A / B ── */}
-      <Field label="Which DHL team are you on?">
-        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-          <Pill label="Team A" active={team === "A"} onClick={() => pickTeam("A")} />
-          <Pill label="Team B" active={team === "B"} onClick={() => pickTeam("B")} />
-        </div>
-        {firstWeekLabel && (
-          <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
-            {firstWeekLabel}. Teams alternate every week — while A works their 3-day, B works their 4-day.
-          </div>
-        )}
-        {!team && (
-          <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
-            Team A starts on a short week (Mon / Thu / Fri). Team B starts on a long week (Tue / Wed / Sat / Sun).
-          </div>
-        )}
-      </Field>
-
-      {/* ── Standard vs custom rotation ── */}
-      <Field label="Do you follow the standard DHL rotation?">
-        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-          <Pill
-            label="Standard rotation"
-            active={!isCustom}
-            onClick={() => onChange({ dhlCustomSchedule: false })}
-          />
-          <Pill
-            label="I have a custom schedule"
-            active={isCustom}
-            onClick={() => onChange({ dhlCustomSchedule: true })}
-          />
-        </div>
-        <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
-          {isCustom
-            ? "Manual — adjust direction in the Schedule step."
-            : "Standard rotation. Override per-week from Income if you pick up extra shifts."}
-        </div>
-      </Field>
-
-      {/* ── Night shift vs morning shift ── */}
-      <Field label="Which shift do you work?">
-        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-          <Pill
-            label="Night shift (+diff)"
-            active={isNight}
-            onClick={() => onChange({ dhlNightShift: true, nightDiffRate: 1.50 })}
-          />
-          <Pill
-            label="Morning shift"
-            active={!isNight}
-            onClick={() => onChange({ dhlNightShift: false, nightDiffRate: 0 })}
-          />
-        </div>
-        <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
-          All shifts earn the {formData.diffRate ? `$${Number(formData.diffRate).toFixed(2)}/hr` : "shift"} weekend differential.
-          Night shift adds +${Number(formData.nightDiffRate || 1.50).toFixed(2)}/hr on all hours (stacks with weekend).
-        </div>
-      </Field>
-
-      {/* ── OT preference (non-blocking) ── */}
-      <Field label="Where do you typically take your required OT shift?">
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "6px" }}>
-          <Pill
-            label="Weekday only"
-            active={formData.dhlOtOnWeekend === false}
-            onClick={() => onChange({ dhlOtOnWeekend: false })}
-          />
-          <Pill
-            label="Sometimes weekend (Sat / Sun)"
-            active={formData.dhlOtOnWeekend === true}
-            onClick={() => onChange({ dhlOtOnWeekend: true })}
-          />
-        </div>
-        <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
-          Weekend OT earns the differential — weekday OT does not.
-        </div>
-      </Field>
     </div>
   );
 }
@@ -1372,132 +1155,6 @@ function estimateWeeklyGross(d) {
   return h * (d.baseRate || 0);
 }
 
-// ─── STEP 7 — Paycheck Buffer ────────────────────────────────────────────────
-// The buffer is an optional per-week amount excluded from every spendable
-// calculation in the app. It is NOT a deduction — the money lands on the
-// paycheck normally — but the app's budget, goal, and income math treat it
-// as invisible, letting it accumulate quietly as a safety reserve.
-//
-// Max: $200/week  Default: On at $50
-// ─────────────────────────────────────────────────────────────────────────────
-const BUFFER_MAX = 200;
-
-function Step7({ formData, onChange }) {
-  const gross = estimateWeeklyGross(formData);
-  const fica = gross * (formData.ficaRate || 0.0765);
-  const k401k = gross * (formData.k401Rate || 0);
-  const benefits =
-    (formData.healthPremium || 0) +
-    (formData.dentalPremium || 0) +
-    (formData.visionPremium || 0) +
-    (formData.stdWeekly || 0) +
-    (formData.lifePremium || 0) +
-    (formData.hsaWeekly || 0) +
-    (formData.fsaWeekly || 0) +
-    (formData.ltd || 0);
-  const other = (formData.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0);
-  const fed = gross * (formData.fedRateLow || 0);
-  const state = gross * (formData.stateRateLow || 0);
-  const net = gross - fica - k401k - benefits - other - fed - state;
-
-  // Buffer toggle state — bufferEnabled defaults to true (on)
-  const bufferOn = formData.bufferEnabled ?? true;
-  const buf      = formData.paycheckBuffer ?? 50;
-
-  const rows = [
-    { label: "Gross Pay",      val: gross,    sign: "" },
-    { label: "Federal Tax",    val: fed,      sign: "−" },
-    { label: "State Tax",      val: state,    sign: "−" },
-    { label: "FICA",           val: fica,     sign: "−" },
-    { label: "401(k)",         val: k401k,    sign: "−" },
-    { label: "Benefits",       val: benefits, sign: "−" },
-    { label: "Other Deduct.", val: other,    sign: "−" },
-  ];
-
-  const fmt = (n) => `$${Math.abs(n).toFixed(2)}`;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-
-      {/* ── Live net estimate ── */}
-      <div>
-        <label style={lS}>Estimated Weekly Net</label>
-        <div style={{
-          marginTop: "10px",
-          background: "var(--color-bg-raised)",
-          borderRadius: "12px", padding: "16px",
-          border: "1px solid var(--color-border-subtle)",
-        }}>
-          {rows.map(r => (
-            <div key={r.label} style={{
-              display: "flex", justifyContent: "space-between",
-              padding: "4px 0",
-              fontSize: "12px",
-              color: "var(--color-text-secondary)",
-              borderBottom: "1px solid rgba(255,255,255,0.04)",
-            }}>
-              <span>{r.label}</span>
-              <span style={{ fontFamily: "var(--font-mono)" }}>
-                {r.sign} {fmt(r.val)}
-              </span>
-            </div>
-          ))}
-          <div style={{
-            display: "flex", justifyContent: "space-between",
-            paddingTop: "10px", marginTop: "4px",
-          }}>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>
-              Net
-            </span>
-            <span style={{
-              fontFamily: "var(--font-mono)", fontSize: "18px", fontWeight: 700,
-              color: net >= 0 ? "var(--color-green)" : "var(--color-red)",
-            }}>
-              {fmt(net)}
-            </span>
-          </div>
-        </div>
-        <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
-          Estimated average from your setup so far.
-          {formData.taxRatesEstimated && " Tax rates are estimated — confirm via Sharpen Rates."}
-        </div>
-      </div>
-
-      {/* ── Paycheck buffer toggle ── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        <p style={{ margin: 0, fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
-          A paycheck buffer is a fixed amount from every check that the app
-          doesn't count as spendable income. Turn it on to build a quiet
-          safety reserve without cluttering your budget.
-        </p>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <Pill label="On"  active={bufferOn}  onClick={() => onChange({ bufferEnabled: true  })} />
-          <Pill label="Off" active={!bufferOn} onClick={() => onChange({ bufferEnabled: false })} />
-        </div>
-        {/* Amount input — only visible when buffer is on */}
-        {bufferOn && (
-          <>
-            <input
-              {...iS} style={{ ...iS }}
-              type="number" min="0" max={BUFFER_MAX} step="1"
-              value={buf || ""}
-              onChange={e => {
-                // Clamp to BUFFER_MAX ceiling; do not enforce a floor
-                const v = Math.min(parseFloat(e.target.value) || 0, BUFFER_MAX);
-                onChange({ paycheckBuffer: v });
-              }}
-              placeholder="e.g. 50"
-            />
-            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
-              At ${buf}/week — ${(buf * 52).toLocaleString()} reserved annually.
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 8 — Tax Exempt Gate
 //
@@ -1535,38 +1192,131 @@ function TaxExemptPreview() {
   );
 }
 
-function Step8({ formData, onChange }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP WRAPUP — Paycheck Buffer + Tax Exempt Gate (combined, non-blocking)
+// ─────────────────────────────────────────────────────────────────────────────
+function StepWrapUp({ formData, onChange }) {
+  const gross = estimateWeeklyGross(formData);
+  const fica     = gross * (formData.ficaRate || 0.0765);
+  const k401k    = gross * (formData.k401Rate || 0);
+  const benefits =
+    (formData.healthPremium || 0) + (formData.dentalPremium || 0) +
+    (formData.visionPremium || 0) + (formData.stdWeekly || 0) +
+    (formData.lifePremium || 0)   + (formData.hsaWeekly || 0) +
+    (formData.fsaWeekly || 0)     + (formData.ltd || 0);
+  const other = (formData.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0);
+  const fed   = gross * (formData.fedRateLow || 0);
+  const state = gross * (formData.stateRateLow || 0);
+  const net   = gross - fica - k401k - benefits - other - fed - state;
+
+  const bufferOn = formData.bufferEnabled ?? true;
+  const buf      = formData.paycheckBuffer ?? 50;
   const accepted = formData.taxExemptOptIn === true;
-  const accept = () => onChange({ taxExemptOptIn: true });
+  const fmt = n => `$${Math.abs(n).toFixed(2)}`;
+
+  const rows = [
+    { label: "Gross Pay",     val: gross,    sign: "" },
+    { label: "Federal Tax",   val: fed,      sign: "−" },
+    { label: "State Tax",     val: state,    sign: "−" },
+    { label: "FICA",          val: fica,     sign: "−" },
+    { label: "401(k)",        val: k401k,    sign: "−" },
+    { label: "Benefits",      val: benefits, sign: "−" },
+    { label: "Other Deduct.", val: other,    sign: "−" },
+  ];
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      {!accepted ? (
+    <div style={{ display: "flex", flexDirection: "column", gap: "22px" }}>
+
+      {/* ── Live net estimate ── */}
+      <div>
+        <label style={lS}>Estimated Weekly Net</label>
         <div style={{
-          background: "var(--color-bg-raised)", borderRadius: "12px", padding: "18px 16px",
-          border: "1px dashed rgba(0,200,150,0.22)",
-          display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start",
+          marginTop: "10px", background: "var(--color-bg-raised)",
+          borderRadius: "12px", padding: "14px",
+          border: "1px solid var(--color-border-subtle)",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "18px", opacity: 0.5 }}>🔒</span>
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-secondary)" }}>
-              Tax-Exempt Week Projections
+          {rows.map(r => (
+            <div key={r.label} style={{
+              display: "flex", justifyContent: "space-between",
+              padding: "4px 0", fontSize: "12px",
+              color: "var(--color-text-secondary)",
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+            }}>
+              <span>{r.label}</span>
+              <span style={{ fontFamily: "var(--font-mono)" }}>{r.sign} {fmt(r.val)}</span>
+            </div>
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "10px", marginTop: "4px" }}>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>Net</span>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: "18px", fontWeight: 700,
+              color: net >= 0 ? "var(--color-green)" : "var(--color-red)",
+            }}>
+              {fmt(net)}
             </span>
           </div>
-          <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
-            {TAX_EXEMPT_DISCLAIMER}
-          </p>
-          <button onClick={accept} style={{
-            background: "var(--color-gold)", color: "var(--color-bg-base)",
-            border: "none", borderRadius: "10px", padding: "8px 16px",
-            fontSize: "10px", letterSpacing: "1.5px", fontWeight: 700,
-            textTransform: "uppercase", cursor: "pointer",
-          }}>
-            Unlock projections
-          </button>
         </div>
-      ) : (
-        <TaxExemptPreview />
-      )}
+        {formData.taxRatesEstimated && (
+          <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)" }}>
+            Tax rates are estimated — confirm via Sharpen Rates in Income.
+          </div>
+        )}
+      </div>
+
+      {/* ── Paycheck buffer ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <label style={lS}>Paycheck Buffer</label>
+        <p style={{ margin: 0, fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+          A fixed amount from every check that the app treats as invisible — quietly builds a safety reserve without cluttering your budget.
+        </p>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <Pill label="On"  active={bufferOn}  onClick={() => onChange({ bufferEnabled: true  })} />
+          <Pill label="Off" active={!bufferOn} onClick={() => onChange({ bufferEnabled: false })} />
+        </div>
+        {bufferOn && (
+          <>
+            <input
+              style={{ ...iS }}
+              type="number" min="0" max={BUFFER_MAX} step="1"
+              value={buf || ""}
+              onChange={e => onChange({ paycheckBuffer: e.target.value === "" ? null : Math.min(parseFloat(e.target.value) || 0, BUFFER_MAX) })}
+              placeholder="e.g. 50"
+            />
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+              At ${buf}/week — ${(buf * 52).toLocaleString()} reserved annually.
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Tax exempt gate (optional, non-blocking) ── */}
+      <div>
+        <label style={lS}>Tax-Exempt Week Projections</label>
+        {!accepted ? (
+          <div style={{
+            marginTop: "8px",
+            background: "var(--color-bg-raised)", borderRadius: "12px", padding: "16px",
+            border: "1px dashed rgba(0,200,150,0.3)",
+            display: "flex", flexDirection: "column", gap: "10px",
+          }}>
+            <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
+              {TAX_EXEMPT_DISCLAIMER}
+            </p>
+            <button onClick={() => onChange({ taxExemptOptIn: true })} style={{
+              background: "rgba(0,200,150,0.12)", color: "var(--color-gold)",
+              border: "1px solid rgba(0,200,150,0.4)", borderRadius: "10px",
+              padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
+              fontWeight: 700, textTransform: "uppercase", cursor: "pointer",
+              alignSelf: "flex-start",
+            }}>
+              Unlock projections
+            </button>
+          </div>
+        ) : (
+          <TaxExemptPreview />
+        )}
+      </div>
+
     </div>
   );
 }
@@ -1585,66 +1335,42 @@ function Step8({ formData, onChange }) {
 // ─────────────────────────────────────────────────────────────────────────────
 const STEP_DEFS = [
   {
-    id: 0, title: "Welcome", sprint: "3b",
+    id: 0, title: "Welcome",
     showIf: () => true,
-    isValid: (_, ev) => ev === null || ev !== null, // re-entry: event already set by sidebar
+    isValid: () => true,
     component: Step0,
   },
   {
-    id: 1, title: "Pay Structure", sprint: "3c",
+    id: 1, title: "Pay Structure",
     showIf: () => true,
-    isValid: (d) => d.baseRate > 0 && d.shiftHours > 0,
+    isValid: (d) => d.baseRate > 0 && d.shiftHours > 0
+      && (d.employerPreset !== "DHL" || d.dhlTeam !== null),
     component: Step1,
   },
   {
-    id: 15, title: "DHL Team Setup", sprint: "3k",
-    showIf: (d) => d.employerPreset === "DHL",
-    isValid: (d) => d.dhlTeam !== null,
-    component: Step15,
-  },
-  {
-    id: 2, title: "Schedule", sprint: "3d",
+    id: 2, title: "Schedule",
     showIf: () => true,
     isValid: (d) => d.startDate != null,
     component: Step2,
   },
   {
-    id: 3, title: "Deductions", sprint: "3e",
+    id: 3, title: "Deductions",
     showIf: () => true,
-    isValid: () => true,
+    isValid: (d) => d.employerPreset === "DHL" || d.attendanceBucketEnabled !== null,
     skippable: true,
     component: Step3,
   },
   {
-    id: 4, title: "Tax Rates", sprint: "3f",
+    id: 4, title: "Tax Rates",
     showIf: () => true,
     isValid: (d) => d.fedRateLow > 0 && d.userState != null,
     component: Step4,
   },
   {
-    id: 5, title: "Tax Summary", sprint: "3g",
-    showIf: (_, ev) => ev !== "lost_job",
+    id: 7, title: "Wrap Up",
+    showIf: (_, ev) => ev === null || ev === "changed_jobs",
     isValid: () => true,
-    component: Step5,
-  },
-  {
-    id: 6, title: "Other Deductions", sprint: "3h",
-    showIf: (_, ev) => ev === null || ev === "changed_jobs",
-    isValid: (d) => d.employerPreset === "DHL" || d.attendanceBucketEnabled !== null,
-    skippable: true,
-    component: Step6,
-  },
-  {
-    id: 7, title: "Paycheck Buffer", sprint: "3i",
-    showIf: (_, ev) => ev === null || ev === "changed_jobs",
-    isValid: () => true,  // buffer is optional; toggle + amount are both optional
-    component: Step7,
-  },
-  {
-    id: 8, title: "Tax Exempt Gate", sprint: "3j",
-    showIf: (_, ev) => ev === null || ev === "changed_jobs",
-    isValid: (d) => d.taxExemptOptIn === true,
-    component: Step8,
+    component: StepWrapUp,
   },
 ];
 

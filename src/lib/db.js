@@ -146,6 +146,14 @@ export async function loadUserData() {
     mergedConfig.baseRate = 19.65;
   }
 
+  // ── One-time diffRate correction (weekend differential corrected to $1.75) ───
+  // Prior to 2026-04 the weekend diff was assumed to be $3.00/hr. The actual rate
+  // is $1.75/hr (weekend) and $1.50/hr (night, tracked separately via nightDiffRate).
+  // Any stored value of exactly 3.00 is the old incorrect assumption.
+  if (data.is_dhl && mergedConfig.diffRate === 3) {
+    mergedConfig.diffRate = 1.75;
+  }
+
   return {
     config:             mergedConfig,
     expenses:           migratedExpenses,
@@ -188,4 +196,22 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
   if (error) {
     console.error("Failed to save user data:", error.message);
   }
+}
+
+/**
+ * Called on every SIGNED_IN auth event. Does two things:
+ *   1. Seeds a user_data row for OAuth users (email sign-up does this explicitly;
+ *      OAuth sign-in does not — this closes that gap).
+ *   2. Syncs Google profile metadata (full_name, avatar_url) into the row so the
+ *      ProfilePanel can surface them without a separate API call.
+ * Safe to call for email/password users — no-op if no metadata present.
+ */
+export async function syncUserProfile(user) {
+  if (!user?.id) return;
+  const meta = user.user_metadata ?? {};
+  const patch = { user_id: user.id };
+  if (meta.full_name)  patch.display_name = meta.full_name;
+  if (meta.avatar_url) patch.avatar_url   = meta.avatar_url;
+  const { error } = await supabase.from("user_data").upsert(patch, { onConflict: "user_id" });
+  if (error) console.warn("syncUserProfile failed:", error.message);
 }

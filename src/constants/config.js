@@ -26,7 +26,7 @@ export const DEFAULT_CONFIG = {
   standardWeeklyHours: 40,     // standard path only — flat hours per week baseline
 
   // ── Pay structure ────────────────────────────────────────────
-  baseRate: 19.65, shiftHours: 12, diffRate: 3.00, nightDiffRate: 1.50, otThreshold: 40, otMultiplier: 1.5,
+  baseRate: 19.65, shiftHours: 12, diffRate: 1.75, nightDiffRate: 1.50, otThreshold: 40, otMultiplier: 1.5,
   commissionMonthly: 0,          // $ / month average; 0 = not a commission job
 
   // ── Deductions / benefits ────────────────────────────────────
@@ -127,14 +127,14 @@ export const DHL_PRESET = {
       days: [1, 4, 5],            // Mon, Thu, Fri
       label: "3-Day (Mon / Thu / Fri)",
       baseHours: 36,              // 3 × 12h
-      weekendShifts: 0,
+      weekendShifts: 1,           // Fri overnight earns diff only from Sat 12:00a–6:00a (½ shift)
     },
     // Long week — 4 required shifts
     long: {
       days: [2, 3, 6, 0],        // Tue, Wed, Sat, Sun
       label: "4-Day (Tue / Wed / Sat / Sun)",
       baseHours: 48,              // 4 × 12h
-      weekendShifts: 2,           // Sat + Sun earn diffRate
+      weekendShifts: 2,           // Sat + Sun earn diffRate (Fri not worked in long rotation)
     },
   },
   // While A-team works their short (3-day) week, B-team is on long (4-day).
@@ -160,7 +160,7 @@ export const DHL_PRESET = {
     bucketCap: 128,
     bucketPayoutRate: 9.825,
     baseRate: 19.65,             // DHL base hourly rate (MO, supply chain)
-    diffRate: 3.00,              // weekend shift differential
+    diffRate: 1.75,              // weekend shift differential (Sat 12:00a → Mon 6am window)
     nightDiffRate: 1.50,         // night shift differential; wizard Step 15 writes 0 for morning shift
     dhlNightShift: true,         // default assumption; wizard Step 15 overrides
     // ── Tax rate preset — MO supply chain, night shift (paystub-derived from Anthony's setup)
@@ -173,6 +173,20 @@ export const DHL_PRESET = {
     stateRateHigh: 0.040,        // long week MO effective rate
   },
 };
+
+// DHL payroll-deduction benefit options (single source of truth for setup/profile flows).
+// Count: 9 options total (8 weekly-dollar deductions + 401k rate-based deduction).
+export const DHL_BENEFIT_OPTIONS = [
+  { id: "health", label: "Health / Medical", sub: "Medical insurance premium", type: "weekly", field: "healthPremium", placeholder: "e.g. 18.50" },
+  { id: "dental", label: "Dental", sub: "Dental insurance premium", type: "weekly", field: "dentalPremium", placeholder: "e.g. 4.00" },
+  { id: "vision", label: "Vision", sub: "Vision insurance premium", type: "weekly", field: "visionPremium", placeholder: "e.g. 2.00" },
+  { id: "ltd", label: "Long-Term Disability", sub: "LTD insurance — flat weekly deduction", type: "weekly", field: "ltd", placeholder: "e.g. 2.00" },
+  { id: "std", label: "Short-Term Disability", sub: "STD insurance — flat weekly deduction", type: "weekly", field: "stdWeekly", placeholder: "e.g. 1.50" },
+  { id: "life", label: "Life / AD&D", sub: "Group life insurance premium", type: "weekly", field: "lifePremium", placeholder: "e.g. 1.00" },
+  { id: "k401", label: "401(k) / Retirement", sub: "Pre-tax contribution + employer match", type: "k401" },
+  { id: "hsa", label: "HSA", sub: "Health Savings Account — weekly contribution", type: "weekly", field: "hsaWeekly", placeholder: "e.g. 15.00" },
+  { id: "fsa", label: "FSA", sub: "Flexible Spending Account — weekly contribution", type: "weekly", field: "fsaWeekly", placeholder: "e.g. 10.00" },
+];
 
 export const FED_BRACKETS = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [Infinity, 0.24]];
 
@@ -201,6 +215,6 @@ export const EVENT_TYPES = {
   other_loss:        { label: "Other Income Loss",              color: "#888",    icon: "−" },
 };
 
-export const CATEGORY_COLORS = { Needs: "#c96060", Lifestyle: "#5B8CFF", Transfers: "#888" };
-export const CATEGORY_BG = { Needs: "#130a0a", Lifestyle: "#0b1022", Transfers: "#111" };
+export const CATEGORY_COLORS = { Needs: "#c96060", Lifestyle: "#5B8CFF" };
+export const CATEGORY_BG = { Needs: "#130a0a", Lifestyle: "#0b1022" };
 export const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];

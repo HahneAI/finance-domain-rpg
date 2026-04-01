@@ -23,6 +23,55 @@ export function dhlEmployerMatchRate(k401Rate) {
   return tier1 + tier2;
 }
 
+function weeklyBenefitDeductions(cfg) {
+  return (
+    (cfg.healthPremium || 0) +
+    (cfg.dentalPremium || 0) +
+    (cfg.visionPremium || 0) +
+    (cfg.ltd || 0) +
+    (cfg.stdWeekly || 0) +
+    (cfg.lifePremium || 0) +
+    (cfg.hsaWeekly || 0) +
+    (cfg.fsaWeekly || 0)
+  );
+}
+
+function dhlWeekendHoursForDate(date, shiftHours) {
+  const dow = date.getDay();
+  if (dow === 6 || dow === 0) return shiftHours; // Sat/Sun full shift earns diff
+  if (dow === 5) return shiftHours / 2;          // Fri night: midnight→Sat 6am only
+  return 0;
+}
+
+function dhlWeekendHoursPerDayName(dayName, shiftHours) {
+  if (dayName === "Sat" || dayName === "Sun") return shiftHours;
+  if (dayName === "Fri") return shiftHours / 2;
+  return 0;
+}
+
+function dhlTotalWeekendHours(isWeek2, shiftHours) {
+  const friday = shiftHours / 2;
+  return isWeek2 ? (friday + 2 * shiftHours) : friday;
+}
+
+function dhlWeekendHoursFromDays(dayNames, shiftHours) {
+  if (!Array.isArray(dayNames) || dayNames.length === 0) return 0;
+  return dayNames.reduce((sum, day) => sum + dhlWeekendHoursPerDayName(day, shiftHours), 0);
+}
+
+function dhlWeekendHoursFromShiftCount(count, isWeek2, shiftHours) {
+  if (!count) return 0;
+  const contributions = isWeek2 ? [shiftHours / 2, shiftHours, shiftHours] : [shiftHours / 2];
+  let remaining = count;
+  let total = 0;
+  for (const hours of contributions) {
+    if (remaining <= 0) break;
+    total += hours;
+    remaining -= 1;
+  }
+  return total;
+}
+
 export function fedTax(income) {
   let tax = 0, prev = 0;
   for (const [limit, rate] of FED_BRACKETS) { if (income <= prev) break; tax += (Math.min(income, limit) - prev) * rate; prev = limit; }
@@ -101,7 +150,8 @@ export function buildYear(cfg) {
       }
       rotation = isHighWeek ? "6-Day" : "4-Day";
       totalHours = worked.length * cfg.shiftHours;
-      weekendHours = worked.filter(w => w.getDay() === 0 || w.getDay() === 6).length * cfg.shiftHours;
+      // Weekend pay: Sat 12:00am → Mon 6:00am (Fri nights only count midnight→6am Sat)
+      weekendHours = worked.reduce((sum, day) => sum + dhlWeekendHoursForDate(day, cfg.shiftHours), 0);
     } else {
       // Standard path: flat weekly hours, no rotation concept.
       isHighWeek = false;
@@ -113,10 +163,17 @@ export function buildYear(cfg) {
 
     regularHours = Math.min(totalHours, cfg.otThreshold);
     overtimeHours = Math.max(totalHours - cfg.otThreshold, 0);
-    // Weekend diff is universal — earned by all shifts (morning and night).
-    // Night diff stacks on top of all hours when DHL + dhlNightShift is active.
-    const nightDiffBonus = (isDHL && cfg.dhlNightShift) ? totalHours * (cfg.nightDiffRate ?? 0) : 0;
-    grossPay = regularHours * cfg.baseRate + overtimeHours * cfg.baseRate * cfg.otMultiplier + weekendHours * cfg.diffRate + nightDiffBonus;
+    // OT: all differentials (weekend + night) are included in the 1.5× multiplier.
+    // Non-weekend shifts come earlier in the week; weekend (Fri+) begin at hour nonWeekendH+1,
+    // so weekend hours that push past the 40h threshold are fully at OT rate.
+    const nonWeekendH = totalHours - weekendHours;
+    const regWkndH = Math.max(0, Math.min(weekendHours, cfg.otThreshold - nonWeekendH));
+    const otWkndH  = weekendHours - regWkndH;
+    const nightDiffHr = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
+    grossPay = regularHours  * (cfg.baseRate + nightDiffHr)
+             + regWkndH      * cfg.diffRate
+             + overtimeHours * (cfg.baseRate + nightDiffHr) * cfg.otMultiplier
+             + otWkndH       * cfg.diffRate * cfg.otMultiplier;
 
     const active = idx >= cfg.firstActiveIdx;
     const has401k = active && weekEnd >= k401Start;
@@ -126,7 +183,7 @@ export function buildYear(cfg) {
       ? dhlEmployerMatchRate(cfg.k401Rate)
       : cfg.k401MatchRate;
     const k401kEmployer = has401k ? grossPay * effectiveMatchRate : 0;
-    const taxableGross = active ? grossPay - cfg.ltd - k401kEmployee : 0;
+    const taxableGross = active ? Math.max(grossPay - weeklyBenefitDeductions(cfg) - k401kEmployee, 0) : 0;
     const isTaxed = active && taxedSet.has(idx);
     weeks.push({
       idx, weekEnd, weekStart, rotation, isHighWeek,
@@ -141,7 +198,8 @@ export function buildYear(cfg) {
 
 export function computeNet(w, cfg, extraPerCheck, showExtra) {
   if (!w.active) return 0;
-  const fica = w.grossPay * cfg.ficaRate, ded = cfg.ltd + w.k401kEmployee;
+  const fica = w.grossPay * cfg.ficaRate;
+  const ded = weeklyBenefitDeductions(cfg) + w.k401kEmployee;
   if (!w.taxedBySchedule) return w.grossPay - fica - ded;
   // Use generalized rate fields; fall back to legacy w1/w2 fields for pre-wizard rows.
   const fedLow  = cfg.fedRateLow   ?? cfg.w1FedRate;
@@ -154,12 +212,18 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
 }
 
 export function projectedGross(isWeek2, cfg) {
-  const isDHL = cfg.employerPreset === "DHL";
   const ns = isWeek2 ? 6 : 4, totalH = ns * cfg.shiftHours;
   const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
-  const wknd = isWeek2 ? 2 * cfg.shiftHours : 0;
-  const nightDiff = (isDHL && cfg.dhlNightShift) ? totalH * (cfg.nightDiffRate ?? 0) : 0;
-  return reg * cfg.baseRate + ot * cfg.baseRate * cfg.otMultiplier + wknd * cfg.diffRate + nightDiff;
+  // Long (Tue–Sun) has Fri (half shift) + Sat + Sun; short (Mon/Wed/Thu/Fri) only earns half-shift diff on Fri night.
+  const wkndH = dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
+  const nonWkndH = totalH - wkndH;
+  const regWknd = Math.max(0, Math.min(wkndH, cfg.otThreshold - nonWkndH));
+  const otWknd  = wkndH - regWknd;
+  const nightDiff = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
+  return reg     * (cfg.baseRate + nightDiff)
+       + regWknd * cfg.diffRate
+       + ot      * (cfg.baseRate + nightDiff) * cfg.otMultiplier
+       + otWknd  * cfg.diffRate * cfg.otMultiplier;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -187,11 +251,10 @@ export function getEffectiveAmount(expense, weekEndDate, phaseIdx) {
 
 export function computeRemainingSpend(expenses, futureWeeks) {
   if (!futureWeeks.length) return { totalRemainingSpend: 0, avgWeeklySpend: 0, weekCount: 0 };
-  const nonTransfer = expenses.filter(e => e.category !== "Transfers");
   let total = 0;
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
-    for (const exp of nonTransfer) total += getEffectiveAmount(exp, week.weekEnd, pi);
+    for (const exp of expenses) total += getEffectiveAmount(exp, week.weekEnd, pi);
   }
   return { totalRemainingSpend: total, avgWeeklySpend: total / futureWeeks.length, weekCount: futureWeeks.length };
 }
@@ -211,7 +274,7 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
     let spend = 0;
-    for (const exp of expenses.filter(e => e.category !== "Transfers"))
+    for (const exp of expenses)
       spend += getEffectiveAmount(exp, week.weekEnd, pi);
     // ── Targeted deduction: current/future-week events hit their specific week ──
     const weekDeduction = futureEventDeductions[week.idx] ?? 0;
@@ -393,15 +456,28 @@ export function calcEventImpact(event, cfg) {
   const isDHL = cfg.employerPreset === "DHL";
   const nightDiffPerHour = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
   const isWeek2 = event.weekRotation === "6-Day" || event.weekRotation === "Week 2"; // "Week 2" kept for backward compat with stored data
-  const normalShifts = isWeek2 ? 6 : 4, normalWeekendShifts = isWeek2 ? 2 : 0;
+  const normalShifts = isWeek2 ? 6 : 4;
+  const normalWeekendHours = dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
   const baseGross = projectedGross(isWeek2, cfg);
   let grossLost = 0, grossGained = 0, hoursLostForPTO = 0;
   if (event.type === "missed_unpaid") {
     const actualShifts = Math.max(normalShifts - (event.shiftsLost || 0), 0);
     const actualHours = actualShifts * cfg.shiftHours;
-    const actualWknd = Math.max(normalWeekendShifts - (event.weekendShifts || 0), 0);
+    const hasDayResolution = Array.isArray(event.missedDays) && event.missedDays.length > 0;
+    const wkndHoursLostFromDays = hasDayResolution ? dhlWeekendHoursFromDays(event.missedDays, cfg.shiftHours) : 0;
+    const wkndHoursLostFallback = hasDayResolution
+      ? 0
+      : dhlWeekendHoursFromShiftCount(event.weekendShifts || 0, isWeek2, cfg.shiftHours);
+    const weekendHoursRemaining = Math.max(normalWeekendHours - wkndHoursLostFromDays - wkndHoursLostFallback, 0);
+    const actualWkndH = Math.min(actualHours, weekendHoursRemaining);
+    const actualNonWkndH = Math.max(actualHours - actualWkndH, 0);
+    const actualRegWkndH = Math.max(0, Math.min(actualWkndH, cfg.otThreshold - actualNonWkndH));
+    const actualOTWkndH  = actualWkndH - actualRegWkndH;
     const actualReg = Math.min(actualHours, cfg.otThreshold), actualOT = Math.max(actualHours - cfg.otThreshold, 0);
-    const actualGross = actualReg * cfg.baseRate + actualOT * cfg.baseRate * cfg.otMultiplier + actualWknd * cfg.shiftHours * cfg.diffRate + actualHours * nightDiffPerHour;
+    const actualGross = actualReg      * (cfg.baseRate + nightDiffPerHour)
+                      + actualRegWkndH * cfg.diffRate
+                      + actualOT       * (cfg.baseRate + nightDiffPerHour) * cfg.otMultiplier
+                      + actualOTWkndH  * cfg.diffRate * cfg.otMultiplier;
     grossLost = Math.max(baseGross - actualGross, 0); hoursLostForPTO = (event.shiftsLost || 0) * cfg.shiftHours;
   } else if (event.type === "pto") {
     const ptoH = event.ptoHours || 0, normalH = normalShifts * cfg.shiftHours;

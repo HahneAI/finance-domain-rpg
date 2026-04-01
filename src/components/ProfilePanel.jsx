@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { dhlEmployerMatchRate, computeNet } from "../lib/finance.js";
-import { DHL_PRESET, MONTH_FULL } from "../constants/config.js";
+import { DHL_BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, SH } from "./ui.jsx";
 
 const BENEFIT_LABELS = {
@@ -86,6 +86,10 @@ function AccountDetail({ authedUser, config, onBack }) {
   const [deleteText, setDeleteText] = useState("");
   const [deleteState, setDeleteState] = useState({ error: null, loading: false });
 
+  const [linkState, setLinkState] = useState({ loading: false, error: null });
+  const hasGoogleLinked = authedUser?.identities?.some(id => id.provider === "google") ?? false;
+  const displayName = authedUser?.user_metadata?.full_name ?? null;
+
   async function handleChangeEmail(e) {
     e.preventDefault();
     const trimmed = newEmail.trim();
@@ -162,6 +166,16 @@ function AccountDetail({ authedUser, config, onBack }) {
     setGlobalSignoutState({ error: null, success: "Signed out from all devices.", loading: false });
   }
 
+  async function handleLinkGoogle() {
+    setLinkState({ loading: true, error: null });
+    const { error } = await supabase.auth.linkIdentity({
+      provider: "google",
+      options: { redirectTo: window.location.origin },
+    });
+    // On success the browser redirects — only reaches here on error.
+    if (error) setLinkState({ loading: false, error: error.message });
+  }
+
   async function handleDeleteAccount() {
     setDeleteState({ error: null, loading: true });
     const { data: sessionData } = await supabase.auth.getSession();
@@ -196,12 +210,43 @@ function AccountDetail({ authedUser, config, onBack }) {
     <>
       <BackBar onBack={onBack} title="Account" />
       <DetailCard>
+        {displayName && <DetailRow label="Name" value={displayName} />}
         <DetailRow label="Email" value={authedUser?.email ?? "—"} />
         <DetailRow label="Setup" last value={
           <span style={{ fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 10px", background: setupBg, color: setupColor, border: `1px solid ${setupBorder}`, borderRadius: "12px" }}>
             {setupLabel}
           </span>
         } />
+      </DetailCard>
+
+      <DetailCard>
+        <div style={{ padding: "13px 16px" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "10px" }}>Connected Accounts</div>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {authedUser?.identities?.some(id => id.provider === "email") && (
+              <span style={{ fontSize: "11px", padding: "3px 10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "20px", color: "var(--color-text-secondary)" }}>
+                Email / Password
+              </span>
+            )}
+            {hasGoogleLinked && (
+              <span style={{ fontSize: "11px", padding: "3px 10px", background: "rgba(66,133,244,0.1)", border: "1px solid rgba(66,133,244,0.28)", borderRadius: "20px", color: "#4285F4" }}>
+                Google
+              </span>
+            )}
+          </div>
+          {!hasGoogleLinked && (
+            <button
+              onClick={handleLinkGoogle}
+              disabled={linkState.loading}
+              style={{ marginTop: "12px", padding: "8px 14px", background: "transparent", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "12px", cursor: linkState.loading ? "default" : "pointer" }}
+            >
+              {linkState.loading ? "Redirecting to Google…" : "Link Google Account"}
+            </button>
+          )}
+          {linkState.error && (
+            <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-red)" }}>{linkState.error}</div>
+          )}
+        </div>
       </DetailCard>
 
       <DetailCard>
@@ -473,21 +518,44 @@ function BenefitsDetail({ config, setConfig, onBack }) {
   const isDHL     = config.employerPreset === "DHL";
   const has401k   = config.k401Rate > 0;
   const matchRate = isDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
-  const enrolled  = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
+  const enrolledConfig = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
 
   const [editing, setEditing]   = useState(false);
+  const [selectedBenefits, setSelectedBenefits] = useState(new Set(enrolledConfig));
   const [k401Rate, setK401Rate] = useState(String(config.k401Rate ?? ""));
   const [k401Match, setK401Match] = useState(String(config.k401MatchRate ?? ""));
   const [k401Start, setK401Start] = useState(config.k401StartDate ?? "");
+  const [benefitsStartDate, setBenefitsStartDate] = useState(config.benefitsStartDate ?? "");
+  const [weeklyValues, setWeeklyValues] = useState(
+    DHL_BENEFIT_OPTIONS
+      .filter(b => b.type === "weekly")
+      .reduce((acc, b) => ({ ...acc, [b.field]: String(config[b.field] ?? "") }), {})
+  );
 
   function handleSave() {
+    const nextSelected = [...selectedBenefits];
+    const weeklyPatch = DHL_BENEFIT_OPTIONS
+      .filter(b => b.type === "weekly")
+      .reduce((acc, b) => ({ ...acc, [b.field]: parseFloat(weeklyValues[b.field]) || 0 }), {});
     setConfig(prev => ({
       ...prev,
       k401Rate:      parseFloat(k401Rate)  || 0,
       k401MatchRate: parseFloat(k401Match) || 0,
-      k401StartDate: k401Start || prev.k401StartDate,
+      k401StartDate: k401Start || null,
+      benefitsStartDate: benefitsStartDate || null,
+      selectedBenefits: nextSelected,
+      ...weeklyPatch,
     }));
     setEditing(false);
+  }
+
+  function toggleBenefit(id) {
+    setSelectedBenefits(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   return (
@@ -524,6 +592,34 @@ function BenefitsDetail({ config, setConfig, onBack }) {
       ) : (
         <DetailCard>
           <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+              Payroll-Deduction Benefits ({DHL_BENEFIT_OPTIONS.length})
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+              {DHL_BENEFIT_OPTIONS.map((benefit) => (
+                <button
+                  key={benefit.id}
+                  onClick={() => toggleBenefit(benefit.id)}
+                  style={{
+                    fontSize: "10px",
+                    letterSpacing: "1px",
+                    textTransform: "uppercase",
+                    padding: "6px 8px",
+                    borderRadius: "8px",
+                    border: `1px solid ${selectedBenefits.has(benefit.id) ? "rgba(76,175,125,0.32)" : "var(--color-border-subtle)"}`,
+                    background: selectedBenefits.has(benefit.id) ? "rgba(76,175,125,0.10)" : "var(--color-bg-raised)",
+                    color: selectedBenefits.has(benefit.id) ? "var(--color-green)" : "var(--color-text-secondary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {selectedBenefits.has(benefit.id) ? "✓ " : ""}{BENEFIT_LABELS[benefit.id] ?? benefit.id}
+                </button>
+              ))}
+            </div>
+            <div>
+              <label style={lS}>Benefits Start Date</label>
+              <input type="date" value={benefitsStartDate} onChange={e => setBenefitsStartDate(e.target.value)} style={iS} />
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
               <div>
                 <label style={lS}>Employee % (decimal)</label>
@@ -539,6 +635,22 @@ function BenefitsDetail({ config, setConfig, onBack }) {
                 <label style={lS}>Start Date</label>
                 <input type="date" value={k401Start} onChange={e => setK401Start(e.target.value)} style={iS} />
               </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly").map((benefit) => (
+                <div key={benefit.id}>
+                  <label style={lS}>{benefit.label} ($ / week)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={weeklyValues[benefit.field]}
+                    placeholder={benefit.placeholder}
+                    onChange={e => setWeeklyValues(v => ({ ...v, [benefit.field]: e.target.value }))}
+                    style={iS}
+                  />
+                </div>
+              ))}
             </div>
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={() => setEditing(false)} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
@@ -556,14 +668,14 @@ function BenefitsDetail({ config, setConfig, onBack }) {
         )}
         <DetailRow
           label="Enrolled"
-          value={enrolled.length > 0 ? `${enrolled.length} plan${enrolled.length !== 1 ? "s" : ""}` : "None enrolled"}
-          valueColor={enrolled.length > 0 ? undefined : "var(--color-text-disabled)"}
-          last={enrolled.length === 0}
+          value={enrolledConfig.length > 0 ? `${enrolledConfig.length} plan${enrolledConfig.length !== 1 ? "s" : ""}` : "None enrolled"}
+          valueColor={enrolledConfig.length > 0 ? undefined : "var(--color-text-disabled)"}
+          last={enrolledConfig.length === 0}
         />
-        {enrolled.length > 0 && (
+        {enrolledConfig.length > 0 && (
           <div style={{ padding: "10px 16px 14px" }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-              {enrolled.map(id => (
+              {enrolledConfig.map(id => (
                 <span key={id} style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(76,175,125,0.08)", color: "var(--color-green)", border: "1px solid rgba(76,175,125,0.2)", borderRadius: "12px" }}>
                   {BENEFIT_LABELS[id] ?? id}
                 </span>
@@ -594,7 +706,7 @@ function PreferencesDetail({ config, onBack }) {
         />
       </DetailCard>
       <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
-        Buffer and tax settings can be adjusted in the Income panel or via Life Events.
+        Buffer is managed in the Income panel. Tax settings are managed in Account → Tax Plan or via Life Events.
       </div>
     </>
   );
@@ -607,6 +719,7 @@ function TaxPlanDetail({ config, setConfig, allWeeks, taxDerived, showExtra, set
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gN = w => computeNet(w, config, extraPerCheck, showExtra);
+  const [taxDraft, setTaxDraft] = useState(null);
 
   const toggleWeek = (idx) => setConfig(prev => {
     const s = new Set(prev.taxedWeeks);
@@ -629,11 +742,43 @@ function TaxPlanDetail({ config, setConfig, allWeeks, taxDerived, showExtra, set
         <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)", color: showExtra ? "var(--color-gold)" : "#aaa", border: "1px solid " + (showExtra ? "var(--color-gold)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</button>
       </div>
 
+      <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", gap: "10px" }}>
+          <SH>Tax Strategy & Planning</SH>
+          {taxDraft === null ? (
+            <button onClick={() => setTaxDraft({
+              fedStdDeduction: config.fedStdDeduction,
+              moFlatRate: config.moFlatRate,
+              targetOwedAtFiling: config.targetOwedAtFiling,
+              firstActiveIdx: config.firstActiveIdx,
+            })} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Edit Tax Plan</button>
+          ) : (
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => { setConfig(prev => ({ ...prev, ...taxDraft })); setTaxDraft(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</button>
+              <button onClick={() => setTaxDraft(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+            </div>
+          )}
+        </div>
+
+        {taxDraft === null ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "13px" }}>
+            {[{ l: "Federal Std Deduction", v: f(config.fedStdDeduction) }, ...(config.userState ? [] : [{ l: "State Rate (fallback)", v: `${(config.moFlatRate * 100).toFixed(1)}%` }]), { l: "Target Owed at Filing", v: f(config.targetOwedAtFiling) }, { l: "First Active Week Index", v: `idx ${config.firstActiveIdx}` }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "#777" }}>{r.l}</span><span style={{ fontWeight: "bold", color: "var(--color-text-primary)" }}>{r.v}</span></div>)}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+            <div><label style={lS}>Federal Std Deduction ($)</label><input type="number" step="100" value={taxDraft.fedStdDeduction} onChange={e => setTaxDraft(v => ({ ...v, fedStdDeduction: parseFloat(e.target.value) || 0 }))} style={iS} /></div>
+            {!config.userState && <div><label style={lS}>State Rate (fallback)</label><input type="number" step="0.001" value={taxDraft.moFlatRate} onChange={e => setTaxDraft(v => ({ ...v, moFlatRate: parseFloat(e.target.value) || 0 }))} style={iS} /></div>}
+            <div><label style={lS}>Target Owed at Filing ($)</label><input type="number" step="100" value={taxDraft.targetOwedAtFiling} onChange={e => setTaxDraft(v => ({ ...v, targetOwedAtFiling: parseFloat(e.target.value) || 0 }))} style={iS} /></div>
+            <div><label style={lS}>First Active Week Index</label><input type="number" step="1" value={taxDraft.firstActiveIdx} onChange={e => setTaxDraft(v => ({ ...v, firstActiveIdx: parseFloat(e.target.value) || 0 }))} style={iS} /></div>
+          </div>
+        )}
+      </div>
+
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "12px", marginBottom: "20px" }}>
-        <Card label="Full Year Fed Liability" val={f(fedLiability)} sub={`On ${f(fedAGI)} AGI`} color="var(--color-red)" size="20px" />
-        <Card label="Full Year MO Liability" val={f(moLiability)} sub="4.7% flat" color="var(--color-gold)" size="20px" />
-        <Card label="FICA (Always Paid)" val={f(ficaTotal)} sub="7.65% every check" color="#888" size="20px" />
+        <Card label="Full Year Fed Liability" val={f(fedLiability)} rawVal={fedLiability} sub={`On ${f(fedAGI)} AGI`} color="var(--color-red)" size="20px" />
+        <Card label="Full Year MO Liability" val={f(moLiability)} rawVal={moLiability} sub="4.7% flat" color="var(--color-gold)" size="20px" />
+        <Card label="FICA (Always Paid)" val={f(ficaTotal)} rawVal={ficaTotal} sub="7.65% every check" color="#888" size="20px" />
       </div>
 
       {/* Tax gap analysis */}

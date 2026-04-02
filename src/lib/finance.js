@@ -82,9 +82,66 @@ function dhlWeekendHoursFromDays(dayNames, shiftHours) {
   return dayNames.reduce((sum, day) => sum + dhlWeekendHoursPerDayName(day, shiftHours), 0);
 }
 
-function dhlWeekendHoursFromShiftCount(count, isWeek2, shiftHours) {
-  if (!count) return 0;
-  const contributions = isWeek2 ? [shiftHours / 2, shiftHours, shiftHours] : [shiftHours / 2];
+// All day indexes use JS Date convention: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+// This matches DHL_PRESET.rotation.days and Date.getDay() throughout.
+const CUSTOM_LONG_DAY_INDEXES = [2, 3, 4, 5, 6, 0]; // Tue/Wed/Thu/Fri/Sat/Sun (Anthony 6-Day)
+const CUSTOM_SHORT_DAY_INDEXES = [1, 3, 4, 5];       // Mon/Wed/Thu/Fri (Anthony 4-Day)
+const WEEKEND_INDEX_ORDER = [5, 6, 0]; // Fri night (½) → Sat → Sun (JS Date convention)
+
+function dhlWeekendHoursPerDayIndex(idx, shiftHours) {
+  // JS Date convention: 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+  if (idx === 5) return shiftHours / 2;  // Friday overnight → Sat 6a earns half diff
+  if (idx === 6) return shiftHours;      // Saturday earns full diff
+  if (idx === 0) return shiftHours;      // Sunday earns full diff
+  return 0;
+}
+
+function getStandardDhlOtDay(isLongWeek, cfg) {
+  if (!DHL_PRESET.requiredOtShifts) return null;
+  const meta = isLongWeek ? DHL_PRESET.rotation.long : DHL_PRESET.rotation.short;
+  if (!isLongWeek && cfg.dhlOtOnWeekend) return meta.otDefaults?.weekend ?? 6;
+  return meta.otDefaults?.weekday ?? (isLongWeek ? 1 : 2);
+}
+
+function buildStandardDhlDayIndexes(cfg, isLongWeek) {
+  const meta = isLongWeek ? DHL_PRESET.rotation.long : DHL_PRESET.rotation.short;
+  const indexes = [...meta.days];
+  const otDay = getStandardDhlOtDay(isLongWeek, cfg);
+  if (otDay != null && !indexes.includes(otDay)) indexes.push(otDay);
+  return indexes;
+}
+
+function getDhlPlannedDayIndexes(cfg, isLongWeek) {
+  if (cfg.dhlCustomSchedule) {
+    return (isLongWeek ? CUSTOM_LONG_DAY_INDEXES : CUSTOM_SHORT_DAY_INDEXES).slice();
+  }
+  return buildStandardDhlDayIndexes(cfg, isLongWeek);
+}
+
+function getDhlRotationLabel(isLongWeek) {
+  const meta = isLongWeek ? DHL_PRESET.rotation.long : DHL_PRESET.rotation.short;
+  return meta.displayName || meta.label || (isLongWeek ? "Long Week" : "Short Week");
+}
+
+function getDhlPlannedPattern(cfg, isLongWeek) {
+  const indexes = getDhlPlannedDayIndexes(cfg, isLongWeek);
+  const totalHours = indexes.length * cfg.shiftHours;
+  const weekendHours = indexes.reduce((sum, idx) => sum + dhlWeekendHoursPerDayIndex(idx, cfg.shiftHours), 0);
+  const rotationLabel = getDhlRotationLabel(isLongWeek);
+  const requiredOtShifts = cfg.dhlCustomSchedule ? 0 : (DHL_PRESET.requiredOtShifts ?? 0);
+  return { indexes, totalHours, weekendHours, rotationLabel, requiredOtShifts };
+}
+
+function dhlWeekendHoursFromShiftCount(count, isWeek2, cfg) {
+  if (!count || cfg.employerPreset !== "DHL") return 0;
+  const indexes = getDhlPlannedDayIndexes(cfg, isWeek2);
+  const contributions = [];
+  for (const day of WEEKEND_INDEX_ORDER) {
+    if (indexes.includes(day)) {
+      const hours = dhlWeekendHoursPerDayIndex(day, cfg.shiftHours);
+      if (hours > 0) contributions.push(hours);
+    }
+  }
   let remaining = count;
   let total = 0;
   for (const hours of contributions) {
@@ -140,7 +197,7 @@ export function getStateConfig(userState) {
 // Note: cfg.dhlNightShift is stored but NOT used here — weekend diff (diffRate)
 //   applies equally to all shifts. Night differential is tracked separately.
 export function buildYear(cfg) {
-  const weeks = [], k401Start = new Date(cfg.k401StartDate), taxedSet = new Set(cfg.taxedWeeks);
+  const weeks = [], k401Start = cfg.k401StartDate ? new Date(cfg.k401StartDate) : null, taxedSet = new Set(cfg.taxedWeeks);
   const isDHL = cfg.employerPreset === "DHL";
   const benefitsStart = parseIsoDate(cfg.benefitsStartDate);
   // Derive loop bounds from FISCAL_YEAR_START so the range stays in sync with the
@@ -152,18 +209,21 @@ export function buildYear(cfg) {
     const weekEnd = new Date(d), weekStart = new Date(d);
     weekStart.setDate(weekStart.getDate() - 7);
 
-    let totalHours, regularHours, overtimeHours, weekendHours, grossPay, worked, rotation, isHighWeek;
+    let totalHours, regularHours, overtimeHours, weekendHours, grossPay, worked, rotation, rotationLabel = null, requiredOtShifts = 0, isHighWeek, adminRotationTag = null;
 
     if (isDHL) {
-      // DHL: alternating long (6-day) / short (4-day) from firstActiveIdx.
+      // DHL: alternating long (preset) / short from firstActiveIdx.
       // (offset%2+2)%2 handles negative offsets (pre-employment weeks) correctly.
       const offset = ((idx - cfg.firstActiveIdx) % 2 + 2) % 2;
       isHighWeek = offset === 0 ? Boolean(cfg.startingWeekIsLong) : !Boolean(cfg.startingWeekIsLong);
       const days = Array.from({ length: 7 }, (_, i) => { const x = new Date(weekStart); x.setDate(x.getDate() + i); return x; });
-      if (cfg.dhlTeam && !cfg.dhlCustomSchedule) {
-        // Standard preset rotation — days from DHL_PRESET (Team A or B, picked in wizard Step 15)
-        const rotDays = isHighWeek ? DHL_PRESET.rotation.long.days : DHL_PRESET.rotation.short.days;
-        worked = rotDays.map(d => days[d]);
+      rotation = isHighWeek ? "6-Day" : "4-Day";
+      adminRotationTag = rotation;
+      if (!cfg.dhlCustomSchedule) {
+        const pattern = getDhlPlannedPattern(cfg, isHighWeek);
+        worked = pattern.indexes.map(d => days[d]);
+        rotationLabel = pattern.rotationLabel;
+        requiredOtShifts = pattern.requiredOtShifts;
       } else {
         // Anthony's custom schedule: standard B-team days + scheduled OT baked in.
         // Long:  Tue/Wed/Sat/Sun (standard) + Thu/Fri (2 OT) = Tue–Sun (6-Day, 72h)
@@ -171,8 +231,8 @@ export function buildYear(cfg) {
         worked = isHighWeek
           ? [days[1], days[2], days[3], days[4], days[5], days[6]]  // 6-day: Tue–Sun
           : [days[0], days[2], days[3], days[4]];                    // 4-day: Mon/Wed/Thu/Fri
+        rotationLabel = getDhlRotationLabel(isHighWeek);
       }
-      rotation = isHighWeek ? "6-Day" : "4-Day";
       totalHours = worked.length * cfg.shiftHours;
       // Weekend pay: Sat 12:00am → Mon 6:00am (Fri nights only count midnight→6am Sat)
       weekendHours = worked.reduce((sum, day) => sum + dhlWeekendHoursForDate(day, cfg.shiftHours), 0);
@@ -181,6 +241,8 @@ export function buildYear(cfg) {
       isHighWeek = false;
       worked = [];
       rotation = "Standard";
+      rotationLabel = "Standard";
+      adminRotationTag = rotation;
       totalHours = cfg.standardWeeklyHours ?? 40;
       weekendHours = 0;
     }
@@ -202,7 +264,8 @@ export function buildYear(cfg) {
     const active = idx >= cfg.firstActiveIdx;
     const benefitsActive = !benefitsStart || weekEnd >= benefitsStart;
     const benefitsDeduction = benefitsActive ? weeklyBenefitDeductions(cfg) : 0;
-    const has401k = active && weekEnd >= k401Start;
+    const k401ActivationDate = k401Start ?? benefitsStart;
+    const has401k = active && (!k401ActivationDate || weekEnd >= k401ActivationDate);
     const k401kEmployee = has401k ? grossPay * cfg.k401Rate : 0;
     // DHL match is formula-driven (tiered); other employers use stored flat k401MatchRate.
     const effectiveMatchRate = cfg.employerPreset === "DHL"
@@ -211,8 +274,9 @@ export function buildYear(cfg) {
     const k401kEmployer = has401k ? grossPay * effectiveMatchRate : 0;
     const taxableGross = active ? Math.max(grossPay - benefitsDeduction - k401kEmployee, 0) : 0;
     const isTaxed = active && taxedSet.has(idx);
+    if (!adminRotationTag) adminRotationTag = rotation;
     weeks.push({
-      idx, weekEnd, weekStart, rotation, isHighWeek,
+      idx, weekEnd, weekStart, rotation, isHighWeek, adminRotationTag,
       workedDayNames: worked.map(w => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][w.getDay()]),
       totalHours, regularHours, overtimeHours, weekendHours,
       grossPay: active ? grossPay : 0,
@@ -224,6 +288,8 @@ export function buildYear(cfg) {
       taxedBySchedule: isTaxed,
       benefitsDeduction,
       benefitsActive,
+      rotationLabel: rotationLabel || rotation,
+      requiredOtShifts,
     });
     d.setDate(d.getDate() + 7); idx++;
   }
@@ -248,10 +314,17 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
 }
 
 export function projectedGross(isWeek2, cfg) {
-  const ns = isWeek2 ? 6 : 4, totalH = ns * cfg.shiftHours;
+  let totalH, wkndH;
+  if (cfg.employerPreset === "DHL") {
+    const pattern = getDhlPlannedPattern(cfg, isWeek2);
+    totalH = pattern.totalHours;
+    wkndH = pattern.weekendHours;
+  } else {
+    const ns = isWeek2 ? 6 : 4;
+    totalH = ns * cfg.shiftHours;
+    wkndH = dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
+  }
   const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
-  // Long (Tue–Sun) has Fri (half shift) + Sat + Sun; short (Mon/Wed/Thu/Fri) only earns half-shift diff on Fri night.
-  const wkndH = dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
   const nonWkndH = totalH - wkndH;
   const regWknd = Math.max(0, Math.min(wkndH, cfg.otThreshold - nonWkndH));
   const otWknd  = wkndH - regWknd;
@@ -294,6 +367,11 @@ export function computeRemainingSpend(expenses, futureWeeks) {
     for (const exp of expenses) total += getEffectiveAmount(exp, week.weekEnd, pi);
   }
   return { totalRemainingSpend: total, avgWeeklySpend: total / futureWeeks.length, weekCount: futureWeeks.length };
+}
+
+export function isFutureWeek(weekEndIso, todayIso) {
+  if (!weekEndIso || !todayIso) return false;
+  return weekEndIso > todayIso;
 }
 
 export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expenses, logNetLost, logNetGained, futureEventDeductions = {}) {
@@ -492,9 +570,10 @@ export function computeBucketModel(logs, cfg) {
 export function calcEventImpact(event, cfg) {
   const isDHL = cfg.employerPreset === "DHL";
   const nightDiffPerHour = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
-  const isWeek2 = event.weekRotation === "6-Day" || event.weekRotation === "Week 2"; // "Week 2" kept for backward compat with stored data
-  const normalShifts = isWeek2 ? 6 : 4;
-  const normalWeekendHours = dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
+  const isWeek2 = ["6-Day", "Week 2", "Long Week"].includes(event.weekRotation);
+  const plannedPattern = isDHL ? getDhlPlannedPattern(cfg, isWeek2) : null;
+  const normalShifts = plannedPattern ? plannedPattern.indexes.length : (isWeek2 ? 6 : 4);
+  const normalWeekendHours = plannedPattern ? plannedPattern.weekendHours : dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
   const baseGross = projectedGross(isWeek2, cfg);
   let grossLost = 0, grossGained = 0, hoursLostForPTO = 0;
   if (event.type === "missed_unpaid") {
@@ -504,7 +583,7 @@ export function calcEventImpact(event, cfg) {
     const wkndHoursLostFromDays = hasDayResolution ? dhlWeekendHoursFromDays(event.missedDays, cfg.shiftHours) : 0;
     const wkndHoursLostFallback = hasDayResolution
       ? 0
-      : dhlWeekendHoursFromShiftCount(event.weekendShifts || 0, isWeek2, cfg.shiftHours);
+      : dhlWeekendHoursFromShiftCount(event.weekendShifts || 0, isWeek2, cfg);
     const weekendHoursRemaining = Math.max(normalWeekendHours - wkndHoursLostFromDays - wkndHoursLostFallback, 0);
     const actualWkndH = Math.min(actualHours, weekendHoursRemaining);
     const actualNonWkndH = Math.max(actualHours - actualWkndH, 0);
@@ -537,7 +616,8 @@ export function calcEventImpact(event, cfg) {
   const effectiveTaxRate = cfg.ficaRate + withholdingRate;
   const netLost = grossLost * (1 - effectiveTaxRate), netGained = grossGained * (1 - effectiveTaxRate);
   const weekDate = event.weekEnd ? new Date(event.weekEnd) : null;
-  const affectsK401 = weekDate && weekDate >= new Date(cfg.k401StartDate);
+  const k401ActivationDate = cfg.k401StartDate ? new Date(cfg.k401StartDate) : parseIsoDate(cfg.benefitsStartDate);
+  const affectsK401 = weekDate && (!k401ActivationDate || weekDate >= k401ActivationDate);
   return {
     grossLost, grossGained, netLost, netGained, baseGross, hoursLostForPTO,
     bucketHoursDeducted: event.type === "missed_unapproved" ? (event.hoursLost || 0) : 0,
@@ -547,3 +627,5 @@ export function calcEventImpact(event, cfg) {
     k401kMatchGained: affectsK401 ? grossGained * (cfg.employerPreset === "DHL" ? dhlEmployerMatchRate(cfg.k401Rate) : cfg.k401MatchRate) : 0
   };
 }
+
+

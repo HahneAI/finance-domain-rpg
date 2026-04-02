@@ -19,9 +19,10 @@ import {
   getStateConfig,
   loanRunwayStartDate,
   dhlEmployerMatchRate,
+  isFutureWeek,
 } from '../../lib/finance.js'
 import { STATE_TAX_TABLE } from '../../constants/stateTaxTable.js'
-import { DEFAULT_CONFIG } from '../../constants/config.js'
+import { DEFAULT_CONFIG, DHL_PRESET } from '../../constants/config.js'
 
 // DHL_CONFIG: used for tests that exercise DHL rotation behavior (6-Day/4-Day alternation).
 // startingWeekIsLong=false with firstActiveIdx=7 produces the same even=long pattern
@@ -30,7 +31,20 @@ const DHL_CONFIG = {
   ...DEFAULT_CONFIG,
   employerPreset: "DHL",
   startingWeekIsLong: false,  // false + firstActiveIdx=7 → even idx = long (6-Day)
+  dhlTeam: 'B',
+  dhlCustomSchedule: true,
   // Explicit 401k values — test must not depend on DEFAULT_CONFIG personal values
+  k401Rate: 0.06,
+  k401MatchRate: 0.05,
+  k401StartDate: "2026-05-15",
+}
+
+const DHL_STANDARD_CONFIG = {
+  ...DEFAULT_CONFIG,
+  employerPreset: "DHL",
+  dhlTeam: 'B',
+  dhlCustomSchedule: false,
+  startingWeekIsLong: DHL_PRESET.teams.B.startsLong,
   k401Rate: 0.06,
   k401MatchRate: 0.05,
   k401StartDate: "2026-05-15",
@@ -169,6 +183,13 @@ describe('buildYear', () => {
     expect(fourDay.weekendHours).toBe(6)
   })
 
+  it('custom DHL schedule weeks do not require explicit OT confirmations', () => {
+    const sixDay = weeks.find(w => w.rotation === '6-Day')
+    const fourDay = weeks.find(w => w.rotation === '4-Day')
+    expect(sixDay.requiredOtShifts).toBe(0)
+    expect(fourDay.requiredOtShifts).toBe(0)
+  })
+
   it('6-Day active weeks have higher grossPay than 4-Day active weeks', () => {
     const sixDay = weeks.find(w => w.rotation === '6-Day' && w.active)
     const fourDay = weeks.find(w => w.rotation === '4-Day' && w.active)
@@ -225,27 +246,31 @@ describe('buildYear', () => {
     lateActive.forEach(w => expect(w.k401kEmployee).toBeGreaterThan(0))
   })
 
-  it('standard DHL preset rotation uses DHL_PRESET day arrays when dhlTeam set and !dhlCustomSchedule', () => {
-    // This path covers lines 76-77: the dhlTeam && !dhlCustomSchedule branch in buildYear()
+  it('standard DHL preset rotation schedules 5-day long weeks and enforces required OT even without dhlTeam', () => {
     const presetConfig = {
-      ...DHL_CONFIG,
-      dhlTeam: 'A',
-      dhlCustomSchedule: false,
-      startingWeekIsLong: true,  // Team A starts long
+      ...DHL_STANDARD_CONFIG,
+      dhlTeam: null,                 // new hires may not have picked a team yet
+      startingWeekIsLong: true,
     }
     const presetWeeks = buildYear(presetConfig)
-    expect(presetWeeks).toHaveLength(53)
-    // Active weeks should have non-zero gross pay
     const activeWeeks = presetWeeks.filter(w => w.active)
     expect(activeWeeks.length).toBeGreaterThan(0)
-    activeWeeks.forEach(w => expect(w.grossPay).toBeGreaterThan(0))
-    // Standard preset long week (DHL_PRESET short = Mon/Thu/Fri = 3 shifts = 36h)
-    // short and long weeks should produce different grossPay amounts
-    const firstLong  = activeWeeks.find(w => w.rotation === '6-Day')
-    const firstShort = activeWeeks.find(w => w.rotation === '4-Day')
-    if (firstLong && firstShort) {
-      expect(firstLong.grossPay).toBeGreaterThan(firstShort.grossPay)
-    }
+    const longWeek  = activeWeeks.find(w => w.rotation === '6-Day')
+    const shortWeek = activeWeeks.find(w => w.rotation === '4-Day')
+    expect(longWeek.totalHours).toBe((presetConfig.shiftHours || 12) * 5)
+    expect(shortWeek.totalHours).toBe((presetConfig.shiftHours || 12) * 4)
+    expect(longWeek.requiredOtShifts).toBe(DHL_PRESET.requiredOtShifts)
+    expect(shortWeek.requiredOtShifts).toBe(DHL_PRESET.requiredOtShifts)
+  })
+
+  it('assigns Short/Long rotation labels and admin tags for standard DHL users', () => {
+    const weeks = buildYear(DHL_STANDARD_CONFIG)
+    const longWeek = weeks.find(w => w.active && w.rotation === '6-Day')
+    const shortWeek = weeks.find(w => w.active && w.rotation === '4-Day')
+    expect(longWeek.rotationLabel).toBe('Long Week')
+    expect(shortWeek.rotationLabel).toBe('Short Week')
+    expect(longWeek.adminRotationTag).toBe('6-Day')
+    expect(shortWeek.adminRotationTag).toBe('4-Day')
   })
 })
 
@@ -570,6 +595,34 @@ describe('computeGoalTimeline', () => {
     if (result[0].eW !== null && result[1].sW !== null) {
       expect(result[1].sW).toBeGreaterThanOrEqual(Math.floor(result[0].eW))
     }
+  })
+
+  it('does not double-count future event deductions when nets stay raw', () => {
+    const goals = [{ id: 'g1', target: 500, label: 'Catch-up' }]
+    const futureWeeks = [
+      { idx: 1, weekEnd: new Date(2026, 0, 7) },
+      { idx: 2, weekEnd: new Date(2026, 0, 14) },
+    ]
+    const weeklyNets = [500, 500]
+    const futureEventDeductions = { 2: 200 }
+    const result = computeGoalTimeline(goals, futureWeeks, weeklyNets, [], 200, 0, futureEventDeductions)
+    expect(result[0].eW).not.toBeNull()
+    expect(result[0].eW).toBeCloseTo(1, 3)
+  })
+})
+
+describe('isFutureWeek', () => {
+  it('returns false when week end matches today', () => {
+    expect(isFutureWeek('2026-04-01', '2026-04-01')).toBe(false)
+  })
+
+  it('returns true when week end is after today', () => {
+    expect(isFutureWeek('2026-04-08', '2026-04-01')).toBe(true)
+  })
+
+  it('handles missing values gracefully', () => {
+    expect(isFutureWeek(null, '2026-04-01')).toBe(false)
+    expect(isFutureWeek('2026-04-02', null)).toBe(false)
   })
 })
 
@@ -945,6 +998,12 @@ describe('calcEventImpact', () => {
 
     it('applies FICA + w2 (6-Day) withholding rates on taxed 6-Day weeks', () => {
       const event = makeEvent({ type: 'other_loss', weekRotation: '6-Day', weekIdx: 8, weekEnd: '2026-02-23', amount: 100 })
+      const effectiveRate = cfg.ficaRate + cfg.w2FedRate + cfg.w2StateRate
+      expect(calcEventImpact(event, cfg).netLost).toBeCloseTo(100 * (1 - effectiveRate))
+    })
+
+    it('"Long Week" rotation strings use high-week withholding', () => {
+      const event = makeEvent({ type: 'other_loss', weekRotation: 'Long Week', weekIdx: 8, weekEnd: '2026-02-23', amount: 100 })
       const effectiveRate = cfg.ficaRate + cfg.w2FedRate + cfg.w2StateRate
       expect(calcEventImpact(event, cfg).netLost).toBeCloseTo(100 * (1 - effectiveRate))
     })

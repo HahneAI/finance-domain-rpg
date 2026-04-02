@@ -88,9 +88,17 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone }) {
 
   async function handleOAuth(provider) {
     setError(null);
+
+    const options = { redirectTo: window.location.origin };
+    if (provider === "google" && isSignUp) {
+      // Force the Google account chooser when we're on the Create Account tab,
+      // otherwise Google silently reuses whatever account already has access.
+      options.queryParams = { prompt: "select_account" };
+    }
+
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: window.location.origin },
+      options,
     });
     if (oauthError) setError(oauthError.message);
   }

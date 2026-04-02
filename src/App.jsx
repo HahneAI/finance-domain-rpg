@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso } from "./lib/finance.js";
+import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek } from "./lib/finance.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile } from "./lib/db.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -215,11 +215,29 @@ export default function App() {
 
   const currentView = viewStack[viewStack.length - 1];
   const canGoBack = viewStack.length > 1;
+  const mainContentRef = useRef(null);
+
+  const jumpToPanelTop = () => {
+    const scrollToTop = () => {
+      const container = mainContentRef.current;
+      if (container) {
+        if (typeof container.scrollTo === "function") container.scrollTo({ top: 0, left: 0, behavior: "auto" });
+        else container.scrollTop = 0;
+      }
+      if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      }
+    };
+
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(scrollToTop);
+    else scrollToTop();
+  };
 
   // Push a panel onto the stack (used by tiles and within-panel navigation)
   const navigate = (key) => {
     setViewStack(prev => [...prev, key]);
     setDrawerOpen(false);
+    jumpToPanelTop();
   };
 
   // Pop back one level (back arrow)
@@ -233,6 +251,7 @@ export default function App() {
   const navigateDirect = (key) => {
     setViewStack(key === "home" ? ["home"] : ["home", key]);
     setDrawerOpen(false);
+    jumpToPanelTop();
   };
 
   // ── Auth: check existing session on mount, subscribe to changes ──
@@ -371,7 +390,8 @@ export default function App() {
       const grossDelta = (i.grossGained || 0) - (i.grossLost || 0);
       if (grossDelta !== 0) grossDeltaByWeek[idx] = (grossDeltaByWeek[idx] || 0) + grossDelta;
 
-      if (e.weekEnd && e.weekEnd >= today && i.netLost) {
+      const weekEndIso = typeof e.weekEnd === "string" ? e.weekEnd : (e.weekEnd ? toLocalIso(e.weekEnd) : null);
+      if (weekEndIso && isFutureWeek(weekEndIso, today) && i.netLost) {
         futureEventDeductionsByWeek[idx] = (futureEventDeductionsByWeek[idx] || 0) + i.netLost;
       }
     });
@@ -449,11 +469,32 @@ export default function App() {
     return baseNet + weekAdjustment;
   }, [allWeeks, today, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs]);
 
+  const weekNetLookup = useMemo(() => {
+    const adjustments = eventImpact.weeklyNetAdjustments || {};
+    const result = {};
+    allWeeks.forEach(w => {
+      const baseNet = computeNet(w, config, taxDerived.extraPerCheck, showExtra);
+      const spendable = baseNet - bufferPerWeek;
+      const adjustment = adjustments[w.idx] || 0;
+      result[w.idx] = {
+        baseNet,
+        adjustedNet: baseNet + adjustment,
+        spendable,
+        adjustedSpendable: spendable + adjustment,
+        adjustment,
+      };
+    });
+    return result;
+  }, [allWeeks, config, taxDerived.extraPerCheck, showExtra, bufferPerWeek, eventImpact.weeklyNetAdjustments]);
+
+  const futureWeekNetsRaw = useMemo(
+    () => futureWeeks.map(w => weekNetLookup[w.idx]?.spendable ?? (computeNet(w, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek)),
+    [futureWeeks, weekNetLookup, config, taxDerived, showExtra, bufferPerWeek]
+  );
+
   const futureWeekNets = useMemo(
-    // Buffer excluded per week — feeds BudgetPanel goal timelines and HomePanel
-    // "Next Week" tile; both should show spendable net, not raw paycheck amount.
-    () => futureWeeks.map(w => computeNet(w, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek),
-    [futureWeeks, config, taxDerived, showExtra, bufferPerWeek]
+    () => futureWeeks.map((w, idx) => weekNetLookup[w.idx]?.adjustedSpendable ?? futureWeekNetsRaw[idx] ?? 0),
+    [futureWeeks, weekNetLookup, futureWeekNetsRaw]
   );
 
   // ── Week-by-week remaining spend using history-aware amounts ──
@@ -535,9 +576,11 @@ export default function App() {
         remainingSpend={remainingSpend}
         goals={goals}
         futureWeekNets={futureWeekNets}
+        prevWeekNet={prevWeekNet}
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
         today={today}
+        isAdmin={isAdmin}
       />}
       {currentView === "income" && <IncomePanel
         allWeeks={allWeeks} config={config} setConfig={setConfig}
@@ -549,6 +592,7 @@ export default function App() {
         currentWeek={currentWeek}
         isAdmin={isAdmin}
         today={today}
+        weekNetLookup={weekNetLookup}
       />}
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
@@ -559,14 +603,16 @@ export default function App() {
         prevWeekNet={prevWeekNet}
         futureWeeks={futureWeeks}
         futureWeekNets={futureWeekNets}
+        timelineWeekNets={futureWeekNetsRaw}
         futureEventDeductions={futureEventDeductions}
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
         today={today}
         userPaySchedule={config.userPaySchedule ?? "weekly"}
+        isAdmin={isAdmin}
       />}
       {currentView === "benefits" && <BenefitsPanel
-        allWeeks={allWeeks} config={config} isDHL={isDHL}
+        allWeeks={allWeeks} config={config} isDHL={isDHL} isAdmin={isAdmin}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
         logK401kGained={logTotals.k401kGained}
@@ -579,7 +625,7 @@ export default function App() {
         setPtoGoal={setPtoGoal}
       />}
       {currentView === "log" && <LogPanel
-        logs={logs} setLogs={setLogs} config={config} isDHL={isDHL}
+        logs={logs} setLogs={setLogs} config={config} isDHL={isDHL} isAdmin={isAdmin}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}
@@ -639,6 +685,11 @@ export default function App() {
             height: calc(56px + env(safe-area-inset-top, 0px)) !important;
             padding-top: env(safe-area-inset-top, 0px) !important;
             flex-direction: column !important;
+          }
+          /* Drawer header inherits the same safe-area buffer as the mobile header so the Dynamic Island never overlaps text. */
+          .drawer-header {
+            padding-top: max(16px, env(safe-area-inset-top, 0px)) !important;
+            min-height: calc(56px + env(safe-area-inset-top, 0px)) !important;
           }
         }
           @media (min-width: 768px) {
@@ -715,7 +766,7 @@ export default function App() {
             </div>
             <button
               title="Sign out"
-              onClick={async () => { await supabase.auth.signOut(); }}
+              onClick={async () => { await supabase.auth.signOut({ scope: "local" }); }}
               style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", padding: "2px 0", marginTop: "1px", lineHeight: 1, display: "flex", alignItems: "center" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -843,7 +894,7 @@ export default function App() {
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-                {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>Wk {currentWeekNumber.num}/{currentWeekNumber.total}</div>}
+                {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>{currentWeekLabel}</div>}
               </div>
               <div style={{ fontSize: "14px", fontWeight: "bold" }}>Authority Finance</div>
             </div>
@@ -895,7 +946,7 @@ export default function App() {
         </div>
 
         {/* Panel content */}
-        <div className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
+        <div ref={mainContentRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
           {activePanel}
         </div>
       </div>
@@ -929,7 +980,7 @@ export default function App() {
         }}
       >
         {/* Drawer header */}
-        <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--color-border-subtle)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
+        <div className="drawer-header" style={{ padding: "16px 18px", borderBottom: "1px solid var(--color-border-subtle)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
             <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
@@ -937,7 +988,7 @@ export default function App() {
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <button
               title="Sign out"
-              onClick={async () => { await supabase.auth.signOut(); setDrawerOpen(false); }}
+              onClick={async () => { await supabase.auth.signOut({ scope: "local" }); setDrawerOpen(false); }}
               style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1091,6 +1142,7 @@ export default function App() {
         <WeekConfirmModal
           week={confirmTriggerWeek}
           config={config}
+          isAdmin={isAdmin}
           onConfirm={(confirmation, logEntry) => {
             setWeekConfirmations(c => ({ ...c, [confirmTriggerWeek.idx]: confirmation }));
             if (logEntry) setLogs(p => [...p, logEntry]);

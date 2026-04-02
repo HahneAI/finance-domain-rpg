@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, iS, lS, SmBtn } from "./ui.jsx";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { dhlEmployerMatchRate, toLocalIso } from "../lib/finance.js";
+import { formatRotationDisplay } from "../lib/rotation.js";
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const fmtMonth = yyyyMM => {
@@ -25,7 +26,7 @@ const SH = ({ children }) => (
 
 const EMPTY_FORM = { label: "", hoursNeeded: "", targetDate: "", negativeBalanceCap: "40" };
 
-export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kMatchLost,
+export function BenefitsPanel({ allWeeks, config, isDHL, isAdmin = false, logK401kLost, logK401kMatchLost,
   logK401kGained, logK401kMatchGained, logPTOHoursLost, currentWeek, bucketModel,
   ptoGoal, setPtoGoal, fiscalWeekInfo }) {
 
@@ -39,9 +40,11 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
 
   // ── 401k computations ──────────────────────────────────────────────────────
   const bE = allWeeks.reduce((s, w) => s + w.k401kEmployee, 0);
-  const k401Start = config.k401StartDate ? new Date(config.k401StartDate) : null;
+  const raw401StartIso = config.k401StartDate || config.benefitsStartDate || null;
+  const k401StartSource = config.k401StartDate ? "k401" : (config.benefitsStartDate ? "benefits" : null);
+  const k401Start = raw401StartIso ? new Date(raw401StartIso) : null;
   const hasValid401Start = Boolean(k401Start && !Number.isNaN(k401Start.getTime()));
-  const k401Active = hasValid401Start && currentWeek ? currentWeek.weekEnd >= k401Start : false;
+  const k401Active = currentWeek ? (!hasValid401Start || currentWeek.weekEnd >= k401Start) : false;
   const weeksUntil401k = hasValid401Start && !k401Active && currentWeek
     ? allWeeks.filter(w => w.active && w.weekEnd >= currentWeek.weekEnd && w.weekEnd < k401Start).length
     : null;
@@ -104,31 +107,45 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
 
     {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
       <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
-      <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{currentWeek.rotation} · ends {fmtDate(toLocalIso(currentWeek.weekEnd))}</div>
+      <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
+        {formatRotationDisplay(currentWeek, { isAdmin })} · ends {fmtDate(toLocalIso(currentWeek.weekEnd))}
+      </div>
     </div>}
 
     {/* ── 401k status banner ── */}
     {currentWeek && <div style={{ background: k401Active ? "#1a3a20" : "#1e1e2a", border: `1px solid ${k401Active ? "rgba(76,175,125,0.27)" : "#7a8bbf44"}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Status</div>
-      {!hasValid401Start
-        ? <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Enrollment start date not set yet</div>
-        : k401Active
-        ? <div style={{ fontSize: "11px", color: "var(--color-green)", fontWeight: "bold" }}>Active — contributions running since {config.k401StartDate}</div>
-        : <div style={{ fontSize: "11px", color: "#7a8bbf" }}><strong style={{ color: "var(--color-text-primary)" }}>{weeksUntil401k} week{weeksUntil401k !== 1 ? "s" : ""}</strong> until enrollment ({config.k401StartDate})</div>}
+      {!hasValid401Start ? (
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Enrollment start date not set yet</div>
+      ) : k401Active ? (
+        <div style={{ fontSize: "11px", color: "var(--color-green)", fontWeight: "bold" }}>
+          Active — contributions running since {fmtDate(raw401StartIso)}
+          {k401StartSource === "benefits" && (
+            <span style={{ fontSize: "10px", color: "var(--color-text-disabled)", fontWeight: "normal" }}> (benefits start)</span>
+          )}
+        </div>
+      ) : (
+        <div style={{ fontSize: "11px", color: "#7a8bbf" }}>
+          <strong style={{ color: "var(--color-text-primary)" }}>{weeksUntil401k} week{weeksUntil401k !== 1 ? "s" : ""}</strong> until enrollment ({fmtDate(raw401StartIso)})
+          <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
+            Projected totals below assume contributions begin on this date.
+          </div>
+        </div>
+      )}
     </div>}
 
     {/* ── 401k projections ── */}
     <div style={{ marginBottom: "24px" }}>
       <SH>401k Projections</SH>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
-        <Card label="Base Your Contributions" val={f(bE)} rawVal={bE} color="#7a8bbf" size="18px" />
-        <Card label="Base Employer Match" val={f(bM)} rawVal={bM} color="var(--color-green)" size="18px" />
-        <Card label="Base Total Balance" val={f(bE + bM)} rawVal={bE + bM} color="var(--color-gold)" size="18px" />
+        <Card label="Proj. Your Contributions" val={f(bE)} rawVal={bE} color="#7a8bbf" size="18px" />
+        <Card label="Proj. Employer Match" val={f(bM)} rawVal={bM} color="var(--color-green)" size="18px" />
+        <Card label="Proj. Year-End Balance" val={f(bE + bM)} rawVal={bE + bM} color="var(--color-gold)" size="18px" />
       </div>
       {(logK401kLost > 0 || logK401kMatchLost > 0 || logK401kGained > 0 || logK401kMatchGained > 0) && <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
-        <Card label="Adj. Your Contributions" val={f(aE)} rawVal={aE} sub={[logK401kLost > 0 && `-${f(logK401kLost)} lost`, logK401kGained > 0 && `+${f(logK401kGained)} bonus`].filter(Boolean).join(" · ")} color="#7a8bbf" size="18px" />
-        <Card label="Adj. Employer Match" val={f(aM)} rawVal={aM} sub={[logK401kMatchLost > 0 && `-${f(logK401kMatchLost)} lost`, logK401kMatchGained > 0 && `+${f(logK401kMatchGained)} bonus`].filter(Boolean).join(" · ")} color="var(--color-green)" size="18px" />
-        <Card label="Adj. Total Balance" val={f(aE + aM)} rawVal={aE + aM} color="var(--color-gold)" size="18px" />
+        <Card label="Proj. Your Contributions (adj.)" val={f(aE)} rawVal={aE} sub={[logK401kLost > 0 && `-${f(logK401kLost)} lost`, logK401kGained > 0 && `+${f(logK401kGained)} bonus`].filter(Boolean).join(" · ")} color="#7a8bbf" size="18px" />
+        <Card label="Proj. Employer Match (adj.)" val={f(aM)} rawVal={aM} sub={[logK401kMatchLost > 0 && `-${f(logK401kMatchLost)} lost`, logK401kMatchGained > 0 && `+${f(logK401kMatchGained)} bonus`].filter(Boolean).join(" · ")} color="var(--color-green)" size="18px" />
+        <Card label="Proj. Year-End Balance (adj.)" val={f(aE + aM)} rawVal={aE + aM} color="var(--color-gold)" size="18px" />
       </div>}
 
       {/* Monthly breakdown table */}
@@ -198,7 +215,7 @@ export function BenefitsPanel({ allWeeks, config, isDHL, logK401kLost, logK401kM
                 size="18px"
               />
               {logPTOHoursLost > 0
-                ? <Card label={`Adj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${adjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
+                ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${adjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
                 : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="#888" size="14px" />
               }
             </>

@@ -154,10 +154,19 @@ export async function loadUserData() {
     mergedConfig.diffRate = 1.75;
   }
 
+  const rawGoals = Array.isArray(data.goals) ? data.goals : [];
+  const migratedGoals = rawGoals.map(goal => {
+    if (goal && typeof goal === "object") {
+      const { category: _legacyCategory, ...rest } = goal;
+      return rest;
+    }
+    return goal;
+  });
+
   return {
     config:             mergedConfig,
     expenses:           migratedExpenses,
-    goals:              Array.isArray(data.goals) ? data.goals : [],
+    goals:              migratedGoals,
     logs:               Array.isArray(data.logs)  ? data.logs  : [],
     showExtra:          data.show_extra,
     weekConfirmations:  wcData?.week_confirmations ?? {},

@@ -35,27 +35,7 @@
 }
 
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: var(--font-sans);
-  --heading: var(--font-display);
-  --mono: var(--font-mono);
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
+  color-scheme: dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -63,26 +43,6 @@
 
   @media (max-width: 1024px) {
     font-size: 16px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
   }
 }
 
@@ -164,9 +124,9 @@ button {
 
 h1,
 h2 {
-  font-family: var(--heading);
+  font-family: var(--font-display);
   font-weight: 500;
-  color: var(--text-h);
+  color: var(--color-text-primary);
 }
 
 h1 {
@@ -193,17 +153,17 @@ p {
 
 code,
 .counter {
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   display: inline-flex;
   border-radius: 4px;
-  color: var(--text-h);
+  color: var(--color-text-primary);
 }
 
 code {
   font-size: 15px;
   line-height: 135%;
   padding: 4px 8px;
-  background: var(--code-bg);
+  background: var(--color-bg-raised);
 }
 
 /* Data tables — JetBrains Mono per spec (only place monospace is allowed) */
@@ -227,4 +187,24 @@ code {
 @keyframes fadeSlideUp {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* ── Goal celebration animations (BudgetPanel) ── */
+@keyframes goalFundedGlow {
+  0%   { box-shadow: 0 0 0 0 rgba(109,191,138,0); border-color: rgba(109,191,138,0.2); }
+  25%  { box-shadow: 0 0 24px 8px rgba(109,191,138,0.4), inset 0 0 24px rgba(109,191,138,0.06); border-color: #6dbf8a; }
+  65%  { box-shadow: 0 0 10px 3px rgba(109,191,138,0.2); border-color: rgba(109,191,138,0.55); }
+  100% { box-shadow: 0 0 0 0 rgba(109,191,138,0); border-color: rgba(109,191,138,0.3); }
+}
+
+@keyframes goalStampIn {
+  0%   { opacity: 0; transform: translate(-50%,-50%) scale(0.35) rotate(-18deg); }
+  55%  { opacity: 1; transform: translate(-50%,-50%) scale(1.1) rotate(-4deg); }
+  75%  { transform: translate(-50%,-50%) scale(0.96) rotate(-6deg); }
+  100% { opacity: 1; transform: translate(-50%,-50%) scale(1) rotate(-5deg); }
+}
+
+@keyframes goalParticle {
+  0%   { opacity: 1; transform: translate(0,0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--dx),var(--dy)) scale(0.2); }
 }

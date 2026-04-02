@@ -20,5 +20,9 @@ export function getFiscalWeekInfo(currentWeek, totalWeeks = FISCAL_WEEKS_PER_YEA
 
 export function formatFiscalWeekLabel(weekInfo) {
   if (!weekInfo) return "—";
-  return `Week ${weekInfo.num} of ${weekInfo.total}`;
+  const total = Number.isFinite(weekInfo.total) ? weekInfo.total : FISCAL_WEEKS_PER_YEAR;
+  const num = Number.isFinite(weekInfo.num) ? weekInfo.num : null;
+  if (num == null) return "—";
+  const weeksLeft = Math.max(total - num, 0);
+  return `Week ${num}, ${weeksLeft} left`;
 }

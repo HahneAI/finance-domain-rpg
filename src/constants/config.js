@@ -2,6 +2,8 @@
 // CONFIG — all income constants, fully editable
 // taxedWeeks replaces taxedRanges — flat array, togglable per week
 // ─────────────────────────────────────────────────────────────
+export const PAYCHECKS_PER_YEAR = { weekly: 52, biweekly: 26, monthly: 12, salary: 26 };
+
 export const DEFAULT_CONFIG = {
   // ── Wizard gate fields ──────────────────────────────────────
   setupComplete: false,        // true once setup wizard completes; gates first-run flow
@@ -12,12 +14,12 @@ export const DEFAULT_CONFIG = {
 
   // ── Employer preset ─────────────────────────────────────────
   employerPreset: null,        // "DHL" | null — drives rotation, bucket, dual-rate logic
-  startingWeekIsLong: null,    // DHL only: true = first active week is long (6-day); null = use dhlTeam to derive
+  startingWeekIsLong: null,    // DHL only: true = first active week is the higher-hour (long) week; null = derive from dhlTeam
   // ── DHL team preset (standard rotation — not Anthony's custom schedule) ──
   // null = Anthony's custom override (hardcoded day arrays in buildYear)
   // "A" | "B" = standard preset; startingWeekIsLong auto-derived from DHL_PRESET.teams[dhlTeam]
   dhlTeam: null,               // "A" | "B" | null
-  dhlOtOnWeekend: false,       // true = mandatory OT day is typically Sat/Sun on 3-day weeks (adds diffRate)
+  dhlOtOnWeekend: false,       // true = mandatory OT day is typically Sat/Sun on short (4-day) weeks (adds diffRate)
   dhlCustomSchedule: false,    // false = use DHL_PRESET.rotation days; true = custom/hardcoded arrays (Anthony)
   dhlNightShift: true,         // true = night shift; applies nightDiffRate on all hours in buildYear()
 
@@ -32,21 +34,21 @@ export const DEFAULT_CONFIG = {
   // ── Deductions / benefits ────────────────────────────────────
   // selectedBenefits: array of benefit IDs the user has enrolled in (wizard step 3)
   selectedBenefits: [],
-  // Per-benefit weekly dollar deductions (0 = not enrolled / not tracked)
-  healthPremium: 0,   // Health / Medical insurance weekly premium
-  dentalPremium: 0,   // Dental insurance weekly premium
-  visionPremium: 0,   // Vision insurance weekly premium
-  ltd: 0,             // Long-Term Disability flat weekly deduction
-  stdWeekly: 0,       // Short-Term Disability flat weekly deduction
-  lifePremium: 0,     // Life / AD&D insurance weekly premium
-  hsaWeekly: 0,       // HSA contribution per week
-  fsaWeekly: 0,       // FSA contribution per week
+  // Per-benefit per-paycheck dollar deductions (0 = not enrolled / not tracked)
+  healthPremium: 0,   // Health / Medical insurance deduction per paycheck
+  dentalPremium: 0,   // Dental insurance deduction per paycheck
+  visionPremium: 0,   // Vision insurance deduction per paycheck
+  ltd: 0,             // Long-Term Disability deduction per paycheck
+  stdWeekly: 0,       // Short-Term Disability deduction per paycheck
+  lifePremium: 0,     // Life / AD&D deduction per paycheck
+  hsaWeekly: 0,       // HSA contribution per paycheck
+  fsaWeekly: 0,       // FSA contribution per paycheck
   // 401(k) — rate fields + start date
   k401Rate: 0, k401MatchRate: 0, k401StartDate: null,
   // Benefits start date — when health/dental/vision coverage activates
   benefitsStartDate: null,        // "YYYY-MM-DD" | null = already active / not enrolled
   // Other recurring deductions not covered by preset benefit fields
-  // Array of { id, label, weeklyAmount } — user-defined, add/remove from wizard
+  // Array of { id, label, weeklyAmount } — each entry stores a per-paycheck amount
   otherDeductions: [],
   // Attendance policy — whether employer uses a formal points/hours-based system
   // null = not yet answered (wizard gate); true = bucket model active; false = log-only
@@ -94,6 +96,8 @@ export const DEFAULT_CONFIG = {
 
   // ── Pay period ───────────────────────────────────────────────
   payPeriodEndDay: 0,          // day-of-week pay period closes: 0=Sun, 1=Mon, ..., 6=Sat
+  userPaySchedule: "weekly",   // how often the user receives a paycheck: "weekly" | "biweekly" | "monthly" | "salary"
+  annualSalary: null,          // salary workers only: gross annual pay; baseRate is auto-derived (annualSalary / 2080)
 };
 
 export const FISCAL_YEAR_START = "2026-01-05"; // week 0 end date — first Monday of the fiscal year
@@ -106,8 +110,8 @@ export const QUARTER_BOUNDARIES = ["2026-03-31", "2026-06-30", "2026-09-30"];
 // DHL EMPLOYER PRESET
 //
 // Standard DHL B-team rotation (used for new wizard users):
-//   Long week:  4 shifts (Tue/Wed/Sat/Sun) — 48h
-//   Short week: 3 shifts (Mon/Thu/Fri)     — 36h
+//   Long week:  4 core shifts (Tue/Wed/Sat/Sun) + 1 required OT = 5 working days
+//   Short week: 3 core shifts (Mon/Thu/Fri)     + 1 required OT = 4 working days
 //
 // Anthony's custom schedule (dhlCustomSchedule: true):
 //   Long week:  4 standard + 2 scheduled OT = 6-Day (Tue–Sun, 72h)
@@ -125,28 +129,32 @@ export const DHL_PRESET = {
     // Short week — 3 required shifts
     short: {
       days: [1, 4, 5],            // Mon, Thu, Fri
-      label: "3-Day (Mon / Thu / Fri)",
-      baseHours: 36,              // 3 × 12h
+      label: "Short Week (Mon / Thu / Fri core + OT)",
+      displayName: "Short Week",
+      baseHours: 36,              // 3 × 12h core hours; OT adds the 4th shift
       weekendShifts: 1,           // Fri overnight earns diff only from Sat 12:00a–6:00a (½ shift)
+      otDefaults: { weekday: 2, weekend: 6 }, // Tue (weekday) or Sat (weekend) as default OT choices
     },
     // Long week — 4 required shifts
     long: {
       days: [2, 3, 6, 0],        // Tue, Wed, Sat, Sun
-      label: "4-Day (Tue / Wed / Sat / Sun)",
-      baseHours: 48,              // 4 × 12h
+      label: "Long Week (Tue / Wed / Sat / Sun core + OT)",
+      displayName: "Long Week",
+      baseHours: 48,              // 4 × 12h core hours; OT adds the 5th shift
       weekendShifts: 2,           // Sat + Sun earn diffRate (Fri not worked in long rotation)
+      otDefaults: { weekday: 1 }, // Monday OT default (always weekday)
     },
   },
-  // While A-team works their short (3-day) week, B-team is on long (4-day).
+  // While A-team works their short (4-day) week, B-team is on long (5-day).
   // Team selection auto-derives startingWeekIsLong.
   teams: {
-    A: { startsLong: false },    // A-team week 1 = short (Mon/Thu/Fri)
-    B: { startsLong: true  },    // B-team week 1 = long (Tue/Wed/Sat/Sun)
+    A: { startsLong: false },    // A-team week 1 = short (Mon/Thu/Fri core + OT)
+    B: { startsLong: true  },    // B-team week 1 = long (Tue/Wed/Sat/Sun core + OT)
   },
   // DHL mandates 1 extra 12h shift per week (required OT).
   // Worker picks any off-day for that week:
-  //   3-day off-days: Tue, Wed, Sat, Sun → Sat/Sun OT earns diffRate (dhlOtOnWeekend flag)
-  //   4-day off-days: Mon, Thu, Fri      → all weekdays, no diff ever applies
+  //   Short-week off-days: Tue, Wed, Sat, Sun → Sat/Sun OT earns diffRate (dhlOtOnWeekend flag)
+  //   Long-week off-days: Mon, Thu, Fri      → all weekdays, no diff ever applies
   requiredOtShifts: 1,
   otShiftHours: 12,
   // Preset defaults — applied to formData on team selection in the wizard
@@ -167,8 +175,8 @@ export const DHL_PRESET = {
     // New DHL users get these pre-filled with taxRatesEstimated: true until they confirm their stub.
     // Morning shift users: same rates (shift affects gross, not effective tax rate).
     userState: "MO",
-    fedRateLow: 0.0784,          // short / 4-day week effective federal rate
-    fedRateHigh: 0.1283,         // long / 6-day week effective federal rate
+    fedRateLow: 0.0784,          // short / low-hour week effective federal rate
+    fedRateHigh: 0.1283,         // long / high-hour week effective federal rate
     stateRateLow: 0.0338,        // short week MO effective rate
     stateRateHigh: 0.040,        // long week MO effective rate
   },
@@ -180,12 +188,12 @@ export const DHL_BENEFIT_OPTIONS = [
   { id: "health", label: "Health / Medical", sub: "Medical insurance premium", type: "weekly", field: "healthPremium", placeholder: "e.g. 18.50" },
   { id: "dental", label: "Dental", sub: "Dental insurance premium", type: "weekly", field: "dentalPremium", placeholder: "e.g. 4.00" },
   { id: "vision", label: "Vision", sub: "Vision insurance premium", type: "weekly", field: "visionPremium", placeholder: "e.g. 2.00" },
-  { id: "ltd", label: "Long-Term Disability", sub: "LTD insurance — flat weekly deduction", type: "weekly", field: "ltd", placeholder: "e.g. 2.00" },
-  { id: "std", label: "Short-Term Disability", sub: "STD insurance — flat weekly deduction", type: "weekly", field: "stdWeekly", placeholder: "e.g. 1.50" },
-  { id: "life", label: "Life / AD&D", sub: "Group life insurance premium", type: "weekly", field: "lifePremium", placeholder: "e.g. 1.00" },
-  { id: "k401", label: "401(k) / Retirement", sub: "Pre-tax contribution + employer match", type: "k401" },
-  { id: "hsa", label: "HSA", sub: "Health Savings Account — weekly contribution", type: "weekly", field: "hsaWeekly", placeholder: "e.g. 15.00" },
-  { id: "fsa", label: "FSA", sub: "Flexible Spending Account — weekly contribution", type: "weekly", field: "fsaWeekly", placeholder: "e.g. 10.00" },
+  { id: "ltd", label: "Long-Term Disability", sub: "LTD insurance — per-paycheck deduction", type: "weekly", field: "ltd", placeholder: "e.g. 12.00" },
+  { id: "std", label: "Short-Term Disability", sub: "STD insurance — per-paycheck deduction", type: "weekly", field: "stdWeekly", placeholder: "e.g. 6.50" },
+  { id: "life", label: "Life / AD&D", sub: "Group life insurance premium", type: "weekly", field: "lifePremium", placeholder: "e.g. 5.00" },
+  { id: "k401", label: "401K / Retirement", sub: "Pre-tax contribution + employer match", type: "k401" },
+  { id: "hsa", label: "HSA", sub: "Health Savings Account — per-paycheck contribution", type: "weekly", field: "hsaWeekly", placeholder: "e.g. 25.00" },
+  { id: "fsa", label: "FSA", sub: "Flexible Spending Account — per-paycheck contribution", type: "weekly", field: "fsaWeekly", placeholder: "e.g. 18.00" },
 ];
 
 export const FED_BRACKETS = [[11925, 0.10], [48475, 0.12], [103350, 0.22], [Infinity, 0.24]];

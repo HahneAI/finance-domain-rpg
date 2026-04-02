@@ -580,6 +580,7 @@ export default function App() {
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
         today={today}
+        isAdmin={isAdmin}
       />}
       {currentView === "income" && <IncomePanel
         allWeeks={allWeeks} config={config} setConfig={setConfig}
@@ -608,9 +609,10 @@ export default function App() {
         fiscalWeekInfo={currentWeekNumber}
         today={today}
         userPaySchedule={config.userPaySchedule ?? "weekly"}
+        isAdmin={isAdmin}
       />}
       {currentView === "benefits" && <BenefitsPanel
-        allWeeks={allWeeks} config={config} isDHL={isDHL}
+        allWeeks={allWeeks} config={config} isDHL={isDHL} isAdmin={isAdmin}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
         logK401kGained={logTotals.k401kGained}
@@ -623,7 +625,7 @@ export default function App() {
         setPtoGoal={setPtoGoal}
       />}
       {currentView === "log" && <LogPanel
-        logs={logs} setLogs={setLogs} config={config} isDHL={isDHL}
+        logs={logs} setLogs={setLogs} config={config} isDHL={isDHL} isAdmin={isAdmin}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}
@@ -1140,6 +1142,7 @@ export default function App() {
         <WeekConfirmModal
           week={confirmTriggerWeek}
           config={config}
+          isAdmin={isAdmin}
           onConfirm={(confirmation, logEntry) => {
             setWeekConfirmations(c => ({ ...c, [confirmTriggerWeek.idx]: confirmation }));
             if (logEntry) setLogs(p => [...p, logEntry]);

@@ -3,6 +3,7 @@ import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../cons
 import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
+import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, iS, lS } from "./ui.jsx";
 
 // TODO: tune — total particle count (12); must divide evenly into rings below
@@ -91,7 +92,7 @@ const safeDate = (raw) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost, logNetGained, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, timelineWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo, userPaySchedule }) {
+export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost, logNetGained, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, timelineWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo, userPaySchedule, isAdmin = false }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
@@ -1143,7 +1144,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       return <div>
         {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
-          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{currentWeek.rotation} · ends {toLocalIso(currentWeek.weekEnd)}</div>
+          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })} · ends {toLocalIso(currentWeek.weekEnd)}</div>
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Weekly Available" val={f2(wr)} rawVal={wr} color="var(--color-green)" />
@@ -1494,7 +1495,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       return <div>
         {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
-          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{currentWeek.rotation} · ends {toLocalIso(currentWeek.weekEnd)}</div>
+          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })} · ends {toLocalIso(currentWeek.weekEnd)}</div>
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Total Loan Balance" val={f(totalOwed)} rawVal={totalOwed} color="var(--color-gold)" />

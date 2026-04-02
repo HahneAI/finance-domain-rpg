@@ -144,7 +144,10 @@ describe('SetupWizard — validation gates', () => {
     clickNext()
     const nextBtn = screen.getByRole('button', { name: /next/i })
     expect(nextBtn).toBeDisabled()
+    // Team pick resets userPaySchedule → must also pick pay schedule before Next unlocks
     fireEvent.click(screen.getByRole('button', { name: /team b/i }))
+    expect(screen.getByRole('button', { name: /next/i })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
     expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled()
   })
 

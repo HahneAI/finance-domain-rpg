@@ -190,6 +190,7 @@ function Step1({ formData, onChange, lifeEvent }) {
       bucketStartBalance: d.bucketStartBalance,
       bucketCap:          d.bucketCap,
       bucketPayoutRate:   d.bucketPayoutRate,
+      userPaySchedule:    null,  // force explicit selection after team pick
     });
   }
 
@@ -279,12 +280,12 @@ function Step1({ formData, onChange, lifeEvent }) {
       {gateTouched && (
         <>
           {/* ── Pay Schedule ── */}
-          <Field label="How do you get paid?">
+          {(!isDHL || formData.dhlTeam) && <Field label="How do you get paid?">
             <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap", alignItems: "center" }}>
               {isDHL ? (
                 <>
-                  <Pill label="Weekly"           active={formData.userPaySchedule === "weekly"}  onClick={() => onChange({ userPaySchedule: "weekly",  annualSalary: null })} />
-                  <Pill label="Salary (Biweekly)" active={formData.userPaySchedule === "salary"}  onClick={() => onChange({ userPaySchedule: "salary" })} />
+                  <Pill label="Weekly"            active={formData.userPaySchedule === "weekly"} onClick={() => onChange({ userPaySchedule: "weekly",  annualSalary: null })} />
+                  <Pill label="Salary (Biweekly)" active={formData.userPaySchedule === "salary"} onClick={() => onChange({ userPaySchedule: "salary" })} />
                 </>
               ) : (
                 <>
@@ -304,7 +305,7 @@ function Step1({ formData, onChange, lifeEvent }) {
                 Paid every 2 weeks. Enter your annual salary and we'll derive your base rate.
               </div>
             )}
-          </Field>
+          </Field>}
 
           {/* ── Rate fields — salary vs hourly ── */}
           {isSalary ? (
@@ -488,12 +489,12 @@ function Step2({ formData, onChange }) {
         <Field label="Which week are you currently on?">
           <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
             <Pill
-              label="Short week (3-Day)"
+              label="Short Week (4 working days)"
               active={formData.startingWeekIsLong === false}
               onClick={() => onChange({ startingWeekIsLong: false })}
             />
             <Pill
-              label="Long week (4-Day)"
+              label="Long Week (5 working days)"
               active={formData.startingWeekIsLong === true}
               onClick={() => onChange({ startingWeekIsLong: true })}
             />
@@ -1182,10 +1183,16 @@ function Step4({ formData, onChange }) {
 function estimateWeeklyGross(d) {
   const isDHL = d.employerPreset === "DHL";
   if (isDHL) {
-    // Short-week DHL: 4 shifts × shiftHours = 48h; long = 6 × 12 = 72h.
+    // Short-week DHL: 3 required shifts + 1 mandatory OT = 4 × shiftHours.
+    // Long-week DHL preset: 4 core shifts + 1 mandatory OT = 5 × shiftHours.
+    // Anthony's custom schedule keeps a 6-day long week (2 scheduled OT shifts).
     // Use a weighted average (26 short + 26 long per year).
-    const shortH = 4 * (d.shiftHours || 12);
-    const longH  = 6 * (d.shiftHours || 12);
+    const isCustom = d.dhlCustomSchedule === true;
+    const shortShifts = 4;                         // both preset + custom short weeks hit 4 shifts
+    const longShifts  = isCustom ? 6 : 5;          // custom stays 6-day, preset long is 5-day
+    const hoursPerShift = d.shiftHours || 12;
+    const shortH = shortShifts * hoursPerShift;
+    const longH  = longShifts  * hoursPerShift;
     const gross = (h) => {
       const base = d.baseRate || 0;
       const reg = Math.min(h, d.otThreshold || 40);
@@ -1638,3 +1645,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
     </div>
   );
 }
+
+
+
+

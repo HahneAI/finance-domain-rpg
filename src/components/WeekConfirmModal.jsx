@@ -26,6 +26,7 @@
 import { useState, useEffect } from "react";
 import { EVENT_TYPES } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
+import { formatRotationDisplay } from "../lib/rotation.js";
 import { iS, lS } from "./ui.jsx";
 
 // Canonical day ordering — must match LogPanel's DayPicker to keep missedDays arrays consistent
@@ -85,7 +86,7 @@ function DayPicker({ scheduledDays, missedDays, onToggle }) {
   );
 }
 
-export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
+export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin = false }) {
   // ── Layer 1 state ─────────────────────────────────────────────────────────
   // Scheduled days default to true (worked); unscheduled days default to null (off, but clickable)
   const [dayToggles, setDayToggles] = useState(() =>
@@ -109,17 +110,18 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
   const dayDates = weekDayDates(week.weekStart);
   // Pay period starts the day after payPeriodEndDay (e.g. end=Sun→start=Mon=1)
   const payPeriodStartDow = ((config.payPeriodEndDay ?? 0) + 1) % 7;
+  const rotationDisplay = formatRotationDisplay(week, { isAdmin });
 
   // DHL short-week OT tracking
-  const isDhlShortWeek = config.employerPreset === "DHL" && scheduledDays.length <= 3;
+  const requiresOtSelection = config.employerPreset === "DHL" && (week.requiredOtShifts ?? 0) > 0;
   const otDayCandidates = DAY_NAMES.filter(d => !scheduledDays.includes(d));
   const otDayIsWeekend = otDay != null && otDay !== "missed" && ["Sat", "Sun"].includes(otDay);
 
   useEffect(() => {
-    if (!isDhlShortWeek && otDay !== null) {
+    if (!requiresOtSelection && otDay !== null) {
       setOtDay(null);
     }
-  }, [isDhlShortWeek, otDay]);
+  }, [requiresOtSelection, otDay]);
 
   const selectOtDay = (value) => {
     setOtDay(value);
@@ -136,8 +138,8 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
     });
   };
 
-  const otSelectionMissing = isDhlShortWeek && otDay === null;
-  const logSwapDisabled = otSelectionMissing || (isDhlShortWeek && otDay === "missed");
+  const otSelectionMissing = requiresOtSelection && otDay === null;
+  const logSwapDisabled = otSelectionMissing || (requiresOtSelection && otDay === "missed");
 
   // ── Toggle handler: 3 states ──────────────────────────────────────────────
   const toggleDay = (day) => {
@@ -205,8 +207,8 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
     if (otSelectionMissing) {
       return;
     }
-    // DHL short week: missed OT → pre-fill Layer 2 as unapproved miss (hits bucket hours)
-    if (isDhlShortWeek && otDay === "missed") {
+    // DHL preset: missed OT → pre-fill Layer 2 as unapproved miss (hits bucket hours)
+    if (requiresOtSelection && otDay === "missed") {
       setEventVals({
         weekEnd: toLocalIso(week.weekEnd),
         weekIdx: week.idx,
@@ -231,7 +233,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
         confirmedAt: new Date().toISOString(),
         dayToggles, scheduledDays, missedScheduledDays, pickupDays,
         netShiftDelta: 0, eventId: null,
-        ...(isDhlShortWeek ? { otDay, otDayIsWeekend } : {}),
+        ...(requiresOtSelection ? { otDay, otDayIsWeekend } : {}),
       }, null);
       return;
     }
@@ -249,7 +251,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       // has a useful starting value. User should verify the actual payout.
       amount: !isDeficit ? pickupDays.length * config.shiftHours * config.baseRate : 0,
       ptoHours: 0,
-      note: isDhlShortWeek && otDay && otDay !== "missed"
+      note: requiresOtSelection && otDay && otDay !== "missed"
         ? `OT day: ${otDay}${otDayIsWeekend ? " (weekend — diff applies)" : ""}`
         : "",
     });
@@ -303,7 +305,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
       confirmedAt: new Date().toISOString(),
       dayToggles, scheduledDays, missedScheduledDays, pickupDays,
       netShiftDelta, eventId: logEntry.id,
-      ...(isDhlShortWeek ? { otDay, otDayIsWeekend } : {}),
+      ...(requiresOtSelection ? { otDay, otDayIsWeekend } : {}),
     }, logEntry);
   };
 
@@ -335,7 +337,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
               </div>
             </div>
             <span style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-secondary)", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", padding: "4px 9px", borderRadius: "3px", textTransform: "uppercase", marginTop: "2px" }}>
-              {week.rotation}
+              {rotationDisplay}
             </span>
           </div>
         </div>
@@ -454,13 +456,13 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss }) {
                 </div>
               )}
 
-              {isDhlShortWeek && (
+              {requiresOtSelection && (
                 <div style={{ margin: "12px 20px 0", padding: "12px 14px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "6px" }}>
                     Mandatory OT shift
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5", marginBottom: "10px" }}>
-                    DHL short weeks include a required fourth shift. Pick the day you worked or mark "Missed". Weekend selections automatically apply the differential.
+                    DHL rotations include a required OT shift each week. Pick the day you worked or mark "Missed". Weekend selections automatically apply the differential.
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                     {otDayCandidates.map(day => {

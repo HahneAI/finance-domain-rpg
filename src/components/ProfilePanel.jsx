@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase.js";
 import { dhlEmployerMatchRate, computeNet } from "../lib/finance.js";
 import { DHL_BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, SH } from "./ui.jsx";
+import { formatRotationDisplay } from "../lib/rotation.js";
 
 const BENEFIT_LABELS = {
   health: "Health / Medical",
@@ -13,6 +14,7 @@ const BENEFIT_LABELS = {
   life:   "Life / AD&D",
   hsa:    "HSA",
   fsa:    "FSA",
+  k401:   "401K / Retirement",
 };
 
 function fmt(dateStr) {
@@ -494,29 +496,308 @@ const PAY_SCHEDULE_LABELS = {
   salary:   "Salary (biweekly)",
 };
 
-function PayDetail({ config, onBack }) {
+function PayDetail({ config, setConfig, onBack }) {
   const isDHL = config.employerPreset === "DHL";
   const scheduleLabel = config.scheduleIsVariable
     ? "Variable hours"
     : `${config.standardWeeklyHours || 40} hrs / week`;
+  const [editing, setEditing] = useState(false);
+  const [payDraft, setPayDraft] = useState(null);
+  const [error, setError] = useState(null);
+
+  const startEditing = () => {
+    setPayDraft({
+      userPaySchedule: config.userPaySchedule ?? "weekly",
+      annualSalary: config.annualSalary != null ? String(config.annualSalary) : "",
+      baseRate: config.baseRate != null ? String(config.baseRate) : "",
+      shiftHours: config.shiftHours != null ? String(config.shiftHours) : "",
+      diffRate: config.diffRate != null ? String(config.diffRate) : "",
+      nightDiffRate: config.nightDiffRate != null ? String(config.nightDiffRate) : "",
+      dhlNightShift: Boolean(config.dhlNightShift),
+      otThreshold: config.otThreshold != null ? String(config.otThreshold) : "",
+      otMultiplier: config.otMultiplier != null ? String(config.otMultiplier) : "",
+      standardWeeklyHours: config.standardWeeklyHours != null ? String(config.standardWeeklyHours) : "",
+    });
+    setError(null);
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setPayDraft(null);
+    setError(null);
+  };
+
+  const handleDraftChange = (field, value) => {
+    setPayDraft(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = () => {
+    if (!payDraft) return;
+    setError(null);
+
+    const updates = {};
+    const schedule = payDraft.userPaySchedule || "weekly";
+    updates.userPaySchedule = schedule;
+
+    if (schedule === "salary") {
+      const annualSalary = parseFloat(payDraft.annualSalary);
+      if (!Number.isFinite(annualSalary) || annualSalary <= 0) {
+        setError("Enter a valid annual salary.");
+        return;
+      }
+      updates.annualSalary = Math.round(annualSalary);
+      updates.baseRate = parseFloat((annualSalary / 2080).toFixed(2));
+    } else {
+      const baseRate = parseFloat(payDraft.baseRate);
+      if (!Number.isFinite(baseRate) || baseRate <= 0) {
+        setError("Enter a valid base hourly rate.");
+        return;
+      }
+      updates.baseRate = parseFloat(baseRate.toFixed(2));
+      updates.annualSalary = null;
+    }
+
+    const shiftHours = parseFloat(payDraft.shiftHours);
+    if (!Number.isFinite(shiftHours) || shiftHours <= 0) {
+      setError("Enter a valid shift length.");
+      return;
+    }
+    updates.shiftHours = parseFloat(shiftHours.toFixed(2));
+
+    const diffRate = parseFloat(payDraft.diffRate);
+    updates.diffRate = Number.isFinite(diffRate) ? parseFloat(diffRate.toFixed(2)) : 0;
+
+    if (isDHL) {
+      updates.dhlNightShift = !!payDraft.dhlNightShift;
+      const nightDiffRate = parseFloat(payDraft.nightDiffRate);
+      updates.nightDiffRate = Number.isFinite(nightDiffRate) ? parseFloat(nightDiffRate.toFixed(2)) : 0;
+    }
+
+    const otThreshold = parseFloat(payDraft.otThreshold);
+    if (!Number.isFinite(otThreshold) || otThreshold <= 0) {
+      setError("Enter a valid OT threshold.");
+      return;
+    }
+    updates.otThreshold = parseFloat(otThreshold.toFixed(2));
+
+    const otMultiplier = parseFloat(payDraft.otMultiplier);
+    if (!Number.isFinite(otMultiplier) || otMultiplier < 1) {
+      setError("Enter a valid OT multiplier (>= 1).");
+      return;
+    }
+    updates.otMultiplier = parseFloat(otMultiplier.toFixed(2));
+
+    if (!config.scheduleIsVariable) {
+      const rawWeekly = payDraft.standardWeeklyHours;
+      const weeklyValue = rawWeekly === "" ? config.standardWeeklyHours : parseFloat(rawWeekly);
+      if (!Number.isFinite(weeklyValue) || weeklyValue <= 0) {
+        setError("Enter weekly hours for your schedule.");
+        return;
+      }
+      updates.standardWeeklyHours = parseFloat(weeklyValue.toFixed(1));
+    }
+
+    setConfig(prev => ({ ...prev, ...updates }));
+    setEditing(false);
+    setPayDraft(null);
+  };
 
   return (
     <>
       <BackBar onBack={onBack} title="Pay Structure" />
-      <DetailCard>
-        <DetailRow label="Pay Schedule"   value={PAY_SCHEDULE_LABELS[config.userPaySchedule] ?? "Weekly"} />
-        <DetailRow label="Base Rate"      value={`$${config.baseRate}/hr`}  valueColor="var(--color-gold)" />
-        {config.shiftHours > 0 && <DetailRow label="Shift Length" value={`${config.shiftHours}h`} />}
-        <DetailRow label="Schedule" value={scheduleLabel} />
-        {config.diffRate > 0 && <DetailRow label="Weekend Diff" value={`+$${config.diffRate}/hr`} />}
-        {isDHL && config.dhlNightShift && config.nightDiffRate > 0 && (
-          <DetailRow label="Night Diff" value={`+$${config.nightDiffRate}/hr`} />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", paddingLeft: "4px" }}>
+        <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Base Pay & Differentials</div>
+        {!editing && (
+          <button
+            onClick={startEditing}
+            style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}
+          >
+            Edit
+          </button>
         )}
-        <DetailRow label="OT Threshold"   value={`${config.otThreshold} hrs/wk`} />
-        <DetailRow label="OT Multiplier"  value={`${config.otMultiplier}×`} last />
-      </DetailCard>
-      <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
-        To edit pay rates, use the Income panel's Config tab or re-run your setup via Life Events.
+      </div>
+
+      {!editing ? (
+        <DetailCard>
+          <DetailRow label="Pay Schedule"   value={PAY_SCHEDULE_LABELS[config.userPaySchedule] ?? "Weekly"} />
+          <DetailRow label="Base Rate"      value={`$${config.baseRate}/hr`}  valueColor="var(--color-gold)" />
+          {config.shiftHours > 0 && <DetailRow label="Shift Length" value={`${config.shiftHours}h`} />}
+          <DetailRow label="Schedule" value={scheduleLabel} />
+          <DetailRow label="Weekend Diff" value={config.diffRate > 0 ? `+$${config.diffRate}/hr` : "$0.00/hr"} />
+          {isDHL && (
+            <DetailRow
+              label="Night Diff"
+              value={config.dhlNightShift && config.nightDiffRate > 0 ? `+$${config.nightDiffRate}/hr` : "Off"}
+            />
+          )}
+          <DetailRow label="OT Threshold"   value={`${config.otThreshold} hrs/wk`} />
+          <DetailRow label="OT Multiplier"  value={`${config.otMultiplier}×`} last />
+        </DetailCard>
+      ) : (
+        <DetailCard>
+          <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div style={{ gridColumn: "span 2" }}>
+                <label style={lS}>Pay Schedule</label>
+                <select
+                  value={payDraft.userPaySchedule}
+                  onChange={e => handleDraftChange("userPaySchedule", e.target.value)}
+                  style={{ ...iS, appearance: "none" }}
+                >
+                  {Object.entries(PAY_SCHEDULE_LABELS).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {payDraft.userPaySchedule === "salary" && (
+                <div style={{ gridColumn: "span 2" }}>
+                  <label style={lS}>Annual Salary ($)</label>
+                  <input
+                    type="number"
+                    step="100"
+                    min="0"
+                    value={payDraft.annualSalary}
+                    onChange={e => handleDraftChange("annualSalary", e.target.value)}
+                    style={iS}
+                  />
+                  <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>
+                    Hourly base pay auto-derives from salary ÷ 2080.
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label style={lS}>Base Hourly Rate ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={payDraft.baseRate}
+                  disabled={payDraft.userPaySchedule === "salary"}
+                  onChange={e => handleDraftChange("baseRate", e.target.value)}
+                  style={{ ...iS, opacity: payDraft.userPaySchedule === "salary" ? 0.6 : 1 }}
+                />
+              </div>
+
+              <div>
+                <label style={lS}>Shift Length (hrs)</label>
+                <input
+                  type="number"
+                  step="0.25"
+                  min="1"
+                  value={payDraft.shiftHours}
+                  onChange={e => handleDraftChange("shiftHours", e.target.value)}
+                  style={iS}
+                />
+                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>
+                  Update this if you move to 10-hour shifts.
+                </div>
+              </div>
+
+              <div>
+                <label style={lS}>Weekend Differential ($/hr)</label>
+                <input
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  value={payDraft.diffRate}
+                  onChange={e => handleDraftChange("diffRate", e.target.value)}
+                  style={iS}
+                />
+              </div>
+
+              {isDHL && (
+                <div>
+                  <label style={lS}>Night Differential ($/hr)</label>
+                  <input
+                    type="number"
+                    step="0.25"
+                    min="0"
+                    value={payDraft.nightDiffRate}
+                    disabled={!payDraft.dhlNightShift}
+                    onChange={e => handleDraftChange("nightDiffRate", e.target.value)}
+                    style={{ ...iS, opacity: payDraft.dhlNightShift ? 1 : 0.6 }}
+                  />
+                  <div style={{ marginTop: "6px", display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={payDraft.dhlNightShift}
+                      onChange={e => handleDraftChange("dhlNightShift", e.target.checked)}
+                      style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                    />
+                    <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Night shift applies</span>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label style={lS}>OT Threshold (hrs/wk)</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={payDraft.otThreshold}
+                  onChange={e => handleDraftChange("otThreshold", e.target.value)}
+                  style={iS}
+                />
+              </div>
+
+              <div>
+                <label style={lS}>OT Multiplier</label>
+                <input
+                  type="number"
+                  step="0.05"
+                  min="1"
+                  value={payDraft.otMultiplier}
+                  onChange={e => handleDraftChange("otMultiplier", e.target.value)}
+                  style={iS}
+                />
+              </div>
+
+              {!config.scheduleIsVariable && (
+                <div>
+                  <label style={lS}>Standard Weekly Hours</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    value={payDraft.standardWeeklyHours}
+                    onChange={e => handleDraftChange("standardWeeklyHours", e.target.value)}
+                    style={iS}
+                  />
+                </div>
+              )}
+            </div>
+
+            {error && (
+              <div style={{ fontSize: "11px", color: "var(--color-red)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>
+                {error}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={handleSave}
+                style={{ flex: 1, padding: "10px 0", background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+              >
+                Save Changes
+              </button>
+              <button
+                onClick={cancelEditing}
+                style={{ flex: 1, padding: "10px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "10px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </DetailCard>
+      )}
+
+      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+        Saving recalculates every paycheck, projection, and budget automatically.
       </div>
     </>
   );
@@ -595,7 +876,7 @@ function BenefitsDetail({ config, setConfig, onBack }) {
           {isDHL && has401k && (
             <DetailRow label="Employer Match" value="Tiered (DHL formula)" valueColor="var(--color-green)" />
           )}
-          <DetailRow label="Active Since" value={config.k401StartDate ? fmt(config.k401StartDate) : "—"} last />
+          <DetailRow label="Contribution Start" value={k401StartLabel} valueColor={k401StartColor} last />
         </DetailCard>
       ) : (
         <DetailCard>
@@ -823,7 +1104,7 @@ function TaxPlanDetail({ config, setConfig, allWeeks, taxDerived, showExtra, set
             <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
               <div>
                 <div style={{ fontSize: "12px", fontWeight: "bold" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
-                <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{w.rotation} · {w.totalHours}h · idx {w.idx}{w.has401k ? " · 401k✓" : ""}</div>
+                <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{formatRotationDisplay(w, { isAdmin })} · {w.totalHours}h · idx {w.idx}{w.has401k ? " · 401k✓" : ""}</div>
               </div>
               <div>
                 <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{f2(w.grossPay)} gross</div>
@@ -894,7 +1175,7 @@ export function ProfilePanel({ authedUser, config, setConfig, allWeeks, taxDeriv
     return <EmploymentDetail config={config} setConfig={setConfig} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "pay") {
-    return <PayDetail config={config} onBack={() => setActiveSection(null)} />;
+    return <PayDetail config={config} setConfig={setConfig} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "retirement") {
     return <BenefitsDetail config={config} setConfig={setConfig} onBack={() => setActiveSection(null)} />;
@@ -958,3 +1239,9 @@ export function ProfilePanel({ authedUser, config, setConfig, allWeeks, taxDeriv
     </div>
   );
 }
+  const effectiveK401Start = config.k401StartDate || config.benefitsStartDate || null;
+  const k401StartSource = config.k401StartDate ? "k401" : (config.benefitsStartDate ? "benefits" : null);
+  const k401StartLabel = effectiveK401Start
+    ? `${fmt(effectiveK401Start)}${k401StartSource === "benefits" ? " (benefits start)" : ""}`
+    : "—";
+  const k401StartColor = k401StartSource === "benefits" ? "var(--color-gold)" : undefined;

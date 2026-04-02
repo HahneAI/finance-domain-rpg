@@ -1,0 +1,88 @@
+*** Begin Patch
+*** Update File: src/components/SetupWizard.jsx
+@@
+-  const isDHL    = formData.employerPreset === " DHL\;
+-
+- function setDHL(yes) {
+- setGateTouched(true);
+- if (yes) {
+- onChange({
+- employerPreset: \DHL\,
+- scheduleIsVariable: true,
+- bucketStartBalance: 64,
+- bucketCap: 128,
+- bucketPayoutRate: 9.825,
+- });
+- } else {
+- onChange({ employerPreset: null });
+- }
+- }
+-
+- function pickTeam(t) {
+- const preset = DHL_PRESET.teams[t];
+- const d = DHL_PRESET.defaults;
+- onChange({
+- dhlTeam: t,
+- startingWeekIsLong: preset.startsLong,
+- shiftHours: d.shiftHours,
+- otThreshold: d.otThreshold,
+- otMultiplier: d.otMultiplier,
+- scheduleIsVariable: d.scheduleIsVariable,
+- payPeriodEndDay: d.payPeriodEndDay,
+- bucketStartBalance: d.bucketStartBalance,
+- bucketCap: d.bucketCap,
+- bucketPayoutRate: d.bucketPayoutRate,
+- });
+- }
++ const isDHL = formData.employerPreset === \DHL\;
++ const isFirstRun = formData.setupComplete !== true;
++
++ const applyDhlPreset = (extra = {}) => {
++ const d = DHL_PRESET.defaults;
++ const patch = {
++ employerPreset: \DHL\,
++ scheduleIsVariable: true,
++ bucketStartBalance: d.bucketStartBalance,
++ bucketCap: d.bucketCap,
++ bucketPayoutRate: d.bucketPayoutRate,
++ payPeriodEndDay: d.payPeriodEndDay,
++ dhlNightShift: formData.dhlNightShift ?? d.dhlNightShift,
++ dhlCustomSchedule: formData.dhlCustomSchedule === true ? true : false,
++ ...extra,
++ };
++ if (isFirstRun) {
++ Object.assign(patch, {
++ baseRate: d.baseRate,
++ shiftHours: d.shiftHours,
++ otThreshold: d.otThreshold,
++ otMultiplier: d.otMultiplier,
++ diffRate: d.diffRate,
++ nightDiffRate: d.nightDiffRate,
++ userState: d.userState,
++ fedRateLow: d.fedRateLow,
++ fedRateHigh: d.fedRateHigh,
++ stateRateLow: d.stateRateLow,
++ stateRateHigh: d.stateRateHigh,
++ taxRatesEstimated: true,
++ });
++ }
++ return patch;
++ };
++
++ function setDHL(yes) {
++ setGateTouched(true);
++ if (yes) {
++ onChange(applyDhlPreset());
++ } else {
++ onChange({ employerPreset: null });
++ }
++ }
++
++ function pickTeam(t) {
++ const preset = DHL_PRESET.teams[t];
++ onChange(applyDhlPreset({
++ dhlTeam: t,
++ startingWeekIsLong: preset.startsLong,
++ }));
++ }
+*** End Patch

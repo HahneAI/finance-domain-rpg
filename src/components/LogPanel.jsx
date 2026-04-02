@@ -4,6 +4,8 @@ import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { Card, iS, lS } from "./ui.jsx";
 
+import { formatRotationDisplay } from "../lib/rotation.js";
+
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // Normalize missedDays to array (handles legacy string format)
@@ -12,7 +14,7 @@ const normalizeDays = (v) =>
 
 const LOG_MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals, bucketModel, fiscalWeekInfo }) {
+export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals, bucketModel, fiscalWeekInfo, isAdmin = false }) {
   const blank = {
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
     shiftsLost: 0, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0,
@@ -196,7 +198,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
           const endFmt   = w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
           return (
             <option key={endStr} value={endStr}>
-              Wk {getFiscalWeekNumber(w.idx) ?? "—"} · {startFmt} – {endFmt} ({w.rotation})
+              Wk {getFiscalWeekNumber(w.idx) ?? "—"} · {startFmt} – {endFmt} ({formatRotationDisplay(w, { isAdmin })})
             </option>
           );
         })}
@@ -208,7 +210,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
           : "week —";
         return (
           <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
-            {vals.weekRotation} · {inlineWeekLabel}
+            {formatRotationDisplay(vals.weekRotation, { isAdmin })} · {inlineWeekLabel}
             {scheduledDaysFor(vals.weekEnd).length > 0 && ` · scheduled: ${scheduledDaysFor(vals.weekEnd).join(", ")}`}
           </div>
         );
@@ -349,7 +351,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
       <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Current fiscal week</div>
       <div style={{ display: "flex", gap: "16px", alignItems: "center", fontSize: "11px" }}>
         <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>Week ending {currentWeek.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-        <span style={{ color: "#666" }}>{currentWeek.rotation}</span>
+        <span style={{ color: "#666" }}>{formatRotationDisplay(currentWeek, { isAdmin })}</span>
         <span style={{ color: "var(--color-green)", fontWeight: "bold" }}>{fiscalWeekLabel}</span>
       </div>
     </div>}
@@ -617,7 +619,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
                   <span style={{ fontSize: "12px", background: ev.color + "22", color: ev.color, padding: "2px 8px", borderRadius: "12px" }}>{ev.icon} {ev.label}</span>
-                  <span style={{ fontSize: "11px", color: "#777" }}>{entry.weekRotation}</span>
+                  <span style={{ fontSize: "11px", color: "#777" }}>{formatRotationDisplay(entry.weekRotation, { isAdmin })}</span>
                   {isUA && <span style={{ fontSize: "9px", background: "#e8622a22", color: "#e8622a", padding: "2px 6px", borderRadius: "12px", fontWeight: "bold" }}>⚠ BUCKET HIT</span>}
                   {ak   && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "12px" }}>401k</span>}
                 </div>

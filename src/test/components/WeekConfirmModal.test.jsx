@@ -62,7 +62,7 @@ describe('WeekConfirmModal — Layer 1 initial render', () => {
 
   it('shows the rotation badge', () => {
     renderModal()
-    expect(screen.getByText('6-Day')).toBeTruthy()
+    expect(screen.getByText('Long Week')).toBeTruthy()
   })
 
   it('renders all 7 day rows', () => {
@@ -82,7 +82,7 @@ describe('WeekConfirmModal — Layer 1 initial render', () => {
     expect(missedBtns).toHaveLength(6)
   })
 
-  it('shows "+ Pickup" button for the unscheduled day (Sun in 6-Day week)', () => {
+  it('shows "+ Pickup" button for the unscheduled day (Sun in Long Week)', () => {
     renderModal()
     expect(screen.getByRole('button', { name: /\+ pickup/i })).toBeTruthy()
   })
@@ -480,6 +480,6 @@ describe('WeekConfirmModal — 4-Day week', () => {
 
   it('shows the correct rotation badge', () => {
     renderModal({ week: FOUR_DAY_WEEK })
-    expect(screen.getByText('4-Day')).toBeTruthy()
+    expect(screen.getByText('Short Week')).toBeTruthy()
   })
 })

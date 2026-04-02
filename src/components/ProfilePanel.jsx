@@ -807,6 +807,12 @@ function BenefitsDetail({ config, setConfig, onBack }) {
   const isDHL     = config.employerPreset === "DHL";
   const has401k   = config.k401Rate > 0;
   const matchRate = isDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
+  const effectiveK401Start = config.k401StartDate || config.benefitsStartDate || null;
+  const k401StartSource = config.k401StartDate ? "k401" : (config.benefitsStartDate ? "benefits" : null);
+  const k401StartLabel = effectiveK401Start
+    ? `${fmt(effectiveK401Start)}${k401StartSource === "benefits" ? " (benefits start)" : ""}`
+    : "—";
+  const k401StartColor = k401StartSource === "benefits" ? "var(--color-gold)" : undefined;
   const enrolledConfig = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
 
   const [editing, setEditing]   = useState(true);
@@ -1003,7 +1009,7 @@ function PreferencesDetail({ config, onBack }) {
 
 // ── TaxPlanDetail ────────────────────────────────────────────────────────────
 
-function TaxPlanDetail({ config, setConfig, allWeeks, taxDerived, showExtra, setShowExtra, onBack }) {
+function TaxPlanDetail({ config, setConfig, allWeeks, taxDerived, showExtra, setShowExtra, onBack, isAdmin = false }) {
   const { extraPerCheck, taxedWeekCount, fedLiability, moLiability, ficaTotal, fedWithheldBase, moWithheldBase, fedGap, moGap, totalGap, targetExtraTotal, fedAGI } = taxDerived;
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1184,7 +1190,7 @@ export function ProfilePanel({ authedUser, config, setConfig, allWeeks, taxDeriv
     return <PreferencesDetail config={config} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "taxplan") {
-    return <TaxPlanDetail config={config} setConfig={setConfig} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} />;
+    return <TaxPlanDetail config={config} setConfig={setConfig} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} />;
   }
 
   // ── Main list ─────────────────────────────────────────────────────────────
@@ -1239,9 +1245,3 @@ export function ProfilePanel({ authedUser, config, setConfig, allWeeks, taxDeriv
     </div>
   );
 }
-  const effectiveK401Start = config.k401StartDate || config.benefitsStartDate || null;
-  const k401StartSource = config.k401StartDate ? "k401" : (config.benefitsStartDate ? "benefits" : null);
-  const k401StartLabel = effectiveK401Start
-    ? `${fmt(effectiveK401Start)}${k401StartSource === "benefits" ? " (benefits start)" : ""}`
-    : "—";
-  const k401StartColor = k401StartSource === "benefits" ? "var(--color-gold)" : undefined;

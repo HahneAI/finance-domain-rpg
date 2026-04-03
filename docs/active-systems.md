@@ -218,3 +218,13 @@ Hidden weeks/months preserved in `hiddenWeeks` / `hiddenMonths` arrays from `rol
 - Budget/Home/Log projection surfaces consume `fundedGoalSpend` so funded amounts stay deducted once from year-end-style totals and cannot drift back into available surplus.
 
 **Guardrail note:** this separation (baseline weekly surplus vs absorbed-goal projection adjustments) prevents the prior “spread + explicit subtract” double-count pattern.
+
+## 11. HomePanel build-parse stability (2026-04-03)
+
+**Issue observed:** deployment logs reported a Babel parse error in `HomePanel.jsx` around the funded-goal prop additions.
+
+**Hardening applied:**
+- Normalized `HomePanel.jsx` to UTF-8 (no BOM) with LF-only line endings.
+- Verified production compile succeeds after normalization with `npm run build`.
+
+**Result:** Home panel math/features remain unchanged, but parser stability is now deterministic across local + Vercel build environments.

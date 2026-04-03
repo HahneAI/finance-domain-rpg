@@ -250,3 +250,31 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
 ---
 
 ---
+
+---
+
+## 13. Mobile Navigation + Income IA + Budget Breakdown/Goals Bridge Discovery Notes (2026-04-03)
+
+- [ ] **[Planning] Mobile drawer: promote Goals to first-class destination and reduce shortcut count to five**
+  - [ ] Current nav sources to refactor are centralized in `src/App.jsx` (`NAV_ITEMS` for drawer/sidebar + `BOTTOM_NAV` for fixed mobile shortcuts) and `activePanel` routing (currently no direct `goals` route).
+  - [ ] Decide final five-item mobile shortcut set before coding (example candidate: Home, Income, Budget, Goals, Account).
+  - [ ] Implementation direction: either (A) add a top-level `goals` view key that opens Budget in goals-only mode, or (B) extract goals into a dedicated `GoalsPanel` component and route it directly.
+  - [ ] Validate drawer + bottom-nav parity so the new Goals page is reachable from both without nested stack confusion (`navigateDirect` / `viewStack`).
+
+- [ ] **[Planning] Income IA simplification: remove config subtab and flatten summary/sub-pill UX**
+  - [ ] Current Income structure is in `src/components/IncomePanel.jsx`: top tabs `summary|config`, then summary subtabs `monthly|weekly` with a second pill row.
+  - [ ] Move/confirm all editable Income config controls are represented in Profile settings (`src/components/ProfilePanel.jsx` sections: Pay Basics, Retirement & Benefits, Tax Plan, Buffer/Tax Exempt references).
+  - [ ] Target end-state: remove `config` subtab in Income and collapse UI into a single primary surface with monthly/weekly switching (no extra nested row if possible).
+  - [ ] Pay special attention to weekly sticky header behavior when hierarchy is simplified (sticky logic currently tied to `view === "summary" && subview === "weekly"`).
+
+- [ ] **[Planning] Budget breakdown chart: display-only deductions line item (do not alter tax threading)**
+  - [ ] Current Breakdown cashflow cards/tables live in `src/components/BudgetPanel.jsx` under `view === "breakdown"`; they show incoming paycheck, needs, loans, and unallocated.
+  - [ ] Research task: add a display-only deductions bucket sourced from existing weekly deduction math (`benefitsDeduction`/other deduction sources in `src/lib/finance.js`) without changing taxable-gross computation pipeline.
+  - [ ] Keep this additive to Breakdown visualization only (no mutation to `computeNet`, `buildYear`, or withholding logic unless separately scoped).
+
+- [ ] **[Planning] Breakdown cashflow should key off next check cadence and feed goals ETA with per-week realism**
+  - [ ] Existing data path already has per-week forward nets from App (`futureWeekNets` adjusted, `timelineWeekNets` raw) passed into Budget; verify which series Breakdown should present as the “next week check” source for rotating high/low paychecks.
+  - [ ] Current goal ETA engine is `computeGoalTimeline()` in `src/lib/finance.js`, which iterates weekly nets and subtracts effective weekly spend; review fallback averaging path (`avgNet`) for unfinished goals and reduce over-reliance on annualized averages.
+  - [ ] Add helper-planning item: design a small bridge utility that exposes `nextCheckNet - weekExpenses = weekSurplus` snapshots to both Breakdown and Goals timeline labels so users can see alternating-surplus weeks (e.g., $1700 vs $1000 check rotations).
+  - [ ] Ensure finish-date projection copy shows both long-range projection and short-range per-week surplus context so “goal completion date” is explainable to the dollar.
+

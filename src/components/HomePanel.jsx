@@ -192,30 +192,6 @@ export function HomePanel({
     </div>
   );
 }
-      {/* Section header */}
-      <div style={{ marginBottom: "18px", textAlign: "center" }}>
-        <div style={{
-          fontSize: "10px",
-          letterSpacing: "3px",
-          textTransform: "uppercase",
-          color: "var(--color-gold)",
-          marginBottom: "4px",
-        }}>
-          Financial Health
-        </div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", lineHeight: 1.6 }}>
-          {subtitle}
-        </div>
-      </div>
-
-      {/* 2-column tile grid */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: "12px",
-      }}>
-        {tiles.map((tile, i) => (
-          <MetricCard
             key={tile.title}
             label={tile.title}
             val={tile.value}

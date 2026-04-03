@@ -143,16 +143,15 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const TOUCH_EDGE_AUTOSCROLL_ZONE_PX = 92;
   const TOUCH_MAX_AUTOSCROLL_SPEED_PX = 18;
   const TOUCH_OVERLAY_EXIT_MS = 130;
-  // Resolve the current effective amount for an expense at the active phase
-  const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
-
   // Full-year annual cost: sums across all 4 quarters using a representative date per quarter.
   // Using a date within each quarter means getEffectiveAmount picks the correct history entry —
   // loans that pay off mid-year will return $0 for quarters after the payoff date.
   const Q_REP_DATES = [new Date("2026-02-15"), new Date("2026-05-15"), new Date("2026-08-15"), new Date("2026-11-15")];
   const WEEKS_PER_Q = [13, 13, 13, 13]; // 52 weeks total
+  const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
+  const quarterEffective = (exp, phaseIdx) => getEffectiveAmount(exp, Q_REP_DATES[phaseIdx], phaseIdx);
   const yearlyExpenseCost = (exp) =>
-    [0, 1, 2, 3].reduce((s, q) => s + getEffectiveAmount(exp, Q_REP_DATES[q], q) * WEEKS_PER_Q[q], 0);
+    [0, 1, 2, 3].reduce((s, q) => s + quarterEffective(exp, q) * WEEKS_PER_Q[q], 0);
 
   // Split loans from regular expenses for display purposes
   const loans = expenses.filter(e => e.type === "loan");
@@ -177,6 +176,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     });
   const f = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const round2 = (value) => (typeof value === "number" ? Math.round(value * 100) / 100 : value);
 
   // Budget debug trace — logs once when Budget tab mounts so formula routing is visible
   // directly in browser devtools for discrepancy triage (income vs spend vs weekly-left).
@@ -212,6 +212,63 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     });
     console.log("Expense totals", groupedTotals);
     console.table(expenseBreakdown);
+    console.groupEnd();
+    const quarterSummaries = Q_REP_DATES.map((_, qIdx) => {
+      const quarterBreakdown = expenses.map(exp => ({
+        id: exp.id,
+        label: exp.label,
+        type: exp.type ?? "regular",
+        phaseIdx: qIdx,
+        effectiveWeekly: quarterEffective(exp, qIdx),
+        splitWeekly: exp.weekly?.[qIdx] ?? 0,
+      }));
+      const quarterTotals = quarterBreakdown.reduce((acc, row) => {
+        const key = row.type === "loan" ? "loan" : "regular";
+        acc[key] += row.effectiveWeekly;
+        return acc;
+      }, { regular: 0, loan: 0 });
+      return {
+        quarter: `Q${qIdx + 1}`,
+        phaseLabel: PHASES[qIdx]?.label ?? `Phase ${qIdx + 1}`,
+        regular: round2(quarterTotals.regular),
+        loan: round2(quarterTotals.loan),
+        total: round2(quarterTotals.regular + quarterTotals.loan),
+      };
+    });
+    const quarterComparison = quarterSummaries.map((summary, idx) => {
+      const prev = quarterSummaries[idx - 1];
+      return {
+        quarter: summary.quarter,
+        phaseLabel: summary.phaseLabel,
+        total: summary.total,
+        deltaFromPrev: prev ? round2(summary.total - prev.total) : null,
+        regular: summary.regular,
+        loan: summary.loan,
+        loanDeltaFromPrev: prev ? round2(summary.loan - prev.loan) : null,
+      };
+    });
+    const expenseQuarterTable = expenses.map(exp => {
+      const rawValues = Q_REP_DATES.map((_, qIdx) => quarterEffective(exp, qIdx));
+      const values = rawValues.map(round2);
+      const deltas = rawValues.map((value, qIdx) => qIdx === 0 ? null : round2(value - rawValues[qIdx - 1]));
+      return {
+        id: exp.id,
+        label: exp.label,
+        type: exp.type ?? "regular",
+        q1: values[0],
+        q2: values[1],
+        q3: values[2],
+        q4: values[3],
+        deltaQ2: deltas[1],
+        deltaQ3: deltas[2],
+        deltaQ4: deltas[3],
+      };
+    });
+    console.groupCollapsed("[Budget Debug][Quarterly] Quarterly spend comparison");
+    console.table(quarterComparison);
+    if (expenseQuarterTable.length) {
+      console.table(expenseQuarterTable);
+    }
     console.groupEnd();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

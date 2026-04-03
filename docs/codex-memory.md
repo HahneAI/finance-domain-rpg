@@ -124,6 +124,15 @@ npx vitest run -u
 - Direction: trace the expense calculation path from income through intermediary transforms to quarterly splits, and log each transition in Markdown.
 - Required behavior: record transformation steps, multipliers/adjustments, quarterly split points, and weekly-versus-quarterly comparison points in the designated audit document.
 - Guardrails: audit/log only — no calculation modifications.
+
+## 2026-04-03 — Funded goal absorption follow-up (quick summary)
+- Refined funded-goal absorption flow to avoid a double-hit in downstream surplus math: `baseWeeklyUnallocated` now remains purely paycheck-minus-expense, while goal absorption is applied at projection/summary layers.
+- Kept annual “money already committed to funded goals” accounting intact via `fundedGoalSpend` in aggregate views (Home/Budget/Log + adjusted take-home displays).
+- Added dedicated fixture coverage in `src/test/lib/goalFunding.test.js` so future-dated completions do not prematurely reduce spendable projections.
+
+## 2026-04-03 — Build stability follow-up (quick summary)
+- Normalized `src/components/HomePanel.jsx` encoding/line endings to plain UTF-8 + LF to remove deployment parser fragility seen in Vercel build logs.
+- Re-ran production build and focused funded-goal tests successfully after normalization (`npm run build`, `npm run test:run -- src/test/lib/goalFunding.test.js`).
 ## DHL Payroll + Benefits Summary (2026-04-02)
 
 - Standard DHL preset now produces realistic paychecks for anyone outside the original account: short weeks project ~\$925 take-home (mandatory OT keeps gross above \$1.1k) and long weeks project ~\$1.14k net off ~\$1.5k gross.

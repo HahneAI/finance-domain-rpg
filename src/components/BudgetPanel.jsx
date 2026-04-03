@@ -92,7 +92,7 @@ const safeDate = (raw) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost, logNetGained, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, timelineWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo, userPaySchedule, isAdmin = false }) {
+export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost, logNetGained, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, timelineWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo, userPaySchedule, fundedGoalSpend = 0, isAdmin = false }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
@@ -1203,6 +1203,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       const nowIdx = getFiscalWeekNumber(currentWeek?.idx ?? 0) ?? 1;
       const totG = goals.reduce((s, g) => !g.completed ? s + g.target : s, 0);
       const projS = wr * weeksLeft;
+      const projSAfterFunded = projS - fundedGoalSpend;
       const lastGoalEW = tl.length ? (tl[tl.length - 1].eW ?? weeksLeft + 1) : 0;
       const ordinalSuffix = (day) => {
         if (day % 100 >= 11 && day % 100 <= 13) return "th";
@@ -1244,7 +1245,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Weekly Available" val={f2(wr)} rawVal={wr} color="var(--color-green)" />
           <Card label="Active Goals Total" val={f(totG)} rawVal={totG} color="var(--color-gold)" />
-          <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projS >= totG ? "var(--color-green)" : "var(--color-red)"} />
+          <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projSAfterFunded >= totG ? "var(--color-green)" : "var(--color-red)"} />
         </div>
 
         <div
@@ -1567,9 +1568,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "10px" }}>Year-End Outlook</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12px" }}>
             <div style={{ color: "var(--color-text-secondary)" }}>Weeks remaining</div><div style={{ textAlign: "right" }}>{weeksLeft}</div>
-            <div style={{ color: "var(--color-text-secondary)" }}>Adj. projected savings</div><div style={{ textAlign: "right", color: "var(--color-green)" }}>{f(projS)}</div>
+            <div style={{ color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div><div style={{ textAlign: "right", color: "var(--color-red)" }}>-{f(fundedGoalSpend)}</div>
+            <div style={{ color: "var(--color-text-secondary)" }}>Adj. projected savings</div><div style={{ textAlign: "right", color: "var(--color-green)" }}>{f(projSAfterFunded)}</div>
             <div style={{ color: "var(--color-text-secondary)" }}>Active goals total</div><div style={{ textAlign: "right", color: "var(--color-gold)" }}>{f(totG)}</div>
-            <div style={{ color: "var(--color-text-secondary)" }}>Surplus after all goals</div><div style={{ textAlign: "right", color: projS - totG >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{f(projS - totG)}</div>
+            <div style={{ color: "var(--color-text-secondary)" }}>Surplus after all goals</div><div style={{ textAlign: "right", color: projSAfterFunded - totG >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{f(projSAfterFunded - totG)}</div>
           </div>
           <div style={{ borderTop: "1px solid #6dbf8a33", marginTop: "12px", paddingTop: "12px", display: "flex", alignItems: "center", gap: "12px" }}>
             <button onClick={() => setGoals(prev => prev.map(({ dueWeek: _dueWeek, ...rest }) => rest))} style={{ background: "transparent", color: "rgba(76,175,125,0.4)", border: "1px solid #6dbf8a33", borderRadius: "12px", padding: "5px 10px", fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>Reset Timelines</button>

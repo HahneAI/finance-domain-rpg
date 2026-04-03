@@ -14,7 +14,7 @@ const normalizeDays = (v) =>
 
 const LOG_MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals, bucketModel, fiscalWeekInfo, isAdmin = false }) {
+export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals, fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isAdmin = false }) {
   const blank = {
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
     shiftsLost: 0, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0,
@@ -45,7 +45,7 @@ export function LogPanel({ logs, setLogs, config, projectedAnnualNet, baseWeekly
 
   const adjTH   = projectedAnnualNet - tot.nL + tot.nG;
   const adjWA   = baseWeeklyUnallocated - (tot.nL / weeksLeft) + (tot.nG / weeksLeft);
-  const projS   = adjWA * weeksLeft;
+  const projS   = adjWA * weeksLeft - fundedGoalSpend;
   const totGoals = goals.filter(g => !g.completed).reduce((s, g) => s + g.target, 0);
   const ok = projS >= totGoals;
 

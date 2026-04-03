@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek } from "./lib/finance.js";
+import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile } from "./lib/db.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -499,6 +500,7 @@ export default function App() {
 
   // ── Week-by-week remaining spend using history-aware amounts ──
   const remainingSpend = useMemo(() => computeRemainingSpend(expenses, futureWeeks), [expenses, futureWeeks]);
+  const fundedGoalSpend = useMemo(() => getFundedGoalSpend(goals, today), [goals, today]);
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
   // ── Event log cascade ──
@@ -512,9 +514,9 @@ export default function App() {
     k401kMatchGained: eventImpact.k401kMatchGained,
     ptoHoursLost: eventImpact.ptoHoursLost,
     bucketHours: eventImpact.bucketHours,
-    adjustedTakeHome: projectedAnnualNet + eventImpact.totalNetAdjustment,
+    adjustedTakeHome: projectedAnnualNet + eventImpact.totalNetAdjustment - fundedGoalSpend,
     adjustedWeeklyAvg: baseWeeklyUnallocated + eventImpact.adjustedWeeklyDelta
-  }), [eventImpact, projectedAnnualNet, baseWeeklyUnallocated]);
+  }), [eventImpact, projectedAnnualNet, baseWeeklyUnallocated, fundedGoalSpend]);
 
   // ── Attendance bucket model ──
   const bucketModel = useMemo(() => computeBucketModel(logs, config), [logs, config]);
@@ -580,6 +582,7 @@ export default function App() {
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
         today={today}
+        fundedGoalSpend={fundedGoalSpend}
         isAdmin={isAdmin}
       />}
       {currentView === "income" && <IncomePanel
@@ -609,6 +612,7 @@ export default function App() {
         fiscalWeekInfo={currentWeekNumber}
         today={today}
         userPaySchedule={config.userPaySchedule ?? "weekly"}
+        fundedGoalSpend={fundedGoalSpend}
         isAdmin={isAdmin}
       />}
       {currentView === "benefits" && <BenefitsPanel
@@ -633,6 +637,7 @@ export default function App() {
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
         goals={goals}
+        fundedGoalSpend={fundedGoalSpend}
         bucketModel={bucketModel}
       />}
       {currentView === "profile" && <ProfilePanel

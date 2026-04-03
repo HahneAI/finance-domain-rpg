@@ -2,11 +2,11 @@
 
 ## 1. Goals Funding + Tax Exempt Projection Integrity Sprint (2026-04-03)
 
-- [ ] **Funded goal cash absorption audit (no double counting after funding animation)**
-  - [ ] Trace current "Fund Goal" pipeline end-to-end: click handler → goal state mutation → funded list transfer → aggregate recompute path.
-  - [ ] Confirm funded amounts are treated as *spent* in all downstream totals: goals surplus section, surplus account, net worth, and annual take-home views.
-  - [ ] Add explicit guardrail checks so funded goal dollars cannot re-enter available surplus/take-home totals in later weeks.
-  - [ ] Validate behavior with a reproducible fixture (fund goal mid-year, confirm post-funding totals drop once and stay dropped).
+- [x] **Funded goal cash absorption audit (no double counting after funding animation)**
+  - [x] Trace current "Fund Goal" pipeline end-to-end: click handler → goal state mutation → funded list transfer → aggregate recompute path.
+  - [x] Confirm funded amounts are treated as *spent* in all downstream totals: goals surplus section, surplus account, net worth, and annual take-home views.
+  - [x] Add explicit guardrail checks so funded goal dollars cannot re-enter available surplus/take-home totals in later weeks.
+  - [x] Validate behavior with a reproducible fixture (fund goal mid-year, confirm post-funding totals drop once and stay dropped).
 
 - [ ] **Tax exempt payback withholding should behave like a real expense in taxed weeks**
   - [ ] Map where extra withholding is currently calculated and where it is displayed across weekly/monthly/year projections.

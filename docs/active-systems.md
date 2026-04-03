@@ -205,3 +205,26 @@ Testing requires manual date simulation (no date override utility yet):
 3. Near EOY — many hidden periods, scale near 1.15x cap
 
 Hidden weeks/months preserved in `hiddenWeeks` / `hiddenMonths` arrays from `rollingTimeline.js` — ready for a future full-year review tab without data migration.
+
+---
+
+## 10. Funded goal absorption integrity (2026-04-03)
+
+**Objective:** prevent funded-goal dollars from re-entering future surplus projections while avoiding double subtraction across weekly averages and year-end rollups.
+
+**Current behavior:**
+- `getFundedGoalSpend(goals, todayIso)` (new helper) sums completed goal targets as absorbed spend, ignores future-dated completions, and counts legacy completed goals without `completedAt`.
+- App-level `baseWeeklyUnallocated` remains the pure paycheck-minus-expense baseline; funded-goal absorption is applied in projection summaries instead of being smeared into baseline weekly math.
+- Budget/Home/Log projection surfaces consume `fundedGoalSpend` so funded amounts stay deducted once from year-end-style totals and cannot drift back into available surplus.
+
+**Guardrail note:** this separation (baseline weekly surplus vs absorbed-goal projection adjustments) prevents the prior “spread + explicit subtract” double-count pattern.
+
+## 11. HomePanel build-parse stability (2026-04-03)
+
+**Issue observed:** deployment logs reported a Babel parse error in `HomePanel.jsx` around the funded-goal prop additions.
+
+**Hardening applied:**
+- Normalized `HomePanel.jsx` to UTF-8 (no BOM) with LF-only line endings.
+- Verified production compile succeeds after normalization with `npm run build`.
+
+**Result:** Home panel math/features remain unchanged, but parser stability is now deterministic across local + Vercel build environments.

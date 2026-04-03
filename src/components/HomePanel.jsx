@@ -1,4 +1,6 @@
-﻿import { FlowSparklineCard, MetricCard } from "./ui.jsx";
+  prevWeekNet,
+  fundedGoalSpend = 0,
+  const annualSavings = weeklyLeft * 52 - fundedGoalSpend;
 import { FISCAL_WEEKS_PER_YEAR, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 

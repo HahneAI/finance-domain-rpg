@@ -211,6 +211,20 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
 
 *Last updated: 2026-04-03*
 
+## 12A. Non-Priority Brand Feature — Food Control Spotlight
+
+- [ ] **Brand-first food expense identity (non-priority)** — elevate Food as its own required expense signal so the experience reinforces our core promise: you stay in control of life math, even in everyday categories that feel easy to ignore.
+  - [ ] Add a dedicated Food expense card with a unique icon and visual emphasis (separate from generic Needs) while keeping it categorized under Needs in calculations.
+  - [ ] Require a Food expense input in budget setup and default to **$400/month for one person** as the starting value.
+  - [ ] Keep copy intentionally minimal in the core UI (subconscious visual emphasis over heavy explanation).
+
+- [ ] **Fast food buffer toggle (new-user budget trigger, non-priority)**
+  - [ ] Introduce this option only after a new user first opens the Budget tab (do not surface it earlier in onboarding).
+  - [ ] Add a dedicated on/off toggle modeled after the paycheck buffer behavior and placement.
+  - [ ] Use this exact explainer copy:
+    - [ ] "Similar to the paycheck buffer feature that you can turn on or off in order to match realistic lifestyle numbers when calculating your goals in life every year, we would like to add a fast food buffer to your income math. This buffer will be ignored from your paycheck formulas and specifically when calculating your extra money for goals."
+  - [ ] Ensure buffer math excludes the configured fast food amount from paycheck-based surplus/goal projections when enabled.
+
 
 ## Completed
 

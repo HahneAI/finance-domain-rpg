@@ -24,6 +24,7 @@
   - [ ] Create a UI spec pass for goals card simplification: remove low-value text blocks and define minimum info hierarchy.
   - [ ] Replace current "always full color bar" behavior with true progress-fill rendering tied to computed funding percentage.
   - [ ] Evaluate removing goal color picker and standardize goals to one system color unless premium theming requires overrides.
+  - [ ] Bring the current + future month markers back to the goal fill bar to turn bar back into timelime bar reaching to end of fiscal year, with months that pass dropping off.
   - [ ] Prototype "liquid/glass fill" interaction direction for premium mode while preserving readable fallback for standard mode.
 
 *Last updated: 2026-04-03*

@@ -2,7 +2,7 @@
 
 ## 1. Auth Providers
 
-- [ ] **Wire Google OAuth** — end-to-end Google sign-in/sign-up via Supabase OAuth
+- [x] **Wire Google OAuth** — end-to-end Google sign-in/sign-up via Supabase OAuth
   - [x] Frontend `signInWithOAuth` call + Google button in `LoginScreen.jsx` — done
   - [x] Supabase Google provider configured (Client ID + Secret set by user in Supabase dashboard) — done
   - [x] Delete account clears OAuth identity — `admin.deleteUser()` in `api/delete-account.js` removes Supabase auth user + all linked OAuth identities (Google); already correct

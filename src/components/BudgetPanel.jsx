@@ -178,6 +178,44 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const f = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  // Budget debug trace — logs once when Budget tab mounts so formula routing is visible
+  // directly in browser devtools for discrepancy triage (income vs spend vs weekly-left).
+  useEffect(() => {
+    const expenseBreakdown = expenses.map(exp => ({
+      id: exp.id,
+      label: exp.label,
+      type: exp.type ?? "regular",
+      phaseIdx: ap,
+      effectiveWeekly: currentEffective(exp, ap),
+      splitWeekly: exp.weekly?.[ap] ?? 0,
+      hasHistory: Boolean(exp.history?.length),
+      latestEffectiveFrom: exp.history?.length
+        ? exp.history.reduce((best, entry) => entry.effectiveFrom > best ? entry.effectiveFrom : best, exp.history[0].effectiveFrom)
+        : null,
+    }));
+    const groupedTotals = expenseBreakdown.reduce((acc, row) => {
+      const key = row.type === "loan" ? "loan" : "regular";
+      acc[key] += row.effectiveWeekly;
+      return acc;
+    }, { regular: 0, loan: 0 });
+    const weeklyLeftFormula = incomingWeekNet - ts;
+    console.groupCollapsed(`[Budget Debug] Phase ${ap} (${ph?.label ?? "unknown"})`);
+    console.log("Formula", {
+      weeklySpend: ts,
+      incomingWeekNet,
+      weeklyLeft: wr,
+      weeklyLeftFormula,
+      spendVsIncomePct: sp,
+      weeklyIncomeAverage: weeklyIncome,
+      prevWeekNet,
+      futureWeekNet0: futureWeekNets?.[0] ?? null,
+    });
+    console.log("Expense totals", groupedTotals);
+    console.table(expenseBreakdown);
+    console.groupEnd();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Fiscal year end for drop-off detection
   const fiscalYearEnd = futureWeeks?.length ? toLocalIso(futureWeeks[futureWeeks.length - 1].weekEnd) : "2027-01-04";
 

@@ -18,6 +18,7 @@ Last updated: 2026-03-30 | App: Authority Finance (A:Fin)
 | 6 | Expense Pay Period vs Monthly Display | `BudgetPanel.jsx` | Resolved (by design) |
 | 7 | Year Summary — Adjusted Net + Event Loss | `IncomePanel.jsx`, `App.jsx` | Live |
 | 8 | Log Tab — Hero + Log Effect Summary | `LogPanel.jsx` | Live |
+| 9 | Loan payoff quarter persistence | `finance.js` | Live — keeps payoff amounts through the payoff quarter |
 
 ---
 
@@ -137,6 +138,14 @@ Feeds full federal (`fedTax`) and state (`stateTax`) liability recalculation →
 **Attendance history** section: groups absence-type logs by calendar month, counts unpaid shifts, unapproved days, partial shifts. Day-of-week miss frequency sorted descending. Explanatory text box removed.
 
 ---
+
+## 9. Loan payoff quarter persistence
+
+**History rebuild:** `buildLoanHistory()` still regenerates a runway entry (`loanRunwayStartDate` + `loanWeeklyAmount`) per loan and a payoff entry, but the payoff entry now becomes effective the day after the quarter-end boundary that contains `computeLoanPayoffDate(loan)`. Helpers `getQuarterEndIsoForDate` (one of the new helper exports) and `addDaysToIso` derive that boundary from ISO cutoffs (Q1=Mar 31, Q2=Jun 30, Q3=Sep 30, Q4=Dec 31).
+
+**Quarter coverage:** Loans closing in July or August now keep their weekly allocation (e.g., Laptop \$33/wk, AirPods \$17.50/wk) visible through Q3 totals, so the quarterly spend audits and Budget tab phase math never drop them to zero before `2026-10-01`.
+
+**Why this matters:** A loan payoff happening mid-quarter previously zeroed the cost for that entire quarter; now the cost is kept alive through the quarter that contains the final payment, ensuring totals, goals, and console audit logs stay aligned with the user’s expectation that a loan “still exists” until the quarter closes.
 
 ## Core Architecture
 

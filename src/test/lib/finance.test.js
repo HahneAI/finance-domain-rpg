@@ -760,9 +760,9 @@ describe('buildLoanHistory', () => {
     expect(history[0].effectiveFrom < loan.firstPaymentDate).toBe(true)
   })
 
-  it('second entry effectiveFrom matches computeLoanPayoffDate', () => {
+  it('second entry effectiveFrom is the day after the payoff quarter boundary', () => {
     const history = buildLoanHistory(loan)
-    expect(history[1].effectiveFrom).toBe(computeLoanPayoffDate(loan))
+    expect(history[1].effectiveFrom).toBe('2026-07-01') // Q2 boundary is 2026-06-30; zero kicks in July 1
   })
 })
 

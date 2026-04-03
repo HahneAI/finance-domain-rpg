@@ -605,6 +605,27 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
 
 const DAYS_PER_FREQ = { weekly: 7, biweekly: 14, monthly: 30.4375 };
 
+const getQuarterEndDatesForYear = (year) => [
+  `${year}-03-31`,
+  `${year}-06-30`,
+  `${year}-09-30`,
+  `${year}-12-31`,
+];
+
+const getQuarterEndIsoForDate = (iso) => {
+  if (!iso) return null;
+  const parsed = parseIsoDate(iso);
+  const year = parsed ? parsed.getFullYear() : parseIsoDate(FISCAL_YEAR_START).getFullYear();
+  const boundaries = getQuarterEndDatesForYear(year);
+  return boundaries.find(boundary => iso <= boundary) ?? boundaries[boundaries.length - 1];
+};
+
+const addDaysToIso = (iso, days) => {
+  const parsed = parseIsoDate(iso) ?? new Date();
+  parsed.setDate(parsed.getDate() + days);
+  return toLocalIso(parsed);
+};
+
 export function loanWeeklyAmount(loan) {
   const amt = loan.paymentAmount ?? loan.paymentPerCheck ?? 0; // backward compat
   const freq = loan.paymentFrequency ?? loan.payFrequency ?? "weekly";
@@ -634,9 +655,12 @@ export function computeLoanPayoffDate(loan) {
 // History is always derived from loanMeta — runway start → payoff
 export function buildLoanHistory(loan) {
   const w = loanWeeklyAmount(loan);
+  const payoffDate = computeLoanPayoffDate(loan);
+  const quarterEnd = getQuarterEndIsoForDate(payoffDate) ?? payoffDate;
+  const zeroEffectiveFrom = quarterEnd ? addDaysToIso(quarterEnd, 1) : payoffDate;
   return [
     { effectiveFrom: loanRunwayStartDate(loan), weekly: [w, w, w, w] },
-    { effectiveFrom: computeLoanPayoffDate(loan), weekly: [0, 0, 0, 0] }
+    { effectiveFrom: zeroEffectiveFrom, weekly: [0, 0, 0, 0] }
   ];
 }
 

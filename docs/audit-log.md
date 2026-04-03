@@ -31,3 +31,8 @@ Generated at: 2026-04-03T10:46:44.489Z
 - **What happens:** Compare quarter-tab spend (currentEffective with today's date) against representative quarter-date routing and optional observed app values.
 - **Values:** `{"uiQuarterlySpendByPhase":[490,525,525,535],"representativeQuarterlySpendByPhase":[490,525,525,535],"uiVsRepresentativeDelta":[0,0,0,0],"observedQuarterlySpendByPhase":[null,757,794,774],"observedVsUiDelta":[-490,232,269,239]}`
 - **Passed on:** Audit markdown output
+
+## Step 7: loan payoff quarter persistence
+- **What happens:** Stretch a loan’s final weekly payment through the quarter that contains `computeLoanPayoffDate(loan)` so the Budget tab and audit totals never drop a loan to zero before its quarter closes.
+- **Values:** `{"quarterBoundaries":["2026-03-31","2026-06-30","2026-09-30","2026-12-31"],"zeroEffectiveFrom":"addDays(getQuarterEndIsoForDate(payoffDate),1)","notableLoans":[{"label":"Laptop","zeroEffectiveFrom":"2026-10-01"},{"label":"AirPods","zeroEffectiveFrom":"2026-10-01"}]}`
+- **Passed on:** Audit markdown output

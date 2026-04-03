@@ -181,7 +181,35 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
 
 - [ ] **Weekly subtab sticky card** — the Income tab’s Weekly view uses a sticky header/table shell that works on desktop, but on iPhone 17 the sticky row detaches ~2 cm before reaching the Dynamic Island and then snaps awkwardly. Rebuild the sticky behavior so the mini chart and column labels pin exactly at the viewport-safe-area boundary and release as expected across Safari/Chrome (test both portrait and landscape).
 
-*Last updated: 2026-03-31*
+---
+
+## 12. Goals Funding + Tax Exempt Projection Integrity Sprint (2026-04-03)
+
+- [ ] **Funded goal cash absorption audit (no double counting after funding animation)**
+  - [ ] Trace current "Fund Goal" pipeline end-to-end: click handler → goal state mutation → funded list transfer → aggregate recompute path.
+  - [ ] Confirm funded amounts are treated as *spent* in all downstream totals: goals surplus section, surplus account, net worth, and annual take-home views.
+  - [ ] Add explicit guardrail checks so funded goal dollars cannot re-enter available surplus/take-home totals in later weeks.
+  - [ ] Validate behavior with a reproducible fixture (fund goal mid-year, confirm post-funding totals drop once and stay dropped).
+
+- [ ] **Tax exempt payback withholding should behave like a real expense in taxed weeks**
+  - [ ] Map where extra withholding is currently calculated and where it is displayed across weekly/monthly/year projections.
+  - [ ] Ensure extra withholding is subtracted from taxed weeks as an expense (not only shown as a tax note), so future planning reflects reduced usable cash.
+  - [ ] Propagate the same subtraction into forward-looking charts and monthly rollups (future taxed weeks and months).
+  - [ ] Add consistency checks so weekly table, yearly projection math, and chart datasets all use one shared withholding-adjusted net value.
+
+- [ ] **Goal timeline ETA sensitivity bug (expenses change but finish week stays static)**
+  - [ ] Reproduce with a controlled scenario: increase recurring expenses by ~$150/week and compare goal #2 finish week before/after.
+  - [ ] Audit timeline inputs to verify the predictor is using live post-expense surplus instead of stale or averaged values.
+  - [ ] Fix dependency/recompute triggers so editing expenses immediately updates timeline completion weeks.
+  - [ ] Add regression coverage for at least two deltas (e.g., +$150/week, +$300/week) to ensure ETA moves later when surplus shrinks.
+
+- [ ] **Goals card + horizontal timeline UI rework prep (premium liquid-flow direction)**
+  - [ ] Create a UI spec pass for goals card simplification: remove low-value text blocks and define minimum info hierarchy.
+  - [ ] Replace current "always full color bar" behavior with true progress-fill rendering tied to computed funding percentage.
+  - [ ] Evaluate removing goal color picker and standardize goals to one system color unless premium theming requires overrides.
+  - [ ] Prototype "liquid/glass fill" interaction direction for premium mode while preserving readable fallback for standard mode.
+
+*Last updated: 2026-04-03*
 
 
 ## Completed
@@ -222,4 +250,3 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
 ---
 
 ---
-

@@ -759,10 +759,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       .filter((week) => week.start && week.end && week.end > week.start);
     if (!validWeeks.length) return null;
     const startMs = Math.min(...validWeeks.map(week => week.start.getTime()));
-    const endMs = Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS;
+    const rawEndMs = Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS;
+    const timelineYear = safeDate(TODAY_ISO)?.getFullYear() ?? new Date(startMs).getFullYear();
+    const calendarYearEndMs = new Date(timelineYear + 1, 0, 1).getTime();
+    const endMs = Math.min(rawEndMs, calendarYearEndMs);
     if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
     return { startMs, endMs, spanMs: endMs - startMs };
-  }, [futureWeeks]);
+  }, [futureWeeks, TODAY_ISO]);
 
   const timelineMonthSegments = useMemo(() => {
     if (!timelineBounds) return [];
@@ -1405,19 +1408,24 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                       />
                     </div>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 8px", flex: 1 }}>
-                      {visibleTimelineSegments.map(seg => (
-                        <span key={`${seg.key}-label`} style={{
-                          fontSize: `${(8 * goalTimelineScale).toFixed(1)}px`,
-                          letterSpacing: "1.5px",
-                          color: seg.key < TODAY_ISO.slice(0, 7) ? "var(--color-text-disabled)" : "#5f5f5f",
-                          textTransform: "uppercase"
-                        }}>
-                          {seg.label}
-                        </span>
-                      ))}
-                    </div>
+                  <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
+                    {visibleTimelineSegments.map(seg => (
+                      <span key={`${seg.key}-label`} style={{
+                        position: "absolute",
+                        left: `${seg.leftPct}%`,
+                        width: `${seg.widthPct}%`,
+                        transform: "translateY(-1px)",
+                        textAlign: "center",
+                        fontSize: `${Math.max(7, Math.round(8 * goalTimelineScale))}px`,
+                        letterSpacing: "1.1px",
+                        color: seg.key < TODAY_ISO.slice(0, 7) ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                        textTransform: "uppercase",
+                        whiteSpace: "nowrap",
+                        lineHeight: 1.1,
+                      }}>
+                        {seg.label}
+                      </span>
+                    ))}
                   </div>
                 </div>;
               })()}

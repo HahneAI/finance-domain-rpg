@@ -107,6 +107,38 @@ exports[`FED_BRACKETS > matches snapshot (catches accidental bracket edits) 1`] 
 ]
 `;
 
-exports[`INITIAL_EXPENSES > matches snapshot 1`] = `[]`;
+exports[`INITIAL_EXPENSES > matches snapshot 1`] = `
+[
+  {
+    "billingMeta": {
+      "amount": 400,
+      "cycle": "every30days",
+      "effectiveFrom": "2026-01-05",
+    },
+    "category": "Needs",
+    "history": [
+      {
+        "effectiveFrom": "2026-01-05",
+        "weekly": [
+          100,
+          100,
+          100,
+          100,
+        ],
+      },
+    ],
+    "id": "exp_default_food",
+    "isFoodHighlighted": true,
+    "isFoodPrimary": true,
+    "label": "Food",
+    "note": [
+      "",
+      "",
+      "",
+      "",
+    ],
+  },
+]
+`;
 
 exports[`INITIAL_GOALS > matches snapshot 1`] = `[]`;

@@ -94,6 +94,8 @@ npm run dev     # FAILS — same reason
 npm run typecheck  # does not exist — this is JSX, not TypeScript
 ```
 
+**Prefer pure JS solutions.** If a task can be solved without native binaries, system calls, or compiled modules, do it that way. Sandbox EPERM errors are not recoverable mid-task.
+
 **Test config:** Vitest auto-prefers `vitest.config.js` over `vite.config.js`. The separate config intentionally omits Tailwind, Rolldown, and LightningCSS to be sandbox-safe. Do not merge them.
 
 **Reporter:** verbose is set — always read per-test output, not just the summary line. Vitest 4's default reporter can miscount failures.
@@ -165,13 +167,34 @@ Full specs for tasks 1–7: `docs/codex-memory.md` §2026-04-03.
 
 ## Guardrails
 
+- **One task = one PR.** Do not bundle unrelated changes into a single commit or branch.
 - **No refactors outside explicit task scope.**
+- **Do not modify unrelated files.** If a file isn't in the task spec, don't touch it.
 - **Preserve calculation outputs unless the task explicitly changes math.**
+- **Do not introduce build-breaking changes.** If you can't run `npm run build` in sandbox, verify with `npm run test:run` and `npm run lint` at minimum — do not ship code you know is broken.
 - **No `npm run build` in sandbox.** Use `npm run test:run` to validate instead.
 - **Do not merge `vitest.config.js` into `vite.config.js`.**
 - **Do not use raw hex for accent, green, or red.** Always reference tokens.
 - **No new files unless the task spec requires them.**
 - **Do not touch `finance.js`, `App.jsx`, or `rollingTimeline.js` from a UI-only task.**
+- **`HomePanel.jsx` is encoding-sensitive.** Prior Codex sessions corrupted this file twice with mixed CRLF/duplicate blocks. Write clean LF-only output and do not append stray JSX after closing braces.
+
+---
+
+## Task Output Format
+
+When completing any task, return a structured summary in this format:
+
+```
+files_changed:         [list every file modified, created, or deleted]
+changes_made:          [one sentence per file — what changed and why]
+affected_calculation_paths: [which pipeline stages were touched, if any — buildYear / computeNet /
+                        computeGoalTimeline / calcEventImpact / rollingTimeline / none]
+validation_result:     [output of npm run lint && npm run test:run — pass / fail + relevant lines]
+new_risks_detected:    [any regressions, edge cases, or known gaps introduced or observed]
+```
+
+`affected_calculation_paths` is required even when the answer is "none" — it forces an explicit check that UI or config changes did not inadvertently reach the finance pipeline.
 
 ---
 

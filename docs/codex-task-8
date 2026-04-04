@@ -1,0 +1,100 @@
+{
+  "task_id": "FEATURE_goals_card_timeline_ui_rework_prep",
+  "task_type": "feature",
+  "environment_domain": "authority-finance-ui",
+  "allowed_environment_domains": ["authority-finance-ui"],
+  "environment_reason": "This task is a UI-only rework touching goals card presentation, timeline rendering, progress fill behavior, visual hierarchy, and premium-mode interaction styling. It belongs to the UI environment, not core finance or audit.",
+  "environment_mismatch_policy": "stop_and_report",
+
+  "objective": "Complete the goals UI TODO item by reworking the goals card and horizontal timeline prep in line with the premium liquid-flow direction, while preserving readable standard-mode behavior and avoiding unrelated finance logic changes.",
+
+  "scope": {
+    "allowed_files": [
+      "src/components/**",
+      "src/hooks/**",
+      "src/index.css",
+      "src/App.jsx",
+      "src/**/BudgetPanel.jsx",
+      "src/**/ui.jsx",
+      "src/**/HomePanel.jsx",
+      "src/**/IncomePanel.jsx",
+      "src/constants/**",
+      "docs/**",
+      "TODO.md"
+    ],
+    "restricted_files": [
+      "src/**/finance.js",
+      "src/**/rollingTimeline.js",
+      "src/**/computeNet*",
+      "src/**/buildYear*",
+      "src/**/tax*",
+      "src/**/benefits*",
+      "supabase/**",
+      "package-lock.json"
+    ],
+    "entry_points": [
+      "Goals card UI in BudgetPanel",
+      "Goal progress/timeline rendering",
+      "Shared UI primitives used by goal cards",
+      "CSS tokens / animation classes",
+      "TODO.md goals item completion"
+    ]
+  },
+
+  "constraints": [
+    "Do not modify finance math or core calculation logic unless absolutely required for reading an already-computed percentage.",
+    "Do not refactor unrelated panels or navigation.",
+    "Do not introduce build-only requirements or npm run build dependencies.",
+    "Preserve standard mode readability and provide reduced-motion-safe behavior.",
+    "Prefer reusing or extending existing UI primitives over wide structural rewrites.",
+    "Keep edits minimal and task-scoped.",
+    "If goal completion percentage is already available, consume it; do not invent new finance calculations.",
+    "If the active environment is not authority-finance-ui, stop immediately and return ENVIRONMENT_MISMATCH."
+  ],
+
+  "implementation_steps": [
+    "Verify active Codex environment is authority-finance-ui before making any changes.",
+    "Audit the existing goals card and timeline bar implementation in the Budget/goals area and identify the minimum files needed.",
+    "Simplify the goals card information hierarchy by removing or reducing low-value text blocks and preserving only the minimum useful summary content.",
+    "Replace the current always-full color bar behavior with true progress-fill rendering driven by the existing computed funding/completion percentage.",
+    "Restore or implement current/future month markers on the goal fill bar so it reads as a fiscal timeline extending to end of year, with passed months visually dropping off or de-emphasizing.",
+    "Standardize goal color treatment to the system color unless the current codebase already has a premium-theme override path that can be used without expanding scope.",
+    "Prototype the premium liquid/glass fill direction for premium mode only, with a plain readable fallback for standard mode and reduced-motion contexts.",
+    "Keep the interaction lightweight: motion under the premium backlog limits and no decorative effects on primary cards beyond the allowed goal-fill treatment.",
+    "Update TODO.md to mark the goals card + horizontal timeline UI rework prep item complete, only if the implemented work fully satisfies the task.",
+    "Run validation commands and summarize affected files, behavior changes, and any remaining risks."
+  ],
+
+  "risk_areas": [
+    "Goals card layout -> removing text may hide important contextual info or break spacing.",
+    "Progress fill rendering -> may desync with underlying percentage source if wrong prop/state is used.",
+    "Timeline month markers -> may misalign on small screens or overflow within card width.",
+    "Premium liquid/glass fill -> may reduce readability or contrast in standard mode if fallback is weak.",
+    "Shared UI primitive changes -> may unintentionally affect other cards outside goals.",
+    "CSS token changes -> may leak styling into unrelated components.",
+    "TODO.md completion -> may be marked complete before all listed sub-behaviors are actually landed."
+  ],
+
+  "potential_bugs": [
+    "Goal bar renders 0% or 100% incorrectly when completion percentage is nullish.",
+    "Month labels overlap on narrow mobile widths.",
+    "Premium fill animation causes jank on iPhone Safari.",
+    "Standard-mode fallback inherits premium transparency and becomes hard to read.",
+    "Existing goal color picker state becomes orphaned or visually broken if color controls are removed without cleanup.",
+    "Goals list/card heights change and break scroll rhythm or surrounding layout."
+  ],
+
+  "validation": [
+    "Environment check confirms active_environment = authority-finance-ui.",
+    "Goals card displays a simplified hierarchy with no obvious missing critical information.",
+    "Goal bar uses actual computed progress fill instead of always-full rendering.",
+    "Current/future month markers appear correctly and read as a timeline to fiscal year end.",
+    "Passed months are visually de-emphasized or dropped off as intended.",
+    "Premium-mode liquid/glass direction works without harming standard-mode readability.",
+    "Reduced-motion or non-premium fallback behaves cleanly.",
+    "No unrelated files were changed.",
+    "npm run lint passes.",
+    "npm run test:run passes.",
+    "TODO.md is only updated if the task is fully complete."
+  ]
+}

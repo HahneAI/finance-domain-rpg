@@ -192,27 +192,3 @@ export function HomePanel({
     </div>
   );
 }
-            key={tile.title}
-            label={tile.title}
-            val={tile.value}
-            rawVal={tile.rawVal ?? undefined}
-            sub={tile.sub}
-            status={tile.status}
-            span={tile.span}
-            size="30px"
-            onClick={() => navigate(tile.key)}
-            entranceIndex={i}
-          />
-        ))}
-      </div>
-
-      {/* Flow Score — placeholder, revisit later */}
-      <FlowSparklineCard
-        label="Flow Score"
-        score={flowScore}
-        points={flowTrendPoints}
-        trendLabel={`Projected pace · ${flowTrendPoints.length} checkpoints`}
-      />
-    </div>
-  );
-}

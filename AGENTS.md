@@ -69,11 +69,59 @@ docs/
 Three persistent environments are configured in Codex settings for this repo.
 **Select the environment that matches your task domain before launching.**
 
-| Environment | Use When Working On |
+### `authority-finance-core`
+Math engine, data pipeline, persistence, fiscal logic.
+
+| Scope | Files |
 |---|---|
-| `authority-finance-core` | `finance.js`, `rollingTimeline.js`, `constants/`, tax math, benefits pipeline, goal surplus engine |
-| `authority-finance-ui` | `components/`, `ui.jsx`, `index.css`, single panel builds, auth flows, token/style changes |
-| `authority-finance-audit` | `docs/` writes, value-flow traces, quarterly audits, expense mapping, source-of-truth checks |
+| Core math | `src/lib/finance.js`, `src/lib/rollingTimeline.js`, `src/lib/goalFunding.js` |
+| Fiscal week | `src/lib/fiscalWeek.js` |
+| Rotation / scheduling | `src/lib/rotation.js` |
+| Persistence | `src/lib/db.js`, `src/hooks/useLocalStorage.js` |
+| Constants | `src/constants/config.js`, `src/constants/stateTaxTable.js` |
+| Tests | `src/test/lib/`, `src/test/constants/`, `src/test/hooks/` |
+
+Use for: tax math, benefits pipeline (Task 4), fiscal week roadmap (Task 2), state tax audit (Task 3), goal surplus engine, any change to `buildYear` / `computeNet` / `computeGoalTimeline` / `calcEventImpact`.
+
+---
+
+### `authority-finance-ui`
+Components, panels, auth flows, design tokens, PWA shell.
+
+| Scope | Files |
+|---|---|
+| Root shell | `src/App.jsx`, `src/main.jsx` |
+| All panels | `src/components/` (all `.jsx` files) |
+| Shared primitives | `src/components/ui.jsx` |
+| Design tokens | `src/index.css` |
+| Auth API route | `api/delete-account.js` |
+| PWA / HTML shell | `index.html`, `public/` |
+| Component tests | `src/test/components/` |
+
+Use for: Profile auth flows (Task 1), sticky header (Task 6), tax plan relocation (Task 5), any panel build or rewrite, token/style changes, PWA label cleanup.
+
+---
+
+### `authority-finance-audit`
+Docs, task specs, value-flow traces, design references.
+
+| Scope | Files |
+|---|---|
+| Task specs | `docs/codex-task-1` through `docs/codex-task-7` |
+| Audit logs | `docs/audit-log.md`, `docs/codex-test-output.txt` |
+| Audit scripts | `scripts/generate-audit-log.mjs` |
+| Active systems | `docs/active-systems.md`, `docs/codex-memory.md`, `docs/TODO.md` |
+| Design refs | `docs/authority-design-system`, `docs/Authority-Company-Branding` |
+| Supporting docs | `docs/dhl-sprint-bugs.md`, `docs/state-tax-math-helper.md`, `docs/premium-ui-TODO.md` |
+
+Use for: expense calculation audit log (Task 7), quarterly switch audits, source-of-truth checks, value-flow tracing, any `docs/` write.
+
+---
+
+### No Environment — CC Only (Do Not Touch in Codex)
+`vite.config.js`, `vitest.config.js`, `eslint.config.js`, `package.json`, `package-lock.json`
+
+These are build/toolchain config files. Changes here require full-host build verification that is not possible in the Codex sandbox. Route to Claude Code.
 
 ---
 

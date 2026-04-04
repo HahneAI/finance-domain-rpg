@@ -85,6 +85,7 @@ const monthlyFromPerPaycheck = (perPaycheck, cpm) => roundToQuarter(perPaycheck 
 
 const MONTH_SUBDIVISIONS = 4;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
 const safeDate = (raw) => {
   if (!raw) return null;
@@ -117,7 +118,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const [editGoalId, setEditGoalId] = useState(null);
   const [editGoalVals, setEditGoalVals] = useState({});
   const [addingGoal, setAddingGoal] = useState(false);
-  const [newGoal, setNewGoal] = useState({ label: "", target: "", color: "var(--color-gold)", note: "" });
+  const [newGoal, setNewGoal] = useState({ label: "", target: "", note: "" });
   const [delGoalId, setDelGoalId] = useState(null);
   const [draggingGoalId, setDraggingGoalId] = useState(null);
   const [dragOverGoalId, setDragOverGoalId] = useState(null);
@@ -644,7 +645,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   // Goal helpers
   const activeGoals = goals.filter(g => !g.completed);
   const completedGoals = goals.filter(g => g.completed);
-  const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, color: g.color, note: g.note }); };
+  const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, note: g.note }); };
   const saveEditGoal = (id) => {
     setGoals(p => p.map(g => g.id === id ? {
       ...g,
@@ -658,11 +659,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       id: `g_${Date.now()}`,
       label: newGoal.label,
       target: parseFloat(newGoal.target) || 0,
-      color: newGoal.color || "var(--color-gold)",
+      color: GOAL_SYSTEM_COLOR,
       note: newGoal.note,
       completed: false
     }]);
-    setAddingGoal(false); setNewGoal({ label: "", target: "", color: "var(--color-gold)", note: "" });
+    setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" });
   };
   const deleteGoal = (id) => { setGoals(p => p.filter(g => g.id !== id)); setDelGoalId(null); };
   const toggleComplete = (id) => setGoals(p => p.map(g => g.id === id ? { ...g, completed: !g.completed } : g));
@@ -757,9 +758,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       }))
       .filter((week) => week.start && week.end && week.end > week.start);
     if (!validWeeks.length) return null;
-    const timelineEnd = new Date(Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS);
-    const startOfYear = new Date(timelineEnd.getFullYear(), 0, 1);
-    const startMs = startOfYear.getTime();
+    const startMs = Math.min(...validWeeks.map(week => week.start.getTime()));
     const endMs = Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS;
     if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
     return { startMs, endMs, spanMs: endMs - startMs };
@@ -798,11 +797,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     return segments;
   }, [timelineBounds]);
   const rollingGoalTimeline = useMemo(
-    () => deriveRollingTimelineMonths(timelineMonthSegments, TODAY_ISO, 1),
+    () => deriveRollingTimelineMonths(timelineMonthSegments, TODAY_ISO, 0),
     [timelineMonthSegments, TODAY_ISO]
   );
   const visibleTimelineSegments = rollingGoalTimeline.visibleMonths;
-  const archivedTimelineSegments = rollingGoalTimeline.hiddenMonths;
   const goalTimelineScale = progressiveScale(rollingGoalTimeline.scaleProgress, 0.15);
 
   // Goal timeline — computed at component level so useEffect can read it
@@ -1272,7 +1270,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
         const ok = g.eW !== null && g.eW <= weeksLeft;
         const isEditing = editGoalId === g.id;
         const celebrating = fundingId === g.id;
-        const isDragging = draggingGoalId === g.id;
+          const isDragging = draggingGoalId === g.id;
           const isDropTarget = dragOverGoalId === g.id;
           const finishLabel = resolveGoalFinishLabel(g) ?? "Timeline pending";
           // TODO: tune — card glow animation duration (1.8s) and easing (ease-out)
@@ -1303,7 +1301,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
             }}
             style={{
               background: "var(--color-bg-surface)",
-              border: `1px solid ${isDropTarget ? "var(--color-gold)" : (celebrating ? "var(--color-green)" : g.color + "33")}`,
+              border: `1px solid ${isDropTarget ? "var(--color-gold)" : (celebrating ? "var(--color-green)" : "var(--color-border-accent)")}`,
               borderRadius: "8px",
               padding: "16px",
               marginBottom: "12px",
@@ -1321,13 +1319,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={editGoalVals.label} onChange={e => setEditGoalVals(v => ({ ...v, label: e.target.value }))} style={iS} /></div>
                 <div><label style={lS}>Target ($)</label><input type="number" value={editGoalVals.target} onChange={e => setEditGoalVals(v => ({ ...v, target: e.target.value }))} style={iS} /></div>
-                <div><label style={lS}>Color (hex)</label>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input type="text" value={editGoalVals.color} onChange={e => setEditGoalVals(v => ({ ...v, color: e.target.value }))} style={{ ...iS, flex: 1 }} />
-                    <div style={{ width: "28px", height: "28px", borderRadius: "4px", background: editGoalVals.color, border: "1px solid #333", flexShrink: 0 }} />
-                    <input type="color" value={editGoalVals.color} onChange={e => setEditGoalVals(v => ({ ...v, color: e.target.value }))} style={{ width: "28px", height: "28px", padding: 0, border: "none", background: "transparent", cursor: "pointer" }} />
-                  </div>
-                </div>
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={editGoalVals.note} onChange={e => setEditGoalVals(v => ({ ...v, note: e.target.value }))} style={iS} /></div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
@@ -1338,13 +1329,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "10px", background: g.color + "22", color: g.color, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
+                    <span style={{ fontSize: "10px", background: "rgba(0,200,150,0.16)", color: GOAL_SYSTEM_COLOR, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
                     <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
                   </div>
-                  <div style={{ fontSize: "10px", color: "#777" }}>{g.note}</div>
                 </div>
                 <div style={{ textAlign: "right", marginLeft: "12px" }}>
-                  <div style={{ fontSize: "18px", fontWeight: "bold", color: g.color }}>{f(g.target)}</div>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{f(g.target)}</div>
                   <div style={{ fontSize: "10px", color: ok ? "var(--color-green)" : "var(--color-red)" }}>{finishLabel}</div>
                   {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                 </div>
@@ -1352,23 +1342,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               {/* TODO: tune — monthly timeline subdivision opacity/width (currently subtle for low visual noise) */}
               {(() => {
                 const nWeeks = Math.max(weeksLeft, 1);
-                const rawStart = Number.isFinite(g.sW) ? g.sW : 0;
-                const projectedEnd = Number.isFinite(g.eW) ? g.eW : rawStart + (Number.isFinite(g.wN) ? g.wN : 0);
-                const startWeek = Math.min(nWeeks, Math.max(0, rawStart));
-                const endWeek = Math.min(nWeeks, Math.max(startWeek, projectedEnd));
-                const fallbackLeftPct = (startWeek / nWeeks) * 100;
-                const fallbackWidthPct = Math.max(((endWeek - startWeek) / nWeeks) * 100, 0);
-                let goalLeftPct = fallbackLeftPct;
-                let goalWidthPct = fallbackWidthPct;
-                if (timelineBounds?.spanMs && futureWeeks?.length) {
-                  const anchorStart = safeDate(futureWeeks[0]?.weekStart)?.getTime() ?? timelineBounds.startMs;
-                  const weekMs = 7 * DAY_MS;
-                  const startMs = anchorStart + (startWeek * weekMs);
-                  const endMs = anchorStart + (endWeek * weekMs);
-                  goalLeftPct = clamp01((startMs - timelineBounds.startMs) / timelineBounds.spanMs) * 100;
-                  goalWidthPct = Math.max(clamp01((endMs - startMs) / timelineBounds.spanMs) * 100, 0);
-                }
-                const visibleWidthPct = goalWidthPct > 0 && goalWidthPct < 0.45 ? 0.45 : goalWidthPct;
+                const projectedWeeks = Number.isFinite(g.eW)
+                  ? Math.max(0, Math.ceil(g.eW))
+                  : Math.max(0, Math.ceil((Number.isFinite(g.sW) ? g.sW : 0) + (Number.isFinite(g.wN) ? g.wN : 0)));
+                const fillWidthPct = clamp01(projectedWeeks / nWeeks) * 100;
                 return <div style={{ marginBottom: "8px" }}>
                   <div style={{
                     height: `${Math.round(16 * goalTimelineScale)}px`,
@@ -1389,7 +1366,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                         height: "100%",
                         borderLeft: "1px solid #232323",
                         borderRight: "1px solid #1a1a1a",
-                        opacity: 0.7,
+                        opacity: seg.key < TODAY_ISO.slice(0, 7) ? 0.28 : 0.72,
                         pointerEvents: "none"
                       }}>
                         {seg.subdivisions.map((sub) => (
@@ -1405,19 +1382,28 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                         ))}
                       </div>;
                     })}
-                    {/* Continuous goal bar with partial month positioning */}
-                    {visibleWidthPct > 0 && <div style={{
+                    {/* Goal timeline lane + cumulative fill */}
+                    <div style={{
                       position: "absolute",
                       top: "2px",
-                      left: `${goalLeftPct}%`,
-                      width: `${visibleWidthPct}%`,
+                      left: 0,
+                      width: "100%",
                       height: "calc(100% - 4px)",
                       borderRadius: "3px",
-                      background: celebrating ? "var(--color-green)" : g.color,
-                      opacity: celebrating ? 1 : (ok ? 0.96 : 0.58),
-                      boxShadow: celebrating ? "0 0 10px rgba(76,175,125,0.55)" : "none",
-                      transition: "background 0.35s ease-out, opacity 0.35s ease-out"
-                    }} />}
+                      background: "rgba(0,200,150,0.1)",
+                      border: "1px solid rgba(0,200,150,0.26)",
+                      opacity: 0.95,
+                    }}>
+                      <div
+                        className="goal-fill goal-fill--standard"
+                        style={{
+                          width: `${Math.max(fillWidthPct, celebrating ? 100 : 0)}%`,
+                          background: celebrating ? "var(--color-green)" : GOAL_SYSTEM_COLOR,
+                          opacity: celebrating ? 1 : 0.9,
+                          boxShadow: celebrating ? "0 0 10px rgba(76,175,125,0.55)" : "none",
+                        }}
+                      />
+                    </div>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 8px", flex: 1 }}>
@@ -1425,22 +1411,14 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                         <span key={`${seg.key}-label`} style={{
                           fontSize: `${(8 * goalTimelineScale).toFixed(1)}px`,
                           letterSpacing: "1.5px",
-                          color: "#5f5f5f",
+                          color: seg.key < TODAY_ISO.slice(0, 7) ? "var(--color-text-disabled)" : "#5f5f5f",
                           textTransform: "uppercase"
                         }}>
                           {seg.label}
                         </span>
                       ))}
                     </div>
-                    <span style={{ fontSize: `${(8 * goalTimelineScale).toFixed(1)}px`, letterSpacing: "1.5px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
-                      4 week blocks / month
-                    </span>
                   </div>
-                  {archivedTimelineSegments.length > 0 && (
-                    <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "8px" }}>
-                      {archivedTimelineSegments.length} older month segment(s) hidden (view keeps previous month + rest of year; archived for future full-year review).
-                    </div>
-                  )}
                 </div>;
               })()}
               {celebrating && <>
@@ -1448,7 +1426,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                 <div style={{ position: "absolute", top: "50%", left: "50%", pointerEvents: "none", zIndex: 10 }}>
                   {/* TODO: tune — particle fontSize (13px), animation duration (0.85s), cubic-bezier easing */}
                   {BURST_PARTICLES.map((p, pi) => (
-                    <span key={pi} style={{ position: "absolute", fontSize: "13px", color: g.color, "--dx": `${p.dx}px`, "--dy": `${p.dy}px`, animation: `goalParticle 0.85s cubic-bezier(0.25,0.46,0.45,0.94) ${p.delay} forwards`, transform: "translate(-50%,-50%)", userSelect: "none" }}>{p.symbol}</span>
+                    <span key={pi} style={{ position: "absolute", fontSize: "13px", color: GOAL_SYSTEM_COLOR, "--dx": `${p.dx}px`, "--dy": `${p.dy}px`, animation: `goalParticle 0.85s cubic-bezier(0.25,0.46,0.45,0.94) ${p.delay} forwards`, transform: "translate(-50%,-50%)", userSelect: "none" }}>{p.symbol}</span>
                   ))}
                 </div>
                 {/* TODO: tune — stamp entrance duration (0.45s), bounce easing, entrance delay (0.1s) */}
@@ -1459,7 +1437,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               </>}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
-                <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: g.color }}>{f2(wr)}/wk</span> · {g.wN.toFixed(1)} weeks to fund</div>
+                <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(wr)}/wk</span> · {g.wN.toFixed(1)} weeks to fund</div>
                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
                   <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
@@ -1505,18 +1483,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={e => setNewGoal(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Emergency Fund" /></div>
             <div><label style={lS}>Target ($)</label><input type="number" value={newGoal.target} onChange={e => setNewGoal(v => ({ ...v, target: e.target.value }))} style={iS} /></div>
-            <div><label style={lS}>Color (hex)</label>
-              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <input type="text" value={newGoal.color} onChange={e => setNewGoal(v => ({ ...v, color: e.target.value }))} style={{ ...iS, flex: 1 }} />
-                <div style={{ width: "28px", height: "28px", borderRadius: "4px", background: newGoal.color, border: "1px solid #333", flexShrink: 0 }} />
-                <input type="color" value={newGoal.color} onChange={e => setNewGoal(v => ({ ...v, color: e.target.value }))} style={{ width: "28px", height: "28px", padding: 0, border: "none", background: "transparent", cursor: "pointer" }} />
-              </div>
-            </div>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={newGoal.note} onChange={e => setNewGoal(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Optional description" /></div>
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
             <button onClick={addGoal} disabled={!newGoal.label || !newGoal.target} style={{ background: (newGoal.label && newGoal.target) ? "var(--color-green)" : "var(--color-border-subtle)", color: (newGoal.label && newGoal.target) ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newGoal.label && newGoal.target) ? "pointer" : "default", fontWeight: "bold" }}>ADD GOAL</button>
-            <button onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", color: "var(--color-gold)", note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
+            <button onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
           </div>
         </div> : <button onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</button>}
 
@@ -1532,11 +1503,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           </button>
 
           {showCompleted && <>
-            {completedGoals.map((g, i) => {
+            {completedGoals.map((g) => {
               const dateFunded = g.completedAt
                 ? new Date(g.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
                 : null;
-              return <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", borderLeft: `3px solid ${g.color}55`, background: "#0e0e0e", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+              return <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", borderLeft: "3px solid rgba(0,200,150,0.4)", background: "#0e0e0e", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: g.note ? "3px" : 0 }}>
                     <span style={{ fontSize: "11px", color: "#3a3a3a", textDecoration: "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>

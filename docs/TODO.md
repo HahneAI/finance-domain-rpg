@@ -20,14 +20,14 @@
   - [ ] Fix dependency/recompute triggers so editing expenses immediately updates timeline completion weeks.
   - [ ] Add regression coverage for at least two deltas (e.g., +$150/week, +$300/week) to ensure ETA moves later when surplus shrinks.
 
-- [ ] **Goals card + horizontal timeline UI rework prep (premium liquid-flow direction)**
-  - [ ] Create a UI spec pass for goals card simplification: remove low-value text blocks and define minimum info hierarchy.
-  - [ ] Replace current "always full color bar" behavior with true progress-fill rendering tied to computed funding percentage.
-  - [ ] Evaluate removing goal color picker and standardize goals to one system color unless premium theming requires overrides.
-  - [ ] Bring the current + future month markers back to the goal fill bar to turn bar back into timelime bar reaching to end of fiscal year, with months that pass dropping off.
-  - [ ] Prototype "liquid/glass fill" interaction direction for premium mode while preserving readable fallback for standard mode.
+- [x] **Goals card + horizontal timeline UI rework prep (premium liquid-flow direction)**
+  - [x] Create a UI spec pass for goals card simplification: remove low-value text blocks and define minimum info hierarchy.
+  - [x] Replace current "always full color bar" behavior with true progress-fill rendering tied to computed funding percentage.
+  - [x] Evaluate removing goal color picker and standardize goals to one system color unless premium theming requires overrides.
+  - [x] Bring the current + future month markers back to the goal fill bar to turn bar back into timelime bar reaching to end of fiscal year, with months that pass dropping off.
+  - [x] Prototype "liquid/glass fill" interaction direction for premium mode while preserving readable fallback for standard mode.
 
-*Last updated: 2026-04-03*
+*Last updated: 2026-04-04*
 
 ## 2. Non-Priority Brand Feature — Food Control Spotlight
 

@@ -759,10 +759,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       .filter((week) => week.start && week.end && week.end > week.start);
     if (!validWeeks.length) return null;
     const startMs = Math.min(...validWeeks.map(week => week.start.getTime()));
-    const endMs = Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS;
+    const rawEndMs = Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS;
+    const timelineYear = safeDate(TODAY_ISO)?.getFullYear() ?? new Date(startMs).getFullYear();
+    const calendarYearEndMs = new Date(timelineYear + 1, 0, 1).getTime();
+    const endMs = Math.min(rawEndMs, calendarYearEndMs);
     if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
     return { startMs, endMs, spanMs: endMs - startMs };
-  }, [futureWeeks]);
+  }, [futureWeeks, TODAY_ISO]);
 
   const timelineMonthSegments = useMemo(() => {
     if (!timelineBounds) return [];

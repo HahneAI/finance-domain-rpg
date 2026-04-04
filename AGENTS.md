@@ -125,6 +125,30 @@ These are build/toolchain config files. Changes here require full-host build ver
 
 ---
 
+## Environment Enforcement
+
+Every task must declare an `environment_domain` at the start.
+
+Before making any code changes:
+- Verify the active Codex environment matches the task's `environment_domain`
+- If it does not match, **stop immediately**
+- Do not partially implement
+- Do not "attempt anyway"
+
+On mismatch, return exactly this structure and nothing else:
+
+```
+status:                       ENVIRONMENT_MISMATCH
+active_environment:           [the environment Codex is currently running in]
+expected_environment:         [the environment the task requires per the routing table above]
+reason_task_does_not_belong_here: [one sentence — which files/domains the task touches and why they are out of scope]
+recommended_environment:      [which of the three environments to relaunch in]
+```
+
+This is a hard stop. A wrong-environment task that proceeds anyway risks modifying the finance pipeline from a UI task, or writing docs changes from a core math task. The PR will be rejected.
+
+---
+
 ## Commands
 
 ### Always Safe in Any Environment

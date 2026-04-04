@@ -913,23 +913,31 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
             const expCycle = resolveExpenseCycle(exp, ap);
             const monthlyDisplay = `${f(monthlyFromPerPaycheck(effAmt, cpm))}/mo`;
             const isEditing = editId === exp.id;
+            const isPinnedFoodCard = Boolean(exp.isFoodPrimary || exp.isFoodHighlighted);
             const isDragging = draggingExpenseId === exp.id;
             const previewCategory = dragPreviewExpenseCategory ?? exp.category;
             const lanePreviewingMove = isDragging && previewCategory !== exp.category;
             const previewTint = lanePreviewingMove ? EXPENSE_DRAG_PREVIEW_TINT[previewCategory] : null;
             const cardInsertIndex = laneCardsExcludingDragged.findIndex(item => item.id === exp.id);
             const showInsertLineBefore = isExpenseDropLane
+              && !isPinnedFoodCard
               && draggingExpenseId
               && expenseInsertLane === cat
               && expenseInsertIndex === cardInsertIndex;
             return <div
               key={exp.id}
               data-expense-id={exp.id}
-              draggable={!isEditing && isExpenseDropLane && !isCoarsePointer}
-              onDragStart={(e) => onExpenseDragStart(exp, e)}
+              draggable={!isPinnedFoodCard && !isEditing && isExpenseDropLane && !isCoarsePointer}
+              onDragStart={(e) => {
+                if (isPinnedFoodCard) {
+                  e.preventDefault();
+                  return;
+                }
+                onExpenseDragStart(exp, e);
+              }}
               onDragEnd={onExpenseDragEnd}
               onTouchStart={(e) => {
-                if (!isEditing && isExpenseDropLane) onExpenseTouchStart(e, exp);
+                if (!isPinnedFoodCard && !isEditing && isExpenseDropLane) onExpenseTouchStart(e, exp);
               }}
               onTouchMove={onExpenseTouchMove}
               onTouchEnd={onExpenseTouchEnd}
@@ -955,24 +963,32 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                 resetExpensePreviewToOrigin();
               }}
               style={{
-                background: lanePreviewingMove
-                  ? `linear-gradient(120deg, ${CATEGORY_BG[cat]} 0%, ${CATEGORY_BG[cat]} 40%, ${previewTint} 72%, ${CATEGORY_BG[previewCategory]} 100%)`
-                  : CAT_GRADIENT[cat] ?? CATEGORY_BG[cat],
-                border: `1px solid ${lanePreviewingMove ? `${CATEGORY_COLORS[previewCategory]}66` : "#1e1e1e"}`,
+                background: isPinnedFoodCard
+                  ? CATEGORY_BG[cat]
+                  : lanePreviewingMove
+                    ? `linear-gradient(120deg, ${CATEGORY_BG[cat]} 0%, ${CATEGORY_BG[cat]} 40%, ${previewTint} 72%, ${CATEGORY_BG[previewCategory]} 100%)`
+                    : CAT_GRADIENT[cat] ?? CATEGORY_BG[cat],
+                border: isPinnedFoodCard
+                  ? "1px solid #1e1e1e"
+                  : `1px solid ${lanePreviewingMove ? `${CATEGORY_COLORS[previewCategory]}66` : "#1e1e1e"}`,
                 borderRadius: "6px",
                 padding: "10px 12px",
                 marginBottom: "6px",
                 position: "relative",
                 opacity: isDragging ? 0.72 : 1,
-                cursor: isEditing ? "default" : (isExpenseDropLane ? (isDragging ? "grabbing" : "grab") : "default"),
+                cursor: isPinnedFoodCard
+                  ? "default"
+                  : isEditing ? "default" : (isExpenseDropLane ? (isDragging ? "grabbing" : "grab") : "default"),
                 transform: isDragging ? "scale(0.94)" : "scale(1)",
-                boxShadow: isDragging
-                  ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}2a inset`
-                  : lanePreviewingMove ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}33 inset` : "none",
+                boxShadow: isPinnedFoodCard
+                  ? "none"
+                  : isDragging
+                    ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}2a inset`
+                    : lanePreviewingMove ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}33 inset` : "none",
                 transition: `background 280ms ${EXPENSE_DRAG_EASE}, border-color 300ms ${EXPENSE_DRAG_EASE}, box-shadow 300ms ${EXPENSE_DRAG_EASE}, opacity 220ms ${EXPENSE_DRAG_EASE}, transform 220ms ${EXPENSE_DRAG_EASE}`,
-                touchAction: isExpenseDropLane ? "pan-y" : "auto",
-                userSelect: isExpenseDropLane ? "none" : "auto",
-                WebkitUserSelect: isExpenseDropLane ? "none" : "auto",
+                touchAction: isPinnedFoodCard ? "auto" : (isExpenseDropLane ? "pan-y" : "auto"),
+                userSelect: isPinnedFoodCard ? "auto" : (isExpenseDropLane ? "none" : "auto"),
+                WebkitUserSelect: isPinnedFoodCard ? "auto" : (isExpenseDropLane ? "none" : "auto"),
                 willChange: draggingExpenseId ? "transform, opacity" : "auto",
               }}
             >
@@ -1016,7 +1032,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                   <button onClick={() => setEditId(null)} style={{ background: "var(--color-border-subtle)", color: "var(--color-text-secondary)", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", }}>✕</button>
                 </div>
               </div> : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
-                <button
+                {!isPinnedFoodCard && <button
                   type="button"
                   data-expense-drag-handle
                   aria-label={`Hold to drag ${exp.label}`}
@@ -1042,10 +1058,15 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                   }}
                 >
                   ⋮⋮
-                </button>
-                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: "13px" }}>{exp.label}</div></div>
+                </button>}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <div style={{ fontSize: "13px" }}>{exp.label}</div>
+                    {isPinnedFoodCard && <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-gold)", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>FOOD</span>}
+                  </div>
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  {pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
+                  {!isPinnedFoodCard && pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
                     <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{monthlyDisplay}</div>

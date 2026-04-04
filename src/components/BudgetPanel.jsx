@@ -758,9 +758,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       }))
       .filter((week) => week.start && week.end && week.end > week.start);
     if (!validWeeks.length) return null;
-    const timelineEnd = new Date(Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS);
-    const startOfYear = new Date(timelineEnd.getFullYear(), 0, 1);
-    const startMs = startOfYear.getTime();
+    const startMs = Math.min(...validWeeks.map(week => week.start.getTime()));
     const endMs = Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS;
     if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
     return { startMs, endMs, spanMs: endMs - startMs };
@@ -799,11 +797,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     return segments;
   }, [timelineBounds]);
   const rollingGoalTimeline = useMemo(
-    () => deriveRollingTimelineMonths(timelineMonthSegments, TODAY_ISO, 1),
+    () => deriveRollingTimelineMonths(timelineMonthSegments, TODAY_ISO, 0),
     [timelineMonthSegments, TODAY_ISO]
   );
   const visibleTimelineSegments = rollingGoalTimeline.visibleMonths;
-  const archivedTimelineSegments = rollingGoalTimeline.hiddenMonths;
   const goalTimelineScale = progressiveScale(rollingGoalTimeline.scaleProgress, 0.15);
 
   // Goal timeline — computed at component level so useEffect can read it
@@ -1273,13 +1270,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
         const ok = g.eW !== null && g.eW <= weeksLeft;
         const isEditing = editGoalId === g.id;
         const celebrating = fundingId === g.id;
-        const isDragging = draggingGoalId === g.id;
+          const isDragging = draggingGoalId === g.id;
           const isDropTarget = dragOverGoalId === g.id;
           const finishLabel = resolveGoalFinishLabel(g) ?? "Timeline pending";
-          const startOffset = Number.isFinite(g.sW) ? g.sW : 0;
-          const totalDuration = Number.isFinite(g.wN) ? Math.max(g.wN, 0) : Math.max((Number.isFinite(g.eW) ? g.eW : 0) - startOffset, 0);
-          const weeksElapsed = Math.max(0, -startOffset);
-          const goalCompletionPct = totalDuration > 0 ? clamp01(weeksElapsed / totalDuration) : (ok ? 1 : 0);
           // TODO: tune — card glow animation duration (1.8s) and easing (ease-out)
           return <div
             key={g.id}
@@ -1349,23 +1342,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               {/* TODO: tune — monthly timeline subdivision opacity/width (currently subtle for low visual noise) */}
               {(() => {
                 const nWeeks = Math.max(weeksLeft, 1);
-                const rawStart = Number.isFinite(g.sW) ? g.sW : 0;
-                const projectedEnd = Number.isFinite(g.eW) ? g.eW : rawStart + (Number.isFinite(g.wN) ? g.wN : 0);
-                const startWeek = Math.min(nWeeks, Math.max(0, rawStart));
-                const endWeek = Math.min(nWeeks, Math.max(startWeek, projectedEnd));
-                const fallbackLeftPct = (startWeek / nWeeks) * 100;
-                const fallbackWidthPct = Math.max(((endWeek - startWeek) / nWeeks) * 100, 0);
-                let goalLeftPct = fallbackLeftPct;
-                let goalWidthPct = fallbackWidthPct;
-                if (timelineBounds?.spanMs && futureWeeks?.length) {
-                  const anchorStart = safeDate(futureWeeks[0]?.weekStart)?.getTime() ?? timelineBounds.startMs;
-                  const weekMs = 7 * DAY_MS;
-                  const startMs = anchorStart + (startWeek * weekMs);
-                  const endMs = anchorStart + (endWeek * weekMs);
-                  goalLeftPct = clamp01((startMs - timelineBounds.startMs) / timelineBounds.spanMs) * 100;
-                  goalWidthPct = Math.max(clamp01((endMs - startMs) / timelineBounds.spanMs) * 100, 0);
-                }
-                const visibleWidthPct = goalWidthPct > 0 && goalWidthPct < 0.45 ? 0.45 : goalWidthPct;
+                const projectedWeeks = Number.isFinite(g.eW)
+                  ? Math.max(0, Math.ceil(g.eW))
+                  : Math.max(0, Math.ceil((Number.isFinite(g.sW) ? g.sW : 0) + (Number.isFinite(g.wN) ? g.wN : 0)));
+                const fillWidthPct = clamp01(projectedWeeks / nWeeks) * 100;
                 return <div style={{ marginBottom: "8px" }}>
                   <div style={{
                     height: `${Math.round(16 * goalTimelineScale)}px`,
@@ -1402,12 +1382,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                         ))}
                       </div>;
                     })}
-                    {/* Goal timeline lane + progress fill */}
-                    {visibleWidthPct > 0 && <div style={{
+                    {/* Goal timeline lane + cumulative fill */}
+                    <div style={{
                       position: "absolute",
                       top: "2px",
-                      left: `${goalLeftPct}%`,
-                      width: `${visibleWidthPct}%`,
+                      left: 0,
+                      width: "100%",
                       height: "calc(100% - 4px)",
                       borderRadius: "3px",
                       background: "rgba(0,200,150,0.1)",
@@ -1417,13 +1397,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                       <div
                         className="goal-fill goal-fill--standard"
                         style={{
-                          width: `${Math.max(goalCompletionPct * 100, celebrating ? 100 : 0)}%`,
+                          width: `${Math.max(fillWidthPct, celebrating ? 100 : 0)}%`,
                           background: celebrating ? "var(--color-green)" : GOAL_SYSTEM_COLOR,
                           opacity: celebrating ? 1 : 0.9,
                           boxShadow: celebrating ? "0 0 10px rgba(76,175,125,0.55)" : "none",
                         }}
                       />
-                    </div>}
+                    </div>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 8px", flex: 1 }}>
@@ -1438,15 +1418,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                         </span>
                       ))}
                     </div>
-                    <span style={{ fontSize: `${(8 * goalTimelineScale).toFixed(1)}px`, letterSpacing: "1.5px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
-                      4 week blocks / month
-                    </span>
                   </div>
-                  {archivedTimelineSegments.length > 0 && (
-                    <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "8px" }}>
-                      {archivedTimelineSegments.length} older month segment(s) hidden (view keeps previous month + rest of year; archived for future full-year review).
-                    </div>
-                  )}
                 </div>;
               })()}
               {celebrating && <>
@@ -1465,7 +1437,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               </>}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
-                <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(wr)}/wk</span> · {g.wN.toFixed(1)} weeks to fund · {(goalCompletionPct * 100).toFixed(0)}%</div>
+                <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(wr)}/wk</span> · {g.wN.toFixed(1)} weeks to fund</div>
                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
                   <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>

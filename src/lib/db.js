@@ -8,6 +8,46 @@ import {
 } from "../constants/config.js";
 import { buildLoanHistory } from "./finance.js";
 
+const FOOD_DEFAULT_MONTHLY = 400;
+const FOOD_DEFAULT_WEEKLY = FOOD_DEFAULT_MONTHLY / 4;
+
+const isFoodPrimaryExpense = (expense) => {
+  if (!expense || expense.type === "loan") return false;
+  if (expense.isFoodPrimary === true) return true;
+  const label = typeof expense.label === "string" ? expense.label.trim().toLowerCase() : "";
+  return expense.category === "Needs" && label === "food";
+};
+
+const normalizeExpenseFoodFlags = (expense) => {
+  if (!expense || expense.type === "loan") return expense;
+  const isFoodPrimary = isFoodPrimaryExpense(expense);
+  return {
+    ...expense,
+    ...(isFoodPrimary ? { category: "Needs" } : {}),
+    isFoodPrimary,
+    // UI: Food card should receive visual emphasis (icon, highlight, separation)
+    isFoodHighlighted: isFoodPrimary,
+  };
+};
+
+const createDefaultFoodExpense = () => ({
+  id: "exp_default_food",
+  category: "Needs",
+  label: "Food",
+  isFoodPrimary: true,
+  // UI: Food card should receive visual emphasis (icon, highlight, separation)
+  isFoodHighlighted: true,
+  note: ["", "", "", ""],
+  billingMeta: { amount: FOOD_DEFAULT_MONTHLY, cycle: "every30days", effectiveFrom: FISCAL_YEAR_START },
+  history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [FOOD_DEFAULT_WEEKLY, FOOD_DEFAULT_WEEKLY, FOOD_DEFAULT_WEEKLY, FOOD_DEFAULT_WEEKLY] }],
+});
+
+const ensureInitialFoodExpense = (expenses) => {
+  const normalized = (Array.isArray(expenses) ? expenses : []).map(normalizeExpenseFoodFlags);
+  if (normalized.some(isFoodPrimaryExpense)) return normalized;
+  return [...normalized, createDefaultFoodExpense()];
+};
+
 /**
  * Load the single user row from Supabase.
  * Falls back to app defaults if the row is empty or missing.
@@ -82,7 +122,7 @@ export async function loadUserData() {
     const migratedNote = Array.isArray(base.note) && base.note.length === 3
       ? [...base.note, base.note[2]]
       : base.note;
-    return { ...base, history: migratedHistory, note: migratedNote };
+    return normalizeExpenseFoodFlags({ ...base, history: migratedHistory, note: migratedNote });
   });
 
   // Merge: new DEFAULT_CONFIG fields fill in for existing rows (safe for any user).
@@ -163,9 +203,13 @@ export async function loadUserData() {
     return goal;
   });
 
+  const normalizedExpenses = mergedConfig.setupComplete
+    ? migratedExpenses.map(normalizeExpenseFoodFlags)
+    : ensureInitialFoodExpense(migratedExpenses);
+
   return {
     config:             mergedConfig,
-    expenses:           migratedExpenses,
+    expenses:           normalizedExpenses,
     goals:              migratedGoals,
     logs:               Array.isArray(data.logs)  ? data.logs  : [],
     showExtra:          data.show_extra,

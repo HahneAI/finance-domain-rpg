@@ -246,6 +246,42 @@ describe('loadUserData — Q4 quarterly expansion', () => {
   })
 })
 
+describe('loadUserData — Food signal + setup default injection', () => {
+  it('injects default Food expense during first-time setup when none exists', async () => {
+    const preSetupConfig = { ...DEFAULT_CONFIG, setupComplete: false }
+    setupLoadMock(makeRow({ config: preSetupConfig, expenses: [] }))
+
+    const result = await loadUserData()
+    const food = result.expenses.find(e => e.isFoodPrimary)
+    expect(food).toBeTruthy()
+    expect(food.category).toBe('Needs')
+    expect(food.label).toBe('Food')
+    expect(food.isFoodHighlighted).toBe(true)
+    expect(food.billingMeta?.amount).toBe(400)
+  })
+
+  it('does not inject default Food expense for setup-complete users', async () => {
+    setupLoadMock(makeRow({ config: { ...DEFAULT_CONFIG, setupComplete: true }, expenses: [] }))
+    const result = await loadUserData()
+    expect(result.expenses).toHaveLength(0)
+  })
+
+  it('normalizes legacy Food-labeled Needs expense into food signal flags', async () => {
+    const expense = {
+      id: 'exp-food-legacy',
+      category: 'Needs',
+      label: 'Food',
+      history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [100, 100, 100, 100] }],
+    }
+    setupLoadMock(makeRow({ config: { ...DEFAULT_CONFIG, setupComplete: true }, expenses: [expense] }))
+    const result = await loadUserData()
+    const normalized = result.expenses[0]
+    expect(normalized.isFoodPrimary).toBe(true)
+    expect(normalized.isFoodHighlighted).toBe(true)
+    expect(normalized.category).toBe('Needs')
+  })
+})
+
 describe('loadUserData — pre-wizard DHL migration', () => {
   it('stamps DHL preset when is_dhl=true and setupComplete is absent', async () => {
     const oldDhlConfig = {

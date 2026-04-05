@@ -111,6 +111,15 @@ Feeds full federal (`fedTax`) and state (`stateTax`) liability recalculation →
 
 **Resolved — by design.** Monthly cost = `perPaycheck × 4` (paycheck-based month, not calendar). This is intentional: app runs on weekly fiscal cadence, so 4 checks = 1 "month." Not a math error. `cycleAmountFromPerPaycheck` reverse-converts for editor display. Documented as resolved in task audit.
 
+**Monthly budget-health projection tap points (2026-04-05):**
+- Core selector output lives in `computeRemainingSpend(expenses, futureWeeks, options)` in `src/lib/finance.js`.
+- Components that need true monthly budget health should consume:
+  - `monthlyExpenses` (normalized from weekly spend using 4.33),
+  - `monthlyNetTakeHome` (sum of projected next 4 weeks),
+  - `budgetHealth` (`monthlyExpenses / monthlyNetTakeHome`).
+- Pass `options.futureWeekNets` and/or `options.weeklyIncome` to keep it reactive to income updates.
+- Pass `options.previousMonthKey` + `options.now` and watch `shouldReevaluateForMonthBoundary` for the 1st-of-month reset/re-evaluation trigger.
+
 ---
 
 ## 7. Year Summary — Adjusted Net + Event Loss

@@ -1466,7 +1466,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               </>}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
-                <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(wr)}/wk</span> · {g.wN.toFixed(1)} weeks to fund</div>
+                <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span> · {g.wN.toFixed(1)} weeks to fund</div>
                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
                   <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>

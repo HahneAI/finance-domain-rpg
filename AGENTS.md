@@ -127,25 +127,44 @@ These are build/toolchain config files. Changes here require full-host build ver
 
 ## Environment Enforcement
 
-Every task must declare an `environment_domain` at the start.
+Every task must declare three fields at the start:
+- `environment_domain` — which environment this task belongs in
+- `allowed_environment_domains` — list of environments whose file scope this task touches
+- `environment_reason` — one sentence explaining why
 
-Before making any code changes:
-- Verify the active Codex environment matches the task's `environment_domain`
-- If it does not match, **stop immediately**
-- Do not partially implement
-- Do not "attempt anyway"
+**Codex cannot inspect its own active environment identifier at runtime.** The environment name is not exposed as a readable variable inside the sandbox. Therefore enforcement is scope-based, not runtime-introspection-based.
 
-On mismatch, return exactly this structure and nothing else:
+### Before making any code changes, check scope — not identity:
 
+Check whether the files the task requires are in scope for the declared `environment_domain` per the routing table above.
+
+**Case 1 — True scope mismatch** (task files clearly belong to a different environment):
+
+Stop immediately. Return:
+```json
+{
+  "status": "ENVIRONMENT_SCOPE_MISMATCH",
+  "declared_environment": "<environment_domain from task>",
+  "reason_task_does_not_belong_here": "<which files/domains conflict and why>",
+  "recommended_environment": "<correct environment per routing table>"
+}
 ```
-status:                       ENVIRONMENT_MISMATCH
-active_environment:           [the environment Codex is currently running in]
-expected_environment:         [the environment the task requires per the routing table above]
-reason_task_does_not_belong_here: [one sentence — which files/domains the task touches and why they are out of scope]
-recommended_environment:      [which of the three environments to relaunch in]
+
+Do not partially implement. Do not "attempt anyway."
+
+**Case 2 — Runtime environment not inspectable** (scope looks correct but environment ID cannot be confirmed):
+
+Proceed. Return this header before any code changes:
+```json
+{
+  "status": "ENVIRONMENT_UNVERIFIED",
+  "declared_environment": "<environment_domain from task>",
+  "runtime_environment_visibility": "not_exposed",
+  "proceeding_based_on_declared_task_environment": true
+}
 ```
 
-This is a hard stop. A wrong-environment task that proceeds anyway risks modifying the finance pipeline from a UI task, or writing docs changes from a core math task. The PR will be rejected.
+Then continue with the task normally. The scope check passed — "cannot verify identity" is not a stop condition.
 
 ---
 

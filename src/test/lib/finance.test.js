@@ -657,6 +657,20 @@ describe('computeGoalTimeline', () => {
     expect(result[0].eW).not.toBeNull()
     expect(result[0].eW).toBeCloseTo(1, 3)
   })
+
+  it('uses average surplus (net minus expenses), not average net, for unfunded fallback weeks', () => {
+    const goals = [{ id: 'g1', target: 1000, label: 'Emergency Fund' }]
+    const futureWeeks = [{ idx: 1, weekEnd: new Date(2026, 0, 7) }]
+    const weeklyNets = [500]
+    const expenses = [
+      { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [250, 250, 250, 250] }] },
+    ]
+    const result = computeGoalTimeline(goals, futureWeeks, weeklyNets, expenses, 0, 0)
+    expect(result[0].eW).toBeNull()
+    // Week 1 contributes $250 surplus, leaving $750 still unfunded:
+    // fallback should be 750 / 250 = 3.0 weeks, not 750 / 500 = 1.5.
+    expect(result[0].wN).toBeCloseTo(3, 1)
+  })
 })
 
 describe('isFutureWeek', () => {

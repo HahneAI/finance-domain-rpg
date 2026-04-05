@@ -359,14 +359,75 @@ export function getEffectiveAmount(expense, weekEndDate, phaseIdx) {
   return best?.weekly[phaseIdx] ?? 0;
 }
 
-export function computeRemainingSpend(expenses, futureWeeks) {
-  if (!futureWeeks.length) return { totalRemainingSpend: 0, avgWeeklySpend: 0, weekCount: 0 };
+const MONTHLY_NORMALIZATION_FACTORS = {
+  weekly: 4.33,
+  biweekly: 2.166,
+  monthly: 1,
+};
+
+export function normalizeToMonthlyAmount(amount, cadence = "monthly") {
+  const safeAmount = Number(amount) || 0;
+  const factor = MONTHLY_NORMALIZATION_FACTORS[cadence] ?? 1;
+  return safeAmount * factor;
+}
+
+export function projectMonthlyNetTakeHome(futureWeekNets = [], weeklyIncome = 0) {
+  const source = Array.isArray(futureWeekNets) && futureWeekNets.length
+    ? futureWeekNets
+    : [weeklyIncome, weeklyIncome, weeklyIncome, weeklyIncome];
+  return source.slice(0, 4).reduce((sum, net) => sum + (Number(net) || 0), 0);
+}
+
+export function resolveBudgetHealthMonthBoundary({
+  previousMonthKey = null,
+  now = new Date(),
+} = {}) {
+  const today = now instanceof Date ? now : new Date(now);
+  const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  const dayOfMonth = today.getDate();
+  const crossedMonth = previousMonthKey !== null && previousMonthKey !== monthKey;
+  const shouldReevaluate = dayOfMonth === 1 && (previousMonthKey === null || crossedMonth);
+  return { monthKey, dayOfMonth, crossedMonth, shouldReevaluate };
+}
+
+export function computeRemainingSpend(expenses, futureWeeks, options = {}) {
+  if (!futureWeeks.length) {
+    return {
+      totalRemainingSpend: 0,
+      avgWeeklySpend: 0,
+      weekCount: 0,
+      monthlyExpenses: 0,
+      monthlyNetTakeHome: 0,
+      budgetHealth: 0,
+      budgetHealthMonthKey: null,
+      shouldReevaluateForMonthBoundary: false,
+    };
+  }
   let total = 0;
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
     for (const exp of expenses) total += getEffectiveAmount(exp, week.weekEnd, pi);
   }
-  return { totalRemainingSpend: total, avgWeeklySpend: total / futureWeeks.length, weekCount: futureWeeks.length };
+  const avgWeeklySpend = total / futureWeeks.length;
+  const monthlyExpenses = normalizeToMonthlyAmount(avgWeeklySpend, "weekly");
+  const monthlyNetTakeHome = projectMonthlyNetTakeHome(
+    options.futureWeekNets ?? [],
+    options.weeklyIncome ?? 0
+  );
+  const monthBoundary = resolveBudgetHealthMonthBoundary({
+    previousMonthKey: options.previousMonthKey ?? null,
+    now: options.now ?? new Date(),
+  });
+  return {
+    totalRemainingSpend: total,
+    avgWeeklySpend,
+    weekCount: futureWeeks.length,
+    monthlyExpenses,
+    monthlyNetTakeHome,
+    budgetHealth: monthlyNetTakeHome > 0 ? monthlyExpenses / monthlyNetTakeHome : 0,
+    budgetHealthMonthKey: monthBoundary.monthKey,
+    shouldReevaluateForMonthBoundary: monthBoundary.shouldReevaluate,
+  };
 }
 
 export function traceExpenseCalculationSteps({

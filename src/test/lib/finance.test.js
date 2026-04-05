@@ -6,6 +6,9 @@ import {
   projectedGross,
   getPhaseIndex,
   getEffectiveAmount,
+  normalizeToMonthlyAmount,
+  projectMonthlyNetTakeHome,
+  resolveBudgetHealthMonthBoundary,
   computeRemainingSpend,
   computeGoalTimeline,
   loanWeeklyAmount,
@@ -546,6 +549,55 @@ describe('computeRemainingSpend', () => {
     const futureWeeks = [{ weekEnd: new Date(2026, 0, 12), idx: 1 }]
     const result = computeRemainingSpend(expenses, futureWeeks)
     expect(result.totalRemainingSpend).toBeCloseTo(225)
+  })
+
+  it('returns monthly budget health using monthly expenses and projected 4-week net', () => {
+    const expenses = [
+      { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [100, 100, 100, 100] }] },
+      { category: 'Lifestyle', history: [{ effectiveFrom: '2026-01-05', weekly: [50, 50, 50, 50] }] },
+    ]
+    const futureWeeks = [
+      { weekEnd: new Date(2026, 0, 12), idx: 1 },
+      { weekEnd: new Date(2026, 0, 19), idx: 2 },
+    ]
+    const futureWeekNets = [600, 650, 625, 675]
+    const result = computeRemainingSpend(expenses, futureWeeks, {
+      futureWeekNets,
+      previousMonthKey: '2026-01',
+      now: new Date('2026-02-01T12:00:00.000Z'),
+    })
+
+    expect(result.monthlyExpenses).toBeCloseTo(649.5)
+    expect(result.monthlyNetTakeHome).toBeCloseTo(2550)
+    expect(result.budgetHealth).toBeCloseTo(649.5 / 2550)
+    expect(result.shouldReevaluateForMonthBoundary).toBe(true)
+  })
+})
+
+describe('monthly budget health helpers', () => {
+  it('normalizes weekly and biweekly amounts into monthly values', () => {
+    expect(normalizeToMonthlyAmount(100, 'weekly')).toBeCloseTo(433)
+    expect(normalizeToMonthlyAmount(200, 'biweekly')).toBeCloseTo(433.2)
+    expect(normalizeToMonthlyAmount(900, 'monthly')).toBeCloseTo(900)
+  })
+
+  it('projects monthly take-home from next 4 weeks', () => {
+    expect(projectMonthlyNetTakeHome([400, 420, 410, 430, 999], 0)).toBeCloseTo(1660)
+    expect(projectMonthlyNetTakeHome([], 500)).toBeCloseTo(2000)
+  })
+
+  it('flags month-boundary reevaluation only on day 1 when month changes', () => {
+    const crossed = resolveBudgetHealthMonthBoundary({
+      previousMonthKey: '2026-03',
+      now: new Date('2026-04-01T10:00:00.000Z'),
+    })
+    const notFirst = resolveBudgetHealthMonthBoundary({
+      previousMonthKey: '2026-03',
+      now: new Date('2026-04-02T10:00:00.000Z'),
+    })
+    expect(crossed.shouldReevaluate).toBe(true)
+    expect(crossed.monthKey).toBe('2026-04')
+    expect(notFirst.shouldReevaluate).toBe(false)
   })
 })
 

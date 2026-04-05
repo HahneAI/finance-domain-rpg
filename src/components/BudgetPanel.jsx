@@ -161,7 +161,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const ph = PHASES[ap];
   const ts = expenses.reduce((s, e) => s + currentEffective(e, ap), 0);
   const incomingWeekNet = futureWeekNets?.[0] ?? prevWeekNet ?? weeklyIncome;
+  const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const wr = incomingWeekNet - ts;
+  const leftThisWeek = finalizedWeekNet - ts;
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
   const overviewCatOrder = ["Needs", "Lifestyle"];
@@ -847,7 +849,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
       <Card label="Last Paycheck" val={f2(prevWeekNet ?? weeklyIncome)} sub="prev week net" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
       <Card label="Weekly Spend" val={f2(ts)} rawVal={ts} color="var(--color-red)" />
-      <Card label="Weekly Left" val={f2(wr)} rawVal={wr} color={wr >= 0 ? "var(--color-green)" : "var(--color-red)"} />
+      <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"} />
     </div>
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>
@@ -1265,7 +1267,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })} · ends {toLocalIso(currentWeek.weekEnd)}</div>
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <Card label="Weekly Available" val={f2(wr)} rawVal={wr} color="var(--color-green)" />
+          <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"} />
           <Card label="Active Goals Total" val={f(totG)} rawVal={totG} color="var(--color-gold)" />
           <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projSAfterFunded >= totG ? "var(--color-green)" : "var(--color-red)"} />
         </div>

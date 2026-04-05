@@ -1,0 +1,83 @@
+{
+  "task_id": "FEATURE_budget_health_monthly_projection_model",
+  "task_type": "feature",
+
+  "environment_domain": "authority-finance-core",
+  "allowed_environment_domains": ["authority-finance-core"],
+  "environment_reason": "This modifies financial calculation logic by converting budget health from a weekly/ambiguous model to a monthly projection system based on monthly net take-home and monthly expenses.",
+  "environment_policy": "scope_enforced",
+  "environment_runtime_visibility_policy": "report_if_available_do_not_fail_if_missing",
+
+  "scope": {
+    "allowed_files": [
+      "budget health calculation helpers",
+      "net income calculation pipeline",
+      "expense aggregation helpers",
+      "date/fiscal helpers for month boundary detection",
+      "selectors/hooks feeding budget health percentage"
+    ],
+    "restricted_files": [
+      "UI components",
+      "styling files",
+      "layout logic",
+      "goal timeline logic",
+      "tax logic"
+    ]
+  },
+
+  "constraints": [
+    "Budget health must be calculated on a monthly basis",
+    "Monthly expenses must be normalized correctly from weekly/biweekly inputs",
+    "Monthly net take-home must be derived from projected next 4 weeks",
+    "Month reset must occur based on real calendar (1st of month)",
+    "Do not modify UI rendering logic"
+  ],
+
+  "implementation_steps": [
+    "Identify current budget health calculation logic and confirm whether it is using weekly or mixed cadence.",
+    
+    "Create a normalized monthly expense total:",
+    "- convert all expenses to monthly equivalent",
+    "- weekly * 4.33",
+    "- biweekly * 2.166",
+    "- monthly stays as-is",
+    
+    "Create a projected monthly net take-home value:",
+    "- sum next 4 weeks of net take-home (or equivalent projection function)",
+    
+    "Define budget health formula:",
+    "budgetHealth = monthlyExpenses / monthlyNetTakeHome",
+    
+    "Ensure value is recomputed when:",
+    "- expenses change",
+    "- income changes",
+    "- new month boundary is crossed",
+    
+    "Add month boundary detection:",
+    "- if day === 1, trigger recompute/reset state",
+    
+    "Ensure selectors feeding UI now return monthly-based health value"
+  ],
+
+  "risk_areas": [
+    "expense normalization → incorrect monthly conversion factors",
+    "net projection → using stale weekly values",
+    "month boundary → not triggering recalculation",
+    "mixed cadence → weekly vs biweekly mismatch"
+  ],
+
+  "potential_bugs": [
+    "budget health appears inflated/deflated due to bad conversion",
+    "monthly net uses only 1 week instead of 4",
+    "health does not update when month changes",
+    "expense updates not triggering recompute"
+  ],
+
+  "validation": [
+    "Budget health reflects monthly expense vs monthly net",
+    "Expense updates change budget health immediately",
+    "Crossing into new month recalculates correctly",
+    "Weekly/biweekly inputs normalize correctly",
+    "No console errors"
+  ]
+}

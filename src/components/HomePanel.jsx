@@ -28,6 +28,8 @@ export function HomePanel({
 }) {
   const avgWeeklySpend = remainingSpend?.avgWeeklySpend ?? 0;
   const incomingWeekNet = futureWeekNets?.[0] ?? weeklyIncome;
+  const monthlyExpenses = avgWeeklySpend * (FISCAL_WEEKS_PER_YEAR / 12);
+  const monthlyTakehome = (adjustedTakeHome ?? (weeklyIncome * FISCAL_WEEKS_PER_YEAR)) / 12;
   const weeklyLeft = incomingWeekNet - avgWeeklySpend;
   const annualSavings = weeklyLeft * 52 - fundedGoalSpend;
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
@@ -109,7 +111,7 @@ export function HomePanel({
     {
       title: "Budget Health",
       value: fmtPct(spendRatio),
-      sub: `${fmt$(avgWeeklySpend)}/wk spend · ${fmt$(weeklyIncome)}/wk income`,
+      sub: `${fmt$(monthlyExpenses)}/mo expenses · ${fmt$(monthlyTakehome)}/mo take-home`,
       status: spendRatio < 0.5 ? "green" : spendRatio < 0.75 ? "gold" : "red",
       span: 2,
       key: "budget",

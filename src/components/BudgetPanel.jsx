@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
-import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
+import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -163,7 +163,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const incomingWeekNet = futureWeekNets?.[0] ?? prevWeekNet ?? weeklyIncome;
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const wr = incomingWeekNet - ts;
-  const leftThisWeek = finalizedWeekNet - ts;
+  const avgWeeklySpend = useMemo(
+    () => computeRemainingSpend(expenses, futureWeeks ?? []).avgWeeklySpend ?? 0,
+    [expenses, futureWeeks],
+  );
+  const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
   const overviewCatOrder = ["Needs", "Lifestyle"];
@@ -847,7 +851,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     </div>
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
-      <Card label="Last Paycheck" val={f2(prevWeekNet ?? weeklyIncome)} sub="prev week net" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
+      <Card label="This Week’s Check" val={f2(prevWeekNet ?? weeklyIncome)} sub="This Week’s Check" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
       <Card label="Weekly Spend" val={f2(ts)} rawVal={ts} color="var(--color-red)" />
       <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"} />
     </div>

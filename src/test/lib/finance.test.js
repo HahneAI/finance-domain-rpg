@@ -648,6 +648,53 @@ describe('traceExpenseCalculationSteps', () => {
   })
 })
 
+describe('traceExpenseCalculationSteps', () => {
+  it('captures routed steps from income through quarterly expense discrepancy checks', () => {
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      setupComplete: true,
+      employerPreset: 'DHL',
+      dhlCustomSchedule: false,
+      startingWeekIsLong: true,
+    }
+    const allWeeks = buildYear(cfg)
+    const futureWeeks = allWeeks.filter(w => w.active).slice(0, 6)
+    const expenses = [
+      {
+        id: 'rent',
+        weekly: [300, 300, 300, 300],
+        history: [{ effectiveFrom: '2026-01-05', weekly: [300, 300, 300, 300] }],
+      },
+      {
+        id: 'loan',
+        weekly: [90, 90, 90, 90],
+        history: [
+          { effectiveFrom: '2026-01-05', weekly: [90, 90, 90, 90] },
+          { effectiveFrom: '2026-01-12', weekly: [110, 110, 110, 110] },
+        ],
+      },
+    ]
+
+    const result = traceExpenseCalculationSteps({
+      cfg,
+      expenses,
+      futureWeeks,
+      showExtra: true,
+      extraPerCheck: 25,
+      bufferPerWeek: 50,
+      observedQuarterlySpendByPhase: [null, 757, 794, 774],
+    })
+
+    expect(result.logEntries.length).toBeGreaterThanOrEqual(5)
+    expect(result.markdown).toContain('# Expense Calculation Audit Log')
+    expect(result.quarterlyDiscrepancies[0].discrepancy).toBeGreaterThan(0)
+    expect(result.weeklyComparisons.some(w => w.discrepancy !== 0)).toBe(true)
+    expect(result.uiQuarterlySpendByPhase).toHaveLength(4)
+    expect(result.representativeQuarterlySpendByPhase).toHaveLength(4)
+    expect(result.observedVsUiDelta).toHaveLength(4)
+  })
+})
+
 // ─────────────────────────────────────────────────────────────
 // computeGoalTimeline
 // ─────────────────────────────────────────────────────────────

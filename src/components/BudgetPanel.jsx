@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
-import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
+import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -161,7 +161,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const ph = PHASES[ap];
   const ts = expenses.reduce((s, e) => s + currentEffective(e, ap), 0);
   const incomingWeekNet = futureWeekNets?.[0] ?? prevWeekNet ?? weeklyIncome;
+  const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const wr = incomingWeekNet - ts;
+  const avgWeeklySpend = useMemo(
+    () => computeRemainingSpend(expenses, futureWeeks ?? []).avgWeeklySpend ?? 0,
+    [expenses, futureWeeks],
+  );
+  const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
   const overviewCatOrder = ["Needs", "Lifestyle"];
@@ -270,6 +276,44 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     if (expenseQuarterTable.length) {
       console.table(expenseQuarterTable);
     }
+    console.groupEnd();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Budget debug trace — logs once when Budget tab mounts so formula routing is visible
+  // directly in browser devtools for discrepancy triage (income vs spend vs weekly-left).
+  useEffect(() => {
+    const expenseBreakdown = expenses.map(exp => ({
+      id: exp.id,
+      label: exp.label,
+      type: exp.type ?? "regular",
+      phaseIdx: ap,
+      effectiveWeekly: currentEffective(exp, ap),
+      splitWeekly: exp.weekly?.[ap] ?? 0,
+      hasHistory: Boolean(exp.history?.length),
+      latestEffectiveFrom: exp.history?.length
+        ? exp.history.reduce((best, entry) => entry.effectiveFrom > best ? entry.effectiveFrom : best, exp.history[0].effectiveFrom)
+        : null,
+    }));
+    const groupedTotals = expenseBreakdown.reduce((acc, row) => {
+      const key = row.type === "loan" ? "loan" : "regular";
+      acc[key] += row.effectiveWeekly;
+      return acc;
+    }, { regular: 0, loan: 0 });
+    const weeklyLeftFormula = incomingWeekNet - ts;
+    console.groupCollapsed(`[Budget Debug] Phase ${ap} (${ph?.label ?? "unknown"})`);
+    console.log("Formula", {
+      weeklySpend: ts,
+      incomingWeekNet,
+      weeklyLeft: wr,
+      weeklyLeftFormula,
+      spendVsIncomePct: sp,
+      weeklyIncomeAverage: weeklyIncome,
+      prevWeekNet,
+      futureWeekNet0: futureWeekNets?.[0] ?? null,
+    });
+    console.log("Expense totals", groupedTotals);
+    console.table(expenseBreakdown);
     console.groupEnd();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -845,9 +889,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     </div>
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
-      <Card label="Last Paycheck" val={f2(prevWeekNet ?? weeklyIncome)} sub="prev week net" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
+      <Card label="This Week’s Check" val={f2(prevWeekNet ?? weeklyIncome)} sub="This Week’s Check" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
       <Card label="Weekly Spend" val={f2(ts)} rawVal={ts} color="var(--color-red)" />
-      <Card label="Weekly Left" val={f2(wr)} rawVal={wr} color={wr >= 0 ? "var(--color-green)" : "var(--color-red)"} />
+      <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"} />
     </div>
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>
@@ -1265,7 +1309,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })} · ends {toLocalIso(currentWeek.weekEnd)}</div>
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <Card label="Weekly Available" val={f2(wr)} rawVal={wr} color="var(--color-green)" />
+          <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"} />
           <Card label="Active Goals Total" val={f(totG)} rawVal={totG} color="var(--color-gold)" />
           <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projSAfterFunded >= totG ? "var(--color-green)" : "var(--color-red)"} />
         </div>

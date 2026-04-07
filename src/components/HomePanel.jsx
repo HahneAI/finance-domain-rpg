@@ -28,10 +28,10 @@ export function HomePanel({
 }) {
   const avgWeeklySpend = remainingSpend?.avgWeeklySpend ?? 0;
   const incomingWeekNet = futureWeekNets?.[0] ?? weeklyIncome;
-  const monthlyExpenses = avgWeeklySpend * (FISCAL_WEEKS_PER_YEAR / 12);
-  const monthlyTakehome = (adjustedTakeHome ?? (weeklyIncome * FISCAL_WEEKS_PER_YEAR)) / 12;
-  const weeklyLeft = incomingWeekNet - avgWeeklySpend;
-  const annualSavings = weeklyLeft * 52 - fundedGoalSpend;
+  const projectedWeeklyLeft = incomingWeekNet - avgWeeklySpend;
+  const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
+  const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
+  const annualSavings = projectedWeeklyLeft * 52 - fundedGoalSpend;
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
   const nextWeekNet = futureWeekNets?.[0] ?? null;
   const fallbackSource = nextWeekNet != null ? null : (prevWeekNet != null ? "prev" : "avg");
@@ -43,16 +43,16 @@ export function HomePanel({
       Math.max(
         0,
         (1 - spendRatio) * 55
-          + (weeklyLeft > 0 ? 25 : 10)
+          + (projectedWeeklyLeft > 0 ? 25 : 10)
           + (goals.length ? (goals.filter((g) => g.completed).length / goals.length) * 20 : 0),
       ),
     ),
   );
-  const flowTrendSource = [weeklyLeft, ...(futureWeekNets || []).slice(0, 5)].filter((v) => v != null);
+  const flowTrendSource = [projectedWeeklyLeft, ...(futureWeekNets || []).slice(0, 5)].filter((v) => v != null);
   const flowTrendPoints = (
     flowTrendSource.length > 1
       ? flowTrendSource
-      : [weeklyLeft, weeklyIncome * 0.92, weeklyIncome * 0.98, weeklyIncome * 1.04, weeklyIncome * 1.09, weeklyIncome * 1.12]
+      : [projectedWeeklyLeft, weeklyIncome * 0.92, weeklyIncome * 0.98, weeklyIncome * 1.04, weeklyIncome * 1.09, weeklyIncome * 1.12]
   ).map((amount) => {
     const base = Math.max(1, weeklyIncome || 1);
     return Math.max(5, Math.min(98, Math.round(50 + ((amount - base * 0.9) / (base * 0.9)) * 22)));
@@ -81,11 +81,11 @@ export function HomePanel({
 
   const tiles = [
     {
-      title: "Weekly Left",
-      value: fmt$(weeklyLeft),
-      rawVal: weeklyLeft,
-      sub: "next paycheck after avg spend",
-      status: weeklyLeft > 100 ? "green" : weeklyLeft >= 0 ? "gold" : "red",
+      title: "Left This Week",
+      value: fmt$(leftThisWeek),
+      rawVal: leftThisWeek,
+      sub: "last finalized paycheck after avg spend",
+      status: leftThisWeek > 100 ? "green" : leftThisWeek >= 0 ? "gold" : "red",
       span: 2,
       key: "budget",
     },

@@ -359,14 +359,259 @@ export function getEffectiveAmount(expense, weekEndDate, phaseIdx) {
   return best?.weekly[phaseIdx] ?? 0;
 }
 
-export function computeRemainingSpend(expenses, futureWeeks) {
-  if (!futureWeeks.length) return { totalRemainingSpend: 0, avgWeeklySpend: 0, weekCount: 0 };
+const MONTHLY_NORMALIZATION_FACTORS = {
+  weekly: 4.33,
+  biweekly: 2.166,
+  monthly: 1,
+};
+
+export function normalizeToMonthlyAmount(amount, cadence = "monthly") {
+  const safeAmount = Number(amount) || 0;
+  const factor = MONTHLY_NORMALIZATION_FACTORS[cadence] ?? 1;
+  return safeAmount * factor;
+}
+
+export function projectMonthlyNetTakeHome(futureWeekNets = [], weeklyIncome = 0) {
+  const source = Array.isArray(futureWeekNets) && futureWeekNets.length
+    ? futureWeekNets
+    : [weeklyIncome, weeklyIncome, weeklyIncome, weeklyIncome];
+  return source.slice(0, 4).reduce((sum, net) => sum + (Number(net) || 0), 0);
+}
+
+export function resolveBudgetHealthMonthBoundary({
+  previousMonthKey = null,
+  now = new Date(),
+} = {}) {
+  const today = now instanceof Date ? now : new Date(now);
+  const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  const dayOfMonth = today.getDate();
+  const crossedMonth = previousMonthKey !== null && previousMonthKey !== monthKey;
+  const shouldReevaluate = dayOfMonth === 1 && (previousMonthKey === null || crossedMonth);
+  return { monthKey, dayOfMonth, crossedMonth, shouldReevaluate };
+}
+
+export function computeRemainingSpend(expenses, futureWeeks, options = {}) {
+  if (!futureWeeks.length) {
+    return {
+      totalRemainingSpend: 0,
+      avgWeeklySpend: 0,
+      weekCount: 0,
+      monthlyExpenses: 0,
+      monthlyNetTakeHome: 0,
+      budgetHealth: 0,
+      budgetHealthMonthKey: null,
+      shouldReevaluateForMonthBoundary: false,
+    };
+  }
   let total = 0;
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
     for (const exp of expenses) total += getEffectiveAmount(exp, week.weekEnd, pi);
   }
-  return { totalRemainingSpend: total, avgWeeklySpend: total / futureWeeks.length, weekCount: futureWeeks.length };
+  const avgWeeklySpend = total / futureWeeks.length;
+  const monthlyExpenses = normalizeToMonthlyAmount(avgWeeklySpend, "weekly");
+  const monthlyNetTakeHome = projectMonthlyNetTakeHome(
+    options.futureWeekNets ?? [],
+    options.weeklyIncome ?? 0
+  );
+  const monthBoundary = resolveBudgetHealthMonthBoundary({
+    previousMonthKey: options.previousMonthKey ?? null,
+    now: options.now ?? new Date(),
+  });
+  return {
+    totalRemainingSpend: total,
+    avgWeeklySpend,
+    weekCount: futureWeeks.length,
+    monthlyExpenses,
+    monthlyNetTakeHome,
+    budgetHealth: monthlyNetTakeHome > 0 ? monthlyExpenses / monthlyNetTakeHome : 0,
+    budgetHealthMonthKey: monthBoundary.monthKey,
+    shouldReevaluateForMonthBoundary: monthBoundary.shouldReevaluate,
+  };
+}
+
+export function traceExpenseCalculationSteps({
+  cfg,
+  expenses,
+  futureWeeks,
+  showExtra = false,
+  extraPerCheck = 0,
+  bufferPerWeek = 0,
+  observedQuarterlySpendByPhase = null,
+} = {}) {
+  const logEntries = [];
+  const add = (source, action, values, forwarded) => {
+    logEntries.push({ source, action, values, forwarded });
+  };
+
+  const safeCfg = cfg ?? {};
+  const safeExpenses = Array.isArray(expenses) ? expenses : [];
+  const safeFutureWeeks = Array.isArray(futureWeeks) ? futureWeeks : [];
+
+  add(
+    "traceExpenseCalculationSteps(input)",
+    "Initialize income and expense routing inputs.",
+    {
+      baseRate: safeCfg.baseRate ?? 0,
+      shiftHours: safeCfg.shiftHours ?? 0,
+      firstActiveIdx: safeCfg.firstActiveIdx ?? 0,
+      expenseCount: safeExpenses.length,
+      futureWeekCount: safeFutureWeeks.length,
+      extraPerCheck,
+      showExtra,
+      bufferPerWeek,
+    },
+    "buildYear(cfg)"
+  );
+
+  const allWeeks = buildYear(safeCfg);
+  const activeWeeks = allWeeks.filter(w => w.active);
+  add(
+    "buildYear",
+    "Build all fiscal weeks and route only active weeks into net-pay calculations.",
+    {
+      totalWeeks: allWeeks.length,
+      activeWeekCount: activeWeeks.length,
+      firstActiveWeekIdx: activeWeeks[0]?.idx ?? null,
+      lastActiveWeekIdx: activeWeeks[activeWeeks.length - 1]?.idx ?? null,
+    },
+    "computeNet(activeWeek)"
+  );
+
+  const weeklyNets = activeWeeks.map(w => computeNet(w, safeCfg, extraPerCheck, showExtra));
+  const spendableNets = weeklyNets.map(n => n - bufferPerWeek);
+  const projectedAnnualNet = weeklyNets.reduce((sum, n) => sum + n, 0);
+  const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
+  add(
+    "computeNet + weeklyIncome",
+    "Transform weekly gross/tax data into spendable weekly income.",
+    {
+      projectedAnnualNet,
+      averageNetBeforeBuffer: projectedAnnualNet / 52,
+      bufferPerWeek,
+      spendableWeeklyIncome: weeklyIncome,
+      sampledSpendableWeeks: spendableNets.slice(0, 3),
+    },
+    "computeRemainingSpend(expenses, futureWeeks)"
+  );
+
+  const quarterRollup = [0, 0, 0, 0].map(() => ({ weeklyActualTotal: 0, weeklySplitTotal: 0, weekCount: 0 }));
+  const weeklyComparisons = [];
+  for (const week of safeFutureWeeks) {
+    const phaseIdx = getPhaseIndex(week.weekEnd);
+    let weekActualTotal = 0;
+    let weekSplitTotal = 0;
+    const expenseComparisons = [];
+    for (const exp of safeExpenses) {
+      const effective = getEffectiveAmount(exp, week.weekEnd, phaseIdx);
+      const split = exp.weekly?.[phaseIdx] ?? 0;
+      const delta = effective - split;
+      weekActualTotal += effective;
+      weekSplitTotal += split;
+      if (delta !== 0) {
+        expenseComparisons.push({
+          expenseId: exp.id ?? exp.label ?? "unknown-expense",
+          effective,
+          split,
+          delta,
+        });
+      }
+    }
+    quarterRollup[phaseIdx].weeklyActualTotal += weekActualTotal;
+    quarterRollup[phaseIdx].weeklySplitTotal += weekSplitTotal;
+    quarterRollup[phaseIdx].weekCount += 1;
+    weeklyComparisons.push({
+      weekIdx: week.idx,
+      weekEndIso: toLocalIso(week.weekEnd),
+      phaseIdx,
+      weekActualTotal,
+      weekSplitTotal,
+      discrepancy: weekActualTotal - weekSplitTotal,
+      expenseComparisons,
+    });
+  }
+
+  add(
+    "getPhaseIndex + getEffectiveAmount",
+    "Route each future week into its quarter and resolve history-aware weekly expense amounts.",
+    {
+      auditedFutureWeeks: safeFutureWeeks.length,
+      sampleWeekComparisons: weeklyComparisons.slice(0, 3),
+    },
+    "Quarter rollup + discrepancy checks"
+  );
+
+  const quarterlyDiscrepancies = quarterRollup.map((quarter, phaseIdx) => ({
+    phaseIdx,
+    weekCount: quarter.weekCount,
+    weeklyActualTotal: quarter.weeklyActualTotal,
+    weeklySplitTotal: quarter.weeklySplitTotal,
+    discrepancy: quarter.weeklyActualTotal - quarter.weeklySplitTotal,
+  }));
+
+  add(
+    "quarterly comparison",
+    "Compare aggregated weekly expense outputs against quarterly split totals.",
+    { quarterlyDiscrepancies },
+    "Audit markdown output"
+  );
+
+  const quarterRepresentativeDates = [
+    new Date("2026-02-15"),
+    new Date("2026-05-15"),
+    new Date("2026-08-15"),
+    new Date("2026-11-15"),
+  ];
+  const uiQuarterlySpendByPhase = [0, 1, 2, 3].map(phaseIdx =>
+    safeExpenses.reduce((sum, exp) => sum + getEffectiveAmount(exp, new Date(), phaseIdx), 0)
+  );
+  const representativeQuarterlySpendByPhase = [0, 1, 2, 3].map(phaseIdx =>
+    safeExpenses.reduce((sum, exp) => sum + getEffectiveAmount(exp, quarterRepresentativeDates[phaseIdx], phaseIdx), 0)
+  );
+  const uiVsRepresentativeDelta = uiQuarterlySpendByPhase.map((value, idx) => value - representativeQuarterlySpendByPhase[idx]);
+  const observedVsUiDelta = Array.isArray(observedQuarterlySpendByPhase)
+    ? observedQuarterlySpendByPhase.map((observed, idx) => (observed ?? 0) - (uiQuarterlySpendByPhase[idx] ?? 0))
+    : null;
+
+  add(
+    "BudgetPanel quarter tab routing",
+    "Compare quarter-tab spend (currentEffective with today's date) against representative quarter-date routing and optional observed app values.",
+    {
+      uiQuarterlySpendByPhase,
+      representativeQuarterlySpendByPhase,
+      uiVsRepresentativeDelta,
+      observedQuarterlySpendByPhase,
+      observedVsUiDelta,
+    },
+    "Audit markdown output"
+  );
+
+  const markdown = [
+    "# Expense Calculation Audit Log",
+    "",
+    `Generated at: ${new Date().toISOString()}`,
+    "",
+    ...logEntries.map((entry, idx) => [
+      `## Step ${idx + 1}: ${entry.source}`,
+      `- **What happens:** ${entry.action}`,
+      `- **Values:** \`${JSON.stringify(entry.values)}\``,
+      `- **Passed on:** ${entry.forwarded}`,
+      "",
+    ].join("\n")),
+  ].join("\n");
+
+  return {
+    logEntries,
+    markdown,
+    weeklyComparisons,
+    quarterlyDiscrepancies,
+    uiQuarterlySpendByPhase,
+    representativeQuarterlySpendByPhase,
+    uiVsRepresentativeDelta,
+    observedVsUiDelta,
+    projectedAnnualNet,
+    weeklyIncome,
+  };
 }
 
 export function traceExpenseCalculationSteps({
@@ -562,13 +807,13 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
   if (!futureWeeks.length || !activeGoals.length)
     return activeGoals.map(g => ({ ...g, sW: 0, eW: 0, wN: 0 }));
   const n = futureWeeks.length;
-  const avgNet = weeklyNets.length ? weeklyNets.reduce((a, b) => a + b, 0) / weeklyNets.length : 0;
   // ── Past-event smear: exclude future-week deductions (handled per-week below) ──
   const futureDeductionTotal = Object.values(futureEventDeductions).reduce((a, b) => a + b, 0);
   const perWeekLost = (logNetLost - futureDeductionTotal) / n, perWeekGain = (logNetGained ?? 0) / n;
   const remaining = activeGoals.map(g => g.target);
   const startWeek = activeGoals.map(() => null);
   const endWeek = activeGoals.map(() => null);
+  let totalSurplus = 0;
   let weekOffset = 0;
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
@@ -578,6 +823,7 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
     // ── Targeted deduction: current/future-week events hit their specific week ──
     const weekDeduction = futureEventDeductions[week.idx] ?? 0;
     let surplus = (weeklyNets[weekOffset] ?? 0) - weekDeduction - spend - perWeekLost + perWeekGain;
+    totalSurplus += surplus;
     if (surplus > 0) {
       for (let i = 0; i < activeGoals.length; i++) {
         if (remaining[i] <= 0 || surplus <= 0) continue;
@@ -590,9 +836,10 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
     }
     weekOffset++;
   }
+  const avgSurplus = totalSurplus / n;
   return activeGoals.map((g, i) => {
     const sw = startWeek[i] ?? 0, ew = endWeek[i] ?? null;
-    const wN = ew !== null ? ew - sw : remaining[i] / Math.max(avgNet - 0.01, 0.01);
+    const wN = ew !== null ? ew - sw : remaining[i] / Math.max(avgSurplus - 0.01, 0.01);
     return { ...g, sW: sw, eW: ew, wN };
   });
 }
@@ -604,6 +851,27 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
 // ─────────────────────────────────────────────────────────────
 
 const DAYS_PER_FREQ = { weekly: 7, biweekly: 14, monthly: 30.4375 };
+
+const getQuarterEndDatesForYear = (year) => [
+  `${year}-03-31`,
+  `${year}-06-30`,
+  `${year}-09-30`,
+  `${year}-12-31`,
+];
+
+const getQuarterEndIsoForDate = (iso) => {
+  if (!iso) return null;
+  const parsed = parseIsoDate(iso);
+  const year = parsed ? parsed.getFullYear() : parseIsoDate(FISCAL_YEAR_START).getFullYear();
+  const boundaries = getQuarterEndDatesForYear(year);
+  return boundaries.find(boundary => iso <= boundary) ?? boundaries[boundaries.length - 1];
+};
+
+const addDaysToIso = (iso, days) => {
+  const parsed = parseIsoDate(iso) ?? new Date();
+  parsed.setDate(parsed.getDate() + days);
+  return toLocalIso(parsed);
+};
 
 export function loanWeeklyAmount(loan) {
   const amt = loan.paymentAmount ?? loan.paymentPerCheck ?? 0; // backward compat
@@ -634,9 +902,12 @@ export function computeLoanPayoffDate(loan) {
 // History is always derived from loanMeta — runway start → payoff
 export function buildLoanHistory(loan) {
   const w = loanWeeklyAmount(loan);
+  const payoffDate = computeLoanPayoffDate(loan);
+  const quarterEnd = getQuarterEndIsoForDate(payoffDate) ?? payoffDate;
+  const zeroEffectiveFrom = quarterEnd ? addDaysToIso(quarterEnd, 1) : payoffDate;
   return [
     { effectiveFrom: loanRunwayStartDate(loan), weekly: [w, w, w, w] },
-    { effectiveFrom: computeLoanPayoffDate(loan), weekly: [0, 0, 0, 0] }
+    { effectiveFrom: zeroEffectiveFrom, weekly: [0, 0, 0, 0] }
   ];
 }
 

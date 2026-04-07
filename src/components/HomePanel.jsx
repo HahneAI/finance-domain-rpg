@@ -28,6 +28,8 @@ export function HomePanel({
 }) {
   const avgWeeklySpend = remainingSpend?.avgWeeklySpend ?? 0;
   const incomingWeekNet = futureWeekNets?.[0] ?? weeklyIncome;
+  const monthlyExpenses = avgWeeklySpend * (FISCAL_WEEKS_PER_YEAR / 12);
+  const monthlyTakehome = (adjustedTakeHome ?? (weeklyIncome * FISCAL_WEEKS_PER_YEAR)) / 12;
   const projectedWeeklyLeft = incomingWeekNet - avgWeeklySpend;
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;

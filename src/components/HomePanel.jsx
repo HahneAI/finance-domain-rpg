@@ -111,7 +111,7 @@ export function HomePanel({
     {
       title: "Budget Health",
       value: fmtPct(spendRatio),
-      sub: `${fmt$(avgWeeklySpend)}/wk spend · ${fmt$(weeklyIncome)}/wk income`,
+      sub: `${fmt$(monthlyExpenses)}/mo expenses · ${fmt$(monthlyTakehome)}/mo take-home`,
       status: spendRatio < 0.5 ? "green" : spendRatio < 0.75 ? "gold" : "red",
       span: 2,
       key: "budget",

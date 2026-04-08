@@ -654,7 +654,7 @@ export default function App() {
   );
 
   return (
-      <div style={{ background: "var(--color-bg-gradient)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
+      <div className="app-shell" style={{ background: "var(--color-bg-gradient)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
         <style>{`
           /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
              but injecting it here as well catches any future SSR or shadow-DOM edge
@@ -677,9 +677,19 @@ export default function App() {
             .sidebar { display: none !important; }
             .mobile-header { display: flex !important; }
             .mobile-bottom-nav { display: flex !important; }
-            /* Bottom nav is always visible on mobile (including home screen), so
-               content needs padding to clear the nav bar on all views. */
+            /* On mobile the outer shell must have a definite height so the flex
+               column inside can act as a scroll container. 100svh = "small viewport
+               height" — excludes the address bar so layout doesn't jump when Chrome
+               shows/hides it. */
+            .app-shell { height: 100svh; }
+            /* Make main-content the scroll container on mobile, matching the desktop
+               pattern (desktop uses height:100vh + overflow-y:auto). Without an
+               overflow-y:auto here, touch scroll has no container to scroll — Android
+               Chrome treats overflow-x:hidden on body as blocking vertical scroll too,
+               so the page appears locked. */
           .main-content {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
           }
           /* Safe-area height + top padding for Dynamic Island / notch iPhones.

@@ -292,6 +292,34 @@ export default function App() {
     });
   }, [authedUser]);
 
+  // ── Auto-confirm all past weeks on first load when no confirmations exist ──
+  // Treats every historical week as fully worked (clean/net-zero). Over-assumption is fine:
+  // income projections already assume full attendance from account creation.
+  // Runs once — after auto-confirm, weekConfirmations is non-empty so condition exits early.
+  useEffect(() => {
+    if (loading) return;
+    if (Object.keys(weekConfirmations).length > 0) return;
+    const pastActiveWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
+    if (!pastActiveWeeks.length) return;
+    const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const confirmedAt = new Date().toISOString();
+    const bulk = {};
+    for (const week of pastActiveWeeks) {
+      const scheduledDays = week.workedDayNames ?? [];
+      bulk[week.idx] = {
+        confirmedAt,
+        dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, scheduledDays.includes(d) ? true : null])),
+        scheduledDays,
+        missedScheduledDays: [],
+        pickupDays: [],
+        netShiftDelta: 0,
+        eventId: null,
+        autoConfirmed: true,
+      };
+    }
+    setWeekConfirmations(bulk);
+  }, [loading, weekConfirmations, allWeeks, today]);
+
   // ── Debounced save to Supabase (800ms) ──
   const saveTimer = useRef(null);
   useEffect(() => {
@@ -616,7 +644,7 @@ export default function App() {
         isAdmin={isAdmin}
       />}
       {currentView === "benefits" && <BenefitsPanel
-        allWeeks={allWeeks} config={config} isDHL={isDHL} isAdmin={isAdmin}
+        allWeeks={allWeeks} config={config} setConfig={setConfig} isDHL={isDHL} isAdmin={isAdmin}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
         logK401kGained={logTotals.k401kGained}
@@ -654,7 +682,7 @@ export default function App() {
   );
 
   return (
-      <div style={{ background: "var(--color-bg-gradient)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
+      <div className="app-shell" style={{ background: "var(--color-bg-gradient)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
         <style>{`
           /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
              but injecting it here as well catches any future SSR or shadow-DOM edge
@@ -677,9 +705,19 @@ export default function App() {
             .sidebar { display: none !important; }
             .mobile-header { display: flex !important; }
             .mobile-bottom-nav { display: flex !important; }
-            /* Bottom nav is always visible on mobile (including home screen), so
-               content needs padding to clear the nav bar on all views. */
+            /* On mobile the outer shell must have a definite height so the flex
+               column inside can act as a scroll container. 100svh = "small viewport
+               height" — excludes the address bar so layout doesn't jump when Chrome
+               shows/hides it. */
+            .app-shell { height: 100svh; }
+            /* Make main-content the scroll container on mobile, matching the desktop
+               pattern (desktop uses height:100vh + overflow-y:auto). Without an
+               overflow-y:auto here, touch scroll has no container to scroll — Android
+               Chrome treats overflow-x:hidden on body as blocking vertical scroll too,
+               so the page appears locked. */
           .main-content {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
           }
           /* Safe-area height + top padding for Dynamic Island / notch iPhones.

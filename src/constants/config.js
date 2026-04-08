@@ -93,6 +93,8 @@ export const DEFAULT_CONFIG = {
   bucketStartBalance: 64,      // hours — new hire starting balance
   bucketCap: 128,              // hours — overflow above this pays out as cash
   bucketPayoutRate: 9.825,     // $/hr for overflow hours (baseRate / 2 ≈ 9.825 at DHL rates)
+  bucketBalanceOverride: null, // hours — when set, replaces computed currentBalance; null = auto-compute
+  ptoHoursOverride: null,     // hours — when set, replaces computed PTO accrual balance; null = auto-compute
 
   // ── Pay period ───────────────────────────────────────────────
   payPeriodEndDay: 0,          // day-of-week pay period closes: 0=Sun, 1=Mon, ..., 6=Sat

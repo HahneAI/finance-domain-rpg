@@ -33,7 +33,8 @@ export function HomePanel({
   const projectedWeeklyLeft = incomingWeekNet - avgWeeklySpend;
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
-  const annualSavings = projectedWeeklyLeft * 52 - fundedGoalSpend;
+  const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
+  const annualSavings = avgWeeklySurplus * 52 - fundedGoalSpend;
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
   const nextWeekNet = futureWeekNets?.[0] ?? null;
   const fallbackSource = nextWeekNet != null ? null : (prevWeekNet != null ? "prev" : "avg");

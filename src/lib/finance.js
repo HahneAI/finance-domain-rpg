@@ -812,8 +812,8 @@ export function computeBucketModel(logs, cfg) {
     balance = closingBalance;
   }
 
-  // Current in-progress month
-  const currentBalance = balance;
+  // Current in-progress month — manual override replaces computed balance when set
+  const currentBalance = (cfg.bucketBalanceOverride != null) ? cfg.bucketBalanceOverride : balance;
   const currentM = hoursByMonth[currentMonth] || 0;
   const currentTier = currentM === 0 ? 1 : currentM <= 12 ? 2 : currentM <= 24 ? 3 : 4;
   const hoursToNextTier = currentTier === 1 ? null : currentTier === 2 ? 12 - currentM : currentTier === 3 ? 24 - currentM : 0;

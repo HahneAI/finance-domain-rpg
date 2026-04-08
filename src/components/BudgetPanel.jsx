@@ -162,7 +162,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const ts = expenses.reduce((s, e) => s + currentEffective(e, ap), 0);
   const incomingWeekNet = futureWeekNets?.[0] ?? prevWeekNet ?? weeklyIncome;
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
-  const wr = incomingWeekNet - ts;
+  const wr = weeklyIncome - ts;
   const avgWeeklySpend = useMemo(
     () => computeRemainingSpend(expenses, futureWeeks ?? []).avgWeeklySpend ?? 0,
     [expenses, futureWeeks],

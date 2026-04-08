@@ -62,8 +62,9 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
     ? allWeeks.filter(w => w.active && w.weekEnd <= ptoCutoff).reduce((s, w) => s + w.totalHours, 0) / 20
     : 0;
   const adjP      = Math.max(ptoBs - logPTOHoursLost / 20, 0);
+  const effectiveAdjP = config.ptoHoursOverride != null ? config.ptoHoursOverride : adjP;
   const negCap    = ptoGoal?.negativeBalanceCap ?? 40;
-  const avail     = adjP + negCap;
+  const avail     = effectiveAdjP + negCap;
   const hoursNeed = ptoGoal?.hoursNeeded ?? 0;
   const onTrack   = avail >= hoursNeed;
 
@@ -73,6 +74,8 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
   const [editMode, setEditMode] = useState(false);
   const [editingBalance, setEditingBalance] = useState(false);
   const [balanceInput, setBalanceInput] = useState("");
+  const [editingPto, setEditingPto] = useState(false);
+  const [ptoInput, setPtoInput] = useState("");
 
   const shiftHours = config.shiftHours ?? 12;
 
@@ -205,6 +208,57 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
       <div style={{ marginBottom: "24px" }}>
         <SH>PTO Accrual</SH>
 
+        {/* PTO balance override control */}
+        <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "14px 16px", marginBottom: "14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: editingPto ? "10px" : "0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>PTO Balance</div>
+              {config.ptoHoursOverride != null && (
+                <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px" }}>(manual)</span>
+              )}
+            </div>
+            <span style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
+              {effectiveAdjP.toFixed(1)} hrs
+            </span>
+          </div>
+          {editingPto ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <input
+                {...iS} style={{ ...iS, width: "100px", padding: "6px 10px" }}
+                type="number" min="0" step="0.5"
+                value={ptoInput}
+                onChange={e => setPtoInput(e.target.value)}
+                placeholder="hours"
+                autoFocus
+              />
+              <SmBtn
+                onClick={() => {
+                  const val = parseFloat(ptoInput);
+                  if (Number.isFinite(val) && val >= 0) {
+                    setConfig(c => ({ ...c, ptoHoursOverride: val }));
+                  }
+                  setEditingPto(false);
+                }}
+                c="var(--color-bg-base)" bg="var(--color-gold)"
+              >Save</SmBtn>
+              <SmBtn onClick={() => setEditingPto(false)} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Cancel</SmBtn>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+              <SmBtn
+                onClick={() => { setPtoInput(String(effectiveAdjP.toFixed(1))); setEditingPto(true); }}
+                c="var(--color-text-secondary)" bg="var(--color-bg-raised)"
+              >Set Balance</SmBtn>
+              {config.ptoHoursOverride != null && (
+                <SmBtn
+                  onClick={() => setConfig(c => ({ ...c, ptoHoursOverride: null }))}
+                  c="var(--color-text-disabled)" bg="var(--color-bg-raised)"
+                >Clear Override</SmBtn>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Accrual metric cards — cutoff driven by goal targetDate if set */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
           <Card label="Accrual Rate" val="1 hr / 20 worked" color="#7eb8c9" size="14px" />
@@ -217,7 +271,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
                 size="18px"
               />
               {logPTOHoursLost > 0
-                ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${adjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
+                ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
                 : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="#888" size="14px" />
               }
             </>
@@ -238,7 +292,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
                   {ptoGoal.label}
                 </div>
                 <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
-                  Need {hoursNeed} hrs · {adjP.toFixed(1)} accrued + {negCap} neg cap = <strong style={{ color: "var(--color-text-primary)" }}>{avail.toFixed(1)} available</strong>
+                  Need {hoursNeed} hrs · {effectiveAdjP.toFixed(1)} accrued + {negCap} neg cap = <strong style={{ color: "var(--color-text-primary)" }}>{avail.toFixed(1)} available</strong>
                 </div>
                 <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "3px" }}>
                   Leave starts {fmtDate(ptoGoal.targetDate)} · ≈ {Math.ceil(hoursNeed / shiftHours)} shifts

@@ -18,6 +18,7 @@ Last updated: 2026-03-30 | App: Authority Finance (A:Fin)
 | 6 | Expense Pay Period vs Monthly Display | `BudgetPanel.jsx` | Resolved (by design) |
 | 7 | Year Summary — Adjusted Net + Event Loss | `IncomePanel.jsx`, `App.jsx` | Live |
 | 8 | Log Tab — Hero + Log Effect Summary | `LogPanel.jsx` | Live |
+| 9 | Loan payoff quarter persistence | `finance.js` | Live — keeps payoff amounts through the payoff quarter |
 
 ---
 
@@ -110,6 +111,15 @@ Feeds full federal (`fedTax`) and state (`stateTax`) liability recalculation →
 
 **Resolved — by design.** Monthly cost = `perPaycheck × 4` (paycheck-based month, not calendar). This is intentional: app runs on weekly fiscal cadence, so 4 checks = 1 "month." Not a math error. `cycleAmountFromPerPaycheck` reverse-converts for editor display. Documented as resolved in task audit.
 
+**Monthly budget-health projection tap points (2026-04-05):**
+- Core selector output lives in `computeRemainingSpend(expenses, futureWeeks, options)` in `src/lib/finance.js`.
+- Components that need true monthly budget health should consume:
+  - `monthlyExpenses` (normalized from weekly spend using 4.33),
+  - `monthlyNetTakeHome` (sum of projected next 4 weeks),
+  - `budgetHealth` (`monthlyExpenses / monthlyNetTakeHome`).
+- Pass `options.futureWeekNets` and/or `options.weeklyIncome` to keep it reactive to income updates.
+- Pass `options.previousMonthKey` + `options.now` and watch `shouldReevaluateForMonthBoundary` for the 1st-of-month reset/re-evaluation trigger.
+
 ---
 
 ## 7. Year Summary — Adjusted Net + Event Loss
@@ -137,6 +147,14 @@ Feeds full federal (`fedTax`) and state (`stateTax`) liability recalculation →
 **Attendance history** section: groups absence-type logs by calendar month, counts unpaid shifts, unapproved days, partial shifts. Day-of-week miss frequency sorted descending. Explanatory text box removed.
 
 ---
+
+## 9. Loan payoff quarter persistence
+
+**History rebuild:** `buildLoanHistory()` still regenerates a runway entry (`loanRunwayStartDate` + `loanWeeklyAmount`) per loan and a payoff entry, but the payoff entry now becomes effective the day after the quarter-end boundary that contains `computeLoanPayoffDate(loan)`. Helpers `getQuarterEndIsoForDate` (one of the new helper exports) and `addDaysToIso` derive that boundary from ISO cutoffs (Q1=Mar 31, Q2=Jun 30, Q3=Sep 30, Q4=Dec 31).
+
+**Quarter coverage:** Loans closing in July or August now keep their weekly allocation (e.g., Laptop \$33/wk, AirPods \$17.50/wk) visible through Q3 totals, so the quarterly spend audits and Budget tab phase math never drop them to zero before `2026-10-01`.
+
+**Why this matters:** A loan payoff happening mid-quarter previously zeroed the cost for that entire quarter; now the cost is kept alive through the quarter that contains the final payment, ensuring totals, goals, and console audit logs stay aligned with the user’s expectation that a loan “still exists” until the quarter closes.
 
 ## Core Architecture
 
@@ -196,3 +214,26 @@ Testing requires manual date simulation (no date override utility yet):
 3. Near EOY — many hidden periods, scale near 1.15x cap
 
 Hidden weeks/months preserved in `hiddenWeeks` / `hiddenMonths` arrays from `rollingTimeline.js` — ready for a future full-year review tab without data migration.
+
+---
+
+## 10. Funded goal absorption integrity (2026-04-03)
+
+**Objective:** prevent funded-goal dollars from re-entering future surplus projections while avoiding double subtraction across weekly averages and year-end rollups.
+
+**Current behavior:**
+- `getFundedGoalSpend(goals, todayIso)` (new helper) sums completed goal targets as absorbed spend, ignores future-dated completions, and counts legacy completed goals without `completedAt`.
+- App-level `baseWeeklyUnallocated` remains the pure paycheck-minus-expense baseline; funded-goal absorption is applied in projection summaries instead of being smeared into baseline weekly math.
+- Budget/Home/Log projection surfaces consume `fundedGoalSpend` so funded amounts stay deducted once from year-end-style totals and cannot drift back into available surplus.
+
+**Guardrail note:** this separation (baseline weekly surplus vs absorbed-goal projection adjustments) prevents the prior “spread + explicit subtract” double-count pattern.
+
+## 11. HomePanel build-parse stability (2026-04-03)
+
+**Issue observed:** deployment logs reported a Babel parse error in `HomePanel.jsx` around the funded-goal prop additions.
+
+**Hardening applied:**
+- Normalized `HomePanel.jsx` to UTF-8 (no BOM) with LF-only line endings.
+- Verified production compile succeeds after normalization with `npm run build`.
+
+**Result:** Home panel math/features remain unchanged, but parser stability is now deterministic across local + Vercel build environments.

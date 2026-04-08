@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
-import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex } from "../lib/finance.js";
+import { getEffectiveAmount, computeGoalTimeline, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, loanRunwayStartDate, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -85,6 +85,7 @@ const monthlyFromPerPaycheck = (perPaycheck, cpm) => roundToQuarter(perPaycheck 
 
 const MONTH_SUBDIVISIONS = 4;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
 const safeDate = (raw) => {
   if (!raw) return null;
@@ -92,7 +93,7 @@ const safeDate = (raw) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost, logNetGained, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, timelineWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo, userPaySchedule, isAdmin = false }) {
+export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost, logNetGained, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, timelineWeekNets, futureEventDeductions, currentWeek, today, fiscalWeekInfo, userPaySchedule, fundedGoalSpend = 0, isAdmin = false }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
@@ -117,7 +118,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const [editGoalId, setEditGoalId] = useState(null);
   const [editGoalVals, setEditGoalVals] = useState({});
   const [addingGoal, setAddingGoal] = useState(false);
-  const [newGoal, setNewGoal] = useState({ label: "", target: "", color: "var(--color-gold)", note: "" });
+  const [newGoal, setNewGoal] = useState({ label: "", target: "", note: "" });
   const [delGoalId, setDelGoalId] = useState(null);
   const [draggingGoalId, setDraggingGoalId] = useState(null);
   const [dragOverGoalId, setDragOverGoalId] = useState(null);
@@ -143,16 +144,15 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const TOUCH_EDGE_AUTOSCROLL_ZONE_PX = 92;
   const TOUCH_MAX_AUTOSCROLL_SPEED_PX = 18;
   const TOUCH_OVERLAY_EXIT_MS = 130;
-  // Resolve the current effective amount for an expense at the active phase
-  const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
-
   // Full-year annual cost: sums across all 4 quarters using a representative date per quarter.
   // Using a date within each quarter means getEffectiveAmount picks the correct history entry —
   // loans that pay off mid-year will return $0 for quarters after the payoff date.
   const Q_REP_DATES = [new Date("2026-02-15"), new Date("2026-05-15"), new Date("2026-08-15"), new Date("2026-11-15")];
   const WEEKS_PER_Q = [13, 13, 13, 13]; // 52 weeks total
+  const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
+  const quarterEffective = (exp, phaseIdx) => getEffectiveAmount(exp, Q_REP_DATES[phaseIdx], phaseIdx);
   const yearlyExpenseCost = (exp) =>
-    [0, 1, 2, 3].reduce((s, q) => s + getEffectiveAmount(exp, Q_REP_DATES[q], q) * WEEKS_PER_Q[q], 0);
+    [0, 1, 2, 3].reduce((s, q) => s + quarterEffective(exp, q) * WEEKS_PER_Q[q], 0);
 
   // Split loans from regular expenses for display purposes
   const loans = expenses.filter(e => e.type === "loan");
@@ -161,7 +161,13 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   const ph = PHASES[ap];
   const ts = expenses.reduce((s, e) => s + currentEffective(e, ap), 0);
   const incomingWeekNet = futureWeekNets?.[0] ?? prevWeekNet ?? weeklyIncome;
+  const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const wr = incomingWeekNet - ts;
+  const avgWeeklySpend = useMemo(
+    () => computeRemainingSpend(expenses, futureWeeks ?? []).avgWeeklySpend ?? 0,
+    [expenses, futureWeeks],
+  );
+  const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
   const overviewCatOrder = ["Needs", "Lifestyle"];
@@ -177,6 +183,140 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     });
   const f = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const round2 = (value) => (typeof value === "number" ? Math.round(value * 100) / 100 : value);
+
+  // Budget debug trace — logs once when Budget tab mounts so formula routing is visible
+  // directly in browser devtools for discrepancy triage (income vs spend vs weekly-left).
+  useEffect(() => {
+    const expenseBreakdown = expenses.map(exp => ({
+      id: exp.id,
+      label: exp.label,
+      type: exp.type ?? "regular",
+      phaseIdx: ap,
+      effectiveWeekly: currentEffective(exp, ap),
+      splitWeekly: exp.weekly?.[ap] ?? 0,
+      hasHistory: Boolean(exp.history?.length),
+      latestEffectiveFrom: exp.history?.length
+        ? exp.history.reduce((best, entry) => entry.effectiveFrom > best ? entry.effectiveFrom : best, exp.history[0].effectiveFrom)
+        : null,
+    }));
+    const groupedTotals = expenseBreakdown.reduce((acc, row) => {
+      const key = row.type === "loan" ? "loan" : "regular";
+      acc[key] += row.effectiveWeekly;
+      return acc;
+    }, { regular: 0, loan: 0 });
+    const weeklyLeftFormula = incomingWeekNet - ts;
+    console.groupCollapsed(`[Budget Debug] Phase ${ap} (${ph?.label ?? "unknown"})`);
+    console.log("Formula", {
+      weeklySpend: ts,
+      incomingWeekNet,
+      weeklyLeft: wr,
+      weeklyLeftFormula,
+      spendVsIncomePct: sp,
+      weeklyIncomeAverage: weeklyIncome,
+      prevWeekNet,
+      futureWeekNet0: futureWeekNets?.[0] ?? null,
+    });
+    console.log("Expense totals", groupedTotals);
+    console.table(expenseBreakdown);
+    console.groupEnd();
+    const quarterSummaries = Q_REP_DATES.map((_, qIdx) => {
+      const quarterBreakdown = expenses.map(exp => ({
+        id: exp.id,
+        label: exp.label,
+        type: exp.type ?? "regular",
+        phaseIdx: qIdx,
+        effectiveWeekly: quarterEffective(exp, qIdx),
+        splitWeekly: exp.weekly?.[qIdx] ?? 0,
+      }));
+      const quarterTotals = quarterBreakdown.reduce((acc, row) => {
+        const key = row.type === "loan" ? "loan" : "regular";
+        acc[key] += row.effectiveWeekly;
+        return acc;
+      }, { regular: 0, loan: 0 });
+      return {
+        quarter: `Q${qIdx + 1}`,
+        phaseLabel: PHASES[qIdx]?.label ?? `Phase ${qIdx + 1}`,
+        regular: round2(quarterTotals.regular),
+        loan: round2(quarterTotals.loan),
+        total: round2(quarterTotals.regular + quarterTotals.loan),
+      };
+    });
+    const quarterComparison = quarterSummaries.map((summary, idx) => {
+      const prev = quarterSummaries[idx - 1];
+      return {
+        quarter: summary.quarter,
+        phaseLabel: summary.phaseLabel,
+        total: summary.total,
+        deltaFromPrev: prev ? round2(summary.total - prev.total) : null,
+        regular: summary.regular,
+        loan: summary.loan,
+        loanDeltaFromPrev: prev ? round2(summary.loan - prev.loan) : null,
+      };
+    });
+    const expenseQuarterTable = expenses.map(exp => {
+      const rawValues = Q_REP_DATES.map((_, qIdx) => quarterEffective(exp, qIdx));
+      const values = rawValues.map(round2);
+      const deltas = rawValues.map((value, qIdx) => qIdx === 0 ? null : round2(value - rawValues[qIdx - 1]));
+      return {
+        id: exp.id,
+        label: exp.label,
+        type: exp.type ?? "regular",
+        q1: values[0],
+        q2: values[1],
+        q3: values[2],
+        q4: values[3],
+        deltaQ2: deltas[1],
+        deltaQ3: deltas[2],
+        deltaQ4: deltas[3],
+      };
+    });
+    console.groupCollapsed("[Budget Debug][Quarterly] Quarterly spend comparison");
+    console.table(quarterComparison);
+    if (expenseQuarterTable.length) {
+      console.table(expenseQuarterTable);
+    }
+    console.groupEnd();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Budget debug trace — logs once when Budget tab mounts so formula routing is visible
+  // directly in browser devtools for discrepancy triage (income vs spend vs weekly-left).
+  useEffect(() => {
+    const expenseBreakdown = expenses.map(exp => ({
+      id: exp.id,
+      label: exp.label,
+      type: exp.type ?? "regular",
+      phaseIdx: ap,
+      effectiveWeekly: currentEffective(exp, ap),
+      splitWeekly: exp.weekly?.[ap] ?? 0,
+      hasHistory: Boolean(exp.history?.length),
+      latestEffectiveFrom: exp.history?.length
+        ? exp.history.reduce((best, entry) => entry.effectiveFrom > best ? entry.effectiveFrom : best, exp.history[0].effectiveFrom)
+        : null,
+    }));
+    const groupedTotals = expenseBreakdown.reduce((acc, row) => {
+      const key = row.type === "loan" ? "loan" : "regular";
+      acc[key] += row.effectiveWeekly;
+      return acc;
+    }, { regular: 0, loan: 0 });
+    const weeklyLeftFormula = incomingWeekNet - ts;
+    console.groupCollapsed(`[Budget Debug] Phase ${ap} (${ph?.label ?? "unknown"})`);
+    console.log("Formula", {
+      weeklySpend: ts,
+      incomingWeekNet,
+      weeklyLeft: wr,
+      weeklyLeftFormula,
+      spendVsIncomePct: sp,
+      weeklyIncomeAverage: weeklyIncome,
+      prevWeekNet,
+      futureWeekNet0: futureWeekNets?.[0] ?? null,
+    });
+    console.log("Expense totals", groupedTotals);
+    console.table(expenseBreakdown);
+    console.groupEnd();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fiscal year end for drop-off detection
   const fiscalYearEnd = futureWeeks?.length ? toLocalIso(futureWeeks[futureWeeks.length - 1].weekEnd) : "2027-01-04";
@@ -549,7 +689,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
   // Goal helpers
   const activeGoals = goals.filter(g => !g.completed);
   const completedGoals = goals.filter(g => g.completed);
-  const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, color: g.color, note: g.note }); };
+  const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, note: g.note }); };
   const saveEditGoal = (id) => {
     setGoals(p => p.map(g => g.id === id ? {
       ...g,
@@ -563,11 +703,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       id: `g_${Date.now()}`,
       label: newGoal.label,
       target: parseFloat(newGoal.target) || 0,
-      color: newGoal.color || "var(--color-gold)",
+      color: GOAL_SYSTEM_COLOR,
       note: newGoal.note,
       completed: false
     }]);
-    setAddingGoal(false); setNewGoal({ label: "", target: "", color: "var(--color-gold)", note: "" });
+    setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" });
   };
   const deleteGoal = (id) => { setGoals(p => p.filter(g => g.id !== id)); setDelGoalId(null); };
   const toggleComplete = (id) => setGoals(p => p.map(g => g.id === id ? { ...g, completed: !g.completed } : g));
@@ -662,13 +802,14 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       }))
       .filter((week) => week.start && week.end && week.end > week.start);
     if (!validWeeks.length) return null;
-    const timelineEnd = new Date(Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS);
-    const startOfYear = new Date(timelineEnd.getFullYear(), 0, 1);
-    const startMs = startOfYear.getTime();
-    const endMs = Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS;
+    const startMs = Math.min(...validWeeks.map(week => week.start.getTime()));
+    const rawEndMs = Math.max(...validWeeks.map(week => week.end.getTime())) + DAY_MS;
+    const timelineYear = safeDate(TODAY_ISO)?.getFullYear() ?? new Date(startMs).getFullYear();
+    const calendarYearEndMs = new Date(timelineYear + 1, 0, 1).getTime();
+    const endMs = Math.min(rawEndMs, calendarYearEndMs);
     if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
     return { startMs, endMs, spanMs: endMs - startMs };
-  }, [futureWeeks]);
+  }, [futureWeeks, TODAY_ISO]);
 
   const timelineMonthSegments = useMemo(() => {
     if (!timelineBounds) return [];
@@ -703,11 +844,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     return segments;
   }, [timelineBounds]);
   const rollingGoalTimeline = useMemo(
-    () => deriveRollingTimelineMonths(timelineMonthSegments, TODAY_ISO, 1),
+    () => deriveRollingTimelineMonths(timelineMonthSegments, TODAY_ISO, 0),
     [timelineMonthSegments, TODAY_ISO]
   );
   const visibleTimelineSegments = rollingGoalTimeline.visibleMonths;
-  const archivedTimelineSegments = rollingGoalTimeline.hiddenMonths;
   const goalTimelineScale = progressiveScale(rollingGoalTimeline.scaleProgress, 0.15);
 
   // Goal timeline — computed at component level so useEffect can read it
@@ -749,9 +889,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     </div>
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
-      <Card label="Last Paycheck" val={f2(prevWeekNet ?? weeklyIncome)} sub="prev week net" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
+      <Card label="This Week’s Check" val={f2(prevWeekNet ?? weeklyIncome)} sub="This Week’s Check" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
       <Card label="Weekly Spend" val={f2(ts)} rawVal={ts} color="var(--color-red)" />
-      <Card label="Weekly Left" val={f2(wr)} rawVal={wr} color={wr >= 0 ? "var(--color-green)" : "var(--color-red)"} />
+      <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"} />
     </div>
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>
@@ -817,23 +957,31 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
             const expCycle = resolveExpenseCycle(exp, ap);
             const monthlyDisplay = `${f(monthlyFromPerPaycheck(effAmt, cpm))}/mo`;
             const isEditing = editId === exp.id;
+            const isPinnedFoodCard = Boolean(exp.isFoodPrimary || exp.isFoodHighlighted);
             const isDragging = draggingExpenseId === exp.id;
             const previewCategory = dragPreviewExpenseCategory ?? exp.category;
             const lanePreviewingMove = isDragging && previewCategory !== exp.category;
             const previewTint = lanePreviewingMove ? EXPENSE_DRAG_PREVIEW_TINT[previewCategory] : null;
             const cardInsertIndex = laneCardsExcludingDragged.findIndex(item => item.id === exp.id);
             const showInsertLineBefore = isExpenseDropLane
+              && !isPinnedFoodCard
               && draggingExpenseId
               && expenseInsertLane === cat
               && expenseInsertIndex === cardInsertIndex;
             return <div
               key={exp.id}
               data-expense-id={exp.id}
-              draggable={!isEditing && isExpenseDropLane && !isCoarsePointer}
-              onDragStart={(e) => onExpenseDragStart(exp, e)}
+              draggable={!isPinnedFoodCard && !isEditing && isExpenseDropLane && !isCoarsePointer}
+              onDragStart={(e) => {
+                if (isPinnedFoodCard) {
+                  e.preventDefault();
+                  return;
+                }
+                onExpenseDragStart(exp, e);
+              }}
               onDragEnd={onExpenseDragEnd}
               onTouchStart={(e) => {
-                if (!isEditing && isExpenseDropLane) onExpenseTouchStart(e, exp);
+                if (!isPinnedFoodCard && !isEditing && isExpenseDropLane) onExpenseTouchStart(e, exp);
               }}
               onTouchMove={onExpenseTouchMove}
               onTouchEnd={onExpenseTouchEnd}
@@ -859,24 +1007,32 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                 resetExpensePreviewToOrigin();
               }}
               style={{
-                background: lanePreviewingMove
-                  ? `linear-gradient(120deg, ${CATEGORY_BG[cat]} 0%, ${CATEGORY_BG[cat]} 40%, ${previewTint} 72%, ${CATEGORY_BG[previewCategory]} 100%)`
-                  : CAT_GRADIENT[cat] ?? CATEGORY_BG[cat],
-                border: `1px solid ${lanePreviewingMove ? `${CATEGORY_COLORS[previewCategory]}66` : "#1e1e1e"}`,
+                background: isPinnedFoodCard
+                  ? CATEGORY_BG[cat]
+                  : lanePreviewingMove
+                    ? `linear-gradient(120deg, ${CATEGORY_BG[cat]} 0%, ${CATEGORY_BG[cat]} 40%, ${previewTint} 72%, ${CATEGORY_BG[previewCategory]} 100%)`
+                    : CAT_GRADIENT[cat] ?? CATEGORY_BG[cat],
+                border: isPinnedFoodCard
+                  ? "1px solid #1e1e1e"
+                  : `1px solid ${lanePreviewingMove ? `${CATEGORY_COLORS[previewCategory]}66` : "#1e1e1e"}`,
                 borderRadius: "6px",
                 padding: "10px 12px",
                 marginBottom: "6px",
                 position: "relative",
                 opacity: isDragging ? 0.72 : 1,
-                cursor: isEditing ? "default" : (isExpenseDropLane ? (isDragging ? "grabbing" : "grab") : "default"),
+                cursor: isPinnedFoodCard
+                  ? "default"
+                  : isEditing ? "default" : (isExpenseDropLane ? (isDragging ? "grabbing" : "grab") : "default"),
                 transform: isDragging ? "scale(0.94)" : "scale(1)",
-                boxShadow: isDragging
-                  ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}2a inset`
-                  : lanePreviewingMove ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}33 inset` : "none",
+                boxShadow: isPinnedFoodCard
+                  ? "none"
+                  : isDragging
+                    ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}2a inset`
+                    : lanePreviewingMove ? `0 0 0 1px ${CATEGORY_COLORS[previewCategory]}33 inset` : "none",
                 transition: `background 280ms ${EXPENSE_DRAG_EASE}, border-color 300ms ${EXPENSE_DRAG_EASE}, box-shadow 300ms ${EXPENSE_DRAG_EASE}, opacity 220ms ${EXPENSE_DRAG_EASE}, transform 220ms ${EXPENSE_DRAG_EASE}`,
-                touchAction: isExpenseDropLane ? "pan-y" : "auto",
-                userSelect: isExpenseDropLane ? "none" : "auto",
-                WebkitUserSelect: isExpenseDropLane ? "none" : "auto",
+                touchAction: isPinnedFoodCard ? "auto" : (isExpenseDropLane ? "pan-y" : "auto"),
+                userSelect: isPinnedFoodCard ? "auto" : (isExpenseDropLane ? "none" : "auto"),
+                WebkitUserSelect: isPinnedFoodCard ? "auto" : (isExpenseDropLane ? "none" : "auto"),
                 willChange: draggingExpenseId ? "transform, opacity" : "auto",
               }}
             >
@@ -920,7 +1076,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                   <button onClick={() => setEditId(null)} style={{ background: "var(--color-border-subtle)", color: "var(--color-text-secondary)", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", }}>✕</button>
                 </div>
               </div> : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
-                <button
+                {!isPinnedFoodCard && <button
                   type="button"
                   data-expense-drag-handle
                   aria-label={`Hold to drag ${exp.label}`}
@@ -946,10 +1102,15 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                   }}
                 >
                   ⋮⋮
-                </button>
-                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: "13px" }}>{exp.label}</div></div>
+                </button>}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <div style={{ fontSize: "13px" }}>{exp.label}</div>
+                    {isPinnedFoodCard && <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-gold)", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>FOOD</span>}
+                  </div>
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  {pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
+                  {!isPinnedFoodCard && pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
                     <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{monthlyDisplay}</div>
@@ -1108,6 +1269,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       const nowIdx = getFiscalWeekNumber(currentWeek?.idx ?? 0) ?? 1;
       const totG = goals.reduce((s, g) => !g.completed ? s + g.target : s, 0);
       const projS = wr * weeksLeft;
+      const projSAfterFunded = projS - fundedGoalSpend;
       const lastGoalEW = tl.length ? (tl[tl.length - 1].eW ?? weeksLeft + 1) : 0;
       const ordinalSuffix = (day) => {
         if (day % 100 >= 11 && day % 100 <= 13) return "th";
@@ -1147,9 +1309,9 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })} · ends {toLocalIso(currentWeek.weekEnd)}</div>
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <Card label="Weekly Available" val={f2(wr)} rawVal={wr} color="var(--color-green)" />
+          <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"} />
           <Card label="Active Goals Total" val={f(totG)} rawVal={totG} color="var(--color-gold)" />
-          <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projS >= totG ? "var(--color-green)" : "var(--color-red)"} />
+          <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projSAfterFunded >= totG ? "var(--color-green)" : "var(--color-red)"} />
         </div>
 
         <div
@@ -1176,7 +1338,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
         const ok = g.eW !== null && g.eW <= weeksLeft;
         const isEditing = editGoalId === g.id;
         const celebrating = fundingId === g.id;
-        const isDragging = draggingGoalId === g.id;
+          const isDragging = draggingGoalId === g.id;
           const isDropTarget = dragOverGoalId === g.id;
           const finishLabel = resolveGoalFinishLabel(g) ?? "Timeline pending";
           // TODO: tune — card glow animation duration (1.8s) and easing (ease-out)
@@ -1207,7 +1369,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
             }}
             style={{
               background: "var(--color-bg-surface)",
-              border: `1px solid ${isDropTarget ? "var(--color-gold)" : (celebrating ? "var(--color-green)" : g.color + "33")}`,
+              border: `1px solid ${isDropTarget ? "var(--color-gold)" : (celebrating ? "var(--color-green)" : "var(--color-border-accent)")}`,
               borderRadius: "8px",
               padding: "16px",
               marginBottom: "12px",
@@ -1225,13 +1387,6 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={editGoalVals.label} onChange={e => setEditGoalVals(v => ({ ...v, label: e.target.value }))} style={iS} /></div>
                 <div><label style={lS}>Target ($)</label><input type="number" value={editGoalVals.target} onChange={e => setEditGoalVals(v => ({ ...v, target: e.target.value }))} style={iS} /></div>
-                <div><label style={lS}>Color (hex)</label>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input type="text" value={editGoalVals.color} onChange={e => setEditGoalVals(v => ({ ...v, color: e.target.value }))} style={{ ...iS, flex: 1 }} />
-                    <div style={{ width: "28px", height: "28px", borderRadius: "4px", background: editGoalVals.color, border: "1px solid #333", flexShrink: 0 }} />
-                    <input type="color" value={editGoalVals.color} onChange={e => setEditGoalVals(v => ({ ...v, color: e.target.value }))} style={{ width: "28px", height: "28px", padding: 0, border: "none", background: "transparent", cursor: "pointer" }} />
-                  </div>
-                </div>
                 <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={editGoalVals.note} onChange={e => setEditGoalVals(v => ({ ...v, note: e.target.value }))} style={iS} /></div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
@@ -1242,13 +1397,12 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "10px", background: g.color + "22", color: g.color, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
+                    <span style={{ fontSize: "10px", background: "rgba(0,200,150,0.16)", color: GOAL_SYSTEM_COLOR, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
                     <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
                   </div>
-                  <div style={{ fontSize: "10px", color: "#777" }}>{g.note}</div>
                 </div>
                 <div style={{ textAlign: "right", marginLeft: "12px" }}>
-                  <div style={{ fontSize: "18px", fontWeight: "bold", color: g.color }}>{f(g.target)}</div>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{f(g.target)}</div>
                   <div style={{ fontSize: "10px", color: ok ? "var(--color-green)" : "var(--color-red)" }}>{finishLabel}</div>
                   {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                 </div>
@@ -1256,23 +1410,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               {/* TODO: tune — monthly timeline subdivision opacity/width (currently subtle for low visual noise) */}
               {(() => {
                 const nWeeks = Math.max(weeksLeft, 1);
-                const rawStart = Number.isFinite(g.sW) ? g.sW : 0;
-                const projectedEnd = Number.isFinite(g.eW) ? g.eW : rawStart + (Number.isFinite(g.wN) ? g.wN : 0);
-                const startWeek = Math.min(nWeeks, Math.max(0, rawStart));
-                const endWeek = Math.min(nWeeks, Math.max(startWeek, projectedEnd));
-                const fallbackLeftPct = (startWeek / nWeeks) * 100;
-                const fallbackWidthPct = Math.max(((endWeek - startWeek) / nWeeks) * 100, 0);
-                let goalLeftPct = fallbackLeftPct;
-                let goalWidthPct = fallbackWidthPct;
-                if (timelineBounds?.spanMs && futureWeeks?.length) {
-                  const anchorStart = safeDate(futureWeeks[0]?.weekStart)?.getTime() ?? timelineBounds.startMs;
-                  const weekMs = 7 * DAY_MS;
-                  const startMs = anchorStart + (startWeek * weekMs);
-                  const endMs = anchorStart + (endWeek * weekMs);
-                  goalLeftPct = clamp01((startMs - timelineBounds.startMs) / timelineBounds.spanMs) * 100;
-                  goalWidthPct = Math.max(clamp01((endMs - startMs) / timelineBounds.spanMs) * 100, 0);
-                }
-                const visibleWidthPct = goalWidthPct > 0 && goalWidthPct < 0.45 ? 0.45 : goalWidthPct;
+                const projectedWeeks = Number.isFinite(g.eW)
+                  ? Math.max(0, Math.ceil(g.eW))
+                  : Math.max(0, Math.ceil((Number.isFinite(g.sW) ? g.sW : 0) + (Number.isFinite(g.wN) ? g.wN : 0)));
+                const fillWidthPct = clamp01(projectedWeeks / nWeeks) * 100;
                 return <div style={{ marginBottom: "8px" }}>
                   <div style={{
                     height: `${Math.round(16 * goalTimelineScale)}px`,
@@ -1293,7 +1434,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                         height: "100%",
                         borderLeft: "1px solid #232323",
                         borderRight: "1px solid #1a1a1a",
-                        opacity: 0.7,
+                        opacity: seg.key < TODAY_ISO.slice(0, 7) ? 0.28 : 0.72,
                         pointerEvents: "none"
                       }}>
                         {seg.subdivisions.map((sub) => (
@@ -1309,42 +1450,48 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                         ))}
                       </div>;
                     })}
-                    {/* Continuous goal bar with partial month positioning */}
-                    {visibleWidthPct > 0 && <div style={{
+                    {/* Goal timeline lane + cumulative fill */}
+                    <div style={{
                       position: "absolute",
                       top: "2px",
-                      left: `${goalLeftPct}%`,
-                      width: `${visibleWidthPct}%`,
+                      left: 0,
+                      width: "100%",
                       height: "calc(100% - 4px)",
                       borderRadius: "3px",
-                      background: celebrating ? "var(--color-green)" : g.color,
-                      opacity: celebrating ? 1 : (ok ? 0.96 : 0.58),
-                      boxShadow: celebrating ? "0 0 10px rgba(76,175,125,0.55)" : "none",
-                      transition: "background 0.35s ease-out, opacity 0.35s ease-out"
-                    }} />}
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 8px", flex: 1 }}>
-                      {visibleTimelineSegments.map(seg => (
-                        <span key={`${seg.key}-label`} style={{
-                          fontSize: `${(8 * goalTimelineScale).toFixed(1)}px`,
-                          letterSpacing: "1.5px",
-                          color: "#5f5f5f",
-                          textTransform: "uppercase"
-                        }}>
-                          {seg.label}
-                        </span>
-                      ))}
+                      background: "rgba(0,200,150,0.1)",
+                      border: "1px solid rgba(0,200,150,0.26)",
+                      opacity: 0.95,
+                    }}>
+                      <div
+                        className="goal-fill goal-fill--standard"
+                        style={{
+                          width: `${Math.max(fillWidthPct, celebrating ? 100 : 0)}%`,
+                          background: celebrating ? "var(--color-green)" : GOAL_SYSTEM_COLOR,
+                          opacity: celebrating ? 1 : 0.9,
+                          boxShadow: celebrating ? "0 0 10px rgba(76,175,125,0.55)" : "none",
+                        }}
+                      />
                     </div>
-                    <span style={{ fontSize: `${(8 * goalTimelineScale).toFixed(1)}px`, letterSpacing: "1.5px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
-                      4 week blocks / month
-                    </span>
                   </div>
-                  {archivedTimelineSegments.length > 0 && (
-                    <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "8px" }}>
-                      {archivedTimelineSegments.length} older month segment(s) hidden (view keeps previous month + rest of year; archived for future full-year review).
-                    </div>
-                  )}
+                  <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
+                    {visibleTimelineSegments.map(seg => (
+                      <span key={`${seg.key}-label`} style={{
+                        position: "absolute",
+                        left: `${seg.leftPct}%`,
+                        width: `${seg.widthPct}%`,
+                        transform: "translateY(-1px)",
+                        textAlign: "center",
+                        fontSize: `${Math.max(7, Math.round(8 * goalTimelineScale))}px`,
+                        letterSpacing: "1.1px",
+                        color: seg.key < TODAY_ISO.slice(0, 7) ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                        textTransform: "uppercase",
+                        whiteSpace: "nowrap",
+                        lineHeight: 1.1,
+                      }}>
+                        {seg.label}
+                      </span>
+                    ))}
+                  </div>
                 </div>;
               })()}
               {celebrating && <>
@@ -1352,7 +1499,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
                 <div style={{ position: "absolute", top: "50%", left: "50%", pointerEvents: "none", zIndex: 10 }}>
                   {/* TODO: tune — particle fontSize (13px), animation duration (0.85s), cubic-bezier easing */}
                   {BURST_PARTICLES.map((p, pi) => (
-                    <span key={pi} style={{ position: "absolute", fontSize: "13px", color: g.color, "--dx": `${p.dx}px`, "--dy": `${p.dy}px`, animation: `goalParticle 0.85s cubic-bezier(0.25,0.46,0.45,0.94) ${p.delay} forwards`, transform: "translate(-50%,-50%)", userSelect: "none" }}>{p.symbol}</span>
+                    <span key={pi} style={{ position: "absolute", fontSize: "13px", color: GOAL_SYSTEM_COLOR, "--dx": `${p.dx}px`, "--dy": `${p.dy}px`, animation: `goalParticle 0.85s cubic-bezier(0.25,0.46,0.45,0.94) ${p.delay} forwards`, transform: "translate(-50%,-50%)", userSelect: "none" }}>{p.symbol}</span>
                   ))}
                 </div>
                 {/* TODO: tune — stamp entrance duration (0.45s), bounce easing, entrance delay (0.1s) */}
@@ -1363,7 +1510,7 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
               </>}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
-                <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: g.color }}>{f2(wr)}/wk</span> · {g.wN.toFixed(1)} weeks to fund</div>
+                <div style={{ fontSize: "10px", color: "#666" }}><span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span> · {g.wN.toFixed(1)} weeks to fund</div>
                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
                   <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
@@ -1409,18 +1556,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={e => setNewGoal(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Emergency Fund" /></div>
             <div><label style={lS}>Target ($)</label><input type="number" value={newGoal.target} onChange={e => setNewGoal(v => ({ ...v, target: e.target.value }))} style={iS} /></div>
-            <div><label style={lS}>Color (hex)</label>
-              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <input type="text" value={newGoal.color} onChange={e => setNewGoal(v => ({ ...v, color: e.target.value }))} style={{ ...iS, flex: 1 }} />
-                <div style={{ width: "28px", height: "28px", borderRadius: "4px", background: newGoal.color, border: "1px solid #333", flexShrink: 0 }} />
-                <input type="color" value={newGoal.color} onChange={e => setNewGoal(v => ({ ...v, color: e.target.value }))} style={{ width: "28px", height: "28px", padding: 0, border: "none", background: "transparent", cursor: "pointer" }} />
-              </div>
-            </div>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={newGoal.note} onChange={e => setNewGoal(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Optional description" /></div>
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
             <button onClick={addGoal} disabled={!newGoal.label || !newGoal.target} style={{ background: (newGoal.label && newGoal.target) ? "var(--color-green)" : "var(--color-border-subtle)", color: (newGoal.label && newGoal.target) ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newGoal.label && newGoal.target) ? "pointer" : "default", fontWeight: "bold" }}>ADD GOAL</button>
-            <button onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", color: "var(--color-gold)", note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
+            <button onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
           </div>
         </div> : <button onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</button>}
 
@@ -1436,11 +1576,11 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           </button>
 
           {showCompleted && <>
-            {completedGoals.map((g, i) => {
+            {completedGoals.map((g) => {
               const dateFunded = g.completedAt
                 ? new Date(g.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
                 : null;
-              return <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", borderLeft: `3px solid ${g.color}55`, background: "#0e0e0e", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+              return <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", borderLeft: "3px solid rgba(0,200,150,0.4)", background: "#0e0e0e", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: g.note ? "3px" : 0 }}>
                     <span style={{ fontSize: "11px", color: "#3a3a3a", textDecoration: "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
@@ -1472,9 +1612,10 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
           <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "10px" }}>Year-End Outlook</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12px" }}>
             <div style={{ color: "var(--color-text-secondary)" }}>Weeks remaining</div><div style={{ textAlign: "right" }}>{weeksLeft}</div>
-            <div style={{ color: "var(--color-text-secondary)" }}>Adj. projected savings</div><div style={{ textAlign: "right", color: "var(--color-green)" }}>{f(projS)}</div>
+            <div style={{ color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div><div style={{ textAlign: "right", color: "var(--color-red)" }}>-{f(fundedGoalSpend)}</div>
+            <div style={{ color: "var(--color-text-secondary)" }}>Adj. projected savings</div><div style={{ textAlign: "right", color: "var(--color-green)" }}>{f(projSAfterFunded)}</div>
             <div style={{ color: "var(--color-text-secondary)" }}>Active goals total</div><div style={{ textAlign: "right", color: "var(--color-gold)" }}>{f(totG)}</div>
-            <div style={{ color: "var(--color-text-secondary)" }}>Surplus after all goals</div><div style={{ textAlign: "right", color: projS - totG >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{f(projS - totG)}</div>
+            <div style={{ color: "var(--color-text-secondary)" }}>Surplus after all goals</div><div style={{ textAlign: "right", color: projSAfterFunded - totG >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{f(projSAfterFunded - totG)}</div>
           </div>
           <div style={{ borderTop: "1px solid #6dbf8a33", marginTop: "12px", paddingTop: "12px", display: "flex", alignItems: "center", gap: "12px" }}>
             <button onClick={() => setGoals(prev => prev.map(({ dueWeek: _dueWeek, ...rest }) => rest))} style={{ background: "transparent", color: "rgba(76,175,125,0.4)", border: "1px solid #6dbf8a33", borderRadius: "12px", padding: "5px 10px", fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>Reset Timelines</button>

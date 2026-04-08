@@ -1,0 +1,102 @@
+# Codex Task Specification
+
+# =========================
+# TASK_SPEC (MACHINE READABLE)
+# =========================
+
+```json
+{
+  "task_id": "AUDIT_goal_timeline_weeks_to_fund_formula_final_trace",
+  "task_type": "bug",
+
+  "environment_domain": "authority-finance-audit",
+  "allowed_environment_domains": ["authority-finance-audit"],
+  "environment_reason": "This task is a source-of-truth audit and formula trace across budget, expense, surplus, and goals timeline pipelines to determine why weeks-to-fund and goal timeline outputs are inconsistent and not reacting correctly to expense changes.",
+  "environment_mismatch_policy": "stop_and_report",
+
+  "scope": {
+    "allowed_files": [
+      "goal timeline math helpers",
+      "futureWeekNets / computeNet related helpers",
+      "goal funding and weeks-to-fund calculation paths",
+      "expense-to-surplus calculation pipeline",
+      "selectors/hooks feeding weekly leftover into goals UI",
+      "audit/debug documentation files",
+      "read-only inspection of BudgetPanel / GoalsPanel / related consumers",
+      "tests or temporary audit instrumentation if needed"
+    ],
+    "restricted_files": [
+      "broad UI redesign",
+      "styling-only files",
+      "navigation/layout files",
+      "unrelated tabs and components",
+      "database schema changes",
+      "feature additions outside goal math auditing/fixing"
+    ]
+  },
+
+  "constraints": [
+    "Treat this as an audit-first task",
+    "Trace the exact source of truth for weekly leftover, weeks-to-fund, and projected completion timing",
+    "Do not add new product features",
+    "Do not do broad refactors",
+    "If a fix is applied, it must be minimal and directly tied to the audited formula/path",
+    "Document the formula actually in use versus the formula that should be in use",
+    "Verify reactive updates when expenses change"
+  ],
+
+  "implementation_steps": [
+    "Audit the complete data flow from expenses -> weekly leftover/surplus -> goal funding math -> weeks-to-fund display -> timeline completion date.",
+    "Use the screenshot scenario as a sanity check: a goal of 800 with roughly 259 to 260 weekly available should not display as 1.6 weeks to fund if the app is using straightforward weekly funding math.",
+    "Identify the exact formula currently producing the weeks-to-fund number.",
+    "Determine whether the issue is caused by: incorrect divisor, hidden multiplier, stale memoized state, wrong surplus source, biweekly/weekly cadence mismatch, flat-average fallback, or timeline/date conversion bug.",
+    "Audit whether expense updates are actually invalidating/recomputing the weekly leftover and downstream goal math.",
+    "Trace the 3000 goal example as a second sanity check and compare expected weeks-to-fund versus actual displayed value.",
+    "Inspect computeGoalTimeline, futureWeekNets, computeNet, and any intermediate helpers/selectors to find where the mismatch begins.",
+    "If the bug is in formula logic, apply the smallest direct fix to the correct source-of-truth calculation path.",
+    "If the bug is in stale/reactivity wiring, fix the dependency/update path so goals math re-runs whenever expenses change.",
+    "Produce an audit note summarizing: expected formula, actual formula found, exact bug location, fix applied, and any remaining edge cases."
+  ],
+
+  "risk_areas": [
+    "weeks-to-fund math may be using a different surplus source than the UI label",
+    "goal cards may show one weekly amount while timeline math uses another",
+    "expense edits may not invalidate memoized futureWeekNets or computeGoalTimeline results",
+    "weekly versus pay-period cadence may be mixed incorrectly",
+    "date projection may be correct while weeks display is wrong, or vice versa"
+  ],
+
+  "potential_bugs": [
+    {
+      "area": "weeks-to-fund formula",
+      "risk": "the divisor may be doubled, halved, averaged incorrectly, or sourced from the wrong net-surplus value"
+    },
+    {
+      "area": "reactive updates",
+      "risk": "expense changes may not trigger recomputation of weekly leftover and downstream goal projections"
+    },
+    {
+      "area": "goal timeline pipeline",
+      "risk": "card display values and computeGoalTimeline may be using different financial inputs"
+    },
+    {
+      "area": "cadence normalization",
+      "risk": "weekly, biweekly, or monthly normalization may be inconsistent across the pipeline"
+    },
+    {
+      "area": "UI consumer layer",
+      "risk": "the displayed 'weekly leftover' may be current while the 'weeks to fund' value is stale"
+    }
+  ],
+
+  "validation": [
+    "Audit identifies the exact source-of-truth formula for weeks-to-fund",
+    "An 800 goal at approximately 259 to 260 weekly available produces a believable weeks-to-fund result",
+    "A 3000 goal at approximately 259 to 260 weekly available produces a believable weeks-to-fund result",
+    "Changing expenses triggers recomputation of weekly leftover and downstream goals math",
+    "Displayed weekly leftover and weeks-to-fund are derived from the same intended source-of-truth pipeline",
+    "No console errors",
+    "No TypeScript errors",
+    "No unintended file changes"
+  ]
+}

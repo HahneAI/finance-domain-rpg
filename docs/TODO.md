@@ -1,8 +1,75 @@
 # TODO — Life RPG Finance Dashboard
 
-## 1. Auth Providers
+## 1. Goals Funding + Tax Exempt Projection Integrity Sprint (2026-04-03)
 
-- [ ] **Wire Google OAuth** — end-to-end Google sign-in/sign-up via Supabase OAuth
+- [x] **Funded goal cash absorption audit (no double counting after funding animation)**
+  - [x] Trace current "Fund Goal" pipeline end-to-end: click handler → goal state mutation → funded list transfer → aggregate recompute path.
+  - [x] Confirm funded amounts are treated as *spent* in all downstream totals: goals surplus section, surplus account, net worth, and annual take-home views.
+  - [x] Add explicit guardrail checks so funded goal dollars cannot re-enter available surplus/take-home totals in later weeks.
+  - [x] Validate behavior with a reproducible fixture (fund goal mid-year, confirm post-funding totals drop once and stay dropped).
+
+- [ ] **Tax exempt payback withholding should behave like a real expense in taxed weeks**
+  - [ ] Map where extra withholding is currently calculated and where it is displayed across weekly/monthly/year projections.
+  - [ ] Ensure extra withholding is subtracted from taxed weeks as an expense (not only shown as a tax note), so future planning reflects reduced usable cash.
+  - [ ] Propagate the same subtraction into forward-looking charts and monthly rollups (future taxed weeks and months).
+  - [ ] Add consistency checks so weekly table, yearly projection math, and chart datasets all use one shared withholding-adjusted net value.
+
+- [ ] **Goal timeline ETA sensitivity bug (expenses change but finish week stays static)**
+  - [ ] Reproduce with a controlled scenario: increase recurring expenses by ~$150/week and compare goal #2 finish week before/after.
+  - [ ] Audit timeline inputs to verify the predictor is using live post-expense surplus instead of stale or averaged values.
+  - [ ] Fix dependency/recompute triggers so editing expenses immediately updates timeline completion weeks.
+  - [ ] Add regression coverage for at least two deltas (e.g., +$150/week, +$300/week) to ensure ETA moves later when surplus shrinks.
+
+- [x] **Goals card + horizontal timeline UI rework prep (premium liquid-flow direction)**
+  - [x] Create a UI spec pass for goals card simplification: remove low-value text blocks and define minimum info hierarchy.
+  - [x] Replace current "always full color bar" behavior with true progress-fill rendering tied to computed funding percentage.
+  - [x] Evaluate removing goal color picker and standardize goals to one system color unless premium theming requires overrides.
+  - [x] Bring the current + future month markers back to the goal fill bar to turn bar back into timelime bar reaching to end of fiscal year, with months that pass dropping off.
+  - [x] Prototype "liquid/glass fill" interaction direction for premium mode while preserving readable fallback for standard mode.
+
+*Last updated: 2026-04-04*
+
+## 2. Non-Priority Brand Feature — Food Control Spotlight
+
+- [ ] **Brand-first food expense identity (non-priority)** — elevate Food as its own required expense signal so the experience reinforces our core promise: you stay in control of life math, even in everyday categories that feel easy to ignore.
+  - [ ] Add a dedicated Food expense card with a unique icon and visual emphasis (separate from generic Needs) while keeping it categorized under Needs in calculations.
+  - [ ] Require a Food expense input in budget setup and default to **$400/month for one person** as the starting value.
+  - [ ] Keep copy intentionally minimal in the core UI (subconscious visual emphasis over heavy explanation).
+
+- [ ] **Fast food buffer toggle (new-user budget trigger, non-priority)**
+  - [ ] Introduce this option only after a new user first opens the Budget tab (do not surface it earlier in onboarding).
+  - [ ] Add a dedicated on/off toggle modeled after the paycheck buffer behavior and placement.
+  - [ ] Use this exact explainer copy:
+    - [ ] "Similar to the paycheck buffer feature that you can turn on or off in order to match realistic lifestyle numbers when calculating your goals in life every year, we would like to add a fast food buffer to your income math. This buffer will be ignored from your paycheck formulas and specifically when calculating your extra money for goals."
+  - [ ] Ensure buffer math excludes the configured fast food amount from paycheck-based surplus/goal projections when enabled.
+
+
+## 3. Desktop Scroll Regression
+
+- [ ] **Global scrolling** — desktop scrolling regressed again; investigate the latest global layout/container changes and restore smooth wheel/trackpad scrolling across all tabs.
+
+---
+
+## 4. Non-DHL Experience Sprint
+
+- [ ] **Week counter mismatch** — new non-DHL accounts show “Week 16” during Week 14; audit the wizard’s fiscal-week seeding for standard users so post-setup dashboards land on the correct `weekIdx`.
+- [ ] **Step 2 shift differential flow** — remove the default weekend/night differential inputs for non-DHL users. Instead:
+  - [ ] Ask whether the user has any shift differentials; when “Yes,” animate in a multi-select with “Night” and “Weekend” options.
+  - [ ] For each selected option, show a rate input plus the necessary timing fields:
+    - Night diff: start/end times for the higher rate window.
+    - Weekend diff: choose whether weekend pay starts on Friday or Saturday, ends on Sunday or Monday, and specify the clock times for the cutoff.
+  - [ ] Persist these schedules in Supabase (`user_data`) so non-standard rotations survive across devices.
+- [ ] **Step 4 paystub alignment** — the gross/tax inputs inside the optional paystub calculator render staggered when expanded; tighten the layout so the three inputs share a clean grid.
+- [ ] **Deductions layout** — the benefits/other deductions pickers grow too tall on both wizard variants. Widen the viewport breakpoint or switch to a two-column layout whenever a section would otherwise force long scrolling.
+- [ ] **Non-DHL schedule expectations** — WeekConfirmModal currently shows seven empty days and treats every check as an extra pickup. Use the `standardWeeklyHours` input to derive the implied number of shifts/hours, pre-fill those days as “worked,” and only count hours beyond that baseline as surplus (e.g., 6 shifts at 8h each should net +8h, not +40h).
+- [ ] **Pay frequency selection** — add a gate after the DHL preset question asking whether the user is paid weekly, bi-weekly, or monthly; thread that choice through all “per-check” math (expenses, goals, surplus) instead of assuming DHL’s weekly cadence.
+- [ ] **PTO/bucket visibility** — if the wizard’s attendance/bucket question is answered “No,” hide PTO accrual cards and bucket hour components across the dashboard. Expose a Benefits subtab setup module only when the user opts into PTO and completes its formula inputs.
+
+---
+
+## 5. Auth Providers
+
+- [x] **Wire Google OAuth** — end-to-end Google sign-in/sign-up via Supabase OAuth
   - [x] Frontend `signInWithOAuth` call + Google button in `LoginScreen.jsx` — done
   - [x] Supabase Google provider configured (Client ID + Secret set by user in Supabase dashboard) — done
   - [x] Delete account clears OAuth identity — `admin.deleteUser()` in `api/delete-account.js` removes Supabase auth user + all linked OAuth identities (Google); already correct
@@ -15,7 +82,7 @@
 - [x] **LoginScreen layout update** — add OAuth buttons below email/password form with a divider ("or continue with"); style per platform guidelines (Apple button must be black/white)
 
 
-## 2. Benefits ? Deductions Pipeline
+## 6. Benefits ? Deductions Pipeline
 
 The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premiums and freeform `otherDeductions` into `config`, but **none of them are applied to take-home math**. Only `cfg.ltd` and `k401kEmployee` are deducted in `computeNet()` and `buildYear()`.
 
@@ -30,7 +97,7 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 - [x] **Update wizard preview (Step 7 — Paycheck Buffer)** — Step 7 shows gated benefits (or labels them as "start later") so the preview matches take-home math.
 
 
-## 3. Setup Wizard Tune
+## 7. Setup Wizard Tune
 
 - [ ] **End-to-end wizard walkthrough** — run a fresh account through every step; note any confusing copy, broken layout, or missing validation
 - [ ] **Step copy pass** — trim any remaining multi-sentence helper text to one sentence; ensure every step has a clear "why this matters" hook
@@ -39,7 +106,7 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 - [ ] **Re-entry flow** — verify the Life Events re-entry path (lost job, changed jobs, commission) correctly diffs and re-runs only the affected steps
 
 
-## 4. Profile & Account Management
+## 8. Profile & Account Management
 
 > Audit run: 2026-03-28
 
@@ -55,7 +122,7 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
   - Audit: **Not live** (standard sign-out exists; global scope sign-out not found).
 
 
-## 5. Post-Auth Roadmap
+## 9. Post-Auth Roadmap
 
 ### Fiscal Week Features
 
@@ -94,7 +161,7 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
 
 
 
-## 6. Authority OS ? Design System Migration
+## 10. Authority OS ? Design System Migration
 
 This section tracks incremental migration from the old "Dark Wealth" gold-based spec to the live Flow shell + future Pulse overlay system. Work is ordered by visual impact and risk.
 
@@ -103,12 +170,6 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
 - [x] **`ui.jsx` — fix METRIC_STATUS green.val** — changed from `var(--color-accent-soft)` to `var(--color-green)` (#22C55E)
 - [x] **`index.css` — update `--color-gold-bright` flash token** — changed from `#4ade80` to `#33e0b0`
 - [x] **Audit foreground use of `--color-accent-soft`** — lime no longer used as any foreground text or value color
-
-### Token Debt — Hardcoded Colors in Components
-
-- [ ] **`WeekConfirmModal.jsx` — full tokenization** — replace hardcoded `#111`, `#2a2a2a`, `#222`, `#444`, `#888`, `#1e1e1e`, `#161616` with CSS vars; these are leftover pre-Flow colors visibly clashing with the green-dark backgrounds
-- [ ] **`LoginScreen.jsx` — tokenize remaining raw values** — align border/separator shades and button sizing to dashboard card radius/padding scale
-- [ ] **`ProfilePanel.jsx` — tokenize mixed values** — currently uses a mix of tokens + raw hex; extract to shared "settings surface" pattern consistent with rest of app
 
 ### Remaining Rename + Cleanup
 
@@ -124,7 +185,7 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
 
 
 
-## 7. Optional Deductions Mapping (Post-Setup Wizard)
+## 11. Optional Deductions Mapping (Post-Setup Wizard)
 
 - [ ] **Itemized deductions module** — optional advanced setup for users who want more accurate year-end tax projections beyond the standard deduction assumption:
   - [ ] Entry point: "Advanced" link shown on the Annual Tax Strategy step of the setup wizard, and accessible anytime from Settings
@@ -147,42 +208,43 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
 
 
 
-## 8. Countup Animation Scope (2026-03-31)
+## 12. Countup Animation Scope (2026-03-31)
 
 - [x] **Countup animation rolled out to all dollar cards** — `rawVal` prop added to every dollar-amount `Card`/`MetricCard` across Income, Budget, Benefits, and Log panels. Previously only HomePanel cards animated.
 - [ ] **[CC] Scope countup to first tab visit per session only (non-Home tabs)** — currently the 0→target countup fires every time a non-Home tab is mounted (i.e. every tab switch). If this feels like too much motion in practice, gate the animation so it only runs on the *first* visit to each tab within a session. Implementation sketch: track a `Set<panelName>` in App-level state (or a session-scoped ref), pass a `skipCountup` boolean into each panel, and suppress `rawVal` on `Card` if the panel has already been visited this session. Home tab always animates (no gate). The `rawVal` flash-on-change behavior should still fire on data changes regardless of the gate.
 
 ---
 
-## 9. Non-DHL Experience Sprint
-
-- [ ] **Week counter mismatch** — new non-DHL accounts show “Week 16” during Week 14; audit the wizard’s fiscal-week seeding for standard users so post-setup dashboards land on the correct `weekIdx`.
-- [ ] **Step 2 shift differential flow** — remove the default weekend/night differential inputs for non-DHL users. Instead:
-  - [ ] Ask whether the user has any shift differentials; when “Yes,” animate in a multi-select with “Night” and “Weekend” options.
-  - [ ] For each selected option, show a rate input plus the necessary timing fields:
-    - Night diff: start/end times for the higher rate window.
-    - Weekend diff: choose whether weekend pay starts on Friday or Saturday, ends on Sunday or Monday, and specify the clock times for the cutoff.
-  - [ ] Persist these schedules in Supabase (`user_data`) so non-standard rotations survive across devices.
-- [ ] **Step 4 paystub alignment** — the gross/tax inputs inside the optional paystub calculator render staggered when expanded; tighten the layout so the three inputs share a clean grid.
-- [ ] **Deductions layout** — the benefits/other deductions pickers grow too tall on both wizard variants. Widen the viewport breakpoint or switch to a two-column layout whenever a section would otherwise force long scrolling.
-- [ ] **Non-DHL schedule expectations** — WeekConfirmModal currently shows seven empty days and treats every check as an extra pickup. Use the `standardWeeklyHours` input to derive the implied number of shifts/hours, pre-fill those days as “worked,” and only count hours beyond that baseline as surplus (e.g., 6 shifts at 8h each should net +8h, not +40h).
-- [ ] **Pay frequency selection** — add a gate after the DHL preset question asking whether the user is paid weekly, bi-weekly, or monthly; thread that choice through all “per-check” math (expenses, goals, surplus) instead of assuming DHL’s weekly cadence.
-- [ ] **PTO/bucket visibility** — if the wizard’s attendance/bucket question is answered “No,” hide PTO accrual cards and bucket hour components across the dashboard. Expose a Benefits subtab setup module only when the user opts into PTO and completes its formula inputs.
-
----
-
-## 10. Desktop Scroll Regression
-
-- [x] **Global scrolling** — desktop scrolling regressed again; investigate the latest global layout/container changes and restore smooth wheel/trackpad scrolling across all tabs.
-
----
-
-## 11. Income Weekly Sticky Header
+## 13. Income Weekly Sticky Header
 
 - [ ] **Weekly subtab sticky card** — the Income tab’s Weekly view uses a sticky header/table shell that works on desktop, but on iPhone 17 the sticky row detaches ~2 cm before reaching the Dynamic Island and then snaps awkwardly. Rebuild the sticky behavior so the mini chart and column labels pin exactly at the viewport-safe-area boundary and release as expected across Safari/Chrome (test both portrait and landscape).
 
-*Last updated: 2026-03-31*
+---
 
+## 14. Mobile Navigation + Income IA + Budget Breakdown/Goals Bridge Discovery Notes (2026-04-03)
+
+- [ ] **[Planning] Mobile drawer: promote Goals to first-class destination and reduce shortcut count to five**
+  - [ ] Current nav sources to refactor are centralized in `src/App.jsx` (`NAV_ITEMS` for drawer/sidebar + `BOTTOM_NAV` for fixed mobile shortcuts) and `activePanel` routing (currently no direct `goals` route).
+  - [ ] Decide final five-item mobile shortcut set before coding (example candidate: Home, Income, Budget, Goals, Account).
+  - [ ] Implementation direction: either (A) add a top-level `goals` view key that opens Budget in goals-only mode, or (B) extract goals into a dedicated `GoalsPanel` component and route it directly.
+  - [ ] Validate drawer + bottom-nav parity so the new Goals page is reachable from both without nested stack confusion (`navigateDirect` / `viewStack`).
+
+- [ ] **[Planning] Income IA simplification: remove config subtab and flatten summary/sub-pill UX**
+  - [ ] Current Income structure is in `src/components/IncomePanel.jsx`: top tabs `summary|config`, then summary subtabs `monthly|weekly` with a second pill row.
+  - [ ] Move/confirm all editable Income config controls are represented in Profile settings (`src/components/ProfilePanel.jsx` sections: Pay Basics, Retirement & Benefits, Tax Plan, Buffer/Tax Exempt references).
+  - [ ] Target end-state: remove `config` subtab in Income and collapse UI into a single primary surface with monthly/weekly switching (no extra nested row if possible).
+  - [ ] Pay special attention to weekly sticky header behavior when hierarchy is simplified (sticky logic currently tied to `view === "summary" && subview === "weekly"`).
+
+- [ ] **[Planning] Budget breakdown chart: display-only deductions line item (do not alter tax threading)**
+  - [ ] Current Breakdown cashflow cards/tables live in `src/components/BudgetPanel.jsx` under `view === "breakdown"`; they show incoming paycheck, needs, loans, and unallocated.
+  - [ ] Research task: add a display-only deductions bucket sourced from existing weekly deduction math (`benefitsDeduction`/other deduction sources in `src/lib/finance.js`) without changing taxable-gross computation pipeline.
+  - [ ] Keep this additive to Breakdown visualization only (no mutation to `computeNet`, `buildYear`, or withholding logic unless separately scoped).
+
+- [ ] **[Planning] Breakdown cashflow should key off next check cadence and feed goals ETA with per-week realism**
+  - [ ] Existing data path already has per-week forward nets from App (`futureWeekNets` adjusted, `timelineWeekNets` raw) passed into Budget; verify which series Breakdown should present as the “next week check” source for rotating high/low paychecks.
+  - [ ] Current goal ETA engine is `computeGoalTimeline()` in `src/lib/finance.js`, which iterates weekly nets and subtracts effective weekly spend; review fallback averaging path (`avgNet`) for unfinished goals and reduce over-reliance on annualized averages.
+  - [ ] Add helper-planning item: design a small bridge utility that exposes `nextCheckNet - weekExpenses = weekSurplus` snapshots to both Breakdown and Goals timeline labels so users can see alternating-surplus weeks (e.g., $1700 vs $1000 check rotations).
+  - [ ] Ensure finish-date projection copy shows both long-range projection and short-range per-week surplus context so “goal completion date” is explainable to the dollar.
 
 ## Completed
 
@@ -223,3 +285,4 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
 
 ---
 
+---

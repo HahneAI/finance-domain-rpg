@@ -1,0 +1,80 @@
+{
+  "task_id": "FEATURE_weekly_left_label_and_previous_week_source",
+  "task_type": "feature",
+
+  "environment_domain": "authority-finance-ui",
+  "allowed_environment_domains": ["authority-finance-ui"],
+  "environment_reason": "This modifies UI labeling and display semantics for weekly surplus, and adjusts which value is surfaced (previous week realized vs projected).",
+  "environment_policy": "scope_enforced",
+  "environment_runtime_visibility_policy": "report_if_available_do_not_fail_if_missing",
+
+  "scope": {
+    "allowed_files": [
+      "weekly left card components",
+      "UI selectors/hooks for surplus display",
+      "text labels and sublabels",
+      "income/budget overview cards",
+      "shared UI components displaying weekly surplus"
+    ],
+    "restricted_files": [
+      "core financial math",
+      "computeNet",
+      "goal timeline logic",
+      "tax logic",
+      "expense calculation logic"
+    ]
+  },
+
+  "constraints": [
+    "Do not change underlying math logic",
+    "Only change which value is displayed",
+    "Label must reflect real-world behavior (delayed paycheck)",
+    "Consistency across all weekly-left cards"
+  ],
+
+  "implementation_steps": [
+    "Locate all UI components displaying 'weekly left' or equivalent.",
+    
+    "Change label text globally:",
+    "'Weekly Left' → 'Left This Week'",
+    
+    "Update value source:",
+    "- instead of projected current week",
+    "- use previous week's finalized surplus value",
+    
+    "Ensure selector pulls from:",
+    "- last completed pay cycle",
+    "- not in-progress current week",
+    
+    "Verify behavior:",
+    "- if user works 6-day week, value still reflects prior check",
+    
+    "Ensure consistency across:",
+    "- home tab",
+    "- income tab",
+    "- budget tab",
+    "- any summary cards"
+  ],
+
+  "risk_areas": [
+    "selector mismatch → still showing projected value",
+    "inconsistent label updates across screens",
+    "edge case → first week with no prior data",
+    "UI showing stale value if previous week not stored correctly"
+  ],
+
+  "potential_bugs": [
+    "card still shows projected instead of actual",
+    "label updated but logic not updated",
+    "first week shows null/undefined",
+    "different tabs show different values"
+  ],
+
+  "validation": [
+    "All cards display 'Left This Week'",
+    "Value reflects previous week's realized surplus",
+    "Consistent across all screens",
+    "Handles first-week edge case gracefully",
+    "No console errors"
+  ]
+}

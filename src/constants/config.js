@@ -208,7 +208,19 @@ export const PHASES = [
   { id: "q4", label: "Oct–Dec", description: "Oct 1 → Dec 31", color: "#00c896" },
 ];
 
-export const INITIAL_EXPENSES = [];
+const DEFAULT_FOOD_WEEKLY = 100; // $400 / month baseline during first-time setup
+export const INITIAL_EXPENSES = [
+  {
+    id: "exp_default_food",
+    category: "Needs",
+    label: "Food",
+    isFoodPrimary: true,
+    isFoodHighlighted: true, // UI-safe flag for future visual emphasis
+    note: ["", "", "", ""],
+    billingMeta: { amount: 400, cycle: "every30days", effectiveFrom: FISCAL_YEAR_START },
+    history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [DEFAULT_FOOD_WEEKLY, DEFAULT_FOOD_WEEKLY, DEFAULT_FOOD_WEEKLY, DEFAULT_FOOD_WEEKLY] }],
+  },
+];
 
 export const INITIAL_GOALS = [];
 

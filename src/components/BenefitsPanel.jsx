@@ -26,7 +26,7 @@ const SH = ({ children }) => (
 
 const EMPTY_FORM = { label: "", hoursNeeded: "", targetDate: "", negativeBalanceCap: "40" };
 
-export function BenefitsPanel({ allWeeks, config, isDHL, isAdmin = false, logK401kLost, logK401kMatchLost,
+export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = false, logK401kLost, logK401kMatchLost,
   logK401kGained, logK401kMatchGained, logPTOHoursLost, currentWeek, bucketModel,
   ptoGoal, setPtoGoal, fiscalWeekInfo }) {
 
@@ -71,6 +71,8 @@ export function BenefitsPanel({ allWeeks, config, isDHL, isAdmin = false, logK40
   const [formOpen, setFormOpen] = useState(false);
   const [formVals, setFormVals] = useState(EMPTY_FORM);
   const [editMode, setEditMode] = useState(false);
+  const [editingBalance, setEditingBalance] = useState(false);
+  const [balanceInput, setBalanceInput] = useState("");
 
   const shiftHours = config.shiftHours ?? 12;
 
@@ -362,15 +364,56 @@ export function BenefitsPanel({ allWeeks, config, isDHL, isAdmin = false, logK40
           {/* Balance bar */}
           <div style={{ background: "var(--color-bg-surface)", border: `1px solid ${bandColor}33`, borderRadius: "8px", padding: "16px", marginBottom: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Bucket Balance</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Bucket Balance</div>
+                {config.bucketBalanceOverride != null && (
+                  <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px" }}>(manual)</span>
+                )}
+              </div>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <span style={{ fontSize: "14px", fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h <span style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>/ {cap}h</span></span>
                 <span style={{ fontSize: "9px", background: bandColor + "22", color: bandColor, padding: "2px 8px", borderRadius: "12px", letterSpacing: "2px" }}>● {bm.status.toUpperCase()}</span>
               </div>
             </div>
-            <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden" }}>
+            <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden", marginBottom: "12px" }}>
               <div style={{ height: "100%", width: `${pct}%`, background: bandColor, borderRadius: "4px", transition: "width 0.3s" }} />
             </div>
+            {editingBalance ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <input
+                  {...iS} style={{ ...iS, width: "100px", padding: "6px 10px" }}
+                  type="number" min="0" max={cap} step="1"
+                  value={balanceInput}
+                  onChange={e => setBalanceInput(e.target.value)}
+                  placeholder="hours"
+                  autoFocus
+                />
+                <SmBtn
+                  onClick={() => {
+                    const val = parseFloat(balanceInput);
+                    if (Number.isFinite(val) && val >= 0) {
+                      setConfig(c => ({ ...c, bucketBalanceOverride: val }));
+                    }
+                    setEditingBalance(false);
+                  }}
+                  c="var(--color-bg-base)" bg="var(--color-gold)"
+                >Save</SmBtn>
+                <SmBtn onClick={() => setEditingBalance(false)} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Cancel</SmBtn>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: "8px" }}>
+                <SmBtn
+                  onClick={() => { setBalanceInput(String(bm.currentBalance)); setEditingBalance(true); }}
+                  c="var(--color-text-secondary)" bg="var(--color-bg-raised)"
+                >Set Balance</SmBtn>
+                {config.bucketBalanceOverride != null && (
+                  <SmBtn
+                    onClick={() => setConfig(c => ({ ...c, bucketBalanceOverride: null }))}
+                    c="var(--color-text-disabled)" bg="var(--color-bg-raised)"
+                  >Clear Override</SmBtn>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Current month strip */}

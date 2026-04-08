@@ -292,6 +292,34 @@ export default function App() {
     });
   }, [authedUser]);
 
+  // ── Auto-confirm all past weeks on first load when no confirmations exist ──
+  // Treats every historical week as fully worked (clean/net-zero). Over-assumption is fine:
+  // income projections already assume full attendance from account creation.
+  // Runs once — after auto-confirm, weekConfirmations is non-empty so condition exits early.
+  useEffect(() => {
+    if (loading) return;
+    if (Object.keys(weekConfirmations).length > 0) return;
+    const pastActiveWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
+    if (!pastActiveWeeks.length) return;
+    const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const confirmedAt = new Date().toISOString();
+    const bulk = {};
+    for (const week of pastActiveWeeks) {
+      const scheduledDays = week.workedDayNames ?? [];
+      bulk[week.idx] = {
+        confirmedAt,
+        dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, scheduledDays.includes(d) ? true : null])),
+        scheduledDays,
+        missedScheduledDays: [],
+        pickupDays: [],
+        netShiftDelta: 0,
+        eventId: null,
+        autoConfirmed: true,
+      };
+    }
+    setWeekConfirmations(bulk);
+  }, [loading, weekConfirmations, allWeeks, today]);
+
   // ── Debounced save to Supabase (800ms) ──
   const saveTimer = useRef(null);
   useEffect(() => {
@@ -616,7 +644,7 @@ export default function App() {
         isAdmin={isAdmin}
       />}
       {currentView === "benefits" && <BenefitsPanel
-        allWeeks={allWeeks} config={config} isDHL={isDHL} isAdmin={isAdmin}
+        allWeeks={allWeeks} config={config} setConfig={setConfig} isDHL={isDHL} isAdmin={isAdmin}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
         logK401kGained={logTotals.k401kGained}

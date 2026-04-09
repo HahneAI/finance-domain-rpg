@@ -23,6 +23,7 @@ import {
   loanRunwayStartDate,
   dhlEmployerMatchRate,
   deriveWeeklyPayrollDeductions,
+  getWeeklyBudgetBreakdownPayrollDeductions,
   isFutureWeek,
   traceExpenseCalculationSteps,
 } from '../../lib/finance.js'
@@ -453,7 +454,15 @@ describe('computeNet', () => {
     expect(preStart.benefitsDeduction).toBe(0)
     expect(postStart.benefitsDeduction).toBeGreaterThan(0)
     const postNet = computeNet(postStart, cfg)
-    const postNetWithoutBenefits = computeNet({ ...postStart, benefitsDeduction: 0 }, cfg)
+    const postNetWithoutBenefits = computeNet({
+      ...postStart,
+      benefitsDeduction: 0,
+      payrollDeductions: {
+        ...(postStart.payrollDeductions || {}),
+        benefits: 0,
+        total: postStart.k401kEmployee || 0,
+      },
+    }, cfg)
     expect(postNet).toBeLessThan(postNetWithoutBenefits)
   })
 
@@ -463,6 +472,50 @@ describe('computeNet', () => {
     expect(parts.benefits).toBeCloseTo(week.benefitsDeduction)
     expect(parts.k401Employee).toBeCloseTo(week.k401kEmployee)
     expect(parts.total).toBeCloseTo(week.benefitsDeduction + week.k401kEmployee)
+  })
+
+  it('deriveWeeklyPayrollDeductions keeps pre-benefits weeks at 0 when benefits are not active', () => {
+    const cfg = {
+      ...DHL_CONFIG,
+      benefitsStartDate: '2026-07-01',
+      healthPremium: 40,
+      dentalPremium: 10,
+      visionPremium: 5,
+      ltd: 4,
+      stdWeekly: 3,
+      lifePremium: 2,
+      hsaWeekly: 8,
+      fsaWeekly: 6,
+      k401Rate: 0,
+      k401MatchRate: 0,
+      k401StartDate: null,
+    }
+
+    const parts = deriveWeeklyPayrollDeductions(
+      {
+        active: true,
+        benefitsActive: false,
+        k401kEmployee: 0,
+      },
+      cfg,
+    )
+    expect(parts.benefits).toBe(0)
+    expect(parts.k401Employee).toBe(0)
+    expect(parts.total).toBe(0)
+  })
+
+  it('Budget Breakdown payroll deduction source excludes event deduction fields', () => {
+    const week = weeks.find(w => w.active && w.taxedBySchedule)
+    const total = getWeeklyBudgetBreakdownPayrollDeductions(
+      {
+        ...week,
+        adjustedWeeklyDelta: -999,
+        eventDeductions: 999,
+        netAfterEvents: week.grossPay - 999,
+      },
+      DHL_CONFIG,
+    )
+    expect(total).toBeCloseTo(week.benefitsDeduction + week.k401kEmployee)
   })
 })
 

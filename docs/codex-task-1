@@ -1,0 +1,98 @@
+{
+  "task_id": "FEATURE_goals_top_level_navigation_with_safe_wiring_audit",
+  "task_type": "feature",
+
+  "environment_domain": "authority-finance-ui",
+  "allowed_environment_domains": ["authority-finance-ui"],
+  "environment_reason": "This task is primarily a navigation and page-structure UI move: promoting Goals to a first-class destination and wiring the new page/view into drawer and mobile navigation. It also requires a careful read-through of goals data and interaction wiring so the UI move does not disconnect existing goal functionality.",
+  "environment_policy": "scope_enforced",
+  "environment_runtime_visibility_policy": "report_if_available_do_not_fail_if_missing",
+
+  "scope": {
+    "allowed_files": [
+      "src/App.jsx",
+      "navigation routing/view-stack logic",
+      "drawer and mobile navigation config",
+      "goal-related panel components",
+      "BudgetPanel goals subview if currently hosting goal UI",
+      "new GoalsPanel component if extraction is needed",
+      "UI selectors/props that feed goal display and goal interactions",
+      "minimal routing/data-pass glue required to preserve existing goal functionality"
+    ],
+    "restricted_files": [
+      "computeNet",
+      "computeGoalTimeline",
+      "futureWeekNets math",
+      "tax logic",
+      "benefits pipeline",
+      "expense calculation engine",
+      "database/schema files",
+      "broad core refactors unrelated to page/view wiring"
+    ]
+  },
+
+  "constraints": [
+    "Primary objective is UI/navigation restructuring",
+    "Do not rewrite core goal math",
+    "Do not change financial formulas unless an absolute blocking bug in UI wiring requires a one-line pass-through correction",
+    "If existing goal functions are currently hosted inside Budget, preserve behavior through safe prop/state wiring rather than re-implementing logic",
+    "Prefer extraction/reuse over duplication",
+    "Navigation, drawer, and mobile route behavior must remain clean and predictable",
+    "Strongly audit goal data dependencies before moving UI entry points"
+  ],
+
+  "implementation_steps": [
+    "Inspect the current goals experience and identify whether goals are rendered fully inside BudgetPanel, partially inside BudgetPanel, or already abstracted enough to promote into a standalone destination.",
+    "Audit the current goal function wiring before moving UI: identify the props, selectors, handlers, and derived values required for the goals view to function correctly. This includes goal list rendering, funded/completion state, timeline display inputs, surplus/ETA inputs, and any add/edit/fund interactions currently reachable from the goals area.",
+    "Document internally in code comments or implementation notes where the goals UI currently depends on BudgetPanel-specific context so those dependencies are not accidentally severed during the move.",
+    "Promote Goals to a top-level destination in the app navigation.",
+    "Update drawer/mobile navigation wiring so Goals is reachable as its own first-class page/view.",
+    "Choose the safest implementation path:",
+    "Path A: introduce a dedicated GoalsPanel component and pass existing goal UI dependencies into it;",
+    "or Path B: route directly into a goals-only mode of the existing Budget/Goals surface if extraction would create unnecessary duplication risk.",
+    "Preserve existing goal interactions by reusing the same handlers/selectors/props rather than rebuilding them.",
+    "If the move requires small routing/data-pass glue changes, keep them minimal and strictly limited to preserving existing functionality.",
+    "Verify that the new Goals page still receives all necessary data inputs for display and interaction, especially any timeline/surplus values already computed elsewhere.",
+    "Ensure the Budget tab no longer acts as the only access point for goals if Goals has been promoted successfully.",
+    "Clean up dead navigation branches, stale labels, and duplicated entry points left behind by the UI move."
+  ],
+
+  "risk_areas": [
+    "Goals UI may currently rely on BudgetPanel-local props or state",
+    "Navigation move may render the page but leave timeline/funding interactions disconnected",
+    "A shallow extraction may duplicate selectors and create drift",
+    "Mobile drawer and bottom-nav parity may break if only one navigation path is updated",
+    "UI move may unintentionally expose stale goal values if props are not passed through correctly"
+  ],
+
+  "potential_bugs": [
+    {
+      "area": "goal page wiring",
+      "risk": "Goals page may render but lose funded state, timeline values, or interaction handlers after extraction"
+    },
+    {
+      "area": "navigation",
+      "risk": "Goals may be reachable from drawer but not from mobile nav, or vice versa"
+    },
+    {
+      "area": "shared state",
+      "risk": "Budget and Goals may start reading different goal sources if logic is duplicated instead of reused"
+    },
+    {
+      "area": "UI extraction",
+      "risk": "Moving goals out of Budget may break assumptions in existing component composition"
+    }
+  ],
+
+  "validation": [
+    "Goals is reachable as a top-level destination",
+    "Goals no longer depends on hidden Budget-only navigation to be accessible",
+    "Goal list, funded/completion state, and timeline-related displays still render correctly after the move",
+    "Existing goal interactions still function from the promoted Goals destination",
+    "No core math logic was rewritten unnecessarily",
+    "No duplicated goal state source was introduced",
+    "Drawer and mobile navigation both route cleanly to Goals",
+    "No console errors",
+    "No unintended file changes"
+  ]
+}

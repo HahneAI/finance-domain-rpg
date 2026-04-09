@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
@@ -294,14 +294,58 @@ export default function App() {
 
   // ── Debounced save to Supabase (800ms) ──
   const saveTimer = useRef(null);
+  const latestPersistedStateRef = useRef({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
+  const pendingSaveRef = useRef(false);
+
+  useEffect(() => {
+    latestPersistedStateRef.current = { config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal };
+  }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
+
   useEffect(() => {
     if (loading) return;
     clearTimeout(saveTimer.current);
+    pendingSaveRef.current = true;
     saveTimer.current = setTimeout(() => {
+      pendingSaveRef.current = false;
       saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
     }, 800);
     return () => clearTimeout(saveTimer.current);
   }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal, loading]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const flushPendingSave = () => {
+      if (loading || !pendingSaveRef.current) return;
+      pendingSaveRef.current = false;
+      clearTimeout(saveTimer.current);
+      saveUserData(latestPersistedStateRef.current);
+    };
+
+    const onBeforeUnload = () => flushPendingSave();
+    const onPageHide = () => flushPendingSave();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushPendingSave();
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [loading]);
+
+  // ── Immediate config save — for ProfilePanel sub-views that need guaranteed persistence ──
+  // Called with the already-computed newConfig so we don't rely on React having flushed setConfig yet.
+  const saveConfigNow = useCallback((newConfig) => {
+    clearTimeout(saveTimer.current);
+    pendingSaveRef.current = false;
+    saveUserData({ config: newConfig, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
+  }, [expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
 
   // ── today: reactive date string — ticks at midnight so everything auto-advances ──
   const [today, setToday] = useState(() => toLocalIso(new Date()));
@@ -673,6 +717,7 @@ export default function App() {
         authedUser={authedUser}
         config={config}
         setConfig={setConfig}
+        saveConfigNow={saveConfigNow}
         allWeeks={allWeeks}
         taxDerived={taxDerived}
         showExtra={showExtra}

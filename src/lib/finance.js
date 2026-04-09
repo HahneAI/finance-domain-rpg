@@ -50,6 +50,40 @@ function weeklyBenefitDeductions(cfg) {
   return perCheck * (checksPerYear / 52);
 }
 
+// Source-of-truth payroll deduction contract for weekly rows.
+// UI consumers (Budget Breakdown) should read:
+//   week.payrollDeductions.total
+// where:
+//   benefits = active benefit deductions (health/dental/vision/ltd/std/life/hsa/fsa)
+//   k401Employee = active employee 401k deduction
+//   total = benefits + k401Employee
+export function deriveWeeklyPayrollDeductions(week, cfg) {
+  const payrollFromWeek = week?.payrollDeductions;
+  if (payrollFromWeek && typeof payrollFromWeek === "object") {
+    const benefits = payrollFromWeek.benefits ?? 0;
+    const k401Employee = payrollFromWeek.k401Employee ?? week.k401kEmployee ?? 0;
+    return {
+      benefits,
+      k401Employee,
+      total: benefits + k401Employee,
+    };
+  }
+
+  const benefits = week.benefitsDeduction ?? ((week.benefitsActive ?? week.active) ? weeklyBenefitDeductions(cfg) : 0);
+  const k401Employee = week.k401kEmployee ?? 0;
+  return {
+    benefits,
+    k401Employee,
+    total: benefits + k401Employee,
+  };
+}
+
+// Budget Breakdown source-of-truth: payroll deductions only.
+// This intentionally excludes event deductions and all event-adjusted deltas.
+export function getWeeklyBudgetBreakdownPayrollDeductions(week, cfg) {
+  return deriveWeeklyPayrollDeductions(week, cfg).total;
+}
+
 function otherPostTaxDeductions(cfg) {
   const perCheck = (cfg.otherDeductions ?? []).reduce((sum, row) => {
     const amt = row?.weeklyAmount;
@@ -288,6 +322,11 @@ export function buildYear(cfg) {
       taxedBySchedule: isTaxed,
       benefitsDeduction,
       benefitsActive,
+      payrollDeductions: {
+        benefits: benefitsDeduction,
+        k401Employee: k401kEmployee,
+        total: benefitsDeduction + k401kEmployee,
+      },
       rotationLabel: rotationLabel || rotation,
       requiredOtShifts,
     });
@@ -299,8 +338,8 @@ export function buildYear(cfg) {
 export function computeNet(w, cfg, extraPerCheck, showExtra) {
   if (!w.active) return 0;
   const fica = w.grossPay * cfg.ficaRate;
-  const benefitDeduction = w.benefitsDeduction ?? (w.active ? weeklyBenefitDeductions(cfg) : 0);
-  const ded = benefitDeduction + w.k401kEmployee;
+  const payrollDeductions = deriveWeeklyPayrollDeductions(w, cfg);
+  const ded = payrollDeductions.total;
   const otherPostTax = otherPostTaxDeductions(cfg);
   if (!w.taxedBySchedule) return (w.grossPay - fica - ded) - otherPostTax;
   // Use generalized rate fields; fall back to legacy w1/w2 fields for pre-wizard rows.

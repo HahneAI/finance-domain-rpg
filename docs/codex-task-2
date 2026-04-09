@@ -1,174 +1,97 @@
-# Codex Task Specification
-
-# =========================
-# TASK_SPEC (MACHINE READABLE)
-# =========================
-
-```json
 {
-  "task_id": "AUDIT_complete_all_fiscal_week_features_roadmap_items",
-  "task_type": "FEATURE",
-  "status": "PENDING",
+  "task_id": "AUDIT_profile_panel_persistence_and_realtime_math_pipeline",
+  "task_type": "bug",
 
-  "objective": "Audit and complete all 4 Fiscal Week Features roadmap items: (1) fiscal week awareness across the app, (2) goals being marked complete when funded, (3) weekly confirmation of days worked versus projected schedule, and (4) goal timeline surplus math using per-week future net outputs instead of a flat average.",
+  "environment_domain": "authority-finance-core",
+  "allowed_environment_domains": ["authority-finance-core"],
+  "environment_reason": "This is a persistence-path and source-of-truth investigation across ProfilePanel form state, save handlers, Supabase write/read flows, and downstream math recomputation. It is an audit/debug task first, not a UI redesign or a core feature build.",
+  "environment_policy": "scope_enforced",
+  "environment_runtime_visibility_policy": "report_if_available_do_not_fail_if_missing",
 
   "scope": {
     "allowed_files": [
-      "shared fiscal week/date helpers",
-      "centralized FISCAL_YEAR_START constant/config",
-      "header week badge component",
-      "log tab week badge/state integration",
-      "benefits tab week badge/state integration",
-      "budget tab phase/week integration",
-      "goals tab/page component",
-      "goal completion status logic",
-      "goal funding/progress helpers",
-      "goal timeline math helpers",
-      "computeNet or equivalent per-week net calculation helpers",
-      "computeGoalTimeline or equivalent goal timeline helper",
-      "weekly schedule/worked-days confirmation components",
-      "relevant selectors/hooks for fiscal week state, goals, and projected/actual work days"
+      "src/components/ProfilePanel.jsx",
+      "account/profile settings subcomponents",
+      "save/update handlers used by ProfilePanel",
+      "Supabase client/data access helpers",
+      "App-level config loading/hydration logic",
+      "selectors/hooks consuming profile/account config in pay math",
+      "benefits settings mapping helpers",
+      "audit/debug documentation files",
+      "temporary instrumentation or logging used only for tracing"
     ],
     "restricted_files": [
-      "authentication logic",
-      "unrelated dashboard tabs/pages outside header/log/benefits/budget/goals surfaces directly tied to fiscal week awareness",
-      "global theme system",
-      "database schema unless minimal persistence is truly required for weekly confirmation data",
-      "broad app-wide layout refactors"
-    ],
-    "entry_points": [
-      "current date/today state logic",
-      "midnight rollover logic",
-      "central fiscal week calculation helper",
-      "header/log/benefits/budget week display pipelines",
-      "goal funded/completion pipeline",
-      "weekly worked-days confirmation flow",
-      "futureWeekNets / computeNet / computeGoalTimeline calculation path"
-    ],
-    "out_of_scope": [
-      "theoretical tab work",
-      "full goals system redesign",
-      "full scheduling/calendar redesign",
-      "major navigation changes",
-      "unrelated budgeting or auth features"
+      "broad UI redesign",
+      "styling-only files",
+      "navigation/layout files",
+      "unrelated tabs/components",
+      "database schema migrations unless strictly required after proving persistence gap",
+      "large refactors outside save/load/recompute path"
     ]
   },
 
-  "implementation": {
-    "steps": [
-      "Audit the current implementation status of all 4 Fiscal Week Features roadmap items and classify each as live, partial, or missing.",
-      "Verify fiscal week awareness exists as a centralized app-wide system using a shared fiscal-year start constant and reactive current-date logic.",
-      "If incomplete, implement or fix fiscal week awareness so the app knows the current fiscal week (Week X of 52), the today state ticks at midnight, and the header, log, benefits, and budget surfaces stay in sync.",
-      "Audit whether goals are marked complete when they become funded.",
-      "If incomplete, implement goal completion behavior tied to the existing funded/progress logic without breaking goal history or timeline views.",
-      "Audit whether users can confirm actual days worked versus projected schedule each week.",
-      "If incomplete, implement a weekly confirmation flow tied to the current fiscal week, with clear projected-versus-actual comparison and appropriate persistence only if the current architecture requires it.",
-      "Audit whether goal timeline surplus math is driven by per-week future net outputs rather than a flat average.",
-      "If incomplete or incorrect, ensure futureWeekNets or the equivalent per-week computeNet output, excluding buffer if that is the current intended rule, feeds computeGoalTimeline directly and the flat-average approach is no longer used.",
-      "Keep all four features aligned to the same fiscal week system and avoid duplicate date logic."
-    ],
-    "constraints": [
-      "Preserve existing TypeScript types",
-      "Audit existing logic before adding new logic",
-      "Prefer centralized fiscal week/date logic over duplicated per-tab calculations",
-      "Keep UI additions minimal and consistent with existing app patterns",
-      "Only add schema changes if truly required after inspecting the real current data model",
-      "Do not regress existing working fiscal week or goal timeline behavior"
-    ]
-  },
+  "constraints": [
+    "Audit-first task",
+    "Trace the exact save path from ProfilePanel input change -> save action -> Supabase write -> app re-hydration -> downstream math recompute",
+    "Do not redesign the Profile UI",
+    "Do not do broad refactors",
+    "If a fix is applied, keep it minimal and directly tied to the audited failure point",
+    "Prefer the quickest safe persistence fix if the root cause is confirmed",
+    "Document source-of-truth fields for base pay and benefits selections"
+  ],
 
-  "change_log": {
-    "expected_changes": [
-      {
-        "file": "shared fiscal week helper/config",
-        "change": "Audit and complete centralized fiscal week awareness, including FISCAL_YEAR_START and current-week calculation"
-      },
-      {
-        "file": "header/log/benefits/budget integrations",
-        "change": "Ensure week badge and fiscal phase/state stay in sync across these surfaces"
-      },
-      {
-        "file": "goal funding/completion logic",
-        "change": "Audit and complete automatic or intended completion behavior when goals become funded"
-      },
-      {
-        "file": "weekly confirmation flow",
-        "change": "Audit and complete projected-vs-actual worked-days confirmation for each fiscal week"
-      },
-      {
-        "file": "goal timeline surplus math helpers",
-        "change": "Audit and complete direct use of per-week future net outputs in computeGoalTimeline, replacing flat-average logic"
-      }
-    ]
-  },
+  "implementation_steps": [
+    "Reproduce the reported failures in ProfilePanel using at least two concrete cases: base pay change not persisting, and benefits toggle/value change (short-term disability to long-term disability, 2 dollars weekly) not persisting.",
+    "Trace the ProfilePanel field state for pay basics and benefits settings to identify which local state keys are used before save.",
+    "Trace the save handler(s) triggered by the ProfilePanel save action and determine exactly what payload is being written, if anything.",
+    "Verify whether the payload reaches Supabase successfully, and identify the target table/columns currently intended as the source of truth for account configuration.",
+    "Inspect the post-save read path: determine how config is reloaded on refresh and whether the refreshed ProfilePanel is hydrating from Supabase, stale local state, or fallback defaults.",
+    "Audit why math is not changing after edits: trace base pay and benefits fields from persisted config into the paycheck/net calculation pipeline and identify where recomputation should occur.",
+    "Verify whether benefits fields in ProfilePanel are correctly mapped to the same config keys used by the benefits deduction pipeline and pay math.",
+    "Determine whether the issue is caused by: missing write, wrong field mapping, stale hydration, save handler not firing, optimistic UI without persistence, or downstream recompute not triggering.",
+    "If the root cause is clear, apply the smallest direct fix necessary to make Profile edits persist and reflect in math after save/refresh.",
+    "If a database write path is missing or incomplete, implement the quickest safe connection to the existing Supabase config/user_data source of truth rather than inventing a parallel storage path.",
+    "Produce an audit note summarizing: actual save path found, persistence source of truth, failure point, fix applied, and any remaining fields in ProfilePanel that may still be disconnected."
+  ],
 
-  "impact_analysis": {
-    "affected_areas": [
-      "shared fiscal week awareness",
-      "header week badge",
-      "log tab",
-      "benefits tab",
-      "budget tab",
-      "goal completion state",
-      "weekly worked-day confirmation UX",
-      "goal timeline surplus calculations"
-    ],
-    "risk_areas": [
-      "midnight rollover may not update all panels consistently",
-      "header/log/benefits/budget may drift if they do not share the same week source",
-      "goals may mark complete too early or too late when funded",
-      "worked-day confirmation may use the wrong fiscal week boundaries",
-      "goal timeline surplus math may still mix flat averages with per-week values",
-      "buffer handling in futureWeekNets/computeNet may be inconsistently applied"
-    ],
-    "potential_bugs": [
-      {
-        "area": "fiscal week awareness",
-        "risk": "current week badge may show different values across header, log, benefits, and budget"
-      },
-      {
-        "area": "midnight tick",
-        "risk": "today state may not cascade reactively across all panels at day rollover"
-      },
-      {
-        "area": "goals funded completion",
-        "risk": "goals may not close when funded or may reopen incorrectly after status refresh"
-      },
-      {
-        "area": "days worked confirmation",
-        "risk": "actual worked days may be stored or compared against the wrong projected week"
-      },
-      {
-        "area": "goal timeline surplus math",
-        "risk": "computeGoalTimeline may still use flat-average assumptions instead of per-week future net outputs"
-      }
-    ]
-  },
+  "risk_areas": [
+    "ProfilePanel may be editing local UI state that never writes to Supabase",
+    "Saved values may write to different keys than the math pipeline reads",
+    "Hydration on refresh may pull stale defaults instead of saved config",
+    "Benefits toggles may be visually present but not mapped to the deduction pipeline source of truth",
+    "Realtime updates may fail even if refresh persistence works, due to missing recompute triggers"
+  ],
 
-  "validation": {
-    "checks": [
-      "Audit clearly reports live, partial, or missing status for all 4 fiscal week roadmap items",
-      "App knows current fiscal week as Week X of 52 using centralized logic",
-      "Today state ticks at midnight and updates dependent panels reactively",
-      "Header, log, benefits, and budget week/phase displays are in sync",
-      "Goals are marked complete when funded if that feature was incomplete",
-      "Users can confirm days worked versus projected schedule for each fiscal week if that feature was incomplete",
-      "Goal timeline surplus math is driven directly by per-week future net outputs instead of a flat average",
-      "No console errors",
-      "No TypeScript errors",
-      "No unintended file changes"
-    ]
-  },
+  "potential_bugs": [
+    {
+      "area": "base pay persistence",
+      "risk": "base pay field may save to the wrong key or not save at all, causing refresh to restore old values"
+    },
+    {
+      "area": "benefits mapping",
+      "risk": "STD/LTD toggles and weekly values may not map to the actual config fields used by deductions"
+    },
+    {
+      "area": "Supabase write path",
+      "risk": "save action may not upsert/update user_data correctly, or may silently fail without surfacing an error"
+    },
+    {
+      "area": "config hydration",
+      "risk": "refresh may reload fallback/default config instead of persisted profile settings"
+    },
+    {
+      "area": "math recompute",
+      "risk": "even after persistence succeeds, dependent income/benefits math may not re-run immediately"
+    }
+  ],
 
-  "output_format": {
-    "require_summary": true,
-    "summary_fields": [
-      "files_changed",
-      "audit_result_by_feature",
-      "features_completed",
-      "fiscal_week_sync_rules",
-      "schema_changes_needed",
-      "remaining_edge_cases"
-    ]
-  }
+  "validation": [
+    "Audit identifies the exact save path and persistence source of truth for ProfilePanel settings",
+    "Changing base pay persists after save and refresh",
+    "Changing benefits selections/weekly values persists after save and refresh",
+    "Base pay changes affect downstream math as intended",
+    "Benefits changes affect downstream deduction/math as intended",
+    "No console errors",
+    "No unintended file changes"
+  ]
 }

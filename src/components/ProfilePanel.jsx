@@ -391,7 +391,7 @@ function AccountDetail({ authedUser, config, onBack }) {
   );
 }
 
-function EmploymentDetail({ config, setConfig, onBack }) {
+function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
   const isDHL = config.employerPreset === "DHL";
 
   // Start date: only editable if not already set
@@ -406,20 +406,19 @@ function EmploymentDetail({ config, setConfig, onBack }) {
 
   function handleSave() {
     if (!canSave) return;
-    setConfig(prev => {
-      const next = { ...prev };
-      if (startDateDirty && startDate) {
-        next.startDate = startDate;
+    const newConfig = { ...config };
+    if (startDateDirty && startDate) {
+      newConfig.startDate = startDate;
+    }
+    if (teamDirty && dhlTeam) {
+      newConfig.dhlTeam = dhlTeam;
+      // Re-derive startingWeekIsLong from the new team unless user has a custom schedule
+      if (!config.dhlCustomSchedule) {
+        newConfig.startingWeekIsLong = DHL_PRESET.teams[dhlTeam]?.startsLong ?? config.startingWeekIsLong;
       }
-      if (teamDirty && dhlTeam) {
-        next.dhlTeam = dhlTeam;
-        // Re-derive startingWeekIsLong from the new team unless user has a custom schedule
-        if (!prev.dhlCustomSchedule) {
-          next.startingWeekIsLong = DHL_PRESET.teams[dhlTeam]?.startsLong ?? prev.startingWeekIsLong;
-        }
-      }
-      return next;
-    });
+    }
+    setConfig(newConfig);
+    onSaveConfig?.(newConfig);
     setStartDateDirty(false);
     setTeamDirty(false);
   }
@@ -496,7 +495,7 @@ const PAY_SCHEDULE_LABELS = {
   salary:   "Salary (biweekly)",
 };
 
-function PayDetail({ config, setConfig, onBack }) {
+function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
   const isDHL = config.employerPreset === "DHL";
   const scheduleLabel = config.scheduleIsVariable
     ? "Variable hours"
@@ -598,7 +597,9 @@ function PayDetail({ config, setConfig, onBack }) {
       updates.standardWeeklyHours = parseFloat(weeklyValue.toFixed(1));
     }
 
-    setConfig(prev => ({ ...prev, ...updates }));
+    const newConfig = { ...config, ...updates };
+    setConfig(newConfig);
+    onSaveConfig?.(newConfig);
     setEditing(false);
     setPayDraft(null);
   };
@@ -803,7 +804,7 @@ function PayDetail({ config, setConfig, onBack }) {
   );
 }
 
-function BenefitsDetail({ config, setConfig, onBack }) {
+function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
   const isDHL     = config.employerPreset === "DHL";
   const has401k   = config.k401Rate > 0;
   const matchRate = isDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
@@ -832,15 +833,17 @@ function BenefitsDetail({ config, setConfig, onBack }) {
     const weeklyPatch = DHL_BENEFIT_OPTIONS
       .filter(b => b.type === "weekly")
       .reduce((acc, b) => ({ ...acc, [b.field]: parseFloat(weeklyValues[b.field]) || 0 }), {});
-    setConfig(prev => ({
-      ...prev,
-      k401Rate:      parseFloat(k401Rate)  || 0,
-      k401MatchRate: parseFloat(k401Match) || 0,
-      k401StartDate: k401Start || null,
+    const newConfig = {
+      ...config,
+      k401Rate:         parseFloat(k401Rate)  || 0,
+      k401MatchRate:    parseFloat(k401Match) || 0,
+      k401StartDate:    k401Start || null,
       benefitsStartDate: benefitsStartDate || null,
       selectedBenefits: nextSelected,
       ...weeklyPatch,
-    }));
+    };
+    setConfig(newConfig);
+    onSaveConfig?.(newConfig);
     setEditing(false);
   }
 
@@ -1009,7 +1012,7 @@ function PreferencesDetail({ config, onBack }) {
 
 // ── TaxPlanDetail ────────────────────────────────────────────────────────────
 
-function TaxPlanDetail({ config, setConfig, allWeeks, taxDerived, showExtra, setShowExtra, onBack, isAdmin = false }) {
+function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, showExtra, setShowExtra, onBack, isAdmin = false }) {
   const { extraPerCheck, taxedWeekCount, fedLiability, moLiability, ficaTotal, fedWithheldBase, moWithheldBase, fedGap, moGap, totalGap, targetExtraTotal, fedAGI } = taxDerived;
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1049,7 +1052,7 @@ function TaxPlanDetail({ config, setConfig, allWeeks, taxDerived, showExtra, set
             })} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Edit Tax Plan</button>
           ) : (
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => { setConfig(prev => ({ ...prev, ...taxDraft })); setTaxDraft(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</button>
+              <button onClick={() => { const nc = { ...config, ...taxDraft }; setConfig(nc); onSaveConfig?.(nc); setTaxDraft(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</button>
               <button onClick={() => setTaxDraft(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
             </div>
           )}
@@ -1164,7 +1167,7 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-export function ProfilePanel({ authedUser, config, setConfig, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin }) {
   const [activeSection, setActiveSection] = useState(null);
 
   const isDHL     = config.employerPreset === "DHL";
@@ -1178,19 +1181,19 @@ export function ProfilePanel({ authedUser, config, setConfig, allWeeks, taxDeriv
     return <AccountDetail authedUser={authedUser} config={config} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "employment") {
-    return <EmploymentDetail config={config} setConfig={setConfig} onBack={() => setActiveSection(null)} />;
+    return <EmploymentDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "pay") {
-    return <PayDetail config={config} setConfig={setConfig} onBack={() => setActiveSection(null)} />;
+    return <PayDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "retirement") {
-    return <BenefitsDetail config={config} setConfig={setConfig} onBack={() => setActiveSection(null)} />;
+    return <BenefitsDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "preferences") {
     return <PreferencesDetail config={config} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "taxplan") {
-    return <TaxPlanDetail config={config} setConfig={setConfig} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} />;
+    return <TaxPlanDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} />;
   }
 
   // ── Main list ─────────────────────────────────────────────────────────────

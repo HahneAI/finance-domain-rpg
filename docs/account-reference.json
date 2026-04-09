@@ -1,0 +1,145 @@
+{
+  "_meta": {
+    "description": "Primary account ground-truth reference for Anthony (DHL B-team, custom schedule). Used for three-tier test validation: db_record → computed_expectations → ui_assertions. Update the relevant section whenever account data or config changes; do NOT fabricate values — leave null and fill in from actual sources.",
+    "account_label": "Anthony — primary DHL account",
+    "last_updated": "FILL_IN",
+    "fiscal_year": 2026,
+    "fiscal_year_start": "2026-01-05",
+    "supabase_table": "user_data",
+    "tiers": {
+      "1_db_record": "Raw Supabase row. Paste actual column values here.",
+      "2_computed_expectations": "Values finance.js/rollingTimeline.js should produce from db_record. Derive from running the app or unit tests.",
+      "3_ui_assertions": "What each panel should display. Compare against live app or component snapshots."
+    }
+  },
+
+  "db_record": {
+    "_note": "Paste the actual Supabase user_data row here. config is the full JSON blob; logs/expenses/goals are the arrays as stored.",
+    "is_dhl": true,
+    "is_admin": true,
+    "config": {},
+    "logs": [],
+    "expenses": [],
+    "goals": [],
+    "week_confirmations": {},
+    "pto_goal": null
+  },
+
+  "computed_expectations": {
+    "_note": "What the finance engine should produce from the db_record above. Values here are the source of truth for unit/integration tests.",
+
+    "schedule": {
+      "first_active_week_idx": null,
+      "total_active_weeks": null,
+      "current_week_idx": null,
+      "past_active_weeks": null,
+      "future_active_weeks": null,
+      "current_rotation": null
+    },
+
+    "income": {
+      "current_week_gross": null,
+      "current_week_net": null,
+      "ytd_gross": null,
+      "ytd_net": null,
+      "projected_annual_gross": null,
+      "projected_annual_net": null,
+      "base_weekly_spendable": null
+    },
+
+    "bucket": {
+      "current_balance_hrs": null,
+      "current_tier": null,
+      "current_month_unapproved_hrs": null,
+      "status": null,
+      "realized_overflow_payout": null,
+      "projected_overflow_payout": null,
+      "total_projected_bonus": null
+    },
+
+    "pto": {
+      "accrued_hrs_to_goal_date": null,
+      "lost_hrs_from_events": null,
+      "effective_balance_hrs": null,
+      "negative_balance_cap_hrs": null,
+      "available_hrs": null,
+      "hours_needed": null,
+      "on_track": null
+    },
+
+    "k401k": {
+      "employee_contributions_projected": null,
+      "employer_match_projected": null,
+      "year_end_balance_projected": null,
+      "active": null,
+      "start_date": null
+    },
+
+    "goals": [],
+
+    "budget": {
+      "total_weekly_expenses": null,
+      "weekly_surplus": null,
+      "monthly_surplus": null
+    },
+
+    "log_impact": {
+      "net_lost": null,
+      "net_gained": null,
+      "bucket_hours_deducted": null,
+      "pto_hours_lost": null,
+      "k401k_lost": null,
+      "k401k_match_lost": null
+    }
+  },
+
+  "ui_assertions": {
+    "_note": "What each panel should render. Use these as expected values in component/integration tests or manual QA checks.",
+
+    "home_panel": {
+      "take_home_this_week": null,
+      "annual_net_projected": null,
+      "weeks_remaining_label": null,
+      "top_goal_label": null,
+      "top_goal_funded_pct": null,
+      "surplus_weekly_display": null
+    },
+
+    "income_panel": {
+      "current_week_label": null,
+      "current_rotation_display": null,
+      "gross_this_week": null,
+      "net_this_week": null,
+      "ytd_gross_display": null,
+      "ytd_net_display": null,
+      "tax_rates_estimated_badge": null,
+      "rolling_timeline_months": null
+    },
+
+    "benefits_panel": {
+      "bucket_balance_display": null,
+      "bucket_status_badge": null,
+      "bucket_override_active": false,
+      "pto_balance_display": null,
+      "pto_override_active": false,
+      "pto_goal_label": null,
+      "pto_on_track": null,
+      "k401k_your_contributions": null,
+      "k401k_employer_match": null,
+      "k401k_year_end_balance": null
+    },
+
+    "budget_panel": {
+      "weekly_spendable": null,
+      "top_expense_label": null,
+      "top_expense_amount": null,
+      "active_goals_count": null
+    },
+
+    "log_panel": {
+      "log_entry_count": null,
+      "net_lost_from_events": null,
+      "net_gained_from_events": null
+    }
+  }
+}

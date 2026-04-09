@@ -2,8 +2,8 @@
   "task_id": "AUDIT_profile_panel_persistence_and_realtime_math_pipeline",
   "task_type": "bug",
 
-  "environment_domain": "authority-finance-audit",
-  "allowed_environment_domains": ["authority-finance-audit"],
+  "environment_domain": "authority-finance-core",
+  "allowed_environment_domains": ["authority-finance-core"],
   "environment_reason": "This is a persistence-path and source-of-truth investigation across ProfilePanel form state, save handlers, Supabase write/read flows, and downstream math recomputation. It is an audit/debug task first, not a UI redesign or a core feature build.",
   "environment_policy": "scope_enforced",
   "environment_runtime_visibility_policy": "report_if_available_do_not_fail_if_missing",

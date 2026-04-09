@@ -22,6 +22,7 @@ import {
   getStateConfig,
   loanRunwayStartDate,
   dhlEmployerMatchRate,
+  deriveWeeklyPayrollDeductions,
   isFutureWeek,
   traceExpenseCalculationSteps,
 } from '../../lib/finance.js'
@@ -250,6 +251,50 @@ describe('buildYear', () => {
     lateActive.forEach(w => expect(w.k401kEmployee).toBeGreaterThan(0))
   })
 
+  it('exposes payrollDeductions with pre-benefits and post-benefits values', () => {
+    const cfg = {
+      ...DHL_CONFIG,
+      benefitsStartDate: '2026-07-01',
+      healthPremium: 40,
+      dentalPremium: 10,
+      visionPremium: 5,
+      ltd: 4,
+      stdWeekly: 3,
+      lifePremium: 2,
+      hsaWeekly: 8,
+      fsaWeekly: 6,
+      k401Rate: 0,
+      k401MatchRate: 0,
+      k401StartDate: null,
+    }
+    const year = buildYear(cfg)
+    const preBenefits = year.find(w => w.active && toLocalIso(w.weekEnd) < cfg.benefitsStartDate)
+    const postBenefits = year.find(w => w.active && toLocalIso(w.weekEnd) >= cfg.benefitsStartDate)
+    const expectedBenefits = 78
+
+    expect(preBenefits.payrollDeductions.benefits).toBe(0)
+    expect(preBenefits.payrollDeductions.k401Employee).toBe(0)
+    expect(preBenefits.payrollDeductions.total).toBe(0)
+
+    expect(postBenefits.payrollDeductions.benefits).toBeCloseTo(expectedBenefits)
+    expect(postBenefits.payrollDeductions.k401Employee).toBe(0)
+    expect(postBenefits.payrollDeductions.total).toBeCloseTo(expectedBenefits)
+  })
+
+  it('exposes payrollDeductions with pre-401k and post-401k values after activation', () => {
+    const year = buildYear(DHL_CONFIG)
+    const pre401k = year.find(w => w.active && !w.has401k)
+    const post401k = year.find(w => w.active && w.has401k)
+
+    expect(pre401k.payrollDeductions.benefits).toBeCloseTo(pre401k.benefitsDeduction)
+    expect(pre401k.payrollDeductions.k401Employee).toBe(0)
+    expect(pre401k.payrollDeductions.total).toBeCloseTo(pre401k.benefitsDeduction)
+
+    expect(post401k.payrollDeductions.benefits).toBeCloseTo(post401k.benefitsDeduction)
+    expect(post401k.payrollDeductions.k401Employee).toBeCloseTo(post401k.k401kEmployee)
+    expect(post401k.payrollDeductions.total).toBeCloseTo(post401k.benefitsDeduction + post401k.k401kEmployee)
+  })
+
   it('standard DHL preset rotation schedules 5-day long weeks and enforces required OT even without dhlTeam', () => {
     const presetConfig = {
       ...DHL_STANDARD_CONFIG,
@@ -410,6 +455,14 @@ describe('computeNet', () => {
     const postNet = computeNet(postStart, cfg)
     const postNetWithoutBenefits = computeNet({ ...postStart, benefitsDeduction: 0 }, cfg)
     expect(postNet).toBeLessThan(postNetWithoutBenefits)
+  })
+
+  it('deriveWeeklyPayrollDeductions returns the payroll deduction total used by computeNet', () => {
+    const week = weeks.find(w => w.active && w.taxedBySchedule)
+    const parts = deriveWeeklyPayrollDeductions(week, DHL_CONFIG)
+    expect(parts.benefits).toBeCloseTo(week.benefitsDeduction)
+    expect(parts.k401Employee).toBeCloseTo(week.k401kEmployee)
+    expect(parts.total).toBeCloseTo(week.benefitsDeduction + week.k401kEmployee)
   })
 })
 

@@ -58,13 +58,30 @@ function weeklyBenefitDeductions(cfg) {
 //   k401Employee = active employee 401k deduction
 //   total = benefits + k401Employee
 export function deriveWeeklyPayrollDeductions(week, cfg) {
-  const benefits = week.benefitsDeduction ?? (week.active ? weeklyBenefitDeductions(cfg) : 0);
+  const payrollFromWeek = week?.payrollDeductions;
+  if (payrollFromWeek && typeof payrollFromWeek === "object") {
+    const benefits = payrollFromWeek.benefits ?? 0;
+    const k401Employee = payrollFromWeek.k401Employee ?? week.k401kEmployee ?? 0;
+    return {
+      benefits,
+      k401Employee,
+      total: benefits + k401Employee,
+    };
+  }
+
+  const benefits = week.benefitsDeduction ?? ((week.benefitsActive ?? week.active) ? weeklyBenefitDeductions(cfg) : 0);
   const k401Employee = week.k401kEmployee ?? 0;
   return {
     benefits,
     k401Employee,
     total: benefits + k401Employee,
   };
+}
+
+// Budget Breakdown source-of-truth: payroll deductions only.
+// This intentionally excludes event deductions and all event-adjusted deltas.
+export function getWeeklyBudgetBreakdownPayrollDeductions(week, cfg) {
+  return deriveWeeklyPayrollDeductions(week, cfg).total;
 }
 
 function otherPostTaxDeductions(cfg) {

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
@@ -338,6 +338,14 @@ export default function App() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [loading]);
+
+  // ── Immediate config save — for ProfilePanel sub-views that need guaranteed persistence ──
+  // Called with the already-computed newConfig so we don't rely on React having flushed setConfig yet.
+  const saveConfigNow = useCallback((newConfig) => {
+    clearTimeout(saveTimer.current);
+    pendingSaveRef.current = false;
+    saveUserData({ config: newConfig, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
+  }, [expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
 
   // ── today: reactive date string — ticks at midnight so everything auto-advances ──
   const [today, setToday] = useState(() => toLocalIso(new Date()));
@@ -709,6 +717,7 @@ export default function App() {
         authedUser={authedUser}
         config={config}
         setConfig={setConfig}
+        saveConfigNow={saveConfigNow}
         allWeeks={allWeeks}
         taxDerived={taxDerived}
         showExtra={showExtra}

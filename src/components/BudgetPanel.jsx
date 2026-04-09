@@ -1214,16 +1214,14 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
       const checkingDesc = regularExpenses.map(e => e.label).join(", ");
       const loansTot = loans.reduce((s, e) => s + currentEffective(e, ap), 0);
       const loansDesc = loans.map(e => e.label).join(", ");
-      const currentWeekDeductions = Number.isFinite(currentWeek?.idx)
-        ? (futureEventDeductions?.[currentWeek.idx] ?? 0)
-        : 0;
+      const payrollDeductionsTotal = currentWeek?.payrollDeductions?.total ?? 0;
       return <div>
-        {/* Cashflow: incoming paycheck → needs → loans → unallocated */}
+        {/* Cashflow: incoming paycheck → payroll deductions → needs → loans → unallocated */}
         <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Incoming Paycheck</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(incomingWeekNet)}</div></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", textAlign: "right" }}>Running week<br />net pay</div></div>
         </div>
         <div style={{ background: "rgba(239,68,68,0.10)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-red)", marginBottom: "4px" }}>Deductions</div><div style={{ fontSize: "10px", color: "#666" }}>Current-week event deductions (display only)</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-red)" }}>{f2(currentWeekDeductions)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((currentWeekDeductions / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-red)", marginBottom: "4px" }}>Payroll Deductions</div><div style={{ fontSize: "10px", color: "#666" }}>Benefits + 401k — already factored into net pay</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-red)" }}>{f2(payrollDeductionsTotal)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((payrollDeductionsTotal / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
         </div>
         <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "#666" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((checkingTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>

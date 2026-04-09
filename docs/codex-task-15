@@ -1,0 +1,77 @@
+{
+  "task_id": "FEATURE_budget_breakdown_display_only_deductions_row",
+  "task_type": "feature",
+
+  "environment_domain": "authority-finance-ui",
+  "allowed_environment_domains": ["authority-finance-ui"],
+  "environment_reason": "This task only changes Budget Breakdown presentation by surfacing an existing deductions amount as a display row without changing tax threading or financial calculation logic.",
+  "environment_policy": "scope_enforced",
+  "environment_runtime_visibility_policy": "report_if_available_do_not_fail_if_missing",
+
+  "scope": {
+    "allowed_files": [
+      "src/components/BudgetPanel.jsx",
+      "budget breakdown subview components",
+      "UI selectors/props already feeding breakdown rows",
+      "display-only row markup/styles for breakdown chart"
+    ],
+    "restricted_files": [
+      "src/lib/finance.js",
+      "computeNet",
+      "buildYear",
+      "tax logic",
+      "benefits deduction calculation helpers",
+      "database/schema files",
+      "unrelated tabs/components"
+    ]
+  },
+
+  "constraints": [
+    "Display-only change",
+    "Do not alter computeNet, buildYear, withholding logic, or taxable-gross logic",
+    "Reuse existing deductions values if already available in props/selectors",
+    "If value is not yet exposed to the UI, only thread through the minimum read-only prop needed",
+    "Do not redesign the breakdown chart"
+  ],
+
+  "implementation_steps": [
+    "Inspect the Budget Breakdown subtab UI and identify the current row structure for incoming paycheck, needs, loans, and unallocated/cash flow.",
+    "Locate the existing deductions amount already produced by current app math (such as benefits deduction / other deduction totals) without changing how it is calculated.",
+    "Add a new display row labeled clearly as Deductions in the breakdown chart.",
+    "Ensure the row is visual-only and uses the existing deduction source of truth.",
+    "Preserve current chart ordering and spacing unless a minimal adjustment is needed for readability.",
+    "Verify this new row does not change any totals, tax threading, or downstream calculations.",
+    "Ensure the breakdown still renders cleanly across the currently supported viewport sizes."
+  ],
+
+  "risk_areas": [
+    "UI may accidentally read the wrong deductions source",
+    "A display-only row may look like it affects totals when it should not",
+    "Breakdown spacing/alignment may shift",
+    "A missing prop may tempt a core-logic change that should not happen in this task"
+  ],
+
+  "potential_bugs": [
+    {
+      "area": "breakdown display",
+      "risk": "Deductions row may render with stale or mismatched values"
+    },
+    {
+      "area": "layout",
+      "risk": "Adding the row may break spacing, wrapping, or visual hierarchy"
+    },
+    {
+      "area": "scope control",
+      "risk": "Implementation may drift into changing tax or benefits math instead of display only"
+    }
+  ],
+
+  "validation": [
+    "Budget Breakdown shows a Deductions row",
+    "Displayed deductions match the existing deductions source of truth",
+    "No change was made to computeNet, buildYear, or tax logic",
+    "Breakdown layout remains stable",
+    "No console errors",
+    "No unintended file changes"
+  ]
+}

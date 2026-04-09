@@ -2,32 +2,493 @@
   "_meta": {
     "description": "Primary account ground-truth reference for Anthony (DHL B-team, custom schedule). Used for three-tier test validation: db_record → computed_expectations → ui_assertions. Update the relevant section whenever account data or config changes; do NOT fabricate values — leave null and fill in from actual sources.",
     "account_label": "Anthony — primary DHL account",
-    "last_updated": "FILL_IN",
+    "last_updated": "2026-04-09",
     "fiscal_year": 2026,
     "fiscal_year_start": "2026-01-05",
-    "supabase_table": "user_data",
+    "supabase_table": "public.user_data",
     "tiers": {
       "1_db_record": "Raw Supabase row. Paste actual column values here.",
       "2_computed_expectations": "Values finance.js/rollingTimeline.js should produce from db_record. Derive from running the app or unit tests.",
       "3_ui_assertions": "What each panel should display. Compare against live app or component snapshots."
+    },
+    "source": "Live Supabase row provided by account owner on 2026-04-09; schema-aligned with public.user_data.",
+    "schema_reference": {
+      "columns": [
+        "user_id",
+        "config",
+        "expenses",
+        "goals",
+        "logs",
+        "show_extra",
+        "updated_at",
+        "week_confirmations",
+        "is_dhl",
+        "is_admin",
+        "pto_goal",
+        "display_name",
+        "avatar_url"
+      ],
+      "primary_key": "user_id"
     }
   },
-
   "db_record": {
-    "_note": "Paste the actual Supabase user_data row here. config is the full JSON blob; logs/expenses/goals are the arrays as stored.",
+    "user_id": "57318ced-60a0-4fdf-9a58-a6409ba8c9db",
+    "config": {
+      "ltd": 2,
+      "dhlTeam": "B",
+      "baseRate": 19.65,
+      "diffRate": 1.75,
+      "ficaRate": 0.0765,
+      "k401Rate": 0.06,
+      "bucketCap": 128,
+      "fsaWeekly": 0,
+      "hsaWeekly": 0,
+      "startDate": "2026-02-09",
+      "stdWeekly": 2,
+      "userState": "MO",
+      "w1FedRate": 0.0784,
+      "w2FedRate": 0.1283,
+      "fedRateLow": 0.0784,
+      "moFlatRate": 0.047,
+      "shiftHours": 12,
+      "taxedWeeks": [
+        7,
+        8,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        52
+      ],
+      "fedRateHigh": 0.1283,
+      "lifePremium": 0,
+      "otThreshold": 40,
+      "w1StateRate": 0.0338,
+      "w2StateRate": 0.04,
+      "annualSalary": null,
+      "otMultiplier": 1.5,
+      "stateRateLow": 0.0338,
+      "bufferEnabled": false,
+      "dentalPremium": 0,
+      "dhlNightShift": true,
+      "healthPremium": 0,
+      "k401MatchRate": 0.05,
+      "k401StartDate": "2026-05-15",
+      "nightDiffRate": 1.5,
+      "setupComplete": true,
+      "stateRateHigh": 0.04,
+      "visionPremium": 0,
+      "dhlOtOnWeekend": false,
+      "employerPreset": "DHL",
+      "firstActiveIdx": 7,
+      "paycheckBuffer": 50,
+      "taxExemptOptIn": false,
+      "fedStdDeduction": 15000,
+      "otherDeductions": [],
+      "payPeriodEndDay": 0,
+      "userPaySchedule": "weekly",
+      "bucketPayoutRate": 9.825,
+      "ptoHoursOverride": null,
+      "selectedBenefits": [
+        "std",
+        "k401"
+      ],
+      "benefitsStartDate": null,
+      "bufferOverrideAck": false,
+      "commissionMonthly": 0,
+      "dhlCustomSchedule": true,
+      "taxRatesEstimated": false,
+      "bucketStartBalance": 64,
+      "scheduleIsVariable": true,
+      "startingWeekIsLong": false,
+      "targetOwedAtFiling": 1000,
+      "standardWeeklyHours": 40,
+      "bucketBalanceOverride": null,
+      "attendanceBucketEnabled": null
+    },
+    "expenses": [
+      {
+        "id": "fireflood",
+        "note": [
+          "$70/mo",
+          "$70/mo",
+          "$70/mo",
+          "$70/mo"
+        ],
+        "label": "Fireflood",
+        "history": [
+          {
+            "weekly": [
+              17.5,
+              17.5,
+              17.5,
+              17.5
+            ],
+            "effectiveFrom": "2026-01-27"
+          },
+          {
+            "weekly": [
+              17.5,
+              18.25,
+              18.25,
+              18.25
+            ],
+            "effectiveFrom": "2026-04-03"
+          }
+        ],
+        "category": "Lifestyle",
+        "billingMeta": {
+          "cycle": "every30days",
+          "amount": 73,
+          "byPhase": {
+            "1": {
+              "cycle": "every30days",
+              "amount": 73,
+              "effectiveFrom": "2026-04-03"
+            },
+            "2": {
+              "cycle": "every30days",
+              "amount": 73,
+              "effectiveFrom": "2026-04-03"
+            },
+            "3": {
+              "cycle": "every30days",
+              "amount": 73,
+              "effectiveFrom": "2026-04-03"
+            }
+          },
+          "effectiveFrom": "2026-04-03"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      },
+      {
+        "id": "nicotine",
+        "note": [
+          "",
+          "",
+          "",
+          ""
+        ],
+        "label": "Nicotine",
+        "history": [
+          {
+            "weekly": [
+              35,
+              35,
+              35,
+              35
+            ],
+            "effectiveFrom": "2026-01-27"
+          },
+          {
+            "weekly": [
+              30,
+              30,
+              30,
+              30
+            ],
+            "effectiveFrom": "2026-03-18"
+          },
+          {
+            "weekly": [
+              30,
+              30,
+              30,
+              30
+            ],
+            "effectiveFrom": "2026-04-01"
+          }
+        ],
+        "category": "Lifestyle",
+        "billingMeta": {
+          "cycle": "weekly",
+          "amount": 30,
+          "byPhase": {
+            "1": {
+              "cycle": "weekly",
+              "amount": 30,
+              "effectiveFrom": "2026-04-01"
+            }
+          },
+          "effectiveFrom": "2026-04-01"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      },
+      {
+        "id": "kids",
+        "note": [
+          "Extra support, pregnancy help",
+          "Minimum child support baseline",
+          "Minimum child support baseline",
+          "Minimum child support baseline"
+        ],
+        "label": "Kids / Angel",
+        "history": [
+          {
+            "weekly": [
+              450,
+              350,
+              350,
+              350
+            ],
+            "effectiveFrom": "2026-01-27"
+          },
+          {
+            "weekly": [
+              450,
+              375,
+              375,
+              375
+            ],
+            "effectiveFrom": "2026-03-25"
+          },
+          {
+            "weekly": [
+              450,
+              525,
+              525,
+              525
+            ],
+            "effectiveFrom": "2026-04-05"
+          }
+        ],
+        "category": "Needs",
+        "billingMeta": {
+          "cycle": "weekly",
+          "amount": 525,
+          "byPhase": {
+            "1": {
+              "cycle": "weekly",
+              "amount": 525,
+              "effectiveFrom": "2026-04-05"
+            },
+            "2": {
+              "cycle": "weekly",
+              "amount": 525,
+              "effectiveFrom": "2026-04-05"
+            },
+            "3": {
+              "cycle": "weekly",
+              "amount": 525,
+              "effectiveFrom": "2026-04-05"
+            }
+          },
+          "effectiveFrom": "2026-04-05"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      },
+      {
+        "id": "jesse",
+        "note": [
+          "Loan $35 + phone $15 + extra",
+          "Loan $35 + phone $15 + extra",
+          "Loan paid off — phone only",
+          "Loan paid off — phone only"
+        ],
+        "label": "Jesse (Loan + Phone)",
+        "history": [
+          {
+            "weekly": [
+              100,
+              100,
+              60,
+              60
+            ],
+            "effectiveFrom": "2026-01-27"
+          },
+          {
+            "weekly": [
+              60,
+              60,
+              60,
+              60
+            ],
+            "effectiveFrom": "2026-03-18"
+          },
+          {
+            "weekly": [
+              60,
+              60,
+              60,
+              60
+            ],
+            "effectiveFrom": "2026-03-18"
+          },
+          {
+            "weekly": [
+              60,
+              60,
+              60,
+              60
+            ],
+            "effectiveFrom": "2026-03-18"
+          },
+          {
+            "weekly": [
+              60,
+              60,
+              60,
+              60
+            ],
+            "effectiveFrom": "2026-03-18"
+          },
+          {
+            "weekly": [
+              60,
+              50,
+              50,
+              30
+            ],
+            "effectiveFrom": "2026-04-03"
+          }
+        ],
+        "category": "Needs",
+        "billingMeta": {
+          "cycle": "weekly",
+          "amount": 50,
+          "byPhase": {
+            "1": {
+              "cycle": "weekly",
+              "amount": 50,
+              "effectiveFrom": "2026-04-03"
+            },
+            "2": {
+              "cycle": "weekly",
+              "amount": 50,
+              "effectiveFrom": "2026-04-03"
+            },
+            "3": {
+              "cycle": "weekly",
+              "amount": 30,
+              "effectiveFrom": "2026-04-01"
+            }
+          },
+          "effectiveFrom": "2026-04-03"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      },
+      {
+        "id": "exp_1775652140160",
+        "note": [
+          "The General",
+          "The General",
+          "The General",
+          "The General"
+        ],
+        "label": "Car Insurance",
+        "history": [
+          {
+            "weekly": [
+              32.5,
+              32.5,
+              32.5,
+              32.5
+            ],
+            "effectiveFrom": "2026-04-08"
+          }
+        ],
+        "category": "Needs",
+        "billingMeta": {
+          "cycle": "every30days",
+          "amount": 130,
+          "effectiveFrom": "2026-04-08"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      }
+    ],
+    "goals": [
+      {
+        "id": "g1",
+        "note": "Traffic tickets — may be more than $600",
+        "color": "#e8856a",
+        "label": "Laywer + Fines",
+        "target": 600,
+        "dueWeek": 14,
+        "completed": true,
+        "completedAt": "2026-04-03T13:48:11.049Z"
+      }
+    ],
+    "logs": [
+      {
+        "id": 1,
+        "note": "Worked Fri/Sat/Sun only (36h instead of 72h) — 3 days missed unpaid",
+        "type": "missed_unpaid",
+        "amount": 0,
+        "weekEnd": "2026-03-16",
+        "weekIdx": 10,
+        "ptoHours": 0,
+        "hoursLost": 0,
+        "missedDays": "Tue, Wed, Thu",
+        "shiftsLost": 3,
+        "workedDays": "Fri, Sat, Sun",
+        "weekRotation": "Week 2",
+        "weekendShifts": 0
+      }
+    ],
+    "show_extra": true,
+    "updated_at": "2026-04-09 00:26:13.095+00",
+    "week_confirmations": {
+      "7": {
+        "eventId": 1774094482240,
+        "dayToggles": {
+          "Fri": true,
+          "Mon": true,
+          "Sat": null,
+          "Sun": null,
+          "Thu": true,
+          "Tue": null,
+          "Wed": true
+        },
+        "pickupDays": [],
+        "confirmedAt": "2026-03-21T12:01:22.240Z",
+        "netShiftDelta": 0,
+        "scheduledDays": [
+          "Mon",
+          "Wed",
+          "Thu",
+          "Fri"
+        ],
+        "missedScheduledDays": []
+      }
+    },
     "is_dhl": true,
     "is_admin": true,
-    "config": {},
-    "logs": [],
-    "expenses": [],
-    "goals": [],
-    "week_confirmations": {},
-    "pto_goal": null
+    "pto_goal": {
+      "label": "Paternity Leave",
+      "targetDate": "2026-09-28",
+      "hoursNeeded": 134,
+      "negativeBalanceCap": 40
+    },
+    "display_name": "Anthony's Insight",
+    "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocJKYSQxrGYx40Gecnu0V9gU-w03ijYw4tcd6o4CEb_DsfnHG0bS=s96-c"
   },
-
   "computed_expectations": {
     "_note": "What the finance engine should produce from the db_record above. Values here are the source of truth for unit/integration tests.",
-
     "schedule": {
       "first_active_week_idx": null,
       "total_active_weeks": null,
@@ -36,7 +497,6 @@
       "future_active_weeks": null,
       "current_rotation": null
     },
-
     "income": {
       "current_week_gross": null,
       "current_week_net": null,
@@ -46,7 +506,6 @@
       "projected_annual_net": null,
       "base_weekly_spendable": null
     },
-
     "bucket": {
       "current_balance_hrs": null,
       "current_tier": null,
@@ -56,7 +515,6 @@
       "projected_overflow_payout": null,
       "total_projected_bonus": null
     },
-
     "pto": {
       "accrued_hrs_to_goal_date": null,
       "lost_hrs_from_events": null,
@@ -66,7 +524,6 @@
       "hours_needed": null,
       "on_track": null
     },
-
     "k401k": {
       "employee_contributions_projected": null,
       "employer_match_projected": null,
@@ -74,15 +531,12 @@
       "active": null,
       "start_date": null
     },
-
     "goals": [],
-
     "budget": {
       "total_weekly_expenses": null,
       "weekly_surplus": null,
       "monthly_surplus": null
     },
-
     "log_impact": {
       "net_lost": null,
       "net_gained": null,
@@ -92,10 +546,8 @@
       "k401k_match_lost": null
     }
   },
-
   "ui_assertions": {
     "_note": "What each panel should render. Use these as expected values in component/integration tests or manual QA checks.",
-
     "home_panel": {
       "take_home_this_week": null,
       "annual_net_projected": null,
@@ -104,7 +556,6 @@
       "top_goal_funded_pct": null,
       "surplus_weekly_display": null
     },
-
     "income_panel": {
       "current_week_label": null,
       "current_rotation_display": null,
@@ -115,7 +566,6 @@
       "tax_rates_estimated_badge": null,
       "rolling_timeline_months": null
     },
-
     "benefits_panel": {
       "bucket_balance_display": null,
       "bucket_status_badge": null,
@@ -128,14 +578,12 @@
       "k401k_employer_match": null,
       "k401k_year_end_balance": null
     },
-
     "budget_panel": {
       "weekly_spendable": null,
       "top_expense_label": null,
       "top_expense_amount": null,
       "active_goals_count": null
     },
-
     "log_panel": {
       "log_entry_count": null,
       "net_lost_from_events": null,

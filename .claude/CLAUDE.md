@@ -208,6 +208,7 @@ After: commit (even if broken), one-sentence summary.
 - `docs/active-systems.md` — how every live system works
 - `docs/authority-design-system` — Flow + Pulse visual system
 - `docs/TODO.md` — prioritized backlog
+- `docs/account-reference.json` — Anthony's primary account ground truth (see below)
 
 ---
 
@@ -221,6 +222,23 @@ After: commit (even if broken), one-sentence summary.
 - [ ] Standalone display mode active (no browser chrome)
 - [ ] Dark status bar on iPhone (black-translucent)
 - [ ] Dynamic Island / notch not obscured
+
+---
+
+## Account Reference (Ground Truth)
+
+`docs/account-reference.json` holds Anthony's primary DHL account data in three tiers:
+
+| Tier | Key | What it contains |
+|------|-----|-----------------|
+| 1 — DB | `db_record` | Raw Supabase `user_data` columns: config, logs, expenses, goals, week_confirmations, pto_goal |
+| 2 — Computed | `computed_expectations` | What finance.js should derive: income, bucket, PTO, 401k, goals, log impact |
+| 3 — UI | `ui_assertions` | What each panel should display (for manual QA + integration test expected values) |
+
+**Rules:**
+- Never fabricate expected values — derive `computed_expectations` from the actual `db_record`
+- Update `last_updated` + the changed section whenever config or real account data changes
+- Use `computed_expectations` as the expected-values source when writing tests against real account behavior
 
 ---
 

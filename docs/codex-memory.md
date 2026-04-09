@@ -12,6 +12,18 @@
 
 ---
 
+## Account Reference File
+
+`docs/account-reference.json` — ground-truth data for Anthony's primary DHL account. Three sections:
+
+1. **`db_record`** — raw Supabase `user_data` row (config, logs, expenses, goals, week_confirmations, pto_goal)
+2. **`computed_expectations`** — values finance.js/rollingTimeline.js should derive from that record (income, bucket, PTO, 401k, goals, log impact)
+3. **`ui_assertions`** — what each panel should display (used for manual QA and integration test expected values)
+
+**When writing tests against real account behavior, import or cross-reference this file.** Never fabricate expected values — derive them from the actual db_record section. Update `last_updated` + the relevant section whenever config or data changes.
+
+---
+
 ## Test Infrastructure (read before running or writing tests)
 
 **Runner:** Vitest 4. Config: `vitest.config.js` (Vitest auto-prefers this over `vite.config.js`).

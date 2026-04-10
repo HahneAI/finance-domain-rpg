@@ -253,6 +253,39 @@ export function HomePanel({
   const weeksLeft = futureWeeks?.length ?? Math.max(FISCAL_WEEKS_PER_YEAR - nowIdx, 0);
   const totalActiveGoals = activeGoals.reduce((s, g) => s + (Number(g.target) || 0), 0);
 
+  const ordinalSuffix = (day) => {
+    if (day >= 11 && day <= 13) return "th";
+    const mod = day % 10;
+    if (mod === 1) return "st";
+    if (mod === 2) return "nd";
+    if (mod === 3) return "rd";
+    return "th";
+  };
+  const formatGoalFinishDate = (rawDate) => {
+    const parsed = safeDate(rawDate);
+    if (!parsed) return null;
+    const month = parsed.toLocaleDateString("en-US", { month: "short" });
+    const day = parsed.getDate();
+    return `${month} ${day}${ordinalSuffix(day)}`;
+  };
+  const buildGoalFinishLabel = (offsetRaw) => {
+    if (!Number.isFinite(offsetRaw)) return null;
+    const offset = Math.max(Math.ceil(offsetRaw), 0);
+    const weekNum = Math.min(nowIdx + offset, FISCAL_WEEKS_PER_YEAR);
+    const finishIdx = futureWeeks?.length ? Math.min(offset, futureWeeks.length - 1) : null;
+    const finishDate = finishIdx != null ? futureWeeks[finishIdx]?.weekEnd : null;
+    const dateLabel = formatGoalFinishDate(finishDate);
+    return dateLabel ? `By ${dateLabel}, week ${weekNum}` : `Week ${weekNum}`;
+  };
+  const resolveGoalFinishLabel = (goal) => {
+    const primary = Number.isFinite(goal.eW) ? buildGoalFinishLabel(goal.eW) : null;
+    if (primary) return primary;
+    const startOffset = Number.isFinite(goal.sW) ? goal.sW : 0;
+    const duration = Number.isFinite(goal.wN) ? goal.wN : null;
+    if (!Number.isFinite(duration)) return "Timeline pending";
+    return buildGoalFinishLabel(startOffset + duration) ?? "Timeline pending";
+  };
+
   const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, note: g.note }); };
   const saveEditGoal = (id) => {
     if (!setGoals) return;
@@ -455,9 +488,12 @@ export function HomePanel({
                   </div>
                 ) : (
                   <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", gap: "10px" }}>
                       <div style={{ fontSize: "14px", fontWeight: "bold" }}>{i + 1}. {g.label}</div>
-                      <div style={{ fontSize: "16px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: "16px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
+                        <div style={{ fontSize: "10px", color: Number.isFinite(g.eW) && g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-red)" }}>{resolveGoalFinishLabel(g)}</div>
+                      </div>
                     </div>
                     <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px" }}>
                       {visibleTimelineSegments.map((seg) => (
@@ -468,6 +504,24 @@ export function HomePanel({
                         </div>
                       ))}
                       <div style={{ position: "absolute", top: "2px", left: 0, width: `${Math.max(fillWidthPct, celebrating === g.id ? 100 : 0)}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
+                    </div>
+                    <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
+                      {visibleTimelineSegments.map((seg) => (
+                        <span key={`${seg.key}-label`} style={{
+                          position: "absolute",
+                          left: `${seg.leftPct}%`,
+                          width: `${seg.widthPct}%`,
+                          textAlign: "center",
+                          fontSize: `${Math.max(7, Math.round(8 * goalTimelineScale))}px`,
+                          letterSpacing: "1.1px",
+                          color: seg.key < today.slice(0, 7) ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                          textTransform: "uppercase",
+                          lineHeight: 1.1,
+                          whiteSpace: "nowrap",
+                        }}>
+                          {seg.label}
+                        </span>
+                      ))}
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
                     <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>

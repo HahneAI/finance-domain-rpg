@@ -187,8 +187,6 @@ Pulse signals must return `undefined` when the backing data is absent or insuffi
 | BudgetPanel goals | Active Goals Total — % of remaining income; Weeks to Complete All — fundable this year? |
 | BudgetPanel loans | Weekly Committed — debt service ratio; Debt-Free In — clears within 2026? |
 
-**What to wire next:** LogPanel hero cards (net lost % of annual net), BenefitsPanel 401k match rate signal.
-
 ---
 
 ## Core Architecture

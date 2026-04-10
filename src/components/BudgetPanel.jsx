@@ -890,8 +890,28 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
       <Card label="This Week’s Check" val={f2(prevWeekNet ?? weeklyIncome)} sub="This Week’s Check" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
-      <Card label="Weekly Spend" val={f2(ts)} rawVal={ts} color="var(--color-red)" />
-      <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"} />
+      <Card label="Weekly Spend" val={f2(ts)} rawVal={ts} color="var(--color-red)"
+        insight={weeklyIncome > 0 ? (() => {
+          const pct = Math.round(sp);
+          if (sp < 50) return { arrow: "up",   delta: `${pct}% of income`, label: "· well-managed",  variant: "blue" };
+          if (sp < 75) return { arrow: "flat",  delta: `${pct}% of income`, label: "· within range",  variant: "blue" };
+          return              { arrow: "down",  delta: `${pct}% of income`, label: "· tighten spend", variant: "purple" };
+        })() : undefined}
+      />
+      <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"}
+        insight={weeklyIncome > 0 ? (() => {
+          const nextCheck = futureWeekNets?.[0] ?? null;
+          const lastCheck = prevWeekNet ?? weeklyIncome;
+          if (nextCheck != null) {
+            const diff = Math.round(nextCheck - lastCheck);
+            if (Math.abs(diff) >= 20) return { arrow: diff > 0 ? "up" : "down", delta: `${diff > 0 ? "+" : ""}${f(diff)}`, label: "next check vs last", variant: diff > 0 ? "blue" : "purple" };
+          }
+          const pct = Math.round((leftThisWeek / weeklyIncome) * 100);
+          if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: "of paycheck clear",    variant: "blue" };
+          if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: "of paycheck remaining", variant: "purple" };
+          return           { arrow: "flat",  delta: `${pct}%`, label: "of paycheck remaining", variant: "blue" };
+        })() : undefined}
+      />
     </div>
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>
@@ -1314,8 +1334,15 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"} />
-          <Card label="Active Goals Total" val={f(totG)} rawVal={totG} color="var(--color-gold)" />
-          <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projSAfterFunded >= totG ? "var(--color-green)" : "var(--color-red)"} />
+          <Card label="Active Goals Total" val={f(totG)} rawVal={totG} color="var(--color-gold)"
+            insight={totG > 0 && weeklyIncome > 0 && weeksLeft > 0 ? { arrow: "flat", delta: `${Math.round((totG / (weeklyIncome * weeksLeft)) * 100)}%`, label: "of remaining income", variant: "blue" } : undefined}
+          />
+          <Card label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} color={projSAfterFunded >= totG ? "var(--color-green)" : "var(--color-red)"}
+            insight={totG > 0 ? (projSAfterFunded >= totG
+              ? { arrow: "up",   delta: null, label: "fundable this year",    variant: "blue" }
+              : { arrow: "down", delta: null, label: "surplus may fall short", variant: "purple" }
+            ) : undefined}
+          />
         </div>
 
         <div
@@ -1644,8 +1671,21 @@ export function BudgetPanel({ expenses, setExpenses, goals, setGoals, logNetLost
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Total Loan Balance" val={f(totalOwed)} rawVal={totalOwed} color="var(--color-gold)" />
-          <Card label="Weekly Committed" val={f2(weeklyCommitted)} rawVal={weeklyCommitted} color="var(--color-red)" />
-          <Card label="Debt-Free In" val={debtFreeDate ? `${weeksToDebtFree} wks` : "—"} color={debtFreeDate && debtFreeDate <= fiscalYearEnd ? "var(--color-green)" : "var(--color-gold)"} />
+          <Card label="Weekly Committed" val={f2(weeklyCommitted)} rawVal={weeklyCommitted} color="var(--color-red)"
+            insight={weeklyIncome > 0 && weeklyCommitted > 0 ? (() => {
+              const ratio = weeklyCommitted / weeklyIncome;
+              const pct   = Math.round(ratio * 100);
+              if (ratio < 0.15) return { arrow: "up",   delta: `${pct}% of income`, label: "· manageable load", variant: "blue" };
+              if (ratio < 0.25) return { arrow: "flat",  delta: `${pct}% of income`, label: "· watch cashflow",  variant: "blue" };
+              return              { arrow: "down",  delta: `${pct}% of income`, label: "· high debt load",   variant: "purple" };
+            })() : undefined}
+          />
+          <Card label="Debt-Free In" val={debtFreeDate ? `${weeksToDebtFree} wks` : "—"} color={debtFreeDate && debtFreeDate <= fiscalYearEnd ? "var(--color-green)" : "var(--color-gold)"}
+            insight={debtFreeDate ? (debtFreeDate <= fiscalYearEnd
+              ? { arrow: "up",   delta: null, label: "clears within 2026", variant: "blue" }
+              : { arrow: "flat",  delta: null, label: "extends past 2026",  variant: "blue" }
+            ) : undefined}
+          />
         </div>
 
         {loans.length === 0 && <div style={{ textAlign: "center", padding: "40px 20px", color: "#444", fontSize: "12px", letterSpacing: "1px" }}>No active loans. Add one below.</div>}

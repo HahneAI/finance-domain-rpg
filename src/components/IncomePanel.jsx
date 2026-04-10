@@ -311,8 +311,12 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
         }}
       >i</button>}>Year Summary</SH>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px" }}>
-        <Card label="Gross (Year)" val={f(yG)} rawVal={yG} />
-        <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)" sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : undefined} />
+        <Card label="Gross (Year)" val={f(yG)} rawVal={yG}
+          insight={yG > 0 && yN > 0 ? { arrow: "flat", delta: `${Math.round((yN / yG) * 100)}%`, label: "kept after tax", variant: "blue" } : undefined}
+        />
+        <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)" sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : undefined}
+          insight={missedEventDayNetLost > 0 && projectedAnnualNet > 0 ? { arrow: "down", delta: `-${Math.round((missedEventDayNetLost / projectedAnnualNet) * 100)}%`, label: "of net to missed events", variant: "purple" } : undefined}
+        />
       </div>
     </div>
     <div style={{ display: "flex", gap: "6px", marginBottom: "18px", flexWrap: "wrap" }}>

@@ -29,6 +29,12 @@
   --color-border-subtle: #1f3b31;
   --color-border-accent: rgba(0, 200, 150, 0.28);
 
+  /* ── Pulse signal tokens (intelligence overlay — Phase 2) ── */
+  /* Rule: signal-blue/purple are Pulse-only. Never apply to Flow UI elements. */
+  --color-signal-blue:   #5b8cff;
+  --color-signal-purple: #7c5cff;
+  --color-signal-glow:   rgba(124, 92, 255, 0.25);
+
   --font-display: 'Inter', system-ui, sans-serif;
   --font-sans:    'Inter', system-ui, sans-serif;
   --font-mono:    'JetBrains Mono', 'Courier New', monospace;

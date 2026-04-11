@@ -19,6 +19,7 @@ const fmt$ = (n) => {
 };
 
 const fmtPct = (n) => `${Math.round(n * 100)}%`;
+const f2 = (n) => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
 const safeDate = (raw) => {
   if (!raw) return null;
@@ -581,11 +582,17 @@ export function HomePanel({
                   </div>
                 ) : (
                   <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", gap: "10px" }}>
-                      <div style={{ fontSize: "14px", fontWeight: "bold" }}>{i + 1}. {g.label}</div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: "16px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                          <span style={{ fontSize: "10px", background: "rgba(0,200,150,0.16)", color: GOAL_SYSTEM_COLOR, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
+                          <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right", marginLeft: "12px" }}>
+                        <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
                         <div style={{ fontSize: "10px", color: Number.isFinite(g.eW) && g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-red)" }}>{resolveGoalFinishLabel(g)}</div>
+                        {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                       </div>
                     </div>
                     <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px" }}>
@@ -617,17 +624,23 @@ export function HomePanel({
                       ))}
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
-                      <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
-                      <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
-                      <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
-                      {delGoalId === g.id ? (
-                        <>
-                          <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)">DEL</SmBtn>
-                          <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
-                        </>
-                      ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)">✕</SmBtn>}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
+                      <div style={{ fontSize: "10px", color: "#666" }}>
+                        <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
+                        {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
+                      </div>
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
+                        <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
+                        <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
+                        <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
+                        {delGoalId === g.id ? (
+                          <>
+                            <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)">DEL</SmBtn>
+                            <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
+                          </>
+                        ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)">✕</SmBtn>}
+                      </div>
                     </div>
                   </div>
                 )}

@@ -51,6 +51,8 @@ export function HomePanel({
   const monthlyExpenses = avgWeeklySpend * (FISCAL_WEEKS_PER_YEAR / 12);
   const monthlyTakehome = (adjustedTakeHome ?? (weeklyIncome * FISCAL_WEEKS_PER_YEAR)) / 12;
   const projectedWeeklyLeft = (futureWeekNets?.[0] ?? weeklyIncome) - avgWeeklySpend;
+  const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
+  const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
   const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
   const annualSavings = avgWeeklySurplus * 52 - fundedGoalSpend;
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
@@ -526,7 +528,7 @@ export function HomePanel({
         )}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <MetricCard label="Left This Week" val={fmt$(projectedWeeklyLeft)} rawVal={projectedWeeklyLeft} status={projectedWeeklyLeft >= 0 ? "green" : "red"} />
+          <MetricCard label="Left This Week" val={fmt$(leftThisWeek)} rawVal={leftThisWeek} status={leftThisWeek >= 0 ? "green" : "red"} />
           <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="gold" />
           <MetricCard label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} status={lastGoalEW <= weeksLeft ? "green" : "red"} />
         </div>

@@ -4,12 +4,10 @@ import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet, toLocalIso } from "../lib/finance.js";
 import { deriveRollingIncomeWeeks, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { Card, VT, SH, iS, lS } from "./ui.jsx";
+import { Card, SH, iS, lS } from "./ui.jsx";
 
-export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {} }) {
-  const [view, setView] = useState("summary");
+export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {} }) {
   const [subview, setSubview] = useState("monthly");
-  const [editCfg, setEditCfg] = useState(null);
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
@@ -18,7 +16,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
   const weeklyTableRef = useRef(null);
   const [stickyHdr, setStickyHdr] = useState(null); // null = hidden; {top,left,width,cols} = visible
   useEffect(() => {
-    if (view !== "summary" || subview !== "weekly") {
+    if (subview !== "weekly") {
       setStickyHdr(s => s !== null ? null : s);
       return;
     }
@@ -53,7 +51,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
       mc?.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
     };
-  }, [view, subview]);
+  }, [subview]);
 
   // ── Sharpen Rates modal state ──────────────────────────────────────────────
   const [sg1, setSg1] = useState("");
@@ -313,21 +311,20 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
         }}
       >i</button>}>Year Summary</SH>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px" }}>
-        <Card label="Gross (Year)" val={f(yG)} rawVal={yG} />
-        <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)" sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : undefined} />
+        <Card label="Gross (Year)" val={f(yG)} rawVal={yG}
+          insight={yG > 0 && yN > 0 ? { arrow: "flat", delta: `${Math.round((yN / yG) * 100)}%`, label: "kept after tax", variant: "blue" } : undefined}
+        />
+        <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)" sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : undefined}
+          insight={missedEventDayNetLost > 0 && projectedAnnualNet > 0 ? { arrow: "down", delta: `-${Math.round((missedEventDayNetLost / projectedAnnualNet) * 100)}%`, label: "of net to missed events", variant: "purple" } : undefined}
+        />
       </div>
     </div>
-    <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
-      {["summary", "config"].map(v => <VT key={v} label={v} active={view === v} onClick={() => setView(v)} />)}
+    <div style={{ display: "flex", gap: "6px", marginBottom: "18px", flexWrap: "wrap" }}>
+      {["monthly", "weekly"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "rgba(0,200,150,0.10)" : "transparent", color: subview === v ? "var(--color-gold)" : "#555", border: "1px solid " + (subview === v ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{v}</button>)}
     </div>
 
-    {/* SUMMARY — subtabs */}
-    {view === "summary" && <div style={{ display: "flex", gap: "6px", marginBottom: "18px", flexWrap: "wrap" }}>
-      {["monthly", "weekly"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "rgba(0,200,150,0.10)" : "transparent", color: subview === v ? "var(--color-gold)" : "#555", border: "1px solid " + (subview === v ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{v}</button>)}
-    </div>}
-
     {/* MONTHLY */}
-    {view === "summary" && subview === "monthly" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "14px" }}>
+    {subview === "monthly" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "14px" }}>
       {mo.filter(m => m.n > 0).map(m => <div key={m.name} style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-gold)" }}>{m.name.slice(0, 3)}</div>
@@ -368,7 +365,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
     </div>}
 
     {/* WEEKLY — slimmed to 4 cols; full detail available via modal */}
-    {view === "summary" && subview === "weekly" && <div>
+    {subview === "weekly" && <div>
       <style>{`
         @media (max-width: 767px) {
           .income-weekly-sticky th {
@@ -446,71 +443,6 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, setShowExt
           {archivedWeeklyRows.length} older active week(s) hidden (view keeps last 4 completed weeks + rest of year; archived for future full-year review).
         </div>
       )}
-    </div>}
-
-    {/* CONFIG */}
-    {view === "config" && <div>
-      {editCfg === null ? <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>Income & Schedule Configuration</div>
-          <button onClick={() => setEditCfg({ ...config })} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "4px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>EDIT CONFIG</button>
-        </div>
-        {[
-          { section: "Pay Structure", rows: [{ l: "Base Hourly Rate", v: `$${config.baseRate}/hr` }, { l: "Shift Length", v: `${config.shiftHours}h` }, { l: "Weekend Differential", v: `+$${config.diffRate}/hr` }, ...(config.dhlNightShift ? [{ l: "Night Differential", v: `+$${config.nightDiffRate}/hr` }] : []), { l: "OT Threshold", v: `${config.otThreshold}h/wk` }, { l: "OT Multiplier", v: `${config.otMultiplier}×` }] },
-          { section: "Deductions", rows: [{ l: "Benefits editing", v: "Use Account → Retirement & Benefits" }] },
-          { section: "Tax Rates (from paychecks)", rows: [{ l: `Long / ${isVariable ? "High" : "Only"} Fed`, v: `${(config.fedRateHigh * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` }, { l: `Long / ${isVariable ? "High" : "Only"} State`, v: `${(config.stateRateHigh * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` }, { l: "Short / Low Fed", v: isVariable ? `${(config.fedRateLow * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` : "—" }, { l: "Short / Low State", v: isVariable ? `${(config.stateRateLow * 100).toFixed(2)}%${config.taxRatesEstimated ? " est." : ""}` : "—" }, { l: "FICA", v: `${(config.ficaRate * 100).toFixed(2)}%` }] },
-          { section: "Paycheck Buffer", rows: [{ l: "Buffer Enabled", v: config.bufferEnabled ? "On" : "Off" }, ...(config.bufferEnabled ? [{ l: "Buffer Per Check", v: `$${config.paycheckBuffer}` }] : [])] },
-        ].map(g => <div key={g.section} style={{ marginBottom: "20px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <SH>{g.section}</SH>
-            {g.section === "Tax Rates (from paychecks)" && (
-              <button onClick={() => setShowSharpener(true)} style={{
-                fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
-                background: "transparent",
-                color: config.taxRatesEstimated ? "var(--color-gold)" : "var(--color-text-disabled)",
-                border: `1px solid ${config.taxRatesEstimated ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
-                borderRadius: "8px", padding: "4px 10px", cursor: "pointer", marginBottom: "12px",
-              }}>
-                {config.taxRatesEstimated ? "⚠ Sharpen" : "Recalculate"}
-              </button>
-            )}
-          </div>
-          {g.rows.map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #1a1a1a" }}><span style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{r.l}</span><span style={{ fontSize: "12px", fontWeight: "bold", color: r.v.includes("est.") ? "var(--color-gold)" : "var(--color-text-primary)" }}>{r.v}</span></div>)}
-        </div>)}
-      </div> : <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <SH>Editing — recalculates on save</SH>
-          <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={() => { setConfig(prev => ({ ...editCfg, taxedWeeks: prev.taxedWeeks })); setEditCfg(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE & RECALCULATE</button>
-            <button onClick={() => setEditCfg(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-          {[
-            { l: "Base Hourly Rate ($)", f: "baseRate", t: "number", s: "0.01" },
-            { l: "Shift Length (hrs)", f: "shiftHours", t: "number", s: "1" },
-            { l: "Weekend Diff ($/hr)", f: "diffRate", t: "number", s: "0.01" },
-            { l: "Night Diff ($/hr)", f: "nightDiffRate", t: "number", s: "0.01" },
-            { l: "OT Threshold (hrs/wk)", f: "otThreshold", t: "number", s: "1" },
-            { l: "OT Multiplier", f: "otMultiplier", t: "number", s: "0.1" },
-            { l: "Long / High Fed Rate", f: "w2FedRate", t: "number", s: "0.0001" },
-            { l: "Long / High State Rate", f: "w2StateRate", t: "number", s: "0.0001" },
-            { l: "Short / Low Fed Rate", f: "w1FedRate", t: "number", s: "0.0001" },
-            { l: "Short / Low State Rate", f: "w1StateRate", t: "number", s: "0.0001" },
-            { l: "FICA Rate", f: "ficaRate", t: "number", s: "0.0001" },
-          ].map(fi => <div key={fi.f}><label style={lS}>{fi.l}</label><input type={fi.t} step={fi.s} value={editCfg[fi.f]} onChange={e => setEditCfg(v => ({ ...v, [fi.f]: fi.t === "number" ? parseFloat(e.target.value) || 0 : e.target.value }))} style={iS} /></div>)}
-          {/* Buffer — boolean toggle + amount; rendered outside the map since it needs a checkbox */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", gridColumn: "span 2" }}>
-            <label style={lS}>Paycheck Buffer</label>
-            <input type="checkbox" checked={!!editCfg.bufferEnabled} onChange={e => setEditCfg(v => ({ ...v, bufferEnabled: e.target.checked }))} style={{ width: "16px", height: "16px", cursor: "pointer" }} />
-            <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{editCfg.bufferEnabled ? "On" : "Off"}</span>
-          </div>
-          {editCfg.bufferEnabled && <div>
-            <label style={lS}>Buffer Per Check ($)</label>
-            <input type="number" step="1" min="50" max="200" value={editCfg.paycheckBuffer} onChange={e => setEditCfg(v => ({ ...v, paycheckBuffer: Math.min(200, Math.max(0, parseFloat(e.target.value) || 0)) }))} style={iS} />
-          </div>}
-        </div>
-      </div>}
     </div>}
 
     {/* FULL-DETAIL WEEKLY MODAL */}

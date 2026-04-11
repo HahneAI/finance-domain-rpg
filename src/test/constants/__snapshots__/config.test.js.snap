@@ -6,6 +6,7 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
   "attendanceBucketEnabled": null,
   "baseRate": 19.65,
   "benefitsStartDate": null,
+  "bucketBalanceOverride": null,
   "bucketCap": 128,
   "bucketPayoutRate": 9.825,
   "bucketStartBalance": 64,
@@ -39,6 +40,7 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
   "otherDeductions": [],
   "payPeriodEndDay": 0,
   "paycheckBuffer": 50,
+  "ptoHoursOverride": null,
   "scheduleIsVariable": false,
   "selectedBenefits": [],
   "setupComplete": false,
@@ -107,6 +109,38 @@ exports[`FED_BRACKETS > matches snapshot (catches accidental bracket edits) 1`] 
 ]
 `;
 
-exports[`INITIAL_EXPENSES > matches snapshot 1`] = `[]`;
+exports[`INITIAL_EXPENSES > matches snapshot 1`] = `
+[
+  {
+    "billingMeta": {
+      "amount": 400,
+      "cycle": "every30days",
+      "effectiveFrom": "2026-01-05",
+    },
+    "category": "Needs",
+    "history": [
+      {
+        "effectiveFrom": "2026-01-05",
+        "weekly": [
+          100,
+          100,
+          100,
+          100,
+        ],
+      },
+    ],
+    "id": "exp_default_food",
+    "isFoodHighlighted": true,
+    "isFoodPrimary": true,
+    "label": "Food",
+    "note": [
+      "",
+      "",
+      "",
+      "",
+    ],
+  },
+]
+`;
 
 exports[`INITIAL_GOALS > matches snapshot 1`] = `[]`;

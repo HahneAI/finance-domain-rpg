@@ -93,6 +93,8 @@ export const DEFAULT_CONFIG = {
   bucketStartBalance: 64,      // hours — new hire starting balance
   bucketCap: 128,              // hours — overflow above this pays out as cash
   bucketPayoutRate: 9.825,     // $/hr for overflow hours (baseRate / 2 ≈ 9.825 at DHL rates)
+  bucketBalanceOverride: null, // hours — when set, replaces computed currentBalance; null = auto-compute
+  ptoHoursOverride: null,     // hours — when set, replaces computed PTO accrual balance; null = auto-compute
 
   // ── Pay period ───────────────────────────────────────────────
   payPeriodEndDay: 0,          // day-of-week pay period closes: 0=Sun, 1=Mon, ..., 6=Sat
@@ -208,7 +210,19 @@ export const PHASES = [
   { id: "q4", label: "Oct–Dec", description: "Oct 1 → Dec 31", color: "#00c896" },
 ];
 
-export const INITIAL_EXPENSES = [];
+const DEFAULT_FOOD_WEEKLY = 100; // $400 / month baseline during first-time setup
+export const INITIAL_EXPENSES = [
+  {
+    id: "exp_default_food",
+    category: "Needs",
+    label: "Food",
+    isFoodPrimary: true,
+    isFoodHighlighted: true, // UI-safe flag for future visual emphasis
+    note: ["", "", "", ""],
+    billingMeta: { amount: 400, cycle: "every30days", effectiveFrom: FISCAL_YEAR_START },
+    history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [DEFAULT_FOOD_WEEKLY, DEFAULT_FOOD_WEEKLY, DEFAULT_FOOD_WEEKLY, DEFAULT_FOOD_WEEKLY] }],
+  },
+];
 
 export const INITIAL_GOALS = [];
 

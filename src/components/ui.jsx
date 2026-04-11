@@ -80,7 +80,7 @@ const _fmt$ = (n) => {
 //   rawVal        — raw number for countup + flash (pass only for $ values)
 //   entranceIndex — stagger index (0-based) for HomePanel grid entrance
 // ─────────────────────────────────────────────────────────────
-export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex }) {
+export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight }) {
   const [pressed,  setPressed]  = useState(false);
   const [flashing, setFlashing] = useState(false);
   const prevRaw = useRef(null);
@@ -150,6 +150,7 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
           {sub}
         </div>
       )}
+      {insight && <InsightRow {...insight} />}
     </>
   );
 
@@ -244,3 +245,40 @@ export function FlowSparklineCard({
 
 export function SmBtn({ children, onClick, c = "var(--color-text-secondary)", bg = "var(--color-bg-surface)" }) { return <button onClick={onClick} style={{ background: bg, color: c, border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "10px 14px", minHeight: "44px", fontSize: "11px", fontFamily: "var(--font-sans)", cursor: "pointer", }}>{children}</button>; }
 export function SH({ children, color, textColor, right }) { const c = color || "var(--color-gold)"; const tc = textColor || c; return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "4px" }}><div style={{ display: "flex", alignItems: "center", gap: "12px" }}><div style={{ width: "3px", height: "18px", background: c, borderRadius: "2px", flexShrink: 0 }} /><div style={{ fontSize: "11px", letterSpacing: "3px", color: tc, textTransform: "uppercase", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{children}</div></div>{right != null && <div style={{ fontSize: "12px", color: tc, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{right}</div>}</div>; }
+
+// ─────────────────────────────────────────────────────────────
+// INSIGHT ROW — Pulse layer component
+//
+// The primary Pulse UI element. Always renders below a primary metric,
+// never replaces it. Uses signal-blue/purple exclusively — never Flow green.
+//
+// Props:
+//   arrow   — "up" | "down" | "flat"  →  ↑ ↓ →
+//   delta   — string like "+8%" or "+$120" (optional)
+//   label   — short plain-language context string
+//   variant — "blue" (default) | "purple"
+//             blue  = trend / directional signal
+//             purple = AI-generated / forward-looking insight moment
+// ─────────────────────────────────────────────────────────────
+export function InsightRow({ arrow, delta, label, variant = "blue" }) {
+  const color = variant === "purple"
+    ? "var(--color-signal-purple)"
+    : "var(--color-signal-blue)";
+  const arrowChar = arrow === "up" ? "↑" : arrow === "down" ? "↓" : "→";
+  return (
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      gap: "4px",
+      marginTop: "5px",
+      fontSize: "10px",
+      fontFamily: "var(--font-sans)",
+      letterSpacing: "0.3px",
+      lineHeight: 1.4,
+    }}>
+      <span style={{ color, fontWeight: 700, fontSize: "11px", lineHeight: 1, flexShrink: 0 }}>{arrowChar}</span>
+      {delta && <span style={{ color, fontWeight: 600 }}>{delta}</span>}
+      <span style={{ color: "var(--color-text-disabled)" }}>{label}</span>
+    </div>
+  );
+}

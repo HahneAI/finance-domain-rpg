@@ -6,6 +6,9 @@ import {
   projectedGross,
   getPhaseIndex,
   getEffectiveAmount,
+  normalizeToMonthlyAmount,
+  projectMonthlyNetTakeHome,
+  resolveBudgetHealthMonthBoundary,
   computeRemainingSpend,
   computeGoalTimeline,
   loanWeeklyAmount,
@@ -19,7 +22,10 @@ import {
   getStateConfig,
   loanRunwayStartDate,
   dhlEmployerMatchRate,
+  deriveWeeklyPayrollDeductions,
+  getWeeklyBudgetBreakdownPayrollDeductions,
   isFutureWeek,
+  traceExpenseCalculationSteps,
 } from '../../lib/finance.js'
 import { STATE_TAX_TABLE } from '../../constants/stateTaxTable.js'
 import { DEFAULT_CONFIG, DHL_PRESET } from '../../constants/config.js'
@@ -246,6 +252,50 @@ describe('buildYear', () => {
     lateActive.forEach(w => expect(w.k401kEmployee).toBeGreaterThan(0))
   })
 
+  it('exposes payrollDeductions with pre-benefits and post-benefits values', () => {
+    const cfg = {
+      ...DHL_CONFIG,
+      benefitsStartDate: '2026-07-01',
+      healthPremium: 40,
+      dentalPremium: 10,
+      visionPremium: 5,
+      ltd: 4,
+      stdWeekly: 3,
+      lifePremium: 2,
+      hsaWeekly: 8,
+      fsaWeekly: 6,
+      k401Rate: 0,
+      k401MatchRate: 0,
+      k401StartDate: null,
+    }
+    const year = buildYear(cfg)
+    const preBenefits = year.find(w => w.active && toLocalIso(w.weekEnd) < cfg.benefitsStartDate)
+    const postBenefits = year.find(w => w.active && toLocalIso(w.weekEnd) >= cfg.benefitsStartDate)
+    const expectedBenefits = 78
+
+    expect(preBenefits.payrollDeductions.benefits).toBe(0)
+    expect(preBenefits.payrollDeductions.k401Employee).toBe(0)
+    expect(preBenefits.payrollDeductions.total).toBe(0)
+
+    expect(postBenefits.payrollDeductions.benefits).toBeCloseTo(expectedBenefits)
+    expect(postBenefits.payrollDeductions.k401Employee).toBe(0)
+    expect(postBenefits.payrollDeductions.total).toBeCloseTo(expectedBenefits)
+  })
+
+  it('exposes payrollDeductions with pre-401k and post-401k values after activation', () => {
+    const year = buildYear(DHL_CONFIG)
+    const pre401k = year.find(w => w.active && !w.has401k)
+    const post401k = year.find(w => w.active && w.has401k)
+
+    expect(pre401k.payrollDeductions.benefits).toBeCloseTo(pre401k.benefitsDeduction)
+    expect(pre401k.payrollDeductions.k401Employee).toBe(0)
+    expect(pre401k.payrollDeductions.total).toBeCloseTo(pre401k.benefitsDeduction)
+
+    expect(post401k.payrollDeductions.benefits).toBeCloseTo(post401k.benefitsDeduction)
+    expect(post401k.payrollDeductions.k401Employee).toBeCloseTo(post401k.k401kEmployee)
+    expect(post401k.payrollDeductions.total).toBeCloseTo(post401k.benefitsDeduction + post401k.k401kEmployee)
+  })
+
   it('standard DHL preset rotation schedules 5-day long weeks and enforces required OT even without dhlTeam', () => {
     const presetConfig = {
       ...DHL_STANDARD_CONFIG,
@@ -404,8 +454,68 @@ describe('computeNet', () => {
     expect(preStart.benefitsDeduction).toBe(0)
     expect(postStart.benefitsDeduction).toBeGreaterThan(0)
     const postNet = computeNet(postStart, cfg)
-    const postNetWithoutBenefits = computeNet({ ...postStart, benefitsDeduction: 0 }, cfg)
+    const postNetWithoutBenefits = computeNet({
+      ...postStart,
+      benefitsDeduction: 0,
+      payrollDeductions: {
+        ...(postStart.payrollDeductions || {}),
+        benefits: 0,
+        total: postStart.k401kEmployee || 0,
+      },
+    }, cfg)
     expect(postNet).toBeLessThan(postNetWithoutBenefits)
+  })
+
+  it('deriveWeeklyPayrollDeductions returns the payroll deduction total used by computeNet', () => {
+    const week = weeks.find(w => w.active && w.taxedBySchedule)
+    const parts = deriveWeeklyPayrollDeductions(week, DHL_CONFIG)
+    expect(parts.benefits).toBeCloseTo(week.benefitsDeduction)
+    expect(parts.k401Employee).toBeCloseTo(week.k401kEmployee)
+    expect(parts.total).toBeCloseTo(week.benefitsDeduction + week.k401kEmployee)
+  })
+
+  it('deriveWeeklyPayrollDeductions keeps pre-benefits weeks at 0 when benefits are not active', () => {
+    const cfg = {
+      ...DHL_CONFIG,
+      benefitsStartDate: '2026-07-01',
+      healthPremium: 40,
+      dentalPremium: 10,
+      visionPremium: 5,
+      ltd: 4,
+      stdWeekly: 3,
+      lifePremium: 2,
+      hsaWeekly: 8,
+      fsaWeekly: 6,
+      k401Rate: 0,
+      k401MatchRate: 0,
+      k401StartDate: null,
+    }
+
+    const parts = deriveWeeklyPayrollDeductions(
+      {
+        active: true,
+        benefitsActive: false,
+        k401kEmployee: 0,
+      },
+      cfg,
+    )
+    expect(parts.benefits).toBe(0)
+    expect(parts.k401Employee).toBe(0)
+    expect(parts.total).toBe(0)
+  })
+
+  it('Budget Breakdown payroll deduction source excludes event deduction fields', () => {
+    const week = weeks.find(w => w.active && w.taxedBySchedule)
+    const total = getWeeklyBudgetBreakdownPayrollDeductions(
+      {
+        ...week,
+        adjustedWeeklyDelta: -999,
+        eventDeductions: 999,
+        netAfterEvents: week.grossPay - 999,
+      },
+      DHL_CONFIG,
+    )
+    expect(total).toBeCloseTo(week.benefitsDeduction + week.k401kEmployee)
   })
 })
 
@@ -546,6 +656,149 @@ describe('computeRemainingSpend', () => {
     const result = computeRemainingSpend(expenses, futureWeeks)
     expect(result.totalRemainingSpend).toBeCloseTo(225)
   })
+
+  it('returns monthly budget health using monthly expenses and projected 4-week net', () => {
+    const expenses = [
+      { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [100, 100, 100, 100] }] },
+      { category: 'Lifestyle', history: [{ effectiveFrom: '2026-01-05', weekly: [50, 50, 50, 50] }] },
+    ]
+    const futureWeeks = [
+      { weekEnd: new Date(2026, 0, 12), idx: 1 },
+      { weekEnd: new Date(2026, 0, 19), idx: 2 },
+    ]
+    const futureWeekNets = [600, 650, 625, 675]
+    const result = computeRemainingSpend(expenses, futureWeeks, {
+      futureWeekNets,
+      previousMonthKey: '2026-01',
+      now: new Date('2026-02-01T12:00:00.000Z'),
+    })
+
+    expect(result.monthlyExpenses).toBeCloseTo(649.5)
+    expect(result.monthlyNetTakeHome).toBeCloseTo(2550)
+    expect(result.budgetHealth).toBeCloseTo(649.5 / 2550)
+    expect(result.shouldReevaluateForMonthBoundary).toBe(true)
+  })
+})
+
+describe('monthly budget health helpers', () => {
+  it('normalizes weekly and biweekly amounts into monthly values', () => {
+    expect(normalizeToMonthlyAmount(100, 'weekly')).toBeCloseTo(433)
+    expect(normalizeToMonthlyAmount(200, 'biweekly')).toBeCloseTo(433.2)
+    expect(normalizeToMonthlyAmount(900, 'monthly')).toBeCloseTo(900)
+  })
+
+  it('projects monthly take-home from next 4 weeks', () => {
+    expect(projectMonthlyNetTakeHome([400, 420, 410, 430, 999], 0)).toBeCloseTo(1660)
+    expect(projectMonthlyNetTakeHome([], 500)).toBeCloseTo(2000)
+  })
+
+  it('flags month-boundary reevaluation only on day 1 when month changes', () => {
+    const crossed = resolveBudgetHealthMonthBoundary({
+      previousMonthKey: '2026-03',
+      now: new Date('2026-04-01T10:00:00.000Z'),
+    })
+    const notFirst = resolveBudgetHealthMonthBoundary({
+      previousMonthKey: '2026-03',
+      now: new Date('2026-04-02T10:00:00.000Z'),
+    })
+    expect(crossed.shouldReevaluate).toBe(true)
+    expect(crossed.monthKey).toBe('2026-04')
+    expect(notFirst.shouldReevaluate).toBe(false)
+  })
+})
+
+describe('traceExpenseCalculationSteps', () => {
+  it('captures routed steps from income through quarterly expense discrepancy checks', () => {
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      setupComplete: true,
+      employerPreset: 'DHL',
+      dhlCustomSchedule: false,
+      startingWeekIsLong: true,
+    }
+    const allWeeks = buildYear(cfg)
+    const futureWeeks = allWeeks.filter(w => w.active).slice(0, 6)
+    const expenses = [
+      {
+        id: 'rent',
+        weekly: [300, 300, 300, 300],
+        history: [{ effectiveFrom: '2026-01-05', weekly: [300, 300, 300, 300] }],
+      },
+      {
+        id: 'loan',
+        weekly: [90, 90, 90, 90],
+        history: [
+          { effectiveFrom: '2026-01-05', weekly: [90, 90, 90, 90] },
+          { effectiveFrom: '2026-01-12', weekly: [110, 110, 110, 110] },
+        ],
+      },
+    ]
+
+    const result = traceExpenseCalculationSteps({
+      cfg,
+      expenses,
+      futureWeeks,
+      showExtra: true,
+      extraPerCheck: 25,
+      bufferPerWeek: 50,
+      observedQuarterlySpendByPhase: [null, 757, 794, 774],
+    })
+
+    expect(result.logEntries.length).toBeGreaterThanOrEqual(5)
+    expect(result.markdown).toContain('# Expense Calculation Audit Log')
+    expect(result.quarterlyDiscrepancies[0].discrepancy).toBeGreaterThan(0)
+    expect(result.weeklyComparisons.some(w => w.discrepancy !== 0)).toBe(true)
+    expect(result.uiQuarterlySpendByPhase).toHaveLength(4)
+    expect(result.representativeQuarterlySpendByPhase).toHaveLength(4)
+    expect(result.observedVsUiDelta).toHaveLength(4)
+  })
+})
+
+describe('traceExpenseCalculationSteps', () => {
+  it('captures routed steps from income through quarterly expense discrepancy checks', () => {
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      setupComplete: true,
+      employerPreset: 'DHL',
+      dhlCustomSchedule: false,
+      startingWeekIsLong: true,
+    }
+    const allWeeks = buildYear(cfg)
+    const futureWeeks = allWeeks.filter(w => w.active).slice(0, 6)
+    const expenses = [
+      {
+        id: 'rent',
+        weekly: [300, 300, 300, 300],
+        history: [{ effectiveFrom: '2026-01-05', weekly: [300, 300, 300, 300] }],
+      },
+      {
+        id: 'loan',
+        weekly: [90, 90, 90, 90],
+        history: [
+          { effectiveFrom: '2026-01-05', weekly: [90, 90, 90, 90] },
+          { effectiveFrom: '2026-01-12', weekly: [110, 110, 110, 110] },
+        ],
+      },
+    ]
+
+    const result = traceExpenseCalculationSteps({
+      cfg,
+      expenses,
+      futureWeeks,
+      showExtra: true,
+      extraPerCheck: 25,
+      bufferPerWeek: 50,
+      observedQuarterlySpendByPhase: [null, 757, 794, 774],
+    })
+
+    expect(result.logEntries.length).toBeGreaterThanOrEqual(5)
+    expect(result.markdown).toContain('# Expense Calculation Audit Log')
+    expect(result.quarterlyDiscrepancies[0].discrepancy).toBeGreaterThan(0)
+    expect(result.weeklyComparisons.some(w => w.discrepancy !== 0)).toBe(true)
+    expect(result.uiQuarterlySpendByPhase).toHaveLength(4)
+    expect(result.representativeQuarterlySpendByPhase).toHaveLength(4)
+    expect(result.observedVsUiDelta).toHaveLength(4)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -608,6 +861,20 @@ describe('computeGoalTimeline', () => {
     const result = computeGoalTimeline(goals, futureWeeks, weeklyNets, [], 200, 0, futureEventDeductions)
     expect(result[0].eW).not.toBeNull()
     expect(result[0].eW).toBeCloseTo(1, 3)
+  })
+
+  it('uses average surplus (net minus expenses), not average net, for unfunded fallback weeks', () => {
+    const goals = [{ id: 'g1', target: 1000, label: 'Emergency Fund' }]
+    const futureWeeks = [{ idx: 1, weekEnd: new Date(2026, 0, 7) }]
+    const weeklyNets = [500]
+    const expenses = [
+      { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [250, 250, 250, 250] }] },
+    ]
+    const result = computeGoalTimeline(goals, futureWeeks, weeklyNets, expenses, 0, 0)
+    expect(result[0].eW).toBeNull()
+    // Week 1 contributes $250 surplus, leaving $750 still unfunded:
+    // fallback should be 750 / 250 = 3.0 weeks, not 750 / 500 = 1.5.
+    expect(result[0].wN).toBeCloseTo(3, 1)
   })
 })
 
@@ -712,9 +979,9 @@ describe('buildLoanHistory', () => {
     expect(history[0].effectiveFrom < loan.firstPaymentDate).toBe(true)
   })
 
-  it('second entry effectiveFrom matches computeLoanPayoffDate', () => {
+  it('second entry effectiveFrom is the day after the payoff quarter boundary', () => {
     const history = buildLoanHistory(loan)
-    expect(history[1].effectiveFrom).toBe(computeLoanPayoffDate(loan))
+    expect(history[1].effectiveFrom).toBe('2026-07-01') // Q2 boundary is 2026-06-30; zero kicks in July 1
   })
 })
 

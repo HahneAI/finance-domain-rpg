@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek } from "./lib/finance.js";
+import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile } from "./lib/db.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -293,14 +294,58 @@ export default function App() {
 
   // ── Debounced save to Supabase (800ms) ──
   const saveTimer = useRef(null);
+  const latestPersistedStateRef = useRef({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
+  const pendingSaveRef = useRef(false);
+
+  useEffect(() => {
+    latestPersistedStateRef.current = { config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal };
+  }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
+
   useEffect(() => {
     if (loading) return;
     clearTimeout(saveTimer.current);
+    pendingSaveRef.current = true;
     saveTimer.current = setTimeout(() => {
+      pendingSaveRef.current = false;
       saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
     }, 800);
     return () => clearTimeout(saveTimer.current);
   }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal, loading]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const flushPendingSave = () => {
+      if (loading || !pendingSaveRef.current) return;
+      pendingSaveRef.current = false;
+      clearTimeout(saveTimer.current);
+      saveUserData(latestPersistedStateRef.current);
+    };
+
+    const onBeforeUnload = () => flushPendingSave();
+    const onPageHide = () => flushPendingSave();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flushPendingSave();
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [loading]);
+
+  // ── Immediate config save — for ProfilePanel sub-views that need guaranteed persistence ──
+  // Called with the already-computed newConfig so we don't rely on React having flushed setConfig yet.
+  const saveConfigNow = useCallback((newConfig) => {
+    clearTimeout(saveTimer.current);
+    pendingSaveRef.current = false;
+    saveUserData({ config: newConfig, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
+  }, [expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
 
   // ── today: reactive date string — ticks at midnight so everything auto-advances ──
   const [today, setToday] = useState(() => toLocalIso(new Date()));
@@ -321,6 +366,35 @@ export default function App() {
 
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config), [config]);
+
+  // ── Auto-confirm all past weeks on first load when no confirmations exist ──
+  // Treats every historical week as fully worked (clean/net-zero). Over-assumption is fine:
+  // income projections already assume full attendance from account creation.
+  // Runs once — after auto-confirm, weekConfirmations is non-empty so condition exits early.
+  // NOTE: must be declared after today and allWeeks to avoid TDZ errors in the dep array.
+  useEffect(() => {
+    if (loading) return;
+    if (Object.keys(weekConfirmations).length > 0) return;
+    const pastActiveWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
+    if (!pastActiveWeeks.length) return;
+    const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const confirmedAt = new Date().toISOString();
+    const bulk = {};
+    for (const week of pastActiveWeeks) {
+      const scheduledDays = week.workedDayNames ?? [];
+      bulk[week.idx] = {
+        confirmedAt,
+        dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, scheduledDays.includes(d) ? true : null])),
+        scheduledDays,
+        missedScheduledDays: [],
+        pickupDays: [],
+        netShiftDelta: 0,
+        eventId: null,
+        autoConfirmed: true,
+      };
+    }
+    setWeekConfirmations(bulk);
+  }, [loading, weekConfirmations, allWeeks, today]);
 
   // ── Future active weeks: today onward, used for spend/goal simulation ──
   const futureWeeks = useMemo(() => {
@@ -499,6 +573,7 @@ export default function App() {
 
   // ── Week-by-week remaining spend using history-aware amounts ──
   const remainingSpend = useMemo(() => computeRemainingSpend(expenses, futureWeeks), [expenses, futureWeeks]);
+  const fundedGoalSpend = useMemo(() => getFundedGoalSpend(goals, today), [goals, today]);
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
   // ── Event log cascade ──
@@ -512,9 +587,9 @@ export default function App() {
     k401kMatchGained: eventImpact.k401kMatchGained,
     ptoHoursLost: eventImpact.ptoHoursLost,
     bucketHours: eventImpact.bucketHours,
-    adjustedTakeHome: projectedAnnualNet + eventImpact.totalNetAdjustment,
+    adjustedTakeHome: projectedAnnualNet + eventImpact.totalNetAdjustment - fundedGoalSpend,
     adjustedWeeklyAvg: baseWeeklyUnallocated + eventImpact.adjustedWeeklyDelta
-  }), [eventImpact, projectedAnnualNet, baseWeeklyUnallocated]);
+  }), [eventImpact, projectedAnnualNet, baseWeeklyUnallocated, fundedGoalSpend]);
 
   // ── Attendance bucket model ──
   const bucketModel = useMemo(() => computeBucketModel(logs, config), [logs, config]);
@@ -580,6 +655,7 @@ export default function App() {
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
         today={today}
+        fundedGoalSpend={fundedGoalSpend}
         isAdmin={isAdmin}
       />}
       {currentView === "income" && <IncomePanel
@@ -609,10 +685,11 @@ export default function App() {
         fiscalWeekInfo={currentWeekNumber}
         today={today}
         userPaySchedule={config.userPaySchedule ?? "weekly"}
+        fundedGoalSpend={fundedGoalSpend}
         isAdmin={isAdmin}
       />}
       {currentView === "benefits" && <BenefitsPanel
-        allWeeks={allWeeks} config={config} isDHL={isDHL} isAdmin={isAdmin}
+        allWeeks={allWeeks} config={config} setConfig={setConfig} isDHL={isDHL} isAdmin={isAdmin}
         logK401kLost={logTotals.k401kLost}
         logK401kMatchLost={logTotals.k401kMatchLost}
         logK401kGained={logTotals.k401kGained}
@@ -633,12 +710,14 @@ export default function App() {
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
         goals={goals}
+        fundedGoalSpend={fundedGoalSpend}
         bucketModel={bucketModel}
       />}
       {currentView === "profile" && <ProfilePanel
         authedUser={authedUser}
         config={config}
         setConfig={setConfig}
+        saveConfigNow={saveConfigNow}
         allWeeks={allWeeks}
         taxDerived={taxDerived}
         showExtra={showExtra}
@@ -649,7 +728,7 @@ export default function App() {
   );
 
   return (
-      <div style={{ background: "var(--color-bg-gradient)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
+      <div className="app-shell" style={{ background: "var(--color-bg-gradient)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
         <style>{`
           /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
              but injecting it here as well catches any future SSR or shadow-DOM edge
@@ -672,9 +751,19 @@ export default function App() {
             .sidebar { display: none !important; }
             .mobile-header { display: flex !important; }
             .mobile-bottom-nav { display: flex !important; }
-            /* Bottom nav is always visible on mobile (including home screen), so
-               content needs padding to clear the nav bar on all views. */
+            /* On mobile the outer shell must have a definite height so the flex
+               column inside can act as a scroll container. 100svh = "small viewport
+               height" — excludes the address bar so layout doesn't jump when Chrome
+               shows/hides it. */
+            .app-shell { height: 100svh; }
+            /* Make main-content the scroll container on mobile, matching the desktop
+               pattern (desktop uses height:100vh + overflow-y:auto). Without an
+               overflow-y:auto here, touch scroll has no container to scroll — Android
+               Chrome treats overflow-x:hidden on body as blocking vertical scroll too,
+               so the page appears locked. */
           .main-content {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
           }
           /* Safe-area height + top padding for Dynamic Island / notch iPhones.

@@ -650,7 +650,14 @@ export default function App() {
         adjustedTakeHome={logTotals.adjustedTakeHome}
         remainingSpend={remainingSpend}
         goals={goals}
+        setGoals={setGoals}
+        futureWeeks={futureWeeks}
         futureWeekNets={futureWeekNets}
+        timelineWeekNets={futureWeekNetsRaw}
+        expenses={expenses}
+        logNetLost={logTotals.netLost}
+        logNetGained={logTotals.netGained}
+        futureEventDeductions={futureEventDeductions}
         prevWeekNet={prevWeekNet}
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}

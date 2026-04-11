@@ -178,8 +178,9 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
 
 ### Pulse Layer (when ready — Phase 2)
 
-- [ ] **Add Pulse signal tokens to `index.css`** — `--color-signal-blue: #5B8CFF`, `--color-signal-purple: #7C5CFF`, `--color-signal-glow: rgba(124,92,255,0.25)`
-- [ ] **Build `InsightRow` component** — trend arrow + delta + label; signal-blue/purple only; always below primary metric; export from `ui.jsx`
+- [x] **Add Pulse signal tokens to `index.css`** — `--color-signal-blue: #5B8CFF`, `--color-signal-purple: #7C5CFF`, `--color-signal-glow: rgba(124,92,255,0.25)`
+- [x] **Build `InsightRow` component** — trend arrow + delta + label; signal-blue/purple only; always below primary metric; export from `ui.jsx`
+- [x] **Feather Pulse signals into metric cards** — `insight` prop on `MetricCard`/`Card`; wired to HomePanel, IncomePanel, BudgetPanel (overview, goals, loans); meaningful-data trigger rule enforced (signals return `undefined` on missing data)
 
 ---
 

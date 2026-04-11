@@ -2,7 +2,7 @@
 
 Living doc. Describes what is built, how it works, and known issues.
 **Guardrail: keep under 300 lines. Summarize; do not transcribe.**
-Last updated: 2026-03-30 | App: Authority Finance (A:Fin)
+Last updated: 2026-04-10 | App: Authority Finance (A:Fin)
 
 ---
 
@@ -19,6 +19,7 @@ Last updated: 2026-03-30 | App: Authority Finance (A:Fin)
 | 7 | Year Summary — Adjusted Net + Event Loss | `IncomePanel.jsx`, `App.jsx` | Live |
 | 8 | Log Tab — Hero + Log Effect Summary | `LogPanel.jsx` | Live |
 | 9 | Loan payoff quarter persistence | `finance.js` | Live — keeps payoff amounts through the payoff quarter |
+| 12 | Pulse Intelligence Layer — InsightRow | `ui.jsx`, `HomePanel.jsx`, `IncomePanel.jsx`, `BudgetPanel.jsx` | Rough draft — signal tokens live, insights wired to real data |
 
 ---
 
@@ -155,6 +156,38 @@ Feeds full federal (`fedTax`) and state (`stateTax`) liability recalculation →
 **Quarter coverage:** Loans closing in July or August now keep their weekly allocation (e.g., Laptop \$33/wk, AirPods \$17.50/wk) visible through Q3 totals, so the quarterly spend audits and Budget tab phase math never drop them to zero before `2026-10-01`.
 
 **Why this matters:** A loan payoff happening mid-quarter previously zeroed the cost for that entire quarter; now the cost is kept alive through the quarter that contains the final payment, ensuring totals, goals, and console audit logs stay aligned with the user’s expectation that a loan “still exists” until the quarter closes.
+
+## 12. Pulse Intelligence Layer (2026-04-10)
+
+**Concept:** Flow dominates visually; Pulse enhances meaning. Pulse elements sit below primary metrics — never replace them. See `docs/authority-design-system` for full spec.
+
+**Tokens** (live in `src/index.css` `@theme`):
+- `--color-signal-blue: #5b8cff` — directional trend signals
+- `--color-signal-purple: #7c5cff` — warnings / AI-generated insight moments
+- `--color-signal-glow: rgba(124,92,255,0.25)` — reserved for future glow surfaces
+
+**Component — `InsightRow`** (exported from `src/components/ui.jsx`):
+```
+Props: arrow ("up"|"down"|"flat") · delta (string, optional) · label (string) · variant ("blue"|"purple")
+Renders: [↑↓→] [delta] [label]   — arrow+delta in signal color, label in text-disabled
+```
+
+**`MetricCard` / `Card` insight prop:** Pass `insight={{ arrow, delta, label, variant }}` to any card — renders InsightRow below the sub label. Returns nothing when `insight` is `undefined`.
+
+**Meaningful-data trigger rule (critical):**
+Pulse signals must return `undefined` when the backing data is absent or insufficient. Never fabricate a signal. Each signal computation is an IIFE that returns `undefined` on early exit conditions (no weeklyIncome, no nextWeekNet, no goals, etc.). This keeps Pulse rare and trustworthy.
+
+**Wired surfaces (rough draft):**
+
+| Panel | Cards carrying Pulse signals |
+|---|---|
+| HomePanel | Left This Week, Net Worth Trend, Goals, Budget Health, Next Week Takehome |
+| IncomePanel | Gross (Year) — net rate; Adjusted Net — missed-event loss % (purple, only when > 0) |
+| BudgetPanel overview | Weekly Spend — spend ratio; Left This Week — forward delta vs next check |
+| BudgetPanel goals | Active Goals Total — % of remaining income; Weeks to Complete All — fundable this year? |
+| BudgetPanel loans | Weekly Committed — debt service ratio; Debt-Free In — clears within 2026? |
+
+---
 
 ## Core Architecture
 

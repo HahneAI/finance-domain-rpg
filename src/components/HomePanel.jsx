@@ -105,6 +105,71 @@ export function HomePanel({
   const handleGoalsTileClick = () => {
     document.getElementById("home-goals-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  // ── Pulse insight signals ───────────────────────────────────────────────
+  // Each signal is derived from real computed data. Returns undefined when
+  // no meaningful signal exists so InsightRow simply doesn't render.
+  // Rule: signal-blue = directional trend; signal-purple = warning / AI moment.
+
+  const pulseLeftThisWeek = (() => {
+    if (!weeklyIncome) return undefined;
+    // Prefer forward-looking delta when next week projection is available
+    if (nextWeekNet != null) {
+      const nextLeft = nextWeekNet - avgWeeklySpend;
+      const diff = Math.round(nextLeft - leftThisWeek);
+      if (Math.abs(diff) >= 20) {
+        return {
+          arrow: diff > 0 ? "up" : "down",
+          delta: `${diff > 0 ? "+" : ""}${fmt$(diff)}`,
+          label: "next week vs this",
+          variant: diff > 0 ? "blue" : "purple",
+        };
+      }
+    }
+    // Fallback: % of paycheck remaining
+    const pct = Math.round((leftThisWeek / weeklyIncome) * 100);
+    if (pct >= 25) return { arrow: "up",   delta: `${pct}%`, label: "of paycheck clear",     variant: "blue" };
+    if (pct < 5)   return { arrow: "down", delta: `${pct}%`, label: "of paycheck remaining",  variant: "purple" };
+    return            { arrow: "flat", delta: `${pct}%`, label: "of paycheck remaining",  variant: "blue" };
+  })();
+
+  const pulseNetWorth = (() => {
+    if (!weeklyIncome) return undefined;
+    const rate = annualSavings / (weeklyIncome * 52);
+    const pct  = Math.round(rate * 100);
+    if (rate >= 0.2) return { arrow: "up",   delta: `${pct}%`, label: "savings rate",         variant: "blue" };
+    if (rate < 0.05) return { arrow: "down", delta: `${pct}%`, label: "savings velocity low",  variant: "purple" };
+    return             { arrow: "flat", delta: `${pct}%`, label: "savings rate",         variant: "blue" };
+  })();
+
+  const pulseGoals = goals.length > 0 ? (() => {
+    if (completedGoals.length === goals.length)
+      return { arrow: "up", delta: null, label: "all targets met", variant: "blue" };
+    if (!totalGoalTarget) return undefined;
+    const pct = Math.round((completedGoalValue / totalGoalTarget) * 100);
+    if (pct > 50) return { arrow: "up",   delta: `${pct}%`, label: "of total funded", variant: "blue" };
+    if (pct > 0)  return { arrow: "flat", delta: `${pct}%`, label: "of total funded", variant: "blue" };
+    return          { arrow: "flat", delta: null,   label: "building toward targets", variant: "blue" };
+  })() : undefined;
+
+  const pulseBudgetHealth = (() => {
+    const pct = Math.round(spendRatio * 100);
+    if (spendRatio < 0.5)  return { arrow: "up",   delta: `${pct}% spend ratio`, label: "· well-managed",  variant: "blue" };
+    if (spendRatio < 0.75) return { arrow: "flat",  delta: `${pct}% spend ratio`, label: "· healthy range", variant: "blue" };
+    return                          { arrow: "down", delta: `${pct}% spend ratio`, label: "· watch spend",   variant: "purple" };
+  })();
+
+  const pulseNextWeek = nextWeekNet != null && weeklyIncome > 0 ? (() => {
+    const diff = nextWeekNet - weeklyIncome;
+    const pct  = Math.round(Math.abs(diff / weeklyIncome) * 100);
+    if (Math.abs(diff) < weeklyIncome * 0.03)
+      return { arrow: "flat", delta: null, label: "on avg weekly pace", variant: "blue" };
+    return {
+      arrow:   diff > 0 ? "up" : "down",
+      delta:   `${pct}%`,
+      label:   `vs avg (${diff > 0 ? "+" : ""}${fmt$(Math.round(diff))})`,
+      variant: diff > 0 ? "blue" : "purple",
+    };
+  })() : undefined;
 
   const tiles = [
     {
@@ -122,6 +187,8 @@ export function HomePanel({
         : "green",
       span: 2,
       onClick: () => navigate("log"),
+      key: "budget",
+      insight: pulseLeftThisWeek,
     },
     {
       title: "Net Worth Trend",
@@ -131,6 +198,8 @@ export function HomePanel({
       status: annualSavings > 5000 ? "green" : annualSavings >= 0 ? "gold" : "red",
       span: 1,
       onClick: () => navigate("income"),
+      key: "income",
+      insight: pulseNetWorth,
     },
     {
       title: "Goals",
@@ -141,6 +210,8 @@ export function HomePanel({
       status: goals.length > 0 && completedGoals.length === goals.length ? "green" : "gold",
       span: 1,
       onClick: handleGoalsTileClick,
+      key: "budget",
+      insight: pulseGoals,
     },
     {
       title: "Budget Health",
@@ -149,6 +220,25 @@ export function HomePanel({
       status: spendRatio < 0.5 ? "green" : spendRatio < 0.75 ? "gold" : "red",
       span: 2,
       onClick: () => navigate("budget"),
+      key: "budget",
+      insight: pulseBudgetHealth,
+    },
+    {
+      title: "Next Week Takehome",
+      value: nextWeekDisplay != null ? fmt$(nextWeekDisplay) : fmt$(weeklyIncome),
+      rawVal: nextWeekDisplay ?? weeklyIncome,
+      sub: nextWeekNet != null
+        ? (nextWeekNet < weeklyIncome * 0.8 ? "est. · below avg · check log"
+          : nextWeekNet < weeklyIncome * 0.95 ? "est. · slightly below avg"
+            : "est. · on track")
+        : `${fallbackSource === "prev" ? "last confirmed pay" : "projected average"} (projected)`,
+      status: nextWeekDisplay != null
+        ? (nextWeekDisplay >= weeklyIncome * 0.95 ? "green"
+          : nextWeekDisplay >= weeklyIncome * 0.8 ? "gold" : "red")
+        : "green",
+      span: 2,
+      key: "log",
+      insight: pulseNextWeek,
     },
   ];
 
@@ -414,6 +504,7 @@ export function HomePanel({
             size="30px"
             onClick={tile.onClick}
             entranceIndex={i}
+            insight={tile.insight}
           />
         ))}
       </div>

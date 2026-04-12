@@ -1,0 +1,102 @@
+{
+  "task_id": "FEATURE_change4_remove_benefitspanel_and_rewire_app_consumers",
+  "task_type": "feature",
+
+  "environment_domain": "authority-finance-ui",
+  "allowed_environment_domains": ["authority-finance-ui"],
+  "environment_reason": "This task removes BenefitsPanel from the app navigation/render tree and rewires existing UI consumers in App.jsx, HomePanel, LogPanel, and BudgetPanel without changing core financial formulas.",
+  "environment_policy": "scope_enforced",
+  "environment_runtime_visibility_policy": "report_if_available_do_not_fail_if_missing",
+
+  "scope": {
+    "allowed_files": [
+      "src/App.jsx",
+      "src/components/HomePanel.jsx",
+      "src/components/LogPanel.jsx",
+      "src/components/BudgetPanel.jsx",
+      "light test updates directly affected by changed prop signatures or removed nav entries"
+    ],
+    "restricted_files": [
+      "core finance math helpers",
+      "computeNet",
+      "buildYear",
+      "goal math helpers",
+      "tax logic",
+      "database/schema files",
+      "broad refactors outside App/HomePanel/LogPanel/BudgetPanel"
+    ]
+  },
+
+  "constraints": [
+    "This is a UI routing and consumer rewiring task",
+    "Do not rewrite financial formulas",
+    "Remove BenefitsPanel as a routed/rendered destination in App.jsx",
+    "Pass newly required props into HomePanel and LogPanel exactly as needed",
+    "Remove now-unused goal-related props from BudgetPanel render call",
+    "Search for stray navigate(\"benefits\") calls and redirect or remove them safely",
+    "Keep changes minimal and localized",
+    "Preserve existing TypeScript/JS typing patterns and current component contracts outside this scope"
+  ],
+
+  "implementation_steps": [
+    "Inspect App.jsx and apply only the section-4 changes shown in the UI rework plan for change4.",
+    "A. Remove the Benefits entry from NAV_ITEMS.",
+    "B. Remove the Benefits entry from BOTTOM_NAV.",
+    "C. Remove the BenefitsPanel import from App.jsx.",
+    "D. Remove the conditional panel-render block for currentView === 'benefits'.",
+    "E. Update HomePanel render call to pass the newly required props shown in the plan: setGoals, futureWeeks, timelineWeekNets, expenses, logNetLost, logNetGained, futureEventDeductions.",
+    "F. Update LogPanel render call to pass the newly required props shown in the plan: allWeeks, setConfig, logK401kLost, logK401kMatchLost, logK401kGained, logK401kMatchGained, logPTOHoursLost, ptoGoal, setPtoGoal.",
+    "G. Update BudgetPanel render call to remove props no longer needed: setGoals, logNetLost, logNetGained, timelineWeekNets, futureEventDeductions.",
+    "H. Search the codebase for stray navigate('benefits') calls. Redirect any valid remaining UX path to 'log' or remove it if the navigation target is no longer appropriate.",
+    "I. Respect the routing notes from the plan:",
+    "- NAV_ITEMS removal should automatically remove Benefits from mobile drawer and desktop sidebar.",
+    "- BOTTOM_NAV removal should reduce the nav count from 6 to 5 and let the indicator width self-correct if it is index/count based.",
+    "- Remove the HomePanel goals metric card navigate('budget') onClick if goals are now inline and that call is stale.",
+    "J. Clean up dead imports, stale references, and unused props created by this change only.",
+    "K. Update directly affected tests only if they fail because of nav count, prop signatures, or removed Benefits route assumptions."
+  ],
+
+  "risk_areas": [
+    "Removing Benefits from App routing may leave orphaned navigation paths",
+    "HomePanel or LogPanel may render with undefined props if App wiring is incomplete",
+    "BudgetPanel may still expect removed props in its signature or internal logic",
+    "A stale navigate('benefits') call may survive and create broken UX",
+    "Bottom-nav indicator or tab count assumptions may be fragile in code even if the plan expects auto-correction"
+  ],
+
+  "potential_bugs": [
+    {
+      "area": "App routing",
+      "risk": "Benefits route may be removed visually but still referenced by state, navigation, or conditionals"
+    },
+    {
+      "area": "HomePanel props",
+      "risk": "newly added props may be missing or misnamed, causing runtime errors or stale cards"
+    },
+    {
+      "area": "LogPanel props",
+      "risk": "ported LogPanel content may break if required App-level props are not fully wired"
+    },
+    {
+      "area": "BudgetPanel render call",
+      "risk": "removed props may still be referenced in BudgetPanel or parent render signatures"
+    },
+    {
+      "area": "navigation cleanup",
+      "risk": "stray navigate('benefits') handlers may remain and send users to a dead route"
+    }
+  ],
+
+  "validation": [
+    "Benefits is removed from NAV_ITEMS",
+    "Benefits is removed from BOTTOM_NAV",
+    "BenefitsPanel import and render block are removed from App.jsx",
+    "HomePanel receives the new props required by the plan",
+    "LogPanel receives the new props required by the plan",
+    "BudgetPanel render call no longer passes removed goal-related props",
+    "No stray navigate('benefits') calls remain unless intentionally redirected",
+    "Drawer/sidebar/bottom-nav still render correctly after reducing from 6 items to 5",
+    "No console errors",
+    "Required validation commands for this repo/environment pass, or any pre-existing unrelated failures are clearly reported"
+  ]
+}

@@ -7,7 +7,6 @@ import { loadUserData, saveUserData, syncUserProfile } from "./lib/db.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
-import { BenefitsPanel } from "./components/BenefitsPanel.jsx";
 import { LogPanel } from "./components/LogPanel.jsx";
 import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
@@ -18,7 +17,6 @@ import { ProfilePanel } from "./components/ProfilePanel.jsx";
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
   { key: "budget",   label: "Budget" },
-  { key: "benefits", label: "Benefits" },
   { key: "log",      label: "Log" },
   { key: "profile",  label: "Account" },
 ];
@@ -49,15 +47,6 @@ const BOTTOM_NAV = [
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
         <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-      </svg>
-    ),
-  },
-  {
-    key: "benefits",
-    label: "Benefits",
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
       </svg>
     ),
   },
@@ -679,15 +668,10 @@ export default function App() {
       />}
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
-        goals={goals} setGoals={setGoals}
-        logNetLost={logTotals.netLost}
-        logNetGained={logTotals.netGained}
         weeklyIncome={weeklyIncome}
         prevWeekNet={prevWeekNet}
         futureWeeks={futureWeeks}
         futureWeekNets={futureWeekNets}
-        timelineWeekNets={futureWeekNetsRaw}
-        futureEventDeductions={futureEventDeductions}
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
         today={today}
@@ -695,27 +679,22 @@ export default function App() {
         fundedGoalSpend={fundedGoalSpend}
         isAdmin={isAdmin}
       />}
-      {currentView === "benefits" && <BenefitsPanel
-        allWeeks={allWeeks} config={config} setConfig={setConfig} isDHL={isDHL} isAdmin={isAdmin}
-        logK401kLost={logTotals.k401kLost}
-        logK401kMatchLost={logTotals.k401kMatchLost}
-        logK401kGained={logTotals.k401kGained}
-        logK401kMatchGained={logTotals.k401kMatchGained}
-        logPTOHoursLost={logTotals.ptoHoursLost}
-        currentWeek={currentWeek}
-        fiscalWeekInfo={currentWeekNumber}
-        bucketModel={bucketModel}
-        ptoGoal={ptoGoal}
-        setPtoGoal={setPtoGoal}
-      />}
       {currentView === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config} isDHL={isDHL} isAdmin={isAdmin}
+        setConfig={setConfig}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}
         allWeeks={allWeeks}
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
+        logK401kLost={logTotals.k401kLost}
+        logK401kMatchLost={logTotals.k401kMatchLost}
+        logK401kGained={logTotals.k401kGained}
+        logK401kMatchGained={logTotals.k401kMatchGained}
+        logPTOHoursLost={logTotals.ptoHoursLost}
+        ptoGoal={ptoGoal}
+        setPtoGoal={setPtoGoal}
         goals={goals}
         fundedGoalSpend={fundedGoalSpend}
         bucketModel={bucketModel}

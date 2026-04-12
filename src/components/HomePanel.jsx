@@ -19,6 +19,7 @@ const fmt$ = (n) => {
 };
 
 const fmtPct = (n) => `${Math.round(n * 100)}%`;
+const f2 = (n) => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const clamp01 = (n) => Math.min(1, Math.max(0, n));
 const safeDate = (raw) => {
   if (!raw) return null;
@@ -107,6 +108,71 @@ export function HomePanel({
   const handleGoalsTileClick = () => {
     document.getElementById("home-goals-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  // ── Pulse insight signals ───────────────────────────────────────────────
+  // Each signal is derived from real computed data. Returns undefined when
+  // no meaningful signal exists so InsightRow simply doesn't render.
+  // Rule: signal-blue = directional trend; signal-purple = warning / AI moment.
+
+  const pulseLeftThisWeek = (() => {
+    if (!weeklyIncome) return undefined;
+    // Prefer forward-looking delta when next week projection is available
+    if (nextWeekNet != null) {
+      const nextLeft = nextWeekNet - avgWeeklySpend;
+      const diff = Math.round(nextLeft - leftThisWeek);
+      if (Math.abs(diff) >= 20) {
+        return {
+          arrow: diff > 0 ? "up" : "down",
+          delta: `${diff > 0 ? "+" : ""}${fmt$(diff)}`,
+          label: "next week vs this",
+          variant: diff > 0 ? "blue" : "purple",
+        };
+      }
+    }
+    // Fallback: % of paycheck remaining
+    const pct = Math.round((leftThisWeek / weeklyIncome) * 100);
+    if (pct >= 25) return { arrow: "up",   delta: `${pct}%`, label: "of paycheck clear",     variant: "blue" };
+    if (pct < 5)   return { arrow: "down", delta: `${pct}%`, label: "of paycheck remaining",  variant: "purple" };
+    return            { arrow: "flat", delta: `${pct}%`, label: "of paycheck remaining",  variant: "blue" };
+  })();
+
+  const pulseNetWorth = (() => {
+    if (!weeklyIncome) return undefined;
+    const rate = annualSavings / (weeklyIncome * 52);
+    const pct  = Math.round(rate * 100);
+    if (rate >= 0.2) return { arrow: "up",   delta: `${pct}%`, label: "savings rate",         variant: "blue" };
+    if (rate < 0.05) return { arrow: "down", delta: `${pct}%`, label: "savings velocity low",  variant: "purple" };
+    return             { arrow: "flat", delta: `${pct}%`, label: "savings rate",         variant: "blue" };
+  })();
+
+  const pulseGoals = goals.length > 0 ? (() => {
+    if (completedGoals.length === goals.length)
+      return { arrow: "up", delta: null, label: "all targets met", variant: "blue" };
+    if (!totalGoalTarget) return undefined;
+    const pct = Math.round((completedGoalValue / totalGoalTarget) * 100);
+    if (pct > 50) return { arrow: "up",   delta: `${pct}%`, label: "of total funded", variant: "blue" };
+    if (pct > 0)  return { arrow: "flat", delta: `${pct}%`, label: "of total funded", variant: "blue" };
+    return          { arrow: "flat", delta: null,   label: "building toward targets", variant: "blue" };
+  })() : undefined;
+
+  const pulseBudgetHealth = (() => {
+    const pct = Math.round(spendRatio * 100);
+    if (spendRatio < 0.5)  return { arrow: "up",   delta: `${pct}% spend ratio`, label: "· well-managed",  variant: "blue" };
+    if (spendRatio < 0.75) return { arrow: "flat",  delta: `${pct}% spend ratio`, label: "· healthy range", variant: "blue" };
+    return                          { arrow: "down", delta: `${pct}% spend ratio`, label: "· watch spend",   variant: "purple" };
+  })();
+
+  const pulseNextWeek = nextWeekNet != null && weeklyIncome > 0 ? (() => {
+    const diff = nextWeekNet - weeklyIncome;
+    const pct  = Math.round(Math.abs(diff / weeklyIncome) * 100);
+    if (Math.abs(diff) < weeklyIncome * 0.03)
+      return { arrow: "flat", delta: null, label: "on avg weekly pace", variant: "blue" };
+    return {
+      arrow:   diff > 0 ? "up" : "down",
+      delta:   `${pct}%`,
+      label:   `vs avg (${diff > 0 ? "+" : ""}${fmt$(Math.round(diff))})`,
+      variant: diff > 0 ? "blue" : "purple",
+    };
+  })() : undefined;
 
   const tiles = [
     {
@@ -124,6 +190,8 @@ export function HomePanel({
         : "green",
       span: 2,
       onClick: () => navigate("log"),
+      key: "budget",
+      insight: pulseLeftThisWeek,
     },
     {
       title: "Net Worth Trend",
@@ -133,6 +201,8 @@ export function HomePanel({
       status: annualSavings > 5000 ? "green" : annualSavings >= 0 ? "gold" : "red",
       span: 1,
       onClick: () => navigate("income"),
+      key: "income",
+      insight: pulseNetWorth,
     },
     {
       title: "Goals",
@@ -143,6 +213,8 @@ export function HomePanel({
       status: goals.length > 0 && completedGoals.length === goals.length ? "green" : "gold",
       span: 1,
       onClick: handleGoalsTileClick,
+      key: "budget",
+      insight: pulseGoals,
     },
     {
       title: "Budget Health",
@@ -151,6 +223,25 @@ export function HomePanel({
       status: spendRatio < 0.5 ? "green" : spendRatio < 0.75 ? "gold" : "red",
       span: 2,
       onClick: () => navigate("budget"),
+      key: "budget",
+      insight: pulseBudgetHealth,
+    },
+    {
+      title: "Next Week Takehome",
+      value: nextWeekDisplay != null ? fmt$(nextWeekDisplay) : fmt$(weeklyIncome),
+      rawVal: nextWeekDisplay ?? weeklyIncome,
+      sub: nextWeekNet != null
+        ? (nextWeekNet < weeklyIncome * 0.8 ? "est. · below avg · check log"
+          : nextWeekNet < weeklyIncome * 0.95 ? "est. · slightly below avg"
+            : "est. · on track")
+        : `${fallbackSource === "prev" ? "last confirmed pay" : "projected average"} (projected)`,
+      status: nextWeekDisplay != null
+        ? (nextWeekDisplay >= weeklyIncome * 0.95 ? "green"
+          : nextWeekDisplay >= weeklyIncome * 0.8 ? "gold" : "red")
+        : "green",
+      span: 2,
+      key: "log",
+      insight: pulseNextWeek,
     },
   ];
 
@@ -254,6 +345,39 @@ export function HomePanel({
   const nowIdx = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : 1;
   const weeksLeft = futureWeeks?.length ?? Math.max(FISCAL_WEEKS_PER_YEAR - nowIdx, 0);
   const totalActiveGoals = activeGoals.reduce((s, g) => s + (Number(g.target) || 0), 0);
+
+  const ordinalSuffix = (day) => {
+    if (day >= 11 && day <= 13) return "th";
+    const mod = day % 10;
+    if (mod === 1) return "st";
+    if (mod === 2) return "nd";
+    if (mod === 3) return "rd";
+    return "th";
+  };
+  const formatGoalFinishDate = (rawDate) => {
+    const parsed = safeDate(rawDate);
+    if (!parsed) return null;
+    const month = parsed.toLocaleDateString("en-US", { month: "short" });
+    const day = parsed.getDate();
+    return `${month} ${day}${ordinalSuffix(day)}`;
+  };
+  const buildGoalFinishLabel = (offsetRaw) => {
+    if (!Number.isFinite(offsetRaw)) return null;
+    const offset = Math.max(Math.ceil(offsetRaw), 0);
+    const weekNum = Math.min(nowIdx + offset, FISCAL_WEEKS_PER_YEAR);
+    const finishIdx = futureWeeks?.length ? Math.min(offset, futureWeeks.length - 1) : null;
+    const finishDate = finishIdx != null ? futureWeeks[finishIdx]?.weekEnd : null;
+    const dateLabel = formatGoalFinishDate(finishDate);
+    return dateLabel ? `By ${dateLabel}, week ${weekNum}` : `Week ${weekNum}`;
+  };
+  const resolveGoalFinishLabel = (goal) => {
+    const primary = Number.isFinite(goal.eW) ? buildGoalFinishLabel(goal.eW) : null;
+    if (primary) return primary;
+    const startOffset = Number.isFinite(goal.sW) ? goal.sW : 0;
+    const duration = Number.isFinite(goal.wN) ? goal.wN : null;
+    if (!Number.isFinite(duration)) return "Timeline pending";
+    return buildGoalFinishLabel(startOffset + duration) ?? "Timeline pending";
+  };
 
   const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, note: g.note }); };
   const saveEditGoal = (id) => {
@@ -383,6 +507,7 @@ export function HomePanel({
             size="30px"
             onClick={tile.onClick}
             entranceIndex={i}
+            insight={tile.insight}
           />
         ))}
       </div>
@@ -457,9 +582,18 @@ export function HomePanel({
                   </div>
                 ) : (
                   <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                      <div style={{ fontSize: "14px", fontWeight: "bold" }}>{i + 1}. {g.label}</div>
-                      <div style={{ fontSize: "16px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                          <span style={{ fontSize: "10px", background: "rgba(0,200,150,0.16)", color: GOAL_SYSTEM_COLOR, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
+                          <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right", marginLeft: "12px" }}>
+                        <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
+                        <div style={{ fontSize: "10px", color: Number.isFinite(g.eW) && g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-red)" }}>{resolveGoalFinishLabel(g)}</div>
+                        {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
+                      </div>
                     </div>
                     <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px" }}>
                       {visibleTimelineSegments.map((seg) => (
@@ -471,18 +605,42 @@ export function HomePanel({
                       ))}
                       <div style={{ position: "absolute", top: "2px", left: 0, width: `${Math.max(fillWidthPct, celebrating === g.id ? 100 : 0)}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
                     </div>
+                    <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
+                      {visibleTimelineSegments.map((seg) => (
+                        <span key={`${seg.key}-label`} style={{
+                          position: "absolute",
+                          left: `${seg.leftPct}%`,
+                          width: `${seg.widthPct}%`,
+                          textAlign: "center",
+                          fontSize: `${Math.max(7, Math.round(8 * goalTimelineScale))}px`,
+                          letterSpacing: "1.1px",
+                          color: seg.key < today.slice(0, 7) ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                          textTransform: "uppercase",
+                          lineHeight: 1.1,
+                          whiteSpace: "nowrap",
+                        }}>
+                          {seg.label}
+                        </span>
+                      ))}
+                    </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
-                      <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
-                      <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
-                      <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
-                      {delGoalId === g.id ? (
-                        <>
-                          <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)">DEL</SmBtn>
-                          <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
-                        </>
-                      ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)">✕</SmBtn>}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
+                      <div style={{ fontSize: "10px", color: "#666" }}>
+                        <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
+                        {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
+                      </div>
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
+                        <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
+                        <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
+                        <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
+                        {delGoalId === g.id ? (
+                          <>
+                            <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)">DEL</SmBtn>
+                            <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
+                          </>
+                        ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)">✕</SmBtn>}
+                      </div>
                     </div>
                   </div>
                 )}

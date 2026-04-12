@@ -439,15 +439,15 @@ export function LogPanel({
         <Card
           label="PTO Balance"
           val={`${effectiveAdjP.toFixed(1)} hrs`}
-          rawVal={effectiveAdjP}
-          status={effectiveAdjP >= 0 ? "good" : "bad"}
+          sub="Current available accrual"
+          status={effectiveAdjP >= 0 ? "green" : "red"}
           color={effectiveAdjP >= 0 ? "var(--color-green)" : "var(--color-red)"}
         />
         <Card
           label="Bucket Hours"
           val={bucketModel ? `${bucketModel.currentBalance} hrs` : "—"}
-          rawVal={bucketModel?.currentBalance ?? 0}
-          status={bucketModel?.status === "safe" ? "good" : (bucketModel?.status === "caution" ? "warn" : "bad")}
+          sub={bucketModel ? `Tier ${bucketModel.currentTier} · ${bucketModel.status}` : "No bucket data"}
+          status={bucketModel?.status === "safe" ? "green" : (bucketModel?.status === "caution" ? "gold" : "red")}
           color={bucketModel?.status === "safe" ? "var(--color-green)" : (bucketModel?.status === "caution" ? "var(--color-gold)" : "var(--color-red)")}
         />
       </div>

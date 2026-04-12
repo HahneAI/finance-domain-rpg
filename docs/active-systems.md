@@ -268,18 +268,28 @@ Hidden weeks/months preserved in `hiddenWeeks` / `hiddenMonths` arrays from `rol
 
 **Component — `LiquidGlass`:**
 ```
-Props: tone ("teal"|"purple") · intensity ("light"|"strong") · withBorder (bool) · purpose (required)
+Props: tone ("teal"|"blue"|"purple") · intensity ("light"|"strong") · withBorder (bool) · purpose (required)
 Effect: backdropFilter blur + semi-transparent tint + accent border on the wrapper div
 ```
 Placement guard fires a `console.warn` in dev if `purpose` is not in the whitelist (`nav | pulse | modal | log-summary`). To add a new placement: update `docs/premium-ui-TODO.md` §4 first, then extend `ALLOWED_PURPOSES` in `LiquidGlass.jsx`.
 
-**Tokens** (live in `src/index.css` `@theme`):
-- `--glass-blur-light: 12px` / `--glass-blur-strong: 20px`
-- `--glass-tint-teal/purple` — 7% opacity fill per tone
-- `--glass-border-teal/purple` — accent border per tone
+**Tone guide:**
+- `teal` — Flow accent surfaces (nav, future neutral Pulse)
+- `blue` — signal-blue Pulse rows (directional trend signals) → uses `rgba(91, 140, 255)`
+- `purple` — signal-purple Pulse rows (warnings / AI moments) → uses `rgba(124, 92, 255)`
 
-**First placement — `InsightRow` (pulse):**
-`InsightRow` in `ui.jsx` wraps its content in `<LiquidGlass purpose="pulse">`. Renders as an inline-flex glass pill below the primary metric value. Tone keys to the signal variant: teal for blue directional signals, purple for warnings. All HomePanel MetricCards with `insight` props now carry glass pills.
+**Locked values (finalized 2026-04-12):**
+
+| Tone | Tint | Border |
+|------|------|--------|
+| teal | `rgba(0, 200, 150, 0.10)` | `rgba(0, 200, 150, 0.24)` |
+| blue | `rgba(91, 140, 255, 0.16)` | `rgba(91, 140, 255, 0.35)` |
+| purple | `rgba(124, 92, 255, 0.10)` | `rgba(124, 92, 255, 0.26)` |
+
+Blur: `light = 12px` · `strong = 20px`. Values are hardcoded in the component lookup table — CSS custom property `blur(var(--x))` does not resolve in inline styles.
+
+**Current placement — `InsightRow` (pulse):**
+`InsightRow` in `ui.jsx` wraps its content in `<LiquidGlass purpose="pulse">`. Renders as an `inline-flex` glass pill below the primary metric value. Tone keys directly to signal variant: `tone="blue"` for directional signals, `tone="purple"` for warnings. All MetricCards with an `insight` prop carry glass pills.
 
 **Banned surfaces:** primary MetricCards, data tables, buttons. Never apply `LiquidGlass` to Flow-tier elements.
 

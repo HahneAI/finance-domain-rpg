@@ -29,6 +29,15 @@
   --color-border-subtle: #1f3b31;
   --color-border-accent: rgba(0, 200, 150, 0.28);
 
+  /* ── Liquid Glass tokens (premium UI layer) ── */
+  /* Rule: use only via LiquidGlass.jsx — never apply raw blur to primary cards. */
+  --glass-blur-light:    12px;
+  --glass-blur-strong:   20px;
+  --glass-tint-teal:     rgba(0, 200, 150, 0.07);
+  --glass-tint-purple:   rgba(124, 92, 255, 0.07);
+  --glass-border-teal:   rgba(0, 200, 150, 0.18);
+  --glass-border-purple: rgba(124, 92, 255, 0.22);
+
   /* ── Pulse signal tokens (intelligence overlay — Phase 2) ── */
   /* Rule: signal-blue/purple are Pulse-only. Never apply to Flow UI elements. */
   --color-signal-blue:   #5b8cff;

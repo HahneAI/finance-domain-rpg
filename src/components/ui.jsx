@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { LiquidGlass } from "./LiquidGlass.jsx";
 
 // ─────────────────────────────────────────────────────────────
 // COUNTUP HOOK
@@ -264,21 +265,30 @@ export function InsightRow({ arrow, delta, label, variant = "blue" }) {
   const color = variant === "purple"
     ? "var(--color-signal-purple)"
     : "var(--color-signal-blue)";
+  const tone = variant === "purple" ? "purple" : "teal";
   const arrowChar = arrow === "up" ? "↑" : arrow === "down" ? "↓" : "→";
   return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "4px",
-      marginTop: "5px",
-      fontSize: "10px",
-      fontFamily: "var(--font-sans)",
-      letterSpacing: "0.3px",
-      lineHeight: 1.4,
-    }}>
+    <LiquidGlass
+      purpose="pulse"
+      tone={tone}
+      intensity="light"
+      withBorder
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "4px",
+        marginTop: "6px",
+        padding: "3px 8px 3px 6px",
+        borderRadius: "6px",
+        fontSize: "10px",
+        fontFamily: "var(--font-sans)",
+        letterSpacing: "0.3px",
+        lineHeight: 1.4,
+      }}
+    >
       <span style={{ color, fontWeight: 700, fontSize: "11px", lineHeight: 1, flexShrink: 0 }}>{arrowChar}</span>
       {delta && <span style={{ color, fontWeight: 600 }}>{delta}</span>}
       <span style={{ color: "var(--color-text-disabled)" }}>{label}</span>
-    </div>
+    </LiquidGlass>
   );
 }

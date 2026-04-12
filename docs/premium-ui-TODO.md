@@ -42,9 +42,9 @@ Curated UI polish backlog focused on "premium" treatments (Liquid Glass-inspired
 
 ## 4. Liquid Glass Components
 
-- [ ] **Reusable LiquidGlass React component** — props: `tone` (teal/gold), `intensity` (light/strong), `border` toggle. Internally: CSS custom props for blur, brightness, tint; optional SVG noise overlay.
-- [ ] **Placement rules** — apply LiquidGlass component only to floating nav, Pulse rows, modal overlays, and Log Effect Summary per Apple/Telerik guidance. Explicitly ban on primary cards, tables, and buttons.
-- [ ] **SVG refraction experiment** — optional enhancement: test an SVG filter (`feGaussianBlur + feColorMatrix + feBlend`) for subtle distortion on Pulse cards. Benchmark performance on iPhone 17 Safari.
+- [x] **Reusable LiquidGlass React component** — `src/components/LiquidGlass.jsx`. Props: `tone` (teal/purple), `intensity` (light/strong), `withBorder`, `purpose` (required, placement-guarded). Inline blur + tint + border via inline styles; no SVG noise yet.
+- [x] **Placement rules** — placement guard live. Allowed: `nav`, `pulse`, `modal`, `log-summary`. Warns in dev on violation. Banned on primary cards, tables, buttons.
+- [ ] **SVG refraction experiment** — optional: test an SVG filter (`feGaussianBlur + feColorMatrix + feBlend`) for subtle distortion on Pulse cards. Benchmark on iPhone 17 Safari.
 
 **Plan addendum**
 
@@ -53,7 +53,12 @@ Curated UI polish backlog focused on "premium" treatments (Liquid Glass-inspired
 - Asset hygiene: the SVG noise texture ships as `src/assets/glass-noise.png`; switching tones simply swaps CSS vars rather than duplicating assets.
 - Refraction experiment scaffolding lives in `docs/experiments/liquid-glass.html` and is toggled at runtime via `ENABLE_GLASS_REFRACTION_EXPERIMENT` in `src/constants/uiFlags.js`.
 
-*(Implementation pending; this doc section captures the plan only.)*
+**Dev note — 2026-04-12 (first implementation)**
+
+- `tone` ships as `"teal" | "purple"` (not `"gold"` — gold is a legacy alias for teal in this design system). The purple tone keys to `--color-signal-purple` and is reserved for warning-variant Pulse signals.
+- Blur values are hardcoded in the component lookup table (`12px` / `20px`), NOT via `blur(var(--glass-blur-light))`. CSS custom properties don't resolve inside `blur()` in inline styles — the `@theme` tokens exist for reference in future CSS-level rules only.
+- First placement: `InsightRow` in `src/components/ui.jsx`. All HomePanel MetricCards with Pulse signals now render a glass pill at the bottom of the card. Pill is `inline-flex` so it never stretches full card width.
+- `noise`, `withNoise`, and `ENABLE_GLASS_REFRACTION_EXPERIMENT` flag are **not yet implemented** — planned for the SVG refraction experiment task above.
 
 ## 5. Stack Reality & QA
 
@@ -68,4 +73,4 @@ Curated UI polish backlog focused on "premium" treatments (Liquid Glass-inspired
 
 ---
 
-*Last updated: 2026-04-01*
+*Last updated: 2026-04-12*

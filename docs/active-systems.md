@@ -2,7 +2,7 @@
 
 Living doc. Describes what is built, how it works, and known issues.
 **Guardrail: keep under 300 lines. Summarize; do not transcribe.**
-Last updated: 2026-04-10 | App: Authority Finance (A:Fin)
+Last updated: 2026-04-12 | App: Authority Finance (A:Fin)
 
 ---
 
@@ -20,6 +20,7 @@ Last updated: 2026-04-10 | App: Authority Finance (A:Fin)
 | 8 | Log Tab — Hero + Log Effect Summary | `LogPanel.jsx` | Live |
 | 9 | Loan payoff quarter persistence | `finance.js` | Live — keeps payoff amounts through the payoff quarter |
 | 12 | Pulse Intelligence Layer — InsightRow | `ui.jsx`, `HomePanel.jsx`, `IncomePanel.jsx`, `BudgetPanel.jsx` | Rough draft — signal tokens live, insights wired to real data |
+| 13 | Liquid Glass Premium UI Layer | `LiquidGlass.jsx`, `ui.jsx`, `index.css` | Live — InsightRow wired as first Pulse placement |
 
 ---
 
@@ -260,6 +261,29 @@ Hidden weeks/months preserved in `hiddenWeeks` / `hiddenMonths` arrays from `rol
 - Budget/Home/Log projection surfaces consume `fundedGoalSpend` so funded amounts stay deducted once from year-end-style totals and cannot drift back into available surplus.
 
 **Guardrail note:** this separation (baseline weekly surplus vs absorbed-goal projection adjustments) prevents the prior “spread + explicit subtract” double-count pattern.
+
+## 13. Liquid Glass Premium UI Layer (2026-04-12)
+
+**Files:** `src/components/LiquidGlass.jsx` · `src/components/ui.jsx` · `src/index.css`
+
+**Component — `LiquidGlass`:**
+```
+Props: tone ("teal"|"purple") · intensity ("light"|"strong") · withBorder (bool) · purpose (required)
+Effect: backdropFilter blur + semi-transparent tint + accent border on the wrapper div
+```
+Placement guard fires a `console.warn` in dev if `purpose` is not in the whitelist (`nav | pulse | modal | log-summary`). To add a new placement: update `docs/premium-ui-TODO.md` §4 first, then extend `ALLOWED_PURPOSES` in `LiquidGlass.jsx`.
+
+**Tokens** (live in `src/index.css` `@theme`):
+- `--glass-blur-light: 12px` / `--glass-blur-strong: 20px`
+- `--glass-tint-teal/purple` — 7% opacity fill per tone
+- `--glass-border-teal/purple` — accent border per tone
+
+**First placement — `InsightRow` (pulse):**
+`InsightRow` in `ui.jsx` wraps its content in `<LiquidGlass purpose="pulse">`. Renders as an inline-flex glass pill below the primary metric value. Tone keys to the signal variant: teal for blue directional signals, purple for warnings. All HomePanel MetricCards with `insight` props now carry glass pills.
+
+**Banned surfaces:** primary MetricCards, data tables, buttons. Never apply `LiquidGlass` to Flow-tier elements.
+
+---
 
 ## 11. HomePanel build-parse stability (2026-04-03)
 

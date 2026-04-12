@@ -265,7 +265,7 @@ export function InsightRow({ arrow, delta, label, variant = "blue" }) {
   const color = variant === "purple"
     ? "var(--color-signal-purple)"
     : "var(--color-signal-blue)";
-  const tone = variant === "purple" ? "purple" : "teal";
+  const tone = variant === "purple" ? "purple" : "blue";
   const arrowChar = arrow === "up" ? "↑" : arrow === "down" ? "↓" : "→";
   return (
     <LiquidGlass

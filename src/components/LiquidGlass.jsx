@@ -5,12 +5,17 @@
 // + semi-transparent tint + optional accent border.
 //
 // Props:
-//   tone       — "teal" (default) | "purple"
+//   tone       — "teal" (default) | "blue" | "purple"
 //   intensity  — "light" (default) | "strong"
 //   withBorder — true (default) | false
 //   purpose    — REQUIRED. Must be one of: "nav" | "pulse" | "modal" | "log-summary"
 //   style      — additional inline styles merged onto the wrapper
 //   className  — forwarded className
+//
+// Tone guide:
+//   teal   → Flow accent surfaces (nav, neutral pulse)
+//   blue   → signal-blue Pulse rows (directional trend signals)
+//   purple → signal-purple Pulse rows (warnings / AI-generated moments)
 //
 // Placement rules (enforced via DEV warning):
 //   Allowed  → nav, pulse, modal, log-summary
@@ -27,13 +32,15 @@ const BLUR = {
 };
 
 const TINT = {
-  teal:   "rgba(0, 200, 150, 0.07)",
-  purple: "rgba(124, 92, 255, 0.07)",
+  teal:   "rgba(0, 200, 150, 0.10)",
+  blue:   "rgba(91, 140, 255, 0.16)",
+  purple: "rgba(124, 92, 255, 0.10)",
 };
 
 const BORDER_COLOR = {
-  teal:   "rgba(0, 200, 150, 0.18)",
-  purple: "rgba(124, 92, 255, 0.22)",
+  teal:   "rgba(0, 200, 150, 0.24)",
+  blue:   "rgba(91, 140, 255, 0.35)",
+  purple: "rgba(124, 92, 255, 0.26)",
 };
 
 export function LiquidGlass({

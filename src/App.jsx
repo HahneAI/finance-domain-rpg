@@ -1158,15 +1158,33 @@ export default function App() {
           tone="teal"
           intensity="light"
           style={{
+            width: "100%",
             borderRadius: "24px",
-            boxShadow: "0 8px 32px rgba(0, 200, 150, 0.08)",
+            // Multi-layer shadow: outer teal glow + dark lift shadow + inner top highlight
+            boxShadow: "0 8px 32px rgba(0, 200, 150, 0.22), 0 4px 16px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
             overflow: "hidden",
             position: "relative",
             display: "flex",
             alignItems: "stretch",
             height: "62px",
+            // Stronger tint than default 0.10 — more opaque colored glass
+            background: "rgba(0, 200, 150, 0.15)",
+            // More visible border to catch light on the raised edge
+            border: "1px solid rgba(0, 200, 150, 0.40)",
           }}
         >
+          {/* Top-edge sheen — light refraction gradient, simulates curved glass surface */}
+          <div style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: "45%",
+            background: "linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, transparent 100%)",
+            borderRadius: "24px 24px 0 0",
+            pointerEvents: "none",
+            zIndex: 1,
+          }} />
           {/* Sliding tab indicator — 2px teal bar that moves to the active tab.
               Contained within the pill via overflow:hidden on LiquidGlass. */}
           {(() => {

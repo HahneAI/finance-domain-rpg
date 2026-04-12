@@ -137,6 +137,47 @@ npx vitest run -u
 - Required behavior: record transformation steps, multipliers/adjustments, quarterly split points, and weekly-versus-quarterly comparison points in the designated audit document.
 - Guardrails: audit/log only — no calculation modifications.
 
+## Liquid Glass Premium UI (2026-04-12)
+
+**Component:** `src/components/LiquidGlass.jsx`
+**Props:** `tone` ("teal"|"blue"|"purple") · `intensity` ("light"|"strong") · `withBorder` · `purpose` (required) · `style` (spread last — use to override defaults) · `className`
+
+### Active placements (whitelist in `ALLOWED_PURPOSES`)
+
+| purpose | Where used | tone |
+|---------|-----------|------|
+| `"pulse"` | `InsightRow` in `ui.jsx` — inline glass pill on MetricCards with `insight` prop | blue / purple |
+| `"nav"` | Floating bottom nav pill in `App.jsx` | teal |
+| `"log-summary"` | Log Effect Summary container in `LogPanel.jsx` | teal |
+| `"modal"` | Reserved — not yet wired | teal |
+
+To add a new placement: update `docs/premium-ui-TODO.md` §4 first, then extend `ALLOWED_PURPOSES` in the component.
+
+### `MetricCard` — `visualTier` prop
+
+`MetricCard` / `Card` in `ui.jsx` accepts `visualTier="glass"` or `"overlay"`. Modifies `containerStyle` in-place (no extra wrapper):
+- `"glass"`: blur 12px, tint `rgba(0,200,150,0.08)`, border `rgba(0,200,150,0.20)`
+- `"overlay"`: blur 20px, tint 0.12, border 0.28
+
+### Glass sheen recipe (nav pill — starting point)
+
+Override via the `style` prop + one `pointerEvents:none` child div:
+
+```
+background:  rgba(0, 200, 150, 0.15)          // bump from default 0.10
+border:      1px solid rgba(0, 200, 150, 0.40) // bump from default 0.24
+boxShadow:   0 8px 32px rgba(0,200,150,0.22),  // outer teal glow
+             0 4px 16px rgba(0,0,0,0.55),       // dark lift
+             inset 0 1px 0 rgba(255,255,255,0.10) // inner rim
+sheen child: linear-gradient(180deg, rgba(255,255,255,0.09) 0%, transparent 100%) — 45% height
+```
+
+Variation α knobs (outer glow / sheen / tint / border): Subtle `0.10/0.05/0.10/0.24` · **Standard nav `0.22/0.09/0.15/0.40`** · Prominent `0.28/0.12/0.18/0.48`
+
+Full reference: `docs/premium-ui-TODO.md` §4 sheen table · `docs/active-systems.md` System 13.
+
+---
+
 ## 2026-04-03 — Funded goal absorption follow-up (quick summary)
 - Refined funded-goal absorption flow to avoid a double-hit in downstream surplus math: `baseWeeklyUnallocated` now remains purely paycheck-minus-expense, while goal absorption is applied at projection/summary layers.
 - Kept annual “money already committed to funded goals” accounting intact via `fundedGoalSpend` in aggregate views (Home/Budget/Log + adjusted take-home displays).

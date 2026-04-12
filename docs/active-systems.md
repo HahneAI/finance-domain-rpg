@@ -264,11 +264,11 @@ Hidden weeks/months preserved in `hiddenWeeks` / `hiddenMonths` arrays from `rol
 
 ## 13. Liquid Glass Premium UI Layer (2026-04-12)
 
-**Files:** `src/components/LiquidGlass.jsx` · `src/components/ui.jsx` · `src/index.css`
+**Files:** `src/components/LiquidGlass.jsx` · `src/components/ui.jsx` · `src/index.css` · `src/App.jsx` · `src/components/LogPanel.jsx`
 
 **Component — `LiquidGlass`:**
 ```
-Props: tone ("teal"|"blue"|"purple") · intensity ("light"|"strong") · withBorder (bool) · purpose (required)
+Props: tone ("teal"|"blue"|"purple") · intensity ("light"|"strong") · withBorder (bool) · purpose (required) · style (merged last — overrides defaults) · className
 Effect: backdropFilter blur + semi-transparent tint + accent border on the wrapper div
 ```
 Placement guard fires a `console.warn` in dev if `purpose` is not in the whitelist (`nav | pulse | modal | log-summary`). To add a new placement: update `docs/premium-ui-TODO.md` §4 first, then extend `ALLOWED_PURPOSES` in `LiquidGlass.jsx`.
@@ -278,7 +278,7 @@ Placement guard fires a `console.warn` in dev if `purpose` is not in the whiteli
 - `blue` — signal-blue Pulse rows (directional trend signals) → uses `rgba(91, 140, 255)`
 - `purple` — signal-purple Pulse rows (warnings / AI moments) → uses `rgba(124, 92, 255)`
 
-**Locked values (finalized 2026-04-12):**
+**Locked base values (finalized 2026-04-12):**
 
 | Tone | Tint | Border |
 |------|------|--------|
@@ -288,10 +288,56 @@ Placement guard fires a `console.warn` in dev if `purpose` is not in the whiteli
 
 Blur: `light = 12px` · `strong = 20px`. Values are hardcoded in the component lookup table — CSS custom property `blur(var(--x))` does not resolve in inline styles.
 
-**Current placement — `InsightRow` (pulse):**
-`InsightRow` in `ui.jsx` wraps its content in `<LiquidGlass purpose="pulse">`. Renders as an `inline-flex` glass pill below the primary metric value. Tone keys directly to signal variant: `tone="blue"` for directional signals, `tone="purple"` for warnings. All MetricCards with an `insight` prop carry glass pills.
+**Active placements:**
+
+| Purpose | Location | Notes |
+|---------|----------|-------|
+| `pulse` | `InsightRow` in `ui.jsx` | `inline-flex` pill under MetricCard value; `tone="blue"` for directional, `tone="purple"` for warnings |
+| `nav` | `mobile-bottom-nav` in `App.jsx` | Floating pill with full glass sheen recipe (see below) |
+| `log-summary` | Log Effect Summary container in `LogPanel.jsx` | Wraps the pre-log summary grid; `tone="teal" intensity="light"` |
 
 **Banned surfaces:** primary MetricCards, data tables, buttons. Never apply `LiquidGlass` to Flow-tier elements.
+
+---
+
+**`MetricCard` — `visualTier` prop (2026-04-12):**
+
+`MetricCard` / `Card` in `ui.jsx` accepts `visualTier="glass"` or `"overlay"`. Injects backdrop-filter + teal glass tint/border directly into `containerStyle` — no extra wrapper element.
+
+| Tier | Blur | Background | Border |
+|------|------|-----------|--------|
+| _(default / `"solid"`)_ | none | `var(--color-bg-surface)` | `var(--color-border-subtle)` |
+| `"glass"` | `12px` | `rgba(0, 200, 150, 0.08)` | `rgba(0, 200, 150, 0.20)` |
+| `"overlay"` | `20px` | `rgba(0, 200, 150, 0.12)` | `rgba(0, 200, 150, 0.28)` |
+
+---
+
+**Glass Sheen Recipe — nav pill (2026-04-12 starting point):**
+
+The floating nav pill overrides the default `LiquidGlass` style with 5 stacked layers to produce the raised Apple-style glass effect. Apply via the `style` prop (spread last in the component, so these win):
+
+| Layer | Property | Value | Purpose |
+|-------|----------|-------|---------|
+| 1 | `background` | `rgba(0, 200, 150, 0.15)` | More opaque colored glass (default teal is 0.10) |
+| 2 | `border` | `1px solid rgba(0, 200, 150, 0.40)` | Visible raised edge (default teal is 0.24) |
+| 3 | `boxShadow` layer A | `0 8px 32px rgba(0, 200, 150, 0.22)` | Outer teal ambient glow — lifts pill off background |
+| 4 | `boxShadow` layer B | `0 4px 16px rgba(0, 0, 0, 0.55)` | Dark lift shadow — adds depth/elevation |
+| 5 | `boxShadow` layer C | `inset 0 1px 0 rgba(255, 255, 255, 0.10)` | Inner top rim highlight — glass edge |
+| 6 | Sheen div (child) | `linear-gradient(180deg, rgba(255,255,255,0.09) 0%, transparent 100%)` at 45% height | Top-surface light refraction — curved glass illusion |
+
+Full `boxShadow` string:
+```
+"0 8px 32px rgba(0, 200, 150, 0.22), 0 4px 16px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.10)"
+```
+
+**Variation presets** (adjust opacity knobs to taste):
+
+| Preset | Outer glow α | Sheen div α | Tint α | Border α | Use |
+|--------|-------------|------------|--------|----------|-----|
+| Subtle | 0.10 | 0.05 | 0.10 | 0.24 | Background glass, log-summary |
+| **Standard** (nav pill) | **0.22** | **0.09** | **0.15** | **0.40** | Floating nav — current shipped |
+| Prominent | 0.28 | 0.12 | 0.18 | 0.48 | Modal overlays, focus surfaces |
+| Dark/muted | — | 0.05 | 0.10 | 0.20 | Pulse rows on dark cards (no color glow) |
 
 ---
 

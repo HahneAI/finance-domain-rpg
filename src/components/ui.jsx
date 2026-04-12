@@ -81,7 +81,13 @@ const _fmt$ = (n) => {
 //   rawVal        — raw number for countup + flash (pass only for $ values)
 //   entranceIndex — stagger index (0-based) for HomePanel grid entrance
 // ─────────────────────────────────────────────────────────────
-export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight }) {
+// Glass tier overrides for visualTier="glass" | "overlay"
+const GLASS_TIER = {
+  glass:   { background: "rgba(0, 200, 150, 0.08)", border: "rgba(0, 200, 150, 0.20)", blur: "12px" },
+  overlay: { background: "rgba(0, 200, 150, 0.12)", border: "rgba(0, 200, 150, 0.28)", blur: "20px" },
+};
+
+export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight, visualTier }) {
   const [pressed,  setPressed]  = useState(false);
   const [flashing, setFlashing] = useState(false);
   const prevRaw = useRef(null);
@@ -110,16 +116,18 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
     animationDelay: `${Math.min(entranceIndex * 0.08, 0.4)}s`,
   } : {};
 
+  const g = visualTier ? GLASS_TIER[visualTier] : null;
   const containerStyle = {
     gridColumn: span === 2 ? "span 2" : undefined,
-    background: s ? s.bg : "var(--color-bg-surface)",
-    border: `1px solid ${s ? s.border : "var(--color-border-subtle)"}`,
+    background: g ? g.background : (s ? s.bg : "var(--color-bg-surface)"),
+    border: `1px solid ${g ? g.border : (s ? s.border : "var(--color-border-subtle)")}`,
     borderRadius: "16px",
     padding: isButton ? "16px 18px" : "18px 16px",
     textAlign: "left",
     color: "inherit",
     boxShadow: "0 8px 26px rgba(0,0,0,0.32)",
     minWidth: 0,
+    ...(g && { backdropFilter: `blur(${g.blur})`, WebkitBackdropFilter: `blur(${g.blur})` }),
     ...entranceStyle,
     ...(isButton && {
       cursor: "pointer",

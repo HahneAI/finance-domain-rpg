@@ -4,7 +4,7 @@ Curated UI polish backlog focused on "premium" treatments (Liquid Glass-inspired
 
 ## 1. Navigation & Layout Experiments
 
-- [ ] **Floating liquid-glass tab bar** — replace the pinned bottom nav with a floating pill (Home, Income, Budget, Benefits, Log): `backdrop-blur-md bg-white/5 border border-white/10 shadow-[0_8px_32px_rgba(0,200,150,0.08)]`, safe-area aware, hides when Life Events drawer opens.
+- [x] **Floating liquid-glass tab bar** — replace the pinned bottom nav with a floating pill (Home, Income, Budget, Benefits, Log): `backdrop-blur-md bg-white/5 border border-white/10 shadow-[0_8px_32px_rgba(0,200,150,0.08)]`, safe-area aware, hides when Life Events drawer opens.
 - [ ] **Contextual nav collapse** — when scrolling down on any data-heavy tab, fade/slide the nav bubble to 60% scale/opacity; restore on scroll up or when user reaches top.
 - [ ] **Gesture bottom sheets** — convert deep-dive panes (week detail, goal detail) into Framer Motion sheets with snap points (33%, 66%, 100%); ensure body scroll locks while sheet is active.
 
@@ -14,9 +14,19 @@ Curated UI polish backlog focused on "premium" treatments (Liquid Glass-inspired
 - Contextual collapse hooks into the scroll observers already used for sticky headers (see `IncomePanel.jsx` sticky weekly table). Add a shared `useScrollDirection` hook in `src/hooks/` that updates a `isScrollingDown` ref; feed that boolean into the nav component to toggle `transform: scale(0.6)` / `opacity:0.6` while keeping pointer events active so taps still register instantly.
 - Gesture bottom sheets consolidate the logic from `WeekConfirmModal.jsx` and the goal drawers inside `BudgetPanel.jsx`. Create `src/components/BottomSheet.jsx` with snap points (33/66/100) that locks body scroll (existing logic around `WeekConfirmModal`’s `useEffect` can be lifted). Use Framer Motion if available; otherwise CSS transitions. Reference `WeekConfirmModal` markup for content stacking and `BudgetPanel` detail cards to keep padding consistent.
 
+**Dev note — 2026-04-12 (floating nav shipped)**
+
+- `mobile-bottom-nav` in `src/App.jsx` is now a floating pill: `position:fixed; bottom: calc(12px + env(safe-area-inset-bottom,0px)); left:16px; right:16px`.
+- Nav content is wrapped in `<LiquidGlass purpose="nav" tone="teal" intensity="light">` with `borderRadius:24px; height:62px; overflow:hidden`.
+- Sliding teal indicator (2px bar) is preserved inside the pill, clipped by `overflow:hidden`.
+- Nav fades out (`opacity:0; pointerEvents:none`) while `drawerOpen` is true.
+- Content spacer bumped from `72px` → `86px` (pill 62px + 12px bottom offset + 12px gap).
+
+---
+
 ## 2. Card Hierarchy & Data Display
 
-- [ ] **Tiered card depth** — apply “solid / glass / overlay” hierarchy: primary metrics stay solid Flow surfaces; secondary insight cards (Pulse rows, Log Effect Summary) use glass treatment; overlays use stronger blur + tint.
+- [x] **Tiered card depth** — apply “solid / glass / overlay” hierarchy: primary metrics stay solid Flow surfaces; secondary insight cards (Pulse rows, Log Effect Summary) use glass treatment; overlays use stronger blur + tint.
 - [ ] **Swipeable stacks** — weekly income summaries and goal detail lists switch to horizontal swipe (snap) containers to cut vertical scrolling.
 - [ ] **Large-number pairs** — ensure all hero numbers pair countup animation with contextual sub-labels (e.g., “Week 14 • Heavy rotation”). Audit for consistency.
 
@@ -25,6 +35,16 @@ Curated UI polish backlog focused on "premium" treatments (Liquid Glass-inspired
 - Introduce a `visualTier` prop on `MetricCard` (`src/components/ui.jsx`). Primary dashboard tiles (`HomePanel.jsx`, `IncomePanel.jsx`) pass `"solid"`, Log summaries in `LogPanel.jsx` use `"glass"`, and overlays (e.g., `WeekConfirmModal`) use `"overlay"`. The tiers map to CSS tokens to land the blur/opacity values introduced in Section 4.
 - Build a `ScrollSnapRow` wrapper (new component in `src/components/`) for swipeable stacks and apply it first to the weekly net sequence in `IncomePanel.jsx` and the goals detail cards in `BudgetPanel.jsx`. Use `scroll-snap-type: x mandatory` with 16px gaps, and surface pagination dots via a reusable `useSwipeStack` hook stored in `src/hooks/useSwipeStack.js`.
 - While touching `HomePanel.jsx` tile definitions (lines ~58–170), feed `currentWeek` metadata into each `MetricCard` `sub` label (e.g., `Week ${currentWeek.idx} • ${currentWeek.rotation}`) so every hero number has context. Mirror that pattern in `IncomePanel`’s sticky header and `Goals` list to satisfy the “large-number pairs” consistency audit.
+
+**Dev note — 2026-04-12 (tiered card depth shipped)**
+
+- `MetricCard` in `src/components/ui.jsx` accepts new `visualTier` prop: `"glass"` | `"overlay"`.
+- `"glass"`: `backdrop-filter:blur(12px)`, teal tint `rgba(0,200,150,0.08)`, border `rgba(0,200,150,0.20)`.
+- `"overlay"`: `backdrop-filter:blur(20px)`, deeper tint `rgba(0,200,150,0.12)`, border `rgba(0,200,150,0.28)`.
+- Default (no prop or `"solid"`): unchanged bg-surface behaviour.
+- Log Effect Summary container in `src/components/LogPanel.jsx` is now wrapped with `<LiquidGlass purpose="log-summary" tone="teal" intensity="light">`.
+
+---
 
 ## 3. Micro-interactions & Motion
 
@@ -84,4 +104,4 @@ Blur: `light = 12px` · `strong = 20px`.
 
 ---
 
-*Last updated: 2026-04-12*
+*Last updated: 2026-04-12 — Section 1 floating nav + Section 2 tiered card depth shipped*

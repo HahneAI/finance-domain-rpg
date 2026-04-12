@@ -3,6 +3,7 @@ import { EVENT_TYPES } from "../constants/config.js";
 import { calcEventImpact, dhlEmployerMatchRate, toLocalIso } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { Card, iS, lS, SmBtn } from "./ui.jsx";
+import { LiquidGlass } from "./LiquidGlass.jsx";
 
 import { formatRotationDisplay } from "../lib/rotation.js";
 
@@ -502,7 +503,8 @@ export function LogPanel({
     })()}
 
     {/* Consolidated pre-log summary */}
-    <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
+    <LiquidGlass purpose="log-summary" tone="teal" intensity="light" style={{ borderRadius: "6px", marginBottom: "20px" }}>
+    <div style={{ padding: "14px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "10px" }}>
         Log Effect Summary
       </div>
@@ -535,6 +537,7 @@ export function LogPanel({
         </div>
       </div>
     </div>
+    </LiquidGlass>
 
     {/* Attendance History */}
     {attendanceLogs.length > 0 && (

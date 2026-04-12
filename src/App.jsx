@@ -703,12 +703,20 @@ export default function App() {
       />}
       {currentView === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config} isDHL={isDHL} isAdmin={isAdmin}
+        setConfig={setConfig}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}
         allWeeks={allWeeks}
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
+        logK401kLost={logTotals.k401kLost}
+        logK401kMatchLost={logTotals.k401kMatchLost}
+        logK401kGained={logTotals.k401kGained}
+        logK401kMatchGained={logTotals.k401kMatchGained}
+        logPTOHoursLost={logTotals.ptoHoursLost}
+        ptoGoal={ptoGoal}
+        setPtoGoal={setPtoGoal}
         goals={goals}
         fundedGoalSpend={fundedGoalSpend}
         bucketModel={bucketModel}

@@ -57,8 +57,9 @@ src/
 └── test/                    — Vitest tests
 
 docs/
-├── active-systems.md        — PRIMARY REFERENCE: all 11 live systems, math, data flow
-├── codex-memory.md          — session log + task direction digests
+├── active-systems.md        — PRIMARY REFERENCE: all live systems, math, data flow
+├── premium-ui-TODO.md       — Liquid Glass + premium UI polish backlog (Section §4 = glass sheen recipe)
+├── account-reference.json   — ground-truth DHL account data (db_record / computed_expectations / ui_assertions)
 └── TODO.md                  — prioritized backlog
 ```
 
@@ -110,9 +111,9 @@ Docs, task specs, value-flow traces, design references.
 | Task specs | `docs/codex-task-1` through `docs/codex-task-7` |
 | Audit logs | `docs/audit-log.md`, `docs/codex-test-output.txt` |
 | Audit scripts | `scripts/generate-audit-log.mjs` |
-| Active systems | `docs/active-systems.md`, `docs/codex-memory.md`, `docs/TODO.md` |
+| Active systems | `docs/active-systems.md`, `docs/TODO.md`, `docs/premium-ui-TODO.md` |
 | Design refs | `docs/authority-design-system`, `docs/Authority-Company-Branding` |
-| Supporting docs | `docs/dhl-sprint-bugs.md`, `docs/state-tax-math-helper.md`, `docs/premium-ui-TODO.md` |
+| Supporting docs | `docs/dhl-sprint-bugs.md`, `docs/state-tax-math-helper.md`, `docs/account-reference.json` |
 
 Use for: expense calculation audit log (Task 7), quarterly switch audits, source-of-truth checks, value-flow tracing, any `docs/` write.
 
@@ -231,6 +232,70 @@ Full token table: `src/index.css` `@theme` block. Never use old amber `#c9a84c`,
 
 ---
 
+## Liquid Glass Premium UI
+
+**Component:** `src/components/LiquidGlass.jsx`
+**Props:** `tone` ("teal"|"blue"|"purple") · `intensity` ("light"|"strong") · `withBorder` · `purpose` (required, guards against misuse) · `style` (spread last — overrides defaults) · `className`
+
+### Placement whitelist (`ALLOWED_PURPOSES`)
+
+| `purpose` | Where used | `tone` |
+|-----------|-----------|--------|
+| `"pulse"` | `InsightRow` in `ui.jsx` — glass pill on MetricCards with `insight` prop | blue / purple |
+| `"nav"` | Floating bottom nav pill in `App.jsx` | teal |
+| `"log-summary"` | Log Effect Summary container in `LogPanel.jsx` | teal |
+| `"modal"` | Reserved — not yet wired | teal |
+
+**To add a placement:** update `docs/premium-ui-TODO.md` §4 first, then extend `ALLOWED_PURPOSES` in the component. Dev logs a warning on any unwhitelisted purpose.
+
+**Never** apply `LiquidGlass` to primary MetricCards, data tables, or buttons.
+
+### `MetricCard` — `visualTier` prop
+
+Accepts `visualTier="glass"` or `"overlay"`. Modifies `containerStyle` in-place (no extra wrapper element):
+- `"glass"`: blur 12px · tint `rgba(0,200,150,0.08)` · border `rgba(0,200,150,0.20)`
+- `"overlay"`: blur 20px · tint 0.12 · border 0.28
+- Default (no prop): unchanged solid bg-surface behaviour
+
+### Glass sheen recipe (nav pill — 2026-04-12 starting point)
+
+5-layer raised glass effect. Apply via `style` prop overrides + one `pointerEvents:none` child sheen div:
+
+```
+background:  rgba(0, 200, 150, 0.15)           // tint α bump (default 0.10)
+border:      1px solid rgba(0, 200, 150, 0.40)  // border α bump (default 0.24)
+boxShadow:   0 8px 32px rgba(0,200,150,0.22),   // outer teal ambient glow
+             0 4px 16px rgba(0,0,0,0.55),        // dark lift/elevation
+             inset 0 1px 0 rgba(255,255,255,0.10) // inner top rim highlight
+sheen child: linear-gradient(180deg, rgba(255,255,255,0.09) 0%, transparent 100%)
+             position:absolute top:0 left:0 right:0 height:45% pointerEvents:none zIndex:1
+```
+
+**α variation presets** (outer glow / sheen / tint / border):
+
+| Preset | Values | When to use |
+|--------|--------|-------------|
+| Subtle | `0.10 / 0.05 / 0.10 / 0.24` | Background glass, log-summary |
+| **Standard** (nav) | **`0.22 / 0.09 / 0.15 / 0.40`** | Floating nav — current shipped |
+| Prominent | `0.28 / 0.12 / 0.18 / 0.48` | Modal overlays, focus surfaces |
+| Dark/muted | `— / 0.05 / 0.10 / 0.20` | Pulse rows (no color glow) |
+
+Full detail: `docs/active-systems.md` §13 · `docs/premium-ui-TODO.md` §4.
+
+---
+
+## Account Reference File
+
+`docs/account-reference.json` — ground-truth data for Anthony's primary DHL account. Three sections:
+
+1. **`db_record`** — raw Supabase `user_data` row (config, logs, expenses, goals, week_confirmations, pto_goal)
+2. **`computed_expectations`** — values `finance.js` / `rollingTimeline.js` should derive from that record
+3. **`ui_assertions`** — what each panel should display (used for QA and integration test expected values)
+
+**When writing tests against real account behavior, cross-reference this file.** Never fabricate expected values — derive from `db_record`. Update `last_updated` + the changed section whenever config or data changes.
+
+---
+
 ## Active Task Backlog (Route to Correct Environment)
 
 | # | Task | Environment |
@@ -243,7 +308,28 @@ Full token table: `src/index.css` `@theme` block. Never use old amber `#c9a84c`,
 | 6 | Income weekly overview sticky header | `authority-finance-ui` |
 | 7 | Expense calculation audit log (trace, no math changes) | `authority-finance-audit` |
 
-Full specs for tasks 1–7: `docs/codex-memory.md` §2026-04-03.
+### Task Direction Digests
+
+**Task 1 — Profile auth actions**
+Complete change-email, change-password (with current-password confirmation), delete account (secure backend route + Supabase admin API — never client-exposed), and global sign-out. All actions must be reachable in Profile UI with loading/error/success states. Use `supabase.auth.updateUser`, `supabase.auth.signOut({ scope: 'global' })`.
+
+**Task 2 — Fiscal week roadmap**
+Audit and finish: centralized week awareness (Week X of 52), goal auto-complete on funding, weekly projected-vs-actual day confirmation, goal timeline surplus sourced from per-week net outputs (not flat averages). Audit-first, avoid duplicate date logic, preserve existing behaviour where correct.
+
+**Task 3 — 50-state tax audit**
+Classify all states as no-tax / flat / bracketed. Flat = one rate, bracketed = marginal math, no-tax = zero. Verify Missouri marginal thresholds specifically. Data-driven table design, no hardcoded flat approximations for bracketed states.
+
+**Task 4 — DHL benefits deduction pipeline**
+Wire every payroll-deducted benefit (medical, dental, vision, LTD, STD, life, HSA/FSA, 401k) from Account/Profile editing → saved state → `buildYear()` pre-tax deduction. No invented defaults. Keep editing authoritative in Account/Profile; remove conflicting duplicate edit surfaces.
+
+**Task 5 — Move tax plan to Account › Tax Plan**
+Relocate Income tab's tax strategy/planning sections into Account › Tax Plan. Reuse existing components/handlers — no logic duplication. No tax math changes. Clean any layout gaps left behind.
+
+**Task 6 — Income weekly overview sticky header**
+Add pinned header row to the weekly chart/table. Column alignment must track horizontal scroll if present. Clean layering/background/z-index — no chart redesign or data math changes.
+
+**Task 7 — Expense calculation audit log**
+Trace expense calculation path from income through intermediary transforms to quarterly splits. Log each transition step in `docs/audit-log.md`. Audit only — no calculation modifications.
 
 ---
 
@@ -294,6 +380,7 @@ new_risks_detected:    [any regressions, edge cases, or known gaps introduced or
 | Doc | Purpose |
 |-----|---------|
 | `docs/active-systems.md` | All live systems — math, data flow, known issues. Read before touching any system. |
-| `docs/codex-memory.md` | Session log, task direction digests, test infrastructure notes |
+| `docs/premium-ui-TODO.md` | Liquid Glass + premium UI polish backlog. §4 = glass sheen recipe + variation presets. |
+| `docs/account-reference.json` | Ground-truth DHL account data for tests and QA. |
 | `docs/TODO.md` | Prioritized backlog |
 | `.claude/CLAUDE.md` | Claude Code authority doc (CC-facing mirror of this file) |

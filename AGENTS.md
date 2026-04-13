@@ -308,29 +308,6 @@ Full detail: `docs/active-systems.md` §13 · `docs/premium-ui-TODO.md` §4.
 | 6 | Income weekly overview sticky header | `authority-finance-ui` |
 | 7 | Expense calculation audit log (trace, no math changes) | `authority-finance-audit` |
 
-### Task Direction Digests
-
-**Task 1 — Profile auth actions**
-Complete change-email, change-password (with current-password confirmation), delete account (secure backend route + Supabase admin API — never client-exposed), and global sign-out. All actions must be reachable in Profile UI with loading/error/success states. Use `supabase.auth.updateUser`, `supabase.auth.signOut({ scope: 'global' })`.
-
-**Task 2 — Fiscal week roadmap**
-Audit and finish: centralized week awareness (Week X of 52), goal auto-complete on funding, weekly projected-vs-actual day confirmation, goal timeline surplus sourced from per-week net outputs (not flat averages). Audit-first, avoid duplicate date logic, preserve existing behaviour where correct.
-
-**Task 3 — 50-state tax audit**
-Classify all states as no-tax / flat / bracketed. Flat = one rate, bracketed = marginal math, no-tax = zero. Verify Missouri marginal thresholds specifically. Data-driven table design, no hardcoded flat approximations for bracketed states.
-
-**Task 4 — DHL benefits deduction pipeline**
-Wire every payroll-deducted benefit (medical, dental, vision, LTD, STD, life, HSA/FSA, 401k) from Account/Profile editing → saved state → `buildYear()` pre-tax deduction. No invented defaults. Keep editing authoritative in Account/Profile; remove conflicting duplicate edit surfaces.
-
-**Task 5 — Move tax plan to Account › Tax Plan**
-Relocate Income tab's tax strategy/planning sections into Account › Tax Plan. Reuse existing components/handlers — no logic duplication. No tax math changes. Clean any layout gaps left behind.
-
-**Task 6 — Income weekly overview sticky header**
-Add pinned header row to the weekly chart/table. Column alignment must track horizontal scroll if present. Clean layering/background/z-index — no chart redesign or data math changes.
-
-**Task 7 — Expense calculation audit log**
-Trace expense calculation path from income through intermediary transforms to quarterly splits. Log each transition step in `docs/audit-log.md`. Audit only — no calculation modifications.
-
 ---
 
 ## Known Gaps — Do Not Paper Over

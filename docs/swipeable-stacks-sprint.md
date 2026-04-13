@@ -199,156 +199,260 @@ export function useSwipeStack(count) {
 
 ## Sprint 5 — Goal Number Identity + Reorder Modal
 
-### 5a. Large ordinal number on each goal card (top-right)
+Sprint 5 is broken into four execution sprints plus a QA pass. Each sprint is independently committable.
 
-Each active goal card gets a large, exaggerated ordinal number anchored to the top-right corner of the card. It is purely presentational — position `absolute` inside the card's `position: relative` container so it never shifts content.
-
-```
-Visual spec:
-  font-size:   96px  (desktop) / 72px (mobile, <768px)
-  font-weight: 900
-  color:       rgba(255, 255, 255, 0.09)   ← white, ghosted behind content
-  font-family: var(--font-display)
-  line-height: 1
-  position:    absolute
-  top:         -8px
-  right:       12px
-  pointer-events: none
-  user-select: none
-  z-index:     0   ← card content sits on z-index: 1
-```
-
-The number is intentionally large enough to bleed slightly out of the card top edge (`top: -8px`) and feel like a magazine-style ordinal — readable but not competing with the label or target figure. The low opacity keeps it subtext-level on dark backgrounds.
-
-**Goal 1** shows `1`, **Goal 2** shows `2`, etc. — derived from the `i` index in `tl.map((g, i) => ...)`. The index is 0-based so display as `i + 1`.
-
-Card container needs `position: relative; overflow: hidden` to clip the number if it bleeds.
+**Dependency order:** 5.1 → 5.2 → 5.3 → 5.4 → 5.5 (QA)
+5.1 has no dependencies. 5.2 delivers the modal shell. 5.3 and 5.4 add interaction modes to the modal independently (5.3 touch, 5.4 desktop drag — either can ship first).
 
 ---
 
-### 5b. Reorder button on each card
+## Sprint 5.1 — Ghost ordinal numbers on goal cards
 
-Replace the existing `↑` / `↓` `SmBtn` pair on the card footer with a single **REORDER** button. Tapping it opens the Reorder Modal (Sprint 5c). The button sits at the left of the existing footer action row, before EDIT and DONE.
+**Scope:** `src/components/HomePanel.jsx` only. Zero state changes. Zero logic changes.
 
+**What changes:**
+- Both card branches (mobile snap + desktop list): add `position: "relative"` and `overflow: "hidden"` to the outer card `<div>` style
+- Wrap all card content in an inner `<div style={{ position: "relative", zIndex: 1 }}>` so it sits above the ghost number
+- Add a ghost ordinal `<div>` as the first child inside each card container (sibling to the content wrapper, not inside it)
+
+**Ghost ordinal spec:**
+```
+font-size:      isMobile ? "72px" : "96px"
+font-weight:    900
+font-family:    var(--font-display)
+color:          rgba(255, 255, 255, 0.09)
+line-height:    1
+position:       absolute
+top:            -8px
+right:          12px
+pointer-events: none
+user-select:    none
+z-index:        0
+```
+
+Value: `i + 1` from the existing `tl.map((g, i) => ...)` index. Apply identically in both mobile and desktop card branches.
+
+`overflow: hidden` on the card clips the top bleed intentionally — the number peeks above the card top edge by 8px in the visual design.
+
+**Does NOT change:** label, target $, timeline bar, edit form, DONE/DEL buttons, celebrating flash, drag props (desktop branch keeps them for now — drag removal is Sprint 5.2).
+
+**Agent tag:** `[CODEX]` — fully specified, single file, zero cross-file impact.
+
+**Acceptance:**
+- [ ] Ghost number visible on both mobile snap card and desktop list card
+- [ ] Number does not shift label or $ target layout
+- [ ] `overflow: hidden` clips top bleed on card container
+
+---
+
+## Sprint 5.2 — Reorder button + modal shell (no interaction)
+
+**Scope:** `src/components/HomePanel.jsx` only.
+
+**New state:**
+```js
+const [showReorderModal, setShowReorderModal] = useState(false);
+```
+
+**Card changes (both mobile and desktop branches):**
+- Remove `↑` `↓` SmBtn pair
+- Remove `draggable`, `onDragStart`, `onDragEnd`, `onDragOver` props from the desktop card branch (drag moves to the modal in 5.4)
+- Add single REORDER button in their place (left of EDIT in the footer action row):
 ```jsx
-<SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)">
-  ⠿ REORDER
-</SmBtn>
+{activeGoals.length > 1 && (
+  <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)">
+    ⠿ REORDER
+  </SmBtn>
+)}
 ```
+Only renders when there are 2+ active goals. Single-goal and zero-goal states show no REORDER button.
 
-The drag handles and `draggable` props on the card itself are also removed — reordering is modal-only. Existing ↑/↓ arrow logic (`moveGoal`) is kept but called from inside the modal instead.
+**`moveGoal` and `reorderGoalByDrag`:** keep both functions — they will be called from the modal in 5.3/5.4.
 
----
-
-### 5c. Reorder Modal — horizontal mini-cards
-
-**State:** `showReorderModal` boolean in `HomePanel`. One modal for the whole goals list — opened from any card's REORDER button.
-
-**What the modal shows:**
+**Modal chrome (read-only, no reorder yet):**
 
 ```
-┌──────────────────────────────────────────────────────┐
-│  REORDER GOALS                              [✕ close] │
-│                                                       │
-│  ← drag or tap arrows to reorder ─────────────────→  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
-│  │   1      │  │   2      │  │   3      │            │
-│  │ Car Note │  │ Laptop   │  │ Vacation │  …          │
-│  └──────────┘  └──────────┘  └──────────┘            │
-│                                                       │
-│  [← ↑] [↓ →] buttons appear below the active card    │
-└──────────────────────────────────────────────────────┘
-```
-
-**Mini-card spec (inside modal):**
-
-```
-width:           min(40vw, 140px)
-height:          80px
-background:      var(--color-bg-surface)
-border:          1px solid var(--color-border-subtle)
-border-radius:   12px
-padding:         10px 12px
-display:         flex
-flex-direction:  column
-justify-content: space-between
-
-Top-right: ordinal number
-  font-size:   32px
-  font-weight: 900
-  color:       rgba(255,255,255,0.12)
-  position:    absolute top 4px right 8px
-
-Label:
-  font-size:   12px
-  font-weight: bold
-  color:       var(--color-text-primary)
-  max 2 lines, text-overflow: ellipsis
-  overflow: hidden
-```
-
-The mini-cards are wrapped in `ScrollSnapRow` (from Sprint 1) so the list is horizontally swipeable inside the modal. The active/focused card (last tapped or centered) gets `border-color: var(--color-accent-primary)`.
-
-**Reorder interaction — two modes:**
-
-1. **Drag (desktop / coarse-pointer = false):** mini-cards are `draggable`. Uses existing `onDragStart/onDragEnd/onDrop` pattern already proven in BudgetPanel expense drag. Drop target highlights with accent border.
-
-2. **Tap-to-select + arrow buttons (touch / coarse-pointer = true):** tap a mini-card to select it (accent border), then use `← →` buttons rendered below the scroll row to shift it left or right. Each tap on an arrow calls `moveGoal(g.id, direction)`. No hold-to-drag required on mobile.
-
-**Pointer detection:** reuse `isCoarsePointer` state pattern from `BudgetPanel` — `window.matchMedia("(pointer: coarse)")`.
-
-**Modal chrome:**
-
-```
-position: fixed
-inset: 0
-z-index: 300
-background: rgba(0,0,0,0.82)
-display: flex
-align-items: flex-end          ← bottom sheet on mobile
-justify-content: center
+Overlay:
+  position: fixed, inset: 0, zIndex: 300
+  background: rgba(0,0,0,0.82)
+  display: flex, alignItems: flex-end, justifyContent: center
 
 Inner panel:
-  width: 100%
-  max-width: 560px
+  width: 100%, maxWidth: 560px
   background: var(--color-bg-surface)
-  border-radius: 20px 20px 0 0   ← on mobile
-  border-radius: 16px            ← on desktop (centered, not bottom sheet)
+  border-radius: isCoarsePointer ? "20px 20px 0 0" : "16px"
   padding: 20px 20px 32px
-  max-height: 80vh
-  overflow: hidden
+  maxHeight: 80vh, overflow: hidden
 ```
 
-**No new data.** The modal only calls `moveGoal` (already exists) and reads the existing `activeGoals` array. No new state shape.
+`isCoarsePointer` state (read-once on mount, same pattern as BudgetPanel):
+```js
+const [isCoarsePointer] = useState(() =>
+  typeof window !== "undefined" ? window.matchMedia("(pointer: coarse)").matches : false
+);
+```
+
+**Modal header:**
+- Left: `REORDER GOALS` label (10px, 2px tracking, uppercase, var(--color-gold))
+- Right: `✕` close button → `setShowReorderModal(false)`
+- Backdrop click → `setShowReorderModal(false)`
+
+**Modal mini-cards (display only this sprint):**
+
+Render `activeGoals` in a `ScrollSnapRow itemWidth="min(40vw, 140px)"`:
+
+```
+Each mini-card:
+  height:          80px
+  background:      var(--color-bg-surface)
+  border:          1px solid var(--color-border-subtle)
+  border-radius:   12px
+  padding:         10px 12px
+  position:        relative
+  overflow:        hidden
+  display:         flex
+  flex-direction:  column
+  justify-content: space-between
+
+Ghost ordinal (top-right):
+  font-size:   32px, font-weight: 900
+  color:       rgba(255,255,255,0.12)
+  position:    absolute, top: 4px, right: 8px
+  pointer-events: none, z-index: 0
+
+Label:
+  font-size:   12px, font-weight: bold
+  color:       var(--color-text-primary)
+  position:    relative, z-index: 1
+  overflow: hidden, display: -webkit-box
+  -webkit-line-clamp: 2, -webkit-box-orient: vertical
+```
+
+No tap/drag handling yet — mini-cards are display only.
+
+**Agent tag:** `[CC]` — requires cross-branch awareness and careful prop removal from both card branches.
+
+**Acceptance:**
+- [ ] REORDER button appears only when activeGoals.length > 1
+- [ ] Modal opens from any card, closes on ✕ and backdrop tap
+- [ ] Bottom-sheet radius on mobile, centered radius on desktop
+- [ ] Mini-cards render with label + ghost ordinal, horizontally swipeable
+- [ ] Desktop card branch no longer has draggable/onDrag* props
 
 ---
 
-### 5d. What does NOT change on the goal cards
+## Sprint 5.3 — Touch reorder (tap-select + ← → arrows)
 
-- Label, target $, timeline fill bar, month markers, finish-week label — all unchanged
-- EDIT inline form — unchanged
-- ✓ DONE, ✕ delete — unchanged, stay in card footer
-- Celebrating flash animation — unchanged
-- `computeGoalTimeline` / `deriveRollingTimelineMonths` — untouched
+**Scope:** `src/components/HomePanel.jsx` — adds interaction to the modal from 5.2.
 
-The only card-level changes are:
-1. Add `position: relative; overflow: hidden` to card container
-2. Add ghost ordinal `<div>` (absolute, pointer-events none)
-3. Replace `↑` `↓` SmBtns with single REORDER SmBtn
+**New state:**
+```js
+const [reorderSelectedId, setReorderSelectedId] = useState(null);
+```
+Tracks which mini-card is currently selected for arrow-button moves. Reset to `null` when modal closes.
+
+**Mini-card tap:** on `onClick`, set `reorderSelectedId` to `g.id`. Selected card gets `border: 1px solid var(--color-accent-primary)`.
+
+**Arrow buttons** — rendered below the ScrollSnapRow, visible only when `isCoarsePointer === true`:
+
+```jsx
+<div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "12px" }}>
+  <SmBtn
+    onClick={() => reorderSelectedId && moveGoalInActiveList(reorderSelectedId, -1)}
+    c={canMoveLeft ? "var(--color-text-primary)" : "var(--color-text-disabled)"}
+  >←</SmBtn>
+  <SmBtn
+    onClick={() => reorderSelectedId && moveGoalInActiveList(reorderSelectedId, +1)}
+    c={canMoveRight ? "var(--color-text-primary)" : "var(--color-text-disabled)"}
+  >→</SmBtn>
+</div>
+```
+
+**`moveGoalInActiveList(id, dir)` — bounds-safe wrapper around `moveGoal`:**
+
+> ⚠️ `moveGoal` operates on the raw `goals` array (active + completed). Calling it with `dir=+1` on the last active goal would swap it into the completed section. The arrows must guard using the active-only index.
+
+```js
+const moveGoalInActiveList = (id, dir) => {
+  const idx = activeGoals.findIndex(g => g.id === id);
+  if (idx === -1) return;
+  const next = idx + dir;
+  if (next < 0 || next >= activeGoals.length) return;
+  moveGoal(id, dir);
+};
+```
+
+`canMoveLeft`: `activeGoals.findIndex(g => g.id === reorderSelectedId) > 0`
+`canMoveRight`: `activeGoals.findIndex(g => g.id === reorderSelectedId) < activeGoals.length - 1`
+
+After move: `reorderSelectedId` stays on the moved goal — the card follows the selection visually.
+
+**Agent tag:** `[CODEX]` — fully specified, self-contained within the modal section.
+
+**Acceptance:**
+- [ ] Tap mini-card → accent border, deselects previous
+- [ ] ← arrow disabled (visually) when goal is first in active list
+- [ ] → arrow disabled (visually) when goal is last in active list
+- [ ] Move updates goal order immediately in the snap row behind the modal
+- [ ] Arrow buttons hidden on non-coarse pointer (desktop)
 
 ---
 
-### 5e. QA checklist for Sprint 5
+## Sprint 5.4 — Desktop drag reorder in modal
 
-- [ ] Ordinal number is visible but does not obscure label or $ target at any card width
+**Scope:** `src/components/HomePanel.jsx` — adds drag interaction to modal mini-cards for fine-pointer (desktop) users.
+
+**Pointer gate:** render drag props only when `!isCoarsePointer`.
+
+**Drag state** — reuse existing `draggingGoalId`, `dragOverGoalId`, `goalInsertRef`, `goalDragFinalizedRef` (already in HomePanel state). No new state needed.
+
+**Mini-card drag props** (fine-pointer only):
+
+```jsx
+draggable={!isCoarsePointer}
+onDragStart={() => onGoalDragStart(g)}
+onDragEnd={onGoalDragEnd}
+onDragOver={(e) => {
+  e.preventDefault();
+  setDragOverGoalId(g.id);
+  const activeIndex = activeGoals.findIndex(goal => goal.id === g.id);
+  goalInsertRef.current = { targetId: g.id, insertIndex: activeIndex === -1 ? 0 : activeIndex };
+}}
+```
+
+Drop target styling: when `dragOverGoalId === g.id`, override border to `var(--color-accent-primary)` (same pattern as desktop card list).
+
+`onDragEnd` fires `reorderGoalByDrag` (already handles active/completed separation) — no changes needed to the existing handler.
+
+**Cursor:** `cursor: isCoarsePointer ? "pointer" : "grab"` on mini-cards.
+
+**Agent tag:** `[CODEX]` — contained to modal mini-card props, reuses all existing drag infrastructure.
+
+**Acceptance:**
+- [ ] Drag-and-drop reorders goals on desktop (fine pointer)
+- [ ] Drop target shows accent border on hover
+- [ ] No drag affordance on touch/coarse pointer
+- [ ] `reorderGoalByDrag` correctly preserves completed goals below active
+
+---
+
+## Sprint 5.5 — QA checklist
+
+- [ ] Ordinal number visible but does not obscure label or $ target at any card width
+- [ ] REORDER button absent for 0 goals and 1 goal; present for 2+ goals
 - [ ] Modal opens from any card's REORDER button
-- [ ] Arrow buttons shift goal position correctly on touch (coarse pointer)
-- [ ] Drag reorder works correctly on desktop
-- [ ] Modal closes on ✕ and on backdrop tap
-- [ ] After reorder, snap row reflects new order immediately
-- [ ] Empty state (0 goals) — no REORDER button rendered, no modal
-- [ ] Single goal (1 goal) — REORDER button renders but arrows are both disabled/no-op
-- [ ] Inline EDIT form still opens inside snap card correctly after Sprint 5 changes
+- [ ] Modal closes on ✕ and backdrop tap
+- [ ] Touch (coarse pointer): tap-select + ← → arrows shift position correctly
+- [ ] → arrow disabled on last active goal; ← arrow disabled on first
+- [ ] After touch move, snap row behind modal reflects new order immediately
+- [ ] Desktop (fine pointer): drag reorder in modal works correctly
+- [ ] Drop target accent border shows on desktop drag hover
+- [ ] After drag, snap row behind modal reflects new order immediately
+- [ ] Ghost ordinal does not shift layout at any card width (mobile + desktop)
+- [ ] Inline EDIT form still opens inside snap card after Sprint 5 changes
+- [ ] ✓ DONE and ✕ delete still work on cards
+- [ ] Celebrating flash animation still fires correctly
+- [ ] `npm run test:run` — zero regressions in data logic
 
 ---
 

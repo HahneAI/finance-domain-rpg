@@ -269,3 +269,8 @@ code {
     background-position: 0% 50%;
   }
 }
+
+/* ── ScrollSnapRow — hide webkit scrollbar on horizontal snap containers ── */
+.snap-scroll-row::-webkit-scrollbar {
+  display: none;
+}

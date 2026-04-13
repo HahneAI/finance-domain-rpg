@@ -5,13 +5,15 @@ import { computeNet, toLocalIso } from "../lib/finance.js";
 import { deriveRollingIncomeWeeks, progressiveScale } from "../lib/rollingTimeline.js";
 import { getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { Card, SH, iS, lS } from "./ui.jsx";
+import { Card, SH, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {} }) {
   const [subview, setSubview] = useState("monthly");
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
+  // Check once on mount — drives mobile vs desktop layout branch for weekly view
+  const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
 
   // ── JS sticky header for weekly chart (CSS sticky broken by overflow-x:hidden on html/body) ──
   const weeklyTableRef = useRef(null);

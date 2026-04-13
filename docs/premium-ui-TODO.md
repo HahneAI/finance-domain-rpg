@@ -5,7 +5,7 @@ Curated UI polish backlog focused on "premium" treatments (Liquid Glass-inspired
 ## 1. Navigation & Layout Experiments
 
 - [x] **Floating liquid-glass tab bar** — replace the pinned bottom nav with a floating pill (Home, Income, Budget, Benefits, Log): `backdrop-blur-md bg-white/5 border border-white/10 shadow-[0_8px_32px_rgba(0,200,150,0.08)]`, safe-area aware, hides when Life Events drawer opens.
-- [ ] **Contextual nav collapse** — when scrolling down on any data-heavy tab, fade/slide the nav bubble to 60% scale/opacity; restore on scroll up or when user reaches top.
+- [x] **Contextual nav collapse** — when scrolling down on any data-heavy tab, fade/slide the nav bubble to 60% scale/opacity; restore on scroll up or when user reaches top.
 - [ ] **Gesture bottom sheets** — convert deep-dive panes (week detail, goal detail) into Framer Motion sheets with snap points (33%, 66%, 100%); ensure body scroll locks while sheet is active.
 
 **Plan addendum**
@@ -134,4 +134,4 @@ Blur: `light = 12px` · `strong = 20px`.
 
 ---
 
-*Last updated: 2026-04-12 — Section 1 floating nav + Section 2 tiered card depth shipped*
+*Last updated: 2026-04-13 — Section 1 floating nav + contextual nav collapse + Section 2 tiered card depth shipped*

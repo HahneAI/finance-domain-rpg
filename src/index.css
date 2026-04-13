@@ -231,6 +231,19 @@ code {
   to { background-position: 160% 50%; }
 }
 
+/* ── Log confirm pulse — brief radial green glow over hero cards on entry save ── */
+@keyframes logConfirmPulse {
+  0%   { opacity: 0; }
+  25%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes logConfirmPulse {
+    0%, 100% { opacity: 0; }
+  }
+}
+
 .goal-fill {
   height: 100%;
   border-radius: inherit;

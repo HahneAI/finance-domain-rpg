@@ -81,6 +81,12 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
   const archivedWeeklyRows = rollingWeekly.hiddenWeeks;
   const weeklyDensityScale = progressiveScale(rollingWeekly.scaleProgress, 0.15);
 
+  const currentMonthIdx = new Date(`${todayIso}T12:00:00`).getMonth();
+  const prevMonthIdx = currentMonthIdx > 0 ? currentMonthIdx - 1 : null;
+  const rollingMonthCards = mo
+    .map((m, mi) => ({ ...m, mi, isCurrentMonth: mi === currentMonthIdx }))
+    .filter(m => m.n > 0 && m.mi >= (prevMonthIdx !== null ? prevMonthIdx : currentMonthIdx));
+
   const [isDesktopWeekly, setIsDesktopWeekly] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true));
 
   useEffect(() => {
@@ -342,66 +348,86 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
     {subview === "weekly" && <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>
-          Rolling Window · last 4 completed + rest of year ({weeklyRows.length} visible)
+          {isDesktopWeekly
+            ? `Rolling Window · last 4 completed + rest of year (${weeklyRows.length} visible)`
+            : `Monthly Rolling · ${rollingMonthCards.length} months`}
         </span>
         <button onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase" }}>⊞ Full Detail</button>
       </div>
 
       {!isDesktopWeekly ? (
-        <ScrollSnapRow itemWidth="min(80vw, 260px)">
-          {weeklyRows.map(w => {
-            const isCurrent = currentWeek && w.idx === currentWeek.idx;
-            const isPast = toLocalIso(w.weekEnd) < todayIso;
-            const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-accent-primary)" : "var(--color-green)");
-            const displayNet = w.active ? f2(resolveWeekNet(w)) : "—";
-            const rotationDisplay = formatRotationDisplay(w, { isAdmin });
-            const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-secondary)";
-
+        <ScrollSnapRow itemWidth="min(92vw, 340px)">
+          {rollingMonthCards.map(m => {
+            const isPastMonth = m.mi < currentMonthIdx;
             return (
               <div
-                key={w.idx}
+                key={m.name}
                 style={{
                   background: "var(--color-bg-surface)",
-                  border: `1px solid ${isCurrent ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
+                  border: `1px solid ${m.isCurrentMonth ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
                   borderRadius: "14px",
-                  padding: "12px",
-                  opacity: isPast ? 0.65 : 1,
+                  padding: "14px",
+                  opacity: isPastMonth ? 0.75 : 1,
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <div style={{ fontSize: "12px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
-                    {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                    {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
+                {/* Month header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-gold)" }}>{m.name}</span>
+                    {m.isCurrentMonth && <span style={{ fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
                   </div>
-                </div>
-
-                <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginBottom: "8px" }} />
-
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", marginBottom: "6px" }}>
-                  <span style={{ fontSize: "10px", letterSpacing: "1.2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>Gross</span>
-                  <span style={{ fontSize: "13px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>
-                    {w.active ? f2(w.grossPay) : "—"}
-                  </span>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", marginBottom: "8px" }}>
-                  <span style={{ fontSize: "10px", letterSpacing: "1.2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>Take Home</span>
-                  <span style={{ fontSize: "13px", color: netColor, fontWeight: "bold", fontVariantNumeric: "tabular-nums" }}>
-                    {displayNet}
+                  <span style={{
+                    fontSize: "9px", padding: "2px 7px", borderRadius: "12px",
+                    background: m.ex === m.n ? "#1e4a30" : m.tx === m.n ? "#1e1e3a" : "rgba(0,200,150,0.10)",
+                    color: m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)",
+                    border: "1px solid " + (m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)"),
+                  }}>
+                    {m.ex === m.n ? "EXEMPT" : m.tx === m.n ? "TAXED" : "MIXED"}
                   </span>
                 </div>
 
                 <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginBottom: "8px" }} />
 
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
-                  <span style={{ fontSize: "10px", letterSpacing: "0.8px", color: rotationColor }}>
-                    {rotationDisplay} · {isPast ? "ACTUAL" : "PROJECTED"}
+                {/* Week rows */}
+                {m.wks.map(w => {
+                  const isCurrent = currentWeek && w.idx === currentWeek.idx;
+                  const isPast = toLocalIso(w.weekEnd) < todayIso;
+                  const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-accent-primary)" : "var(--color-green)");
+                  const rotationDisplay = formatRotationDisplay(w, { isAdmin });
+                  const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-secondary)";
+                  return (
+                    <div key={w.idx} style={{ marginBottom: "8px", opacity: isPastMonth ? 1 : (isPast ? 0.65 : 1) }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ fontSize: "11px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
+                          Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ fontSize: "12px", fontWeight: "bold", color: netColor, fontVariantNumeric: "tabular-nums" }}>
+                            {w.active ? f2(resolveWeekNet(w)) : "—"}
+                          </span>
+                          {w.active && (
+                            <span style={{ fontSize: "8px", padding: "2px 5px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule), letterSpacing: "0.5px" }}>
+                              {w.taxedBySchedule ? "TX" : "EX"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: "9px", color: rotationColor, marginTop: "2px" }}>
+                        {rotationDisplay} · {isPast ? "ACTUAL" : "PROJECTED"}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Month total */}
+                <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginTop: "4px", paddingTop: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "10px", letterSpacing: "1.2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+                    {m.wks.some(w => toLocalIso(w.weekEnd) >= todayIso) ? "Est. Take Home" : "Take Home"}
                   </span>
-                  {w.active && (
-                    <span style={{ fontSize: "8px", padding: "2px 6px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule), letterSpacing: "0.5px" }}>
-                      {w.taxedBySchedule ? "TX" : "EX"}
-                    </span>
-                  )}
+                  <span style={{ fontSize: "16px", fontWeight: "bold", color: m.isCurrentMonth ? "var(--color-accent-primary)" : "var(--color-green)", fontVariantNumeric: "tabular-nums" }}>
+                    {f2(m.net)}
+                  </span>
                 </div>
               </div>
             );
@@ -456,7 +482,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
         </table>
       )}
 
-      {archivedWeeklyRows.length > 0 && (
+      {isDesktopWeekly && archivedWeeklyRows.length > 0 && (
         <div style={{ marginTop: "8px", fontSize: "10px", color: "var(--color-text-disabled)" }}>
           {archivedWeeklyRows.length} older active week(s) hidden (view keeps last 4 completed weeks + rest of year; archived for future full-year review).
         </div>

@@ -77,6 +77,36 @@ Curated UI polish backlog focused on "premium" treatments (Liquid Glass-inspired
 
 Three tones ship — `"teal"`, `"blue"`, `"purple"`. `"gold"` is not a tone; gold is a legacy alias for teal in this system.
 
+---
+
+### Glass Sheen Reference (2026-04-12 starting point)
+
+The 5-layer recipe that produces the raised Apple-style glass effect. Applied as `style` prop overrides on `<LiquidGlass>` plus one child sheen div. Adjust the α values (opacity knobs) to hit different intensity levels:
+
+```jsx
+// Layer 1 + 2 — tint and border override (pass in style prop)
+background: "rgba(0, 200, 150, 0.15)"          // default teal tint is 0.10
+border:     "1px solid rgba(0, 200, 150, 0.40)" // default teal border is 0.24
+
+// Layer 3 + 4 + 5 — boxShadow (pass in style prop)
+boxShadow: "0 8px 32px rgba(0, 200, 150, 0.22),  // outer teal glow
+            0 4px 16px rgba(0, 0, 0, 0.55),       // dark lift shadow
+            inset 0 1px 0 rgba(255, 255, 255, 0.10)" // inner top rim
+
+// Layer 6 — sheen div (first child, pointerEvents:none, zIndex:1)
+background: "linear-gradient(180deg, rgba(255,255,255,0.09) 0%, transparent 100%)"
+height: "45%", position: "absolute", top:0, left:0, right:0
+```
+
+**Variation presets:**
+
+| Preset | Outer glow α | Sheen α | Tint α | Border α | When to use |
+|--------|-------------|---------|--------|----------|-------------|
+| Subtle | 0.10 | 0.05 | 0.10 | 0.24 | Background glass, log-summary |
+| **Standard** (nav) | **0.22** | **0.09** | **0.15** | **0.40** | Floating nav — current shipped |
+| Prominent | 0.28 | 0.12 | 0.18 | 0.48 | Modal overlays, focus surfaces |
+| Dark/muted | — | 0.05 | 0.10 | 0.20 | Pulse rows on dark cards (no color glow) |
+
 | Tone | Tint | Border | Use |
 |------|------|--------|-----|
 | `teal` | `rgba(0, 200, 150, 0.10)` | `rgba(0, 200, 150, 0.24)` | Flow surfaces, nav |

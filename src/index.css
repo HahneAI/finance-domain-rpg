@@ -132,6 +132,22 @@ button {
   box-sizing: border-box;
 }
 
+/* Desktop scroll safety net:
+   Keep the primary panel column as an explicit scroll container even if
+   injected <style> rules in App.jsx are delayed or skipped by the browser. */
+@media (min-width: 768px) {
+  .app-shell {
+    height: 100vh;
+  }
+
+  .main-content {
+    min-height: 0;
+    height: 100vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 /* DEBUG: At 480px and below the :root font-size drops from 16px to 14px.
    This affects rem units globally. If any component uses rem and looks too
    small on iPhone SE (375px), this breakpoint is the cause. */

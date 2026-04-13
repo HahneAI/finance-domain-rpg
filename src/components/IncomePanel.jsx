@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { MONTH_FULL } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet, toLocalIso } from "../lib/finance.js";
@@ -14,47 +14,6 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
   // Check once on mount — drives mobile vs desktop layout branch for weekly view
   const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
-
-  // ── JS sticky header for weekly chart (CSS sticky broken by overflow-x:hidden on html/body) ──
-  const weeklyTableRef = useRef(null);
-  const [stickyHdr, setStickyHdr] = useState(null); // null = hidden; {top,left,width,cols} = visible
-  useEffect(() => {
-    if (subview !== "weekly") {
-      setStickyHdr(s => s !== null ? null : s);
-      return;
-    }
-    const update = () => {
-      const table = weeklyTableRef.current;
-      if (!table) return;
-      const thead = table.querySelector("thead");
-      if (!thead) return;
-      const r = thead.getBoundingClientRect();
-      const isMob = window.innerWidth < 768;
-      const threshold = isMob ? 57 : 1;
-      if (r.top < threshold) {
-        const ths = Array.from(table.querySelectorAll("thead th"));
-        const tr = table.getBoundingClientRect();
-        setStickyHdr({
-          top: isMob ? "calc(56px + env(safe-area-inset-top, 0px))" : "0px",
-          left: tr.left,
-          width: tr.width,
-          cols: ths.map(th => th.getBoundingClientRect().width),
-        });
-      } else {
-        setStickyHdr(s => s !== null ? null : s);
-      }
-    };
-    const mc = document.querySelector(".main-content");
-    window.addEventListener("scroll", update, { passive: true });
-    mc?.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update, { passive: true });
-    update();
-    return () => {
-      window.removeEventListener("scroll", update);
-      mc?.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  }, [subview]);
 
   // ── Sharpen Rates modal state ──────────────────────────────────────────────
   const [sg1, setSg1] = useState("");
@@ -121,6 +80,16 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
   const weeklyRows = rollingWeekly.visibleWeeks;
   const archivedWeeklyRows = rollingWeekly.hiddenWeeks;
   const weeklyDensityScale = progressiveScale(rollingWeekly.scaleProgress, 0.15);
+
+  const [isDesktopWeekly, setIsDesktopWeekly] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onResize = () => setIsDesktopWeekly(window.innerWidth >= 768);
+    onResize();
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
 
   return (<div>
@@ -371,78 +340,122 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
 
     {/* WEEKLY — slimmed to 4 cols; full detail available via modal */}
     {subview === "weekly" && <div>
-      <style>{`
-        @media (max-width: 767px) {
-          .income-weekly-sticky th {
-            top: calc(56px + env(safe-area-inset-top, 0px)) !important;
-          }
-        }
-      `}</style>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>
           Rolling Window · last 4 completed + rest of year ({weeklyRows.length} visible)
         </span>
         <button onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase" }}>⊞ Full Detail</button>
       </div>
-      {stickyHdr && (
-        <div style={{ position: "fixed", top: stickyHdr.top, left: stickyHdr.left, width: stickyHdr.width, zIndex: 25, background: "var(--color-bg-base)", borderBottom: "1px solid var(--color-accent-primary)", boxShadow: "0 4px 16px rgba(0,0,0,0.6)", pointerEvents: "none" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-            <colgroup>{stickyHdr.cols.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}</colgroup>
-            <thead><tr style={{ color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
-              <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th>
-              <th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th>
-              <th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th>
-              <th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
-            </tr></thead>
-          </table>
-        </div>
-      )}
-      <table ref={weeklyTableRef} className="data-table income-weekly-sticky" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
-        <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
-          <th style={{ textAlign: "left", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Wk End</th>
-          <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Gross</th>
-          <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Take Home</th>
-          <th style={{ textAlign: "center", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Status</th>
-        </tr></thead>
-          <tbody>{weeklyRows.map(w => {
+
+      {!isDesktopWeekly ? (
+        <ScrollSnapRow itemWidth="min(80vw, 260px)">
+          {weeklyRows.map(w => {
             const isCurrent = currentWeek && w.idx === currentWeek.idx;
             const isPast = toLocalIso(w.weekEnd) < todayIso;
-            const baseBg = isCurrent ? "#1a2a14" : isPast ? "#111111" : "transparent";
-            const hoverBg = isCurrent ? "#1e3018" : isPast ? "#1a1a1a" : "var(--color-bg-surface)";
-            const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)");
+            const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-accent-primary)" : "var(--color-green)");
             const displayNet = w.active ? f2(resolveWeekNet(w)) : "—";
             const rotationDisplay = formatRotationDisplay(w, { isAdmin });
-            const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-disabled)";
+            const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-secondary)";
+
             return (
-              <tr
+              <div
                 key={w.idx}
-                style={{ borderBottom: "1px solid #161616", background: baseBg }}
-                onMouseEnter={e => { e.currentTarget.style.background = hoverBg; }}
-                onMouseLeave={e => { e.currentTarget.style.background = baseBg; }}
-            >
-              <td style={{ padding: `${Math.round(7 * weeklyDensityScale)}px 4px`, color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
-                <span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
-              </td>
-              <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{w.active ? f2(w.grossPay) : "—"}</td>
-              <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{displayNet}</td>
-              <td style={{ padding: "7px 4px", textAlign: "center", color: rotationColor, fontWeight: "bold" }}>{rotationDisplay}</td>
-              <td style={{ padding: "7px 4px", textAlign: "center" }}>
-                {w.active && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
-                    <span style={{ fontSize: "8px", padding: "2px 6px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule) }}>
+                style={{
+                  background: "var(--color-bg-surface)",
+                  border: `1px solid ${isCurrent ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
+                  borderRadius: "14px",
+                  padding: "12px",
+                  opacity: isPast ? 0.65 : 1,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "12px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
+                    {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginBottom: "8px" }} />
+
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "10px", letterSpacing: "1.2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>Gross</span>
+                  <span style={{ fontSize: "13px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>
+                    {w.active ? f2(w.grossPay) : "—"}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "10px", letterSpacing: "1.2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>Take Home</span>
+                  <span style={{ fontSize: "13px", color: netColor, fontWeight: "bold", fontVariantNumeric: "tabular-nums" }}>
+                    {displayNet}
+                  </span>
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginBottom: "8px" }} />
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
+                  <span style={{ fontSize: "10px", letterSpacing: "0.8px", color: rotationColor }}>
+                    {rotationDisplay} · {isPast ? "ACTUAL" : "PROJECTED"}
+                  </span>
+                  {w.active && (
+                    <span style={{ fontSize: "8px", padding: "2px 6px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule), letterSpacing: "0.5px" }}>
                       {w.taxedBySchedule ? "TX" : "EX"}
                     </span>
-                    <span style={{ fontSize: "8px", letterSpacing: "0.5px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-secondary)" }}>
-                      {isPast ? "ACTUAL" : "PROJECTED"}
-                    </span>
-                  </div>
-                )}
-              </td>
-            </tr>
-          );
-        })}</tbody>
-      </table>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </ScrollSnapRow>
+      ) : (
+        <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
+          <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+            <th style={{ textAlign: "left", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Wk End</th>
+            <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Gross</th>
+            <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Take Home</th>
+            <th style={{ textAlign: "center", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Status</th>
+          </tr></thead>
+            <tbody>{weeklyRows.map(w => {
+              const isCurrent = currentWeek && w.idx === currentWeek.idx;
+              const isPast = toLocalIso(w.weekEnd) < todayIso;
+              const baseBg = isCurrent ? "#1a2a14" : isPast ? "#111111" : "transparent";
+              const hoverBg = isCurrent ? "#1e3018" : isPast ? "#1a1a1a" : "var(--color-bg-surface)";
+              const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)");
+              const displayNet = w.active ? f2(resolveWeekNet(w)) : "—";
+              const rotationDisplay = formatRotationDisplay(w, { isAdmin });
+              const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-disabled)";
+              return (
+                <tr
+                  key={w.idx}
+                  style={{ borderBottom: "1px solid #161616", background: baseBg }}
+                  onMouseEnter={e => { e.currentTarget.style.background = hoverBg; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = baseBg; }}
+              >
+                <td style={{ padding: `${Math.round(7 * weeklyDensityScale)}px 4px`, color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
+                  <span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                  {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
+                </td>
+                <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{w.active ? f2(w.grossPay) : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{displayNet}</td>
+                <td style={{ padding: "7px 4px", textAlign: "center", color: rotationColor, fontWeight: "bold" }}>{rotationDisplay}</td>
+                <td style={{ padding: "7px 4px", textAlign: "center" }}>
+                  {w.active && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
+                      <span style={{ fontSize: "8px", padding: "2px 6px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule) }}>
+                        {w.taxedBySchedule ? "TX" : "EX"}
+                      </span>
+                      <span style={{ fontSize: "8px", letterSpacing: "0.5px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-secondary)" }}>
+                        {isPast ? "ACTUAL" : "PROJECTED"}
+                      </span>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      )}
+
       {archivedWeeklyRows.length > 0 && (
         <div style={{ marginTop: "8px", fontSize: "10px", color: "var(--color-text-disabled)" }}>
           {archivedWeeklyRows.length} older active week(s) hidden (view keeps last 4 completed weeks + rest of year; archived for future full-year review).

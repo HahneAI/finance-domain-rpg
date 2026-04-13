@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
@@ -207,6 +208,15 @@ export default function App() {
   const currentView = viewStack[viewStack.length - 1];
   const canGoBack = viewStack.length > 1;
   const mainContentRef = useRef(null);
+  // Track the actual DOM element in state so useScrollDirection's effect
+  // re-runs when the element mounts (first render hits auth gate, so the
+  // ref is null until the real view renders).
+  const [mainContentEl, setMainContentEl] = useState(null);
+  const mainContentCallbackRef = useCallback((el) => {
+    mainContentRef.current = el; // keep ref in sync for jumpToPanelTop
+    setMainContentEl(el);
+  }, []);
+  const isScrollingDown = useScrollDirection(mainContentEl);
 
   const jumpToPanelTop = () => {
     const scrollToTop = () => {
@@ -1022,7 +1032,7 @@ export default function App() {
         </div>
 
         {/* Panel content */}
-        <div ref={mainContentRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
+        <div ref={mainContentCallbackRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
           {activePanel}
         </div>
       </div>
@@ -1148,9 +1158,11 @@ export default function App() {
           left: "16px",
           right: "16px",
           zIndex: 20,
-          opacity: drawerOpen ? 0 : 1,
+          opacity: drawerOpen ? 0 : isScrollingDown ? 0.6 : 1,
+          transform: isScrollingDown ? "scale(0.6)" : "scale(1)",
+          transformOrigin: "center bottom",
           pointerEvents: drawerOpen ? "none" : "auto",
-          transition: "opacity 0.2s ease",
+          transition: "opacity 0.25s ease, transform 0.25s ease",
         }}
       >
         <LiquidGlass

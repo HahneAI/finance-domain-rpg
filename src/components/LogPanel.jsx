@@ -3,6 +3,7 @@ import { EVENT_TYPES } from "../constants/config.js";
 import { calcEventImpact, dhlEmployerMatchRate, toLocalIso } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { Card, iS, lS, SmBtn } from "./ui.jsx";
+import { LiquidGlass } from "./LiquidGlass.jsx";
 
 import { formatRotationDisplay } from "../lib/rotation.js";
 
@@ -53,6 +54,7 @@ export function LogPanel({
   const [addConfirming, setAddConfirming] = useState(false);
   const [editConfirming, setEditConfirming] = useState(false);
   const [cancelWarning, setCancelWarning] = useState(false);
+  const [pulseKey, setPulseKey] = useState(0);
 
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const f0 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -214,6 +216,7 @@ export function LogPanel({
       hoursGained: parseFloat(nEv.hoursGained) || 0,
     }]);
     setAdding(false); setNEv(blank); setAddConfirming(false);
+    setPulseKey(k => k + 1);
   };
 
   // ── Edit handlers ──
@@ -235,6 +238,7 @@ export function LogPanel({
       hoursGained: parseFloat(editVals.hoursGained) || 0,
     }));
     setEditId(null); setEditConfirming(false);
+    setPulseKey(k => k + 1);
   };
 
   // ── Day picker component ──
@@ -464,10 +468,26 @@ export function LogPanel({
     </div>}
 
     {/* Hero cards */}
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
-      <Card label="Total Net Lost" val={f(tot.nL)} rawVal={tot.nL} color="var(--color-red)" />
-      <Card label="PTO Accrual Lost" val={`${(tot.pto / 20).toFixed(1)} hrs`} sub={`${tot.pto}h ÷ 20`} color="#888" />
-      <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`} sub="Unapproved absences" color="#e8622a" />
+    <div style={{ position: "relative", marginBottom: "20px" }}>
+      {pulseKey > 0 && (
+        <div
+          key={pulseKey}
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "6px",
+            pointerEvents: "none",
+            zIndex: 2,
+            background: "radial-gradient(circle at 50% 50%, rgba(34,197,94,0.16) 0%, transparent 72%)",
+            animation: "logConfirmPulse 320ms ease-out forwards",
+          }}
+        />
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px" }}>
+        <Card label="Total Net Lost" val={f(tot.nL)} rawVal={tot.nL} color="var(--color-red)" />
+        <Card label="PTO Accrual Lost" val={`${(tot.pto / 20).toFixed(1)} hrs`} sub={`${tot.pto}h ÷ 20`} color="#888" />
+        <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`} sub="Unapproved absences" color="#e8622a" />
+      </div>
     </div>
 
     {/* Compact bucket status widget */}
@@ -502,7 +522,8 @@ export function LogPanel({
     })()}
 
     {/* Consolidated pre-log summary */}
-    <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
+    <LiquidGlass purpose="log-summary" tone="teal" intensity="light" style={{ borderRadius: "6px", marginBottom: "20px" }}>
+    <div style={{ padding: "14px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "10px" }}>
         Log Effect Summary
       </div>
@@ -535,6 +556,7 @@ export function LogPanel({
         </div>
       </div>
     </div>
+    </LiquidGlass>
 
     {/* Attendance History */}
     {attendanceLogs.length > 0 && (

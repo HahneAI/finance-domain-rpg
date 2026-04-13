@@ -197,7 +197,7 @@ export function HomePanel({
       title: "Net Worth Trend",
       value: fmt$(annualSavings),
       rawVal: annualSavings,
-      sub: "projected annual savings",
+      sub: weekNumber != null ? `projected annual savings · Wk ${weekNumber}` : "projected annual savings",
       status: annualSavings > 5000 ? "green" : annualSavings >= 0 ? "gold" : "red",
       span: 1,
       onClick: () => navigate("income"),

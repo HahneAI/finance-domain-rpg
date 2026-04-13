@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
@@ -13,6 +14,7 @@ import { HomePanel } from "./components/HomePanel.jsx";
 import { SetupWizard } from "./components/SetupWizard.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
+import { LiquidGlass } from "./components/LiquidGlass.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -206,6 +208,15 @@ export default function App() {
   const currentView = viewStack[viewStack.length - 1];
   const canGoBack = viewStack.length > 1;
   const mainContentRef = useRef(null);
+  // Track the actual DOM element in state so useScrollDirection's effect
+  // re-runs when the element mounts (first render hits auth gate, so the
+  // ref is null until the real view renders).
+  const [mainContentEl, setMainContentEl] = useState(null);
+  const mainContentCallbackRef = useCallback((el) => {
+    mainContentRef.current = el; // keep ref in sync for jumpToPanelTop
+    setMainContentEl(el);
+  }, []);
+  const isScrollingDown = useScrollDirection(mainContentEl);
 
   const jumpToPanelTop = () => {
     const scrollToTop = () => {
@@ -750,7 +761,7 @@ export default function App() {
           .main-content {
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+            padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px)) !important;
           }
           /* Safe-area height + top padding for Dynamic Island / notch iPhones.
              CSS !important overrides inline styles in iOS PWA standalone mode where
@@ -1021,7 +1032,7 @@ export default function App() {
         </div>
 
         {/* Panel content */}
-        <div ref={mainContentRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
+        <div ref={mainContentCallbackRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
           {activePanel}
         </div>
       </div>
@@ -1137,74 +1148,104 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── Mobile bottom nav — Chime-style, always visible, icon + label ── */}
+      {/* ── Floating Liquid Glass bottom nav pill ── */}
       <div
         className="mobile-bottom-nav"
         style={{
           display: "none",
           position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: "calc(62px + env(safe-area-inset-bottom, 0px))",
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
-          background: "var(--color-bg-surface)",
-          borderTop: "1px solid var(--color-border-subtle)",
-          boxShadow: "0 -12px 32px rgba(0,0,0,0.45)",
+          bottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
+          left: "16px",
+          right: "16px",
           zIndex: 20,
-          // fixed creates a containing block — the absolute-positioned indicator
-          // is anchored to this bar, not the viewport.
+          opacity: drawerOpen ? 0 : isScrollingDown ? 0.6 : 1,
+          transform: isScrollingDown ? "scale(0.6)" : "scale(1)",
+          transformOrigin: "center bottom",
+          pointerEvents: drawerOpen ? "none" : "auto",
+          transition: "opacity 0.25s ease, transform 0.25s ease",
         }}
       >
-        {/* Sliding tab indicator — 2px gold bar that moves to the active tab.
-            All tabs are flex:1 so each occupies 100%/n of the nav width.
-            We slide via `left` + CSS transition (no layout thrash; tab count is static). */}
-        {(() => {
-          const activeIdx = Math.max(BOTTOM_NAV.findIndex(i => i.key === currentView), 0);
-          const pct = 100 / BOTTOM_NAV.length;
-          return (
-            <div style={{
-              position: "absolute",
-              top: 0,
-              left: `${activeIdx * pct}%`,
-              width: `${pct}%`,
-              height: "2px",
-              background: "var(--color-accent-primary)",
-              transition: "left 0.3s ease",
-              borderRadius: "0 0 1px 1px",
-            }} />
-          );
-        })()}
-        {BOTTOM_NAV.map(item => {
-          const active = currentView === item.key;
-          return (
-            <button
-              key={item.key}
-              onClick={() => navigateDirect(item.key)}
-              style={{
-                flex: 1,
-                height: "100%",
-                background: "transparent",
-                border: "none",
-                color: active ? "var(--color-accent-primary)" : "var(--color-text-disabled)",
-                cursor: "pointer",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "3px",
-                fontSize: "9px",
-                letterSpacing: "1px",
-                textTransform: "uppercase",
-                paddingTop: "2px",
-                transition: "color 0.2s ease",
-              }}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
+        <LiquidGlass
+          purpose="nav"
+          tone="teal"
+          intensity="light"
+          style={{
+            width: "100%",
+            borderRadius: "24px",
+            // Multi-layer shadow: outer teal glow + dark lift shadow + inner top highlight
+            boxShadow: "0 8px 32px rgba(0, 200, 150, 0.22), 0 4px 16px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
+            overflow: "hidden",
+            position: "relative",
+            display: "flex",
+            alignItems: "stretch",
+            height: "62px",
+            // Stronger tint than default 0.10 — more opaque colored glass
+            background: "rgba(0, 200, 150, 0.15)",
+            // More visible border to catch light on the raised edge
+            border: "1px solid rgba(0, 200, 150, 0.40)",
+          }}
+        >
+          {/* Top-edge sheen — light refraction gradient, simulates curved glass surface */}
+          <div style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: "45%",
+            background: "linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, transparent 100%)",
+            borderRadius: "24px 24px 0 0",
+            pointerEvents: "none",
+            zIndex: 1,
+          }} />
+          {/* Sliding tab indicator — 2px teal bar that moves to the active tab.
+              Contained within the pill via overflow:hidden on LiquidGlass. */}
+          {(() => {
+            const activeIdx = Math.max(BOTTOM_NAV.findIndex(i => i.key === currentView), 0);
+            const pct = 100 / BOTTOM_NAV.length;
+            return (
+              <div style={{
+                position: "absolute",
+                top: 0,
+                left: `${activeIdx * pct}%`,
+                width: `${pct}%`,
+                height: "2px",
+                background: "var(--color-accent-primary)",
+                transition: "left 0.3s ease",
+                borderRadius: "0 0 1px 1px",
+              }} />
+            );
+          })()}
+          {BOTTOM_NAV.map(item => {
+            const active = currentView === item.key;
+            return (
+              <button
+                key={item.key}
+                onClick={() => navigateDirect(item.key)}
+                style={{
+                  flex: 1,
+                  height: "100%",
+                  background: "transparent",
+                  border: "none",
+                  color: active ? "var(--color-accent-primary)" : "var(--color-text-disabled)",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "3px",
+                  fontSize: "9px",
+                  letterSpacing: "1px",
+                  textTransform: "uppercase",
+                  paddingTop: "2px",
+                  transition: "color 0.2s ease",
+                }}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </LiquidGlass>
       </div>
 
       {/* ── Weekly work confirmation modal ──

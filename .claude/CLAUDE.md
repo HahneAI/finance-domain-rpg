@@ -54,6 +54,8 @@ architecture, state shape, or core logic.
 
 **Design system:** Flow shell (live) + Pulse overlay (Phase 2). See `docs/authority-design-system`.
 
+**Liquid Glass UI layer (live):** `src/components/LiquidGlass.jsx` — frosted glass surfaces for nav, pulse pills, modals, log summaries. Glass sheen recipe (5-layer raised glass effect) documented in `docs/active-systems.md` §13 and `docs/premium-ui-TODO.md` §4. Codex reference: `AGENTS.md` §Liquid Glass.
+
 ---
 
 ## Tech Stack

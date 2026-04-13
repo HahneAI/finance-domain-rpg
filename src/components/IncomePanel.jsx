@@ -8,7 +8,6 @@ import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, SH, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {} }) {
-  const [subview, setSubview] = useState("monthly");
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
@@ -299,53 +298,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
         />
       </div>
     </div>
-    <div style={{ display: "flex", gap: "6px", marginBottom: "18px", flexWrap: "wrap" }}>
-      {["monthly", "weekly"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "rgba(0,200,150,0.10)" : "transparent", color: subview === v ? "var(--color-gold)" : "#555", border: "1px solid " + (subview === v ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{v}</button>)}
-    </div>
-
-    {/* MONTHLY */}
-    {subview === "monthly" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "14px" }}>
-      {mo.filter(m => m.n > 0).map(m => <div key={m.name} style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "16px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-          <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-gold)" }}>{m.name.slice(0, 3)}</div>
-          <span style={{ fontSize: "9px", padding: "3px 7px", borderRadius: "12px", background: m.ex === m.n ? "#1e4a30" : m.tx === m.n ? "#1e1e3a" : "rgba(0,200,150,0.10)", color: m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)", border: "1px solid " + (m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)") }}>{m.ex === m.n ? "EXEMPT" : m.tx === m.n ? "TAXED" : "MIXED"}</span>
-        </div>
-        {(() => {
-          const firstFutureIdx = m.wks.findIndex(w => toLocalIso(w.weekEnd) >= todayIso);
-          const hasPartial = firstFutureIdx > 0;
-          return m.wks.map((w, wi) => {
-            const isPast = toLocalIso(w.weekEnd) < todayIso;
-            const rotationDisplay = formatRotationDisplay(w, { isAdmin });
-            const showDivider = hasPartial && wi === firstFutureIdx;
-            return [
-              showDivider && (
-                <div key={`divider-${w.idx}`} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 0 4px" }}>
-                  <div style={{ flex: 1, height: "1px", background: "var(--color-border-subtle)" }} />
-                  <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>est. below</span>
-                  <div style={{ flex: 1, height: "1px", background: "var(--color-border-subtle)" }} />
-                </div>
-              ),
-              <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #1e1e1e", opacity: isPast ? 0.75 : 1 }}>
-                <div><div style={{ fontSize: "11px", color: "#777" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div><div style={{ fontSize: "10px", color: "#999" }}>{rotationDisplay} · {w.totalHours}h</div></div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "13px", fontWeight: "bold", color: isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)") }}>{f2(resolveWeekNet(w))}</div>
-                  <div style={{ fontSize: "9px", color: sc(w.taxedBySchedule) }}>{w.taxedBySchedule ? "TAXED" : "EXEMPT"}</div>
-                </div>
-              </div>
-            ];
-          });
-        })()}
-        <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px", fontSize: "11px" }}>
-          <span style={{ color: "#aaa" }}>Gross: {f(m.gross)}</span>
-          <span style={{ color: "var(--color-green)", textAlign: "right" }}>
-            {m.wks.some(w => toLocalIso(w.weekEnd) >= todayIso) ? "Est. Net: " : "Net: "}{f(m.net)}
-          </span>
-        </div>
-      </div>)}
-    </div>}
-
-    {/* WEEKLY — slimmed to 4 cols; full detail available via modal */}
-    {subview === "weekly" && <div>
+    <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>
           {isDesktopWeekly
@@ -487,7 +440,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
           {archivedWeeklyRows.length} older active week(s) hidden (view keeps last 4 completed weeks + rest of year; archived for future full-year review).
         </div>
       )}
-    </div>}
+    </div>
 
     {/* FULL-DETAIL WEEKLY MODAL */}
     {showWeekDetail && <div onClick={() => setShowWeekDetail(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 1000, overflowY: "auto", padding: "16px" }}>

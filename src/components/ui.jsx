@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Children } from "react";
+import { LiquidGlass } from "./LiquidGlass.jsx";
+import { useSwipeStack } from "../hooks/useSwipeStack.js";
 
 // ─────────────────────────────────────────────────────────────
 // COUNTUP HOOK
@@ -80,7 +82,13 @@ const _fmt$ = (n) => {
 //   rawVal        — raw number for countup + flash (pass only for $ values)
 //   entranceIndex — stagger index (0-based) for HomePanel grid entrance
 // ─────────────────────────────────────────────────────────────
-export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight }) {
+// Glass tier overrides for visualTier="glass" | "overlay"
+const GLASS_TIER = {
+  glass:   { background: "rgba(0, 200, 150, 0.08)", border: "rgba(0, 200, 150, 0.20)", blur: "12px" },
+  overlay: { background: "rgba(0, 200, 150, 0.12)", border: "rgba(0, 200, 150, 0.28)", blur: "20px" },
+};
+
+export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight, visualTier }) {
   const [pressed,  setPressed]  = useState(false);
   const [flashing, setFlashing] = useState(false);
   const prevRaw = useRef(null);
@@ -109,16 +117,18 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
     animationDelay: `${Math.min(entranceIndex * 0.08, 0.4)}s`,
   } : {};
 
+  const g = visualTier ? GLASS_TIER[visualTier] : null;
   const containerStyle = {
     gridColumn: span === 2 ? "span 2" : undefined,
-    background: s ? s.bg : "var(--color-bg-surface)",
-    border: `1px solid ${s ? s.border : "var(--color-border-subtle)"}`,
+    background: g ? g.background : (s ? s.bg : "var(--color-bg-surface)"),
+    border: `1px solid ${g ? g.border : (s ? s.border : "var(--color-border-subtle)")}`,
     borderRadius: "16px",
     padding: isButton ? "16px 18px" : "18px 16px",
     textAlign: "left",
     color: "inherit",
     boxShadow: "0 8px 26px rgba(0,0,0,0.32)",
     minWidth: 0,
+    ...(g && { backdropFilter: `blur(${g.blur})`, WebkitBackdropFilter: `blur(${g.blur})` }),
     ...entranceStyle,
     ...(isButton && {
       cursor: "pointer",
@@ -264,21 +274,140 @@ export function InsightRow({ arrow, delta, label, variant = "blue" }) {
   const color = variant === "purple"
     ? "var(--color-signal-purple)"
     : "var(--color-signal-blue)";
+  const tone = variant === "purple" ? "purple" : "blue";
   const arrowChar = arrow === "up" ? "↑" : arrow === "down" ? "↓" : "→";
   return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "4px",
-      marginTop: "5px",
-      fontSize: "10px",
-      fontFamily: "var(--font-sans)",
-      letterSpacing: "0.3px",
-      lineHeight: 1.4,
-    }}>
+    <LiquidGlass
+      purpose="pulse"
+      tone={tone}
+      intensity="light"
+      withBorder
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "4px",
+        marginTop: "6px",
+        padding: "3px 8px 3px 6px",
+        borderRadius: "6px",
+        fontSize: "10px",
+        fontFamily: "var(--font-sans)",
+        letterSpacing: "0.3px",
+        lineHeight: 1.4,
+      }}
+    >
       <span style={{ color, fontWeight: 700, fontSize: "11px", lineHeight: 1, flexShrink: 0 }}>{arrowChar}</span>
       {delta && <span style={{ color, fontWeight: 600 }}>{delta}</span>}
       <span style={{ color: "var(--color-text-disabled)" }}>{label}</span>
+    </LiquidGlass>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// PAGINATION DOTS
+// Renders a frosted pill indicator row for snap stacks.
+//
+// Props:
+//   count  — total number of items
+//   active — 0-based index of the visible item
+//   color  — override active dot color (default --color-accent-primary)
+// ─────────────────────────────────────────────────────────────
+export function PaginationDots({ count, active, color }) {
+  const activeColor = color || "var(--color-accent-primary)";
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        gap: "6px",
+        padding: "5px 14px",
+        width: "fit-content",
+        margin: "0 auto",
+        borderRadius: "20px",
+        // Subtle glass pill — Liquid Glass "Subtle" preset values, applied inline
+        // since this element is too small to warrant the full LiquidGlass wrapper.
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        background: "rgba(0, 200, 150, 0.06)",
+        border: "1px solid rgba(0, 200, 150, 0.14)",
+      }}
+    >
+      {Array.from({ length: count }, (_, i) => (
+        <div
+          key={i}
+          style={{
+            width: "6px",
+            height: "6px",
+            borderRadius: "50%",
+            background: i === active ? activeColor : "rgba(0, 200, 150, 0.28)",
+            transition: "background 200ms ease",
+            flexShrink: 0,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// SCROLL SNAP ROW
+// Horizontal snap container with optional pagination dots.
+//
+// Props:
+//   children   — snap items (each wrapped in a snap-aligned div)
+//   itemWidth  — CSS width string for each item (default "min(88vw, 320px)")
+//   gap        — CSS gap string (default "16px")
+//   showDots   — boolean, renders PaginationDots below (default true)
+//   dotColor   — override active dot color (default --color-accent-primary)
+//
+// CSS shape:
+//   display: flex | overflow-x: scroll | scroll-snap-type: x mandatory
+//   -webkit-overflow-scrolling: touch | scrollbar-width: none
+//   gap: 16px | padding: 4px 0 12px (bottom pad for dots clearance)
+//   .snap-scroll-row::-webkit-scrollbar { display:none } → src/index.css
+// ─────────────────────────────────────────────────────────────
+export function ScrollSnapRow({
+  children,
+  itemWidth = "min(88vw, 320px)",
+  gap = "16px",
+  showDots = true,
+  dotColor,
+}) {
+  const items = Children.toArray(children);
+  const count = items.length;
+  const { containerRef, activeIndex } = useSwipeStack(count);
+
+  return (
+    <div>
+      <div
+        ref={containerRef}
+        className="snap-scroll-row"
+        style={{
+          display: "flex",
+          overflowX: "scroll",
+          scrollSnapType: "x mandatory",
+          WebkitOverflowScrolling: "touch",
+          scrollbarWidth: "none",
+          gap,
+          padding: "4px 0 12px",
+        }}
+      >
+        {items.map((child, i) => (
+          <div
+            key={i}
+            style={{
+              scrollSnapAlign: "start",
+              flexShrink: 0,
+              width: itemWidth,
+            }}
+          >
+            {child}
+          </div>
+        ))}
+      </div>
+      {showDots && count > 1 && (
+        <PaginationDots count={count} active={activeIndex} color={dotColor} />
+      )}
     </div>
   );
 }

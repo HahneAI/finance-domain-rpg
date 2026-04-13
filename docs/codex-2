@@ -1,0 +1,98 @@
+{
+  "task_id": "FEATURE_logpanel_absorb_benefitspanel_sections_with_safe_ui_wiring",
+  "task_type": "feature",
+
+  "environment_domain": "authority-finance-ui",
+  "allowed_environment_domains": ["authority-finance-ui"],
+  "environment_reason": "This task restructures LogPanel UI by porting selected BenefitsPanel content, computed values, and local form behavior into LogPanel while preserving existing core calculations and allowing only minimal prop/data plumbing required for the moved UI to function.",
+  "environment_policy": "scope_enforced",
+  "environment_runtime_visibility_policy": "report_if_available_do_not_fail_if_missing",
+
+  "scope": {
+    "allowed_files": [
+      "src/components/LogPanel.jsx",
+      "src/components/BenefitsPanel.jsx",
+      "shared UI primitives used by both panels",
+      "read-only prop plumbing into LogPanel if minimally required",
+      "small parent-to-LogPanel prop pass-through if strictly necessary for moved UI to work"
+    ],
+    "restricted_files": [
+      "App.jsx section 4 navigation changes",
+      "computeNet",
+      "buildYear",
+      "goal math helpers",
+      "tax logic",
+      "database/schema files",
+      "broad refactors outside LogPanel/BenefitsPanel-related UI extraction"
+    ]
+  },
+
+  "constraints": [
+    "Ignore section 4 / App.jsx changes entirely",
+    "Do not remove BenefitsPanel from navigation in this task",
+    "Do not rewrite financial formulas",
+    "Do not redesign unrelated LogPanel sections",
+    "Port only the content shown in section 3 of the provided UI rework plan",
+    "Allow only minimal wiring needed to make the ported UI function",
+    "Prefer reuse/migration of existing BenefitsPanel display logic over duplicating new logic from scratch"
+  ],
+
+  "implementation_steps": [
+    "Inspect section 3 of the provided ui-rework plan and apply only those changes to LogPanel.jsx. Ignore section 4 completely.",
+    "A. Props: add the listed props to LogPanel signature if not already present: allWeeks, setConfig, logK401kLost, logK401kMatchLost, logK401kGained, logK401kMatchGained, logPTOHoursLost, ptoGoal, setPtoGoal. Keep existing props such as config, isDHL, bucketModel if already present.",
+    "B. Computed values: port the BenefitsPanel-derived computed values needed for the moved sections, including the 401k projection values and PTO/bucket-related computed values shown in the plan. Reuse existing formulas/logic already present in BenefitsPanel rather than inventing new ones.",
+    "C. Local state/helpers: port the BenefitsPanel form state and the related openAdd, openEdit, and saveForm helpers only as needed for the PTO Accrual section to function inside LogPanel.",
+    "D. JSX layout: update LogPanel order to match the rework plan:",
+    "Top (new): add the DHL-only priority metric cards for PTO Balance and Bucket Hours.",
+    "Middle (existing, unchanged): keep current week indicator -> hero cards -> compact bucket widget -> log effect summary -> attendance history -> event log section.",
+    "Bottom (ported from BenefitsPanel):",
+    "1. 401k status banner",
+    "2. 401k projections cards plus monthly breakdown table",
+    "3. PTO Accrual section including balance override control, metric cards, leave goal tracker, and form (DHL only)",
+    "4. Attendance Bucket detail including current month strip, month history table, and year-end summary (bucketModel only), omitting the large balance bar because the compact widget above already shows it.",
+    "Carefully audit any dependencies required by the moved JSX so the ported sections still receive valid data.",
+    "If minimal parent wiring is required to provide the new LogPanel props, keep it narrow and read-through only.",
+    "Do not touch App.jsx section 4 or broader navigation in this task.",
+    "Clean up dead imports and now-unused local references inside LogPanel or BenefitsPanel only if directly caused by this migration step."
+  ],
+
+  "risk_areas": [
+    "Ported BenefitsPanel sections may depend on props not currently passed to LogPanel",
+    "Copied computed values may drift if not reused consistently from BenefitsPanel logic",
+    "LogPanel layout may become unstable if top/middle/bottom ordering is not preserved cleanly",
+    "PTO form helpers may partially port but fail due to missing local state or config wiring",
+    "Bucket detail may duplicate visuals already present unless the large balance bar is correctly omitted"
+  ],
+
+  "potential_bugs": [
+    {
+      "area": "LogPanel prop wiring",
+      "risk": "newly ported sections may render with undefined values if required props are not passed through correctly"
+    },
+    {
+      "area": "computed values",
+      "risk": "401k/PTO numbers may differ from BenefitsPanel if formulas are copied inconsistently instead of reused"
+    },
+    {
+      "area": "local form state",
+      "risk": "PTO balance override or leave-goal editing UI may render but fail to save/update because helper state was incompletely ported"
+    },
+    {
+      "area": "layout order",
+      "risk": "existing log sections may move unintentionally or the new bottom stack may overlap/duplicate content"
+    }
+  ],
+
+  "validation": [
+    "Only section 3 changes are implemented",
+    "Section 4 / App.jsx is untouched",
+    "LogPanel receives the required additional props for the moved UI",
+    "DHL-only priority metric cards appear at the top",
+    "Existing middle LogPanel flow remains unchanged",
+    "Bottom stack includes the ported 401k, PTO, and bucket-detail sections",
+    "The bucket detail omits the large balance bar",
+    "No core financial formulas were rewritten unnecessarily",
+    "No console errors",
+    "No unintended file changes"
+  ]
+}

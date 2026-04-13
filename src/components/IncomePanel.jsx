@@ -3,6 +3,7 @@ import { MONTH_FULL } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet, toLocalIso } from "../lib/finance.js";
 import { deriveRollingIncomeWeeks, progressiveScale } from "../lib/rollingTimeline.js";
+import { getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, SH, iS, lS } from "./ui.jsx";
 
@@ -312,9 +313,11 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
       >i</button>}>Year Summary</SH>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px" }}>
         <Card label="Gross (Year)" val={f(yG)} rawVal={yG}
+          sub={currentWeek ? `Wk ${getFiscalWeekNumber(currentWeek.idx)} projection` : undefined}
           insight={yG > 0 && yN > 0 ? { arrow: "flat", delta: `${Math.round((yN / yG) * 100)}%`, label: "kept after tax", variant: "blue" } : undefined}
         />
-        <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)" sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : undefined}
+        <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)"
+          sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : currentWeek ? `Wk ${getFiscalWeekNumber(currentWeek.idx)} · on pace` : undefined}
           insight={missedEventDayNetLost > 0 && projectedAnnualNet > 0 ? { arrow: "down", delta: `-${Math.round((missedEventDayNetLost / projectedAnnualNet) * 100)}%`, label: "of net to missed events", variant: "purple" } : undefined}
         />
       </div>

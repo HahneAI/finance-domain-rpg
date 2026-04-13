@@ -197,4 +197,159 @@ export function useSwipeStack(count) {
 
 ---
 
-*Created: 2026-04-13*
+## Sprint 5 — Goal Number Identity + Reorder Modal
+
+### 5a. Large ordinal number on each goal card (top-right)
+
+Each active goal card gets a large, exaggerated ordinal number anchored to the top-right corner of the card. It is purely presentational — position `absolute` inside the card's `position: relative` container so it never shifts content.
+
+```
+Visual spec:
+  font-size:   96px  (desktop) / 72px (mobile, <768px)
+  font-weight: 900
+  color:       rgba(255, 255, 255, 0.09)   ← white, ghosted behind content
+  font-family: var(--font-display)
+  line-height: 1
+  position:    absolute
+  top:         -8px
+  right:       12px
+  pointer-events: none
+  user-select: none
+  z-index:     0   ← card content sits on z-index: 1
+```
+
+The number is intentionally large enough to bleed slightly out of the card top edge (`top: -8px`) and feel like a magazine-style ordinal — readable but not competing with the label or target figure. The low opacity keeps it subtext-level on dark backgrounds.
+
+**Goal 1** shows `1`, **Goal 2** shows `2`, etc. — derived from the `i` index in `tl.map((g, i) => ...)`. The index is 0-based so display as `i + 1`.
+
+Card container needs `position: relative; overflow: hidden` to clip the number if it bleeds.
+
+---
+
+### 5b. Reorder button on each card
+
+Replace the existing `↑` / `↓` `SmBtn` pair on the card footer with a single **REORDER** button. Tapping it opens the Reorder Modal (Sprint 5c). The button sits at the left of the existing footer action row, before EDIT and DONE.
+
+```jsx
+<SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)">
+  ⠿ REORDER
+</SmBtn>
+```
+
+The drag handles and `draggable` props on the card itself are also removed — reordering is modal-only. Existing ↑/↓ arrow logic (`moveGoal`) is kept but called from inside the modal instead.
+
+---
+
+### 5c. Reorder Modal — horizontal mini-cards
+
+**State:** `showReorderModal` boolean in `HomePanel`. One modal for the whole goals list — opened from any card's REORDER button.
+
+**What the modal shows:**
+
+```
+┌──────────────────────────────────────────────────────┐
+│  REORDER GOALS                              [✕ close] │
+│                                                       │
+│  ← drag or tap arrows to reorder ─────────────────→  │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
+│  │   1      │  │   2      │  │   3      │            │
+│  │ Car Note │  │ Laptop   │  │ Vacation │  …          │
+│  └──────────┘  └──────────┘  └──────────┘            │
+│                                                       │
+│  [← ↑] [↓ →] buttons appear below the active card    │
+└──────────────────────────────────────────────────────┘
+```
+
+**Mini-card spec (inside modal):**
+
+```
+width:           min(40vw, 140px)
+height:          80px
+background:      var(--color-bg-surface)
+border:          1px solid var(--color-border-subtle)
+border-radius:   12px
+padding:         10px 12px
+display:         flex
+flex-direction:  column
+justify-content: space-between
+
+Top-right: ordinal number
+  font-size:   32px
+  font-weight: 900
+  color:       rgba(255,255,255,0.12)
+  position:    absolute top 4px right 8px
+
+Label:
+  font-size:   12px
+  font-weight: bold
+  color:       var(--color-text-primary)
+  max 2 lines, text-overflow: ellipsis
+  overflow: hidden
+```
+
+The mini-cards are wrapped in `ScrollSnapRow` (from Sprint 1) so the list is horizontally swipeable inside the modal. The active/focused card (last tapped or centered) gets `border-color: var(--color-accent-primary)`.
+
+**Reorder interaction — two modes:**
+
+1. **Drag (desktop / coarse-pointer = false):** mini-cards are `draggable`. Uses existing `onDragStart/onDragEnd/onDrop` pattern already proven in BudgetPanel expense drag. Drop target highlights with accent border.
+
+2. **Tap-to-select + arrow buttons (touch / coarse-pointer = true):** tap a mini-card to select it (accent border), then use `← →` buttons rendered below the scroll row to shift it left or right. Each tap on an arrow calls `moveGoal(g.id, direction)`. No hold-to-drag required on mobile.
+
+**Pointer detection:** reuse `isCoarsePointer` state pattern from `BudgetPanel` — `window.matchMedia("(pointer: coarse)")`.
+
+**Modal chrome:**
+
+```
+position: fixed
+inset: 0
+z-index: 300
+background: rgba(0,0,0,0.82)
+display: flex
+align-items: flex-end          ← bottom sheet on mobile
+justify-content: center
+
+Inner panel:
+  width: 100%
+  max-width: 560px
+  background: var(--color-bg-surface)
+  border-radius: 20px 20px 0 0   ← on mobile
+  border-radius: 16px            ← on desktop (centered, not bottom sheet)
+  padding: 20px 20px 32px
+  max-height: 80vh
+  overflow: hidden
+```
+
+**No new data.** The modal only calls `moveGoal` (already exists) and reads the existing `activeGoals` array. No new state shape.
+
+---
+
+### 5d. What does NOT change on the goal cards
+
+- Label, target $, timeline fill bar, month markers, finish-week label — all unchanged
+- EDIT inline form — unchanged
+- ✓ DONE, ✕ delete — unchanged, stay in card footer
+- Celebrating flash animation — unchanged
+- `computeGoalTimeline` / `deriveRollingTimelineMonths` — untouched
+
+The only card-level changes are:
+1. Add `position: relative; overflow: hidden` to card container
+2. Add ghost ordinal `<div>` (absolute, pointer-events none)
+3. Replace `↑` `↓` SmBtns with single REORDER SmBtn
+
+---
+
+### 5e. QA checklist for Sprint 5
+
+- [ ] Ordinal number is visible but does not obscure label or $ target at any card width
+- [ ] Modal opens from any card's REORDER button
+- [ ] Arrow buttons shift goal position correctly on touch (coarse pointer)
+- [ ] Drag reorder works correctly on desktop
+- [ ] Modal closes on ✕ and on backdrop tap
+- [ ] After reorder, snap row reflects new order immediately
+- [ ] Empty state (0 goals) — no REORDER button rendered, no modal
+- [ ] Single goal (1 goal) — REORDER button renders but arrows are both disabled/no-op
+- [ ] Inline EDIT form still opens inside snap card correctly after Sprint 5 changes
+
+---
+
+*Updated: 2026-04-13*

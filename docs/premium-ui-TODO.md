@@ -28,7 +28,7 @@ Curated UI polish backlog focused on "premium" treatments (Liquid Glass-inspired
 
 - [x] **Tiered card depth** — apply “solid / glass / overlay” hierarchy: primary metrics stay solid Flow surfaces; secondary insight cards (Pulse rows, Log Effect Summary) use glass treatment; overlays use stronger blur + tint.
 - [ ] **Swipeable stacks** — weekly income summaries and goal detail lists switch to horizontal swipe (snap) containers to cut vertical scrolling.
-- [ ] **Large-number pairs** — ensure all hero numbers pair countup animation with contextual sub-labels (e.g., “Week 14 • Heavy rotation”). Audit for consistency.
+- [x] **Large-number pairs** — ensure all hero numbers pair countup animation with contextual sub-labels (e.g., “Week 14 • Heavy rotation”). Audit for consistency.
 
 **Plan addendum**
 
@@ -49,7 +49,7 @@ Curated UI polish backlog focused on "premium" treatments (Liquid Glass-inspired
 ## 3. Micro-interactions & Motion
 
 - [ ] **Value transitions** — when totals change (wizard completion, shift log), animate numbers between previous and next values (<300 ms, ease-in-out).
-- [ ] **Log confirmation pulse** — after confirming a week or log event, ripple highlight the affected card (green radial gradient, fade within 250 ms).
+- [x] **Log confirmation pulse** — after confirming a week or log event, ripple highlight the affected card (green radial gradient, fade within 250 ms).
 - [ ] **Drag feedback** — add scale + shadow pop during drag-and-drop (goals/expenses) to mimic haptic lift; ensure drop snap feels crisp.
 - [ ] **Liquid goal fill** — animate goal progress bars using a subtle wave/clip-path fill rather than a linear width change; keep motion under 400 ms.
 

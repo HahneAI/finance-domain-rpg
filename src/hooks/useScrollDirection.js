@@ -3,17 +3,18 @@ import { useEffect, useRef, useState } from "react";
 /**
  * Tracks whether the user is scrolling down inside a given scroll container.
  * Returns true when scrolling down and not at the very top; false otherwise.
- * Resets to false when scrollTop reaches 0.
  *
- * @param {React.RefObject} scrollRef — ref attached to the scrollable container
+ * Accepts the DOM element directly (not a ref object) so the effect re-runs
+ * correctly when the element mounts after an auth/loading gate.
+ *
+ * @param {HTMLElement|null} el — the scrollable container element
  * @returns {boolean} isScrollingDown
  */
-export function useScrollDirection(scrollRef) {
+export function useScrollDirection(el) {
   const [isScrollingDown, setIsScrollingDown] = useState(false);
   const lastScrollY = useRef(0);
 
   useEffect(() => {
-    const el = scrollRef?.current;
     if (!el) return;
 
     const handleScroll = () => {
@@ -30,7 +31,7 @@ export function useScrollDirection(scrollRef) {
 
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleScroll);
-  }, [scrollRef]);
+  }, [el]); // re-runs when el changes: null → div (after auth gate resolves)
 
   return isScrollingDown;
 }

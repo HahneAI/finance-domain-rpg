@@ -208,7 +208,15 @@ export default function App() {
   const currentView = viewStack[viewStack.length - 1];
   const canGoBack = viewStack.length > 1;
   const mainContentRef = useRef(null);
-  const isScrollingDown = useScrollDirection(mainContentRef);
+  // Track the actual DOM element in state so useScrollDirection's effect
+  // re-runs when the element mounts (first render hits auth gate, so the
+  // ref is null until the real view renders).
+  const [mainContentEl, setMainContentEl] = useState(null);
+  const mainContentCallbackRef = useCallback((el) => {
+    mainContentRef.current = el; // keep ref in sync for jumpToPanelTop
+    setMainContentEl(el);
+  }, []);
+  const isScrollingDown = useScrollDirection(mainContentEl);
 
   const jumpToPanelTop = () => {
     const scrollToTop = () => {
@@ -1024,7 +1032,7 @@ export default function App() {
         </div>
 
         {/* Panel content */}
-        <div ref={mainContentRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
+        <div ref={mainContentCallbackRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
           {activePanel}
         </div>
       </div>

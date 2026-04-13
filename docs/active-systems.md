@@ -21,6 +21,7 @@ Last updated: 2026-04-12 | App: Authority Finance (A:Fin)
 | 9 | Loan payoff quarter persistence | `finance.js` | Live — keeps payoff amounts through the payoff quarter |
 | 12 | Pulse Intelligence Layer — InsightRow | `ui.jsx`, `HomePanel.jsx`, `IncomePanel.jsx`, `BudgetPanel.jsx` | Rough draft — signal tokens live, insights wired to real data |
 | 13 | Liquid Glass Premium UI Layer | `LiquidGlass.jsx`, `ui.jsx`, `index.css` | Live — InsightRow wired as first Pulse placement |
+| 14 | Swipeable Stacks — Horizontal Snap Cards | `useSwipeStack.js`, `ui.jsx`, `IncomePanel.jsx`, `HomePanel.jsx` | Sprint 1 shipped · Sprint 2 in progress · Sprints 3–5 pending |
 
 ---
 
@@ -350,3 +351,68 @@ Full `boxShadow` string:
 - Verified production compile succeeds after normalization with `npm run build`.
 
 **Result:** Home panel math/features remain unchanged, but parser stability is now deterministic across local + Vercel build environments.
+
+---
+
+## 14. Swipeable Stacks — Horizontal Snap Cards (2026-04-13)
+
+**Goal:** Convert weekly income rows (`IncomePanel`) and active goal cards (`HomePanel`) from vertical stacks into horizontal scroll-snap cards. Cuts mobile scrolling without touching data layer. Full spec: `docs/swipeable-stacks-sprint.md`.
+
+**Files:** `src/hooks/useSwipeStack.js` · `src/components/ui.jsx` · `src/components/IncomePanel.jsx` · `src/components/HomePanel.jsx` · `src/index.css`
+
+**Design constraints (all sprints):** CSS `scroll-snap-type: x mandatory` — no Framer Motion. Tokens only — no raw hex. No bounce, no scale-up on mount. Mobile-first; desktop degrades to existing layout.
+
+---
+
+### Sprint 1 — Core primitives (SHIPPED 2026-04-13)
+
+**`src/hooks/useSwipeStack.js`** — `useSwipeStack(count)` → `{ containerRef, activeIndex }`. Attaches `IntersectionObserver` (threshold 0.6, root-scoped to scroll container) to every snap child. Reports the most-visible child index. Guards for SSR/jsdom (`typeof IntersectionObserver === "undefined"`).
+
+**`src/components/ui.jsx`** — two new exports:
+
+- **`PaginationDots({ count, active, color })`** — frosted glass pill indicator. Active dot = `--color-accent-primary`; inactive = `rgba(0,200,150,0.28)`. 200ms transition. Glass pill uses Subtle preset inline: `blur(12px)`, tint 0.06α, border 0.14α.
+- **`ScrollSnapRow({ children, itemWidth, gap, showDots, dotColor })`** — flex container with `scroll-snap-type: x mandatory`, `scrollbarWidth: none`, and `.snap-scroll-row::-webkit-scrollbar { display:none }` CSS class (added to `src/index.css`). Each child is wrapped in a snap-aligned div. Dots render only when `count > 1`.
+
+---
+
+### Sprint 2 — IncomePanel weekly rows (IN PROGRESS)
+
+**Target:** Replace the vertical `<table>` in the weekly subview with `ScrollSnapRow` on mobile (< 768px). Desktop keeps the existing table + sticky header unchanged.
+
+**Each snap card shape:**
+```
+Wk End date  [← now badge]
+─────────────────────────
+GROSS          $1,234.56
+TAKE HOME        $980.00   ← green=exempt, primary=taxed, disabled=past
+─────────────────────────
+5-Day · PROJECTED   [TX/EX]
+```
+
+**Key rules:** `itemWidth="min(80vw, 260px)"`. `isCurrent` card border = `var(--color-accent-primary)`. Past weeks `opacity: 0.65`. Sticky header JS block removed on mobile only. "Full Detail" modal button preserved. `archivedWeeklyRows` footnote preserved.
+
+**Current state:** `ScrollSnapRow` import and `isMobile` state added to `IncomePanel.jsx`. The table-to-snap card conversion of the weekly view body is the remaining work.
+
+---
+
+### Sprint 3 — HomePanel active goal cards (PENDING)
+
+Wrap `{tl.map((g, i) => ...)}` goal card block in `ScrollSnapRow` with `itemWidth="min(88vw, 340px)"`. Card body is verbatim — only the container changes from vertical margin-stacking to horizontal snap. `draggable`/`onDragStart` props removed from card when inside snap row (reorder via ↑ ↓ buttons only on mobile). Desktop keeps existing vertical list. Inline edit form and celebrating pulse are untouched.
+
+---
+
+### Sprint 4 — QA + cleanup (PENDING)
+
+Mobile checklist: 390px / 375px — no horizontal bleed on app shell. `scroll-snap-type` must not conflict with main-content scroll container. iOS Safari momentum scroll (`-webkit-overflow-scrolling: touch`) verified. Edge cases: 0 / 1 / 3 / 20 rows. "Full Detail" modal and goal inline edit verified inside snap cards.
+
+---
+
+### Sprint 5 — Goal card identity + Reorder Modal (PENDING)
+
+**5a. Ghost ordinal number** — each goal card gets a large background ordinal (`96px` desktop / `72px` mobile, `font-weight: 900`, `rgba(255,255,255,0.09)`, `position: absolute`, `top: -8px`, `right: 12px`, `pointer-events: none`). Card container needs `position: relative; overflow: hidden`.
+
+**5b. REORDER button** — replaces the ↑ ↓ `SmBtn` pair on each card footer. Single button opens the Reorder Modal (5c).
+
+**5c. Reorder Modal** — bottom sheet on mobile / centered on desktop. Contains a horizontal `ScrollSnapRow` of mini-cards (`min(40vw, 140px)` × 80px). Two interaction modes: drag-and-drop on desktop (`pointer: fine`), tap-to-select + ← → arrow buttons on touch (`pointer: coarse`). Uses existing `moveGoal()` — no new data shape. Modal chrome: `position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.82); align-items: flex-end`.
+
+**What does NOT change:** label, target $, timeline fill bar, month markers, finish-week label, EDIT form, DONE/delete buttons, `computeGoalTimeline`, `deriveRollingTimelineMonths`.

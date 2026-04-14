@@ -254,6 +254,8 @@ export function HomePanel({
   const [showCompleted, setShowCompleted] = useState(false);
   const [showReorderModal, setShowReorderModal] = useState(false);
   const [reorderSelectedId, setReorderSelectedId] = useState(null);
+  const [draggingReorderId, setDraggingReorderId] = useState(null);
+  const [dragOverReorderId, setDragOverReorderId] = useState(null);
   const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
   const [isCoarsePointer] = useState(() => (
     typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -463,6 +465,8 @@ export function HomePanel({
   const closeReorderModal = () => {
     setShowReorderModal(false);
     setReorderSelectedId(null);
+    setDraggingReorderId(null);
+    setDragOverReorderId(null);
   };
 
   return (
@@ -790,100 +794,179 @@ export function HomePanel({
               zIndex: 300,
               background: "rgba(0,0,0,0.82)",
               display: "flex",
-              alignItems: "flex-end",
+              alignItems: "center",
               justifyContent: "center",
+              padding: "16px",
             }}
           >
             <div
               onClick={(e) => e.stopPropagation()}
               style={{
                 width: "100%",
-                maxWidth: "560px",
+                maxWidth: "480px",
                 background: "var(--color-bg-surface)",
-                borderRadius: isCoarsePointer ? "20px 20px 0 0" : "16px",
-                padding: "20px 20px 32px",
-                maxHeight: "80vh",
-                overflow: "hidden",
+                borderRadius: "20px",
+                padding: "20px",
+                maxHeight: "88vh",
+                display: "flex",
+                flexDirection: "column",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexShrink: 0 }}>
                 <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>
                   REORDER GOALS
                 </div>
                 <button
                   onClick={closeReorderModal}
-                  style={{ background: "none", border: "none", color: "var(--color-text-primary)", cursor: "pointer", fontSize: "16px" }}
+                  style={{ background: "none", border: "none", color: "var(--color-text-primary)", cursor: "pointer", fontSize: "16px", lineHeight: 1 }}
                 >
                   ✕
                 </button>
               </div>
-              <ScrollSnapRow itemWidth="min(40vw, 140px)">
-                {activeGoals.map((g, i) => (
-                  <div
-                    key={g.id}
-                    onClick={() => setReorderSelectedId(g.id)}
-                    style={{
-                      height: "80px",
-                      background: "var(--color-bg-surface)",
-                      border: `1px solid ${reorderSelectedId === g.id ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
-                      borderRadius: "12px",
-                      padding: "10px 12px",
-                      position: "relative",
-                      overflow: "hidden",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      cursor: "pointer",
-                    }}
-                  >
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "16px", flexShrink: 0 }}>
+                {isCoarsePointer ? "Use ↑ ↓ to move each goal." : "Drag goals to reorder."}
+              </div>
+              {/* Vertical card list */}
+              <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+                {activeGoals.map((g, i) => {
+                  const isDragging = draggingReorderId === g.id;
+                  const isDropTarget = dragOverReorderId === g.id && draggingReorderId !== g.id;
+                  return (
                     <div
+                      key={g.id}
+                      draggable={!isCoarsePointer}
+                      onDragStart={!isCoarsePointer ? () => setDraggingReorderId(g.id) : undefined}
+                      onDragEnd={!isCoarsePointer ? () => {
+                        if (draggingReorderId && dragOverReorderId && draggingReorderId !== dragOverReorderId) {
+                          reorderGoalByDrag(draggingReorderId, dragOverReorderId);
+                        }
+                        setDraggingReorderId(null);
+                        setDragOverReorderId(null);
+                      } : undefined}
+                      onDragOver={!isCoarsePointer ? (e) => { e.preventDefault(); setDragOverReorderId(g.id); } : undefined}
                       style={{
-                        fontSize: "32px",
+                        height: "72px",
+                        background: "var(--color-bg-raised)",
+                        border: `1px solid ${isDropTarget ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
+                        borderRadius: "12px",
+                        padding: "0 14px",
+                        position: "relative",
+                        overflow: "hidden",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        cursor: isCoarsePointer ? "default" : "grab",
+                        opacity: isDragging ? 0.4 : 1,
+                        flexShrink: 0,
+                        transition: "border-color 120ms, opacity 120ms",
+                      }}
+                    >
+                      {/* Ghost ordinal */}
+                      <div style={{
+                        fontSize: "56px",
                         fontWeight: 900,
-                        color: "rgba(255,255,255,0.12)",
+                        fontFamily: "var(--font-display)",
+                        color: "rgba(255,255,255,0.06)",
                         position: "absolute",
-                        top: "4px",
-                        right: "8px",
+                        top: "-6px",
+                        right: "10px",
                         pointerEvents: "none",
                         zIndex: 0,
-                      }}
-                    >
-                      {i + 1}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: "bold",
-                        color: "var(--color-text-primary)",
-                        position: "relative",
+                        lineHeight: 1,
+                        userSelect: "none",
+                      }}>
+                        {i + 1}
+                      </div>
+                      {/* Visible ordinal */}
+                      <div style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        color: "var(--color-text-disabled)",
+                        width: "18px",
+                        textAlign: "center",
+                        flexShrink: 0,
                         zIndex: 1,
-                        overflow: "hidden",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                      }}
-                    >
-                      {g.label}
+                      }}>
+                        {i + 1}
+                      </div>
+                      {/* Label + target */}
+                      <div style={{ flex: 1, zIndex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          color: "var(--color-text-primary)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}>
+                          {g.label}
+                        </div>
+                        <div style={{
+                          fontSize: "11px",
+                          color: "var(--color-text-secondary)",
+                          marginTop: "2px",
+                        }}>
+                          ${Number(g.target || 0).toLocaleString()}
+                        </div>
+                      </div>
+                      {/* Touch: inline ↑ ↓ per card */}
+                      {isCoarsePointer && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px", zIndex: 1, flexShrink: 0 }}>
+                          <button
+                            onClick={() => moveGoalInActiveList(g.id, -1)}
+                            disabled={i === 0}
+                            style={{
+                              background: "none",
+                              border: `1px solid ${i === 0 ? "var(--color-border-subtle)" : "var(--color-border-accent)"}`,
+                              color: i === 0 ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                              borderRadius: "6px",
+                              width: "30px",
+                              height: "26px",
+                              cursor: i === 0 ? "default" : "pointer",
+                              fontSize: "12px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >↑</button>
+                          <button
+                            onClick={() => moveGoalInActiveList(g.id, 1)}
+                            disabled={i === activeGoals.length - 1}
+                            style={{
+                              background: "none",
+                              border: `1px solid ${i === activeGoals.length - 1 ? "var(--color-border-subtle)" : "var(--color-border-accent)"}`,
+                              color: i === activeGoals.length - 1 ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                              borderRadius: "6px",
+                              width: "30px",
+                              height: "26px",
+                              cursor: i === activeGoals.length - 1 ? "default" : "pointer",
+                              fontSize: "12px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >↓</button>
+                        </div>
+                      )}
+                      {/* Desktop: drag handle */}
+                      {!isCoarsePointer && (
+                        <div style={{
+                          fontSize: "18px",
+                          color: "var(--color-text-disabled)",
+                          zIndex: 1,
+                          flexShrink: 0,
+                          pointerEvents: "none",
+                          userSelect: "none",
+                          letterSpacing: "-2px",
+                        }}>
+                          ⠿
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
-              </ScrollSnapRow>
-              {isCoarsePointer && (
-                <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "12px" }}>
-                  <SmBtn
-                    onClick={() => reorderSelectedId && moveGoalInActiveList(reorderSelectedId, -1)}
-                    c={canMoveLeft ? "var(--color-text-primary)" : "var(--color-text-disabled)"}
-                  >
-                    ←
-                  </SmBtn>
-                  <SmBtn
-                    onClick={() => reorderSelectedId && moveGoalInActiveList(reorderSelectedId, +1)}
-                    c={canMoveRight ? "var(--color-text-primary)" : "var(--color-text-disabled)"}
-                  >
-                    →
-                  </SmBtn>
-                </div>
-              )}
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}

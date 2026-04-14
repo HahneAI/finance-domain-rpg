@@ -253,6 +253,7 @@ export function HomePanel({
   const [celebrating, setCelebrating] = useState(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [showReorderModal, setShowReorderModal] = useState(false);
+  const [reorderSelectedId, setReorderSelectedId] = useState(null);
   const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
   const [isCoarsePointer] = useState(() => (
     typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -426,6 +427,13 @@ export function HomePanel({
       return arr;
     });
   };
+  const moveGoalInActiveList = (id, dir) => {
+    const idx = activeGoals.findIndex((g) => g.id === id);
+    if (idx === -1) return;
+    const next = idx + dir;
+    if (next < 0 || next >= activeGoals.length) return;
+    moveGoal(id, dir);
+  };
   const reorderGoalByDrag = (draggedId, overId, insertIndexOverride = null) => {
     setGoals?.((prev) => {
       const active = prev.filter((g) => !g.completed);
@@ -449,6 +457,13 @@ export function HomePanel({
     });
   };
   const canShowReorder = activeGoals.length > 1 && typeof moveGoal === "function" && typeof reorderGoalByDrag === "function";
+  const selectedActiveIndex = activeGoals.findIndex((g) => g.id === reorderSelectedId);
+  const canMoveLeft = selectedActiveIndex > 0;
+  const canMoveRight = selectedActiveIndex !== -1 && selectedActiveIndex < activeGoals.length - 1;
+  const closeReorderModal = () => {
+    setShowReorderModal(false);
+    setReorderSelectedId(null);
+  };
 
   return (
     <div style={{ paddingBottom: "8px" }}>
@@ -768,7 +783,7 @@ export function HomePanel({
         </div>
         {showReorderModal && (
           <div
-            onClick={() => setShowReorderModal(false)}
+            onClick={closeReorderModal}
             style={{
               position: "fixed",
               inset: 0,
@@ -796,7 +811,7 @@ export function HomePanel({
                   REORDER GOALS
                 </div>
                 <button
-                  onClick={() => setShowReorderModal(false)}
+                  onClick={closeReorderModal}
                   style={{ background: "none", border: "none", color: "var(--color-text-primary)", cursor: "pointer", fontSize: "16px" }}
                 >
                   ✕
@@ -806,10 +821,11 @@ export function HomePanel({
                 {activeGoals.map((g, i) => (
                   <div
                     key={g.id}
+                    onClick={() => setReorderSelectedId(g.id)}
                     style={{
                       height: "80px",
                       background: "var(--color-bg-surface)",
-                      border: "1px solid var(--color-border-subtle)",
+                      border: `1px solid ${reorderSelectedId === g.id ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
                       borderRadius: "12px",
                       padding: "10px 12px",
                       position: "relative",
@@ -817,6 +833,7 @@ export function HomePanel({
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "space-between",
+                      cursor: "pointer",
                     }}
                   >
                     <div
@@ -851,6 +868,22 @@ export function HomePanel({
                   </div>
                 ))}
               </ScrollSnapRow>
+              {isCoarsePointer && (
+                <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "12px" }}>
+                  <SmBtn
+                    onClick={() => reorderSelectedId && moveGoalInActiveList(reorderSelectedId, -1)}
+                    c={canMoveLeft ? "var(--color-text-primary)" : "var(--color-text-disabled)"}
+                  >
+                    ←
+                  </SmBtn>
+                  <SmBtn
+                    onClick={() => reorderSelectedId && moveGoalInActiveList(reorderSelectedId, +1)}
+                    c={canMoveRight ? "var(--color-text-primary)" : "var(--color-text-disabled)"}
+                  >
+                    →
+                  </SmBtn>
+                </div>
+              )}
             </div>
           </div>
         )}

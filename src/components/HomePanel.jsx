@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { computeGoalTimeline } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
@@ -252,11 +252,13 @@ export function HomePanel({
   const [delGoalId, setDelGoalId] = useState(null);
   const [celebrating, setCelebrating] = useState(null);
   const [showCompleted, setShowCompleted] = useState(false);
-  const [draggingGoalId, setDraggingGoalId] = useState(null);
-  const [dragOverGoalId, setDragOverGoalId] = useState(null);
+  const [showReorderModal, setShowReorderModal] = useState(false);
   const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
-  const goalInsertRef = useRef({ targetId: null, insertIndex: null });
-  const goalDragFinalizedRef = useRef(false);
+  const [isCoarsePointer] = useState(() => (
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(pointer: coarse)").matches
+      : false
+  ));
 
   const activeGoals = goals.filter((g) => !g.completed);
 
@@ -446,20 +448,7 @@ export function HomePanel({
       return [...reordered, ...completed];
     });
   };
-  const onGoalDragStart = (goal) => {
-    setDraggingGoalId(goal.id);
-    goalDragFinalizedRef.current = false;
-  };
-  const onGoalDragEnd = () => {
-    if (draggingGoalId && !goalDragFinalizedRef.current) {
-      const { targetId, insertIndex } = goalInsertRef.current;
-      reorderGoalByDrag(draggingGoalId, targetId, insertIndex);
-    }
-    goalInsertRef.current = { targetId: null, insertIndex: null };
-    goalDragFinalizedRef.current = false;
-    setDraggingGoalId(null);
-    setDragOverGoalId(null);
-  };
+  const canShowReorder = activeGoals.length > 1 && typeof moveGoal === "function" && typeof reorderGoalByDrag === "function";
 
   return (
     <div style={{ paddingBottom: "8px" }}>
@@ -635,8 +624,11 @@ export function HomePanel({
                             {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
                           </div>
                           <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                            <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
-                            <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
+                            {canShowReorder && (
+                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)">
+                                ⠿ REORDER
+                              </SmBtn>
+                            )}
                             <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
                             <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
@@ -658,30 +650,18 @@ export function HomePanel({
             <>
               {tl.map((g, i) => {
                 const isEditing = editGoalId === g.id;
-                const isDragging = draggingGoalId === g.id;
-                const isDropTarget = dragOverGoalId === g.id;
                 const projectedWeeks = Number.isFinite(g.eW) ? Math.max(0, Math.ceil(g.eW)) : 0;
                 const fillWidthPct = clamp01(projectedWeeks / Math.max(weeksLeft, 1)) * 100;
                 return (
                   <div
                     key={g.id}
-                    draggable={!isEditing}
-                    onDragStart={() => onGoalDragStart(g)}
-                    onDragEnd={onGoalDragEnd}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setDragOverGoalId(g.id);
-                      const activeIndex = activeGoals.findIndex((goal) => goal.id === g.id);
-                      goalInsertRef.current = { targetId: g.id, insertIndex: activeIndex === -1 ? 0 : activeIndex };
-                    }}
                     style={{
                       background: "var(--color-bg-surface)",
-                      border: `1px solid ${isDropTarget ? "var(--color-gold)" : "var(--color-border-accent)"}`,
+                      border: "1px solid var(--color-border-accent)",
                       borderRadius: "8px",
                       padding: "16px",
                       marginBottom: "12px",
-                      opacity: isDragging ? 0.65 : 1,
-                      cursor: isEditing ? "default" : "grab",
+                      cursor: "default",
                       position: "relative",
                       overflow: "hidden",
                     }}
@@ -762,8 +742,11 @@ export function HomePanel({
                             {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
                           </div>
                           <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                            <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
-                            <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
+                            {canShowReorder && (
+                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)">
+                                ⠿ REORDER
+                              </SmBtn>
+                            )}
                             <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
                             <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
@@ -783,6 +766,94 @@ export function HomePanel({
             </>
           )}
         </div>
+        {showReorderModal && (
+          <div
+            onClick={() => setShowReorderModal(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 300,
+              background: "rgba(0,0,0,0.82)",
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "center",
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: "560px",
+                background: "var(--color-bg-surface)",
+                borderRadius: isCoarsePointer ? "20px 20px 0 0" : "16px",
+                padding: "20px 20px 32px",
+                maxHeight: "80vh",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>
+                  REORDER GOALS
+                </div>
+                <button
+                  onClick={() => setShowReorderModal(false)}
+                  style={{ background: "none", border: "none", color: "var(--color-text-primary)", cursor: "pointer", fontSize: "16px" }}
+                >
+                  ✕
+                </button>
+              </div>
+              <ScrollSnapRow itemWidth="min(40vw, 140px)">
+                {activeGoals.map((g, i) => (
+                  <div
+                    key={g.id}
+                    style={{
+                      height: "80px",
+                      background: "var(--color-bg-surface)",
+                      border: "1px solid var(--color-border-subtle)",
+                      borderRadius: "12px",
+                      padding: "10px 12px",
+                      position: "relative",
+                      overflow: "hidden",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "32px",
+                        fontWeight: 900,
+                        color: "rgba(255,255,255,0.12)",
+                        position: "absolute",
+                        top: "4px",
+                        right: "8px",
+                        pointerEvents: "none",
+                        zIndex: 0,
+                      }}
+                    >
+                      {i + 1}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        color: "var(--color-text-primary)",
+                        position: "relative",
+                        zIndex: 1,
+                        overflow: "hidden",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                      }}
+                    >
+                      {g.label}
+                    </div>
+                  </div>
+                ))}
+              </ScrollSnapRow>
+            </div>
+          </div>
+        )}
 
         {addingGoal ? (
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>

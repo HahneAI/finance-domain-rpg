@@ -2,7 +2,7 @@
   "_meta": {
     "description": "Primary account ground-truth reference for Anthony (DHL B-team, custom schedule). Used for three-tier test validation: db_record → computed_expectations → ui_assertions. Update the relevant section whenever account data or config changes; do NOT fabricate values — leave null and fill in from actual sources.",
     "account_label": "Anthony — primary DHL account",
-    "last_updated": "2026-04-09",
+    "last_updated": "2026-04-13",
     "fiscal_year": 2026,
     "fiscal_year_start": "2026-01-05",
     "supabase_table": "public.user_data",
@@ -44,7 +44,7 @@
       "fsaWeekly": 0,
       "hsaWeekly": 0,
       "startDate": "2026-02-09",
-      "stdWeekly": 2,
+      "stdWeekly": 0,
       "userState": "MO",
       "w1FedRate": 0.0784,
       "w2FedRate": 0.1283,
@@ -54,7 +54,6 @@
       "taxedWeeks": [
         7,
         8,
-        16,
         17,
         18,
         19,
@@ -110,8 +109,8 @@
       "bucketPayoutRate": 9.825,
       "ptoHoursOverride": null,
       "selectedBenefits": [
-        "std",
-        "k401"
+        "k401",
+        "ltd"
       ],
       "benefitsStartDate": null,
       "bufferOverrideAck": false,
@@ -129,53 +128,20 @@
     "expenses": [
       {
         "id": "fireflood",
-        "note": [
-          "$70/mo",
-          "$70/mo",
-          "$70/mo",
-          "$70/mo"
-        ],
+        "note": ["$70/mo", "$70/mo", "$70/mo", "$70/mo"],
         "label": "Fireflood",
         "history": [
-          {
-            "weekly": [
-              17.5,
-              17.5,
-              17.5,
-              17.5
-            ],
-            "effectiveFrom": "2026-01-27"
-          },
-          {
-            "weekly": [
-              17.5,
-              18.25,
-              18.25,
-              18.25
-            ],
-            "effectiveFrom": "2026-04-03"
-          }
+          {"weekly": [17.5, 17.5, 17.5, 17.5], "effectiveFrom": "2026-01-27"},
+          {"weekly": [17.5, 18.25, 18.25, 18.25], "effectiveFrom": "2026-04-03"}
         ],
         "category": "Lifestyle",
         "billingMeta": {
           "cycle": "every30days",
           "amount": 73,
           "byPhase": {
-            "1": {
-              "cycle": "every30days",
-              "amount": 73,
-              "effectiveFrom": "2026-04-03"
-            },
-            "2": {
-              "cycle": "every30days",
-              "amount": 73,
-              "effectiveFrom": "2026-04-03"
-            },
-            "3": {
-              "cycle": "every30days",
-              "amount": 73,
-              "effectiveFrom": "2026-04-03"
-            }
+            "1": {"cycle": "every30days", "amount": 73, "effectiveFrom": "2026-04-03"},
+            "2": {"cycle": "every30days", "amount": 73, "effectiveFrom": "2026-04-03"},
+            "3": {"cycle": "every30days", "amount": 73, "effectiveFrom": "2026-04-03"}
           },
           "effectiveFrom": "2026-04-03"
         },
@@ -184,116 +150,45 @@
       },
       {
         "id": "nicotine",
-        "note": [
-          "",
-          "",
-          "",
-          ""
-        ],
+        "note": ["", "", "", ""],
         "label": "Nicotine",
         "history": [
-          {
-            "weekly": [
-              35,
-              35,
-              35,
-              35
-            ],
-            "effectiveFrom": "2026-01-27"
-          },
-          {
-            "weekly": [
-              30,
-              30,
-              30,
-              30
-            ],
-            "effectiveFrom": "2026-03-18"
-          },
-          {
-            "weekly": [
-              30,
-              30,
-              30,
-              30
-            ],
-            "effectiveFrom": "2026-04-01"
-          }
+          {"weekly": [35, 35, 35, 35], "effectiveFrom": "2026-01-27"},
+          {"weekly": [30, 30, 30, 30], "effectiveFrom": "2026-03-18"},
+          {"weekly": [30, 30, 30, 30], "effectiveFrom": "2026-04-01"},
+          {"weekly": [30, 25, 25, 25], "effectiveFrom": "2026-04-09"}
         ],
         "category": "Lifestyle",
         "billingMeta": {
           "cycle": "weekly",
-          "amount": 30,
+          "amount": 25,
           "byPhase": {
-            "1": {
-              "cycle": "weekly",
-              "amount": 30,
-              "effectiveFrom": "2026-04-01"
-            }
+            "1": {"cycle": "weekly", "amount": 25, "effectiveFrom": "2026-04-09"},
+            "2": {"cycle": "weekly", "amount": 25, "effectiveFrom": "2026-04-09"},
+            "3": {"cycle": "weekly", "amount": 25, "effectiveFrom": "2026-04-09"}
           },
-          "effectiveFrom": "2026-04-01"
+          "effectiveFrom": "2026-04-09"
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false
       },
       {
         "id": "kids",
-        "note": [
-          "Extra support, pregnancy help",
-          "Minimum child support baseline",
-          "Minimum child support baseline",
-          "Minimum child support baseline"
-        ],
+        "note": ["Extra support, pregnancy help", "Minimum child support baseline", "Minimum child support baseline", "Minimum child support baseline"],
         "label": "Kids / Angel",
         "history": [
-          {
-            "weekly": [
-              450,
-              350,
-              350,
-              350
-            ],
-            "effectiveFrom": "2026-01-27"
-          },
-          {
-            "weekly": [
-              450,
-              375,
-              375,
-              375
-            ],
-            "effectiveFrom": "2026-03-25"
-          },
-          {
-            "weekly": [
-              450,
-              525,
-              525,
-              525
-            ],
-            "effectiveFrom": "2026-04-05"
-          }
+          {"weekly": [450, 350, 350, 350], "effectiveFrom": "2026-01-27"},
+          {"weekly": [450, 375, 375, 375], "effectiveFrom": "2026-03-25"},
+          {"weekly": [450, 525, 525, 525], "effectiveFrom": "2026-04-05"}
         ],
         "category": "Needs",
         "billingMeta": {
           "cycle": "weekly",
           "amount": 525,
           "byPhase": {
-            "1": {
-              "cycle": "weekly",
-              "amount": 525,
-              "effectiveFrom": "2026-04-05"
-            },
-            "2": {
-              "cycle": "weekly",
-              "amount": 525,
-              "effectiveFrom": "2026-04-05"
-            },
-            "3": {
-              "cycle": "weekly",
-              "amount": 525,
-              "effectiveFrom": "2026-04-05"
-            }
+            "1": {"cycle": "weekly", "amount": 525, "effectiveFrom": "2026-04-05"},
+            "2": {"cycle": "weekly", "amount": 525, "effectiveFrom": "2026-04-05"},
+            "3": {"cycle": "weekly", "amount": 525, "effectiveFrom": "2026-04-05"}
           },
           "effectiveFrom": "2026-04-05"
         },
@@ -302,89 +197,24 @@
       },
       {
         "id": "jesse",
-        "note": [
-          "Loan $35 + phone $15 + extra",
-          "Loan $35 + phone $15 + extra",
-          "Loan paid off — phone only",
-          "Loan paid off — phone only"
-        ],
+        "note": ["Loan $35 + phone $15 + extra", "Loan $35 + phone $15 + extra", "Loan paid off — phone only", "Loan paid off — phone only"],
         "label": "Jesse (Loan + Phone)",
         "history": [
-          {
-            "weekly": [
-              100,
-              100,
-              60,
-              60
-            ],
-            "effectiveFrom": "2026-01-27"
-          },
-          {
-            "weekly": [
-              60,
-              60,
-              60,
-              60
-            ],
-            "effectiveFrom": "2026-03-18"
-          },
-          {
-            "weekly": [
-              60,
-              60,
-              60,
-              60
-            ],
-            "effectiveFrom": "2026-03-18"
-          },
-          {
-            "weekly": [
-              60,
-              60,
-              60,
-              60
-            ],
-            "effectiveFrom": "2026-03-18"
-          },
-          {
-            "weekly": [
-              60,
-              60,
-              60,
-              60
-            ],
-            "effectiveFrom": "2026-03-18"
-          },
-          {
-            "weekly": [
-              60,
-              50,
-              50,
-              30
-            ],
-            "effectiveFrom": "2026-04-03"
-          }
+          {"weekly": [100, 100, 60, 60], "effectiveFrom": "2026-01-27"},
+          {"weekly": [60, 60, 60, 60], "effectiveFrom": "2026-03-18"},
+          {"weekly": [60, 60, 60, 60], "effectiveFrom": "2026-03-18"},
+          {"weekly": [60, 60, 60, 60], "effectiveFrom": "2026-03-18"},
+          {"weekly": [60, 60, 60, 60], "effectiveFrom": "2026-03-18"},
+          {"weekly": [60, 50, 50, 30], "effectiveFrom": "2026-04-03"}
         ],
         "category": "Needs",
         "billingMeta": {
           "cycle": "weekly",
           "amount": 50,
           "byPhase": {
-            "1": {
-              "cycle": "weekly",
-              "amount": 50,
-              "effectiveFrom": "2026-04-03"
-            },
-            "2": {
-              "cycle": "weekly",
-              "amount": 50,
-              "effectiveFrom": "2026-04-03"
-            },
-            "3": {
-              "cycle": "weekly",
-              "amount": 30,
-              "effectiveFrom": "2026-04-01"
-            }
+            "1": {"cycle": "weekly", "amount": 50, "effectiveFrom": "2026-04-03"},
+            "2": {"cycle": "weekly", "amount": 50, "effectiveFrom": "2026-04-03"},
+            "3": {"cycle": "weekly", "amount": 30, "effectiveFrom": "2026-04-01"}
           },
           "effectiveFrom": "2026-04-03"
         },
@@ -393,23 +223,10 @@
       },
       {
         "id": "exp_1775652140160",
-        "note": [
-          "The General",
-          "The General",
-          "The General",
-          "The General"
-        ],
+        "note": ["The General", "The General", "The General", "The General"],
         "label": "Car Insurance",
         "history": [
-          {
-            "weekly": [
-              32.5,
-              32.5,
-              32.5,
-              32.5
-            ],
-            "effectiveFrom": "2026-04-08"
-          }
+          {"weekly": [32.5, 32.5, 32.5, 32.5], "effectiveFrom": "2026-04-08"}
         ],
         "category": "Needs",
         "billingMeta": {
@@ -419,18 +236,285 @@
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false
+      },
+      {
+        "id": "exp_1775678458649",
+        "note": ["", "", "", ""],
+        "label": "Gas",
+        "history": [
+          {"weekly": [100, 50, 50, 50], "effectiveFrom": "2026-04-09"}
+        ],
+        "category": "Needs",
+        "billingMeta": {
+          "cycle": "every30days",
+          "amount": 200,
+          "byPhase": {
+            "1": {"cycle": "every30days", "amount": 200, "effectiveFrom": "2026-04-09"},
+            "2": {"cycle": "every30days", "amount": 200, "effectiveFrom": "2026-04-09"},
+            "3": {"cycle": "every30days", "amount": 200, "effectiveFrom": "2026-04-09"}
+          },
+          "effectiveFrom": "2026-04-09"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      },
+      {
+        "id": "loan_1773892258930",
+        "note": ["", "", ""],
+        "type": "loan",
+        "label": "iPhone 17",
+        "history": [
+          {"weekly": [3, 3, 3, 3], "effectiveFrom": "2026-03-08"},
+          {"weekly": [0, 0, 0, 0], "effectiveFrom": "2029-06-30"}
+        ],
+        "category": "Loans",
+        "loanMeta": {
+          "totalAmount": 467,
+          "paymentAmount": 13,
+          "firstPaymentDate": "2026-04-08",
+          "paymentFrequency": "monthly"
+        }
+      },
+      {
+        "id": "exp_1775678501526",
+        "note": ["", "", "", ""],
+        "label": "Car Payment",
+        "history": [
+          {"weekly": [75, 50, 50, 50], "effectiveFrom": "2026-04-09"}
+        ],
+        "category": "Needs",
+        "billingMeta": {
+          "cycle": "every30days",
+          "amount": 200,
+          "byPhase": {
+            "1": {"cycle": "every30days", "amount": 200, "effectiveFrom": "2026-04-09"},
+            "2": {"cycle": "every30days", "amount": 200, "effectiveFrom": "2026-04-09"},
+            "3": {"cycle": "every30days", "amount": 200, "effectiveFrom": "2026-04-09"}
+          },
+          "effectiveFrom": "2026-04-09"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      },
+      {
+        "id": "loan_1774411495472",
+        "note": ["Labtop on Perpay Plus Warranty", "Labtop on Perpay Plus Warranty", "Labtop on Perpay Plus Warranty"],
+        "type": "loan",
+        "label": "Labtop",
+        "history": [
+          {"weekly": [33, 33, 33, 33], "effectiveFrom": "2026-03-25"},
+          {"weekly": [0, 0, 0, 0], "effectiveFrom": "2026-09-30"}
+        ],
+        "category": "Loans",
+        "loanMeta": {
+          "totalAmount": 500,
+          "paymentAmount": 33,
+          "firstPaymentDate": "2026-04-02",
+          "paymentFrequency": "weekly"
+        }
+      },
+      {
+        "id": "loan_1774411574883",
+        "note": ["AirPods Perpay plus Warranty", "AirPods Perpay plus Warranty", "AirPods Perpay plus Warranty"],
+        "type": "loan",
+        "label": "Airpods",
+        "history": [
+          {"weekly": [17.5, 17.5, 17.5, 17.5], "effectiveFrom": "2026-03-25"},
+          {"weekly": [0, 0, 0, 0], "effectiveFrom": "2026-09-30"}
+        ],
+        "category": "Loans",
+        "loanMeta": {
+          "totalAmount": 317,
+          "paymentAmount": 17.5,
+          "firstPaymentDate": "2026-04-02",
+          "paymentFrequency": "weekly"
+        }
+      },
+      {
+        "id": "exp_1775798727338",
+        "note": ["Moms Payment", "Moms Payment", "Moms Payment", "Moms Payment"],
+        "label": "Housing",
+        "history": [
+          {"weekly": [50, 50, 50, 50], "effectiveFrom": "2026-04-10"}
+        ],
+        "category": "Needs",
+        "billingMeta": {
+          "cycle": "weekly",
+          "amount": 50,
+          "effectiveFrom": "2026-04-10"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      },
+      {
+        "id": "exp_1773889318142",
+        "note": ["AT&T Unlimited Plan", "AT&T Unlimited Plan", "AT&T Unlimited Plan", "AT&T Unlimited Plan"],
+        "label": "Phone Service",
+        "history": [
+          {"weekly": [60, 60, 60, 60], "effectiveFrom": "2026-03-18"},
+          {"weekly": [50.001, 12.5, 12.5, 12.5], "effectiveFrom": "2026-04-03"}
+        ],
+        "category": "Needs",
+        "billingMeta": {
+          "cycle": "every30days",
+          "amount": 50,
+          "byPhase": {
+            "0": {"cycle": "every30days", "amount": 214.29, "effectiveFrom": "2026-03-28"},
+            "1": {"cycle": "every30days", "amount": 50, "effectiveFrom": "2026-04-01"},
+            "2": {"cycle": "every30days", "amount": 50, "effectiveFrom": "2026-04-03"},
+            "3": {"cycle": "every30days", "amount": 50, "effectiveFrom": "2026-04-03"}
+          },
+          "effectiveFrom": "2026-04-03"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      },
+      {
+        "id": "food",
+        "note": ["", "", "", ""],
+        "label": "Food",
+        "history": [
+          {"weekly": [65, 65, 65, 65], "effectiveFrom": "2026-01-27"},
+          {"weekly": [65, 75, 75, 75], "effectiveFrom": "2026-04-04"}
+        ],
+        "category": "Needs",
+        "billingMeta": {
+          "cycle": "every30days",
+          "amount": 300,
+          "byPhase": {
+            "1": {"cycle": "every30days", "amount": 300, "effectiveFrom": "2026-04-04"},
+            "2": {"cycle": "every30days", "amount": 300, "effectiveFrom": "2026-04-04"},
+            "3": {"cycle": "every30days", "amount": 300, "effectiveFrom": "2026-04-04"}
+          },
+          "effectiveFrom": "2026-04-04"
+        },
+        "isFoodPrimary": true,
+        "isFoodHighlighted": true
+      },
+      {
+        "id": "exp_1774678531647",
+        "note": ["", "", "", ""],
+        "label": "Claude",
+        "history": [
+          {"weekly": [5, 5, 5, 5], "effectiveFrom": "2026-03-28"},
+          {"weekly": [5, 5, 5, 5], "effectiveFrom": "2026-04-02"}
+        ],
+        "category": "Lifestyle",
+        "billingMeta": {
+          "cycle": "every30days",
+          "amount": 20,
+          "byPhase": {
+            "1": {"cycle": "every30days", "amount": 20, "effectiveFrom": "2026-04-02"}
+          },
+          "effectiveFrom": "2026-04-02"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      },
+      {
+        "id": "exp_1775190804332",
+        "note": ["", "", "", ""],
+        "label": "GPT",
+        "history": [
+          {"weekly": [5, 5, 5, 5], "effectiveFrom": "2026-04-02"}
+        ],
+        "category": "Lifestyle",
+        "billingMeta": {
+          "cycle": "every30days",
+          "amount": 20,
+          "effectiveFrom": "2026-04-02"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      },
+      {
+        "id": "exp_1773959427067",
+        "note": ["Disney+ & Hulu bundle", "Disney+ & Hulu bundle", "Disney+ & Hulu bundle", "Disney+ & Hulu bundle"],
+        "label": "Disney+ Bundle",
+        "history": [
+          {"weekly": [0, 20, 20, 20], "effectiveFrom": "2026-03-20"},
+          {"weekly": [0, 5, 5, 5], "effectiveFrom": "2026-04-03"}
+        ],
+        "category": "Lifestyle",
+        "billingMeta": {
+          "cycle": "every30days",
+          "amount": 20,
+          "byPhase": {
+            "1": {"cycle": "every30days", "amount": 20, "effectiveFrom": "2026-04-01"},
+            "2": {"cycle": "every30days", "amount": 20, "effectiveFrom": "2026-04-03"},
+            "3": {"cycle": "every30days", "amount": 20, "effectiveFrom": "2026-04-03"}
+          },
+          "effectiveFrom": "2026-04-03"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      },
+      {
+        "id": "exp_1774641421041",
+        "note": ["", "", "", ""],
+        "label": "TRW",
+        "history": [
+          {"weekly": [12.5, 12.5, 12.5, 12.5], "effectiveFrom": "2026-03-27"}
+        ],
+        "category": "Lifestyle",
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
+      },
+      {
+        "id": "exp_1775678425375",
+        "note": ["", "", "", ""],
+        "label": "Walmart+",
+        "history": [
+          {"weekly": [1.25, 1.25, 1.25, 1.25], "effectiveFrom": "2026-04-08"}
+        ],
+        "category": "Lifestyle",
+        "billingMeta": {
+          "cycle": "every30days",
+          "amount": 5,
+          "effectiveFrom": "2026-04-08"
+        },
+        "isFoodPrimary": false,
+        "isFoodHighlighted": false
       }
     ],
     "goals": [
+      {
+        "id": "g3",
+        "note": "Safety net for Angel & baby",
+        "color": "#7eb8c9",
+        "label": "Angel Emergency Fund",
+        "target": 2500,
+        "dueWeek": 20,
+        "completed": false
+      },
+      {
+        "id": "g7",
+        "note": "Save $3k cash + 401k loan for remainder",
+        "color": "#c8a84b",
+        "label": "FHA Down Payment",
+        "target": 3000,
+        "dueWeek": 45,
+        "completed": false
+      },
       {
         "id": "g1",
         "note": "Traffic tickets — may be more than $600",
         "color": "#e8856a",
         "label": "Laywer + Fines",
-        "target": 600,
+        "target": 500,
         "dueWeek": 14,
         "completed": true,
-        "completedAt": "2026-04-03T13:48:11.049Z"
+        "completedAt": "2026-04-09T03:45:23.553Z"
+      },
+      {
+        "id": "g2",
+        "note": "Financing Chevy Caprice from Bob",
+        "color": "#c9a96e",
+        "label": "Chevy Car Insurance and Registration",
+        "target": 250,
+        "dueWeek": 23,
+        "completed": true,
+        "completedAt": "2026-04-10T20:04:39.447Z"
       }
     ],
     "logs": [
@@ -448,31 +532,102 @@
         "workedDays": "Fri, Sat, Sun",
         "weekRotation": "Week 2",
         "weekendShifts": 0
+      },
+      {
+        "id": 1773905437024,
+        "note": "cut open foot",
+        "type": "missed_unapproved",
+        "amount": 0,
+        "weekEnd": "2026-03-23",
+        "weekIdx": 11,
+        "ptoHours": 0,
+        "hoursLost": 12,
+        "missedDays": ["Wed"],
+        "shiftsLost": 1,
+        "weekRotation": "4-Day",
+        "weekendShifts": 0
+      },
+      {
+        "id": 1775821510302,
+        "note": "Took off to register car",
+        "type": "missed_unpaid",
+        "amount": 0,
+        "weekEnd": "2026-04-13",
+        "weekIdx": 14,
+        "ptoHours": 0,
+        "hoursLost": 12,
+        "missedDays": ["Fri"],
+        "shiftsLost": 1,
+        "hoursGained": 0,
+        "shiftsGained": 0,
+        "weekRotation": "6-Day",
+        "weekendShifts": 1
       }
     ],
     "show_extra": true,
-    "updated_at": "2026-04-09 00:26:13.095+00",
+    "updated_at": "2026-04-13 20:58:51.854+00",
     "week_confirmations": {
       "7": {
         "eventId": 1774094482240,
-        "dayToggles": {
-          "Fri": true,
-          "Mon": true,
-          "Sat": null,
-          "Sun": null,
-          "Thu": true,
-          "Tue": null,
-          "Wed": true
-        },
+        "dayToggles": {"Fri": true, "Mon": true, "Sat": null, "Sun": null, "Thu": true, "Tue": null, "Wed": true},
         "pickupDays": [],
         "confirmedAt": "2026-03-21T12:01:22.240Z",
         "netShiftDelta": 0,
-        "scheduledDays": [
-          "Mon",
-          "Wed",
-          "Thu",
-          "Fri"
-        ],
+        "scheduledDays": ["Mon", "Wed", "Thu", "Fri"],
+        "missedScheduledDays": []
+      },
+      "8": {
+        "eventId": 1774094479740,
+        "dayToggles": {"Fri": true, "Mon": true, "Sat": null, "Sun": null, "Thu": true, "Tue": null, "Wed": true},
+        "pickupDays": ["Mon"],
+        "confirmedAt": "2026-03-21T12:01:19.740Z",
+        "netShiftDelta": 1,
+        "scheduledDays": ["Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "missedScheduledDays": []
+      },
+      "9": {
+        "eventId": null,
+        "dayToggles": {"Fri": true, "Mon": true, "Sat": null, "Sun": null, "Thu": true, "Tue": null, "Wed": true},
+        "pickupDays": [],
+        "confirmedAt": "2026-03-21T12:00:50.559Z",
+        "netShiftDelta": 0,
+        "scheduledDays": ["Mon", "Wed", "Thu", "Fri"],
+        "missedScheduledDays": []
+      },
+      "10": {
+        "eventId": 1774045803623,
+        "dayToggles": {"Fri": true, "Mon": null, "Sat": true, "Sun": true, "Thu": false, "Tue": false, "Wed": false},
+        "pickupDays": [],
+        "confirmedAt": "2026-03-20T22:30:03.623Z",
+        "netShiftDelta": -3,
+        "scheduledDays": ["Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "missedScheduledDays": ["Tue", "Wed", "Thu"]
+      },
+      "11": {
+        "eventId": 1774329014783,
+        "dayToggles": {"Fri": true, "Mon": true, "Sat": null, "Sun": null, "Thu": true, "Tue": null, "Wed": false},
+        "pickupDays": [],
+        "confirmedAt": "2026-03-24T05:10:14.783Z",
+        "netShiftDelta": -1,
+        "scheduledDays": ["Mon", "Wed", "Thu", "Fri"],
+        "missedScheduledDays": ["Wed"]
+      },
+      "12": {
+        "eventId": null,
+        "dayToggles": {"Fri": true, "Mon": null, "Sat": true, "Sun": true, "Thu": true, "Tue": true, "Wed": true},
+        "pickupDays": [],
+        "confirmedAt": "2026-03-31T05:22:14.012Z",
+        "netShiftDelta": 0,
+        "scheduledDays": ["Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "missedScheduledDays": []
+      },
+      "13": {
+        "eventId": null,
+        "dayToggles": {"Fri": true, "Mon": true, "Sat": null, "Sun": null, "Thu": true, "Tue": null, "Wed": true},
+        "pickupDays": [],
+        "confirmedAt": "2026-04-07T14:26:41.695Z",
+        "netShiftDelta": 0,
+        "scheduledDays": ["Mon", "Wed", "Thu", "Fri"],
         "missedScheduledDays": []
       }
     },

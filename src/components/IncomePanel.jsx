@@ -1,58 +1,18 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { MONTH_FULL } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet, toLocalIso } from "../lib/finance.js";
 import { deriveRollingIncomeWeeks, progressiveScale } from "../lib/rollingTimeline.js";
 import { getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { Card, SH, iS, lS } from "./ui.jsx";
+import { Card, SH, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {} }) {
-  const [subview, setSubview] = useState("monthly");
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
-
-  // ── JS sticky header for weekly chart (CSS sticky broken by overflow-x:hidden on html/body) ──
-  const weeklyTableRef = useRef(null);
-  const [stickyHdr, setStickyHdr] = useState(null); // null = hidden; {top,left,width,cols} = visible
-  useEffect(() => {
-    if (subview !== "weekly") {
-      setStickyHdr(s => s !== null ? null : s);
-      return;
-    }
-    const update = () => {
-      const table = weeklyTableRef.current;
-      if (!table) return;
-      const thead = table.querySelector("thead");
-      if (!thead) return;
-      const r = thead.getBoundingClientRect();
-      const isMob = window.innerWidth < 768;
-      const threshold = isMob ? 57 : 1;
-      if (r.top < threshold) {
-        const ths = Array.from(table.querySelectorAll("thead th"));
-        const tr = table.getBoundingClientRect();
-        setStickyHdr({
-          top: isMob ? "calc(56px + env(safe-area-inset-top, 0px))" : "0px",
-          left: tr.left,
-          width: tr.width,
-          cols: ths.map(th => th.getBoundingClientRect().width),
-        });
-      } else {
-        setStickyHdr(s => s !== null ? null : s);
-      }
-    };
-    const mc = document.querySelector(".main-content");
-    window.addEventListener("scroll", update, { passive: true });
-    mc?.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update, { passive: true });
-    update();
-    return () => {
-      window.removeEventListener("scroll", update);
-      mc?.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  }, [subview]);
+  // Check once on mount — drives mobile vs desktop layout branch for weekly view
+  const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
 
   // ── Sharpen Rates modal state ──────────────────────────────────────────────
   const [sg1, setSg1] = useState("");
@@ -119,6 +79,22 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
   const weeklyRows = rollingWeekly.visibleWeeks;
   const archivedWeeklyRows = rollingWeekly.hiddenWeeks;
   const weeklyDensityScale = progressiveScale(rollingWeekly.scaleProgress, 0.15);
+
+  const currentMonthIdx = new Date(`${todayIso}T12:00:00`).getMonth();
+  const prevMonthIdx = currentMonthIdx > 0 ? currentMonthIdx - 1 : null;
+  const rollingMonthCards = mo
+    .map((m, mi) => ({ ...m, mi, isCurrentMonth: mi === currentMonthIdx }))
+    .filter(m => m.n > 0 && m.mi >= (prevMonthIdx !== null ? prevMonthIdx : currentMonthIdx));
+
+  const [isDesktopWeekly, setIsDesktopWeekly] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onResize = () => setIsDesktopWeekly(window.innerWidth >= 768);
+    onResize();
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
 
   return (<div>
@@ -322,131 +298,149 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
         />
       </div>
     </div>
-    <div style={{ display: "flex", gap: "6px", marginBottom: "18px", flexWrap: "wrap" }}>
-      {["monthly", "weekly"].map(v => <button key={v} onClick={() => setSubview(v)} style={{ padding: "5px 12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", background: subview === v ? "rgba(0,200,150,0.10)" : "transparent", color: subview === v ? "var(--color-gold)" : "#555", border: "1px solid " + (subview === v ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{v}</button>)}
-    </div>
-
-    {/* MONTHLY */}
-    {subview === "monthly" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "14px" }}>
-      {mo.filter(m => m.n > 0).map(m => <div key={m.name} style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "16px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-          <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-gold)" }}>{m.name.slice(0, 3)}</div>
-          <span style={{ fontSize: "9px", padding: "3px 7px", borderRadius: "12px", background: m.ex === m.n ? "#1e4a30" : m.tx === m.n ? "#1e1e3a" : "rgba(0,200,150,0.10)", color: m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)", border: "1px solid " + (m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)") }}>{m.ex === m.n ? "EXEMPT" : m.tx === m.n ? "TAXED" : "MIXED"}</span>
-        </div>
-        {(() => {
-          const firstFutureIdx = m.wks.findIndex(w => toLocalIso(w.weekEnd) >= todayIso);
-          const hasPartial = firstFutureIdx > 0;
-          return m.wks.map((w, wi) => {
-            const isPast = toLocalIso(w.weekEnd) < todayIso;
-            const rotationDisplay = formatRotationDisplay(w, { isAdmin });
-            const showDivider = hasPartial && wi === firstFutureIdx;
-            return [
-              showDivider && (
-                <div key={`divider-${w.idx}`} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 0 4px" }}>
-                  <div style={{ flex: 1, height: "1px", background: "var(--color-border-subtle)" }} />
-                  <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)" }}>est. below</span>
-                  <div style={{ flex: 1, height: "1px", background: "var(--color-border-subtle)" }} />
-                </div>
-              ),
-              <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #1e1e1e", opacity: isPast ? 0.75 : 1 }}>
-                <div><div style={{ fontSize: "11px", color: "#777" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div><div style={{ fontSize: "10px", color: "#999" }}>{rotationDisplay} · {w.totalHours}h</div></div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "13px", fontWeight: "bold", color: isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)") }}>{f2(resolveWeekNet(w))}</div>
-                  <div style={{ fontSize: "9px", color: sc(w.taxedBySchedule) }}>{w.taxedBySchedule ? "TAXED" : "EXEMPT"}</div>
-                </div>
-              </div>
-            ];
-          });
-        })()}
-        <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px", fontSize: "11px" }}>
-          <span style={{ color: "#aaa" }}>Gross: {f(m.gross)}</span>
-          <span style={{ color: "var(--color-green)", textAlign: "right" }}>
-            {m.wks.some(w => toLocalIso(w.weekEnd) >= todayIso) ? "Est. Net: " : "Net: "}{f(m.net)}
-          </span>
-        </div>
-      </div>)}
-    </div>}
-
-    {/* WEEKLY — slimmed to 4 cols; full detail available via modal */}
-    {subview === "weekly" && <div>
-      <style>{`
-        @media (max-width: 767px) {
-          .income-weekly-sticky th {
-            top: calc(56px + env(safe-area-inset-top, 0px)) !important;
-          }
-        }
-      `}</style>
+    <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>
-          Rolling Window · last 4 completed + rest of year ({weeklyRows.length} visible)
+          {isDesktopWeekly
+            ? `Rolling Window · last 4 completed + rest of year (${weeklyRows.length} visible)`
+            : `Monthly Rolling · ${rollingMonthCards.length} months`}
         </span>
         <button onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase" }}>⊞ Full Detail</button>
       </div>
-      {stickyHdr && (
-        <div style={{ position: "fixed", top: stickyHdr.top, left: stickyHdr.left, width: stickyHdr.width, zIndex: 25, background: "var(--color-bg-base)", borderBottom: "1px solid var(--color-accent-primary)", boxShadow: "0 4px 16px rgba(0,0,0,0.6)", pointerEvents: "none" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-            <colgroup>{stickyHdr.cols.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}</colgroup>
-            <thead><tr style={{ color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
-              <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th>
-              <th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th>
-              <th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th>
-              <th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
-            </tr></thead>
-          </table>
-        </div>
-      )}
-      <table ref={weeklyTableRef} className="data-table income-weekly-sticky" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
-        <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
-          <th style={{ textAlign: "left", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Wk End</th>
-          <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Gross</th>
-          <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Take Home</th>
-          <th style={{ textAlign: "center", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Status</th>
-        </tr></thead>
-          <tbody>{weeklyRows.map(w => {
-            const isCurrent = currentWeek && w.idx === currentWeek.idx;
-            const isPast = toLocalIso(w.weekEnd) < todayIso;
-            const baseBg = isCurrent ? "#1a2a14" : isPast ? "#111111" : "transparent";
-            const hoverBg = isCurrent ? "#1e3018" : isPast ? "#1a1a1a" : "var(--color-bg-surface)";
-            const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)");
-            const displayNet = w.active ? f2(resolveWeekNet(w)) : "—";
-            const rotationDisplay = formatRotationDisplay(w, { isAdmin });
-            const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-disabled)";
+
+      {!isDesktopWeekly ? (
+        <ScrollSnapRow itemWidth="min(92vw, 340px)">
+          {rollingMonthCards.map(m => {
+            const isPastMonth = m.mi < currentMonthIdx;
             return (
-              <tr
-                key={w.idx}
-                style={{ borderBottom: "1px solid #161616", background: baseBg }}
-                onMouseEnter={e => { e.currentTarget.style.background = hoverBg; }}
-                onMouseLeave={e => { e.currentTarget.style.background = baseBg; }}
-            >
-              <td style={{ padding: `${Math.round(7 * weeklyDensityScale)}px 4px`, color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
-                <span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
-              </td>
-              <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{w.active ? f2(w.grossPay) : "—"}</td>
-              <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{displayNet}</td>
-              <td style={{ padding: "7px 4px", textAlign: "center", color: rotationColor, fontWeight: "bold" }}>{rotationDisplay}</td>
-              <td style={{ padding: "7px 4px", textAlign: "center" }}>
-                {w.active && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
-                    <span style={{ fontSize: "8px", padding: "2px 6px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule) }}>
-                      {w.taxedBySchedule ? "TX" : "EX"}
-                    </span>
-                    <span style={{ fontSize: "8px", letterSpacing: "0.5px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-secondary)" }}>
-                      {isPast ? "ACTUAL" : "PROJECTED"}
-                    </span>
+              <div
+                key={m.name}
+                style={{
+                  background: "var(--color-bg-surface)",
+                  border: `1px solid ${m.isCurrentMonth ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
+                  borderRadius: "14px",
+                  padding: "14px",
+                  opacity: isPastMonth ? 0.75 : 1,
+                }}
+              >
+                {/* Month header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-gold)" }}>{m.name}</span>
+                    {m.isCurrentMonth && <span style={{ fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
                   </div>
-                )}
-              </td>
-            </tr>
-          );
-        })}</tbody>
-      </table>
-      {archivedWeeklyRows.length > 0 && (
+                  <span style={{
+                    fontSize: "9px", padding: "2px 7px", borderRadius: "12px",
+                    background: m.ex === m.n ? "#1e4a30" : m.tx === m.n ? "#1e1e3a" : "rgba(0,200,150,0.10)",
+                    color: m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)",
+                    border: "1px solid " + (m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)"),
+                  }}>
+                    {m.ex === m.n ? "EXEMPT" : m.tx === m.n ? "TAXED" : "MIXED"}
+                  </span>
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginBottom: "8px" }} />
+
+                {/* Week rows */}
+                {m.wks.map(w => {
+                  const isCurrent = currentWeek && w.idx === currentWeek.idx;
+                  const isPast = toLocalIso(w.weekEnd) < todayIso;
+                  const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-accent-primary)" : "var(--color-green)");
+                  const rotationDisplay = formatRotationDisplay(w, { isAdmin });
+                  const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-secondary)";
+                  return (
+                    <div key={w.idx} style={{ marginBottom: "8px", opacity: isPastMonth ? 1 : (isPast ? 0.65 : 1) }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ fontSize: "11px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
+                          Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ fontSize: "12px", fontWeight: "bold", color: netColor, fontVariantNumeric: "tabular-nums" }}>
+                            {w.active ? f2(resolveWeekNet(w)) : "—"}
+                          </span>
+                          {w.active && (
+                            <span style={{ fontSize: "8px", padding: "2px 5px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule), letterSpacing: "0.5px" }}>
+                              {w.taxedBySchedule ? "TX" : "EX"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: "9px", color: rotationColor, marginTop: "2px" }}>
+                        {rotationDisplay} · {isPast ? "ACTUAL" : "PROJECTED"}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Month total */}
+                <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginTop: "4px", paddingTop: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "10px", letterSpacing: "1.2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+                    {m.wks.some(w => toLocalIso(w.weekEnd) >= todayIso) ? "Est. Take Home" : "Take Home"}
+                  </span>
+                  <span style={{ fontSize: "16px", fontWeight: "bold", color: m.isCurrentMonth ? "var(--color-accent-primary)" : "var(--color-green)", fontVariantNumeric: "tabular-nums" }}>
+                    {f2(m.net)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </ScrollSnapRow>
+      ) : (
+        <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
+          <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+            <th style={{ textAlign: "left", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Wk End</th>
+            <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Gross</th>
+            <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Take Home</th>
+            <th style={{ textAlign: "center", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Status</th>
+          </tr></thead>
+            <tbody>{weeklyRows.map(w => {
+              const isCurrent = currentWeek && w.idx === currentWeek.idx;
+              const isPast = toLocalIso(w.weekEnd) < todayIso;
+              const baseBg = isCurrent ? "#1a2a14" : isPast ? "#111111" : "transparent";
+              const hoverBg = isCurrent ? "#1e3018" : isPast ? "#1a1a1a" : "var(--color-bg-surface)";
+              const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)");
+              const displayNet = w.active ? f2(resolveWeekNet(w)) : "—";
+              const rotationDisplay = formatRotationDisplay(w, { isAdmin });
+              const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-disabled)";
+              return (
+                <tr
+                  key={w.idx}
+                  style={{ borderBottom: "1px solid #161616", background: baseBg }}
+                  onMouseEnter={e => { e.currentTarget.style.background = hoverBg; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = baseBg; }}
+              >
+                <td style={{ padding: `${Math.round(7 * weeklyDensityScale)}px 4px`, color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
+                  <span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                  {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
+                </td>
+                <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{w.active ? f2(w.grossPay) : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{displayNet}</td>
+                <td style={{ padding: "7px 4px", textAlign: "center", color: rotationColor, fontWeight: "bold" }}>{rotationDisplay}</td>
+                <td style={{ padding: "7px 4px", textAlign: "center" }}>
+                  {w.active && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
+                      <span style={{ fontSize: "8px", padding: "2px 6px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule) }}>
+                        {w.taxedBySchedule ? "TX" : "EX"}
+                      </span>
+                      <span style={{ fontSize: "8px", letterSpacing: "0.5px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-secondary)" }}>
+                        {isPast ? "ACTUAL" : "PROJECTED"}
+                      </span>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      )}
+
+      {isDesktopWeekly && archivedWeeklyRows.length > 0 && (
         <div style={{ marginTop: "8px", fontSize: "10px", color: "var(--color-text-disabled)" }}>
           {archivedWeeklyRows.length} older active week(s) hidden (view keeps last 4 completed weeks + rest of year; archived for future full-year review).
         </div>
       )}
-    </div>}
+    </div>
 
     {/* FULL-DETAIL WEEKLY MODAL */}
     {showWeekDetail && <div onClick={() => setShowWeekDetail(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 1000, overflowY: "auto", padding: "16px" }}>

@@ -3,7 +3,7 @@ import { computeGoalTimeline } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { FlowSparklineCard, MetricCard, SH, SmBtn, iS, lS } from "./ui.jsx";
+import { FlowSparklineCard, MetricCard, SH, SmBtn, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_SUBDIVISIONS = 4;
@@ -254,6 +254,7 @@ export function HomePanel({
   const [showCompleted, setShowCompleted] = useState(false);
   const [draggingGoalId, setDraggingGoalId] = useState(null);
   const [dragOverGoalId, setDragOverGoalId] = useState(null);
+  const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
   const goalInsertRef = useRef({ targetId: null, insertIndex: null });
   const goalDragFinalizedRef = useRef(false);
 
@@ -540,113 +541,213 @@ export function HomePanel({
             <div style={{ fontSize: "10px", color: "#666" }}>{tl.length}</div>
           </div>
           {!tl.length && <div style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", color: "#666", letterSpacing: "1px", textTransform: "uppercase" }}>No active goals yet</div>}
-          {tl.map((g, i) => {
-            const isEditing = editGoalId === g.id;
-            const isDragging = draggingGoalId === g.id;
-            const isDropTarget = dragOverGoalId === g.id;
-            const projectedWeeks = Number.isFinite(g.eW) ? Math.max(0, Math.ceil(g.eW)) : 0;
-            const fillWidthPct = clamp01(projectedWeeks / Math.max(weeksLeft, 1)) * 100;
-            return (
-              <div
-                key={g.id}
-                draggable={!isEditing}
-                onDragStart={() => onGoalDragStart(g)}
-                onDragEnd={onGoalDragEnd}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOverGoalId(g.id);
-                  const activeIndex = activeGoals.findIndex((goal) => goal.id === g.id);
-                  goalInsertRef.current = { targetId: g.id, insertIndex: activeIndex === -1 ? 0 : activeIndex };
-                }}
-                style={{
-                  background: "var(--color-bg-surface)",
-                  border: `1px solid ${isDropTarget ? "var(--color-gold)" : "var(--color-border-accent)"}`,
-                  borderRadius: "8px",
-                  padding: "16px",
-                  marginBottom: "12px",
-                  opacity: isDragging ? 0.65 : 1,
-                  cursor: isEditing ? "default" : "grab",
-                }}
-              >
-                {isEditing ? (
-                  <div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
-                      <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={editGoalVals.label} onChange={(e) => setEditGoalVals((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
-                      <div><label style={lS}>Target ($)</label><input type="number" value={editGoalVals.target} onChange={(e) => setEditGoalVals((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
-                      <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={editGoalVals.note} onChange={(e) => setEditGoalVals((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
-                    </div>
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <SmBtn onClick={() => saveEditGoal(g.id)} c="var(--color-green)">SAVE</SmBtn>
-                      <SmBtn onClick={() => setEditGoalId(null)}>CANCEL</SmBtn>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                          <span style={{ fontSize: "10px", background: "rgba(0,200,150,0.16)", color: GOAL_SYSTEM_COLOR, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
-                          <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
+          {isMobile ? (
+            <ScrollSnapRow itemWidth="min(88vw, 340px)">
+              {tl.map((g, i) => {
+                const isEditing = editGoalId === g.id;
+                const projectedWeeks = Number.isFinite(g.eW) ? Math.max(0, Math.ceil(g.eW)) : 0;
+                const fillWidthPct = clamp01(projectedWeeks / Math.max(weeksLeft, 1)) * 100;
+                return (
+                  <div
+                    key={g.id}
+                    style={{
+                      background: "var(--color-bg-surface)",
+                      border: `1px solid ${isEditing ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
+                      borderRadius: "8px",
+                      padding: "16px",
+                    }}
+                  >
+                    {isEditing ? (
+                      <div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
+                          <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={editGoalVals.label} onChange={(e) => setEditGoalVals((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
+                          <div><label style={lS}>Target ($)</label><input type="number" value={editGoalVals.target} onChange={(e) => setEditGoalVals((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
+                          <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={editGoalVals.note} onChange={(e) => setEditGoalVals((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
+                        </div>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <SmBtn onClick={() => saveEditGoal(g.id)} c="var(--color-green)">SAVE</SmBtn>
+                          <SmBtn onClick={() => setEditGoalId(null)}>CANCEL</SmBtn>
                         </div>
                       </div>
-                      <div style={{ textAlign: "right", marginLeft: "12px" }}>
-                        <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                        <div style={{ fontSize: "10px", color: Number.isFinite(g.eW) && g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-red)" }}>{resolveGoalFinishLabel(g)}</div>
-                        {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
-                      </div>
-                    </div>
-                    <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px" }}>
-                      {visibleTimelineSegments.map((seg) => (
-                        <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }}>
-                          {seg.subdivisions.map((sub) => (
-                            <div key={`${seg.key}-${sub.key}`} style={{ position: "absolute", top: "1px", bottom: "1px", left: `${sub.leftPct - seg.leftPct}%`, width: `${sub.widthPct}%`, borderRight: sub.key < MONTH_SUBDIVISIONS - 1 ? "1px solid rgba(255,255,255,0.07)" : "none" }} />
+                    ) : (
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                              <span style={{ fontSize: "10px", background: "rgba(0,200,150,0.16)", color: GOAL_SYSTEM_COLOR, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
+                              <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right", marginLeft: "12px" }}>
+                            <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
+                            <div style={{ fontSize: "10px", color: Number.isFinite(g.eW) && g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-red)" }}>{resolveGoalFinishLabel(g)}</div>
+                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
+                          </div>
+                        </div>
+                        <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px" }}>
+                          {visibleTimelineSegments.map((seg) => (
+                            <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }}>
+                              {seg.subdivisions.map((sub) => (
+                                <div key={`${seg.key}-${sub.key}`} style={{ position: "absolute", top: "1px", bottom: "1px", left: `${sub.leftPct - seg.leftPct}%`, width: `${sub.widthPct}%`, borderRight: sub.key < MONTH_SUBDIVISIONS - 1 ? "1px solid rgba(255,255,255,0.07)" : "none" }} />
+                              ))}
+                            </div>
+                          ))}
+                          <div style={{ position: "absolute", top: "2px", left: 0, width: `${Math.max(fillWidthPct, celebrating === g.id ? 100 : 0)}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
+                        </div>
+                        <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
+                          {visibleTimelineSegments.map((seg) => (
+                            <span key={`${seg.key}-label`} style={{
+                              position: "absolute",
+                              left: `${seg.leftPct}%`,
+                              width: `${seg.widthPct}%`,
+                              textAlign: "center",
+                              fontSize: `${Math.max(7, Math.round(8 * goalTimelineScale))}px`,
+                              letterSpacing: "1.1px",
+                              color: seg.key < today.slice(0, 7) ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                              textTransform: "uppercase",
+                              lineHeight: 1.1,
+                              whiteSpace: "nowrap",
+                            }}>
+                              {seg.label}
+                            </span>
                           ))}
                         </div>
-                      ))}
-                      <div style={{ position: "absolute", top: "2px", left: 0, width: `${Math.max(fillWidthPct, celebrating === g.id ? 100 : 0)}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
-                    </div>
-                    <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
-                      {visibleTimelineSegments.map((seg) => (
-                        <span key={`${seg.key}-label`} style={{
-                          position: "absolute",
-                          left: `${seg.leftPct}%`,
-                          width: `${seg.widthPct}%`,
-                          textAlign: "center",
-                          fontSize: `${Math.max(7, Math.round(8 * goalTimelineScale))}px`,
-                          letterSpacing: "1.1px",
-                          color: seg.key < today.slice(0, 7) ? "var(--color-text-disabled)" : "var(--color-text-primary)",
-                          textTransform: "uppercase",
-                          lineHeight: 1.1,
-                          whiteSpace: "nowrap",
-                        }}>
-                          {seg.label}
-                        </span>
-                      ))}
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
-                      <div style={{ fontSize: "10px", color: "#666" }}>
-                        <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
-                        {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
+                          <div style={{ fontSize: "10px", color: "#666" }}>
+                            <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
+                            {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
+                          </div>
+                          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                            <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
+                            <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
+                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
+                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
+                            {delGoalId === g.id ? (
+                              <>
+                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)">DEL</SmBtn>
+                                <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
+                              </>
+                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)">✕</SmBtn>}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                        <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
-                        <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
-                        <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
-                        <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
-                        {delGoalId === g.id ? (
-                          <>
-                            <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)">DEL</SmBtn>
-                            <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
-                          </>
-                        ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)">✕</SmBtn>}
-                      </div>
-                    </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </ScrollSnapRow>
+          ) : (
+            <>
+              {tl.map((g, i) => {
+                const isEditing = editGoalId === g.id;
+                const isDragging = draggingGoalId === g.id;
+                const isDropTarget = dragOverGoalId === g.id;
+                const projectedWeeks = Number.isFinite(g.eW) ? Math.max(0, Math.ceil(g.eW)) : 0;
+                const fillWidthPct = clamp01(projectedWeeks / Math.max(weeksLeft, 1)) * 100;
+                return (
+                  <div
+                    key={g.id}
+                    draggable={!isEditing}
+                    onDragStart={() => onGoalDragStart(g)}
+                    onDragEnd={onGoalDragEnd}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOverGoalId(g.id);
+                      const activeIndex = activeGoals.findIndex((goal) => goal.id === g.id);
+                      goalInsertRef.current = { targetId: g.id, insertIndex: activeIndex === -1 ? 0 : activeIndex };
+                    }}
+                    style={{
+                      background: "var(--color-bg-surface)",
+                      border: `1px solid ${isDropTarget ? "var(--color-gold)" : "var(--color-border-accent)"}`,
+                      borderRadius: "8px",
+                      padding: "16px",
+                      marginBottom: "12px",
+                      opacity: isDragging ? 0.65 : 1,
+                      cursor: isEditing ? "default" : "grab",
+                    }}
+                  >
+                    {isEditing ? (
+                      <div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
+                          <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={editGoalVals.label} onChange={(e) => setEditGoalVals((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
+                          <div><label style={lS}>Target ($)</label><input type="number" value={editGoalVals.target} onChange={(e) => setEditGoalVals((v) => ({ ...v, target: e.target.value }))} style={iS} /></div>
+                          <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note</label><input type="text" value={editGoalVals.note} onChange={(e) => setEditGoalVals((v) => ({ ...v, note: e.target.value }))} style={iS} /></div>
+                        </div>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <SmBtn onClick={() => saveEditGoal(g.id)} c="var(--color-green)">SAVE</SmBtn>
+                          <SmBtn onClick={() => setEditGoalId(null)}>CANCEL</SmBtn>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                              <span style={{ fontSize: "10px", background: "rgba(0,200,150,0.16)", color: GOAL_SYSTEM_COLOR, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
+                              <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right", marginLeft: "12px" }}>
+                            <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
+                            <div style={{ fontSize: "10px", color: Number.isFinite(g.eW) && g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-red)" }}>{resolveGoalFinishLabel(g)}</div>
+                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
+                          </div>
+                        </div>
+                        <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px" }}>
+                          {visibleTimelineSegments.map((seg) => (
+                            <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }}>
+                              {seg.subdivisions.map((sub) => (
+                                <div key={`${seg.key}-${sub.key}`} style={{ position: "absolute", top: "1px", bottom: "1px", left: `${sub.leftPct - seg.leftPct}%`, width: `${sub.widthPct}%`, borderRight: sub.key < MONTH_SUBDIVISIONS - 1 ? "1px solid rgba(255,255,255,0.07)" : "none" }} />
+                              ))}
+                            </div>
+                          ))}
+                          <div style={{ position: "absolute", top: "2px", left: 0, width: `${Math.max(fillWidthPct, celebrating === g.id ? 100 : 0)}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
+                        </div>
+                        <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
+                          {visibleTimelineSegments.map((seg) => (
+                            <span key={`${seg.key}-label`} style={{
+                              position: "absolute",
+                              left: `${seg.leftPct}%`,
+                              width: `${seg.widthPct}%`,
+                              textAlign: "center",
+                              fontSize: `${Math.max(7, Math.round(8 * goalTimelineScale))}px`,
+                              letterSpacing: "1.1px",
+                              color: seg.key < today.slice(0, 7) ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                              textTransform: "uppercase",
+                              lineHeight: 1.1,
+                              whiteSpace: "nowrap",
+                            }}>
+                              {seg.label}
+                            </span>
+                          ))}
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
+                          <div style={{ fontSize: "10px", color: "#666" }}>
+                            <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
+                            {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
+                          </div>
+                          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                            <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
+                            <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
+                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
+                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
+                            {delGoalId === g.id ? (
+                              <>
+                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)">DEL</SmBtn>
+                                <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
+                              </>
+                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)">✕</SmBtn>}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
 
         {addingGoal ? (

@@ -555,8 +555,24 @@ export function HomePanel({
                       border: `1px solid ${isEditing ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
                       borderRadius: "8px",
                       padding: "16px",
+                      position: "relative",
+                      overflow: "hidden",
                     }}
                   >
+                    <div style={{
+                      fontSize: isMobile ? "72px" : "96px",
+                      fontWeight: 900,
+                      fontFamily: "var(--font-display)",
+                      color: "rgba(255, 255, 255, 0.09)",
+                      lineHeight: 1,
+                      position: "absolute",
+                      top: "-8px",
+                      right: "12px",
+                      pointerEvents: "none",
+                      userSelect: "none",
+                      zIndex: 0,
+                    }}>{i + 1}</div>
+                    <div style={{ position: "relative", zIndex: 1 }}>
                     {isEditing ? (
                       <div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
@@ -633,6 +649,7 @@ export function HomePanel({
                         </div>
                       </div>
                     )}
+                    </div>
                   </div>
                 );
               })}
@@ -665,8 +682,24 @@ export function HomePanel({
                       marginBottom: "12px",
                       opacity: isDragging ? 0.65 : 1,
                       cursor: isEditing ? "default" : "grab",
+                      position: "relative",
+                      overflow: "hidden",
                     }}
                   >
+                    <div style={{
+                      fontSize: isMobile ? "72px" : "96px",
+                      fontWeight: 900,
+                      fontFamily: "var(--font-display)",
+                      color: "rgba(255, 255, 255, 0.09)",
+                      lineHeight: 1,
+                      position: "absolute",
+                      top: "-8px",
+                      right: "12px",
+                      pointerEvents: "none",
+                      userSelect: "none",
+                      zIndex: 0,
+                    }}>{i + 1}</div>
+                    <div style={{ position: "relative", zIndex: 1 }}>
                     {isEditing ? (
                       <div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
@@ -743,6 +776,7 @@ export function HomePanel({
                         </div>
                       </div>
                     )}
+                    </div>
                   </div>
                 );
               })}

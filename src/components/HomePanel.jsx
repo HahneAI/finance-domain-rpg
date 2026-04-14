@@ -253,7 +253,6 @@ export function HomePanel({
   const [celebrating, setCelebrating] = useState(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [showReorderModal, setShowReorderModal] = useState(false);
-  const [reorderSelectedId, setReorderSelectedId] = useState(null);
   const [draggingReorderId, setDraggingReorderId] = useState(null);
   const [dragOverReorderId, setDragOverReorderId] = useState(null);
   const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
@@ -459,12 +458,8 @@ export function HomePanel({
     });
   };
   const canShowReorder = activeGoals.length > 1 && typeof moveGoal === "function" && typeof reorderGoalByDrag === "function";
-  const selectedActiveIndex = activeGoals.findIndex((g) => g.id === reorderSelectedId);
-  const canMoveLeft = selectedActiveIndex > 0;
-  const canMoveRight = selectedActiveIndex !== -1 && selectedActiveIndex < activeGoals.length - 1;
   const closeReorderModal = () => {
     setShowReorderModal(false);
-    setReorderSelectedId(null);
     setDraggingReorderId(null);
     setDragOverReorderId(null);
   };

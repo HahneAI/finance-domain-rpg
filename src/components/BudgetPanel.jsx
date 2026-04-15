@@ -4,6 +4,7 @@ import { getEffectiveAmount, computeLoanPayoffDate, buildLoanHistory, loanPaymen
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, iS, lS } from "./ui.jsx";
+import { LiquidGlass } from "./LiquidGlass.jsx";
 import { PhaseAdvancedEditModal } from "./PhaseAdvancedEditModal.jsx";
 
 const EXPENSE_DRAG_PREVIEW_TINT = {
@@ -688,17 +689,54 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     <div style={{ display: "flex", gap: "10px", marginBottom: "6px" }}>
       {PHASES.map((p, i) => { const isCurrent = i === currentPhaseIdx; return <button key={p.id} onClick={() => setAp(i)} style={{ flex: 1, padding: "10px", borderRadius: "6px", cursor: "pointer", background: ap === i ? p.color : "var(--color-bg-surface)", color: ap === i ? "#0a0a0a" : "#666", border: "2px solid " + (ap === i ? p.color : isCurrent ? p.color + "55" : "#222"), fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", position: "relative" }}>{isCurrent && ap !== i && <span style={{ position: "absolute", top: "5px", right: "6px", width: "6px", height: "6px", borderRadius: "50%", background: p.color }} />}{p.label}<br /><span style={{ fontSize: "9px", fontWeight: "normal" }}>{p.description}</span>{isCurrent && <span style={{ display: "block", fontSize: "8px", marginTop: "2px", opacity: ap === i ? 0.7 : 0.9 }}>● now</span>}</button>; })}
     </div>
-    {/* Adv. Edit row — one button per quarter, anchored below phase tabs */}
+    {/* Adv. Edit row — liquid glass raised pills, one per quarter */}
     <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
       {PHASES.map((p, i) => (
-        <div key={p.id} style={{ flex: 1 }}>
-          <SmBtn
+        <LiquidGlass
+          key={p.id}
+          purpose="phase-btn"
+          tone="teal"
+          intensity="light"
+          style={{
+            flex: 1,
+            borderRadius: "10px",
+            overflow: "hidden",
+            position: "relative",
+            background: "rgba(0, 200, 150, 0.12)",
+            border: "1px solid rgba(0, 200, 150, 0.35)",
+            boxShadow: "0 4px 14px rgba(0, 200, 150, 0.16), 0 2px 8px rgba(0, 0, 0, 0.50), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
+          }}
+        >
+          {/* Top-edge sheen — same recipe as nav pill */}
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0,
+            height: "50%",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 100%)",
+            borderRadius: "10px 10px 0 0",
+            pointerEvents: "none",
+            zIndex: 1,
+          }} />
+          <button
             onClick={() => setAdvEditPhaseIdx(i)}
-            style={{ width: "100%", fontSize: "9px", letterSpacing: "1.5px", padding: "5px 4px", minHeight: "28px" }}
+            style={{
+              position: "relative",
+              zIndex: 2,
+              width: "100%",
+              background: "transparent",
+              border: "none",
+              color: "var(--color-text-secondary)",
+              fontSize: "9px",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              padding: "7px 4px",
+              minHeight: "30px",
+              cursor: "pointer",
+              fontFamily: "var(--font-sans)",
+            }}
           >
             ADV. EDIT
-          </SmBtn>
-        </div>
+          </button>
+        </LiquidGlass>
       ))}
     </div>
     {/* Summary cards */}

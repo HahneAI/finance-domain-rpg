@@ -24,7 +24,7 @@
 //   then extend ALLOWED_PURPOSES here.
 // ─────────────────────────────────────────────────────────────
 
-const ALLOWED_PURPOSES = ["nav", "pulse", "modal", "log-summary"];
+const ALLOWED_PURPOSES = ["nav", "pulse", "modal", "log-summary", "phase-btn"];
 
 const BLUR = {
   light:  "12px",

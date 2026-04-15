@@ -164,7 +164,8 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
           borderRadius: "10px",
           width: "100%",
           maxWidth: "460px",
-          maxHeight: "90vh",
+          /* svh = small viewport height, excludes browser chrome on iOS */
+          height: "min(calc(100svh - 32px), 640px)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -212,7 +213,7 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
         </div>
 
         {/* ── Expense list ── */}
-        <div style={{ overflowY: "auto", flex: 1, padding: "12px 18px" }}>
+        <div style={{ overflowY: "scroll", flex: 1, padding: "12px 18px", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}>
           {categories.map(cat => {
             const catExps = expenses.filter(e => e.category === cat);
             if (!catExps.length) return null;

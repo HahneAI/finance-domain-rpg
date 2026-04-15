@@ -4,6 +4,7 @@ import { getEffectiveAmount, computeLoanPayoffDate, buildLoanHistory, loanPaymen
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, iS, lS } from "./ui.jsx";
+import { PhaseAdvancedEditModal } from "./PhaseAdvancedEditModal.jsx";
 
 const EXPENSE_DRAG_PREVIEW_TINT = {
   Needs: "rgba(201, 96, 96, 0.18)",
@@ -62,6 +63,17 @@ const fromMonthlyCost = (monthly, cycle) => {
 const perPaycheckFromCycle = (amount, cycle, cpm) =>
   roundToQuarter(toMonthlyCost(amount, cycle) / cpm);
 
+// Builds the weekly[4] array for a new history entry.
+// Cascade rule: phases before phaseIdx are untouched; phaseIdx and forward
+// get perPaycheck UNLESS that future phase already has an explicit byPhase override.
+function buildCascadedWeekly(phaseIdx, perPaycheck, baseWeekly, existingByPhase) {
+  return [0, 1, 2, 3].map(q => {
+    if (q < phaseIdx) return baseWeekly[q] ?? 0;
+    if (q === phaseIdx) return perPaycheck;
+    return existingByPhase?.[q] ? (baseWeekly[q] ?? 0) : perPaycheck;
+  });
+}
+
 // Recover the original entered cycle amount from the stored per-paycheck value
 const cycleAmountFromPerPaycheck = (perPaycheck, cycle, cpm) =>
   fromMonthlyCost(roundToQuarter(perPaycheck * cpm), cycle);
@@ -84,6 +96,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [addingExp, setAddingExp] = useState(false);
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   const [delExpId, setDelExpId] = useState(null);
+  const [advEditPhaseIdx, setAdvEditPhaseIdx] = useState(null); // null=closed, 0-3=open for that quarter
   // Loan CRUD state
   const [editLoanId, setEditLoanId] = useState(null);
   const [editLoanVals, setEditLoanVals] = useState({});
@@ -314,12 +327,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
       const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
       const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
-      const newWeekly = [baseWeekly[0] ?? 0, baseWeekly[1] ?? 0, baseWeekly[2] ?? 0, baseWeekly[3] ?? 0];
-      newWeekly[ap] = perPaycheck;
       const byPhase = {
         ...(e.billingMeta?.byPhase ?? {}),
         [ap]: { amount, cycle, effectiveFrom: TODAY_ISO },
       };
+      const newWeekly = buildCascadedWeekly(ap, perPaycheck, baseWeekly, e.billingMeta?.byPhase);
       const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO, byPhase };
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
       if (daysDiff <= 3) {
@@ -337,6 +349,23 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     }));
     setEditId(null);
   };
+
+  const saveAdvancedEdit = (patches) => {
+    setExpenses(prev => prev.map(e => {
+      const patch = patches.find(p => p.expId === e.id);
+      if (!patch) return e;
+      const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
+      const { effectiveFrom, newWeekly, newByPhase } = patch;
+      const billingMeta = { ...(e.billingMeta ?? {}), byPhase: newByPhase };
+      const exactMatch = existing.find(entry => entry.effectiveFrom === effectiveFrom);
+      if (exactMatch) {
+        return { ...e, history: existing.map(entry => entry.effectiveFrom === effectiveFrom ? { effectiveFrom, weekly: newWeekly } : entry), billingMeta };
+      }
+      return { ...e, history: [...existing, { effectiveFrom, weekly: newWeekly }], billingMeta };
+    }));
+    setAdvEditPhaseIdx(null);
+  };
+
   const addExp = () => {
     const amount = parseFloat(newExp.amount) || 0;
     const cycle = newExp.cycle ?? "every30days";
@@ -656,8 +685,21 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
   return (<div>
     {/* Phase tabs */}
-    <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+    <div style={{ display: "flex", gap: "10px", marginBottom: "6px" }}>
       {PHASES.map((p, i) => { const isCurrent = i === currentPhaseIdx; return <button key={p.id} onClick={() => setAp(i)} style={{ flex: 1, padding: "10px", borderRadius: "6px", cursor: "pointer", background: ap === i ? p.color : "var(--color-bg-surface)", color: ap === i ? "#0a0a0a" : "#666", border: "2px solid " + (ap === i ? p.color : isCurrent ? p.color + "55" : "#222"), fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", position: "relative" }}>{isCurrent && ap !== i && <span style={{ position: "absolute", top: "5px", right: "6px", width: "6px", height: "6px", borderRadius: "50%", background: p.color }} />}{p.label}<br /><span style={{ fontSize: "9px", fontWeight: "normal" }}>{p.description}</span>{isCurrent && <span style={{ display: "block", fontSize: "8px", marginTop: "2px", opacity: ap === i ? 0.7 : 0.9 }}>● now</span>}</button>; })}
+    </div>
+    {/* Adv. Edit row — one button per quarter, anchored below phase tabs */}
+    <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
+      {PHASES.map((p, i) => (
+        <div key={p.id} style={{ flex: 1 }}>
+          <SmBtn
+            onClick={() => setAdvEditPhaseIdx(i)}
+            style={{ width: "100%", fontSize: "9px", letterSpacing: "1.5px", padding: "5px 4px", minHeight: "28px" }}
+          >
+            ADV. EDIT
+          </SmBtn>
+        </div>
+      ))}
     </div>
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
@@ -1255,6 +1297,16 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     >
       {touchDragOverlay.label}
     </div>}
+    {advEditPhaseIdx !== null && (
+      <PhaseAdvancedEditModal
+        phaseIdx={advEditPhaseIdx}
+        expenses={regularExpenses}
+        cpm={cpm}
+        TODAY_ISO={TODAY_ISO}
+        onSave={saveAdvancedEdit}
+        onClose={() => setAdvEditPhaseIdx(null)}
+      />
+    )}
   </div>);
 }
 

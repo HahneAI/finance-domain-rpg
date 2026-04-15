@@ -496,17 +496,12 @@ export function HomePanel({
         trendLabel={`Projected pace · ${flowTrendPoints.length} checkpoints`}
       />
 
-      <div id="home-goals-section" style={{ marginTop: "20px" }}>
-        <div style={{ marginBottom: "20px" }}>
-          <div style={{ height: "1px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", marginBottom: "16px", opacity: 0.35 }} />
-          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-            <div style={{ width: "3px", height: "32px", background: "var(--color-accent-primary)", borderRadius: "2px", flexShrink: 0 }} />
-            <div>
-              <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.5px", lineHeight: 1 }}>Goals</div>
-              <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginTop: "4px" }}>
-                {activeGoals.length > 0 ? `${activeGoals.length} active · track your targets` : "Start your first goal"}
-              </div>
-            </div>
+      <div id="home-goals-section" style={{ marginTop: "28px" }}>
+        <div style={{ marginBottom: "24px", textAlign: "center" }}>
+          <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, var(--color-accent-primary), transparent)", marginBottom: "20px", opacity: 0.35 }} />
+          <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.5px", lineHeight: 1, marginBottom: "6px" }}>Goals</div>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+            {activeGoals.length > 0 ? `${activeGoals.length} active · track your targets` : "Start your first goal"}
           </div>
         </div>
         {currentWeek && (

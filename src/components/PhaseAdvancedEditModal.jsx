@@ -153,8 +153,8 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
         // stretch lets the overlay's padding define height — no CSS calc needed
         alignItems: "stretch",
         justifyContent: "center",
-        paddingTop: "max(16px, env(safe-area-inset-top, 0px))",
-        paddingBottom: "max(16px, env(safe-area-inset-bottom, 0px))",
+        paddingTop: "calc(56px + env(safe-area-inset-top, 0px) + 8px)",
+        paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
         paddingLeft: "16px",
         paddingRight: "16px",
       }}
@@ -178,16 +178,22 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
         {/* ── Header ── */}
         <div style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
-          padding: "10px 14px 8px",
+          padding: "14px 14px 12px",
           borderBottom: "1px solid var(--color-border-subtle)",
           flexShrink: 0,
+          gap: "8px",
         }}>
-          <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontWeight: "bold" }}>
-            ADV. EDIT — {phase.label}
+          <div>
+            <div style={{ fontSize: "18px", fontWeight: "700", color: "var(--color-accent-primary)", letterSpacing: "0.5px", lineHeight: 1.1 }}>
+              {phase.label}
+            </div>
+            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", letterSpacing: "1.5px", textTransform: "uppercase", marginTop: "4px" }}>
+              Monthly expense overrides
+            </div>
           </div>
-          <SmBtn onClick={onClose} style={{ padding: "3px 9px", minHeight: "28px", fontSize: "13px", lineHeight: 1, flexShrink: 0 }}>✕</SmBtn>
+          <SmBtn onClick={onClose} style={{ padding: "3px 9px", minHeight: "28px", fontSize: "13px", lineHeight: 1, flexShrink: 0, marginTop: "2px" }}>✕</SmBtn>
         </div>
 
         {/* ── Month selector ── */}

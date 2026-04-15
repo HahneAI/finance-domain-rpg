@@ -830,6 +830,11 @@ export default function App() {
           transform: scale(0.85) translateY(12px) !important;
           transition: opacity 0.2s ease, transform 0.2s ease !important;
         }
+        body.modal-open .mobile-header {
+          opacity: 0 !important;
+          pointer-events: none !important;
+          transition: opacity 0.15s ease !important;
+        }
         .scroll-x {
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;

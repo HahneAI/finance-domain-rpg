@@ -5,7 +5,7 @@ import { computeNet, toLocalIso } from "../lib/finance.js";
 import { deriveRollingIncomeWeeks, progressiveScale } from "../lib/rollingTimeline.js";
 import { getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { Card, SH, iS, lS, ScrollSnapRow } from "./ui.jsx";
+import { Card, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {} }) {
   const [showSharpener, setShowSharpener] = useState(false);
@@ -277,35 +277,53 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
       </div>
     )}
 
-    <div style={{ background: "#111", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "16px", marginBottom: "20px" }}>
-      <SH right={<button
-        onClick={() => setShowEventLossInfo(true)}
-        aria-label="Show missed event day loss details"
-        style={{
-          width: "24px", height: "24px", borderRadius: "999px", border: "1px solid var(--color-border-subtle)",
-          background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", cursor: "pointer",
-          display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "12px", lineHeight: 1
-        }}
-      >i</button>}>Year Summary</SH>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px" }}>
-        <Card label="Gross (Year)" val={f(yG)} rawVal={yG}
-          sub={currentWeek ? `Wk ${getFiscalWeekNumber(currentWeek.idx)} projection` : undefined}
-          insight={yG > 0 && yN > 0 ? { arrow: "flat", delta: `${Math.round((yN / yG) * 100)}%`, label: "kept after tax", variant: "blue" } : undefined}
-        />
-        <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)"
-          sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : currentWeek ? `Wk ${getFiscalWeekNumber(currentWeek.idx)} · on pace` : undefined}
-          insight={missedEventDayNetLost > 0 && projectedAnnualNet > 0 ? { arrow: "down", delta: `-${Math.round((missedEventDayNetLost / projectedAnnualNet) * 100)}%`, label: "of net to missed events", variant: "purple" } : undefined}
-        />
+    <div style={{ marginBottom: "24px", textAlign: "center" }}>
+      <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "12px" }}>
+        Income Overview
       </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "14px" }}>
+        <div style={{ fontSize: "32px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-accent-primary)", letterSpacing: "-1px", lineHeight: 1 }}>
+          Year Summary
+        </div>
+        <button
+          onClick={() => setShowEventLossInfo(true)}
+          aria-label="Show missed event day loss details"
+          style={{
+            width: "24px", height: "24px", borderRadius: "999px", border: "1px solid var(--color-border-subtle)",
+            background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", cursor: "pointer",
+            display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "12px", lineHeight: 1,
+            flexShrink: 0,
+          }}
+        >i</button>
+      </div>
+      <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto", borderRadius: "1px", opacity: 0.45 }} />
+    </div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "28px" }}>
+      <Card label="Gross (Year)" val={f(yG)} rawVal={yG}
+        sub={currentWeek ? `Wk ${getFiscalWeekNumber(currentWeek.idx)} projection` : undefined}
+        insight={yG > 0 && yN > 0 ? { arrow: "flat", delta: `${Math.round((yN / yG) * 100)}%`, label: "kept after tax", variant: "blue" } : undefined}
+      />
+      <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)"
+        sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : currentWeek ? `Wk ${getFiscalWeekNumber(currentWeek.idx)} · on pace` : undefined}
+        insight={missedEventDayNetLost > 0 && projectedAnnualNet > 0 ? { arrow: "down", delta: `-${Math.round((missedEventDayNetLost / projectedAnnualNet) * 100)}%`, label: "of net to missed events", variant: "purple" } : undefined}
+      />
     </div>
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-        <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>
-          {isDesktopWeekly
-            ? `Rolling Window · last 4 completed + rest of year (${weeklyRows.length} visible)`
-            : `Monthly Rolling · ${rollingMonthCards.length} months`}
-        </span>
-        <button onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase" }}>⊞ Full Detail</button>
+      <div style={{ marginBottom: "20px" }}>
+        <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, var(--color-accent-primary), transparent)", marginBottom: "20px", opacity: 0.35 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div style={{ flex: 1, textAlign: "center" }}>
+            <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.5px", lineHeight: 1, marginBottom: "6px" }}>
+              {isDesktopWeekly ? "Rolling Window" : "Monthly Rolling"}
+            </div>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+              {isDesktopWeekly
+                ? `${weeklyRows.length} visible · rolling window`
+                : `${rollingMonthCards.length} months`}
+            </div>
+          </div>
+          <button onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase", flexShrink: 0 }}>⊞ Full Detail</button>
+        </div>
       </div>
 
       {!isDesktopWeekly ? (

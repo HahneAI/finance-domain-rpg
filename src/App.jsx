@@ -762,6 +762,7 @@ export default function App() {
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px)) !important;
+            overscroll-behavior-y: contain;
           }
           /* Safe-area height + top padding for Dynamic Island / notch iPhones.
              CSS !important overrides inline styles in iOS PWA standalone mode where
@@ -1161,7 +1162,7 @@ export default function App() {
           opacity: drawerOpen ? 0 : isScrollingDown ? 0.6 : 1,
           transform: isScrollingDown ? "scale(0.6)" : "scale(1)",
           transformOrigin: "center bottom",
-          pointerEvents: drawerOpen ? "none" : "auto",
+          pointerEvents: "none",
           transition: "opacity 0.25s ease, transform 0.25s ease",
         }}
       >
@@ -1238,6 +1239,7 @@ export default function App() {
                   textTransform: "uppercase",
                   paddingTop: "2px",
                   transition: "color 0.2s ease",
+                  pointerEvents: drawerOpen ? "none" : "auto",
                 }}
               >
                 {item.icon}

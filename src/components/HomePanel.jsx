@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { computeGoalTimeline } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
@@ -252,11 +252,15 @@ export function HomePanel({
   const [delGoalId, setDelGoalId] = useState(null);
   const [celebrating, setCelebrating] = useState(null);
   const [showCompleted, setShowCompleted] = useState(false);
-  const [draggingGoalId, setDraggingGoalId] = useState(null);
-  const [dragOverGoalId, setDragOverGoalId] = useState(null);
+  const [showReorderModal, setShowReorderModal] = useState(false);
+  const [draggingReorderId, setDraggingReorderId] = useState(null);
+  const [dragOverReorderId, setDragOverReorderId] = useState(null);
   const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
-  const goalInsertRef = useRef({ targetId: null, insertIndex: null });
-  const goalDragFinalizedRef = useRef(false);
+  const [isCoarsePointer] = useState(() => (
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(pointer: coarse)").matches
+      : false
+  ));
 
   const activeGoals = goals.filter((g) => !g.completed);
 
@@ -424,6 +428,13 @@ export function HomePanel({
       return arr;
     });
   };
+  const moveGoalInActiveList = (id, dir) => {
+    const idx = activeGoals.findIndex((g) => g.id === id);
+    if (idx === -1) return;
+    const next = idx + dir;
+    if (next < 0 || next >= activeGoals.length) return;
+    moveGoal(id, dir);
+  };
   const reorderGoalByDrag = (draggedId, overId, insertIndexOverride = null) => {
     setGoals?.((prev) => {
       const active = prev.filter((g) => !g.completed);
@@ -446,19 +457,11 @@ export function HomePanel({
       return [...reordered, ...completed];
     });
   };
-  const onGoalDragStart = (goal) => {
-    setDraggingGoalId(goal.id);
-    goalDragFinalizedRef.current = false;
-  };
-  const onGoalDragEnd = () => {
-    if (draggingGoalId && !goalDragFinalizedRef.current) {
-      const { targetId, insertIndex } = goalInsertRef.current;
-      reorderGoalByDrag(draggingGoalId, targetId, insertIndex);
-    }
-    goalInsertRef.current = { targetId: null, insertIndex: null };
-    goalDragFinalizedRef.current = false;
-    setDraggingGoalId(null);
-    setDragOverGoalId(null);
+  const canShowReorder = activeGoals.length > 1 && typeof moveGoal === "function" && typeof reorderGoalByDrag === "function";
+  const closeReorderModal = () => {
+    setShowReorderModal(false);
+    setDraggingReorderId(null);
+    setDragOverReorderId(null);
   };
 
   return (
@@ -555,8 +558,24 @@ export function HomePanel({
                       border: `1px solid ${isEditing ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
                       borderRadius: "8px",
                       padding: "16px",
+                      position: "relative",
+                      overflow: "hidden",
                     }}
                   >
+                    <div style={{
+                      fontSize: isMobile ? "72px" : "96px",
+                      fontWeight: 900,
+                      fontFamily: "var(--font-display)",
+                      color: "rgba(255, 255, 255, 0.09)",
+                      lineHeight: 1,
+                      position: "absolute",
+                      top: "-8px",
+                      right: "12px",
+                      pointerEvents: "none",
+                      userSelect: "none",
+                      zIndex: 0,
+                    }}>{i + 1}</div>
+                    <div style={{ position: "relative", zIndex: 1 }}>
                     {isEditing ? (
                       <div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
@@ -619,8 +638,11 @@ export function HomePanel({
                             {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
                           </div>
                           <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                            <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
-                            <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
+                            {canShowReorder && (
+                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)">
+                                ⠿ REORDER
+                              </SmBtn>
+                            )}
                             <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
                             <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
@@ -633,6 +655,7 @@ export function HomePanel({
                         </div>
                       </div>
                     )}
+                    </div>
                   </div>
                 );
               })}
@@ -641,32 +664,36 @@ export function HomePanel({
             <>
               {tl.map((g, i) => {
                 const isEditing = editGoalId === g.id;
-                const isDragging = draggingGoalId === g.id;
-                const isDropTarget = dragOverGoalId === g.id;
                 const projectedWeeks = Number.isFinite(g.eW) ? Math.max(0, Math.ceil(g.eW)) : 0;
                 const fillWidthPct = clamp01(projectedWeeks / Math.max(weeksLeft, 1)) * 100;
                 return (
                   <div
                     key={g.id}
-                    draggable={!isEditing}
-                    onDragStart={() => onGoalDragStart(g)}
-                    onDragEnd={onGoalDragEnd}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setDragOverGoalId(g.id);
-                      const activeIndex = activeGoals.findIndex((goal) => goal.id === g.id);
-                      goalInsertRef.current = { targetId: g.id, insertIndex: activeIndex === -1 ? 0 : activeIndex };
-                    }}
                     style={{
                       background: "var(--color-bg-surface)",
-                      border: `1px solid ${isDropTarget ? "var(--color-gold)" : "var(--color-border-accent)"}`,
+                      border: "1px solid var(--color-border-accent)",
                       borderRadius: "8px",
                       padding: "16px",
                       marginBottom: "12px",
-                      opacity: isDragging ? 0.65 : 1,
-                      cursor: isEditing ? "default" : "grab",
+                      cursor: "default",
+                      position: "relative",
+                      overflow: "hidden",
                     }}
                   >
+                    <div style={{
+                      fontSize: isMobile ? "72px" : "96px",
+                      fontWeight: 900,
+                      fontFamily: "var(--font-display)",
+                      color: "rgba(255, 255, 255, 0.09)",
+                      lineHeight: 1,
+                      position: "absolute",
+                      top: "-8px",
+                      right: "12px",
+                      pointerEvents: "none",
+                      userSelect: "none",
+                      zIndex: 0,
+                    }}>{i + 1}</div>
+                    <div style={{ position: "relative", zIndex: 1 }}>
                     {isEditing ? (
                       <div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
@@ -729,8 +756,11 @@ export function HomePanel({
                             {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
                           </div>
                           <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                            <SmBtn onClick={() => moveGoal(g.id, -1)} c="#666">↑</SmBtn>
-                            <SmBtn onClick={() => moveGoal(g.id, 1)} c="#666">↓</SmBtn>
+                            {canShowReorder && (
+                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)">
+                                ⠿ REORDER
+                              </SmBtn>
+                            )}
                             <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
                             <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
@@ -743,12 +773,198 @@ export function HomePanel({
                         </div>
                       </div>
                     )}
+                    </div>
                   </div>
                 );
               })}
             </>
           )}
         </div>
+        {showReorderModal && (
+          <div
+            onClick={closeReorderModal}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 300,
+              background: "rgba(0,0,0,0.82)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px",
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: "480px",
+                background: "var(--color-bg-surface)",
+                borderRadius: "20px",
+                padding: "20px",
+                maxHeight: "88vh",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexShrink: 0 }}>
+                <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>
+                  REORDER GOALS
+                </div>
+                <button
+                  onClick={closeReorderModal}
+                  style={{ background: "none", border: "none", color: "var(--color-text-primary)", cursor: "pointer", fontSize: "16px", lineHeight: 1 }}
+                >
+                  ✕
+                </button>
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "16px", flexShrink: 0 }}>
+                {isCoarsePointer ? "Use ↑ ↓ to move each goal." : "Drag goals to reorder."}
+              </div>
+              {/* Vertical card list */}
+              <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+                {activeGoals.map((g, i) => {
+                  const isDragging = draggingReorderId === g.id;
+                  const isDropTarget = dragOverReorderId === g.id && draggingReorderId !== g.id;
+                  return (
+                    <div
+                      key={g.id}
+                      draggable={!isCoarsePointer}
+                      onDragStart={!isCoarsePointer ? () => setDraggingReorderId(g.id) : undefined}
+                      onDragEnd={!isCoarsePointer ? () => {
+                        if (draggingReorderId && dragOverReorderId && draggingReorderId !== dragOverReorderId) {
+                          reorderGoalByDrag(draggingReorderId, dragOverReorderId);
+                        }
+                        setDraggingReorderId(null);
+                        setDragOverReorderId(null);
+                      } : undefined}
+                      onDragOver={!isCoarsePointer ? (e) => { e.preventDefault(); setDragOverReorderId(g.id); } : undefined}
+                      style={{
+                        height: "72px",
+                        background: "var(--color-bg-raised)",
+                        border: `1px solid ${isDropTarget ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
+                        borderRadius: "12px",
+                        padding: "0 14px",
+                        position: "relative",
+                        overflow: "hidden",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        cursor: isCoarsePointer ? "default" : "grab",
+                        opacity: isDragging ? 0.4 : 1,
+                        flexShrink: 0,
+                        transition: "border-color 120ms, opacity 120ms",
+                      }}
+                    >
+                      {/* Ghost ordinal */}
+                      <div style={{
+                        fontSize: "56px",
+                        fontWeight: 900,
+                        fontFamily: "var(--font-display)",
+                        color: "rgba(255,255,255,0.06)",
+                        position: "absolute",
+                        top: "-6px",
+                        right: "10px",
+                        pointerEvents: "none",
+                        zIndex: 0,
+                        lineHeight: 1,
+                        userSelect: "none",
+                      }}>
+                        {i + 1}
+                      </div>
+                      {/* Visible ordinal */}
+                      <div style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        color: "var(--color-text-disabled)",
+                        width: "18px",
+                        textAlign: "center",
+                        flexShrink: 0,
+                        zIndex: 1,
+                      }}>
+                        {i + 1}
+                      </div>
+                      {/* Label + target */}
+                      <div style={{ flex: 1, zIndex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          color: "var(--color-text-primary)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}>
+                          {g.label}
+                        </div>
+                        <div style={{
+                          fontSize: "11px",
+                          color: "var(--color-text-secondary)",
+                          marginTop: "2px",
+                        }}>
+                          ${Number(g.target || 0).toLocaleString()}
+                        </div>
+                      </div>
+                      {/* Touch: inline ↑ ↓ per card */}
+                      {isCoarsePointer && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px", zIndex: 1, flexShrink: 0 }}>
+                          <button
+                            onClick={() => moveGoalInActiveList(g.id, -1)}
+                            disabled={i === 0}
+                            style={{
+                              background: "none",
+                              border: `1px solid ${i === 0 ? "var(--color-border-subtle)" : "var(--color-border-accent)"}`,
+                              color: i === 0 ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                              borderRadius: "6px",
+                              width: "30px",
+                              height: "26px",
+                              cursor: i === 0 ? "default" : "pointer",
+                              fontSize: "12px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >↑</button>
+                          <button
+                            onClick={() => moveGoalInActiveList(g.id, 1)}
+                            disabled={i === activeGoals.length - 1}
+                            style={{
+                              background: "none",
+                              border: `1px solid ${i === activeGoals.length - 1 ? "var(--color-border-subtle)" : "var(--color-border-accent)"}`,
+                              color: i === activeGoals.length - 1 ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                              borderRadius: "6px",
+                              width: "30px",
+                              height: "26px",
+                              cursor: i === activeGoals.length - 1 ? "default" : "pointer",
+                              fontSize: "12px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >↓</button>
+                        </div>
+                      )}
+                      {/* Desktop: drag handle */}
+                      {!isCoarsePointer && (
+                        <div style={{
+                          fontSize: "18px",
+                          color: "var(--color-text-disabled)",
+                          zIndex: 1,
+                          flexShrink: 0,
+                          pointerEvents: "none",
+                          userSelect: "none",
+                          letterSpacing: "-2px",
+                        }}>
+                          ⠿
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
 
         {addingGoal ? (
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>

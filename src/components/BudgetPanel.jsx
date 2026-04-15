@@ -4,6 +4,8 @@ import { getEffectiveAmount, computeLoanPayoffDate, buildLoanHistory, loanPaymen
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, iS, lS } from "./ui.jsx";
+import { LiquidGlass } from "./LiquidGlass.jsx";
+import { PhaseAdvancedEditModal } from "./PhaseAdvancedEditModal.jsx";
 
 const EXPENSE_DRAG_PREVIEW_TINT = {
   Needs: "rgba(201, 96, 96, 0.18)",
@@ -62,6 +64,17 @@ const fromMonthlyCost = (monthly, cycle) => {
 const perPaycheckFromCycle = (amount, cycle, cpm) =>
   roundToQuarter(toMonthlyCost(amount, cycle) / cpm);
 
+// Builds the weekly[4] array for a new history entry.
+// Cascade rule: phases before phaseIdx are untouched; phaseIdx and forward
+// get perPaycheck UNLESS that future phase already has an explicit byPhase override.
+function buildCascadedWeekly(phaseIdx, perPaycheck, baseWeekly, existingByPhase) {
+  return [0, 1, 2, 3].map(q => {
+    if (q < phaseIdx) return baseWeekly[q] ?? 0;
+    if (q === phaseIdx) return perPaycheck;
+    return existingByPhase?.[q] ? (baseWeekly[q] ?? 0) : perPaycheck;
+  });
+}
+
 // Recover the original entered cycle amount from the stored per-paycheck value
 const cycleAmountFromPerPaycheck = (perPaycheck, cycle, cpm) =>
   fromMonthlyCost(roundToQuarter(perPaycheck * cpm), cycle);
@@ -84,6 +97,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [addingExp, setAddingExp] = useState(false);
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   const [delExpId, setDelExpId] = useState(null);
+  const [advEditPhaseIdx, setAdvEditPhaseIdx] = useState(null); // null=closed, 0-3=open for that quarter
+  // Hide mobile nav bar while this modal is open (body class drives the CSS rule in App.jsx)
+  useEffect(() => {
+    document.body.classList.toggle("modal-open", advEditPhaseIdx !== null);
+    return () => document.body.classList.remove("modal-open");
+  }, [advEditPhaseIdx]);
   // Loan CRUD state
   const [editLoanId, setEditLoanId] = useState(null);
   const [editLoanVals, setEditLoanVals] = useState({});
@@ -314,12 +333,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
       const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
       const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
-      const newWeekly = [baseWeekly[0] ?? 0, baseWeekly[1] ?? 0, baseWeekly[2] ?? 0, baseWeekly[3] ?? 0];
-      newWeekly[ap] = perPaycheck;
       const byPhase = {
         ...(e.billingMeta?.byPhase ?? {}),
         [ap]: { amount, cycle, effectiveFrom: TODAY_ISO },
       };
+      const newWeekly = buildCascadedWeekly(ap, perPaycheck, baseWeekly, e.billingMeta?.byPhase);
       const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO, byPhase };
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
       if (daysDiff <= 3) {
@@ -337,6 +355,23 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     }));
     setEditId(null);
   };
+
+  const saveAdvancedEdit = (patches) => {
+    setExpenses(prev => prev.map(e => {
+      const patch = patches.find(p => p.expId === e.id);
+      if (!patch) return e;
+      const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
+      const { effectiveFrom, newWeekly, newByPhase } = patch;
+      const billingMeta = { ...(e.billingMeta ?? {}), byPhase: newByPhase };
+      const exactMatch = existing.find(entry => entry.effectiveFrom === effectiveFrom);
+      if (exactMatch) {
+        return { ...e, history: existing.map(entry => entry.effectiveFrom === effectiveFrom ? { effectiveFrom, weekly: newWeekly } : entry), billingMeta };
+      }
+      return { ...e, history: [...existing, { effectiveFrom, weekly: newWeekly }], billingMeta };
+    }));
+    setAdvEditPhaseIdx(null);
+  };
+
   const addExp = () => {
     const amount = parseFloat(newExp.amount) || 0;
     const cycle = newExp.cycle ?? "every30days";
@@ -655,10 +690,118 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
 
   return (<div>
-    {/* Phase tabs */}
-    <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
-      {PHASES.map((p, i) => { const isCurrent = i === currentPhaseIdx; return <button key={p.id} onClick={() => setAp(i)} style={{ flex: 1, padding: "10px", borderRadius: "6px", cursor: "pointer", background: ap === i ? p.color : "var(--color-bg-surface)", color: ap === i ? "#0a0a0a" : "#666", border: "2px solid " + (ap === i ? p.color : isCurrent ? p.color + "55" : "#222"), fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", position: "relative" }}>{isCurrent && ap !== i && <span style={{ position: "absolute", top: "5px", right: "6px", width: "6px", height: "6px", borderRadius: "50%", background: p.color }} />}{p.label}<br /><span style={{ fontSize: "9px", fontWeight: "normal" }}>{p.description}</span>{isCurrent && <span style={{ display: "block", fontSize: "8px", marginTop: "2px", opacity: ap === i ? 0.7 : 0.9 }}>● now</span>}</button>; })}
-    </div>
+    {/* ── Unified phase control card — quarter selector + adv. edit in one glass box ── */}
+    <LiquidGlass
+      purpose="phase-btn"
+      tone="teal"
+      intensity="light"
+      style={{
+        width: "100%",
+        borderRadius: "20px",
+        // Exact nav pill spec
+        background: "rgba(0, 200, 150, 0.15)",
+        border: "1px solid rgba(0, 200, 150, 0.40)",
+        boxShadow: "0 8px 32px rgba(0, 200, 150, 0.22), 0 4px 16px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
+        overflow: "hidden",
+        position: "relative",
+        marginBottom: "16px",
+      }}
+    >
+      {/* Top-edge sheen — exact nav recipe */}
+      <div style={{
+        position: "absolute", top: 0, left: 0, right: 0,
+        height: "45%",
+        background: "linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, transparent 100%)",
+        borderRadius: "20px 20px 0 0",
+        pointerEvents: "none",
+        zIndex: 1,
+      }} />
+      {/* Sliding active-quarter indicator — 2px bar, mirrors nav tab indicator */}
+      <div style={{
+        position: "absolute",
+        top: 0,
+        left: `${ap * 25}%`,
+        width: "25%",
+        height: "2px",
+        background: "var(--color-accent-primary)",
+        transition: "left 0.3s ease",
+        borderRadius: "0 0 1px 1px",
+        zIndex: 2,
+      }} />
+
+      {/* ── Quarter selector row ── */}
+      <div style={{ display: "flex", position: "relative", zIndex: 2 }}>
+        {PHASES.map((p, i) => {
+          const isCurrent = i === currentPhaseIdx;
+          const isActive = ap === i;
+          return (
+            <button
+              key={p.id}
+              onClick={() => setAp(i)}
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                borderRight: i < 3 ? "1px solid rgba(0, 200, 150, 0.15)" : "none",
+                color: isActive ? "var(--color-accent-primary)" : "var(--color-text-secondary)",
+                cursor: "pointer",
+                padding: "11px 4px 8px",
+                fontSize: "11px",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                fontWeight: isActive ? "bold" : "500",
+                fontFamily: "var(--font-sans)",
+                position: "relative",
+                textAlign: "center",
+              }}
+            >
+              {isCurrent && !isActive && (
+                <span style={{
+                  position: "absolute", top: "6px", right: "5px",
+                  width: "5px", height: "5px", borderRadius: "50%",
+                  background: "var(--color-accent-primary)",
+                }} />
+              )}
+              {p.label}
+              <br />
+              <span style={{ fontSize: "8px", fontWeight: "normal", opacity: isActive ? 0.85 : 0.55 }}>{p.description}</span>
+              {isCurrent && (
+                <span style={{ display: "block", fontSize: "7px", marginTop: "1px", color: "var(--color-accent-primary)", opacity: 0.85 }}>● now</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Horizontal divider between rows */}
+      <div style={{ height: "1px", background: "rgba(0, 200, 150, 0.22)" }} />
+
+      {/* ── ADV. EDIT row ── */}
+      <div style={{ display: "flex", position: "relative", zIndex: 2 }}>
+        {PHASES.map((p, i) => (
+          <button
+            key={`adv-${p.id}`}
+            onClick={() => setAdvEditPhaseIdx(i)}
+            style={{
+              flex: 1,
+              background: "transparent",
+              border: "none",
+              borderRight: i < 3 ? "1px solid rgba(0, 200, 150, 0.15)" : "none",
+              // Slightly darker than nav inactive text per user request
+              color: "rgba(127, 163, 154, 0.70)",
+              cursor: "pointer",
+              padding: "7px 4px 9px",
+              fontSize: "8px",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              fontFamily: "var(--font-sans)",
+            }}
+          >
+            ADV. EDIT
+          </button>
+        ))}
+      </div>
+    </LiquidGlass>
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
       <Card label="This Week’s Check" val={f2(prevWeekNet ?? weeklyIncome)} sub="This Week’s Check" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
@@ -1255,6 +1398,16 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     >
       {touchDragOverlay.label}
     </div>}
+    {advEditPhaseIdx !== null && (
+      <PhaseAdvancedEditModal
+        phaseIdx={advEditPhaseIdx}
+        expenses={regularExpenses}
+        cpm={cpm}
+        TODAY_ISO={TODAY_ISO}
+        onSave={saveAdvancedEdit}
+        onClose={() => setAdvEditPhaseIdx(null)}
+      />
+    )}
   </div>);
 }
 

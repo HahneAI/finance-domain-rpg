@@ -3,7 +3,7 @@ import { computeGoalTimeline } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { FlowSparklineCard, MetricCard, SH, SmBtn, iS, lS, ScrollSnapRow } from "./ui.jsx";
+import { FlowSparklineCard, MetricCard, SmBtn, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_SUBDIVISIONS = 4;
@@ -449,19 +449,23 @@ export function HomePanel({
           No active goals yet. Add your first goal below to unlock timeline forecasting.
         </div>
       )}
-      <div style={{ marginBottom: "18px", textAlign: "center" }}>
-        <div
-          style={{
-            fontSize: "10px",
-            letterSpacing: "3px",
-            textTransform: "uppercase",
-            color: "var(--color-gold)",
-            marginBottom: "4px",
-          }}
-        >
+      <div style={{ marginBottom: "28px", textAlign: "center", padding: "6px 0" }}>
+        <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "12px" }}>
+          Authority Finance
+        </div>
+        <div style={{
+          fontSize: "32px",
+          fontWeight: 800,
+          fontFamily: "var(--font-display)",
+          color: "var(--color-accent-primary)",
+          letterSpacing: "-1px",
+          lineHeight: 1,
+          marginBottom: "14px",
+        }}>
           Financial Health
         </div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", lineHeight: 1.6 }}>
+        <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto 14px", borderRadius: "1px", opacity: 0.45 }} />
+        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
           {subtitle}
         </div>
       </div>
@@ -491,8 +495,19 @@ export function HomePanel({
         trendLabel={`Projected pace · ${flowTrendPoints.length} checkpoints`}
       />
 
-      <div id="home-goals-section" style={{ marginTop: "16px" }}>
-        <SH>Goals</SH>
+      <div id="home-goals-section" style={{ marginTop: "20px" }}>
+        <div style={{ marginBottom: "20px" }}>
+          <div style={{ height: "1px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", marginBottom: "16px", opacity: 0.35 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            <div style={{ width: "3px", height: "32px", background: "var(--color-accent-primary)", borderRadius: "2px", flexShrink: 0 }} />
+            <div>
+              <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.5px", lineHeight: 1 }}>Goals</div>
+              <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginTop: "4px" }}>
+                {activeGoals.length > 0 ? `${activeGoals.length} active · track your targets` : "Start your first goal"}
+              </div>
+            </div>
+          </div>
+        </div>
         {currentWeek && (
           <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
@@ -975,14 +990,33 @@ export function HomePanel({
           </div>
         )}
 
-        <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a", borderRadius: "8px", padding: "16px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "10px" }}>Year-End Outlook</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12px" }}>
-            <div style={{ color: "var(--color-text-secondary)" }}>Weeks remaining</div><div style={{ textAlign: "right" }}>{weeksLeft}</div>
-            <div style={{ color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div><div style={{ textAlign: "right", color: "var(--color-red)" }}>-{fmt$(fundedGoalSpend)}</div>
-            <div style={{ color: "var(--color-text-secondary)" }}>Adj. projected savings</div><div style={{ textAlign: "right", color: "var(--color-green)" }}>{fmt$(annualSavings)}</div>
-            <div style={{ color: "var(--color-text-secondary)" }}>Active goals total</div><div style={{ textAlign: "right", color: "var(--color-gold)" }}>{fmt$(totalActiveGoals)}</div>
-            <div style={{ color: "var(--color-text-secondary)" }}>Surplus after all goals</div><div style={{ textAlign: "right", color: annualSavings - totalActiveGoals >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{fmt$(annualSavings - totalActiveGoals)}</div>
+        <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />
+          <div style={{ marginBottom: "16px" }}>
+            <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "4px" }}>Fiscal Year 2026</div>
+            <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px" }}>Year-End Outlook</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Weeks remaining</div>
+              <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "var(--font-display)" }}>{weeksLeft}</div>
+            </div>
+            <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-red)" }}>-{fmt$(fundedGoalSpend)}</div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Adj. projected savings</div>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-green)" }}>{fmt$(annualSavings)}</div>
+            </div>
+            <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
+              <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - totalActiveGoals >= 0 ? "var(--color-green)" : "var(--color-red)" }}>
+                {fmt$(annualSavings - totalActiveGoals)}
+              </div>
+            </div>
           </div>
         </div>
       </div>

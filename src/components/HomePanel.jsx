@@ -3,7 +3,7 @@ import { computeGoalTimeline } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { FlowSparklineCard, MetricCard, SH, SmBtn, iS, lS, ScrollSnapRow } from "./ui.jsx";
+import { FlowSparklineCard, MetricCard, SmBtn, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_SUBDIVISIONS = 4;
@@ -105,9 +105,6 @@ export function HomePanel({
       ? `Week ${weekNumber}, ${weeksLeftCount} left · ${formatRotationDisplay(currentWeek, { isAdmin })}`
       : "2026 Dashboard";
 
-  const handleGoalsTileClick = () => {
-    document.getElementById("home-goals-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
   // ── Pulse insight signals ───────────────────────────────────────────────
   // Each signal is derived from real computed data. Returns undefined when
   // no meaningful signal exists so InsightRow simply doesn't render.
@@ -191,7 +188,7 @@ export function HomePanel({
       span: 2,
       onClick: () => navigate("log"),
       key: "budget",
-      insight: pulseLeftThisWeek,
+      insight: pulseNextWeek,
     },
     {
       title: "Net Worth Trend",
@@ -199,22 +196,10 @@ export function HomePanel({
       rawVal: annualSavings,
       sub: weekNumber != null ? `projected annual savings · Wk ${weekNumber}` : "projected annual savings",
       status: annualSavings > 5000 ? "green" : annualSavings >= 0 ? "gold" : "red",
-      span: 1,
+      span: 2,
       onClick: () => navigate("income"),
       key: "income",
       insight: pulseNetWorth,
-    },
-    {
-      title: "Goals",
-      value: `${completedGoals.length}/${goals.length}`,
-      sub: completedGoals.length > 0
-        ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
-        : `${fmt$(totalGoalTarget)} total target`,
-      status: goals.length > 0 && completedGoals.length === goals.length ? "green" : "gold",
-      span: 1,
-      onClick: handleGoalsTileClick,
-      key: "budget",
-      insight: pulseGoals,
     },
     {
       title: "Budget Health",
@@ -225,23 +210,6 @@ export function HomePanel({
       onClick: () => navigate("budget"),
       key: "budget",
       insight: pulseBudgetHealth,
-    },
-    {
-      title: "Next Week Takehome",
-      value: nextWeekDisplay != null ? fmt$(nextWeekDisplay) : fmt$(weeklyIncome),
-      rawVal: nextWeekDisplay ?? weeklyIncome,
-      sub: nextWeekNet != null
-        ? (nextWeekNet < weeklyIncome * 0.8 ? "est. · below avg · check log"
-          : nextWeekNet < weeklyIncome * 0.95 ? "est. · slightly below avg"
-            : "est. · on track")
-        : `${fallbackSource === "prev" ? "last confirmed pay" : "projected average"} (projected)`,
-      status: nextWeekDisplay != null
-        ? (nextWeekDisplay >= weeklyIncome * 0.95 ? "green"
-          : nextWeekDisplay >= weeklyIncome * 0.8 ? "gold" : "red")
-        : "green",
-      span: 2,
-      key: "log",
-      insight: pulseNextWeek,
     },
   ];
 
@@ -481,19 +449,23 @@ export function HomePanel({
           No active goals yet. Add your first goal below to unlock timeline forecasting.
         </div>
       )}
-      <div style={{ marginBottom: "18px", textAlign: "center" }}>
-        <div
-          style={{
-            fontSize: "10px",
-            letterSpacing: "3px",
-            textTransform: "uppercase",
-            color: "var(--color-gold)",
-            marginBottom: "4px",
-          }}
-        >
+      <div style={{ marginBottom: "28px", textAlign: "center", padding: "6px 0" }}>
+        <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "12px" }}>
+          Authority Finance
+        </div>
+        <div style={{
+          fontSize: "32px",
+          fontWeight: 800,
+          fontFamily: "var(--font-display)",
+          color: "var(--color-accent-primary)",
+          letterSpacing: "-1px",
+          lineHeight: 1,
+          marginBottom: "14px",
+        }}>
           Financial Health
         </div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", lineHeight: 1.6 }}>
+        <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto 14px", borderRadius: "1px", opacity: 0.45 }} />
+        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
           {subtitle}
         </div>
       </div>
@@ -509,6 +481,7 @@ export function HomePanel({
             status={tile.status}
             span={tile.span}
             size="30px"
+            centered
             onClick={tile.onClick}
             entranceIndex={i}
             insight={tile.insight}
@@ -523,8 +496,14 @@ export function HomePanel({
         trendLabel={`Projected pace · ${flowTrendPoints.length} checkpoints`}
       />
 
-      <div id="home-goals-section" style={{ marginTop: "16px" }}>
-        <SH>Goals</SH>
+      <div id="home-goals-section" style={{ marginTop: "28px" }}>
+        <div style={{ marginBottom: "24px", textAlign: "center" }}>
+          <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, var(--color-accent-primary), transparent)", marginBottom: "20px", opacity: 0.35 }} />
+          <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.5px", lineHeight: 1, marginBottom: "6px" }}>Goals</div>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+            {activeGoals.length > 0 ? `${activeGoals.length} active · track your targets` : "Start your first goal"}
+          </div>
+        </div>
         {currentWeek && (
           <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
@@ -536,6 +515,15 @@ export function HomePanel({
           <MetricCard label="Left This Week" val={fmt$(leftThisWeek)} rawVal={leftThisWeek} status={leftThisWeek >= 0 ? "green" : "red"} />
           <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="gold" />
           <MetricCard label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} status={lastGoalEW <= weeksLeft ? "green" : "red"} />
+          <MetricCard
+            label="Goals"
+            val={`${completedGoals.length}/${goals.length}`}
+            sub={completedGoals.length > 0
+              ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
+              : `${fmt$(totalGoalTarget)} total target`}
+            status={goals.length > 0 && completedGoals.length === goals.length ? "green" : "gold"}
+            insight={pulseGoals}
+          />
         </div>
 
         <div style={{ marginBottom: "16px", padding: "12px", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)" }}>
@@ -592,8 +580,7 @@ export function HomePanel({
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                              <span style={{ fontSize: "10px", background: "rgba(0,200,150,0.16)", color: GOAL_SYSTEM_COLOR, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
+                            <div style={{ display: "flex", alignItems: "center", marginBottom: "4px" }}>
                               <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
                             </div>
                           </div>
@@ -632,25 +619,27 @@ export function HomePanel({
                           ))}
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
-                          <div style={{ fontSize: "10px", color: "#666" }}>
-                            <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
-                            {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
-                          </div>
-                          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
+                          {isAdmin && (
+                            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
+                              <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
+                              {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
+                            </div>
+                          )}
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                             {canShowReorder && (
-                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)">
+                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)" style={{ flex: 1 }}>
                                 ⠿ REORDER
                               </SmBtn>
                             )}
-                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
-                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
+                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)" style={{ flex: 1 }}>EDIT</SmBtn>
+                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
                               <>
-                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)">DEL</SmBtn>
-                                <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
+                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)" style={{ flex: 1 }}>DEL</SmBtn>
+                                <SmBtn onClick={() => setDelGoalId(null)} style={{ flex: 1 }}>NO</SmBtn>
                               </>
-                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)">✕</SmBtn>}
+                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)" style={{ flex: 1 }}>✕</SmBtn>}
                           </div>
                         </div>
                       </div>
@@ -710,8 +699,7 @@ export function HomePanel({
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                              <span style={{ fontSize: "10px", background: "rgba(0,200,150,0.16)", color: GOAL_SYSTEM_COLOR, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
+                            <div style={{ display: "flex", alignItems: "center", marginBottom: "4px" }}>
                               <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
                             </div>
                           </div>
@@ -750,25 +738,27 @@ export function HomePanel({
                           ))}
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
-                          <div style={{ fontSize: "10px", color: "#666" }}>
-                            <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
-                            {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
-                          </div>
-                          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
+                          {isAdmin && (
+                            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
+                              <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
+                              {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
+                            </div>
+                          )}
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                             {canShowReorder && (
-                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)">
+                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)" style={{ flex: 1 }}>
                                 ⠿ REORDER
                               </SmBtn>
                             )}
-                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
-                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
+                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)" style={{ flex: 1 }}>EDIT</SmBtn>
+                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
                               <>
-                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)">DEL</SmBtn>
-                                <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
+                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)" style={{ flex: 1 }}>DEL</SmBtn>
+                                <SmBtn onClick={() => setDelGoalId(null)} style={{ flex: 1 }}>NO</SmBtn>
                               </>
-                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)">✕</SmBtn>}
+                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)" style={{ flex: 1 }}>✕</SmBtn>}
                           </div>
                         </div>
                       </div>
@@ -998,14 +988,33 @@ export function HomePanel({
           </div>
         )}
 
-        <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a", borderRadius: "8px", padding: "16px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "10px" }}>Year-End Outlook</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12px" }}>
-            <div style={{ color: "var(--color-text-secondary)" }}>Weeks remaining</div><div style={{ textAlign: "right" }}>{weeksLeft}</div>
-            <div style={{ color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div><div style={{ textAlign: "right", color: "var(--color-red)" }}>-{fmt$(fundedGoalSpend)}</div>
-            <div style={{ color: "var(--color-text-secondary)" }}>Adj. projected savings</div><div style={{ textAlign: "right", color: "var(--color-green)" }}>{fmt$(annualSavings)}</div>
-            <div style={{ color: "var(--color-text-secondary)" }}>Active goals total</div><div style={{ textAlign: "right", color: "var(--color-gold)" }}>{fmt$(totalActiveGoals)}</div>
-            <div style={{ color: "var(--color-text-secondary)" }}>Surplus after all goals</div><div style={{ textAlign: "right", color: annualSavings - totalActiveGoals >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{fmt$(annualSavings - totalActiveGoals)}</div>
+        <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />
+          <div style={{ marginBottom: "16px" }}>
+            <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "4px" }}>Fiscal Year 2026</div>
+            <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px" }}>Year-End Outlook</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Weeks remaining</div>
+              <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "var(--font-display)" }}>{weeksLeft}</div>
+            </div>
+            <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-red)" }}>-{fmt$(fundedGoalSpend)}</div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Adj. projected savings</div>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-green)" }}>{fmt$(annualSavings)}</div>
+            </div>
+            <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
+              <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - totalActiveGoals >= 0 ? "var(--color-green)" : "var(--color-red)" }}>
+                {fmt$(annualSavings - totalActiveGoals)}
+              </div>
+            </div>
           </div>
         </div>
       </div>

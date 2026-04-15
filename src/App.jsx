@@ -820,6 +820,16 @@ export default function App() {
            internal horizontal scrolling without leaking to the page.
            -webkit-overflow-scrolling:touch enables momentum (inertial) scroll
            on iOS — without it, scrolling feels sticky and non-native. */
+        /* Hide the floating nav pill whenever any modal is open.
+           Components signal this by toggling body.modal-open.
+           !important overrides the inline opacity/pointer-events set by
+           scroll-direction state — modal backdrop should always win. */
+        body.modal-open .mobile-bottom-nav {
+          opacity: 0 !important;
+          pointer-events: none !important;
+          transform: scale(0.85) translateY(12px) !important;
+          transition: opacity 0.2s ease, transform 0.2s ease !important;
+        }
         .scroll-x {
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;

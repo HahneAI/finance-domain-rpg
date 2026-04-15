@@ -98,6 +98,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   const [delExpId, setDelExpId] = useState(null);
   const [advEditPhaseIdx, setAdvEditPhaseIdx] = useState(null); // null=closed, 0-3=open for that quarter
+  // Hide mobile nav bar while this modal is open (body class drives the CSS rule in App.jsx)
+  useEffect(() => {
+    document.body.classList.toggle("modal-open", advEditPhaseIdx !== null);
+    return () => document.body.classList.remove("modal-open");
+  }, [advEditPhaseIdx]);
   // Loan CRUD state
   const [editLoanId, setEditLoanId] = useState(null);
   const [editLoanVals, setEditLoanVals] = useState({});

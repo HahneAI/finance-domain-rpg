@@ -150,13 +150,16 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
         zIndex: 60,
         background: "rgba(0,0,0,0.78)",
         display: "flex",
-        alignItems: "center",
+        // stretch lets the overlay's padding define height — no CSS calc needed
+        alignItems: "stretch",
         justifyContent: "center",
-        // Safe-area padding so modal clears Dynamic Island top + home indicator bottom
-        padding: "max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px))",
+        paddingTop: "max(16px, env(safe-area-inset-top, 0px))",
+        paddingBottom: "max(16px, env(safe-area-inset-bottom, 0px))",
+        paddingLeft: "16px",
+        paddingRight: "16px",
       }}
     >
-      {/* Modal card — stop click from closing when clicking inside */}
+      {/* Modal card fills the padded overlay height — flex:1 is the sizing mechanism */}
       <div
         onClick={e => e.stopPropagation()}
         style={{
@@ -165,11 +168,11 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
           borderRadius: "14px",
           width: "100%",
           maxWidth: "460px",
-          // svh excludes browser chrome; subtract both safe-area paddings so modal never clips
-          maxHeight: "calc(100svh - max(16px, env(safe-area-inset-top, 0px)) - max(16px, env(safe-area-inset-bottom, 0px)) - 16px)",
+          flex: 1,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          minHeight: 0,
         }}
       >
         {/* ── Header ── */}

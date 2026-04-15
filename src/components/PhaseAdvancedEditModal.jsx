@@ -152,7 +152,8 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: "16px",
+        // Safe-area padding so modal clears Dynamic Island top + home indicator bottom
+        padding: "max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px))",
       }}
     >
       {/* Modal card — stop click from closing when clicking inside */}
@@ -161,11 +162,11 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
         style={{
           background: "var(--color-bg-surface)",
           border: "1px solid var(--color-border-subtle)",
-          borderRadius: "10px",
+          borderRadius: "14px",
           width: "100%",
           maxWidth: "460px",
-          /* svh = small viewport height, excludes browser chrome on iOS */
-          height: "min(calc(100svh - 32px), 640px)",
+          // svh excludes browser chrome; subtract both safe-area paddings so modal never clips
+          maxHeight: "calc(100svh - max(16px, env(safe-area-inset-top, 0px)) - max(16px, env(safe-area-inset-bottom, 0px)) - 16px)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -176,26 +177,21 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "16px 18px 12px",
+          padding: "10px 14px 8px",
           borderBottom: "1px solid var(--color-border-subtle)",
           flexShrink: 0,
         }}>
-          <div>
-            <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontWeight: "bold" }}>
-              ADV. EDIT — {phase.label}
-            </div>
-            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "3px" }}>
-              Changes from selected month carry forward through remaining quarters.
-            </div>
+          <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontWeight: "bold" }}>
+            ADV. EDIT — {phase.label}
           </div>
-          <SmBtn onClick={onClose} style={{ padding: "4px 10px", minHeight: "32px", fontSize: "14px", lineHeight: 1 }}>✕</SmBtn>
+          <SmBtn onClick={onClose} style={{ padding: "3px 9px", minHeight: "28px", fontSize: "13px", lineHeight: 1, flexShrink: 0 }}>✕</SmBtn>
         </div>
 
         {/* ── Month selector ── */}
         <div style={{
           display: "flex",
           gap: "8px",
-          padding: "12px 18px",
+          padding: "8px 14px",
           borderBottom: "1px solid var(--color-border-subtle)",
           flexShrink: 0,
         }}>
@@ -205,7 +201,7 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
               onClick={() => { setSelectedMonthIdx(mi); setExpandedExpId(null); }}
               bg={selectedMonthIdx === mi ? "var(--color-accent-primary)" : "var(--color-bg-raised)"}
               c={selectedMonthIdx === mi ? "#0a0a0a" : "var(--color-text-secondary)"}
-              style={{ flex: 1, fontSize: "10px", letterSpacing: "1px", padding: "7px 4px", minHeight: "34px" }}
+              style={{ flex: 1, fontSize: "10px", letterSpacing: "1px", padding: "6px 4px", minHeight: "32px" }}
             >
               {m.label}
             </SmBtn>
@@ -344,13 +340,13 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
         <div style={{
           display: "flex",
           gap: "8px",
-          padding: "12px 18px",
+          padding: "8px 14px",
           borderTop: "1px solid var(--color-border-subtle)",
           flexShrink: 0,
         }}>
           <SmBtn
             onClick={onClose}
-            style={{ flex: 1, fontSize: "10px", letterSpacing: "1px", padding: "9px", minHeight: "40px" }}
+            style={{ flex: 1, fontSize: "10px", letterSpacing: "1px", padding: "7px", minHeight: "36px" }}
           >
             CANCEL
           </SmBtn>
@@ -362,8 +358,8 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
               flex: 2,
               fontSize: "10px",
               letterSpacing: "1px",
-              padding: "9px",
-              minHeight: "40px",
+              padding: "7px",
+              minHeight: "36px",
               fontWeight: "bold",
               cursor: hasStagedEdits ? "pointer" : "not-allowed",
             }}

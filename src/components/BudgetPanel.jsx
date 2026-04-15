@@ -685,60 +685,118 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
 
   return (<div>
-    {/* Phase tabs */}
-    <div style={{ display: "flex", gap: "10px", marginBottom: "6px" }}>
-      {PHASES.map((p, i) => { const isCurrent = i === currentPhaseIdx; return <button key={p.id} onClick={() => setAp(i)} style={{ flex: 1, padding: "10px", borderRadius: "6px", cursor: "pointer", background: ap === i ? p.color : "var(--color-bg-surface)", color: ap === i ? "#0a0a0a" : "#666", border: "2px solid " + (ap === i ? p.color : isCurrent ? p.color + "55" : "#222"), fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", position: "relative" }}>{isCurrent && ap !== i && <span style={{ position: "absolute", top: "5px", right: "6px", width: "6px", height: "6px", borderRadius: "50%", background: p.color }} />}{p.label}<br /><span style={{ fontSize: "9px", fontWeight: "normal" }}>{p.description}</span>{isCurrent && <span style={{ display: "block", fontSize: "8px", marginTop: "2px", opacity: ap === i ? 0.7 : 0.9 }}>● now</span>}</button>; })}
-    </div>
-    {/* Adv. Edit row — liquid glass raised pills, one per quarter */}
-    <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
-      {PHASES.map((p, i) => (
-        <LiquidGlass
-          key={p.id}
-          purpose="phase-btn"
-          tone="teal"
-          intensity="light"
-          style={{
-            flex: 1,
-            borderRadius: "10px",
-            overflow: "hidden",
-            position: "relative",
-            background: "rgba(0, 200, 150, 0.12)",
-            border: "1px solid rgba(0, 200, 150, 0.35)",
-            boxShadow: "0 4px 14px rgba(0, 200, 150, 0.16), 0 2px 8px rgba(0, 0, 0, 0.50), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
-          }}
-        >
-          {/* Top-edge sheen — same recipe as nav pill */}
-          <div style={{
-            position: "absolute", top: 0, left: 0, right: 0,
-            height: "50%",
-            background: "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 100%)",
-            borderRadius: "10px 10px 0 0",
-            pointerEvents: "none",
-            zIndex: 1,
-          }} />
+    {/* ── Unified phase control card — quarter selector + adv. edit in one glass box ── */}
+    <LiquidGlass
+      purpose="phase-btn"
+      tone="teal"
+      intensity="light"
+      style={{
+        width: "100%",
+        borderRadius: "20px",
+        // Exact nav pill spec
+        background: "rgba(0, 200, 150, 0.15)",
+        border: "1px solid rgba(0, 200, 150, 0.40)",
+        boxShadow: "0 8px 32px rgba(0, 200, 150, 0.22), 0 4px 16px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.10)",
+        overflow: "hidden",
+        position: "relative",
+        marginBottom: "16px",
+      }}
+    >
+      {/* Top-edge sheen — exact nav recipe */}
+      <div style={{
+        position: "absolute", top: 0, left: 0, right: 0,
+        height: "45%",
+        background: "linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, transparent 100%)",
+        borderRadius: "20px 20px 0 0",
+        pointerEvents: "none",
+        zIndex: 1,
+      }} />
+      {/* Sliding active-quarter indicator — 2px bar, mirrors nav tab indicator */}
+      <div style={{
+        position: "absolute",
+        top: 0,
+        left: `${ap * 25}%`,
+        width: "25%",
+        height: "2px",
+        background: "var(--color-accent-primary)",
+        transition: "left 0.3s ease",
+        borderRadius: "0 0 1px 1px",
+        zIndex: 2,
+      }} />
+
+      {/* ── Quarter selector row ── */}
+      <div style={{ display: "flex", position: "relative", zIndex: 2 }}>
+        {PHASES.map((p, i) => {
+          const isCurrent = i === currentPhaseIdx;
+          const isActive = ap === i;
+          return (
+            <button
+              key={p.id}
+              onClick={() => setAp(i)}
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                borderRight: i < 3 ? "1px solid rgba(0, 200, 150, 0.15)" : "none",
+                color: isActive ? "var(--color-accent-primary)" : "var(--color-text-secondary)",
+                cursor: "pointer",
+                padding: "11px 4px 8px",
+                fontSize: "11px",
+                letterSpacing: "2px",
+                textTransform: "uppercase",
+                fontWeight: isActive ? "bold" : "500",
+                fontFamily: "var(--font-sans)",
+                position: "relative",
+                textAlign: "center",
+              }}
+            >
+              {isCurrent && !isActive && (
+                <span style={{
+                  position: "absolute", top: "6px", right: "5px",
+                  width: "5px", height: "5px", borderRadius: "50%",
+                  background: "var(--color-accent-primary)",
+                }} />
+              )}
+              {p.label}
+              <br />
+              <span style={{ fontSize: "8px", fontWeight: "normal", opacity: isActive ? 0.85 : 0.55 }}>{p.description}</span>
+              {isCurrent && (
+                <span style={{ display: "block", fontSize: "7px", marginTop: "1px", color: "var(--color-accent-primary)", opacity: 0.85 }}>● now</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Horizontal divider between rows */}
+      <div style={{ height: "1px", background: "rgba(0, 200, 150, 0.22)" }} />
+
+      {/* ── ADV. EDIT row ── */}
+      <div style={{ display: "flex", position: "relative", zIndex: 2 }}>
+        {PHASES.map((p, i) => (
           <button
+            key={`adv-${p.id}`}
             onClick={() => setAdvEditPhaseIdx(i)}
             style={{
-              position: "relative",
-              zIndex: 2,
-              width: "100%",
+              flex: 1,
               background: "transparent",
               border: "none",
-              color: "var(--color-text-secondary)",
-              fontSize: "9px",
+              borderRight: i < 3 ? "1px solid rgba(0, 200, 150, 0.15)" : "none",
+              // Slightly darker than nav inactive text per user request
+              color: "rgba(127, 163, 154, 0.70)",
+              cursor: "pointer",
+              padding: "7px 4px 9px",
+              fontSize: "8px",
               letterSpacing: "1.5px",
               textTransform: "uppercase",
-              padding: "7px 4px",
-              minHeight: "30px",
-              cursor: "pointer",
               fontFamily: "var(--font-sans)",
             }}
           >
             ADV. EDIT
           </button>
-        </LiquidGlass>
-      ))}
-    </div>
+        ))}
+      </div>
+    </LiquidGlass>
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
       <Card label="This Week’s Check" val={f2(prevWeekNet ?? weeklyIncome)} sub="This Week’s Check" status="green" rawVal={prevWeekNet ?? weeklyIncome} />

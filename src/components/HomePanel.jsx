@@ -105,9 +105,6 @@ export function HomePanel({
       ? `Week ${weekNumber}, ${weeksLeftCount} left · ${formatRotationDisplay(currentWeek, { isAdmin })}`
       : "2026 Dashboard";
 
-  const handleGoalsTileClick = () => {
-    document.getElementById("home-goals-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
   // ── Pulse insight signals ───────────────────────────────────────────────
   // Each signal is derived from real computed data. Returns undefined when
   // no meaningful signal exists so InsightRow simply doesn't render.
@@ -191,7 +188,7 @@ export function HomePanel({
       span: 2,
       onClick: () => navigate("log"),
       key: "budget",
-      insight: pulseLeftThisWeek,
+      insight: pulseNextWeek,
     },
     {
       title: "Net Worth Trend",
@@ -205,18 +202,6 @@ export function HomePanel({
       insight: pulseNetWorth,
     },
     {
-      title: "Goals",
-      value: `${completedGoals.length}/${goals.length}`,
-      sub: completedGoals.length > 0
-        ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
-        : `${fmt$(totalGoalTarget)} total target`,
-      status: goals.length > 0 && completedGoals.length === goals.length ? "green" : "gold",
-      span: 1,
-      onClick: handleGoalsTileClick,
-      key: "budget",
-      insight: pulseGoals,
-    },
-    {
       title: "Budget Health",
       value: fmtPct(spendRatio),
       sub: `${fmt$(monthlyExpenses)}/mo expenses · ${fmt$(monthlyTakehome)}/mo take-home`,
@@ -225,23 +210,6 @@ export function HomePanel({
       onClick: () => navigate("budget"),
       key: "budget",
       insight: pulseBudgetHealth,
-    },
-    {
-      title: "Next Week Takehome",
-      value: nextWeekDisplay != null ? fmt$(nextWeekDisplay) : fmt$(weeklyIncome),
-      rawVal: nextWeekDisplay ?? weeklyIncome,
-      sub: nextWeekNet != null
-        ? (nextWeekNet < weeklyIncome * 0.8 ? "est. · below avg · check log"
-          : nextWeekNet < weeklyIncome * 0.95 ? "est. · slightly below avg"
-            : "est. · on track")
-        : `${fallbackSource === "prev" ? "last confirmed pay" : "projected average"} (projected)`,
-      status: nextWeekDisplay != null
-        ? (nextWeekDisplay >= weeklyIncome * 0.95 ? "green"
-          : nextWeekDisplay >= weeklyIncome * 0.8 ? "gold" : "red")
-        : "green",
-      span: 2,
-      key: "log",
-      insight: pulseNextWeek,
     },
   ];
 
@@ -536,6 +504,15 @@ export function HomePanel({
           <MetricCard label="Left This Week" val={fmt$(leftThisWeek)} rawVal={leftThisWeek} status={leftThisWeek >= 0 ? "green" : "red"} />
           <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="gold" />
           <MetricCard label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} status={lastGoalEW <= weeksLeft ? "green" : "red"} />
+          <MetricCard
+            label="Goals"
+            val={`${completedGoals.length}/${goals.length}`}
+            sub={completedGoals.length > 0
+              ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
+              : `${fmt$(totalGoalTarget)} total target`}
+            status={goals.length > 0 && completedGoals.length === goals.length ? "green" : "gold"}
+            insight={pulseGoals}
+          />
         </div>
 
         <div style={{ marginBottom: "16px", padding: "12px", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)" }}>

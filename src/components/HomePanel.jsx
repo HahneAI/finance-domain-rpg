@@ -196,7 +196,7 @@ export function HomePanel({
       rawVal: annualSavings,
       sub: weekNumber != null ? `projected annual savings · Wk ${weekNumber}` : "projected annual savings",
       status: annualSavings > 5000 ? "green" : annualSavings >= 0 ? "gold" : "red",
-      span: 1,
+      span: 2,
       onClick: () => navigate("income"),
       key: "income",
       insight: pulseNetWorth,
@@ -481,6 +481,7 @@ export function HomePanel({
             status={tile.status}
             span={tile.span}
             size="30px"
+            centered
             onClick={tile.onClick}
             entranceIndex={i}
             insight={tile.insight}

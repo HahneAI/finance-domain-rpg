@@ -580,8 +580,7 @@ export function HomePanel({
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                              <span style={{ fontSize: "10px", background: "rgba(0,200,150,0.16)", color: GOAL_SYSTEM_COLOR, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
+                            <div style={{ display: "flex", alignItems: "center", marginBottom: "4px" }}>
                               <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
                             </div>
                           </div>
@@ -620,25 +619,27 @@ export function HomePanel({
                           ))}
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
-                          <div style={{ fontSize: "10px", color: "#666" }}>
-                            <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
-                            {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
-                          </div>
-                          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
+                          {isAdmin && (
+                            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
+                              <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
+                              {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
+                            </div>
+                          )}
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                             {canShowReorder && (
-                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)">
+                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)" style={{ flex: 1 }}>
                                 ⠿ REORDER
                               </SmBtn>
                             )}
-                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
-                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
+                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)" style={{ flex: 1 }}>EDIT</SmBtn>
+                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
                               <>
-                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)">DEL</SmBtn>
-                                <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
+                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)" style={{ flex: 1 }}>DEL</SmBtn>
+                                <SmBtn onClick={() => setDelGoalId(null)} style={{ flex: 1 }}>NO</SmBtn>
                               </>
-                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)">✕</SmBtn>}
+                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)" style={{ flex: 1 }}>✕</SmBtn>}
                           </div>
                         </div>
                       </div>
@@ -698,8 +699,7 @@ export function HomePanel({
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                              <span style={{ fontSize: "10px", background: "rgba(0,200,150,0.16)", color: GOAL_SYSTEM_COLOR, padding: "2px 8px", borderRadius: "12px" }}>#{i + 1}</span>
+                            <div style={{ display: "flex", alignItems: "center", marginBottom: "4px" }}>
                               <span style={{ fontSize: "14px", fontWeight: "bold" }}>{g.label}</span>
                             </div>
                           </div>
@@ -738,25 +738,27 @@ export function HomePanel({
                           ))}
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
-                          <div style={{ fontSize: "10px", color: "#666" }}>
-                            <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
-                            {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
-                          </div>
-                          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
+                          {isAdmin && (
+                            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
+                              <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
+                              {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
+                            </div>
+                          )}
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                             {canShowReorder && (
-                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)">
+                              <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)" style={{ flex: 1 }}>
                                 ⠿ REORDER
                               </SmBtn>
                             )}
-                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)">EDIT</SmBtn>
-                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)">✓ DONE</SmBtn>
+                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)" style={{ flex: 1 }}>EDIT</SmBtn>
+                            <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
                               <>
-                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)">DEL</SmBtn>
-                                <SmBtn onClick={() => setDelGoalId(null)}>NO</SmBtn>
+                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)" style={{ flex: 1 }}>DEL</SmBtn>
+                                <SmBtn onClick={() => setDelGoalId(null)} style={{ flex: 1 }}>NO</SmBtn>
                               </>
-                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)">✕</SmBtn>}
+                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)" style={{ flex: 1 }}>✕</SmBtn>}
                           </div>
                         </div>
                       </div>

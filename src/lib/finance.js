@@ -381,12 +381,21 @@ export function projectedGross(isWeek2, cfg) {
   let totalH, wkndH;
   if (cfg.employerPreset === "DHL") {
     const pattern = getDhlPlannedPattern(cfg, isWeek2);
-    totalH = pattern.totalHours;
+    totalH = cfg.customWeeklyHours != null ? cfg.customWeeklyHours : pattern.totalHours;
     wkndH = pattern.weekendHours;
   } else {
-    const ns = isWeek2 ? 6 : 4;
-    totalH = ns * cfg.shiftHours;
-    wkndH = dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
+    // Non-DHL: no weekend differential. customWeeklyHours overrides everything.
+    wkndH = 0;
+    if (cfg.customWeeklyHours != null) {
+      totalH = cfg.customWeeklyHours;
+    } else if (cfg.scheduleIsVariable) {
+      // Variable schedule: isWeek2 = long week, !isWeek2 = short week
+      totalH = isWeek2
+        ? (cfg.longWeeklyHours || cfg.standardWeeklyHours || 40)
+        : (cfg.standardWeeklyHours || 40);
+    } else {
+      totalH = cfg.standardWeeklyHours || 40;
+    }
   }
   const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
   const nonWkndH = totalH - wkndH;
@@ -907,8 +916,16 @@ export function calcEventImpact(event, cfg) {
   const nightDiffPerHour = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
   const isWeek2 = ["6-Day", "Week 2", "Long Week"].includes(event.weekRotation);
   const plannedPattern = isDHL ? getDhlPlannedPattern(cfg, isWeek2) : null;
-  const normalShifts = plannedPattern ? plannedPattern.indexes.length : (isWeek2 ? 6 : 4);
-  const normalWeekendHours = plannedPattern ? plannedPattern.weekendHours : dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
+  // Non-DHL total hours: customWeeklyHours overrides; variable uses long/short; else flat.
+  const nonDhlTotalH = cfg.customWeeklyHours != null
+    ? cfg.customWeeklyHours
+    : cfg.scheduleIsVariable
+      ? (isWeek2 ? (cfg.longWeeklyHours || cfg.standardWeeklyHours || 40) : (cfg.standardWeeklyHours || 40))
+      : (cfg.standardWeeklyHours || 40);
+  const normalShifts = plannedPattern
+    ? plannedPattern.indexes.length
+    : nonDhlTotalH / (cfg.shiftHours || 8);
+  const normalWeekendHours = plannedPattern ? plannedPattern.weekendHours : 0;
   const baseGross = projectedGross(isWeek2, cfg);
   let grossLost = 0, grossGained = 0, hoursLostForPTO = 0;
   if (event.type === "missed_unpaid") {

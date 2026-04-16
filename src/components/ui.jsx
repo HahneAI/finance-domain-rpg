@@ -38,7 +38,9 @@ function useCountUp(target, duration = 1200) {
 // SHARED UI PRIMITIVES
 // ─────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const iS = { background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", color: "var(--color-text-primary)", padding: "10px 12px", borderRadius: "8px", fontSize: "16px", width: "100%", boxSizing: "border-box", fontFamily: "'JetBrains Mono', 'Courier New', monospace", minHeight: "44px" };
+// eslint-disable-next-line react-refresh/only-export-components
 export const lS = { fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "4px", display: "block", fontFamily: "var(--font-sans)" };
 
 export function NT({ label, active, onClick }) { return <button onClick={onClick} style={{ padding: "10px 18px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontFamily: "var(--font-sans)", background: active ? "var(--color-gold)" : "var(--color-bg-surface)", color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)", border: "1px solid " + (active ? "var(--color-gold)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{label}</button>; }
@@ -102,6 +104,7 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
     if (prevRaw.current === null) { prevRaw.current = rawVal; return; }
     if (prevRaw.current !== rawVal) {
       prevRaw.current = rawVal;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFlashing(true);
       const t = setTimeout(() => setFlashing(false), 150); // stays gold 150ms, CSS transition fades over 600ms
       return () => clearTimeout(t);

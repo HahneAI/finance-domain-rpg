@@ -1213,8 +1213,8 @@ function estimateWeeklyGross(d) {
     const hoursPerShift = d.shiftHours || 12;
     return (gross(4 * hoursPerShift) + gross(5 * hoursPerShift)) / 2;
   }
-  if (d.scheduleIsVariable) {
-    // Two-rate variable: average of both gross estimates.
+  if (d.scheduleIsVariable && d.customWeeklyHours == null) {
+    // Two-rate variable: average of short and long week estimates.
     const h1 = (d.standardWeeklyHours || 40);
     const h2 = (d.longWeeklyHours || 50);
     const gross = (h) => {
@@ -1225,8 +1225,9 @@ function estimateWeeklyGross(d) {
     };
     return (gross(h1) + gross(h2)) / 2;
   }
-  // Standard fixed schedule — no OT assumed for typical estimate.
-  const h = d.standardWeeklyHours || 40;
+  // Standard fixed schedule (or variable with customWeeklyHours override).
+  // customWeeklyHours always takes precedence over standardWeeklyHours.
+  const h = d.customWeeklyHours ?? d.standardWeeklyHours ?? 40;
   return h * (d.baseRate || 0);
 }
 

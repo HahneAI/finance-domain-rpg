@@ -43,23 +43,23 @@ Store hours per week as the projection override. Everything stays per-week inter
 
 ---
 
-## Phase 1 — Config Shape: Add `customWeeklyHours`
+## Phase 1 — Config Shape: Add `customWeeklyHours` ✅ COMPLETE
 **Sprint size: small. No UI, no breaking changes.**
 
 ### Tasks
-- [ ] Add `customWeeklyHours: null` to `DEFAULT_CONFIG` in `src/constants/config.js`
+- [x] Add `customWeeklyHours: null` to `DEFAULT_CONFIG` in `src/constants/config.js`
   - Type: `number | null`
   - Meaning: when set, overrides rotation-derived hours for projection math only
   - Add a comment block explaining the three schedule tiers (DHL preset / DHL custom / non-DHL)
-- [ ] Update the `DEFAULT_CONFIG` snapshot in `src/test/constants/__snapshots__/config.test.js.snap`
+- [x] Update the `DEFAULT_CONFIG` snapshot in `src/test/constants/__snapshots__/config.test.js.snap`
   - Run `npx vitest run -u` to regenerate snapshots after adding the field
-- [ ] Confirm no other tests break (`npm run test:run`)
+- [x] Confirm no other tests break (`npm run test:run`)
 
 **After this phase:** field exists in schema, no behavior change yet.
 
 ---
 
-## Phase 2 — `buildYear()` Custom Hours Code Path
+## Phase 2 — `buildYear()` Custom Hours Code Path ✅ COMPLETE
 **Sprint size: medium. Core math change — must test thoroughly.**
 
 ### What changes in `finance.js`
@@ -85,19 +85,19 @@ New behavior when `cfg.customWeeklyHours` is set AND `employerPreset !== "DHL"`:
 - Standard OT split against `cfg.otThreshold`
 
 ### Tasks
-- [ ] In `getDhlPlannedPattern()` (`finance.js:160`): after computing `totalHours` from indexes,
+- [x] In `getDhlPlannedPattern()` (`finance.js:160`): after computing `totalHours` from indexes,
   check if `cfg.customWeeklyHours` is set — if so, override `totalHours` and compute
   `requiredOtShifts = Math.round((cfg.customWeeklyHours - totalHours) / cfg.shiftHours)`
   (floor to 0 if negative). Keep `indexes` and `weekendHours` unchanged.
-- [ ] In `buildYear()` non-DHL path (`finance.js:273`): when `cfg.customWeeklyHours` is set,
+- [x] In `buildYear()` non-DHL path (`finance.js:273`): when `cfg.customWeeklyHours` is set,
   use it instead of `cfg.standardWeeklyHours`. Set `rotation = "Custom"`.
 - [ ] Delete `CUSTOM_LONG_DAY_INDEXES` and `CUSTOM_SHORT_DAY_INDEXES` constants from `finance.js`
-  once the custom-hours path is wired — they become dead code.
+  **Deferred to Phase 4** — removing before db.js migration would break Anthony's live account
+  (his Supabase row still has `dhlCustomSchedule: true`; the legacy path must remain until auto-migration ships).
 - [ ] Remove the `if (cfg.dhlCustomSchedule)` branch from `getDhlPlannedDayIndexes()` —
-  with `customWeeklyHours` handling the hours override, there is no longer a reason to
-  swap out the day arrays.
-- [ ] Update the `buildYear()` header comment block to document the new three-tier logic.
-- [ ] Add unit tests in `src/test/lib/finance.test.js`:
+  **Deferred to Phase 4** — same reason as above.
+- [x] Update the `buildYear()` header comment block to document the new three-tier logic.
+- [x] Add unit tests in `src/test/lib/finance.test.js`:
   - DHL B-team + `customWeeklyHours: 60` → long weeks gross = 60h of pay, short weeks gross = 60h of pay
   - DHL B-team + `customWeeklyHours: 60` → long `requiredOtShifts = 1`, short `requiredOtShifts = 2`
   - Non-DHL + `customWeeklyHours: 35` → `totalHours = 35`, `rotation = "Custom"` every week
@@ -293,11 +293,11 @@ Phase 9 (tests + cleanup)
 
 ## Sprint Recommendations
 
-| Sprint | Phases | What ships |
-|--------|--------|------------|
-| 1 | 1 + 2 | Correct projection math for custom hours; Anthony's 60h/week working in code |
-| 2 | 3 + 4 | WeekConfirmModal multi-OT + db.js auto-migration; Anthony's account self-heals |
-| 3 | 5 + 6 | ProfilePanel + SetupWizard UI; all users can configure custom schedule |
-| 4 | 7 | Clean live Supabase row; verify in app |
-| 5 | 8 | Non-DHL full pass |
-| 6 | 9 | Tests, cleanup, CODEX_MEMORY update |
+| Sprint | Phases | What ships | Status |
+|--------|--------|------------|--------|
+| 1 | 1 + 2 | Correct projection math for custom hours; Anthony's 60h/week working in code | ✅ COMPLETE (2026-04-16) |
+| 2 | 3 + 4 | WeekConfirmModal multi-OT + db.js auto-migration; Anthony's account self-heals | — |
+| 3 | 5 + 6 | ProfilePanel + SetupWizard UI; all users can configure custom schedule | — |
+| 4 | 7 | Clean live Supabase row; verify in app | — |
+| 5 | 8 | Non-DHL full pass | — |
+| 6 | 9 | Tests, cleanup, CODEX_MEMORY update | — |

@@ -149,7 +149,7 @@ DHL weeks producing `requiredOtShifts = 2`, the UI must support multiple OT pick
 
 ---
 
-## Phase 5 — Profile Panel: Custom Schedule Editor
+## Phase 5 — Profile Panel: Custom Schedule Editor ✅ COMPLETE
 **Sprint size: large. New UI subsection.**
 
 New sub-section inside `PayDetail` in `ProfilePanel.jsx`, rendered below Shift Hours.
@@ -170,34 +170,34 @@ Labeled **"Schedule Override"** with a teal section header.
 - On save: set `customWeeklyHours` (or `null` to revert to rotation)
 
 ### Tasks
-- [ ] Add `customWeeklyHours` to the local state in `PayDetail`'s edit form
-- [ ] Build the "Schedule Override" section with toggle + conditional input
-- [ ] Compute and display the implied OT pickup count for DHL users as a read-only hint
-  (same formula as Phase 2: `(customWeeklyHours - baseHours) / shiftHours`)
-- [ ] Wire save: update `cfg.customWeeklyHours` on save, clear to `null` on "Use rotation"
-- [ ] Use `iS` / `lS` style objects for inputs (from `ui.jsx`), match existing ProfilePanel patterns
-- [ ] Validate: custom hours must be > 0 and ≤ 168. For DHL, warn if value < rotation base hours
-  (would imply negative OT — not a hard block, just a warning label)
+- [x] Add `customWeeklyHours` + `customScheduleEnabled` to `PayDetail`'s draft state
+- [x] Build the "Schedule Override" section with toggle + conditional input (below Shift Hours)
+  - DHL: shows team/rotation label, "Use rotation hours" / "Set custom weekly hours" toggle
+  - Non-DHL: "Standard hours" / "Custom hours" toggle
+- [x] Live OT pickup count hint for DHL users (long/short) using `DHL_PRESET.rotation.*.baseHours`
+- [x] Wire save: validates 1–168, sets `customWeeklyHours` or clears to `null`
+- [x] Read-only view: `scheduleLabel` updated; "Custom Override" DetailRow shown when set
+- [ ] Validate: warn if DHL custom hours < rotation base hours (negative OT case)
+  *Deferred — not a hard block; user can still save; low-priority polish*
 
 **After this phase:** Users can configure custom hours without touching Supabase directly.
 
 ---
 
-## Phase 6 — SetupWizard: Wire Custom Schedule to `customWeeklyHours`
+## Phase 6 — SetupWizard: Wire Custom Schedule to `customWeeklyHours` ✅ COMPLETE
 **Sprint size: small. Existing dead UI gets wired up.**
 
-The wizard already has a "Custom schedule" pill in Step 2 (`SetupWizard.jsx:260-266`) but
-it only sets `dhlCustomSchedule: true` with no hours input.
+The wizard already had a "Custom schedule" pill in Step 2 but it only set `dhlCustomSchedule: true`
+with no hours input.
 
 ### Tasks
-- [ ] Replace the `dhlCustomSchedule` pill behavior: selecting "Custom schedule" now shows
-  a `customWeeklyHours` input field (same pattern as Profile Panel Phase 5)
-- [ ] Remove the `onChange({ dhlCustomSchedule: true })` call — set `customWeeklyHours` instead
-- [ ] Update the estimated annual gross preview in the wizard (`SetupWizard.jsx:1188-1192`)
-  to use `customWeeklyHours` when set, instead of the hardcoded `isCustom ? 6 : 5` shift branches
-- [ ] Add a hint label under the input: "Projections will use this as your weekly hours baseline."
-- [ ] For non-DHL users: Step 2 already has `standardWeeklyHours` input — add an optional
-  "Override" toggle that reveals `customWeeklyHours` input (same toggle pattern as Profile Panel)
+- [x] Replace the `dhlCustomSchedule` pill behavior: selecting "Custom schedule" now shows
+  a `customWeeklyHours` input field; sets `dhlCustomSchedule: false`
+- [x] Remove the `onChange({ dhlCustomSchedule: true })` call — `customWeeklyHours` drives this now
+- [x] Update `estimateWeeklyGross()` to use `customWeeklyHours` when set (flat gross);
+  falls back to 4/5-shift weighted average for standard rotation
+- [x] Hint label under input: "Projections will use this as your weekly hours baseline…"
+- [ ] Non-DHL "Override" toggle in Step 2: deferred to Phase 8 (non-DHL full pass)
 
 **After this phase:** New users get proper custom hours setup in onboarding.
 
@@ -296,7 +296,7 @@ Phase 9 (tests + cleanup)
 |--------|--------|------------|--------|
 | 1 | 1 + 2 | Correct projection math for custom hours; Anthony's 60h/week working in code | ✅ COMPLETE (2026-04-16) |
 | 2 | 3 + 4 | WeekConfirmModal multi-OT + db.js auto-migration; Anthony's account self-heals | ✅ COMPLETE (2026-04-16) |
-| 3 | 5 + 6 | ProfilePanel + SetupWizard UI; all users can configure custom schedule | — |
+| 3 | 5 + 6 | ProfilePanel + SetupWizard UI; all users can configure custom schedule | ✅ COMPLETE (2026-04-16) |
 | 4 | 7 | Clean live Supabase row; verify in app | — |
 | 5 | 8 | Non-DHL full pass | — |
 | 6 | 9 | Tests, cleanup, CODEX_MEMORY update | — |

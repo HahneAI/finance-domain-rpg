@@ -175,7 +175,7 @@ describe('WeekConfirmModal — dismiss', () => {
   })
 
   it('does not call onConfirm when skipping', () => {
-    const { mockConfirm, mockDismiss } = renderModal()
+    const { mockConfirm } = renderModal()
     fireEvent.click(screen.getByRole('button', { name: /skip for now/i }))
     expect(mockConfirm).not.toHaveBeenCalled()
   })

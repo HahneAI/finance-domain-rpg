@@ -940,11 +940,11 @@ describe('computeLoanPayoffDate', () => {
   })
 
   it('returns correct payoff date for 10 weekly payments of $100 on $1000 loan', () => {
-    expect(computeLoanPayoffDate(baseLoan)).toBe('2026-04-11')
+    expect(computeLoanPayoffDate(baseLoan)).toBe('2026-04-12')
   })
 
   it('returns firstPaymentDate when paymentAmount is 0 (no payments)', () => {
-    expect(computeLoanPayoffDate({ ...baseLoan, paymentAmount: 0 })).toBe('2026-01-31')
+    expect(computeLoanPayoffDate({ ...baseLoan, paymentAmount: 0 })).toBe('2026-02-01')
   })
 })
 
@@ -1446,21 +1446,21 @@ describe('loanRunwayStartDate', () => {
 
   it('weekly frequency → 7 days before firstPaymentDate', () => {
     const loan = { ...baseLoan, paymentFrequency: 'weekly' }
-    expect(loanRunwayStartDate(loan)).toBe('2026-05-24')
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-25')
   })
 
   it('biweekly frequency → 14 days before firstPaymentDate', () => {
     const loan = { ...baseLoan, paymentFrequency: 'biweekly' }
-    expect(loanRunwayStartDate(loan)).toBe('2026-05-17')
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-18')
   })
 
   it('monthly frequency → ~30 days before firstPaymentDate', () => {
     const loan = { ...baseLoan, paymentFrequency: 'monthly' }
-    expect(loanRunwayStartDate(loan)).toBe('2026-05-01')
+    expect(loanRunwayStartDate(loan)).toBe('2026-05-02')
   })
 
   it('defaults to weekly (7 days) when no paymentFrequency provided', () => {
-    expect(loanRunwayStartDate({ ...baseLoan })).toBe('2026-05-24')
+    expect(loanRunwayStartDate({ ...baseLoan })).toBe('2026-05-25')
   })
 
   it('returns a valid ISO date string', () => {

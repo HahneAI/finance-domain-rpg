@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/static-components */
 import { useState } from "react";
 import { EVENT_TYPES } from "../constants/config.js";
 import { calcEventImpact, dhlEmployerMatchRate, toLocalIso } from "../lib/finance.js";

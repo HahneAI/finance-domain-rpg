@@ -26,6 +26,13 @@ export const DEFAULT_CONFIG = {
   // ── Schedule type (non-DHL users) ───────────────────────────
   scheduleIsVariable: false,   // true = pay varies week-to-week (two paystub calculators)
   standardWeeklyHours: 40,     // standard path only — flat hours per week baseline
+  // customWeeklyHours: when set, overrides the rotation-derived hours in buildYear() for all
+  // income projections and goal timelines. Three tiers:
+  //   DHL preset   (customWeeklyHours: null)  — rotation drives hours; weekly conf picks OT day
+  //   DHL custom   (customWeeklyHours: 60)    — flat 60h/week; rotation still shown in weekly conf
+  //   Non-DHL      (customWeeklyHours: N)     — flat N h/week; no rotation; simplified conf
+  // null = inactive — rotation or standardWeeklyHours is used instead.
+  customWeeklyHours: null,
 
   // ── Pay structure ────────────────────────────────────────────
   baseRate: 19.65, shiftHours: 12, diffRate: 1.75, nightDiffRate: 1.50, otThreshold: 40, otMultiplier: 1.5,
@@ -112,18 +119,22 @@ export const QUARTER_BOUNDARIES = ["2026-03-31", "2026-06-30", "2026-09-30"];
 // DHL EMPLOYER PRESET
 //
 // Standard DHL B-team rotation (used for new wizard users):
-//   Long week:  4 core shifts (Tue/Wed/Sat/Sun) + 1 required OT = 5 working days
-//   Short week: 3 core shifts (Mon/Thu/Fri)     + 1 required OT = 4 working days
+//   Long week:  4 core shifts (Tue/Wed/Sat/Sun) + 1 required OT = 5 working days (60h)
+//   Short week: 3 core shifts (Mon/Thu/Fri)     + 1 required OT = 4 working days (48h)
+//   requiredOtShifts = 1 for both rotation types; user picks the day in WeekConfirmModal.
 //
-// Anthony's custom schedule (dhlCustomSchedule: true):
-//   Long week:  4 standard + 2 scheduled OT = 6-Day (Tue–Sun, 72h)
-//   Short week: 3 standard + 1 scheduled OT = 4-Day (Mon/Wed/Thu/Fri, 48h)
-//   OT is baked into his hardcoded day arrays in buildYear(); new standard
-//   users get the preset rotation only (no OT pre-baked).
+// DHL custom hours (customWeeklyHours set, e.g. 60):
+//   Rotation day arrays are preserved for WeekConfirmModal display.
+//   Projection math uses customWeeklyHours as the flat weekly total instead.
+//   requiredOtShifts derived from (customWeeklyHours - coreHours) / shiftHours:
+//     Long week  core = 48h → (60−48)/12 = 1 OT shift
+//     Short week core = 36h → (60−36)/12 = 2 OT shifts
 //
-// DHL_PRESET.rotation is used by buildYear() for standard users.
-// Anthony's row: dhlTeam="B", dhlCustomSchedule=true → hardcoded arrays.
+// dhlCustomSchedule (legacy, kept for migration reads only):
+//   Was used to activate hardcoded 6-Day/4-Day arrays for Anthony's old schedule.
+//   Replaced by customWeeklyHours; will be removed after migration window closes.
 //
+// DHL_PRESET.rotation is used by buildYear() for all DHL rotation logic.
 // Day index: 0=Sun  1=Mon  2=Tue  3=Wed  4=Thu  5=Fri  6=Sat
 // ─────────────────────────────────────────────────────────────
 export const DHL_PRESET = {

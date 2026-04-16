@@ -257,20 +257,36 @@ function Step1({ formData, onChange, lifeEvent }) {
             <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
               <Pill
                 label="Standard rotation"
-                active={formData.dhlCustomSchedule !== true}
-                onClick={() => onChange({ dhlCustomSchedule: false })}
+                active={formData.customWeeklyHours == null}
+                onClick={() => onChange({ customWeeklyHours: null, dhlCustomSchedule: false })}
               />
               <Pill
                 label="Custom schedule"
-                active={formData.dhlCustomSchedule === true}
-                onClick={() => onChange({ dhlCustomSchedule: true })}
+                active={formData.customWeeklyHours != null}
+                onClick={() => onChange({ customWeeklyHours: formData.customWeeklyHours ?? 60, dhlCustomSchedule: false })}
               />
             </div>
-            <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
-              {formData.dhlCustomSchedule
-                ? "Adjust days manually in Schedule."
-                : "Override per-week from Income for extra shifts."}
-            </div>
+            {formData.customWeeklyHours != null ? (
+              <div style={{ marginTop: "10px" }}>
+                <label style={lS}>Hours per week</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  max="168"
+                  value={formData.customWeeklyHours}
+                  onChange={e => onChange({ customWeeklyHours: parseFloat(e.target.value) || 60, dhlCustomSchedule: false })}
+                  style={{ ...iS, marginTop: "4px" }}
+                />
+                <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+                  Projections will use this as your weekly hours baseline. Your DHL rotation is still used to show scheduled days in weekly confirmation.
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+                Override per-week from Income for extra shifts.
+              </div>
+            )}
           </Field>
 
         </>
@@ -1183,26 +1199,22 @@ function Step4({ formData, onChange }) {
 function estimateWeeklyGross(d) {
   const isDHL = d.employerPreset === "DHL";
   if (isDHL) {
-    // Short-week DHL: 3 required shifts + 1 mandatory OT = 4 × shiftHours.
-    // Long-week DHL preset: 4 core shifts + 1 mandatory OT = 5 × shiftHours.
-    // Anthony's custom schedule keeps a 6-day long week (2 scheduled OT shifts).
-    // Use a weighted average (26 short + 26 long per year).
-    const isCustom = d.dhlCustomSchedule === true;
-    const shortShifts = 4;                         // both preset + custom short weeks hit 4 shifts
-    const longShifts  = isCustom ? 6 : 5;          // custom stays 6-day, preset long is 5-day
-    const hoursPerShift = d.shiftHours || 12;
-    const shortH = shortShifts * hoursPerShift;
-    const longH  = longShifts  * hoursPerShift;
     const gross = (h) => {
       const base = d.baseRate || 0;
       const reg = Math.min(h, d.otThreshold || 40);
       const ot = Math.max(h - (d.otThreshold || 40), 0);
       return reg * base + ot * base * (d.otMultiplier || 1.5);
     };
-    return (gross(shortH) + gross(longH)) / 2;
+    if (d.customWeeklyHours != null) {
+      // Flat custom hours — same projected total every week
+      return gross(d.customWeeklyHours);
+    }
+    // Standard DHL rotation: weighted average of long (5-shift) and short (4-shift) weeks
+    const hoursPerShift = d.shiftHours || 12;
+    return (gross(4 * hoursPerShift) + gross(5 * hoursPerShift)) / 2;
   }
-  if (d.scheduleIsVariable) {
-    // Two-rate variable: average of both gross estimates.
+  if (d.scheduleIsVariable && d.customWeeklyHours == null) {
+    // Two-rate variable: average of short and long week estimates.
     const h1 = (d.standardWeeklyHours || 40);
     const h2 = (d.longWeeklyHours || 50);
     const gross = (h) => {
@@ -1213,8 +1225,9 @@ function estimateWeeklyGross(d) {
     };
     return (gross(h1) + gross(h2)) / 2;
   }
-  // Standard fixed schedule — no OT assumed for typical estimate.
-  const h = d.standardWeeklyHours || 40;
+  // Standard fixed schedule (or variable with customWeeklyHours override).
+  // customWeeklyHours always takes precedence over standardWeeklyHours.
+  const h = d.customWeeklyHours ?? d.standardWeeklyHours ?? 40;
   return h * (d.baseRate || 0);
 }
 

@@ -90,7 +90,7 @@ const GLASS_TIER = {
   overlay: { background: "rgba(0, 200, 150, 0.12)", border: "rgba(0, 200, 150, 0.28)", blur: "20px" },
 };
 
-export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight, visualTier }) {
+export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight, visualTier, centered }) {
   const [pressed,  setPressed]  = useState(false);
   const [flashing, setFlashing] = useState(false);
   const prevRaw = useRef(null);
@@ -127,7 +127,7 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
     border: `1px solid ${g ? g.border : (s ? s.border : "var(--color-border-subtle)")}`,
     borderRadius: "16px",
     padding: isButton ? "16px 18px" : "18px 16px",
-    textAlign: "left",
+    textAlign: centered ? "center" : "left",
     color: "inherit",
     boxShadow: "0 8px 26px rgba(0,0,0,0.32)",
     minWidth: 0,
@@ -140,6 +140,7 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
       minHeight: "88px",
       display: "flex",
       flexDirection: "column",
+      alignItems: centered ? "center" : undefined,
       gap: "4px",
       minWidth: 0,
     }),
@@ -256,7 +257,7 @@ export function FlowSparklineCard({
   );
 }
 
-export function SmBtn({ children, onClick, c = "var(--color-text-secondary)", bg = "var(--color-bg-surface)" }) { return <button onClick={onClick} style={{ background: bg, color: c, border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "10px 14px", minHeight: "44px", fontSize: "11px", fontFamily: "var(--font-sans)", cursor: "pointer", }}>{children}</button>; }
+export function SmBtn({ children, onClick, c = "var(--color-text-secondary)", bg = "var(--color-bg-surface)", style: extraStyle }) { return <button onClick={onClick} style={{ background: bg, color: c, border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "10px 14px", minHeight: "44px", fontSize: "11px", fontFamily: "var(--font-sans)", cursor: "pointer", ...extraStyle }}>{children}</button>; }
 export function SH({ children, color, textColor, right }) { const c = color || "var(--color-gold)"; const tc = textColor || c; return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "4px" }}><div style={{ display: "flex", alignItems: "center", gap: "12px" }}><div style={{ width: "3px", height: "18px", background: c, borderRadius: "2px", flexShrink: 0 }} /><div style={{ fontSize: "11px", letterSpacing: "3px", color: tc, textTransform: "uppercase", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{children}</div></div>{right != null && <div style={{ fontSize: "12px", color: tc, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{right}</div>}</div>; }
 
 // ─────────────────────────────────────────────────────────────

@@ -757,6 +757,7 @@ export default function App() {
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px)) !important;
+            overscroll-behavior-y: contain;
           }
           /* Safe-area height + top padding for Dynamic Island / notch iPhones.
              CSS !important overrides inline styles in iOS PWA standalone mode where
@@ -814,6 +815,21 @@ export default function App() {
            internal horizontal scrolling without leaking to the page.
            -webkit-overflow-scrolling:touch enables momentum (inertial) scroll
            on iOS — without it, scrolling feels sticky and non-native. */
+        /* Hide the floating nav pill whenever any modal is open.
+           Components signal this by toggling body.modal-open.
+           !important overrides the inline opacity/pointer-events set by
+           scroll-direction state — modal backdrop should always win. */
+        body.modal-open .mobile-bottom-nav {
+          opacity: 0 !important;
+          pointer-events: none !important;
+          transform: scale(0.85) translateY(12px) !important;
+          transition: opacity 0.2s ease, transform 0.2s ease !important;
+        }
+        body.modal-open .mobile-header {
+          opacity: 0 !important;
+          pointer-events: none !important;
+          transition: opacity 0.15s ease !important;
+        }
         .scroll-x {
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
@@ -1156,7 +1172,7 @@ export default function App() {
           opacity: drawerOpen ? 0 : isScrollingDown ? 0.6 : 1,
           transform: isScrollingDown ? "scale(0.6)" : "scale(1)",
           transformOrigin: "center bottom",
-          pointerEvents: drawerOpen ? "none" : "auto",
+          pointerEvents: "none",
           transition: "opacity 0.25s ease, transform 0.25s ease",
         }}
       >
@@ -1233,6 +1249,7 @@ export default function App() {
                   textTransform: "uppercase",
                   paddingTop: "2px",
                   transition: "color 0.2s ease",
+                  pointerEvents: drawerOpen ? "none" : "auto",
                 }}
               >
                 {item.icon}

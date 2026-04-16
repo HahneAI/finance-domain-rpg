@@ -145,7 +145,8 @@ export async function loadUserData() {
     mergedConfig.startingWeekIsLong = false;    // corrected: false = odd-offset weeks are long
     mergedConfig.scheduleIsVariable = true;
     mergedConfig.dhlTeam = "B";
-    mergedConfig.dhlCustomSchedule = true;
+    mergedConfig.customWeeklyHours = 60;   // Phase 4 migration: replaces dhlCustomSchedule:true
+    mergedConfig.dhlCustomSchedule = false;
     // Promote legacy w1/w2 rate field names to the generalized names used by the wizard
     if (mergedConfig.fedRateLow === DEFAULT_CONFIG.fedRateLow) {
       mergedConfig.fedRateLow    = mergedConfig.w1FedRate   ?? DEFAULT_CONFIG.w1FedRate;
@@ -173,8 +174,20 @@ export async function loadUserData() {
   // Sets all three fields needed for Anthony's custom schedule correctly.
   if (data.is_dhl && mergedConfig.dhlTeam === null) {
     mergedConfig.dhlTeam = "B";
-    mergedConfig.dhlCustomSchedule = true;
+    mergedConfig.customWeeklyHours = 60;   // Phase 4 migration: replaces dhlCustomSchedule:true
+    mergedConfig.dhlCustomSchedule = false;
     mergedConfig.startingWeekIsLong = false;   // odd-offset weeks from firstActiveIdx are long
+  }
+
+  // ── dhlCustomSchedule → customWeeklyHours auto-migration ─────────────────────
+  // If any prior migration or saved Supabase data still carries dhlCustomSchedule:true,
+  // convert it to customWeeklyHours:60 and clear the flag. This is the Phase 4 migration
+  // window guard — safe to remove after Anthony's live Supabase row is cleaned (Phase 7).
+  if (mergedConfig.dhlCustomSchedule === true) {
+    // eslint-disable-next-line no-console
+    console.warn("[db] dhlCustomSchedule migration: setting customWeeklyHours=60, dhlCustomSchedule=false");
+    mergedConfig.customWeeklyHours = 60;
+    mergedConfig.dhlCustomSchedule = false;
   }
 
   // ── One-time baseRate correction (night diff separation) ─────────────────────

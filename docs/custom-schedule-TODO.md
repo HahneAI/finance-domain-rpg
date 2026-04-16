@@ -107,7 +107,7 @@ New behavior when `cfg.customWeeklyHours` is set AND `employerPreset !== "DHL"`:
 
 ---
 
-## Phase 3 — WeekConfirmModal: Multi-OT Support
+## Phase 3 — WeekConfirmModal: Multi-OT Support ✅ COMPLETE
 **Sprint size: medium. UI change to existing modal.**
 
 Currently the modal only handles `requiredOtShifts = 0` (custom, skip OT) or
@@ -115,36 +115,35 @@ Currently the modal only handles `requiredOtShifts = 0` (custom, skip OT) or
 DHL weeks producing `requiredOtShifts = 2`, the UI must support multiple OT picks.
 
 ### Tasks
-- [ ] In `WeekConfirmModal.jsx`, update the mandatory OT section (`lines 459–537`) to loop
-  over `requiredOtShifts` count rather than assuming a single OT day:
-  - Change `otDay` state (single string) to `otDays` state (array of strings)
-  - Render N OT day pickers, each drawing from remaining unselected candidates
-  - Each picker: same "which day did you work / missed" UI as current single picker
-- [ ] Update `netShiftDelta` calculation to use `otDays.length` picked vs `requiredOtShifts`
-- [ ] Update the saved `weekConfirmation` shape: `otDays: string[]` (replaces `otDay: string`)
-  - Keep `otDay` in saved object as `otDays[0] ?? null` for backward compatibility
-- [ ] Update `pickupDays` logic to include all selected OT days
+- [x] In `WeekConfirmModal.jsx`, update the mandatory OT section to loop over
+  `requiredOtShifts` count rather than assuming a single OT day:
+  - Changed `otDay` state (single string) to `otDays` state (array of strings)
+  - Renders N OT day pickers, each drawing from remaining unselected candidates
+  - Each picker: same "which day did you work / missed" UI as prior single picker
+- [x] Update `netShiftDelta` to work via `dayToggles` (unchanged — OT days that are worked
+  appear in `pickupDays` naturally; missed OT doesn't set a toggle)
+- [x] Update the saved `weekConfirmation` shape: `otDays: string[]`
+  - `otDay: otDays[0] ?? null` kept for backward compatibility
+- [x] `pickupDays` logic unchanged — `selectOtDayAt` sets `dayToggles[day] = true` for worked OT
 - [ ] Test: short-week B-team + `customWeeklyHours: 60` → modal shows 2 OT pickers
+  *Manual QA only (no headless WeekConfirmModal tests in current suite)*
 
 **After this phase:** Anthony can confirm weeks with proper OT tracking for both long and short weeks.
 
 ---
 
-## Phase 4 — `db.js` Legacy Migration: Retire `dhlCustomSchedule`
+## Phase 4 — `db.js` Legacy Migration: Retire `dhlCustomSchedule` ✅ COMPLETE
 **Sprint size: small. Data layer only.**
 
 ### Tasks
-- [ ] In `loadUserData()` (`db.js:141-178`), replace the `is_admin`/`dhlCustomSchedule` override block:
-  - If row has `dhlCustomSchedule: true` → auto-migrate: set `customWeeklyHours: 60`,
-    set `dhlCustomSchedule: false` in the merged config
-  - This migration runs client-side on load — no Supabase migration needed
-  - Log a console warning so it's visible during the migration window
-- [ ] Remove both hardcoded `dhlCustomSchedule: true` blocks from `db.js`
-- [ ] Update `db.test.js` tests (`lines 298-302`, `357-360`):
-  - `dhlCustomSchedule` should be `false` (or absent) after load
-  - `customWeeklyHours` should be `60` for the is_admin fixture
-- [ ] Deprecate `dhlCustomSchedule` in `DEFAULT_CONFIG` — mark with a comment noting it's
-  only kept for migration reads; no new code should set it
+- [x] In `loadUserData()` (`db.js:141-178`), replaced both `dhlCustomSchedule: true` assignments:
+  - Pre-wizard DHL migration: sets `customWeeklyHours: 60`, `dhlCustomSchedule: false`
+  - Rotation correction block (dhlTeam=null): same swap
+  - Added catch-all block: if any path leaves `dhlCustomSchedule: true` (e.g. stale Supabase data),
+    auto-migrates to `customWeeklyHours: 60` and logs a console.warn
+- [x] Update `db.test.js` — both test fixtures now assert `dhlCustomSchedule: false` + `customWeeklyHours: 60`
+- [x] `dhlCustomSchedule` in `DEFAULT_CONFIG` already carries a deprecation comment from Sprint 1
+  (marked as "legacy, kept for migration reads only")
 
 **After this phase:** Anthony's account auto-migrates on next app load. No manual Supabase update needed until Phase 7.
 
@@ -296,7 +295,7 @@ Phase 9 (tests + cleanup)
 | Sprint | Phases | What ships | Status |
 |--------|--------|------------|--------|
 | 1 | 1 + 2 | Correct projection math for custom hours; Anthony's 60h/week working in code | ✅ COMPLETE (2026-04-16) |
-| 2 | 3 + 4 | WeekConfirmModal multi-OT + db.js auto-migration; Anthony's account self-heals | — |
+| 2 | 3 + 4 | WeekConfirmModal multi-OT + db.js auto-migration; Anthony's account self-heals | ✅ COMPLETE (2026-04-16) |
 | 3 | 5 + 6 | ProfilePanel + SetupWizard UI; all users can configure custom schedule | — |
 | 4 | 7 | Clean live Supabase row; verify in app | — |
 | 5 | 8 | Non-DHL full pass | — |

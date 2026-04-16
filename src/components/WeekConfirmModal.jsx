@@ -99,8 +99,9 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
 
   // ── Layer 2 form state (mirrors LogPanel's blank event shape) ─────────────
   const [eventVals, setEventVals] = useState({});
-  // DHL short-week OT confirmation — null = unanswered, "missed" or a day name
-  const [otDay, setOtDay] = useState(null);
+  // DHL OT confirmation — one entry per requiredOtShifts slot: null=unanswered, "missed", or a day name
+  const requiredOtCount = week.requiredOtShifts ?? 0;
+  const [otDays, setOtDays] = useState(() => Array(requiredOtCount).fill(null));
 
   const scheduledDays = week.workedDayNames;
   const missedScheduledDays = scheduledDays.filter(d => dayToggles[d] === false);
@@ -112,34 +113,40 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
   const payPeriodStartDow = ((config.payPeriodEndDay ?? 0) + 1) % 7;
   const rotationDisplay = formatRotationDisplay(week, { isAdmin });
 
-  // DHL short-week OT tracking
-  const requiresOtSelection = config.employerPreset === "DHL" && (week.requiredOtShifts ?? 0) > 0;
-  const otDayCandidates = DAY_NAMES.filter(d => !scheduledDays.includes(d));
-  const otDayIsWeekend = otDay != null && otDay !== "missed" && ["Sat", "Sun"].includes(otDay);
+  // DHL OT tracking
+  const requiresOtSelection = config.employerPreset === "DHL" && requiredOtCount > 0;
+  const anyOtMissed = otDays.some(d => d === "missed");
+  const missedOtCount = otDays.filter(d => d === "missed").length;
+  const workedOtDays = otDays.filter(d => d && d !== "missed");
 
   useEffect(() => {
-    if (!requiresOtSelection && otDay !== null) {
-      setOtDay(null);
+    if (!requiresOtSelection && otDays.some(d => d !== null)) {
+      setOtDays(Array(requiredOtCount).fill(null));
     }
-  }, [requiresOtSelection, otDay]);
+  }, [requiresOtSelection]);
 
-  const selectOtDay = (value) => {
-    setOtDay(value);
+  // Sets a specific OT slot; keeps dayToggles in sync for the changed slot.
+  const selectOtDayAt = (slotIdx, value) => {
+    const oldValue = otDays[slotIdx];
+    setOtDays(prev => {
+      const next = [...prev];
+      next[slotIdx] = value;
+      return next;
+    });
     setDayToggles(prev => {
       const next = { ...prev };
-      if (value === "missed") {
-        otDayCandidates.forEach(day => {
-          next[day] = null;
-        });
-      } else if (value) {
-        next[value] = true;
+      // Clear the previous day for this slot (unless another slot also holds it)
+      if (oldValue && oldValue !== "missed") {
+        const usedElsewhere = otDays.some((d, i) => i !== slotIdx && d === oldValue);
+        if (!usedElsewhere) next[oldValue] = null;
       }
+      if (value && value !== "missed") next[value] = true;
       return next;
     });
   };
 
-  const otSelectionMissing = requiresOtSelection && otDay === null;
-  const logSwapDisabled = otSelectionMissing || (requiresOtSelection && otDay === "missed");
+  const otSelectionMissing = requiresOtSelection && otDays.some(d => d === null);
+  const logSwapDisabled = otSelectionMissing || anyOtMissed;
 
   // ── Toggle handler: 3 states ──────────────────────────────────────────────
   const toggleDay = (day) => {
@@ -207,20 +214,20 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
     if (otSelectionMissing) {
       return;
     }
-    // DHL preset: missed OT → pre-fill Layer 2 as unapproved miss (hits bucket hours)
-    if (requiresOtSelection && otDay === "missed") {
+    // DHL preset: any missed OT → pre-fill Layer 2 as unapproved miss (hits bucket hours)
+    if (requiresOtSelection && anyOtMissed) {
       setEventVals({
         weekEnd: toLocalIso(week.weekEnd),
         weekIdx: week.idx,
         weekRotation: week.rotation,
         type: "missed_unapproved",
         missedDays: [],
-        shiftsLost: 1,
+        shiftsLost: missedOtCount,
         weekendShifts: 0,
-        hoursLost: config.shiftHours,
+        hoursLost: missedOtCount * config.shiftHours,
         amount: 0,
         ptoHours: 0,
-        note: "Mandatory OT shift not worked",
+        note: missedOtCount === 1 ? "Mandatory OT shift not worked" : `${missedOtCount} mandatory OT shifts not worked`,
       });
       setLayer(2);
       setWentToLayer2(true);
@@ -233,7 +240,11 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
         confirmedAt: new Date().toISOString(),
         dayToggles, scheduledDays, missedScheduledDays, pickupDays,
         netShiftDelta: 0, eventId: null,
-        ...(requiresOtSelection ? { otDay, otDayIsWeekend } : {}),
+        ...(requiresOtSelection ? {
+          otDays,
+          otDay: otDays[0] ?? null,
+          otDayIsWeekend: !!(otDays[0] && otDays[0] !== "missed" && ["Sat", "Sun"].includes(otDays[0])),
+        } : {}),
       }, null);
       return;
     }
@@ -251,8 +262,8 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
       // has a useful starting value. User should verify the actual payout.
       amount: !isDeficit ? pickupDays.length * config.shiftHours * config.baseRate : 0,
       ptoHours: 0,
-      note: requiresOtSelection && otDay && otDay !== "missed"
-        ? `OT day: ${otDay}${otDayIsWeekend ? " (weekend — diff applies)" : ""}`
+      note: requiresOtSelection && workedOtDays.length > 0
+        ? workedOtDays.map(d => `OT day: ${d}${["Sat", "Sun"].includes(d) ? " (weekend — diff applies)" : ""}`).join("; ")
         : "",
     });
     setLayer(2);
@@ -305,7 +316,11 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
       confirmedAt: new Date().toISOString(),
       dayToggles, scheduledDays, missedScheduledDays, pickupDays,
       netShiftDelta, eventId: logEntry.id,
-      ...(requiresOtSelection ? { otDay, otDayIsWeekend } : {}),
+      ...(requiresOtSelection ? {
+        otDays,
+        otDay: otDays[0] ?? null,
+        otDayIsWeekend: !!(otDays[0] && otDays[0] !== "missed" && ["Sat", "Sun"].includes(otDays[0])),
+      } : {}),
     }, logEntry);
   };
 
@@ -459,80 +474,95 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
               {requiresOtSelection && (
                 <div style={{ margin: "12px 20px 0", padding: "12px 14px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "6px" }}>
-                    Mandatory OT shift
+                    Mandatory OT {requiredOtCount === 1 ? "Shift" : `Shifts (${requiredOtCount} required)`}
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5", marginBottom: "10px" }}>
-                    DHL rotations include a required OT shift each week. Pick the day you worked or mark "Missed". Weekend selections automatically apply the differential.
+                    DHL rotations include {requiredOtCount === 1 ? "a required OT shift" : `${requiredOtCount} required OT shifts`} each week. Pick the day you worked or mark "Missed". Weekend selections automatically apply the differential.
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                    {otDayCandidates.map(day => {
-                      const active = otDay === day;
-                      const weekend = day === "Sat" || day === "Sun";
-                      return (
-                        <button
-                          key={day}
-                          type="button"
-                          onClick={() => selectOtDay(day)}
-                          style={{
-                            padding: "6px 12px",
-                            borderRadius: "4px",
-                            fontSize: "9px",
-                            letterSpacing: "1px",
-                            textTransform: "uppercase",
-                            border: active ? "1px solid rgba(34,197,94,0.6)" : "1px solid var(--color-border-subtle)",
-                            background: active ? "rgba(34,197,94,0.12)" : "var(--color-bg-surface)",
-                            color: weekend ? "var(--color-green)" : "var(--color-text-secondary)",
-                            fontWeight: active ? "bold" : "normal",
-                            cursor: "pointer",
-                            display: "flex",
-                            gap: "6px",
-                            alignItems: "center",
-                          }}
-                        >
-                          {active ? "✓" : "+"} {day}
-                          {weekend && (
-                            <span style={{ fontSize: "8px", letterSpacing: "1px", color: "var(--color-text-disabled)" }}>
-                              weekend
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => selectOtDay("missed")}
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: "4px",
-                        fontSize: "9px",
-                        letterSpacing: "1px",
-                        textTransform: "uppercase",
-                        border: otDay === "missed" ? "1px solid rgba(239,68,68,0.6)" : "1px solid var(--color-border-subtle)",
-                        background: otDay === "missed" ? "rgba(239,68,68,0.12)" : "var(--color-bg-surface)",
-                        color: otDay === "missed" ? "var(--color-red)" : "var(--color-text-secondary)",
-                        fontWeight: otDay === "missed" ? "bold" : "normal",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {otDay === "missed" ? "✓ Missed OT" : "Missed OT"}
-                    </button>
-                  </div>
-                  <div style={{
-                    marginTop: "8px",
-                    fontSize: "10px",
-                    color: otDay === "missed"
-                      ? "var(--color-red)"
-                      : otDay
-                        ? (otDayIsWeekend ? "var(--color-green)" : "var(--color-text-secondary)")
-                        : "var(--color-text-disabled)",
-                    letterSpacing: "0.5px",
-                  }}>
-                    {otDay === "missed"
-                      ? "Missed OT will be logged for approval and hits bucket hours unless cleared."
-                      : otDay
-                        ? (otDayIsWeekend ? "Weekend OT earns your diff rate automatically." : "Weekday OT does not include the differential.")
-                        : "Required — select the OT day or mark it missed to continue."}
-                  </div>
+                  {Array.from({ length: requiredOtCount }, (_, slotIdx) => {
+                    const otDaysWorkedOtherSlots = otDays.filter((d, i) => i !== slotIdx && d && d !== "missed");
+                    const slotCandidates = DAY_NAMES.filter(d => !scheduledDays.includes(d) && !otDaysWorkedOtherSlots.includes(d));
+                    const slotValue = otDays[slotIdx];
+                    const slotIsWeekend = !!(slotValue && slotValue !== "missed" && ["Sat", "Sun"].includes(slotValue));
+                    return (
+                      <div key={slotIdx} style={{ marginTop: slotIdx > 0 ? "12px" : "0" }}>
+                        {requiredOtCount > 1 && (
+                          <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1px", marginBottom: "6px", textTransform: "uppercase" }}>
+                            OT Shift {slotIdx + 1}
+                          </div>
+                        )}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                          {slotCandidates.map(day => {
+                            const active = slotValue === day;
+                            const weekend = day === "Sat" || day === "Sun";
+                            return (
+                              <button
+                                key={day}
+                                type="button"
+                                onClick={() => selectOtDayAt(slotIdx, day)}
+                                style={{
+                                  padding: "6px 12px",
+                                  borderRadius: "4px",
+                                  fontSize: "9px",
+                                  letterSpacing: "1px",
+                                  textTransform: "uppercase",
+                                  border: active ? "1px solid rgba(34,197,94,0.6)" : "1px solid var(--color-border-subtle)",
+                                  background: active ? "rgba(34,197,94,0.12)" : "var(--color-bg-surface)",
+                                  color: weekend ? "var(--color-green)" : "var(--color-text-secondary)",
+                                  fontWeight: active ? "bold" : "normal",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  gap: "6px",
+                                  alignItems: "center",
+                                }}
+                              >
+                                {active ? "✓" : "+"} {day}
+                                {weekend && (
+                                  <span style={{ fontSize: "8px", letterSpacing: "1px", color: "var(--color-text-disabled)" }}>
+                                    weekend
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            onClick={() => selectOtDayAt(slotIdx, "missed")}
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: "4px",
+                              fontSize: "9px",
+                              letterSpacing: "1px",
+                              textTransform: "uppercase",
+                              border: slotValue === "missed" ? "1px solid rgba(239,68,68,0.6)" : "1px solid var(--color-border-subtle)",
+                              background: slotValue === "missed" ? "rgba(239,68,68,0.12)" : "var(--color-bg-surface)",
+                              color: slotValue === "missed" ? "var(--color-red)" : "var(--color-text-secondary)",
+                              fontWeight: slotValue === "missed" ? "bold" : "normal",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {slotValue === "missed" ? "✓ Missed OT" : "Missed OT"}
+                          </button>
+                        </div>
+                        <div style={{
+                          marginTop: "8px",
+                          fontSize: "10px",
+                          color: slotValue === "missed"
+                            ? "var(--color-red)"
+                            : slotValue
+                              ? (slotIsWeekend ? "var(--color-green)" : "var(--color-text-secondary)")
+                              : "var(--color-text-disabled)",
+                          letterSpacing: "0.5px",
+                        }}>
+                          {slotValue === "missed"
+                            ? "Missed OT will be logged for approval and hits bucket hours unless cleared."
+                            : slotValue
+                              ? (slotIsWeekend ? "Weekend OT earns your diff rate automatically." : "Weekday OT does not include the differential.")
+                              : "Required — select the OT day or mark it missed to continue."}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

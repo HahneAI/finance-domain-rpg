@@ -297,7 +297,8 @@ describe('loadUserData — pre-wizard DHL migration', () => {
     const result = await loadUserData()
     expect(result.config.employerPreset).toBe('DHL')
     expect(result.config.dhlTeam).toBe('B')
-    expect(result.config.dhlCustomSchedule).toBe(true)
+    expect(result.config.dhlCustomSchedule).toBe(false)   // Phase 4: migrated away from legacy flag
+    expect(result.config.customWeeklyHours).toBe(60)       // Phase 4: auto-migrated to customWeeklyHours
     expect(result.config.startingWeekIsLong).toBe(false)
     expect(result.config.startingWeekIsHeavy).toBeUndefined()
     expect(result.config.setupComplete).toBe(true)
@@ -356,7 +357,8 @@ describe('loadUserData — rotation correction', () => {
 
     const result = await loadUserData()
     expect(result.config.dhlTeam).toBe('B')
-    expect(result.config.dhlCustomSchedule).toBe(true)
+    expect(result.config.dhlCustomSchedule).toBe(false)   // Phase 4: migrated
+    expect(result.config.customWeeklyHours).toBe(60)       // Phase 4: auto-migrated
     expect(result.config.startingWeekIsLong).toBe(false)
   })
 

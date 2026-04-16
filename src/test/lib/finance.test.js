@@ -30,15 +30,17 @@ import {
 import { STATE_TAX_TABLE } from '../../constants/stateTaxTable.js'
 import { DEFAULT_CONFIG, DHL_PRESET } from '../../constants/config.js'
 
-// DHL_CONFIG: used for tests that exercise DHL rotation behavior (6-Day/4-Day alternation).
-// startingWeekIsLong=false with firstActiveIdx=7 produces the same even=long pattern
-// as the legacy idx%2===0 logic, so all rotation-based test assertions remain valid.
+// DHL_CONFIG: exercises DHL rotation + customWeeklyHours behavior (the "Anthony tier").
+// startingWeekIsLong=false with firstActiveIdx=7 → even idx = long (6-Day).
+// customWeeklyHours=60 overrides hours for projection math; rotation days preserved for
+// WeekConfirmModal display. requiredOtShifts: 1 for long weeks, 2 for short weeks.
 const DHL_CONFIG = {
   ...DEFAULT_CONFIG,
   employerPreset: "DHL",
   startingWeekIsLong: false,  // false + firstActiveIdx=7 → even idx = long (6-Day)
   dhlTeam: 'B',
-  dhlCustomSchedule: true,
+  dhlCustomSchedule: false,   // uses B-team preset rotation day arrays
+  customWeeklyHours: 60,      // flat 60h/week target; overrides rotation-derived hours
   // Explicit 401k values — test must not depend on DEFAULT_CONFIG personal values
   k401Rate: 0.06,
   k401MatchRate: 0.05,
@@ -169,31 +171,31 @@ describe('buildYear', () => {
     }
   })
 
-  it('6-Day weeks have 72 total hours (6 shifts × 12h)', () => {
+  it('all weeks have 60 total hours when customWeeklyHours=60 (overrides rotation hours)', () => {
     const sixDay = weeks.find(w => w.rotation === '6-Day')
-    expect(sixDay.totalHours).toBe(72)
-  })
-
-  it('4-Day weeks have 48 total hours (4 shifts × 12h)', () => {
     const fourDay = weeks.find(w => w.rotation === '4-Day')
-    expect(fourDay.totalHours).toBe(48)
+    expect(sixDay.totalHours).toBe(60)
+    expect(fourDay.totalHours).toBe(60)
   })
 
-  it('6-Day weeks include 2½ weekend shifts (30 weekend hours — Fri midnight onward)', () => {
+  it('6-Day (long) weeks have 24 weekend hours (Sat + Sun core, Mon OT is weekday)', () => {
+    // B-team long rotation: Tue/Wed/Sat/Sun + Mon OT. Sat=12h, Sun=12h, others=0.
     const sixDay = weeks.find(w => w.rotation === '6-Day')
-    expect(sixDay.weekendHours).toBe(30)
+    expect(sixDay.weekendHours).toBe(24)
   })
 
-  it('4-Day weeks have 6 weekend hours (only Sat 12:00a→6:00a earns diff)', () => {
+  it('4-Day (short) weeks have 6 weekend hours (Fri midnight → Sat 6a only)', () => {
+    // B-team short rotation: Mon/Thu/Fri + Tue OT. Fri earns half diff (6h), others=0.
     const fourDay = weeks.find(w => w.rotation === '4-Day')
     expect(fourDay.weekendHours).toBe(6)
   })
 
-  it('custom DHL schedule weeks do not require explicit OT confirmations', () => {
+  it('6-Day (long) weeks require 1 OT shift; 4-Day (short) weeks require 2 OT shifts (60h target)', () => {
+    // Long core=48h → (60-48)/12=1. Short core=36h → (60-36)/12=2.
     const sixDay = weeks.find(w => w.rotation === '6-Day')
     const fourDay = weeks.find(w => w.rotation === '4-Day')
-    expect(sixDay.requiredOtShifts).toBe(0)
-    expect(fourDay.requiredOtShifts).toBe(0)
+    expect(sixDay.requiredOtShifts).toBe(1)
+    expect(fourDay.requiredOtShifts).toBe(2)
   })
 
   it('6-Day active weeks have higher grossPay than 4-Day active weeks', () => {
@@ -202,25 +204,28 @@ describe('buildYear', () => {
     expect(sixDay.grossPay).toBeGreaterThan(fourDay.grossPay)
   })
 
-  it('computes correct grossPay for an active 4-Day week (diffs inside 1.5× OT)', () => {
+  it('computes correct grossPay for an active 4-Day (short) week with customWeeklyHours=60', () => {
     const cfg = DHL_CONFIG
-    // 4-Day: 48h total, 6h weekend (Fri midnight→Sat 6a). Non-weekend = 42h. regWknd = 0h, otWknd = 6h.
-    // All diffs (night + weekend) are included in the 1.5× OT multiplier.
+    // Short B-team rotation: Mon/Thu/Fri/Tue(OT). weekendHours=6h (Fri midnight→Sat 6a).
+    // totalHours overridden to 60h. nonWeekendH=54h → all weekend hours push past OT threshold.
+    // regWknd=max(0,min(6,40-54))=0h, otWknd=6h.
     const rateReg = cfg.baseRate + cfg.nightDiffRate
-    const expected = 40 * rateReg
-                   + 8 * rateReg * cfg.otMultiplier
-                   + 6 * cfg.diffRate * cfg.otMultiplier
+    const expected = 40 * rateReg                        // 40 regular hours
+                   + 20 * rateReg * cfg.otMultiplier     // 20 OT hours (all non-weekend OT)
+                   + 6  * cfg.diffRate * cfg.otMultiplier // 6 OT weekend hours (Fri diff)
     const fourDay = weeks.find(w => w.rotation === '4-Day' && w.active)
     expect(fourDay.grossPay).toBeCloseTo(expected)
   })
 
-  it('computes correct grossPay for an active 6-Day week (diffs inside 1.5× OT)', () => {
+  it('computes correct grossPay for an active 6-Day (long) week with customWeeklyHours=60', () => {
     const cfg = DHL_CONFIG
-    // 6-Day: 72h total, 30h weekend (Fri midnight→Sat 6a, Sat, Sun). Non-weekend = 42h. regWknd = 0h, otWknd = 30h.
+    // Long B-team rotation: Tue/Wed/Sat/Sun/Mon(OT). weekendHours=24h (Sat 12h + Sun 12h).
+    // totalHours overridden to 60h. nonWeekendH=36h → regWknd=min(24,40-36)=4h, otWknd=20h.
     const rateReg = cfg.baseRate + cfg.nightDiffRate
-    const expected = 40 * rateReg
-                   + 32 * rateReg * cfg.otMultiplier
-                   + 30 * cfg.diffRate * cfg.otMultiplier
+    const expected = 40 * rateReg                         // 40 regular hours
+                   + 4  * cfg.diffRate                    // 4 regular weekend diff hours
+                   + 20 * rateReg * cfg.otMultiplier      // 20 OT hours (non-weekend OT)
+                   + 20 * cfg.diffRate * cfg.otMultiplier // 20 OT weekend diff hours
     const sixDay = weeks.find(w => w.rotation === '6-Day' && w.active)
     expect(sixDay.grossPay).toBeCloseTo(expected)
   })
@@ -321,6 +326,113 @@ describe('buildYear', () => {
     expect(shortWeek.rotationLabel).toBe('Short Week')
     expect(longWeek.adminRotationTag).toBe('6-Day')
     expect(shortWeek.adminRotationTag).toBe('4-Day')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// customWeeklyHours — DHL and non-DHL paths
+// ─────────────────────────────────────────────────────────────
+
+describe('customWeeklyHours', () => {
+  it('DHL: overrides totalHours to the custom value for both rotation types', () => {
+    const weeks = buildYear(DHL_CONFIG) // customWeeklyHours=60
+    const long = weeks.find(w => w.active && w.rotation === '6-Day')
+    const short = weeks.find(w => w.active && w.rotation === '4-Day')
+    expect(long.totalHours).toBe(60)
+    expect(short.totalHours).toBe(60)
+  })
+
+  it('DHL: requiredOtShifts scales with customWeeklyHours relative to core rotation hours', () => {
+    // 60h target: long core=48h → 1 OT, short core=36h → 2 OT
+    const weeks = buildYear(DHL_CONFIG)
+    const long = weeks.find(w => w.active && w.rotation === '6-Day')
+    const short = weeks.find(w => w.active && w.rotation === '4-Day')
+    expect(long.requiredOtShifts).toBe(1)
+    expect(short.requiredOtShifts).toBe(2)
+  })
+
+  it('DHL: customWeeklyHours=null (preset) uses rotation hours and requiredOtShifts=1', () => {
+    // DHL_STANDARD_CONFIG has no customWeeklyHours — standard preset behavior
+    const weeks = buildYear(DHL_STANDARD_CONFIG)
+    const long = weeks.find(w => w.active && w.rotation === '6-Day')
+    const short = weeks.find(w => w.active && w.rotation === '4-Day')
+    expect(long.totalHours).toBe(DHL_PRESET.rotation.long.days.length * DHL_STANDARD_CONFIG.shiftHours + DHL_PRESET.otShiftHours)
+    expect(short.totalHours).toBe(DHL_PRESET.rotation.short.days.length * DHL_STANDARD_CONFIG.shiftHours + DHL_PRESET.otShiftHours)
+    expect(long.requiredOtShifts).toBe(DHL_PRESET.requiredOtShifts)
+    expect(short.requiredOtShifts).toBe(DHL_PRESET.requiredOtShifts)
+  })
+
+  it('DHL: rotation label and workedDayNames are unaffected by customWeeklyHours', () => {
+    const weeks = buildYear(DHL_CONFIG)
+    const long = weeks.find(w => w.active && w.rotation === '6-Day')
+    const short = weeks.find(w => w.active && w.rotation === '4-Day')
+    // Rotation labels stay from DHL preset
+    expect(long.rotationLabel).toBe('Long Week')
+    expect(short.rotationLabel).toBe('Short Week')
+    // Day names are B-team preset (5 days for long, 4 for short)
+    expect(long.workedDayNames).toHaveLength(5)
+    expect(short.workedDayNames).toHaveLength(4)
+  })
+
+  it('DHL: grossPay is higher for long weeks than short weeks (more weekend hours at 60h total)', () => {
+    const weeks = buildYear(DHL_CONFIG)
+    const long = weeks.find(w => w.active && w.rotation === '6-Day')
+    const short = weeks.find(w => w.active && w.rotation === '4-Day')
+    // Both 60h; long has 24h weekend diff vs short 6h — long earns more
+    expect(long.grossPay).toBeGreaterThan(short.grossPay)
+  })
+
+  it('non-DHL: sets totalHours to customWeeklyHours and rotation to "Custom"', () => {
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      employerPreset: null,
+      customWeeklyHours: 35,
+      baseRate: 18,
+      shiftHours: 8,
+      firstActiveIdx: 0,
+    }
+    const weeks = buildYear(cfg)
+    const active = weeks.filter(w => w.active)
+    expect(active.length).toBeGreaterThan(0)
+    active.forEach(w => {
+      expect(w.totalHours).toBe(35)
+      expect(w.rotation).toBe('Custom')
+      expect(w.rotationLabel).toBe('Custom')
+    })
+  })
+
+  it('non-DHL: customWeeklyHours=null falls back to standardWeeklyHours', () => {
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      employerPreset: null,
+      customWeeklyHours: null,
+      standardWeeklyHours: 32,
+      baseRate: 18,
+      firstActiveIdx: 0,
+    }
+    const weeks = buildYear(cfg)
+    const active = weeks.filter(w => w.active)
+    active.forEach(w => {
+      expect(w.totalHours).toBe(32)
+      expect(w.rotation).toBe('Standard')
+    })
+  })
+
+  it('non-DHL: customWeeklyHours computes grossPay correctly (no weekend diff)', () => {
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      employerPreset: null,
+      customWeeklyHours: 45,
+      baseRate: 20,
+      otThreshold: 40,
+      otMultiplier: 1.5,
+      firstActiveIdx: 0,
+    }
+    const weeks = buildYear(cfg)
+    const active = weeks.find(w => w.active)
+    // 45h: 40 regular + 5 OT, no night diff, no weekend diff
+    const expected = 40 * 20 + 5 * 20 * 1.5
+    expect(active.grossPay).toBeCloseTo(expected)
   })
 })
 

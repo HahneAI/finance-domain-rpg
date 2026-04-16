@@ -20,7 +20,7 @@ import { iS, lS } from "./ui.jsx";
 
 // ── OAuth provider button ────────────────────────────────────────────────────
 
-function OAuthBtn({ provider, label, icon, onClick }) {
+function OAuthBtn({ label, icon, onClick }) {
   const [hovered, setHovered] = useState(false);
   return (
     <button
@@ -66,6 +66,23 @@ function Divider({ label }) {
       <div style={{ flex: 1, height: "1px", background: "#222" }} />
       <span style={{ fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#444" }}>{label}</span>
       <div style={{ flex: 1, height: "1px", background: "#222" }} />
+    </div>
+  );
+}
+
+// ── Shared wrapper ────────────────────────────────────────────────────────────
+
+function Shell({ title, subtitle, children }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "var(--color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+      <div style={{ width: "100%", maxWidth: "360px", background: "var(--color-bg-surface)", border: "1px solid #222", borderRadius: "12px", padding: "32px 28px" }}>
+        <div style={{ marginBottom: "28px", textAlign: "center" }}>
+          <div style={{ fontSize: "11px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>Authority Finance</div>
+          <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-primary)", textAlign: "left" }}>{title}</div>
+          {subtitle && <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "4px", textAlign: "left" }}>{subtitle}</div>}
+        </div>
+        {children}
+      </div>
     </div>
   );
 }
@@ -169,23 +186,6 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone }) {
     }
 
     setLoading(false);
-  }
-
-  // ── Shared wrapper ────────────────────────────────────────────────────────
-
-  function Shell({ title, subtitle, children }) {
-    return (
-      <div style={{ minHeight: "100vh", background: "var(--color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
-        <div style={{ width: "100%", maxWidth: "360px", background: "var(--color-bg-surface)", border: "1px solid #222", borderRadius: "12px", padding: "32px 28px" }}>
-          <div style={{ marginBottom: "28px", textAlign: "center" }}>
-            <div style={{ fontSize: "11px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>Authority Finance</div>
-            <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-primary)", textAlign: "left" }}>{title}</div>
-            {subtitle && <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "4px", textAlign: "left" }}>{subtitle}</div>}
-          </div>
-          {children}
-        </div>
-      </div>
-    );
   }
 
   // ── Info / confirmation screen ────────────────────────────────────────────

@@ -11,8 +11,6 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
-  // Check once on mount — drives mobile vs desktop layout branch for weekly view
-  const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
 
   // ── Sharpen Rates modal state ──────────────────────────────────────────────
   const [sg1, setSg1] = useState("");
@@ -53,7 +51,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
     setSg2(""); setSf2(""); setSs2("");
   }
   const sPct = n => n != null ? (n * 100).toFixed(2) + "%" : "—";
-  const { extraPerCheck, taxedWeekCount, fedLiability, moLiability, ficaTotal, fedWithheldBase, moWithheldBase, fedGap, moGap, totalGap, targetExtraTotal, fedAGI } = taxDerived;
+  const { extraPerCheck } = taxDerived;
   const f = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gN = w => computeNet(w, config, extraPerCheck, showExtra);

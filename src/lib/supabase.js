@@ -19,23 +19,23 @@ const sharedStorage = {
         JSON.parse(val); // validate before trusting it
         return val;
       }
-    } catch {}
-    try { return window.localStorage.getItem(key); } catch {}
+    } catch { /* ignore cookie parse errors */ }
+    try { return window.localStorage.getItem(key); } catch { /* ignore */ }
     return null;
   },
   setItem(key, value) {
-    try { window.localStorage.setItem(key, value); } catch {}
+    try { window.localStorage.setItem(key, value); } catch { /* ignore quota errors */ }
     try {
       const encoded = encodeURIComponent(value);
       if (encoded.length < 3800) { // stay under the 4096-byte per-cookie limit
         const secure = location.protocol === "https:" ? ";Secure" : "";
         document.cookie = `${key}=${encoded};max-age=${365 * 24 * 3600};path=/;SameSite=Lax${secure}`;
       }
-    } catch {}
+    } catch { /* ignore cookie write errors */ }
   },
   removeItem(key) {
-    try { window.localStorage.removeItem(key); } catch {}
-    try { document.cookie = `${key}=;max-age=0;path=/`; } catch {}
+    try { window.localStorage.removeItem(key); } catch { /* ignore */ }
+    try { document.cookie = `${key}=;max-age=0;path=/`; } catch { /* ignore */ }
   },
 };
 

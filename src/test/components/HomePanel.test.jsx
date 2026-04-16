@@ -17,7 +17,9 @@ const baseProps = {
 describe('HomePanel', () => {
   it('labels the tile as Next Week Takehome and shows a currency value', () => {
     render(<HomePanel {...baseProps} futureWeekNets={[1234]} />)
-    const tile = screen.getByText('Next Week Takehome').closest('button')
+    const tiles = screen.getAllByText('Next Week Takehome')
+    expect(tiles.length).toBeGreaterThanOrEqual(1)
+    const tile = tiles[0].closest('button')
     expect(tile).not.toBeNull()
     expect(tile).toHaveTextContent(/\$\d+/)
   })

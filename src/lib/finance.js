@@ -266,7 +266,7 @@ export function buildYear(cfg) {
       // DHL: alternating long (preset) / short from firstActiveIdx.
       // (offset%2+2)%2 handles negative offsets (pre-employment weeks) correctly.
       const offset = ((idx - cfg.firstActiveIdx) % 2 + 2) % 2;
-      isHighWeek = offset === 0 ? Boolean(cfg.startingWeekIsLong) : !Boolean(cfg.startingWeekIsLong);
+      isHighWeek = offset === 0 ? !!cfg.startingWeekIsLong : !cfg.startingWeekIsLong;
       const days = Array.from({ length: 7 }, (_, i) => { const x = new Date(weekStart); x.setDate(x.getDate() + i); return x; });
       rotation = isHighWeek ? "6-Day" : "4-Day";
       adminRotationTag = rotation;

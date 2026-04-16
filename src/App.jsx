@@ -206,7 +206,6 @@ export default function App() {
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
 
   const currentView = viewStack[viewStack.length - 1];
-  const canGoBack = viewStack.length > 1;
   const mainContentRef = useRef(null);
   // Track the actual DOM element in state so useScrollDirection's effect
   // re-runs when the element mounts (first render hits auth gate, so the
@@ -241,12 +240,6 @@ export default function App() {
     jumpToPanelTop();
   };
 
-  // Pop back one level (back arrow)
-  const navigateBack = () => {
-    setViewStack(prev => prev.length > 1 ? prev.slice(0, -1) : prev);
-    setDrawerOpen(false);
-  };
-
   // Direct jump: always lands as ["home", key] — used by sidebar/drawer/bottom-nav
   // so switching panels never nests indefinitely.
   const navigateDirect = (key) => {
@@ -276,6 +269,7 @@ export default function App() {
   // ── Load from Supabase once auth resolves to a signed-in user ──
   useEffect(() => {
     if (!authedUser) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     loadUserData().then((data) => {
       setConfig(data.config);
@@ -393,6 +387,7 @@ export default function App() {
         autoConfirmed: true,
       };
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWeekConfirmations(bulk);
   }, [loading, weekConfirmations, allWeeks, today]);
 

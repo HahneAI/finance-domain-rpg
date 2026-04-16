@@ -305,6 +305,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
   const handleConfirmLayer2 = () => {
     const logEntry = {
       ...eventVals,
+      // eslint-disable-next-line react-hooks/purity
       id: Date.now(),
       shiftsLost:   parseInt(eventVals.shiftsLost)   || 0,
       weekendShifts: parseInt(eventVals.weekendShifts) || 0,

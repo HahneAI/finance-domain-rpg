@@ -356,19 +356,48 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setEditId(null);
   };
 
-  const saveAdvancedEdit = (patches) => {
-    setExpenses(prev => prev.map(e => {
-      const patch = patches.find(p => p.expId === e.id);
-      if (!patch) return e;
-      const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
-      const { effectiveFrom, newWeekly, newByPhase } = patch;
-      const billingMeta = { ...(e.billingMeta ?? {}), byPhase: newByPhase };
-      const exactMatch = existing.find(entry => entry.effectiveFrom === effectiveFrom);
-      if (exactMatch) {
-        return { ...e, history: existing.map(entry => entry.effectiveFrom === effectiveFrom ? { effectiveFrom, weekly: newWeekly } : entry), billingMeta };
+  const saveAdvancedEdit = ({ patches = [], additions = [] }) => {
+    setExpenses(prev => {
+      // Group patches by expId so multiple patches per expense are all applied
+      const patchMap = {};
+      for (const p of patches) {
+        if (!patchMap[p.expId]) patchMap[p.expId] = [];
+        patchMap[p.expId].push(p);
       }
-      return { ...e, history: [...existing, { effectiveFrom, weekly: newWeekly }], billingMeta };
-    }));
+
+      const updated = prev.map(e => {
+        const expPatches = patchMap[e.id];
+        if (!expPatches) return e;
+        let history = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
+        let billingMeta = e.billingMeta ?? {};
+        for (const { effectiveFrom, newWeekly, newByPhase } of expPatches) {
+          const exactMatch = history.find(en => en.effectiveFrom === effectiveFrom);
+          if (exactMatch) {
+            history = history.map(en => en.effectiveFrom === effectiveFrom ? { effectiveFrom, weekly: newWeekly } : en);
+          } else {
+            history = [...history, { effectiveFrom, weekly: newWeekly }];
+          }
+          if (newByPhase) billingMeta = { ...billingMeta, byPhase: newByPhase };
+        }
+        return { ...e, history, billingMeta };
+      });
+
+      const newExps = additions.map(a => ({
+        id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        category: a.category,
+        label: a.label,
+        note: ["", "", "", ""],
+        billingMeta: {
+          amount: a.amount,
+          cycle: a.cycle,
+          effectiveFrom: a.effectiveFrom,
+          byPhase: { [a.phaseIdx]: { amount: a.amount, cycle: a.cycle, effectiveFrom: a.effectiveFrom } },
+        },
+        history: [{ effectiveFrom: a.effectiveFrom, weekly: a.weekly }],
+      }));
+
+      return [...updated, ...newExps];
+    });
     setAdvEditPhaseIdx(null);
   };
 

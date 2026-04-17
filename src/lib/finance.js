@@ -164,11 +164,12 @@ function getDhlPlannedPattern(cfg, isLongWeek) {
   const rotationLabel = getDhlRotationLabel(isLongWeek);
   let requiredOtShifts;
   if (cfg.customWeeklyHours != null && !cfg.dhlCustomSchedule) {
-    // Custom hours: OT shifts required = (weekly target − core rotation hours) / shift length.
-    // Core hours exclude the standard preset OT day so the full OT requirement is computed
-    // from scratch rather than incremented on top of the preset's 1 mandatory shift.
-    const coreMeta = isLongWeek ? DHL_PRESET.rotation.long : DHL_PRESET.rotation.short;
-    requiredOtShifts = Math.max(0, Math.round((cfg.customWeeklyHours - coreMeta.baseHours) / cfg.shiftHours));
+    // Custom hours: additional OT shifts = (weekly target − already-scheduled rotation hours) / shift length.
+    // Uses rotationHours (indexes already include the default OT day) so requiredOtShifts represents
+    // only the EXTRA shifts beyond the existing schedule needed to reach the custom target.
+    // e.g. customWeeklyHours=60: long (5 days×12=60h) → 0 extra; short (4 days×12=48h) → 1 extra.
+    const rotationHours = indexes.length * cfg.shiftHours;
+    requiredOtShifts = Math.max(0, Math.round((cfg.customWeeklyHours - rotationHours) / cfg.shiftHours));
   } else {
     requiredOtShifts = cfg.dhlCustomSchedule ? 0 : (DHL_PRESET.requiredOtShifts ?? 0);
   }

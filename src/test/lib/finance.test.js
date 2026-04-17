@@ -33,7 +33,7 @@ import { DEFAULT_CONFIG, DHL_PRESET } from '../../constants/config.js'
 // DHL_CONFIG: exercises DHL rotation + customWeeklyHours behavior (the "Anthony tier").
 // startingWeekIsLong=false with firstActiveIdx=7 → even idx = long (6-Day).
 // customWeeklyHours=60 overrides hours for projection math; rotation days preserved for
-// WeekConfirmModal display. requiredOtShifts: 1 for long weeks, 2 for short weeks.
+// WeekConfirmModal display. requiredOtShifts: 0 for long weeks (5 days×12=60h, already at target), 1 for short weeks (4 days×12=48h, 1 extra shift to reach 60h).
 const DHL_CONFIG = {
   ...DEFAULT_CONFIG,
   employerPreset: "DHL",
@@ -190,12 +190,12 @@ describe('buildYear', () => {
     expect(fourDay.weekendHours).toBe(6)
   })
 
-  it('6-Day (long) weeks require 1 OT shift; 4-Day (short) weeks require 2 OT shifts (60h target)', () => {
-    // Long core=48h → (60-48)/12=1. Short core=36h → (60-36)/12=2.
+  it('6-Day (long) weeks need 0 extra OT shifts; 4-Day (short) weeks need 1 extra OT shift (60h target)', () => {
+    // Long: 5 scheduled days × 12h = 60h = target → 0 extra. Short: 4 days × 12h = 48h → 1 extra.
     const sixDay = weeks.find(w => w.rotation === '6-Day')
     const fourDay = weeks.find(w => w.rotation === '4-Day')
-    expect(sixDay.requiredOtShifts).toBe(1)
-    expect(fourDay.requiredOtShifts).toBe(2)
+    expect(sixDay.requiredOtShifts).toBe(0)
+    expect(fourDay.requiredOtShifts).toBe(1)
   })
 
   it('6-Day active weeks have higher grossPay than 4-Day active weeks', () => {
@@ -342,13 +342,13 @@ describe('customWeeklyHours', () => {
     expect(short.totalHours).toBe(60)
   })
 
-  it('DHL: requiredOtShifts scales with customWeeklyHours relative to core rotation hours', () => {
-    // 60h target: long core=48h → 1 OT, short core=36h → 2 OT
+  it('DHL: requiredOtShifts is extra shifts beyond already-scheduled rotation hours', () => {
+    // 60h target: long 5×12=60h → 0 extra; short 4×12=48h → 1 extra shift to reach target
     const weeks = buildYear(DHL_CONFIG)
     const long = weeks.find(w => w.active && w.rotation === '6-Day')
     const short = weeks.find(w => w.active && w.rotation === '4-Day')
-    expect(long.requiredOtShifts).toBe(1)
-    expect(short.requiredOtShifts).toBe(2)
+    expect(long.requiredOtShifts).toBe(0)
+    expect(short.requiredOtShifts).toBe(1)
   })
 
   it('DHL: customWeeklyHours=null (preset) uses rotation hours and requiredOtShifts=1', () => {

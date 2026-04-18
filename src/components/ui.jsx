@@ -257,6 +257,31 @@ export function FlowSparklineCard({
 export function SmBtn({ children, onClick, c = "var(--color-text-secondary)", bg = "var(--color-bg-surface)", style: extraStyle }) { return <button onClick={onClick} style={{ background: bg, color: c, border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "10px 14px", minHeight: "44px", fontSize: "11px", fontFamily: "var(--font-sans)", cursor: "pointer", ...extraStyle }}>{children}</button>; }
 export function SH({ children, color, textColor, right }) { const c = color || "var(--color-gold)"; const tc = textColor || c; return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "4px" }}><div style={{ display: "flex", alignItems: "center", gap: "12px" }}><div style={{ width: "3px", height: "18px", background: c, borderRadius: "2px", flexShrink: 0 }} /><div style={{ fontSize: "11px", letterSpacing: "3px", color: tc, textTransform: "uppercase", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{children}</div></div>{right != null && <div style={{ fontSize: "12px", color: tc, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{right}</div>}</div>; }
 
+export function PanelHero({ eyebrow, children }) {
+  return (
+    <div style={{ marginBottom: "28px", textAlign: "center" }}>
+      <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "12px" }}>{eyebrow}</div>
+      <div style={{ fontSize: "32px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-accent-primary)", letterSpacing: "-1px", lineHeight: 1, marginBottom: "14px" }}>{children}</div>
+      <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto", borderRadius: "1px", opacity: 0.45 }} />
+    </div>
+  );
+}
+
+export function SectionHeader({ children, sub, right }) {
+  return (
+    <div style={{ marginBottom: "20px" }}>
+      <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, var(--color-accent-primary), transparent)", marginBottom: "16px", opacity: 0.35 }} />
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div style={{ flex: 1, textAlign: "center" }}>
+          <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.5px", lineHeight: 1, marginBottom: sub ? "6px" : 0 }}>{children}</div>
+          {sub && <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>{sub}</div>}
+        </div>
+        {right != null && <div style={{ flexShrink: 0 }}>{right}</div>}
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────
 // INSIGHT ROW — Pulse layer component
 //

@@ -3,7 +3,7 @@ import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../cons
 import { getEffectiveAmount, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { Card, VT, SmBtn, SH, iS, lS } from "./ui.jsx";
+import { Card, VT, SmBtn, SH, SectionHeader, iS, lS } from "./ui.jsx";
 
 const EXPENSE_DRAG_PREVIEW_TINT = {
   Needs: "rgba(201, 96, 96, 0.18)",
@@ -1033,7 +1033,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           </div>;
         })}
         <div style={{ height: "1px", background: "var(--color-bg-raised)", margin: "20px 0" }} />
-        <SH>Annual Projection (Full Year)</SH>
+        <SectionHeader>Annual Projection</SectionHeader>
         <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
           <thead><tr style={{ borderBottom: "1px solid #333", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Wk Avg</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
           <tbody>{expenses.map(exp => {

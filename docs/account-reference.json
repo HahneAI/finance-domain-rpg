@@ -2,7 +2,7 @@
   "_meta": {
     "description": "Primary account ground-truth reference for Anthony (DHL B-team, custom schedule). Used for three-tier test validation: db_record → computed_expectations → ui_assertions. Update the relevant section whenever account data or config changes; do NOT fabricate values — leave null and fill in from actual sources.",
     "account_label": "Anthony — primary DHL account",
-    "last_updated": "2026-04-13",
+    "last_updated": "2026-04-16",
     "fiscal_year": 2026,
     "fiscal_year_start": "2026-01-05",
     "supabase_table": "public.user_data",
@@ -115,7 +115,8 @@
       "benefitsStartDate": null,
       "bufferOverrideAck": false,
       "commissionMonthly": 0,
-      "dhlCustomSchedule": true,
+      "dhlCustomSchedule": false,
+      "customWeeklyHours": 60,
       "taxRatesEstimated": false,
       "bucketStartBalance": 64,
       "scheduleIsVariable": true,

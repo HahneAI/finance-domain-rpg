@@ -206,7 +206,6 @@ export default function App() {
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
 
   const currentView = viewStack[viewStack.length - 1];
-  const canGoBack = viewStack.length > 1;
   const mainContentRef = useRef(null);
   // Track the actual DOM element in state so useScrollDirection's effect
   // re-runs when the element mounts (first render hits auth gate, so the
@@ -241,12 +240,6 @@ export default function App() {
     jumpToPanelTop();
   };
 
-  // Pop back one level (back arrow)
-  const navigateBack = () => {
-    setViewStack(prev => prev.length > 1 ? prev.slice(0, -1) : prev);
-    setDrawerOpen(false);
-  };
-
   // Direct jump: always lands as ["home", key] — used by sidebar/drawer/bottom-nav
   // so switching panels never nests indefinitely.
   const navigateDirect = (key) => {
@@ -276,6 +269,7 @@ export default function App() {
   // ── Load from Supabase once auth resolves to a signed-in user ──
   useEffect(() => {
     if (!authedUser) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     loadUserData().then((data) => {
       setConfig(data.config);
@@ -393,6 +387,7 @@ export default function App() {
         autoConfirmed: true,
       };
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWeekConfirmations(bulk);
   }, [loading, weekConfirmations, allWeeks, today]);
 
@@ -762,6 +757,7 @@ export default function App() {
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px)) !important;
+            overscroll-behavior-y: contain;
           }
           /* Safe-area height + top padding for Dynamic Island / notch iPhones.
              CSS !important overrides inline styles in iOS PWA standalone mode where
@@ -819,6 +815,21 @@ export default function App() {
            internal horizontal scrolling without leaking to the page.
            -webkit-overflow-scrolling:touch enables momentum (inertial) scroll
            on iOS — without it, scrolling feels sticky and non-native. */
+        /* Hide the floating nav pill whenever any modal is open.
+           Components signal this by toggling body.modal-open.
+           !important overrides the inline opacity/pointer-events set by
+           scroll-direction state — modal backdrop should always win. */
+        body.modal-open .mobile-bottom-nav {
+          opacity: 0 !important;
+          pointer-events: none !important;
+          transform: scale(0.85) translateY(12px) !important;
+          transition: opacity 0.2s ease, transform 0.2s ease !important;
+        }
+        body.modal-open .mobile-header {
+          opacity: 0 !important;
+          pointer-events: none !important;
+          transition: opacity 0.15s ease !important;
+        }
         .scroll-x {
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
@@ -1161,7 +1172,7 @@ export default function App() {
           opacity: drawerOpen ? 0 : isScrollingDown ? 0.6 : 1,
           transform: isScrollingDown ? "scale(0.6)" : "scale(1)",
           transformOrigin: "center bottom",
-          pointerEvents: drawerOpen ? "none" : "auto",
+          pointerEvents: "none",
           transition: "opacity 0.25s ease, transform 0.25s ease",
         }}
       >
@@ -1238,6 +1249,7 @@ export default function App() {
                   textTransform: "uppercase",
                   paddingTop: "2px",
                   transition: "color 0.2s ease",
+                  pointerEvents: drawerOpen ? "none" : "auto",
                 }}
               >
                 {item.icon}

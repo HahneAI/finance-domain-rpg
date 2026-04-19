@@ -162,7 +162,17 @@ function getDhlPlannedPattern(cfg, isLongWeek) {
   const totalHours = indexes.length * cfg.shiftHours;
   const weekendHours = indexes.reduce((sum, idx) => sum + dhlWeekendHoursPerDayIndex(idx, cfg.shiftHours), 0);
   const rotationLabel = getDhlRotationLabel(isLongWeek);
-  const requiredOtShifts = cfg.dhlCustomSchedule ? 0 : (DHL_PRESET.requiredOtShifts ?? 0);
+  let requiredOtShifts;
+  if (cfg.customWeeklyHours != null && !cfg.dhlCustomSchedule) {
+    // Custom hours: additional OT shifts = (weekly target − already-scheduled rotation hours) / shift length.
+    // Uses rotationHours (indexes already include the default OT day) so requiredOtShifts represents
+    // only the EXTRA shifts beyond the existing schedule needed to reach the custom target.
+    // e.g. customWeeklyHours=60: long (5 days×12=60h) → 0 extra; short (4 days×12=48h) → 1 extra.
+    const rotationHours = indexes.length * cfg.shiftHours;
+    requiredOtShifts = Math.max(0, Math.round((cfg.customWeeklyHours - rotationHours) / cfg.shiftHours));
+  } else {
+    requiredOtShifts = cfg.dhlCustomSchedule ? 0 : (DHL_PRESET.requiredOtShifts ?? 0);
+  }
   return { indexes, totalHours, weekendHours, rotationLabel, requiredOtShifts };
 }
 
@@ -216,18 +226,26 @@ export function getStateConfig(userState) {
 }
 
 // Builds a full 52-week array of pay data from config.
-// DHL path: alternates long (6-day) / short (4-day) from firstActiveIdx,
-//   using either the DHL_PRESET day arrays (dhlTeam + !dhlCustomSchedule)
-//   or Anthony's hardcoded arrays (dhlCustomSchedule: true).
 //
-// Anthony's custom schedule vs standard DHL B-team rotation:
-//   Standard B-team long  = 4 shifts (Tue/Wed/Sat/Sun)   → 48h
-//   Standard B-team short = 3 shifts (Mon/Thu/Fri)        → 36h
-//   Anthony long  = 4 standard + 2 scheduled OT           → 6-Day (Tue–Sun, 72h)
-//   Anthony short = 3 standard + 1 scheduled OT           → 4-Day (Mon/Wed/Thu/Fri, 48h)
-//   The hardcoded day arrays below represent his full week including OT.
+// Schedule tiers (see DEFAULT_CONFIG.customWeeklyHours for full docs):
 //
-// Standard path: flat weekly hours, no rotation.
+//   DHL preset   (!customWeeklyHours, !dhlCustomSchedule)
+//     Alternates long/short from firstActiveIdx using DHL_PRESET day arrays.
+//     requiredOtShifts = 1 for all weeks (user picks OT day in WeekConfirmModal).
+//
+//   DHL custom hours (customWeeklyHours set, !dhlCustomSchedule)
+//     Same rotation day arrays for workedDayNames / WeekConfirmModal display.
+//     totalHours overridden to customWeeklyHours for all projection math.
+//     requiredOtShifts = (customWeeklyHours − coreHours) / shiftHours per week.
+//
+//   DHL legacy (dhlCustomSchedule: true) — kept until db.js migration window closes.
+//     Uses hardcoded CUSTOM_LONG/SHORT_DAY_INDEXES. requiredOtShifts = 0.
+//     If customWeeklyHours is ALSO set, totalHours is still overridden below.
+//
+//   Standard / non-DHL (!employerPreset)
+//     Flat customWeeklyHours ?? standardWeeklyHours hours/week, no rotation.
+//     rotation = "Custom" when customWeeklyHours is set, "Standard" otherwise.
+//
 // Note: cfg.dhlNightShift is stored but NOT used here — weekend diff (diffRate)
 //   applies equally to all shifts. Night differential is tracked separately.
 export function buildYear(cfg) {
@@ -249,13 +267,16 @@ export function buildYear(cfg) {
       // DHL: alternating long (preset) / short from firstActiveIdx.
       // (offset%2+2)%2 handles negative offsets (pre-employment weeks) correctly.
       const offset = ((idx - cfg.firstActiveIdx) % 2 + 2) % 2;
-      isHighWeek = offset === 0 ? Boolean(cfg.startingWeekIsLong) : !Boolean(cfg.startingWeekIsLong);
+      isHighWeek = offset === 0 ? !!cfg.startingWeekIsLong : !cfg.startingWeekIsLong;
       const days = Array.from({ length: 7 }, (_, i) => { const x = new Date(weekStart); x.setDate(x.getDate() + i); return x; });
       rotation = isHighWeek ? "6-Day" : "4-Day";
       adminRotationTag = rotation;
       if (!cfg.dhlCustomSchedule) {
         const pattern = getDhlPlannedPattern(cfg, isHighWeek);
-        worked = pattern.indexes.map(d => days[d]);
+        // DHL_PRESET.rotation.days uses JS getDay() convention (0=Sun,1=Mon,...,6=Sat).
+        // days[] is indexed from weekStart (always Monday), so offset = (getDay + 6) % 7
+        // maps JS day values to the correct Mon-relative array positions.
+        worked = pattern.indexes.map(d => days[(d + 6) % 7]);
         rotationLabel = pattern.rotationLabel;
         requiredOtShifts = pattern.requiredOtShifts;
       } else {
@@ -270,14 +291,19 @@ export function buildYear(cfg) {
       totalHours = worked.length * cfg.shiftHours;
       // Weekend pay: Sat 12:00am → Mon 6:00am (Fri nights only count midnight→6am Sat)
       weekendHours = worked.reduce((sum, day) => sum + dhlWeekendHoursForDate(day, cfg.shiftHours), 0);
+      // Custom weekly hours: override projection total; rotation days preserved for WeekConfirmModal.
+      if (!cfg.dhlCustomSchedule && cfg.customWeeklyHours != null) {
+        totalHours = cfg.customWeeklyHours;
+      }
     } else {
-      // Standard path: flat weekly hours, no rotation concept.
+      // Standard / non-DHL path.
       isHighWeek = false;
       worked = [];
-      rotation = "Standard";
-      rotationLabel = "Standard";
+      const customHrs = cfg.customWeeklyHours;
+      totalHours = customHrs ?? cfg.standardWeeklyHours ?? 40;
+      rotation = customHrs != null ? "Custom" : "Standard";
+      rotationLabel = rotation;
       adminRotationTag = rotation;
-      totalHours = cfg.standardWeeklyHours ?? 40;
       weekendHours = 0;
     }
 
@@ -356,12 +382,21 @@ export function projectedGross(isWeek2, cfg) {
   let totalH, wkndH;
   if (cfg.employerPreset === "DHL") {
     const pattern = getDhlPlannedPattern(cfg, isWeek2);
-    totalH = pattern.totalHours;
+    totalH = cfg.customWeeklyHours != null ? cfg.customWeeklyHours : pattern.totalHours;
     wkndH = pattern.weekendHours;
   } else {
-    const ns = isWeek2 ? 6 : 4;
-    totalH = ns * cfg.shiftHours;
-    wkndH = dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
+    // Non-DHL: no weekend differential. customWeeklyHours overrides everything.
+    wkndH = 0;
+    if (cfg.customWeeklyHours != null) {
+      totalH = cfg.customWeeklyHours;
+    } else if (cfg.scheduleIsVariable) {
+      // Variable schedule: isWeek2 = long week, !isWeek2 = short week
+      totalH = isWeek2
+        ? (cfg.longWeeklyHours || cfg.standardWeeklyHours || 40)
+        : (cfg.standardWeeklyHours || 40);
+    } else {
+      totalH = cfg.standardWeeklyHours || 40;
+    }
   }
   const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
   const nonWkndH = totalH - wkndH;
@@ -882,8 +917,16 @@ export function calcEventImpact(event, cfg) {
   const nightDiffPerHour = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
   const isWeek2 = ["6-Day", "Week 2", "Long Week"].includes(event.weekRotation);
   const plannedPattern = isDHL ? getDhlPlannedPattern(cfg, isWeek2) : null;
-  const normalShifts = plannedPattern ? plannedPattern.indexes.length : (isWeek2 ? 6 : 4);
-  const normalWeekendHours = plannedPattern ? plannedPattern.weekendHours : dhlTotalWeekendHours(isWeek2, cfg.shiftHours);
+  // Non-DHL total hours: customWeeklyHours overrides; variable uses long/short; else flat.
+  const nonDhlTotalH = cfg.customWeeklyHours != null
+    ? cfg.customWeeklyHours
+    : cfg.scheduleIsVariable
+      ? (isWeek2 ? (cfg.longWeeklyHours || cfg.standardWeeklyHours || 40) : (cfg.standardWeeklyHours || 40))
+      : (cfg.standardWeeklyHours || 40);
+  const normalShifts = plannedPattern
+    ? plannedPattern.indexes.length
+    : nonDhlTotalH / (cfg.shiftHours || 8);
+  const normalWeekendHours = plannedPattern ? plannedPattern.weekendHours : 0;
   const baseGross = projectedGross(isWeek2, cfg);
   let grossLost = 0, grossGained = 0, hoursLostForPTO = 0;
   if (event.type === "missed_unpaid") {

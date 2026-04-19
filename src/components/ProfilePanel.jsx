@@ -497,9 +497,11 @@ const PAY_SCHEDULE_LABELS = {
 
 function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
   const isDHL = config.employerPreset === "DHL";
-  const scheduleLabel = config.scheduleIsVariable
-    ? "Variable hours"
-    : `${config.standardWeeklyHours || 40} hrs / week`;
+  const scheduleLabel = config.customWeeklyHours != null
+    ? `${config.customWeeklyHours} hrs / week (custom)`
+    : config.scheduleIsVariable
+      ? "Variable hours"
+      : `${config.standardWeeklyHours || 40} hrs / week`;
   const [editing, setEditing] = useState(false);
   const [payDraft, setPayDraft] = useState(null);
   const [error, setError] = useState(null);
@@ -516,6 +518,8 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
       otThreshold: config.otThreshold != null ? String(config.otThreshold) : "",
       otMultiplier: config.otMultiplier != null ? String(config.otMultiplier) : "",
       standardWeeklyHours: config.standardWeeklyHours != null ? String(config.standardWeeklyHours) : "",
+      customScheduleEnabled: config.customWeeklyHours != null,
+      customWeeklyHours: config.customWeeklyHours != null ? String(config.customWeeklyHours) : "",
     });
     setError(null);
     setEditing(true);
@@ -597,6 +601,17 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
       updates.standardWeeklyHours = parseFloat(weeklyValue.toFixed(1));
     }
 
+    if (payDraft.customScheduleEnabled) {
+      const customHrs = parseFloat(payDraft.customWeeklyHours);
+      if (!Number.isFinite(customHrs) || customHrs <= 0 || customHrs > 168) {
+        setError("Custom hours must be between 1 and 168.");
+        return;
+      }
+      updates.customWeeklyHours = parseFloat(customHrs.toFixed(1));
+    } else {
+      updates.customWeeklyHours = null;
+    }
+
     const newConfig = { ...config, ...updates };
     setConfig(newConfig);
     onSaveConfig?.(newConfig);
@@ -626,6 +641,9 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
           <DetailRow label="Base Rate"      value={`$${config.baseRate}/hr`}  valueColor="var(--color-gold)" />
           {config.shiftHours > 0 && <DetailRow label="Shift Length" value={`${config.shiftHours}h`} />}
           <DetailRow label="Schedule" value={scheduleLabel} />
+          {config.customWeeklyHours != null && (
+            <DetailRow label="Custom Override" value={`${config.customWeeklyHours} hrs/wk`} valueColor="var(--color-gold)" />
+          )}
           <DetailRow label="Weekend Diff" value={config.diffRate > 0 ? `+$${config.diffRate}/hr` : "$0.00/hr"} />
           {isDHL && (
             <DetailRow
@@ -696,6 +714,122 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                 <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>
                   Update this if you move to 10-hour shifts.
                 </div>
+              </div>
+
+              <div style={{ gridColumn: "span 2" }}>
+                <SH color="var(--color-gold)" right={null}>Schedule Override</SH>
+                {isDHL ? (
+                  <>
+                    <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
+                      {`${config.dhlTeam ?? "B"}-Team · Long/Short alternating (DHL preset rotation)`}
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleDraftChange("customScheduleEnabled", false)}
+                        style={{
+                          padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
+                          border: !payDraft.customScheduleEnabled ? "1px solid var(--color-gold)" : "1px solid var(--color-border-subtle)",
+                          background: !payDraft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
+                          color: !payDraft.customScheduleEnabled ? "var(--color-gold)" : "var(--color-text-secondary)",
+                          fontWeight: !payDraft.customScheduleEnabled ? "bold" : "normal",
+                        }}
+                      >
+                        Use rotation hours
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDraftChange("customScheduleEnabled", true)}
+                        style={{
+                          padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
+                          border: payDraft.customScheduleEnabled ? "1px solid var(--color-gold)" : "1px solid var(--color-border-subtle)",
+                          background: payDraft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
+                          color: payDraft.customScheduleEnabled ? "var(--color-gold)" : "var(--color-text-secondary)",
+                          fontWeight: payDraft.customScheduleEnabled ? "bold" : "normal",
+                        }}
+                      >
+                        Set custom weekly hours
+                      </button>
+                    </div>
+                    {payDraft.customScheduleEnabled && (
+                      <div style={{ marginTop: "10px" }}>
+                        <label style={lS}>Hours per week</label>
+                        <input
+                          type="number"
+                          step="1"
+                          min="1"
+                          max="168"
+                          value={payDraft.customWeeklyHours}
+                          onChange={e => handleDraftChange("customWeeklyHours", e.target.value)}
+                          style={{ ...iS, marginTop: "4px" }}
+                        />
+                        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+                          Projections use this flat total. DHL rotation still shows scheduled days in weekly confirmation.
+                        </div>
+                        {(() => {
+                          const h = parseFloat(payDraft.customWeeklyHours);
+                          const sh = parseFloat(payDraft.shiftHours) || config.shiftHours || 12;
+                          if (!Number.isFinite(h) || h <= 0) return null;
+                          const longOt = Math.max(0, Math.round((h - DHL_PRESET.rotation.long.baseHours) / sh));
+                          const shortOt = Math.max(0, Math.round((h - DHL_PRESET.rotation.short.baseHours) / sh));
+                          return (
+                            <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+                              OT pickups required: long week → {longOt}, short week → {shortOt}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleDraftChange("customScheduleEnabled", false)}
+                        style={{
+                          padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
+                          border: !payDraft.customScheduleEnabled ? "1px solid var(--color-gold)" : "1px solid var(--color-border-subtle)",
+                          background: !payDraft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
+                          color: !payDraft.customScheduleEnabled ? "var(--color-gold)" : "var(--color-text-secondary)",
+                          fontWeight: !payDraft.customScheduleEnabled ? "bold" : "normal",
+                        }}
+                      >
+                        Standard hours
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDraftChange("customScheduleEnabled", true)}
+                        style={{
+                          padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
+                          border: payDraft.customScheduleEnabled ? "1px solid var(--color-gold)" : "1px solid var(--color-border-subtle)",
+                          background: payDraft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
+                          color: payDraft.customScheduleEnabled ? "var(--color-gold)" : "var(--color-text-secondary)",
+                          fontWeight: payDraft.customScheduleEnabled ? "bold" : "normal",
+                        }}
+                      >
+                        Custom hours
+                      </button>
+                    </div>
+                    {payDraft.customScheduleEnabled && (
+                      <div style={{ marginTop: "10px" }}>
+                        <label style={lS}>Hours per week</label>
+                        <input
+                          type="number"
+                          step="1"
+                          min="1"
+                          max="168"
+                          value={payDraft.customWeeklyHours}
+                          onChange={e => handleDraftChange("customWeeklyHours", e.target.value)}
+                          style={{ ...iS, marginTop: "4px" }}
+                        />
+                        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+                          Used for all income projections and goal timelines. Enter your typical hours per week.
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               <div>

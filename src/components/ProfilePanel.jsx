@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
-import { dhlEmployerMatchRate, computeNet } from "../lib/finance.js";
+import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { DHL_BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, PanelHero } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -1146,7 +1146,7 @@ function PreferencesDetail({ config, onBack }) {
 
 // ── TaxPlanDetail ────────────────────────────────────────────────────────────
 
-function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, showExtra, setShowExtra, onBack, isAdmin = false }) {
+function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, showExtra, setShowExtra, onBack, isAdmin = false, today }) {
   const { extraPerCheck, taxedWeekCount, fedLiability, moLiability, ficaTotal, fedWithheldBase, moWithheldBase, fedGap, moGap, totalGap, targetExtraTotal, fedAGI } = taxDerived;
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1243,21 +1243,22 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
         <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "8px" }}>{m.name.slice(0, 3)}</div>
         {m.wks.map(w => {
           const taxed = config.taxedWeeks.includes(w.idx);
-          return <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--color-bg-surface)", border: `1px solid ${taxed ? "#7a8bbf22" : "rgba(76,175,125,0.13)"}`, borderRadius: "6px", marginBottom: "6px" }}>
+          const isPast = today ? toLocalIso(w.weekEnd) < today : false;
+          return <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: isPast ? "var(--color-bg-base)" : "var(--color-bg-surface)", border: `1px solid ${isPast ? "var(--color-border-subtle)" : taxed ? "#7a8bbf22" : "rgba(76,175,125,0.13)"}`, borderRadius: "6px", marginBottom: "6px", opacity: isPast ? 0.5 : 1 }}>
             <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
               <div>
-                <div style={{ fontSize: "12px", fontWeight: "bold" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                <div style={{ fontSize: "12px", fontWeight: "bold", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{isPast && <span style={{ marginLeft: "6px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)", fontWeight: "normal" }}>received</span>}</div>
                 <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{formatRotationDisplay(w, { isAdmin })} · {w.totalHours}h · idx {w.idx}{w.has401k ? " · 401k✓" : ""}</div>
               </div>
               <div>
                 <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{f2(w.grossPay)} gross</div>
-                <div style={{ fontSize: "11px", color: taxed ? "var(--color-text-primary)" : "var(--color-green)" }}>{f2(gN(w))} net</div>
+                <div style={{ fontSize: "11px", color: isPast ? "var(--color-text-disabled)" : taxed ? "var(--color-text-primary)" : "var(--color-green)" }}>{f2(gN(w))} net</div>
               </div>
             </div>
             <div style={{ display: "flex", background: "var(--color-bg-base)", border: "1px solid #2a2a2a", borderRadius: "5px", overflow: "hidden" }}>
-              <button onClick={() => !taxed && toggleWeek(w.idx)} style={{ padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", cursor: taxed ? "default" : "pointer", background: taxed ? "#1e1e3a" : "transparent", color: taxed ? "#7a8bbf" : "var(--color-border-subtle)", fontWeight: taxed ? "bold" : "normal", transition: "all 0.12s" }}>Taxed</button>
+              <button disabled={isPast} onClick={() => !isPast && !taxed && toggleWeek(w.idx)} style={{ padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", cursor: isPast || taxed ? "default" : "pointer", background: taxed ? (isPast ? "#15152a" : "#1e1e3a") : "transparent", color: taxed ? (isPast ? "#3a3a5a" : "#7a8bbf") : "var(--color-border-subtle)", fontWeight: taxed ? "bold" : "normal", transition: "all 0.12s" }}>Taxed</button>
               <div style={{ width: "1px", background: "var(--color-border-subtle)" }} />
-              <button onClick={() => taxed && toggleWeek(w.idx)} style={{ padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", cursor: !taxed ? "default" : "pointer", background: !taxed ? "#1e4a30" : "transparent", color: !taxed ? "var(--color-green)" : "var(--color-border-subtle)", fontWeight: !taxed ? "bold" : "normal", transition: "all 0.12s" }}>Exempt</button>
+              <button disabled={isPast} onClick={() => !isPast && taxed && toggleWeek(w.idx)} style={{ padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", cursor: isPast || !taxed ? "default" : "pointer", background: !taxed ? (isPast ? "#0f2a1a" : "#1e4a30") : "transparent", color: !taxed ? (isPast ? "#1f4a2a" : "var(--color-green)") : "var(--color-border-subtle)", fontWeight: !taxed ? "bold" : "normal", transition: "all 0.12s" }}>Exempt</button>
             </div>
           </div>;
         })}
@@ -1301,7 +1302,7 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, today }) {
   const [activeSection, setActiveSection] = useState(null);
 
   const isDHL     = config.employerPreset === "DHL";
@@ -1327,7 +1328,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, all
     return <PreferencesDetail config={config} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "taxplan") {
-    return <TaxPlanDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} />;
+    return <TaxPlanDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} today={today} />;
   }
 
   // ── Main list ─────────────────────────────────────────────────────────────

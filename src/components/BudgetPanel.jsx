@@ -135,6 +135,18 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const Q_REP_DATES = [new Date("2026-02-15"), new Date("2026-05-15"), new Date("2026-08-15"), new Date("2026-11-15")];
   const WEEKS_PER_Q = [13, 13, 13, 13]; // 52 weeks total
   const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
+
+  // Returns the ISO start date of the next future history entry where weekly[ap] > 0,
+  // or null if the expense has no future activation (permanently zeroed for this phase).
+  const getNextNonZeroIso = (exp, ap, todayIso) => {
+    if (!exp.history?.length) return null;
+    const found = exp.history
+      .filter(en => en.effectiveFrom > todayIso && (en.weekly?.[ap] ?? 0) > 0)
+      .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))[0];
+    return found?.effectiveFrom ?? null;
+  };
+  const shortMonth = (iso) =>
+    ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(iso.split("-")[1], 10) - 1];
   const quarterEffective = (exp, phaseIdx) => getEffectiveAmount(exp, Q_REP_DATES[phaseIdx], phaseIdx);
   const yearlyExpenseCost = (exp) =>
     [0, 1, 2, 3].reduce((s, q) => s + quarterEffective(exp, q) * WEEKS_PER_Q[q], 0);
@@ -919,6 +931,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot) + "/wk"}>{cat}</SH>
           {cExp.map(exp => {
             const effAmt = currentEffective(exp, ap);
+            // Resolve timeline state for this expense in the active phase
+            const nextNonZeroIso = effAmt === 0 ? getNextNonZeroIso(exp, ap, TODAY_ISO) : null;
+            const isScheduledFuture = effAmt === 0 && nextNonZeroIso !== null;
+            const isRemovedThisPhase = effAmt === 0 && nextNonZeroIso === null && (exp.history?.length ?? 0) > 0;
+            // Hide expenses permanently zeroed for this phase (deleted-forward or all-zero history)
+            if (isRemovedThisPhase) return null;
             const monthlyDisplay = `${f(monthlyFromPerPaycheck(effAmt, cpm))}/mo`;
             const isEditing = editId === exp.id;
             const isPinnedFoodCard = Boolean(exp.isFoodPrimary || exp.isFoodHighlighted);
@@ -983,7 +1001,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 padding: "10px 12px",
                 marginBottom: "6px",
                 position: "relative",
-                opacity: isDragging ? 0.72 : 1,
+                opacity: isDragging ? 0.72 : isScheduledFuture ? 0.48 : 1,
                 cursor: isPinnedFoodCard
                   ? "default"
                   : isEditing ? "default" : (isExpenseDropLane ? (isDragging ? "grabbing" : "grab") : "default"),
@@ -1068,15 +1086,20 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   ⋮⋮
                 </button>}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <div style={{ fontSize: "13px" }}>{exp.label}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                    <div style={{ fontSize: "13px", color: isScheduledFuture ? "var(--color-text-secondary)" : undefined }}>{exp.label}</div>
                     {isPinnedFoodCard && <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-gold)", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>FOOD</span>}
+                    {isScheduledFuture && (
+                      <span style={{ fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", padding: "1px 6px", borderRadius: "3px", whiteSpace: "nowrap" }}>
+                        STARTS {shortMonth(nextNonZeroIso).toUpperCase()}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   {!isPinnedFoodCard && pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "bold", color: CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
+                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isScheduledFuture ? "var(--color-text-disabled)" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
                     <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{monthlyDisplay}</div>
                   </div>
                   <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>

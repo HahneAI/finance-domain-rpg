@@ -34,7 +34,7 @@ export function LogPanel({
   logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals,
   fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isDHL = false, isAdmin = false, setConfig,
   logK401kLost = 0, logK401kMatchLost = 0, logK401kGained = 0, logK401kMatchGained = 0, logPTOHoursLost = 0,
-  ptoGoal, setPtoGoal,
+  ptoGoal, setPtoGoal, weekConfirmations = {},
 }) {
   const blank = {
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
@@ -89,12 +89,37 @@ export function LogPanel({
     : null;
   const ptoCutoffRaw = ptoGoal?.targetDate ? new Date(ptoGoal.targetDate) : null;
   const ptoCutoff = ptoCutoffRaw && !Number.isNaN(ptoCutoffRaw.getTime()) ? ptoCutoffRaw : null;
+  // Base projected accrual (used in non-override display cards)
   const ptoBs = ptoCutoff
     ? allWeeks.filter(w => w.active && w.weekEnd <= ptoCutoff).reduce((s, w) => s + w.totalHours, 0) / 20
     : 0;
-  const adjP = Math.max(ptoBs - logPTOHoursLost / 20, 0);
-  const effectiveAdjP = config.ptoHoursOverride != null ? config.ptoHoursOverride : adjP;
   const negCap = ptoGoal?.negativeBalanceCap ?? 40;
+
+  // Rolling PTO balance when override is active:
+  //   balance = override + earned-from-confirmed-weeks - pto-consumed - accrual-lost
+  // Without override: use the legacy projected-accrual model.
+  const overrideIdx = config.ptoOverrideWeekIdx ?? -1;
+  const ptoEarnedSinceOverride = config.ptoHoursOverride != null
+    ? allWeeks
+        .filter(w => w.active && w.idx > overrideIdx && weekConfirmations[w.idx])
+        .reduce((s, w) => s + w.totalHours, 0) / 20
+    : 0;
+  const ptoConsumedSinceOverride = config.ptoHoursOverride != null
+    ? logs
+        .filter(e => Number(e.weekIdx) > overrideIdx && (e.type === "pto" || e.type === "pto_unapproved"))
+        .reduce((s, e) => s + (e.type === "pto" ? (e.ptoHours || 0) : (e.hoursLost || 0)), 0)
+    : 0;
+  const ptoAccrualLostSinceOverride = config.ptoHoursOverride != null
+    ? logs
+        .filter(e => Number(e.weekIdx) > overrideIdx && ["missed_unpaid", "missed_unapproved", "partial"].includes(e.type))
+        .reduce((s, e) => {
+          if (e.type === "missed_unpaid") return s + (parseInt(e.shiftsLost) || 0) * (config.shiftHours ?? 12);
+          return s + (parseFloat(e.hoursLost) || 0);
+        }, 0) / 20
+    : 0;
+  const effectiveAdjP = config.ptoHoursOverride != null
+    ? config.ptoHoursOverride + ptoEarnedSinceOverride - ptoConsumedSinceOverride - ptoAccrualLostSinceOverride
+    : Math.max(ptoBs - logPTOHoursLost / 20, 0);
   const avail = effectiveAdjP + negCap;
   const hoursNeed = ptoGoal?.hoursNeeded ?? 0;
   const onTrack = ptoGoal ? avail >= hoursNeed : false;
@@ -105,6 +130,8 @@ export function LogPanel({
   const [editMode, setEditMode] = useState(false);
   const [editingPto, setEditingPto] = useState(false);
   const [ptoInput, setPtoInput] = useState("");
+  const [editingBucket, setEditingBucket] = useState(false);
+  const [bucketInput, setBucketInput] = useState("");
 
   function openAdd() {
     setFormVals(EMPTY_FORM);
@@ -890,22 +917,43 @@ export function LogPanel({
           {editingPto ? (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <input {...iS} style={{ ...iS, width: "100px", padding: "6px 10px" }} type="number" min="0" step="0.5" value={ptoInput} onChange={e => setPtoInput(e.target.value)} placeholder="hours" autoFocus />
-              <SmBtn onClick={() => { const val = parseFloat(ptoInput); if (setConfig && Number.isFinite(val) && val >= 0) setConfig(c => ({ ...c, ptoHoursOverride: val })); setEditingPto(false); }} c="var(--color-bg-base)" bg="var(--color-gold)">Save</SmBtn>
+              <SmBtn onClick={() => { const val = parseFloat(ptoInput); if (setConfig && Number.isFinite(val) && val >= 0) setConfig(c => ({ ...c, ptoHoursOverride: val, ptoOverrideWeekIdx: currentWeek?.idx ?? 0 })); setEditingPto(false); }} c="var(--color-bg-base)" bg="var(--color-gold)">Save</SmBtn>
               <SmBtn onClick={() => setEditingPto(false)} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Cancel</SmBtn>
             </div>
           ) : (
             <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
               <SmBtn onClick={() => { setPtoInput(String(effectiveAdjP.toFixed(1))); setEditingPto(true); }} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Set Balance</SmBtn>
-              {config.ptoHoursOverride != null && <SmBtn onClick={() => setConfig?.(c => ({ ...c, ptoHoursOverride: null }))} c="var(--color-text-disabled)" bg="var(--color-bg-raised)">Clear Override</SmBtn>}
+              {config.ptoHoursOverride != null && <SmBtn onClick={() => setConfig?.(c => ({ ...c, ptoHoursOverride: null, ptoOverrideWeekIdx: null }))} c="var(--color-text-disabled)" bg="var(--color-bg-raised)">Clear Override</SmBtn>}
             </div>
           )}
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
           <Card label="Accrual Rate" val="1 hr / 20 worked" color="#7eb8c9" size="14px" />
-          {ptoGoal ? (<>
+          {config.ptoHoursOverride != null ? (<>
+            {/* Override active — show delta cards relative to override starting point */}
+            <Card
+              label="Earned Since Override"
+              val={`+${ptoEarnedSinceOverride.toFixed(1)} hrs`}
+              sub={`${Object.values(weekConfirmations).filter(Boolean).length > 0 ? "from confirmed weeks" : "no weeks confirmed yet"}`}
+              color="var(--color-green)" size="14px"
+            />
+            {(ptoConsumedSinceOverride > 0 || ptoAccrualLostSinceOverride > 0)
+              ? <Card
+                  label="Used / Lost Since Override"
+                  val={`-${(ptoConsumedSinceOverride + ptoAccrualLostSinceOverride).toFixed(1)} hrs`}
+                  sub={[ptoConsumedSinceOverride > 0 && `${ptoConsumedSinceOverride.toFixed(1)} used`, ptoAccrualLostSinceOverride > 0 && `${ptoAccrualLostSinceOverride.toFixed(1)} accrual`].filter(Boolean).join(" · ")}
+                  color="var(--color-red)" size="14px"
+                />
+              : <Card label="Negative Balance Cap" val={`${negCap} hrs`} color="#888" size="14px" />
+            }
+          </>) : ptoGoal ? (<>
+            {/* No override — show projected accrual toward goal */}
             <Card label={`Base Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${ptoBs.toFixed(1)} hrs`} color="var(--color-text-primary)" size="18px" />
-            {logPTOHoursLost > 0 ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" /> : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="#888" size="14px" />}
+            {logPTOHoursLost > 0
+              ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
+              : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="#888" size="14px" />
+            }
           </>) : (<>
             <Card label="Accrued by Leave Date" val="— set a goal" color="var(--color-text-disabled)" size="14px" />
             <Card label="Negative Balance Cap" val="40 hrs (after 90d)" color="#888" size="14px" />
@@ -953,11 +1001,60 @@ export function LogPanel({
 
     {bucketModel && (() => {
       const bm = bucketModel;
+      const cap = config.bucketCap ?? 128;
       const bandColor = bm.status === "safe" ? "var(--color-green)" : bm.status === "caution" ? "var(--color-gold)" : "var(--color-red)";
       const bandBg = bm.status === "safe" ? "#1a2d1e" : bm.status === "caution" ? "#2d2710" : "#2d1a1a";
       return (
         <div style={{ marginBottom: "24px" }}>
           <SectionHeader>Attendance Bucket</SectionHeader>
+
+          {/* Bucket balance override control */}
+          <div style={{ background: "var(--color-bg-surface)", border: `1px solid ${bandColor}33`, borderRadius: "8px", padding: "14px 16px", marginBottom: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: editingBucket ? "10px" : "0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Bucket Balance</div>
+                {config.bucketBalanceOverride != null && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px" }}>(manual)</span>}
+              </div>
+              <span style={{ fontSize: "14px", fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h <span style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>/ {cap}h</span></span>
+            </div>
+            {editingBucket ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <input
+                  {...iS} style={{ ...iS, width: "100px", padding: "6px 10px" }}
+                  type="number" min="0" max={cap} step="1"
+                  value={bucketInput}
+                  onChange={e => setBucketInput(e.target.value)}
+                  placeholder="hours"
+                  autoFocus
+                />
+                <SmBtn
+                  onClick={() => {
+                    const val = parseFloat(bucketInput);
+                    if (setConfig && Number.isFinite(val) && val >= 0) {
+                      setConfig(c => ({ ...c, bucketBalanceOverride: val, bucketOverrideMonth: currentMonthStr }));
+                    }
+                    setEditingBucket(false);
+                  }}
+                  c="var(--color-bg-base)" bg="var(--color-gold)"
+                >Save</SmBtn>
+                <SmBtn onClick={() => setEditingBucket(false)} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Cancel</SmBtn>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                <SmBtn
+                  onClick={() => { setBucketInput(String(bm.currentBalance)); setEditingBucket(true); }}
+                  c="var(--color-text-secondary)" bg="var(--color-bg-raised)"
+                >Set Balance</SmBtn>
+                {config.bucketBalanceOverride != null && (
+                  <SmBtn
+                    onClick={() => setConfig?.(c => ({ ...c, bucketBalanceOverride: null, bucketOverrideMonth: null }))}
+                    c="var(--color-text-disabled)" bg="var(--color-bg-raised)"
+                  >Clear Override</SmBtn>
+                )}
+              </div>
+            )}
+          </div>
+
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "10px 14px", marginBottom: "10px", fontSize: "11px" }}>
             <span style={{ color: "var(--color-text-secondary)", marginRight: "8px" }}>{fmtMonth(currentMonthStr)} — Tier {bm.currentTier}</span>
             {bm.currentTier === 1 && <span style={{ color: "var(--color-green)" }}>perfect so far · any unapproved absence changes tier</span>}

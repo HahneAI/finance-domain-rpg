@@ -846,9 +846,14 @@ function prevMonth(yyyyMM) {
 export function computeBucketModel(logs, cfg) {
   const payoutRate = cfg.bucketPayoutRate ?? (cfg.baseRate / 2);
   const cap = cfg.bucketCap ?? 128;
-  let balance = cfg.bucketStartBalance ?? 64;
 
-  // Job start month: week 0 ends at FISCAL_YEAR_START; firstActiveIdx weeks of 7 days forward = first active week end
+  // When both override fields are set, use the override as the rolling starting point for
+  // months after the override month. Without bucketOverrideMonth (legacy), fall back to
+  // replacing currentBalance at the end (old behavior preserved for backward compat).
+  const overrideActive = cfg.bucketBalanceOverride != null && cfg.bucketOverrideMonth != null;
+  let balance = overrideActive ? cfg.bucketBalanceOverride : (cfg.bucketStartBalance ?? 64);
+
+  // Job start month — always computed but only used as loop start when override is inactive
   const [wzeY, wzeM, wzeD] = FISCAL_YEAR_START.split('-').map(Number);
   const weekZeroEnd = new Date(wzeY, wzeM - 1, wzeD);
   const firstWeekEnd = new Date(weekZeroEnd.getTime() + (cfg.firstActiveIdx ?? 7) * 7 * 86400000);
@@ -858,7 +863,7 @@ export function computeBucketModel(logs, cfg) {
   const today = toLocalIso(new Date());
   const currentMonth = today.slice(0, 7);
 
-  // Group missed_unapproved hours by YYYY-MM from event.weekEnd
+  // Group unapproved-absence hours by YYYY-MM from event.weekEnd
   const hoursByMonth = {};
   logs.forEach(e => {
     if ((e.type === "missed_unapproved" || e.type === "pto_unapproved") && e.weekEnd) {
@@ -867,9 +872,10 @@ export function computeBucketModel(logs, cfg) {
     }
   });
 
-  // Completed months: job start through the month before current month
+  // Loop start: month after override month (its balance is given) or job start
+  const loopStartMonth = overrideActive ? addOneMonth(cfg.bucketOverrideMonth) : jobStartMonth;
   const lastCompleted = prevMonth(currentMonth);
-  const completedMonths = jobStartMonth <= lastCompleted ? monthRange(jobStartMonth, lastCompleted) : [];
+  const completedMonths = loopStartMonth <= lastCompleted ? monthRange(loopStartMonth, lastCompleted) : [];
 
   const monthHistory = [];
   for (const month of completedMonths) {
@@ -886,8 +892,8 @@ export function computeBucketModel(logs, cfg) {
     balance = closingBalance;
   }
 
-  // Current in-progress month — manual override replaces computed balance when set
-  const currentBalance = (cfg.bucketBalanceOverride != null) ? cfg.bucketBalanceOverride : balance;
+  // Current balance: naturally computed when overrideActive; legacy snapshot override otherwise
+  const currentBalance = (!overrideActive && cfg.bucketBalanceOverride != null) ? cfg.bucketBalanceOverride : balance;
   const currentM = hoursByMonth[currentMonth] || 0;
   const currentTier = currentM === 0 ? 1 : currentM <= 12 ? 2 : currentM <= 24 ? 3 : 4;
   const hoursToNextTier = currentTier === 1 ? null : currentTier === 2 ? 12 - currentM : currentTier === 3 ? 24 - currentM : 0;

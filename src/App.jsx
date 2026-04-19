@@ -716,6 +716,7 @@ export default function App() {
         showExtra={showExtra}
         setShowExtra={setShowExtra}
         isAdmin={isAdmin}
+        today={today}
       />}
     </>
   );

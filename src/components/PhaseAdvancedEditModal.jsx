@@ -212,6 +212,8 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
 
   const hasStagedChanges = Object.keys(edits).length > 0 || Object.keys(deletions).length > 0 || additions.length > 0;
   const changeCount = Object.keys(edits).length + Object.keys(deletions).length + additions.length;
+  // Gate: any in-progress work locks the month selector to the current month
+  const monthLocked = hasStagedChanges || showAddForm || expandedExpId !== null || deletePopup !== null;
 
   const getDisplayAmount = (exp) => {
     if (deletions[exp.id]) return 0;
@@ -284,17 +286,35 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
           borderBottom: "1px solid var(--color-border-subtle)",
           flexShrink: 0,
         }}>
-          {months.map((m, mi) => (
-            <SmBtn
-              key={m.iso}
-              onClick={() => { setSelectedMonthIdx(mi); setExpandedExpId(null); setDeletePopup(null); setMonthOnlyArmed(null); }}
-              bg={selectedMonthIdx === mi ? "var(--color-accent-primary)" : "var(--color-bg-raised)"}
-              c={selectedMonthIdx === mi ? "#0a0a0a" : "var(--color-text-secondary)"}
-              style={{ flex: 1, fontSize: "10px", letterSpacing: "1px", padding: "6px 4px", minHeight: "32px" }}
-            >
-              {m.label}
-            </SmBtn>
-          ))}
+          {months.map((m, mi) => {
+            const isActive  = selectedMonthIdx === mi;
+            const isBlocked = monthLocked && !isActive;
+            return (
+              <SmBtn
+                key={m.iso}
+                onClick={() => {
+                  if (isBlocked) return;
+                  setSelectedMonthIdx(mi);
+                  setExpandedExpId(null);
+                  setDeletePopup(null);
+                  setMonthOnlyArmed(null);
+                }}
+                bg={isActive ? "var(--color-accent-primary)" : "var(--color-bg-raised)"}
+                c={isActive ? "#0a0a0a" : isBlocked ? "var(--color-text-disabled)" : "var(--color-text-secondary)"}
+                style={{
+                  flex: 1,
+                  fontSize: "10px",
+                  letterSpacing: "1px",
+                  padding: "6px 4px",
+                  minHeight: "32px",
+                  opacity: isBlocked ? 0.4 : 1,
+                  cursor: isBlocked ? "not-allowed" : "pointer",
+                }}
+              >
+                {m.label}
+              </SmBtn>
+            );
+          })}
         </div>
 
         {/* ── Expense list ── */}
@@ -314,6 +334,8 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
                     const isEdited     = !!edits[exp.id];
                     const isDeleted    = !!deletions[exp.id];
                     const displayAmt   = getDisplayAmount(exp);
+                    // Expense is $0 for this month from a prior save (not from a current-session staged delete)
+                    const isInactive   = displayAmt === 0 && !isEdited && !isDeleted;
                     const draftPerPaycheck = isExpanded
                       ? perPaycheckFromCycle(parseFloat(draftVals.amount) || 0, draftVals.cycle, cpm)
                       : displayAmt;
@@ -330,6 +352,7 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
                           border: `1px solid ${isDeleted ? "rgba(239,68,68,0.28)" : isEdited ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
                           borderRadius: "8px",
                           padding: "10px 12px",
+                          opacity: isInactive ? 0.55 : 1,
                         }}
                       >
                         {/* Collapsed header row */}
@@ -337,7 +360,7 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{
                               fontSize: "12px",
-                              color: isDeleted ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                              color: isDeleted ? "var(--color-text-disabled)" : isInactive ? "var(--color-text-secondary)" : "var(--color-text-primary)",
                               fontWeight: 500,
                               whiteSpace: "nowrap",
                               overflow: "hidden",
@@ -351,6 +374,7 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
                                   {deletions[exp.id] === "forward" ? "REMOVED →" : "THIS MONTH"}
                                 </span>
                               )}
+                              {isInactive && <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1px" }}>INACTIVE</span>}
                             </div>
                             <div style={{ fontSize: "11px", color: isDeleted ? "var(--color-red)" : isEdited ? "var(--color-accent-primary)" : "var(--color-text-secondary)", marginTop: "2px" }}>
                               {f2(displayAmt)}/wk
@@ -367,6 +391,14 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
                                   style={{ fontSize: "9px", letterSpacing: "1px", padding: "5px 10px", minHeight: "28px" }}
                                 >
                                   UNDO
+                                </SmBtn>
+                              ) : isInactive ? (
+                                <SmBtn
+                                  onClick={() => openEdit(exp)}
+                                  c="var(--color-text-secondary)"
+                                  style={{ fontSize: "9px", letterSpacing: "1px", padding: "5px 10px", minHeight: "28px" }}
+                                >
+                                  SET AMOUNT
                                 </SmBtn>
                               ) : (
                                 <>

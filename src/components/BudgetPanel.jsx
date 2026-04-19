@@ -3,7 +3,7 @@ import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../cons
 import { getEffectiveAmount, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { Card, VT, SmBtn, SH, SectionHeader, iS, lS } from "./ui.jsx";
+import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 import { PhaseAdvancedEditModal } from "./PhaseAdvancedEditModal.jsx";
 
@@ -719,6 +719,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
 
   return (<div>
+    <PanelHero eyebrow="Expenses & Liabilities">Budget</PanelHero>
     {/* ── Unified phase control card — quarter selector + adv. edit in one glass box ── */}
     <LiquidGlass
       purpose="phase-btn"

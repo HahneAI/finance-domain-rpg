@@ -4,7 +4,6 @@ import { getEffectiveAmount, computeLoanPayoffDate, buildLoanHistory, loanPaymen
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, SectionHeader, iS, lS } from "./ui.jsx";
-import { Card, VT, SmBtn, SH, iS, lS } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 import { PhaseAdvancedEditModal } from "./PhaseAdvancedEditModal.jsx";
 

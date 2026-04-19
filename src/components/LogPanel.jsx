@@ -95,9 +95,17 @@ export function LogPanel({
     : 0;
   const negCap = ptoGoal?.negativeBalanceCap ?? 40;
 
+  // Direct PTO consumption across ALL events — used in both override and non-override models.
+  // pto events consume ptoHours; pto_unapproved events consume hoursLost.
+  // hoursLostForPTO (captured in logPTOHoursLost) only tracks accrual reduction from missed
+  // shifts — it doesn't cover direct balance draws, so we compute them separately.
+  const ptoUsedAll = logs
+    .filter(e => e.type === "pto" || e.type === "pto_unapproved")
+    .reduce((s, e) => s + (e.type === "pto" ? (e.ptoHours || 0) : (e.hoursLost || 0)), 0);
+
   // Rolling PTO balance when override is active:
-  //   balance = override + earned-from-confirmed-weeks - pto-consumed - accrual-lost
-  // Without override: use the legacy projected-accrual model.
+  //   balance = override + earned-from-confirmed-weeks - pto-consumed-after-idx - accrual-lost-after-idx
+  // Without override: projected-accrual model minus accrual losses and direct consumption.
   const overrideIdx = config.ptoOverrideWeekIdx ?? -1;
   const ptoEarnedSinceOverride = config.ptoHoursOverride != null
     ? allWeeks
@@ -119,7 +127,7 @@ export function LogPanel({
     : 0;
   const effectiveAdjP = config.ptoHoursOverride != null
     ? config.ptoHoursOverride + ptoEarnedSinceOverride - ptoConsumedSinceOverride - ptoAccrualLostSinceOverride
-    : Math.max(ptoBs - logPTOHoursLost / 20, 0);
+    : Math.max(ptoBs - logPTOHoursLost / 20 - ptoUsedAll, 0);
   const avail = effectiveAdjP + negCap;
   const hoursNeed = ptoGoal?.hoursNeeded ?? 0;
   const onTrack = ptoGoal ? avail >= hoursNeed : false;

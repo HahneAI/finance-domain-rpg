@@ -140,7 +140,7 @@ export function LogPanel({
 
   // ── Attendance History ──
   // Only absence-type events feed the history view; bonus/other_loss are irrelevant here.
-  const attendanceLogs = logs.filter(e => ["missed_unpaid", "missed_unapproved", "partial"].includes(e.type));
+  const attendanceLogs = logs.filter(e => ["missed_unpaid", "missed_unapproved", "pto_unapproved", "partial"].includes(e.type));
 
   // Group by calendar month (YYYY-MM) for the monthly breakdown table.
   // missed_unpaid     → shiftsLost (full approved shifts)
@@ -153,14 +153,14 @@ export function LogPanel({
     if (!byMonth[month]) byMonth[month] = { unpaid: 0, unapproved: 0, unapprovedH: 0, partial: 0, partialH: 0 };
     const m = byMonth[month];
     if (e.type === "missed_unpaid")     m.unpaid       += parseInt(e.shiftsLost) || 0;
-    if (e.type === "missed_unapproved") { m.unapproved += normalizeDays(e.missedDays).length; m.unapprovedH += parseFloat(e.hoursLost) || 0; }
+    if (e.type === "missed_unapproved" || e.type === "pto_unapproved") { m.unapproved += normalizeDays(e.missedDays).length; m.unapprovedH += parseFloat(e.hoursLost) || 0; }
     if (e.type === "partial")           { m.partial    += 1;                                  m.partialH    += parseFloat(e.hoursLost) || 0; }
   }
 
   // Count how many times each day-of-week appears across missed/unapproved events.
   // Partials excluded — a partial shift isn't a full absence.
   const dowCounts = {};
-  for (const e of logs.filter(e => ["missed_unpaid", "missed_unapproved"].includes(e.type))) {
+  for (const e of logs.filter(e => ["missed_unpaid", "missed_unapproved", "pto_unapproved"].includes(e.type))) {
     for (const d of normalizeDays(e.missedDays)) dowCounts[d] = (dowCounts[d] || 0) + 1;
   }
   // Sorted descending so the most-missed day leads in the pill row.
@@ -381,6 +381,28 @@ export function LogPanel({
               </div>
             ) : null;
           })()}
+        </div>
+      </div>
+    )}
+
+    {vals.type === "pto_unapproved" && (
+      <div style={{ gridColumn: "1 / -1" }}>
+        <DayPicker vals={vals} set={set} />
+        <div style={{ marginTop: "8px", padding: "8px 10px", background: "#1e1510", border: "1px solid #c8922a44", borderRadius: "4px", fontSize: "10px", color: "#c8922a", lineHeight: "1.6" }}>
+          ⚠ PTO covers pay — but absence was unapproved. PTO hours consumed AND attendance bucket hit ({normalizeDays(vals.missedDays).length * config.shiftHours}h this entry).
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
+          <div>
+            <label style={lS}>Days / Shifts</label>
+            <input type="number" min="0" readOnly value={normalizeDays(vals.missedDays).length}
+              style={{ ...iS, marginTop: "4px", opacity: 0.5 }} />
+          </div>
+          <div>
+            <label style={lS}>Hours (PTO + Bucket)</label>
+            <input type="number" min="0" step="0.5" value={vals.hoursLost ?? 0}
+              onChange={e => set(v => ({ ...v, hoursLost: e.target.value }))}
+              style={{ ...iS, marginTop: "4px" }} />
+          </div>
         </div>
       </div>
     )}
@@ -697,7 +719,7 @@ export function LogPanel({
       const imp  = calcEventImpact(entry, config);
       const ev   = EVENT_TYPES[entry.type] ?? { label: entry.type, color: "var(--color-text-secondary)", icon: "?" };
       const isB  = entry.type === "bonus";
-      const isUA = entry.type === "missed_unapproved";
+      const isUA = entry.type === "missed_unapproved" || entry.type === "pto_unapproved";
       const ak   = entry.weekEnd && new Date(entry.weekEnd) >= new Date(config.k401StartDate);
       const isEditing = editId === entry.id;
       const missedArr = normalizeDays(entry.missedDays);
@@ -723,6 +745,7 @@ export function LogPanel({
                 {editVals.type === "bonus" && <div>+${parseFloat(editVals.amount) || 0} · {parseInt(editVals.shiftsGained) || 0} shift(s) · {parseFloat(editVals.hoursGained) || 0}h gained</div>}
                 {editVals.type === "partial" && <div>{parseFloat(editVals.hoursLost) || 0}h partial shift</div>}
                 {editVals.type === "pto" && <div>{parseFloat(editVals.ptoHours) || 0}h PTO</div>}
+                {editVals.type === "pto_unapproved" && <div>{parseFloat(editVals.hoursLost) || 0}h PTO (unapproved) · bucket hit</div>}
                 {editVals.type === "other_loss" && <div>-${parseFloat(editVals.amount) || 0} other loss</div>}
               </div>
             )}
@@ -768,6 +791,7 @@ export function LogPanel({
                 {entry.type === "missed_unpaid"     && `${entry.shiftsLost} shift(s) · ${entry.weekendShifts} wknd · ${entry.shiftsLost * config.shiftHours}h`}
                 {entry.type === "missed_unapproved" && `${entry.hoursLost}h unapproved`}
                 {entry.type === "pto"               && `${entry.ptoHours}h PTO @ $${config.baseRate}`}
+                {entry.type === "pto_unapproved"    && `${entry.hoursLost}h PTO (unapproved) @ $${config.baseRate}`}
                 {entry.type === "partial"           && `${entry.hoursLost}h partial`}
                 {entry.type === "bonus"             && `+${f(entry.amount)} bonus`}
                 {entry.type === "other_loss"        && `-${f(entry.amount)} other`}

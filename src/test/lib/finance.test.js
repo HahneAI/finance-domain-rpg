@@ -1332,6 +1332,23 @@ describe('calcEventImpact', () => {
     })
   })
 
+  describe('pto_unapproved', () => {
+    it('returns non-negative grossLost (opportunity cost, same as pto type)', () => {
+      const event = makeEvent({ type: 'pto_unapproved', weekRotation: '6-Day', weekEnd: '2026-02-02', hoursLost: 12 })
+      expect(calcEventImpact(event, cfg).grossLost).toBeGreaterThanOrEqual(0)
+    })
+
+    it('sets bucketHoursDeducted = hoursLost (unapproved bucket hit)', () => {
+      const event = makeEvent({ type: 'pto_unapproved', weekRotation: '6-Day', weekEnd: '2026-02-02', hoursLost: 12 })
+      expect(calcEventImpact(event, cfg).bucketHoursDeducted).toBe(12)
+    })
+
+    it('hoursLostForPTO is 0 (PTO-covered hours do not reduce accrual)', () => {
+      const event = makeEvent({ type: 'pto_unapproved', weekRotation: '6-Day', weekEnd: '2026-02-02', hoursLost: 12 })
+      expect(calcEventImpact(event, cfg).hoursLostForPTO).toBe(0)
+    })
+  })
+
   describe('partial', () => {
     it('calculates grossLost = hoursLost × baseRate', () => {
       const event = makeEvent({ type: 'partial', weekEnd: '2026-02-02', hoursLost: 6 })

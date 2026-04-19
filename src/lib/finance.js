@@ -861,7 +861,7 @@ export function computeBucketModel(logs, cfg) {
   // Group missed_unapproved hours by YYYY-MM from event.weekEnd
   const hoursByMonth = {};
   logs.forEach(e => {
-    if (e.type === "missed_unapproved" && e.weekEnd) {
+    if ((e.type === "missed_unapproved" || e.type === "pto_unapproved") && e.weekEnd) {
       const month = e.weekEnd.slice(0, 7);
       hoursByMonth[month] = (hoursByMonth[month] || 0) + (e.hoursLost || 0);
     }
@@ -966,6 +966,11 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
     const normalOT = Math.max(normalH - cfg.otThreshold, 0), actualOT = Math.max(normalH - ptoH - cfg.otThreshold, 0);
     // PTO pays at baseRate; night diff applies to hours worked only — both deltas included
     grossLost = ptoH * nightDiffPerHour + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
+  } else if (event.type === "pto_unapproved") {
+    // PTO covers paycheck but absence was unapproved: same gross impact as pto + bucket deducted below
+    const ptoH = event.hoursLost || 0, normalH = normalShifts * cfg.shiftHours;
+    const normalOT = Math.max(normalH - cfg.otThreshold, 0), actualOT = Math.max(normalH - ptoH - cfg.otThreshold, 0);
+    grossLost = ptoH * nightDiffPerHour + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
   } else if (event.type === "missed_unapproved") {
     // Hours missed × (base rate + night diff); bucket hit tracked separately
     grossLost = (event.hoursLost || 0) * (cfg.baseRate + nightDiffPerHour); hoursLostForPTO = event.hoursLost || 0;
@@ -986,7 +991,7 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
   const affectsK401 = weekDate && (!k401ActivationDate || weekDate >= k401ActivationDate);
   return {
     grossLost, grossGained, netLost, netGained, baseGross, hoursLostForPTO,
-    bucketHoursDeducted: event.type === "missed_unapproved" ? (event.hoursLost || 0) : 0,
+    bucketHoursDeducted: (event.type === "missed_unapproved" || event.type === "pto_unapproved") ? (event.hoursLost || 0) : 0,
     k401kLost: affectsK401 ? grossLost * cfg.k401Rate : 0,
     k401kMatchLost: affectsK401 ? grossLost * (cfg.employerPreset === "DHL" ? dhlEmployerMatchRate(cfg.k401Rate) : cfg.k401MatchRate) : 0,
     k401kGained: affectsK401 ? grossGained * cfg.k401Rate : 0,

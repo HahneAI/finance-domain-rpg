@@ -3,7 +3,7 @@ import { useState } from "react";
 import { EVENT_TYPES } from "../constants/config.js";
 import { calcEventImpact, dhlEmployerMatchRate, toLocalIso } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
-import { Card, iS, lS, SmBtn } from "./ui.jsx";
+import { Card, iS, lS, SmBtn, PanelHero, SectionHeader } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -27,11 +27,7 @@ const fmtDate  = iso => {
   if (!Number.isFinite(m) || !Number.isFinite(d) || m < 1 || m > 12 || d < 1 || d > 31) return "—";
   return `${LOG_MONTH_SHORT[m - 1]} ${d}`;
 };
-const SH = ({ children }) => (
-  <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "12px" }}>
-    {children}
-  </div>
-);
+
 const EMPTY_FORM = { label: "", hoursNeeded: "", targetDate: "", negativeBalanceCap: "40" };
 
 export function LogPanel({
@@ -437,6 +433,7 @@ export function LogPanel({
   </>;
 
   return (<div>
+    <PanelHero eyebrow="Activity & Projections">Event Log</PanelHero>
 
     {/* Top priority metrics (DHL only) */}
     {isDHL && (
@@ -814,7 +811,7 @@ export function LogPanel({
     </div>}
 
     <div style={{ marginBottom: "24px" }}>
-      <SH>401k Projections</SH>
+      <SectionHeader>401k Projections</SectionHeader>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
         <Card label="Proj. Your Contributions" val={f(bE)} rawVal={bE} color="#7a8bbf" size="18px" />
         <Card label="Proj. Employer Match" val={f(bM)} rawVal={bM} color="var(--color-green)" size="18px" />
@@ -857,7 +854,7 @@ export function LogPanel({
 
     {isDHL && (
       <div style={{ marginBottom: "24px" }}>
-        <SH>PTO Accrual</SH>
+        <SectionHeader>PTO Accrual</SectionHeader>
         <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "14px 16px", marginBottom: "14px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: editingPto ? "10px" : "0" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -936,7 +933,7 @@ export function LogPanel({
       const bandBg = bm.status === "safe" ? "#1a2d1e" : bm.status === "caution" ? "#2d2710" : "#2d1a1a";
       return (
         <div style={{ marginBottom: "24px" }}>
-          <SH>Attendance Bucket</SH>
+          <SectionHeader>Attendance Bucket</SectionHeader>
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "10px 14px", marginBottom: "10px", fontSize: "11px" }}>
             <span style={{ color: "var(--color-text-secondary)", marginRight: "8px" }}>{fmtMonth(currentMonthStr)} — Tier {bm.currentTier}</span>
             {bm.currentTier === 1 && <span style={{ color: "var(--color-green)" }}>perfect so far · any unapproved absence changes tier</span>}

@@ -443,7 +443,9 @@ export default function App() {
     const grossDeltaByWeek = {};
 
     logs.forEach(e => {
-      const i = calcEventImpact(e, config);
+      const eIdx = Number(e.weekIdx);
+      const weekMeta = Number.isFinite(eIdx) ? (allWeeks.find(w => w.idx === eIdx) ?? null) : null;
+      const i = calcEventImpact(e, config, weekMeta);
       nL += i.netLost; nG += i.netGained;
       if ((e.type === "missed_unpaid" || e.type === "missed_unapproved") && i.netLost) {
         missedEventDayNetLost += i.netLost;
@@ -452,16 +454,15 @@ export default function App() {
       k4G += i.k401kGained; k4MG += i.k401kMatchGained;
       ptoL += i.hoursLostForPTO; bucket += i.bucketHoursDeducted;
 
-      const idx = Number(e.weekIdx);
-      if (!Number.isFinite(idx)) return;
+      if (!Number.isFinite(eIdx)) return;
       const netDelta = (i.netGained || 0) - (i.netLost || 0);
-      if (netDelta !== 0) weeklyNetAdjustments[idx] = (weeklyNetAdjustments[idx] || 0) + netDelta;
+      if (netDelta !== 0) weeklyNetAdjustments[eIdx] = (weeklyNetAdjustments[eIdx] || 0) + netDelta;
       const grossDelta = (i.grossGained || 0) - (i.grossLost || 0);
-      if (grossDelta !== 0) grossDeltaByWeek[idx] = (grossDeltaByWeek[idx] || 0) + grossDelta;
+      if (grossDelta !== 0) grossDeltaByWeek[eIdx] = (grossDeltaByWeek[eIdx] || 0) + grossDelta;
 
       const weekEndIso = typeof e.weekEnd === "string" ? e.weekEnd : (e.weekEnd ? toLocalIso(e.weekEnd) : null);
       if (weekEndIso && isFutureWeek(weekEndIso, today) && i.netLost) {
-        futureEventDeductionsByWeek[idx] = (futureEventDeductionsByWeek[idx] || 0) + i.netLost;
+        futureEventDeductionsByWeek[eIdx] = (futureEventDeductionsByWeek[eIdx] || 0) + i.netLost;
       }
     });
 
@@ -478,7 +479,7 @@ export default function App() {
       futureEventDeductionsByWeek,
       grossDeltaByWeek,
     };
-  }, [logs, config, futureWeeks, today]);
+  }, [logs, config, futureWeeks, today, allWeeks]);
 
   // ── Tax derived values ──
   const taxDerived = useMemo(() => {
@@ -532,7 +533,7 @@ export default function App() {
     const weekAdjustment = logs
       .filter(e => e.weekIdx === prevWeek.idx)
       .reduce((sum, e) => {
-        const impact = calcEventImpact(e, config);
+        const impact = calcEventImpact(e, config, prevWeek);
         return sum + impact.netGained - impact.netLost;
       }, 0);
     return baseNet + weekAdjustment;

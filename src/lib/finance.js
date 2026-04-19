@@ -912,10 +912,16 @@ export function computeBucketModel(logs, cfg) {
   return { currentBalance, currentM, currentTier, hoursToNextTier, status, monthHistory, projectedHistory, realizedPayout, projectedPayout, totalProjectedBonus: realizedPayout + projectedPayout };
 }
 
-export function calcEventImpact(event, cfg) {
+// weekMeta: optional week object from buildYear for the event's week.
+// When provided, uses the actual scheduled isHighWeek and grossPay so the
+// impact calculation stays consistent with computeNet for that same week.
+// Falls back to event.weekRotation / projectedGross when weekMeta is absent.
+export function calcEventImpact(event, cfg, weekMeta = null) {
   const isDHL = cfg.employerPreset === "DHL";
   const nightDiffPerHour = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
-  const isWeek2 = ["6-Day", "Week 2", "Long Week"].includes(event.weekRotation);
+  const isWeek2 = weekMeta != null
+    ? !!weekMeta.isHighWeek
+    : ["6-Day", "Week 2", "Long Week"].includes(event.weekRotation);
   const plannedPattern = isDHL ? getDhlPlannedPattern(cfg, isWeek2) : null;
   // Non-DHL total hours: customWeeklyHours overrides; variable uses long/short; else flat.
   const nonDhlTotalH = cfg.customWeeklyHours != null
@@ -923,11 +929,18 @@ export function calcEventImpact(event, cfg) {
     : cfg.scheduleIsVariable
       ? (isWeek2 ? (cfg.longWeeklyHours || cfg.standardWeeklyHours || 40) : (cfg.standardWeeklyHours || 40))
       : (cfg.standardWeeklyHours || 40);
+  // For DHL with customWeeklyHours, the actual shifts worked equals total hours / shift length.
+  // plannedPattern.indexes.length only covers the base rotation (may need extra OT shifts to
+  // reach the custom target — those are tracked in requiredOtShifts but not in indexes).
   const normalShifts = plannedPattern
-    ? plannedPattern.indexes.length
+    ? (cfg.customWeeklyHours != null
+        ? Math.round(cfg.customWeeklyHours / cfg.shiftHours)
+        : plannedPattern.indexes.length)
     : nonDhlTotalH / (cfg.shiftHours || 8);
   const normalWeekendHours = plannedPattern ? plannedPattern.weekendHours : 0;
-  const baseGross = projectedGross(isWeek2, cfg);
+  // Use the actual week's grossPay when available so the impact delta is computed
+  // against the same base that computeNet uses for that week.
+  const baseGross = weekMeta != null ? weekMeta.grossPay : projectedGross(isWeek2, cfg);
   let grossLost = 0, grossGained = 0, hoursLostForPTO = 0;
   if (event.type === "missed_unpaid") {
     const actualShifts = Math.max(normalShifts - (event.shiftsLost || 0), 0);

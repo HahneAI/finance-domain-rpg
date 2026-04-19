@@ -846,9 +846,14 @@ function prevMonth(yyyyMM) {
 export function computeBucketModel(logs, cfg) {
   const payoutRate = cfg.bucketPayoutRate ?? (cfg.baseRate / 2);
   const cap = cfg.bucketCap ?? 128;
-  let balance = cfg.bucketStartBalance ?? 64;
 
-  // Job start month: week 0 ends at FISCAL_YEAR_START; firstActiveIdx weeks of 7 days forward = first active week end
+  // When both override fields are set, use the override as the rolling starting point for
+  // months after the override month. Without bucketOverrideMonth (legacy), fall back to
+  // replacing currentBalance at the end (old behavior preserved for backward compat).
+  const overrideActive = cfg.bucketBalanceOverride != null && cfg.bucketOverrideMonth != null;
+  let balance = overrideActive ? cfg.bucketBalanceOverride : (cfg.bucketStartBalance ?? 64);
+
+  // Job start month — always computed but only used as loop start when override is inactive
   const [wzeY, wzeM, wzeD] = FISCAL_YEAR_START.split('-').map(Number);
   const weekZeroEnd = new Date(wzeY, wzeM - 1, wzeD);
   const firstWeekEnd = new Date(weekZeroEnd.getTime() + (cfg.firstActiveIdx ?? 7) * 7 * 86400000);
@@ -858,18 +863,19 @@ export function computeBucketModel(logs, cfg) {
   const today = toLocalIso(new Date());
   const currentMonth = today.slice(0, 7);
 
-  // Group missed_unapproved hours by YYYY-MM from event.weekEnd
+  // Group unapproved-absence hours by YYYY-MM from event.weekEnd
   const hoursByMonth = {};
   logs.forEach(e => {
-    if (e.type === "missed_unapproved" && e.weekEnd) {
+    if ((e.type === "missed_unapproved" || e.type === "pto_unapproved") && e.weekEnd) {
       const month = e.weekEnd.slice(0, 7);
       hoursByMonth[month] = (hoursByMonth[month] || 0) + (e.hoursLost || 0);
     }
   });
 
-  // Completed months: job start through the month before current month
+  // Loop start: month after override month (its balance is given) or job start
+  const loopStartMonth = overrideActive ? addOneMonth(cfg.bucketOverrideMonth) : jobStartMonth;
   const lastCompleted = prevMonth(currentMonth);
-  const completedMonths = jobStartMonth <= lastCompleted ? monthRange(jobStartMonth, lastCompleted) : [];
+  const completedMonths = loopStartMonth <= lastCompleted ? monthRange(loopStartMonth, lastCompleted) : [];
 
   const monthHistory = [];
   for (const month of completedMonths) {
@@ -886,8 +892,8 @@ export function computeBucketModel(logs, cfg) {
     balance = closingBalance;
   }
 
-  // Current in-progress month — manual override replaces computed balance when set
-  const currentBalance = (cfg.bucketBalanceOverride != null) ? cfg.bucketBalanceOverride : balance;
+  // Current balance: naturally computed when overrideActive; legacy snapshot override otherwise
+  const currentBalance = (!overrideActive && cfg.bucketBalanceOverride != null) ? cfg.bucketBalanceOverride : balance;
   const currentM = hoursByMonth[currentMonth] || 0;
   const currentTier = currentM === 0 ? 1 : currentM <= 12 ? 2 : currentM <= 24 ? 3 : 4;
   const hoursToNextTier = currentTier === 1 ? null : currentTier === 2 ? 12 - currentM : currentTier === 3 ? 24 - currentM : 0;
@@ -966,6 +972,11 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
     const normalOT = Math.max(normalH - cfg.otThreshold, 0), actualOT = Math.max(normalH - ptoH - cfg.otThreshold, 0);
     // PTO pays at baseRate; night diff applies to hours worked only — both deltas included
     grossLost = ptoH * nightDiffPerHour + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
+  } else if (event.type === "pto_unapproved") {
+    // PTO covers paycheck but absence was unapproved: same gross impact as pto + bucket deducted below
+    const ptoH = event.hoursLost || 0, normalH = normalShifts * cfg.shiftHours;
+    const normalOT = Math.max(normalH - cfg.otThreshold, 0), actualOT = Math.max(normalH - ptoH - cfg.otThreshold, 0);
+    grossLost = ptoH * nightDiffPerHour + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
   } else if (event.type === "missed_unapproved") {
     // Hours missed × (base rate + night diff); bucket hit tracked separately
     grossLost = (event.hoursLost || 0) * (cfg.baseRate + nightDiffPerHour); hoursLostForPTO = event.hoursLost || 0;
@@ -986,7 +997,7 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
   const affectsK401 = weekDate && (!k401ActivationDate || weekDate >= k401ActivationDate);
   return {
     grossLost, grossGained, netLost, netGained, baseGross, hoursLostForPTO,
-    bucketHoursDeducted: event.type === "missed_unapproved" ? (event.hoursLost || 0) : 0,
+    bucketHoursDeducted: (event.type === "missed_unapproved" || event.type === "pto_unapproved") ? (event.hoursLost || 0) : 0,
     k401kLost: affectsK401 ? grossLost * cfg.k401Rate : 0,
     k401kMatchLost: affectsK401 ? grossLost * (cfg.employerPreset === "DHL" ? dhlEmployerMatchRate(cfg.k401Rate) : cfg.k401MatchRate) : 0,
     k401kGained: affectsK401 ? grossGained * cfg.k401Rate : 0,

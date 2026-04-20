@@ -688,7 +688,7 @@ export default function App() {
       />}
       {currentView === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config} isDHL={isDHL} isAdmin={isAdmin}
-        setConfig={setConfig}
+        setConfig={setConfig} weekConfirmations={weekConfirmations}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}
@@ -716,6 +716,7 @@ export default function App() {
         showExtra={showExtra}
         setShowExtra={setShowExtra}
         isAdmin={isAdmin}
+        today={today}
       />}
     </>
   );

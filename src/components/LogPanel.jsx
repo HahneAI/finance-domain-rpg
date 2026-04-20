@@ -34,7 +34,7 @@ export function LogPanel({
   logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals,
   fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isDHL = false, isAdmin = false, setConfig,
   logK401kLost = 0, logK401kMatchLost = 0, logK401kGained = 0, logK401kMatchGained = 0, logPTOHoursLost = 0,
-  ptoGoal, setPtoGoal,
+  ptoGoal, setPtoGoal, weekConfirmations = {},
 }) {
   const blank = {
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
@@ -89,22 +89,63 @@ export function LogPanel({
     : null;
   const ptoCutoffRaw = ptoGoal?.targetDate ? new Date(ptoGoal.targetDate) : null;
   const ptoCutoff = ptoCutoffRaw && !Number.isNaN(ptoCutoffRaw.getTime()) ? ptoCutoffRaw : null;
+  // Base projected accrual (used in non-override display cards)
   const ptoBs = ptoCutoff
     ? allWeeks.filter(w => w.active && w.weekEnd <= ptoCutoff).reduce((s, w) => s + w.totalHours, 0) / 20
     : 0;
-  const adjP = Math.max(ptoBs - logPTOHoursLost / 20, 0);
-  const effectiveAdjP = config.ptoHoursOverride != null ? config.ptoHoursOverride : adjP;
   const negCap = ptoGoal?.negativeBalanceCap ?? 40;
+
+  // Direct PTO consumption across ALL events — used in both override and non-override models.
+  // pto events consume ptoHours; pto_unapproved events consume hoursLost.
+  // hoursLostForPTO (captured in logPTOHoursLost) only tracks accrual reduction from missed
+  // shifts — it doesn't cover direct balance draws, so we compute them separately.
+  const ptoUsedAll = logs
+    .filter(e => e.type === "pto" || e.type === "pto_unapproved")
+    .reduce((s, e) => s + (e.type === "pto" ? (e.ptoHours || 0) : (e.hoursLost || 0)), 0);
+
+  // Rolling PTO balance when override is active:
+  //   balance = override + earned-from-confirmed-weeks - pto-consumed-after-idx - accrual-lost-after-idx
+  // Without override: projected-accrual model minus accrual losses and direct consumption.
+  const overrideIdx = config.ptoOverrideWeekIdx ?? -1;
+  const ptoEarnedSinceOverride = config.ptoHoursOverride != null
+    ? allWeeks
+        .filter(w => w.active && w.idx > overrideIdx && weekConfirmations[w.idx])
+        .reduce((s, w) => s + w.totalHours, 0) / 20
+    : 0;
+  const ptoConsumedSinceOverride = config.ptoHoursOverride != null
+    ? logs
+        .filter(e => Number(e.weekIdx) > overrideIdx && (e.type === "pto" || e.type === "pto_unapproved"))
+        .reduce((s, e) => s + (e.type === "pto" ? (e.ptoHours || 0) : (e.hoursLost || 0)), 0)
+    : 0;
+  const ptoAccrualLostSinceOverride = config.ptoHoursOverride != null
+    ? logs
+        .filter(e => Number(e.weekIdx) > overrideIdx && ["missed_unpaid", "missed_unapproved", "partial"].includes(e.type))
+        .reduce((s, e) => {
+          if (e.type === "missed_unpaid") return s + (parseInt(e.shiftsLost) || 0) * (config.shiftHours ?? 12);
+          return s + (parseFloat(e.hoursLost) || 0);
+        }, 0) / 20
+    : 0;
+  const effectiveAdjP = config.ptoHoursOverride != null
+    ? config.ptoHoursOverride + ptoEarnedSinceOverride - ptoConsumedSinceOverride - ptoAccrualLostSinceOverride
+    : Math.max(ptoBs - logPTOHoursLost / 20 - ptoUsedAll, 0);
   const avail = effectiveAdjP + negCap;
   const hoursNeed = ptoGoal?.hoursNeeded ?? 0;
   const onTrack = ptoGoal ? avail >= hoursNeed : false;
   const shiftHours = config.shiftHours ?? 12;
+
+  // Benefit gates — DHL checks selectedBenefits enrollment; non-DHL uses config values directly.
+  const enrolledBenefits = new Set(Array.isArray(config.selectedBenefits) ? config.selectedBenefits : []);
+  const has401k = isDHL ? (enrolledBenefits.has("k401") && config.k401Rate > 0) : config.k401Rate > 0;
+  const hasPTO = isDHL;
+  const hasBucket = isDHL;
 
   const [formOpen, setFormOpen] = useState(false);
   const [formVals, setFormVals] = useState(EMPTY_FORM);
   const [editMode, setEditMode] = useState(false);
   const [editingPto, setEditingPto] = useState(false);
   const [ptoInput, setPtoInput] = useState("");
+  const [editingBucket, setEditingBucket] = useState(false);
+  const [bucketInput, setBucketInput] = useState("");
 
   function openAdd() {
     setFormVals(EMPTY_FORM);
@@ -140,7 +181,7 @@ export function LogPanel({
 
   // ── Attendance History ──
   // Only absence-type events feed the history view; bonus/other_loss are irrelevant here.
-  const attendanceLogs = logs.filter(e => ["missed_unpaid", "missed_unapproved", "partial"].includes(e.type));
+  const attendanceLogs = logs.filter(e => ["missed_unpaid", "missed_unapproved", "pto_unapproved", "partial"].includes(e.type));
 
   // Group by calendar month (YYYY-MM) for the monthly breakdown table.
   // missed_unpaid     → shiftsLost (full approved shifts)
@@ -153,14 +194,14 @@ export function LogPanel({
     if (!byMonth[month]) byMonth[month] = { unpaid: 0, unapproved: 0, unapprovedH: 0, partial: 0, partialH: 0 };
     const m = byMonth[month];
     if (e.type === "missed_unpaid")     m.unpaid       += parseInt(e.shiftsLost) || 0;
-    if (e.type === "missed_unapproved") { m.unapproved += normalizeDays(e.missedDays).length; m.unapprovedH += parseFloat(e.hoursLost) || 0; }
+    if (e.type === "missed_unapproved" || e.type === "pto_unapproved") { m.unapproved += normalizeDays(e.missedDays).length; m.unapprovedH += parseFloat(e.hoursLost) || 0; }
     if (e.type === "partial")           { m.partial    += 1;                                  m.partialH    += parseFloat(e.hoursLost) || 0; }
   }
 
   // Count how many times each day-of-week appears across missed/unapproved events.
   // Partials excluded — a partial shift isn't a full absence.
   const dowCounts = {};
-  for (const e of logs.filter(e => ["missed_unpaid", "missed_unapproved"].includes(e.type))) {
+  for (const e of logs.filter(e => ["missed_unpaid", "missed_unapproved", "pto_unapproved"].includes(e.type))) {
     for (const d of normalizeDays(e.missedDays)) dowCounts[d] = (dowCounts[d] || 0) + 1;
   }
   // Sorted descending so the most-missed day leads in the pill row.
@@ -385,6 +426,28 @@ export function LogPanel({
       </div>
     )}
 
+    {vals.type === "pto_unapproved" && (
+      <div style={{ gridColumn: "1 / -1" }}>
+        <DayPicker vals={vals} set={set} />
+        <div style={{ marginTop: "8px", padding: "8px 10px", background: "#1e1510", border: "1px solid #c8922a44", borderRadius: "4px", fontSize: "10px", color: "#c8922a", lineHeight: "1.6" }}>
+          ⚠ PTO covers pay — but absence was unapproved. PTO hours consumed AND attendance bucket hit ({normalizeDays(vals.missedDays).length * config.shiftHours}h this entry).
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
+          <div>
+            <label style={lS}>Days / Shifts</label>
+            <input type="number" min="0" readOnly value={normalizeDays(vals.missedDays).length}
+              style={{ ...iS, marginTop: "4px", opacity: 0.5 }} />
+          </div>
+          <div>
+            <label style={lS}>Hours (PTO + Bucket)</label>
+            <input type="number" min="0" step="0.5" value={vals.hoursLost ?? 0}
+              onChange={e => set(v => ({ ...v, hoursLost: e.target.value }))}
+              style={{ ...iS, marginTop: "4px" }} />
+          </div>
+        </div>
+      </div>
+    )}
+
     {vals.type === "pto" && (
       <div><label style={lS}>PTO Hours (${config.baseRate}/hr flat)</label>
         <input type="number" min="0" value={vals.ptoHours} onChange={e => set(v => ({ ...v, ptoHours: e.target.value }))} style={iS} />
@@ -435,26 +498,6 @@ export function LogPanel({
   return (<div>
     <PanelHero eyebrow="Activity & Projections">Event Log</PanelHero>
 
-    {/* Top priority metrics (DHL only) */}
-    {isDHL && (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "12px", marginBottom: "20px" }}>
-        <Card
-          label="PTO Balance"
-          val={`${effectiveAdjP.toFixed(1)} hrs`}
-          sub="Current available accrual"
-          status={effectiveAdjP >= 0 ? "green" : "red"}
-          color={effectiveAdjP >= 0 ? "var(--color-green)" : "var(--color-red)"}
-        />
-        <Card
-          label="Bucket Hours"
-          val={bucketModel ? `${bucketModel.currentBalance} hrs` : "—"}
-          sub={bucketModel ? `Tier ${bucketModel.currentTier} · ${bucketModel.status}` : "No bucket data"}
-          status={bucketModel?.status === "safe" ? "green" : (bucketModel?.status === "caution" ? "gold" : "red")}
-          color={bucketModel?.status === "safe" ? "var(--color-green)" : (bucketModel?.status === "caution" ? "var(--color-gold)" : "var(--color-red)")}
-        />
-      </div>
-    )}
-
     {/* Current week indicator */}
     {currentWeek && <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "10px 14px", marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Current fiscal week</div>
@@ -464,178 +507,6 @@ export function LogPanel({
         <span style={{ color: "var(--color-green)", fontWeight: "bold" }}>{fiscalWeekLabel}</span>
       </div>
     </div>}
-
-    {/* Hero cards */}
-    <div style={{ position: "relative", marginBottom: "20px" }}>
-      {pulseKey > 0 && (
-        <div
-          key={pulseKey}
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: "6px",
-            pointerEvents: "none",
-            zIndex: 2,
-            background: "radial-gradient(circle at 50% 50%, rgba(34,197,94,0.16) 0%, transparent 72%)",
-            animation: "logConfirmPulse 320ms ease-out forwards",
-          }}
-        />
-      )}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px" }}>
-        <Card label="Total Net Lost" val={f(tot.nL)} rawVal={tot.nL} color="var(--color-red)" />
-        <Card label="PTO Accrual Lost" val={`${(tot.pto / 20).toFixed(1)} hrs`} sub={`${tot.pto}h ÷ 20`} color="#888" />
-        <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`} sub="Unapproved absences" color="#e8622a" />
-      </div>
-    </div>
-
-    {/* Compact bucket status widget */}
-    {bucketModel && (() => {
-      const bm = bucketModel;
-      const cap = config.bucketCap ?? 128;
-      const bandColor = bm.status === "safe" ? "var(--color-green)" : bm.status === "caution" ? "var(--color-gold)" : "var(--color-red)";
-      const pct = Math.min((bm.currentBalance / cap) * 100, 100);
-      const now = new Date();
-      const monthLabel = LOG_MONTH_SHORT[now.getMonth()];
-      return (
-        <div style={{ background: "var(--color-bg-surface)", border: `1px solid ${bandColor}33`, borderRadius: "6px", padding: "12px 14px", marginBottom: "20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "7px" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Bucket Balance</div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "12px", fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h <span style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>/ {cap}h</span></span>
-              <span style={{ fontSize: "9px", background: bandColor + "22", color: bandColor, padding: "2px 7px", borderRadius: "12px", letterSpacing: "1.5px" }}>● {bm.status.toUpperCase()}</span>
-            </div>
-          </div>
-          <div style={{ height: "5px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "7px" }}>
-            <div style={{ height: "100%", width: `${pct}%`, background: bandColor, borderRadius: "3px" }} />
-          </div>
-          <div style={{ fontSize: "10px" }}>
-            <span style={{ color: "#666" }}>{monthLabel}: </span>
-            {bm.currentTier === 1 && <span style={{ color: "var(--color-green)" }}>Tier 1 · any unapproved absence changes tier · full breakdown below</span>}
-            {bm.currentTier === 2 && <span style={{ color: "var(--color-gold)" }}>Tier 2 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
-            {bm.currentTier === 3 && <span style={{ color: "var(--color-red)" }}>Tier 3 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to worst tier</span>}
-            {bm.currentTier === 4 && <span style={{ color: "var(--color-red)" }}>Tier 4 · worst tier · {bm.currentM}h unapproved this month</span>}
-          </div>
-        </div>
-      );
-    })()}
-
-    {/* Consolidated pre-log summary */}
-    <LiquidGlass purpose="log-summary" tone="teal" intensity="light" style={{ borderRadius: "6px", marginBottom: "20px" }}>
-    <div style={{ padding: "14px" }}>
-      <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "10px" }}>
-        Log Effect Summary
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: "10px 14px", marginBottom: "10px" }}>
-        <div>
-          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Total Gross Lost</div>
-          <div style={{ fontSize: "14px", color: "var(--color-red)", fontWeight: "bold" }}>{f(tot.gL)}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adjusted Take-Home</div>
-          <div style={{ fontSize: "14px", color: "var(--color-green)", fontWeight: "bold" }}>{f0(adjTH)}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adj. Weekly Unalloc.</div>
-          <div style={{ fontSize: "14px", color: adjWA > 0 ? "var(--color-green)" : "var(--color-red)", fontWeight: "bold" }}>{f(adjWA)}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Lost</div>
-          <div style={{ fontSize: "14px", color: "#7a8bbf", fontWeight: "bold" }}>{f(tot.k4)}</div>
-        </div>
-      </div>
-      <div style={{ borderTop: "1px solid #1f1f1f", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
-        <div>
-          <div style={{ fontSize: "10px", letterSpacing: "2px", color: ok ? "var(--color-green)" : "var(--color-red)", textTransform: "uppercase", marginBottom: "4px" }}>Goals Impact</div>
-          <div style={{ fontSize: "12px", color: "#aaa" }}>Adj. savings: <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f0(projS)}</span> · Goals: <span style={{ color: "var(--color-gold)" }}>{f0(totGoals)}</span></div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: "14px", fontWeight: "bold", color: ok ? "var(--color-green)" : "var(--color-red)" }}>{ok ? "All goals on track" : "Goals at risk"}</div>
-          <div style={{ fontSize: "11px", color: "#666" }}>{Math.ceil(totGoals / adjWA)} wks to fund all goals</div>
-        </div>
-      </div>
-    </div>
-    </LiquidGlass>
-
-    {/* Attendance History */}
-    {attendanceLogs.length > 0 && (
-      <div style={{ marginBottom: "20px" }}>
-        <button
-          onClick={() => setHistOpen(o => !o)}
-          style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: histOpen ? "6px 6px 0 0" : "6px", padding: "10px 14px", cursor: "pointer" }}
-        >
-          <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Attendance History</span>
-          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {(ytdUnpaid + ytdUnapproved) > 0 && <span style={{ fontSize: "11px", color: "var(--color-red)" }}>{ytdUnpaid + ytdUnapproved} days missed YTD</span>}
-            <span style={{ fontSize: "10px", color: "#666" }}>{histOpen ? "▲" : "▼"}</span>
-          </span>
-        </button>
-
-        {histOpen && (
-          <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderTop: "none", borderRadius: "0 0 6px 6px", padding: "14px" }}>
-
-            {/* YTD summary tiles */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px", marginBottom: "14px" }}>
-              <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
-                <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-red)", fontFamily: "var(--font-mono)" }}>{ytdUnpaid}</div>
-                <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Unpaid Shifts</div>
-              </div>
-              <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
-                <div style={{ fontSize: "20px", fontWeight: "bold", color: "#e8622a", fontFamily: "var(--font-mono)" }}>{ytdUnapproved}</div>
-                <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Unapprov. Days</div>
-              </div>
-              <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
-                <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>{ytdPartial}</div>
-                <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Partial Shifts</div>
-              </div>
-            </div>
-
-            {/* Monthly breakdown */}
-            {Object.keys(byMonth).length > 0 && (
-              <div style={{ marginBottom: "14px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "6px" }}>By Month</div>
-                <div style={{ display: "grid", gridTemplateColumns: "70px 1fr 1fr 1fr", gap: "4px 8px", fontSize: "9px", color: "#444", textTransform: "uppercase", marginBottom: "4px" }}>
-                  <span>Month</span><span>Unpaid</span><span>Unapprov.</span><span>Partial</span>
-                </div>
-                {Object.entries(byMonth).sort().map(([month, m]) => {
-                  const [yr, mo] = month.split("-");
-                  const label = `${LOG_MONTH_SHORT[parseInt(mo) - 1]} ${yr}`;
-                  return (
-                    <div key={month} style={{ display: "grid", gridTemplateColumns: "70px 1fr 1fr 1fr", gap: "4px 8px", padding: "4px 0", borderBottom: "1px solid #1a1a1a" }}>
-                      <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>{label}</span>
-                      <span style={{ fontSize: "11px", color: m.unpaid > 0 ? "var(--color-red)" : "#333", fontFamily: "var(--font-mono)" }}>{m.unpaid > 0 ? `${m.unpaid}sh` : "—"}</span>
-                      <span style={{ fontSize: "11px", color: m.unapproved > 0 ? "#e8622a" : "#333", fontFamily: "var(--font-mono)" }}>{m.unapproved > 0 ? `${m.unapproved}d·${m.unapprovedH}h` : "—"}</span>
-                      <span style={{ fontSize: "11px", color: m.partial > 0 ? "var(--color-text-secondary)" : "#333", fontFamily: "var(--font-mono)" }}>{m.partial > 0 ? `${m.partial}·${m.partialH}h` : "—"}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Day-of-week pattern */}
-            {dowSorted.length > 0 && (
-              <div>
-                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "6px" }}>Day Pattern</div>
-                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                  {dowSorted.map(([day, count]) => {
-                    const pct = totalMissedDays > 0 ? count / totalMissedDays : 0;
-                    const isWeekend = day === "Sat" || day === "Sun";
-                    const col = pct >= 0.3 ? "var(--color-red)" : pct >= 0.15 ? "var(--color-gold)" : "var(--color-text-secondary)";
-                    return (
-                      <div key={day} style={{ display: "flex", alignItems: "center", gap: "5px", background: "var(--color-bg-raised)", padding: "4px 10px", borderRadius: "12px" }}>
-                        <span style={{ fontSize: "10px", color: isWeekend ? "var(--color-gold)" : col, fontWeight: pct >= 0.2 ? "bold" : "normal", textTransform: "uppercase", letterSpacing: "1px" }}>{day.toUpperCase()}</span>
-                        <span style={{ fontSize: "11px", color: col, fontFamily: "var(--font-mono)", fontWeight: "bold" }}>{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{ fontSize: "10px", color: "#444", marginTop: "6px" }}>{totalMissedDays} total missed day{totalMissedDays !== 1 ? "s" : ""} logged</div>
-              </div>
-            )}
-
-          </div>
-        )}
-      </div>
-    )}
 
     {/* Log header + add button */}
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
@@ -697,8 +568,8 @@ export function LogPanel({
       const imp  = calcEventImpact(entry, config);
       const ev   = EVENT_TYPES[entry.type] ?? { label: entry.type, color: "var(--color-text-secondary)", icon: "?" };
       const isB  = entry.type === "bonus";
-      const isUA = entry.type === "missed_unapproved";
-      const ak   = entry.weekEnd && new Date(entry.weekEnd) >= new Date(config.k401StartDate);
+      const isUA = entry.type === "missed_unapproved" || entry.type === "pto_unapproved";
+      const ak   = has401k && entry.weekEnd && new Date(entry.weekEnd) >= new Date(config.k401StartDate);
       const isEditing = editId === entry.id;
       const missedArr = normalizeDays(entry.missedDays);
 
@@ -723,6 +594,7 @@ export function LogPanel({
                 {editVals.type === "bonus" && <div>+${parseFloat(editVals.amount) || 0} · {parseInt(editVals.shiftsGained) || 0} shift(s) · {parseFloat(editVals.hoursGained) || 0}h gained</div>}
                 {editVals.type === "partial" && <div>{parseFloat(editVals.hoursLost) || 0}h partial shift</div>}
                 {editVals.type === "pto" && <div>{parseFloat(editVals.ptoHours) || 0}h PTO</div>}
+                {editVals.type === "pto_unapproved" && <div>{parseFloat(editVals.hoursLost) || 0}h PTO (unapproved) · bucket hit</div>}
                 {editVals.type === "other_loss" && <div>-${parseFloat(editVals.amount) || 0} other loss</div>}
               </div>
             )}
@@ -747,7 +619,7 @@ export function LogPanel({
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
                   <span style={{ fontSize: "12px", background: ev.color + "22", color: ev.color, padding: "2px 8px", borderRadius: "12px" }}>{ev.icon} {ev.label}</span>
                   <span style={{ fontSize: "11px", color: "#777" }}>{formatRotationDisplay(entry.weekRotation, { isAdmin })}</span>
-                  {isUA && <span style={{ fontSize: "9px", background: "#e8622a22", color: "#e8622a", padding: "2px 6px", borderRadius: "12px", fontWeight: "bold" }}>⚠ BUCKET HIT</span>}
+                  {hasBucket && isUA && <span style={{ fontSize: "9px", background: "#e8622a22", color: "#e8622a", padding: "2px 6px", borderRadius: "12px", fontWeight: "bold" }}>⚠ BUCKET HIT</span>}
                   {ak   && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "12px" }}>401k</span>}
                 </div>
                 <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "2px" }}>Week ending {entry.weekEnd || "—"}</div>
@@ -759,8 +631,8 @@ export function LogPanel({
                 <div style={{ fontSize: "10px", color: "#666" }}>gross · proj {f(imp.baseGross)}</div>
                 <div style={{ fontSize: "13px", color: isB ? "var(--color-green)" : "var(--color-red)", marginTop: "2px" }}>{isB ? "+" : "-"}{f(isB ? imp.netGained : imp.netLost)} net</div>
                 {ak && imp.k401kLost > 0 && <div style={{ fontSize: "10px", color: "#7a8bbf", marginTop: "2px" }}>-{f(imp.k401kLost)} 401k</div>}
-                {imp.hoursLostForPTO > 0 && <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "2px" }}>-{(imp.hoursLostForPTO / 20).toFixed(2)} PTO accrual</div>}
-                {isUA && <div style={{ fontSize: "10px", color: "#e8622a", marginTop: "2px" }}>-{imp.bucketHoursDeducted}h bucket</div>}
+                {hasPTO && imp.hoursLostForPTO > 0 && <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "2px" }}>-{(imp.hoursLostForPTO / 20).toFixed(2)} PTO accrual</div>}
+                {hasBucket && isUA && <div style={{ fontSize: "10px", color: "#e8622a", marginTop: "2px" }}>-{imp.bucketHoursDeducted}h bucket</div>}
               </div>
             </div>
             <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -768,6 +640,7 @@ export function LogPanel({
                 {entry.type === "missed_unpaid"     && `${entry.shiftsLost} shift(s) · ${entry.weekendShifts} wknd · ${entry.shiftsLost * config.shiftHours}h`}
                 {entry.type === "missed_unapproved" && `${entry.hoursLost}h unapproved`}
                 {entry.type === "pto"               && `${entry.ptoHours}h PTO @ $${config.baseRate}`}
+                {entry.type === "pto_unapproved"    && `${entry.hoursLost}h PTO (unapproved) @ $${config.baseRate}`}
                 {entry.type === "partial"           && `${entry.hoursLost}h partial`}
                 {entry.type === "bonus"             && `+${f(entry.amount)} bonus`}
                 {entry.type === "other_loss"        && `-${f(entry.amount)} other`}
@@ -788,8 +661,140 @@ export function LogPanel({
       </div>;
     })}
 
-    {/* Bottom stack ported from BenefitsPanel */}
-    {currentWeek && <div style={{ background: k401Active ? "#1a3a20" : "#1e1e2a", border: `1px solid ${k401Active ? "rgba(76,175,125,0.27)" : "#7a8bbf44"}`, borderRadius: "6px", padding: "10px 14px", margin: "24px 0 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+    {/* ── Log Effect Summary ── */}
+    <div style={{ position: "relative", marginTop: "20px", marginBottom: "20px" }}>
+      {pulseKey > 0 && (
+        <div
+          key={pulseKey}
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "6px",
+            pointerEvents: "none",
+            zIndex: 2,
+            background: "radial-gradient(circle at 50% 50%, rgba(34,197,94,0.16) 0%, transparent 72%)",
+            animation: "logConfirmPulse 320ms ease-out forwards",
+          }}
+        />
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${1 + (hasPTO ? 1 : 0) + (hasBucket ? 1 : 0)},1fr)`, gap: "12px" }}>
+        <Card label="Total Net Lost" val={f(tot.nL)} rawVal={tot.nL} color="var(--color-red)" />
+        {hasPTO && <Card label="PTO Accrual Lost" val={`${(tot.pto / 20).toFixed(1)} hrs`} sub={`${tot.pto}h ÷ 20`} color="#888" />}
+        {hasBucket && <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`} sub="Unapproved absences" color="#e8622a" />}
+      </div>
+    </div>
+
+    <LiquidGlass purpose="log-summary" tone="teal" intensity="light" style={{ borderRadius: "6px", marginBottom: "20px" }}>
+    <div style={{ padding: "14px" }}>
+      <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "10px" }}>
+        Log Effect Summary
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: "10px 14px", marginBottom: "10px" }}>
+        <div>
+          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Total Gross Lost</div>
+          <div style={{ fontSize: "14px", color: "var(--color-red)", fontWeight: "bold" }}>{f(tot.gL)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adjusted Take-Home</div>
+          <div style={{ fontSize: "14px", color: "var(--color-green)", fontWeight: "bold" }}>{f0(adjTH)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adj. Weekly Unalloc.</div>
+          <div style={{ fontSize: "14px", color: adjWA > 0 ? "var(--color-green)" : "var(--color-red)", fontWeight: "bold" }}>{f(adjWA)}</div>
+        </div>
+        {has401k && <div>
+          <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Lost</div>
+          <div style={{ fontSize: "14px", color: "#7a8bbf", fontWeight: "bold" }}>{f(tot.k4)}</div>
+        </div>}
+      </div>
+      <div style={{ borderTop: "1px solid #1f1f1f", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
+        <div>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", color: ok ? "var(--color-green)" : "var(--color-red)", textTransform: "uppercase", marginBottom: "4px" }}>Goals Impact</div>
+          <div style={{ fontSize: "12px", color: "#aaa" }}>Adj. savings: <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f0(projS)}</span> · Goals: <span style={{ color: "var(--color-gold)" }}>{f0(totGoals)}</span></div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: "14px", fontWeight: "bold", color: ok ? "var(--color-green)" : "var(--color-red)" }}>{ok ? "All goals on track" : "Goals at risk"}</div>
+          <div style={{ fontSize: "11px", color: "#666" }}>{Math.ceil(totGoals / adjWA)} wks to fund all goals</div>
+        </div>
+      </div>
+    </div>
+    </LiquidGlass>
+
+    {/* ── Attendance History ── */}
+    {attendanceLogs.length > 0 && (
+      <div style={{ marginBottom: "20px" }}>
+        <button
+          onClick={() => setHistOpen(o => !o)}
+          style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: histOpen ? "6px 6px 0 0" : "6px", padding: "10px 14px", cursor: "pointer" }}
+        >
+          <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Attendance History</span>
+          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            {(ytdUnpaid + ytdUnapproved) > 0 && <span style={{ fontSize: "11px", color: "var(--color-red)" }}>{ytdUnpaid + ytdUnapproved} days missed YTD</span>}
+            <span style={{ fontSize: "10px", color: "#666" }}>{histOpen ? "▲" : "▼"}</span>
+          </span>
+        </button>
+        {histOpen && (
+          <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderTop: "none", borderRadius: "0 0 6px 6px", padding: "14px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px", marginBottom: "14px" }}>
+              <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
+                <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-red)", fontFamily: "var(--font-mono)" }}>{ytdUnpaid}</div>
+                <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Unpaid Shifts</div>
+              </div>
+              <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
+                <div style={{ fontSize: "20px", fontWeight: "bold", color: "#e8622a", fontFamily: "var(--font-mono)" }}>{ytdUnapproved}</div>
+                <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Unapprov. Days</div>
+              </div>
+              <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
+                <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>{ytdPartial}</div>
+                <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Partial Shifts</div>
+              </div>
+            </div>
+            {Object.keys(byMonth).length > 0 && (
+              <div style={{ marginBottom: "14px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "6px" }}>By Month</div>
+                <div style={{ display: "grid", gridTemplateColumns: "70px 1fr 1fr 1fr", gap: "4px 8px", fontSize: "9px", color: "#444", textTransform: "uppercase", marginBottom: "4px" }}>
+                  <span>Month</span><span>Unpaid</span><span>Unapprov.</span><span>Partial</span>
+                </div>
+                {Object.entries(byMonth).sort().map(([month, m]) => {
+                  const [yr, mo] = month.split("-");
+                  const label = `${LOG_MONTH_SHORT[parseInt(mo) - 1]} ${yr}`;
+                  return (
+                    <div key={month} style={{ display: "grid", gridTemplateColumns: "70px 1fr 1fr 1fr", gap: "4px 8px", padding: "4px 0", borderBottom: "1px solid #1a1a1a" }}>
+                      <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>{label}</span>
+                      <span style={{ fontSize: "11px", color: m.unpaid > 0 ? "var(--color-red)" : "#333", fontFamily: "var(--font-mono)" }}>{m.unpaid > 0 ? `${m.unpaid}sh` : "—"}</span>
+                      <span style={{ fontSize: "11px", color: m.unapproved > 0 ? "#e8622a" : "#333", fontFamily: "var(--font-mono)" }}>{m.unapproved > 0 ? `${m.unapproved}d·${m.unapprovedH}h` : "—"}</span>
+                      <span style={{ fontSize: "11px", color: m.partial > 0 ? "var(--color-text-secondary)" : "#333", fontFamily: "var(--font-mono)" }}>{m.partial > 0 ? `${m.partial}·${m.partialH}h` : "—"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {dowSorted.length > 0 && (
+              <div>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "6px" }}>Day Pattern</div>
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  {dowSorted.map(([day, count]) => {
+                    const pct = totalMissedDays > 0 ? count / totalMissedDays : 0;
+                    const isWeekend = day === "Sat" || day === "Sun";
+                    const col = pct >= 0.3 ? "var(--color-red)" : pct >= 0.15 ? "var(--color-gold)" : "var(--color-text-secondary)";
+                    return (
+                      <div key={day} style={{ display: "flex", alignItems: "center", gap: "5px", background: "var(--color-bg-raised)", padding: "4px 10px", borderRadius: "12px" }}>
+                        <span style={{ fontSize: "10px", color: isWeekend ? "var(--color-gold)" : col, fontWeight: pct >= 0.2 ? "bold" : "normal", textTransform: "uppercase", letterSpacing: "1px" }}>{day.toUpperCase()}</span>
+                        <span style={{ fontSize: "11px", color: col, fontFamily: "var(--font-mono)", fontWeight: "bold" }}>{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: "10px", color: "#444", marginTop: "6px" }}>{totalMissedDays} total missed day{totalMissedDays !== 1 ? "s" : ""} logged</div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* ── 401k ── */}
+    {has401k && currentWeek && <div style={{ background: k401Active ? "#1a3a20" : "#1e1e2a", border: `1px solid ${k401Active ? "rgba(76,175,125,0.27)" : "#7a8bbf44"}`, borderRadius: "6px", padding: "10px 14px", margin: "24px 0 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Status</div>
       {!hasValid401Start ? (
         <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Enrollment start date not set yet</div>
@@ -810,7 +815,7 @@ export function LogPanel({
       )}
     </div>}
 
-    <div style={{ marginBottom: "24px" }}>
+    {has401k && <div style={{ marginBottom: "24px" }}>
       <SectionHeader>401k Projections</SectionHeader>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
         <Card label="Proj. Your Contributions" val={f(bE)} rawVal={bE} color="#7a8bbf" size="18px" />
@@ -850,9 +855,9 @@ export function LogPanel({
           </div>
         );
       })()}
-    </div>
+    </div>}
 
-    {isDHL && (
+    {hasPTO && (
       <div style={{ marginBottom: "24px" }}>
         <SectionHeader>PTO Accrual</SectionHeader>
         <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "14px 16px", marginBottom: "14px" }}>
@@ -866,22 +871,43 @@ export function LogPanel({
           {editingPto ? (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <input {...iS} style={{ ...iS, width: "100px", padding: "6px 10px" }} type="number" min="0" step="0.5" value={ptoInput} onChange={e => setPtoInput(e.target.value)} placeholder="hours" autoFocus />
-              <SmBtn onClick={() => { const val = parseFloat(ptoInput); if (setConfig && Number.isFinite(val) && val >= 0) setConfig(c => ({ ...c, ptoHoursOverride: val })); setEditingPto(false); }} c="var(--color-bg-base)" bg="var(--color-gold)">Save</SmBtn>
+              <SmBtn onClick={() => { const val = parseFloat(ptoInput); if (setConfig && Number.isFinite(val) && val >= 0) setConfig(c => ({ ...c, ptoHoursOverride: val, ptoOverrideWeekIdx: currentWeek?.idx ?? 0 })); setEditingPto(false); }} c="var(--color-bg-base)" bg="var(--color-gold)">Save</SmBtn>
               <SmBtn onClick={() => setEditingPto(false)} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Cancel</SmBtn>
             </div>
           ) : (
             <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
               <SmBtn onClick={() => { setPtoInput(String(effectiveAdjP.toFixed(1))); setEditingPto(true); }} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Set Balance</SmBtn>
-              {config.ptoHoursOverride != null && <SmBtn onClick={() => setConfig?.(c => ({ ...c, ptoHoursOverride: null }))} c="var(--color-text-disabled)" bg="var(--color-bg-raised)">Clear Override</SmBtn>}
+              {config.ptoHoursOverride != null && <SmBtn onClick={() => setConfig?.(c => ({ ...c, ptoHoursOverride: null, ptoOverrideWeekIdx: null }))} c="var(--color-text-disabled)" bg="var(--color-bg-raised)">Clear Override</SmBtn>}
             </div>
           )}
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
           <Card label="Accrual Rate" val="1 hr / 20 worked" color="#7eb8c9" size="14px" />
-          {ptoGoal ? (<>
+          {config.ptoHoursOverride != null ? (<>
+            {/* Override active — show delta cards relative to override starting point */}
+            <Card
+              label="Earned Since Override"
+              val={`+${ptoEarnedSinceOverride.toFixed(1)} hrs`}
+              sub={`${Object.values(weekConfirmations).filter(Boolean).length > 0 ? "from confirmed weeks" : "no weeks confirmed yet"}`}
+              color="var(--color-green)" size="14px"
+            />
+            {(ptoConsumedSinceOverride > 0 || ptoAccrualLostSinceOverride > 0)
+              ? <Card
+                  label="Used / Lost Since Override"
+                  val={`-${(ptoConsumedSinceOverride + ptoAccrualLostSinceOverride).toFixed(1)} hrs`}
+                  sub={[ptoConsumedSinceOverride > 0 && `${ptoConsumedSinceOverride.toFixed(1)} used`, ptoAccrualLostSinceOverride > 0 && `${ptoAccrualLostSinceOverride.toFixed(1)} accrual`].filter(Boolean).join(" · ")}
+                  color="var(--color-red)" size="14px"
+                />
+              : <Card label="Negative Balance Cap" val={`${negCap} hrs`} color="#888" size="14px" />
+            }
+          </>) : ptoGoal ? (<>
+            {/* No override — show projected accrual toward goal */}
             <Card label={`Base Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${ptoBs.toFixed(1)} hrs`} color="var(--color-text-primary)" size="18px" />
-            {logPTOHoursLost > 0 ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" /> : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="#888" size="14px" />}
+            {logPTOHoursLost > 0
+              ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
+              : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="#888" size="14px" />
+            }
           </>) : (<>
             <Card label="Accrued by Leave Date" val="— set a goal" color="var(--color-text-disabled)" size="14px" />
             <Card label="Negative Balance Cap" val="40 hrs (after 90d)" color="#888" size="14px" />
@@ -927,13 +953,89 @@ export function LogPanel({
       </div>
     )}
 
-    {bucketModel && (() => {
+    {hasBucket && (() => {
       const bm = bucketModel;
+      const cap = config.bucketCap ?? 128;
       const bandColor = bm.status === "safe" ? "var(--color-green)" : bm.status === "caution" ? "var(--color-gold)" : "var(--color-red)";
       const bandBg = bm.status === "safe" ? "#1a2d1e" : bm.status === "caution" ? "#2d2710" : "#2d1a1a";
       return (
         <div style={{ marginBottom: "24px" }}>
           <SectionHeader>Attendance Bucket</SectionHeader>
+
+          {/* Compact status bar */}
+          {(() => {
+            const pct = Math.min((bm.currentBalance / cap) * 100, 100);
+            const monthLabel = LOG_MONTH_SHORT[now.getMonth()];
+            return (
+              <div style={{ background: "var(--color-bg-surface)", border: `1px solid ${bandColor}33`, borderRadius: "6px", padding: "12px 14px", marginBottom: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "7px" }}>
+                  <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Bucket Balance</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "12px", fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h <span style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>/ {cap}h</span></span>
+                    <span style={{ fontSize: "9px", background: bandColor + "22", color: bandColor, padding: "2px 7px", borderRadius: "12px", letterSpacing: "1.5px" }}>● {bm.status.toUpperCase()}</span>
+                  </div>
+                </div>
+                <div style={{ height: "5px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "7px" }}>
+                  <div style={{ height: "100%", width: `${pct}%`, background: bandColor, borderRadius: "3px" }} />
+                </div>
+                <div style={{ fontSize: "10px" }}>
+                  <span style={{ color: "#666" }}>{monthLabel}: </span>
+                  {bm.currentTier === 1 && <span style={{ color: "var(--color-green)" }}>Tier 1 · any unapproved absence changes tier</span>}
+                  {bm.currentTier === 2 && <span style={{ color: "var(--color-gold)" }}>Tier 2 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
+                  {bm.currentTier === 3 && <span style={{ color: "var(--color-red)" }}>Tier 3 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to worst tier</span>}
+                  {bm.currentTier === 4 && <span style={{ color: "var(--color-red)" }}>Tier 4 · worst tier · {bm.currentM}h unapproved this month</span>}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Bucket balance override control */}
+          <div style={{ background: "var(--color-bg-surface)", border: `1px solid ${bandColor}33`, borderRadius: "8px", padding: "14px 16px", marginBottom: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: editingBucket ? "10px" : "0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Bucket Balance</div>
+                {config.bucketBalanceOverride != null && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px" }}>(manual)</span>}
+              </div>
+              <span style={{ fontSize: "14px", fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h <span style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>/ {cap}h</span></span>
+            </div>
+            {editingBucket ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <input
+                  {...iS} style={{ ...iS, width: "100px", padding: "6px 10px" }}
+                  type="number" min="0" max={cap} step="1"
+                  value={bucketInput}
+                  onChange={e => setBucketInput(e.target.value)}
+                  placeholder="hours"
+                  autoFocus
+                />
+                <SmBtn
+                  onClick={() => {
+                    const val = parseFloat(bucketInput);
+                    if (setConfig && Number.isFinite(val) && val >= 0) {
+                      setConfig(c => ({ ...c, bucketBalanceOverride: val, bucketOverrideMonth: currentMonthStr }));
+                    }
+                    setEditingBucket(false);
+                  }}
+                  c="var(--color-bg-base)" bg="var(--color-gold)"
+                >Save</SmBtn>
+                <SmBtn onClick={() => setEditingBucket(false)} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Cancel</SmBtn>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                <SmBtn
+                  onClick={() => { setBucketInput(String(bm.currentBalance)); setEditingBucket(true); }}
+                  c="var(--color-text-secondary)" bg="var(--color-bg-raised)"
+                >Set Balance</SmBtn>
+                {config.bucketBalanceOverride != null && (
+                  <SmBtn
+                    onClick={() => setConfig?.(c => ({ ...c, bucketBalanceOverride: null, bucketOverrideMonth: null }))}
+                    c="var(--color-text-disabled)" bg="var(--color-bg-raised)"
+                  >Clear Override</SmBtn>
+                )}
+              </div>
+            )}
+          </div>
+
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "10px 14px", marginBottom: "10px", fontSize: "11px" }}>
             <span style={{ color: "var(--color-text-secondary)", marginRight: "8px" }}>{fmtMonth(currentMonthStr)} — Tier {bm.currentTier}</span>
             {bm.currentTier === 1 && <span style={{ color: "var(--color-green)" }}>perfect so far · any unapproved absence changes tier</span>}

@@ -569,7 +569,7 @@ export function LogPanel({
       const ev   = EVENT_TYPES[entry.type] ?? { label: entry.type, color: "var(--color-text-secondary)", icon: "?" };
       const isB  = entry.type === "bonus";
       const isUA = entry.type === "missed_unapproved" || entry.type === "pto_unapproved";
-      const ak   = entry.weekEnd && new Date(entry.weekEnd) >= new Date(config.k401StartDate);
+      const ak   = has401k && entry.weekEnd && new Date(entry.weekEnd) >= new Date(config.k401StartDate);
       const isEditing = editId === entry.id;
       const missedArr = normalizeDays(entry.missedDays);
 
@@ -619,7 +619,7 @@ export function LogPanel({
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
                   <span style={{ fontSize: "12px", background: ev.color + "22", color: ev.color, padding: "2px 8px", borderRadius: "12px" }}>{ev.icon} {ev.label}</span>
                   <span style={{ fontSize: "11px", color: "#777" }}>{formatRotationDisplay(entry.weekRotation, { isAdmin })}</span>
-                  {isUA && <span style={{ fontSize: "9px", background: "#e8622a22", color: "#e8622a", padding: "2px 6px", borderRadius: "12px", fontWeight: "bold" }}>⚠ BUCKET HIT</span>}
+                  {hasBucket && isUA && <span style={{ fontSize: "9px", background: "#e8622a22", color: "#e8622a", padding: "2px 6px", borderRadius: "12px", fontWeight: "bold" }}>⚠ BUCKET HIT</span>}
                   {ak   && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "12px" }}>401k</span>}
                 </div>
                 <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "2px" }}>Week ending {entry.weekEnd || "—"}</div>
@@ -631,8 +631,8 @@ export function LogPanel({
                 <div style={{ fontSize: "10px", color: "#666" }}>gross · proj {f(imp.baseGross)}</div>
                 <div style={{ fontSize: "13px", color: isB ? "var(--color-green)" : "var(--color-red)", marginTop: "2px" }}>{isB ? "+" : "-"}{f(isB ? imp.netGained : imp.netLost)} net</div>
                 {ak && imp.k401kLost > 0 && <div style={{ fontSize: "10px", color: "#7a8bbf", marginTop: "2px" }}>-{f(imp.k401kLost)} 401k</div>}
-                {imp.hoursLostForPTO > 0 && <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "2px" }}>-{(imp.hoursLostForPTO / 20).toFixed(2)} PTO accrual</div>}
-                {isUA && <div style={{ fontSize: "10px", color: "#e8622a", marginTop: "2px" }}>-{imp.bucketHoursDeducted}h bucket</div>}
+                {hasPTO && imp.hoursLostForPTO > 0 && <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "2px" }}>-{(imp.hoursLostForPTO / 20).toFixed(2)} PTO accrual</div>}
+                {hasBucket && isUA && <div style={{ fontSize: "10px", color: "#e8622a", marginTop: "2px" }}>-{imp.bucketHoursDeducted}h bucket</div>}
               </div>
             </div>
             <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -677,10 +677,10 @@ export function LogPanel({
           }}
         />
       )}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${1 + (hasPTO ? 1 : 0) + (hasBucket ? 1 : 0)},1fr)`, gap: "12px" }}>
         <Card label="Total Net Lost" val={f(tot.nL)} rawVal={tot.nL} color="var(--color-red)" />
-        <Card label="PTO Accrual Lost" val={`${(tot.pto / 20).toFixed(1)} hrs`} sub={`${tot.pto}h ÷ 20`} color="#888" />
-        <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`} sub="Unapproved absences" color="#e8622a" />
+        {hasPTO && <Card label="PTO Accrual Lost" val={`${(tot.pto / 20).toFixed(1)} hrs`} sub={`${tot.pto}h ÷ 20`} color="#888" />}
+        {hasBucket && <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`} sub="Unapproved absences" color="#e8622a" />}
       </div>
     </div>
 
@@ -702,10 +702,10 @@ export function LogPanel({
           <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adj. Weekly Unalloc.</div>
           <div style={{ fontSize: "14px", color: adjWA > 0 ? "var(--color-green)" : "var(--color-red)", fontWeight: "bold" }}>{f(adjWA)}</div>
         </div>
-        <div>
+        {has401k && <div>
           <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Lost</div>
           <div style={{ fontSize: "14px", color: "#7a8bbf", fontWeight: "bold" }}>{f(tot.k4)}</div>
-        </div>
+        </div>}
       </div>
       <div style={{ borderTop: "1px solid #1f1f1f", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
         <div>
@@ -794,7 +794,7 @@ export function LogPanel({
     )}
 
     {/* ── 401k ── */}
-    {currentWeek && <div style={{ background: k401Active ? "#1a3a20" : "#1e1e2a", border: `1px solid ${k401Active ? "rgba(76,175,125,0.27)" : "#7a8bbf44"}`, borderRadius: "6px", padding: "10px 14px", margin: "24px 0 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+    {has401k && currentWeek && <div style={{ background: k401Active ? "#1a3a20" : "#1e1e2a", border: `1px solid ${k401Active ? "rgba(76,175,125,0.27)" : "#7a8bbf44"}`, borderRadius: "6px", padding: "10px 14px", margin: "24px 0 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Status</div>
       {!hasValid401Start ? (
         <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Enrollment start date not set yet</div>
@@ -815,7 +815,7 @@ export function LogPanel({
       )}
     </div>}
 
-    <div style={{ marginBottom: "24px" }}>
+    {has401k && <div style={{ marginBottom: "24px" }}>
       <SectionHeader>401k Projections</SectionHeader>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
         <Card label="Proj. Your Contributions" val={f(bE)} rawVal={bE} color="#7a8bbf" size="18px" />
@@ -855,9 +855,9 @@ export function LogPanel({
           </div>
         );
       })()}
-    </div>
+    </div>}
 
-    {isDHL && (
+    {hasPTO && (
       <div style={{ marginBottom: "24px" }}>
         <SectionHeader>PTO Accrual</SectionHeader>
         <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "14px 16px", marginBottom: "14px" }}>
@@ -953,7 +953,7 @@ export function LogPanel({
       </div>
     )}
 
-    {bucketModel && (() => {
+    {hasBucket && (() => {
       const bm = bucketModel;
       const cap = config.bucketCap ?? 128;
       const bandColor = bm.status === "safe" ? "var(--color-green)" : bm.status === "caution" ? "var(--color-gold)" : "var(--color-red)";

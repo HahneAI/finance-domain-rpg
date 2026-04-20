@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { computeGoalTimeline } from "../lib/finance.js";
+import { computeGoalTimeline, fiscalMonthLabel } from "../lib/finance.js";
+import { FISCAL_YEAR_START } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -8,6 +9,7 @@ import { FlowSparklineCard, MetricCard, SmBtn, iS, lS, ScrollSnapRow } from "./u
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_SUBDIVISIONS = 4;
 const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
+const FY_YEAR = parseInt(FISCAL_YEAR_START.split('-')[0]);
 
 const fmt$ = (n) => {
   if (n == null || Number.isNaN(n)) return "$—";
@@ -250,9 +252,7 @@ export function HomePanel({
     if (!validWeeks.length) return null;
     const startMs = Math.min(...validWeeks.map((week) => week.start.getTime()));
     const rawEndMs = Math.max(...validWeeks.map((week) => week.end.getTime())) + DAY_MS;
-    const timelineYear = safeDate(today)?.getFullYear() ?? new Date(startMs).getFullYear();
-    const calendarYearEndMs = new Date(timelineYear + 1, 0, 1).getTime();
-    const endMs = Math.min(rawEndMs, calendarYearEndMs);
+    const endMs = rawEndMs;
     if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
     return { startMs, endMs, spanMs: endMs - startMs };
   })();
@@ -273,7 +273,7 @@ export function HomePanel({
         const blockWidthPct = widthPct / MONTH_SUBDIVISIONS;
         segments.push({
           key: `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, "0")}`,
-          label: monthStart.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
+          label: fiscalMonthLabel(monthStart).toUpperCase(),
           leftPct,
           widthPct,
           subdivisions: Array.from({ length: MONTH_SUBDIVISIONS }, (_, idx) => ({
@@ -332,7 +332,8 @@ export function HomePanel({
     if (!parsed) return null;
     const month = parsed.toLocaleDateString("en-US", { month: "short" });
     const day = parsed.getDate();
-    return `${month} ${day}${ordinalSuffix(day)}`;
+    const yearSuffix = parsed.getFullYear() !== FY_YEAR ? ` '${String(parsed.getFullYear()).slice(2)}` : "";
+    return `${month} ${day}${ordinalSuffix(day)}${yearSuffix}`;
   };
   const buildGoalFinishLabel = (offsetRaw) => {
     if (!Number.isFinite(offsetRaw)) return null;

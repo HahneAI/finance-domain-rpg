@@ -526,14 +526,14 @@ export function HomePanel({
           />
         </div>
 
-        <div style={{ marginBottom: "16px", padding: "12px", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0" }}>
+        <div style={{ marginBottom: "16px", padding: "12px 0", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)", overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0", padding: "0 12px" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>Active Goals</div>
             <div style={{ fontSize: "10px", color: "#666" }}>{tl.length}</div>
           </div>
-          {!tl.length && <div style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", color: "#666", letterSpacing: "1px", textTransform: "uppercase" }}>No active goals yet</div>}
+          {!tl.length && <div style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", color: "#666", letterSpacing: "1px", textTransform: "uppercase", margin: "0 12px" }}>No active goals yet</div>}
           {isMobile ? (
-            <ScrollSnapRow itemWidth="min(88vw, 340px)">
+            <ScrollSnapRow itemWidth="calc(100% - 40px)">
               {tl.map((g, i) => {
                 const isEditing = editGoalId === g.id;
                 const projectedWeeks = Number.isFinite(g.eW) ? Math.max(0, Math.ceil(g.eW)) : 0;

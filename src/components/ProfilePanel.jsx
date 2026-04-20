@@ -1048,42 +1048,51 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
                 </button>
               ))}
             </div>
+            {isDHL && (
+              <div style={{ padding: "8px 10px", background: "rgba(0,200,150,0.06)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "6px", fontSize: "10px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+                <span style={{ color: "var(--color-accent-primary)", fontWeight: "bold" }}>PTO accrual</span> and <span style={{ color: "var(--color-accent-primary)", fontWeight: "bold" }}>attendance bucket</span> are automatically enabled for all DHL employees — no enrollment needed.
+              </div>
+            )}
             <div>
               <label style={lS}>Benefits Start Date</label>
               <input type="date" value={benefitsStartDate} onChange={e => setBenefitsStartDate(e.target.value)} style={iS} />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-              <div>
-                <label style={lS}>Employee % (decimal)</label>
-                <input type="number" step="0.01" min="0" max="1" value={k401Rate} onChange={e => setK401Rate(e.target.value)} style={iS} />
-              </div>
-              {!isDHL && (
+              {selectedBenefits.has("k401") && <>
                 <div>
-                  <label style={lS}>Match % (decimal)</label>
-                  <input type="number" step="0.01" min="0" max="1" value={k401Match} onChange={e => setK401Match(e.target.value)} style={iS} />
+                  <label style={lS}>Employee % (decimal)</label>
+                  <input type="number" step="0.01" min="0" max="1" value={k401Rate} onChange={e => setK401Rate(e.target.value)} style={iS} />
                 </div>
-              )}
-              <div>
-                <label style={lS}>Start Date</label>
-                <input type="date" value={k401Start} onChange={e => setK401Start(e.target.value)} style={iS} />
+                {!isDHL && (
+                  <div>
+                    <label style={lS}>Match % (decimal)</label>
+                    <input type="number" step="0.01" min="0" max="1" value={k401Match} onChange={e => setK401Match(e.target.value)} style={iS} />
+                  </div>
+                )}
+                <div>
+                  <label style={lS}>Start Date</label>
+                  <input type="date" value={k401Start} onChange={e => setK401Start(e.target.value)} style={iS} />
+                </div>
+              </>}
+            </div>
+            {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).length > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).map((benefit) => (
+                  <div key={benefit.id}>
+                    <label style={lS}>{benefit.label} ($ / week)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={weeklyValues[benefit.field]}
+                      placeholder={benefit.placeholder}
+                      onChange={e => setWeeklyValues(v => ({ ...v, [benefit.field]: e.target.value }))}
+                      style={iS}
+                    />
+                  </div>
+                ))}
               </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-              {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly").map((benefit) => (
-                <div key={benefit.id}>
-                  <label style={lS}>{benefit.label} ($ / week)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={weeklyValues[benefit.field]}
-                    placeholder={benefit.placeholder}
-                    onChange={e => setWeeklyValues(v => ({ ...v, [benefit.field]: e.target.value }))}
-                    style={iS}
-                  />
-                </div>
-              ))}
-            </div>
+            )}
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={() => setEditing(false)} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
               <button onClick={handleSave} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</button>
@@ -1104,7 +1113,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
           valueColor={enrolledConfig.length > 0 ? undefined : "var(--color-text-disabled)"}
           last={enrolledConfig.length === 0}
         />
-        {enrolledConfig.length > 0 && (
+        {(enrolledConfig.length > 0 || isDHL) && (
           <div style={{ padding: "10px 16px 14px" }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
               {enrolledConfig.map(id => (
@@ -1112,7 +1121,14 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
                   {BENEFIT_LABELS[id] ?? id}
                 </span>
               ))}
+              {isDHL && (
+                <>
+                  <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>PTO Accrual ✦</span>
+                  <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>Attendance Bucket ✦</span>
+                </>
+              )}
             </div>
+            {isDHL && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "6px" }}>✦ Auto-enabled for DHL employees</div>}
           </div>
         )}
       </DetailCard>

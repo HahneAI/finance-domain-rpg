@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, iS, lS, SmBtn } from "./ui.jsx";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
-import { dhlEmployerMatchRate, toLocalIso } from "../lib/finance.js";
+import { dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -157,17 +157,16 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
       {(() => {
         const matchRate = config.employerPreset === "DHL" ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
         let r401 = 0;
-        const mo401 = allWeeks
-          .reduce((acc, w) => {
+        const mo401 = allWeeks.reduce((acc, w) => {
             if (!w.active) return acc;
-            const mi = w.weekEnd.getMonth();
-            if (!acc[mi]) acc[mi] = { name: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][mi], gross: 0, k4E: 0, k4M: 0 };
-            acc[mi].gross += w.grossPay;
-            acc[mi].k4E  += w.k401kEmployee;
-            acc[mi].k4M  += w.k401kEmployer;
+            const key = fiscalMonthKey(w.weekEnd);
+            if (!acc[key]) acc[key] = { name: fiscalMonthLabel(w.weekEnd), gross: 0, k4E: 0, k4M: 0 };
+            acc[key].gross += w.grossPay;
+            acc[key].k4E  += w.k401kEmployee;
+            acc[key].k4M  += w.k401kEmployer;
             return acc;
           }, {});
-        const rows = Object.values(mo401).filter(m => m.k4E > 0).map(m => { r401 += m.k4E + m.k4M; return { ...m, running: r401 }; });
+        const rows = Object.keys(mo401).sort().map(k => mo401[k]).filter(m => m.k4E > 0).map(m => { r401 += m.k4E + m.k4M; return { ...m, running: r401 }; });
         if (!rows.length) return null;
         return (
           <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}>

@@ -137,7 +137,7 @@ export function LogPanel({
   const enrolledBenefits = new Set(Array.isArray(config.selectedBenefits) ? config.selectedBenefits : []);
   const has401k = isDHL ? (enrolledBenefits.has("k401") && config.k401Rate > 0) : config.k401Rate > 0;
   const hasPTO = isDHL;
-  const hasBucket = isDHL && Boolean(bucketModel);
+  const hasBucket = isDHL;
 
   const [formOpen, setFormOpen] = useState(false);
   const [formVals, setFormVals] = useState(EMPTY_FORM);

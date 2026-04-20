@@ -1053,37 +1053,41 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
               <input type="date" value={benefitsStartDate} onChange={e => setBenefitsStartDate(e.target.value)} style={iS} />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-              <div>
-                <label style={lS}>Employee % (decimal)</label>
-                <input type="number" step="0.01" min="0" max="1" value={k401Rate} onChange={e => setK401Rate(e.target.value)} style={iS} />
-              </div>
-              {!isDHL && (
+              {selectedBenefits.has("k401") && <>
                 <div>
-                  <label style={lS}>Match % (decimal)</label>
-                  <input type="number" step="0.01" min="0" max="1" value={k401Match} onChange={e => setK401Match(e.target.value)} style={iS} />
+                  <label style={lS}>Employee % (decimal)</label>
+                  <input type="number" step="0.01" min="0" max="1" value={k401Rate} onChange={e => setK401Rate(e.target.value)} style={iS} />
                 </div>
-              )}
-              <div>
-                <label style={lS}>Start Date</label>
-                <input type="date" value={k401Start} onChange={e => setK401Start(e.target.value)} style={iS} />
+                {!isDHL && (
+                  <div>
+                    <label style={lS}>Match % (decimal)</label>
+                    <input type="number" step="0.01" min="0" max="1" value={k401Match} onChange={e => setK401Match(e.target.value)} style={iS} />
+                  </div>
+                )}
+                <div>
+                  <label style={lS}>Start Date</label>
+                  <input type="date" value={k401Start} onChange={e => setK401Start(e.target.value)} style={iS} />
+                </div>
+              </>}
+            </div>
+            {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).length > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).map((benefit) => (
+                  <div key={benefit.id}>
+                    <label style={lS}>{benefit.label} ($ / week)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={weeklyValues[benefit.field]}
+                      placeholder={benefit.placeholder}
+                      onChange={e => setWeeklyValues(v => ({ ...v, [benefit.field]: e.target.value }))}
+                      style={iS}
+                    />
+                  </div>
+                ))}
               </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-              {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly").map((benefit) => (
-                <div key={benefit.id}>
-                  <label style={lS}>{benefit.label} ($ / week)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={weeklyValues[benefit.field]}
-                    placeholder={benefit.placeholder}
-                    onChange={e => setWeeklyValues(v => ({ ...v, [benefit.field]: e.target.value }))}
-                    style={iS}
-                  />
-                </div>
-              ))}
-            </div>
+            )}
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={() => setEditing(false)} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
               <button onClick={handleSave} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</button>

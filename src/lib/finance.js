@@ -27,6 +27,75 @@ export function fiscalMonthLabel(date) {
   return _MONTH_SHORT[date.getMonth()] + (yr !== _FY_YEAR ? ` '${String(yr).slice(2)}` : "");
 }
 
+// Projects a goal that won't complete in the current fiscal year into the next one.
+// Uses Q4/December deductions and expenses as the next-year proxy:
+//   - Paycheck deductions: benefits + 401k derived from cfg (fully active all next year)
+//   - Expenses: Q4 weekly total; December values take priority if they differ from Q4
+//   - Taxes: standard withholding assumed (no extra withholding, taxExemptOptIn ignored)
+// Returns { estDate, weeksFromFYStart, label, weeklyNet, weeklyExpenses, weeklySurplus }
+// or null if surplus is non-positive or inputs are invalid.
+export function estimateGoalNextYear(remainingAmount, cfg, expenses) {
+  if (!Number.isFinite(remainingAmount) || remainingAmount <= 0 || !cfg) return null;
+
+  const isDHL = cfg.employerPreset === "DHL";
+  const longGross  = projectedGross(true,  cfg);
+  const shortGross = projectedGross(false, cfg);
+
+  // Flat per-week deductions — same in Q4 and December (no date dependency on cfg fields)
+  const benefitDed  = weeklyBenefitDeductions(cfg);
+  const otherPostTax = otherPostTaxDeductions(cfg);
+  const k401Rate    = cfg.k401Rate ?? 0;
+  const ficaRate    = cfg.ficaRate ?? 0.0765;
+
+  // Tax rates — standard withholding, no exemption
+  const fedLow  = cfg.fedRateLow   ?? cfg.w1FedRate   ?? 0.0784;
+  const fedHigh = cfg.fedRateHigh  ?? cfg.w2FedRate   ?? 0.1283;
+  const stLow   = cfg.stateRateLow  ?? cfg.w1StateRate ?? 0.0338;
+  const stHigh  = cfg.stateRateHigh ?? cfg.w2StateRate ?? 0.040;
+
+  const weekNet = (gross, isHighWeek) => {
+    const k401 = gross * k401Rate;
+    const fica  = gross * ficaRate;
+    const taxable = Math.max(gross - benefitDed - k401, 0);
+    const fed = taxable * (isHighWeek ? fedHigh : fedLow);
+    const st  = taxable * (isHighWeek ? stHigh  : stLow);
+    return gross - fica - fed - st - benefitDed - k401 - otherPostTax;
+  };
+
+  // DHL alternates long (high) / short (low) weeks; average both for a representative week
+  const avgWeeklyNet = isDHL
+    ? (weekNet(longGross, true) + weekNet(shortGross, false)) / 2
+    : weekNet(shortGross, false);
+
+  // Q4 expenses — phase 3, mid-November representative date
+  // December expenses — phase 3 still, but history-aware lookup may pick up a newer entry
+  // December takes priority when it differs from the rest of Q4 (best passover proxy)
+  const Q4_PHASE = 3;
+  const q4Date  = new Date(_FY_YEAR, 10, 15); // Nov 15 — Q4 non-December
+  const decDate = new Date(_FY_YEAR, 11, 15); // Dec 15 — December
+  const q4Exp  = (expenses ?? []).reduce((s, e) => s + getEffectiveAmount(e, q4Date,  Q4_PHASE), 0);
+  const decExp = (expenses ?? []).reduce((s, e) => s + getEffectiveAmount(e, decDate, Q4_PHASE), 0);
+  const weeklyExpenses = Math.abs(decExp - q4Exp) > 0.001 ? decExp : q4Exp;
+
+  const weeklySurplus = avgWeeklyNet - weeklyExpenses;
+  if (weeklySurplus <= 0) return null;
+
+  const weeksNeeded = Math.ceil(remainingAmount / weeklySurplus);
+  const [fy, fm, fd] = FISCAL_YEAR_START.split('-').map(Number);
+  const nextFYStart = new Date(fy + 1, fm - 1, fd);
+  const estDate = new Date(nextFYStart);
+  estDate.setDate(estDate.getDate() + weeksNeeded * 7);
+
+  return {
+    estDate,
+    weeksFromFYStart: weeksNeeded,
+    label: fiscalMonthLabel(estDate),
+    weeklyNet: avgWeeklyNet,
+    weeklyExpenses,
+    weeklySurplus,
+  };
+}
+
 function parseIsoDate(value) {
   if (!value) return null;
   const d = new Date(value);
@@ -746,7 +815,9 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
   return activeGoals.map((g, i) => {
     const sw = startWeek[i] ?? 0, ew = endWeek[i] ?? null;
     const wN = ew !== null ? ew - sw : remaining[i] / Math.max(avgSurplus - 0.01, 0.01);
-    return { ...g, sW: sw, eW: ew, wN };
+    // remainingAtEnd: amount still unfunded after the full fiscal year simulation.
+    // Non-zero only when eW === null (goal never completes within futureWeeks).
+    return { ...g, sW: sw, eW: ew, wN, remainingAtEnd: remaining[i] };
   });
 }
 

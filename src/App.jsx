@@ -651,6 +651,7 @@ export default function App() {
         futureWeekNets={futureWeekNets}
         timelineWeekNets={futureWeekNetsRaw}
         expenses={expenses}
+        config={config}
         logNetLost={logTotals.netLost}
         logNetGained={logTotals.netGained}
         futureEventDeductions={futureEventDeductions}

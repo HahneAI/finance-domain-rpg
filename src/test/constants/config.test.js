@@ -168,9 +168,9 @@ describe('PHASES', () => {
 // ─────────────────────────────────────────────────────────────
 
 describe('EVENT_TYPES', () => {
-  const EXPECTED_TYPES = ['missed_unpaid', 'missed_unapproved', 'pto', 'partial', 'bonus', 'other_loss']
+  const EXPECTED_TYPES = ['missed_unpaid', 'missed_unapproved', 'pto', 'pto_unapproved', 'partial', 'bonus', 'other_loss']
 
-  it('contains all 6 expected event type keys', () => {
+  it('contains all 7 expected event type keys', () => {
     for (const type of EXPECTED_TYPES) {
       expect(EVENT_TYPES).toHaveProperty(type)
     }

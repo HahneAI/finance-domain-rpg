@@ -209,7 +209,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
   // no days selected is a financially inert no-op that would only clutter the log.
   // Block "Log & Confirm" in this state; warn the user visually.
   const isVacuousEvent = (
-    (eventVals.type === "missed_unpaid" || eventVals.type === "missed_unapproved") &&
+    (eventVals.type === "missed_unpaid" || eventVals.type === "missed_unapproved" || eventVals.type === "pto_unapproved") &&
     (parseInt(eventVals.shiftsLost) || 0) === 0 &&
     (parseFloat(eventVals.hoursLost) || 0) === 0 &&
     (eventVals.missedDays ?? []).length === 0
@@ -778,8 +778,8 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
                 </select>
               </div>
 
-              {/* DayPicker + shifts/hours override — for missed types */}
-              {(eventVals.type === "missed_unpaid" || eventVals.type === "missed_unapproved") && (
+              {/* DayPicker + shifts/hours override — for missed types and pto_unapproved */}
+              {(eventVals.type === "missed_unpaid" || eventVals.type === "missed_unapproved" || eventVals.type === "pto_unapproved") && (
                 <div style={{ marginBottom: "12px" }}>
                   <DayPicker
                     scheduledDays={scheduledDays}
@@ -907,7 +907,7 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
                   <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "10px" }}>Confirm entry</div>
                   <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.9" }}>
                     <div><span style={{ color: "var(--color-text-disabled)" }}>Type:</span> {EVENT_TYPES[eventVals.type]?.label ?? eventVals.type}</div>
-                    {(eventVals.type === "missed_unpaid" || eventVals.type === "missed_unapproved") && (() => {
+                    {(eventVals.type === "missed_unpaid" || eventVals.type === "missed_unapproved" || eventVals.type === "pto_unapproved") && (() => {
                       const s = parseInt(eventVals.shiftsLost) || 0;
                       const h = parseFloat(eventVals.hoursLost) || 0;
                       const expected = s * config.shiftHours;

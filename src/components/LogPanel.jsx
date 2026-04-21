@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/static-components */
 import { useState } from "react";
 import { EVENT_TYPES } from "../constants/config.js";
-import { calcEventImpact, dhlEmployerMatchRate, toLocalIso } from "../lib/finance.js";
+import { calcEventImpact, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { Card, iS, lS, SmBtn, PanelHero, SectionHeader } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
@@ -832,14 +832,14 @@ export function LogPanel({
         let r401 = 0;
         const mo401 = allWeeks.reduce((acc, w) => {
           if (!w.active) return acc;
-          const mi = w.weekEnd.getMonth();
-          if (!acc[mi]) acc[mi] = { name: LOG_MONTH_SHORT[mi], gross: 0, k4E: 0, k4M: 0 };
-          acc[mi].gross += w.grossPay;
-          acc[mi].k4E += w.k401kEmployee;
-          acc[mi].k4M += w.k401kEmployer;
+          const key = fiscalMonthKey(w.weekEnd);
+          if (!acc[key]) acc[key] = { name: fiscalMonthLabel(w.weekEnd), gross: 0, k4E: 0, k4M: 0 };
+          acc[key].gross += w.grossPay;
+          acc[key].k4E += w.k401kEmployee;
+          acc[key].k4M += w.k401kEmployer;
           return acc;
         }, {});
-        const rows = Object.values(mo401).filter(m => m.k4E > 0).map(m => ({ ...m, running: (r401 += m.k4E + m.k4M) }));
+        const rows = Object.keys(mo401).sort().map(k => mo401[k]).filter(m => m.k4E > 0).map(m => ({ ...m, running: (r401 += m.k4E + m.k4M) }));
         if (!rows.length) return null;
         return (
           <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}>

@@ -11,6 +11,22 @@ function toLocalIso(date) {
 }
 export { toLocalIso };
 
+const _FY_YEAR = parseInt(FISCAL_YEAR_START.split('-')[0]);
+const _MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+// Sortable YYYY-MM key for a Date within the fiscal year.
+export function fiscalMonthKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Display label for a fiscal month. Months outside the fiscal year's primary
+// calendar year get a short-year suffix (e.g. "Jan '27") so they sort to the
+// bottom of year-end charts rather than collapsing into the January position.
+export function fiscalMonthLabel(date) {
+  const yr = date.getFullYear();
+  return _MONTH_SHORT[date.getMonth()] + (yr !== _FY_YEAR ? ` '${String(yr).slice(2)}` : "");
+}
+
 function parseIsoDate(value) {
   if (!value) return null;
   const d = new Date(value);

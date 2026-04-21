@@ -1273,6 +1273,7 @@ export default function App() {
         <WeekConfirmModal
           week={confirmTriggerWeek}
           config={config}
+          logs={logs}
           isAdmin={isAdmin}
           onConfirm={(confirmation, logEntry) => {
             setWeekConfirmations(c => ({ ...c, [confirmTriggerWeek.idx]: confirmation }));

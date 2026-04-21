@@ -86,12 +86,25 @@ function DayPicker({ scheduledDays, missedDays, onToggle }) {
   );
 }
 
-export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin = false }) {
-  // ── Layer 1 state ─────────────────────────────────────────────────────────
-  // Scheduled days default to true (worked); unscheduled days default to null (off, but clickable)
-  const [dayToggles, setDayToggles] = useState(() =>
-    Object.fromEntries(DAY_NAMES.map(d => [d, week.workedDayNames.includes(d) ? true : null]))
+export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss, isAdmin = false }) {
+  // ── Existing logs for this week ───────────────────────────────────────────
+  // Pre-computed from props so the dayToggles initializer can reference them.
+  const weekEndIso = toLocalIso(week.weekEnd);
+  const weekLogEntries = logs.filter(l => l.weekEnd === weekEndIso || l.weekIdx === week.idx);
+  const preLoggedMissedDays = new Set(
+    weekLogEntries
+      .filter(l => ["missed_unpaid", "missed_unapproved", "pto_unapproved"].includes(l.type))
+      .flatMap(l => Array.isArray(l.missedDays) ? l.missedDays : [])
   );
+
+  // ── Layer 1 state ─────────────────────────────────────────────────────────
+  // Scheduled days default to true (worked); unscheduled days default to null (off, but clickable).
+  // Pre-populate missed days from any existing log entries so the grid reflects what's already logged.
+  const [dayToggles, setDayToggles] = useState(() => {
+    const toggles = Object.fromEntries(DAY_NAMES.map(d => [d, week.workedDayNames.includes(d) ? true : null]));
+    preLoggedMissedDays.forEach(d => { if (toggles[d] !== undefined) toggles[d] = false; });
+    return toggles;
+  });
   const [layer, setLayer] = useState(1);
   const [confirming, setConfirming] = useState(false);
   const [wentToLayer2, setWentToLayer2] = useState(false);
@@ -114,6 +127,11 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
     dayToggles[d] === true
   );
   const netShiftDelta = pickupDays.length - missedScheduledDays.length;
+  // True when every currently-missed day is already covered by an existing log entry.
+  // Used to suppress the "Previously Logged" overflow note and skip duplicate log creation.
+  const allMissedPreLogged = preLoggedMissedDays.size > 0
+    && missedScheduledDays.length > 0
+    && missedScheduledDays.every(d => preLoggedMissedDays.has(d));
   // Total planned hours: scheduled worked + confirmed OT + extra pickups
   const totalHoursPlanned = hasCustomSchedule
     ? (scheduledDays.length - missedScheduledDays.length + workedOtDays.length + pickupDays.length) * config.shiftHours
@@ -253,6 +271,25 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
       return;
     }
 
+    // ── Pre-logged coverage check ────────────────────────────────────────────
+    // Days not yet covered by an existing log entry for this week.
+    const newMissedDays = missedScheduledDays.filter(d => !preLoggedMissedDays.has(d));
+    // If every missed day is already logged and there are no pickups to record,
+    // confirm directly — no new log entry needed.
+    if (missedScheduledDays.length > 0 && newMissedDays.length === 0 && pickupDays.length === 0) {
+      onConfirm({
+        confirmedAt: new Date().toISOString(),
+        dayToggles, scheduledDays, missedScheduledDays, pickupDays,
+        netShiftDelta, eventId: null,
+        ...(requiresOtSelection ? {
+          otDays,
+          otDay: otDays[0] ?? null,
+          otDayIsWeekend: !!(otDays[0] && otDays[0] !== "missed" && ["Sat", "Sun"].includes(otDays[0])),
+        } : {}),
+      }, null);
+      return;
+    }
+
     if (netShiftDelta === 0) {
       // Net-zero: same total hours regardless of which days — confirm clean
       onConfirm({
@@ -268,15 +305,19 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
       return;
     }
     const isDeficit = netShiftDelta < 0;
+    // Only log truly new missed days — pre-logged ones are already in the log.
+    const missedDaysForLog = isDeficit
+      ? (newMissedDays.length > 0 ? newMissedDays : missedScheduledDays)
+      : [];
     setEventVals({
-      weekEnd: toLocalIso(week.weekEnd),
+      weekEnd: weekEndIso,
       weekIdx: week.idx,
       weekRotation: week.rotation,
       type: isDeficit ? "missed_unpaid" : "bonus",
-      missedDays: isDeficit ? missedScheduledDays : [],
-      shiftsLost: isDeficit ? missedScheduledDays.length : 0,
-      weekendShifts: isDeficit ? missedScheduledDays.filter(d => d === "Fri" || d === "Sat" || d === "Sun").length : 0,
-      hoursLost: isDeficit ? missedScheduledDays.length * config.shiftHours : 0,
+      missedDays: missedDaysForLog,
+      shiftsLost: missedDaysForLog.length,
+      weekendShifts: missedDaysForLog.filter(d => d === "Fri" || d === "Sat" || d === "Sun").length,
+      hoursLost: missedDaysForLog.length * config.shiftHours,
       // Surplus: estimate gross (pre-tax) from pickup shifts so the amount field
       // has a useful starting value. User should verify the actual payout.
       amount: !isDeficit ? pickupDays.length * config.shiftHours * config.baseRate : 0,
@@ -409,6 +450,34 @@ export function WeekConfirmModal({ week, config, onConfirm, onDismiss, isAdmin =
               <div style={{ padding: "6px 20px 4px", fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
                 Mark your actual week — tap any day to update
               </div>
+
+              {/* ── Previously Logged — shown when existing logs exist for this week ── */}
+              {weekLogEntries.length > 0 && (
+                <div style={{ margin: "6px 20px 4px", padding: "10px 12px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "8px" }}>
+                    Already Logged This Week
+                  </div>
+                  {weekLogEntries.map(log => {
+                    const et = EVENT_TYPES[log.type];
+                    const parts = [];
+                    if (Array.isArray(log.missedDays) && log.missedDays.length > 0)
+                      parts.push(log.missedDays.join(", "));
+                    if (log.shiftsLost > 0) parts.push(`${log.shiftsLost} shift${log.shiftsLost !== 1 ? "s" : ""}`);
+                    if (log.amount > 0) parts.push(`$${log.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+                    return (
+                      <div key={log.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "3px", fontSize: "10px", color: "var(--color-text-secondary)", lineHeight: "1.4" }}>
+                        <span style={{ color: et?.color ?? "var(--color-text-disabled)", fontSize: "11px", flexShrink: 0 }}>{et?.icon ?? "•"}</span>
+                        <span>{et?.label ?? log.type}{parts.length > 0 ? ` · ${parts.join(" · ")}` : ""}</span>
+                      </div>
+                    );
+                  })}
+                  {allMissedPreLogged && pickupDays.length === 0 && (
+                    <div style={{ marginTop: "6px", fontSize: "9px", color: "var(--color-text-disabled)", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "6px" }}>
+                      All missed days accounted for — confirm below to finalize the week.
+                    </div>
+                  )}
+                </div>
+              )}
 
               {DAY_NAMES.map((day, i) => {
                 const isScheduled = scheduledDays.includes(day);

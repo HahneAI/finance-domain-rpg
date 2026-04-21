@@ -103,6 +103,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     document.body.classList.toggle("modal-open", advEditPhaseIdx !== null);
     return () => document.body.classList.remove("modal-open");
   }, [advEditPhaseIdx]);
+  // Keep the viewed phase in sync with the real current quarter so that
+  // advanced-edit month amounts are always reflected as time advances.
+  useEffect(() => {
+    setAp(currentPhaseIdx);
+  }, [currentPhaseIdx]);
   // Loan CRUD state
   const [editLoanId, setEditLoanId] = useState(null);
   const [editLoanVals, setEditLoanVals] = useState({});

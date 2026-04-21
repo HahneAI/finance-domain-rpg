@@ -427,7 +427,29 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     }]);
     setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   };
-  const deleteExp = (id) => { setExpenses(p => p.filter(e => e.id !== id)); setDelExpId(null); };
+  const deleteExp = (id) => {
+    setExpenses(prev => prev.map(e => {
+      if (e.id !== id) return e;
+      const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
+      const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
+      const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
+      // Zero out active phase and forward; preserve phases before the active one
+      const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : 0);
+      const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
+      if (daysDiff <= 3) {
+        return {
+          ...e,
+          history: existing.map(entry =>
+            entry.effectiveFrom === latest.effectiveFrom
+              ? { effectiveFrom: TODAY_ISO, weekly: newWeekly }
+              : entry
+          ),
+        };
+      }
+      return { ...e, history: [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }] };
+    }));
+    setDelExpId(null);
+  };
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mq = window.matchMedia("(pointer: coarse)");

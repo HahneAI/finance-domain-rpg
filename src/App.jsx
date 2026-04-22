@@ -267,6 +267,9 @@ export default function App() {
   }, []);
 
   // ── Load from Supabase once auth resolves to a signed-in user ──
+  // Depend on authedUser?.id (not the full object) so TOKEN_REFRESHED events — which
+  // produce a new user object reference with the same ID — don't re-trigger a load
+  // that would overwrite unsaved in-memory edits with stale Supabase data.
   useEffect(() => {
     if (!authedUser) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -284,16 +287,17 @@ export default function App() {
       if (!data.config.setupComplete) setWizardEntry(false);
       setLoading(false);
     });
-  }, [authedUser]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authedUser?.id]);
 
   // ── Debounced save to Supabase (800ms) ──
   const saveTimer = useRef(null);
-  const latestPersistedStateRef = useRef({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
+  const latestPersistedStateRef = useRef(null);
+  // Update synchronously during render (not in a useEffect) so the flush handlers
+  // on visibilitychange/pagehide always read the latest state even if the app goes
+  // to background before effects have committed.
+  latestPersistedStateRef.current = { config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal };
   const pendingSaveRef = useRef(false);
-
-  useEffect(() => {
-    latestPersistedStateRef.current = { config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal };
-  }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
 
   useEffect(() => {
     if (loading) return;

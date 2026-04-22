@@ -329,12 +329,23 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     return normalizeCycle(phaseBillingMeta?.cycle ?? exp.billingMeta?.cycle ?? exp.cycle ?? "every30days");
   };
 
+  // Returns the most recent history entry with effectiveFrom <= today.
+  // Future ADV. EDIT entries (e.g. June overrides edited in April) are excluded so
+  // regular card edits never accidentally overwrite scheduled future changes.
+  const latestPastEntry = (existing) => {
+    const past = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
+    return past.length > 0
+      ? past.reduce((b, en) => en.effectiveFrom > b.effectiveFrom ? en : b, past[0])
+      : existing[0];
+  };
+
   const startEditExp = (exp) => {
-    const latest = exp.history?.length
-      ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b)
-      : { weekly: exp.weekly ?? [0, 0, 0, 0] };
+    const existing = exp.history?.length
+      ? exp.history
+      : [{ effectiveFrom: FISCAL_YEAR_START, weekly: exp.weekly ?? [0, 0, 0, 0] }];
+    const base = latestPastEntry(existing);
     const cycle = resolveExpenseCycle(exp, ap);
-    const anchorWeekly = latest.weekly[ap] ?? latest.weekly[0] ?? 0;
+    const anchorWeekly = base.weekly?.[ap] ?? base.weekly?.[0] ?? 0;
     setEditId(exp.id);
     setEditVals({
       amount: cycleAmountFromPerPaycheck(anchorWeekly, cycle, cpm).toFixed(2),
@@ -348,7 +359,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setExpenses(prev => prev.map(e => {
       if (e.id !== id) return e;
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
-      const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
+      const latest = latestPastEntry(existing);
       const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
       const byPhase = {
         ...(e.billingMeta?.byPhase ?? {}),
@@ -436,7 +447,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setExpenses(prev => prev.map(e => {
       if (e.id !== id) return e;
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
-      const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
+      const latest = latestPastEntry(existing);
       const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
       // Zero out active phase and forward; preserve phases before the active one
       const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : 0);

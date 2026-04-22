@@ -1132,18 +1132,29 @@ describe('loanPaymentsRemaining', () => {
   })
 
   it('returns a reduced count when today is mid-term (hits elapsed calculation path)', () => {
-    // Use a long-running loan so today (March 22) is between firstPaymentDate and payoffDate.
-    // 52 weekly payments from 2026-01-01 → payoff ≈ 2026-12-31; March 22 is ~11 payments in.
+    // 52 weekly payments from 2026-01-01 → payoff ≈ 2026-12-31
+    // today = March 22 = 80 days after Jan 1 → Math.floor(80/7)+1 = 12 payments made → 40 left
     const activeLoan = {
       totalAmount: 5200,
       paymentAmount: 100,
       paymentFrequency: 'weekly',
       firstPaymentDate: '2026-01-01',
     }
-    const remaining = loanPaymentsRemaining(activeLoan)
-    // 52 total - 11 elapsed ≈ 41 remaining
-    expect(remaining).toBeGreaterThan(0)
-    expect(remaining).toBeLessThan(52)
+    expect(loanPaymentsRemaining(activeLoan)).toBe(40)
+  })
+
+  it('counts first payment as made on firstPaymentDate itself (past-loan regression)', () => {
+    // User scenario: $4000 loan at $250/mo, firstPaymentDate 14 days ago.
+    // 14 days < 30.4375 days/payment → elapsed=0 under the old code → showed 16 remaining (wrong).
+    // Correct: payment #1 was made on firstPaymentDate → 1 payment made → 15 remaining.
+    vi.setSystemTime(new Date(2026, 3, 22)) // April 22
+    const loan = {
+      totalAmount: 4000,
+      paymentAmount: 250,
+      paymentFrequency: 'monthly',
+      firstPaymentDate: '2026-04-08',
+    }
+    expect(loanPaymentsRemaining(loan)).toBe(15)
   })
 
   it('returns total payment count when today is before firstPaymentDate', () => {

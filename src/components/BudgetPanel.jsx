@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
 import { getEffectiveAmount, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
+import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure } from "../lib/expense.js";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
@@ -64,16 +65,6 @@ const fromMonthlyCost = (monthly, cycle) => {
 const perPaycheckFromCycle = (amount, cycle, cpm) =>
   roundToQuarter(toMonthlyCost(amount, cycle) / cpm);
 
-// Builds the weekly[4] array for a new history entry.
-// Cascade rule: phases before phaseIdx are untouched; phaseIdx and forward
-// get perPaycheck UNLESS that future phase already has an explicit byPhase override.
-function buildCascadedWeekly(phaseIdx, perPaycheck, baseWeekly, existingByPhase) {
-  return [0, 1, 2, 3].map(q => {
-    if (q < phaseIdx) return baseWeekly[q] ?? 0;
-    if (q === phaseIdx) return perPaycheck;
-    return existingByPhase?.[q] ? (baseWeekly[q] ?? 0) : perPaycheck;
-  });
-}
 
 // Recover the original entered cycle amount from the stored per-paycheck value
 const cycleAmountFromPerPaycheck = (perPaycheck, cycle, cpm) =>
@@ -329,12 +320,16 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     return normalizeCycle(phaseBillingMeta?.cycle ?? exp.billingMeta?.cycle ?? exp.cycle ?? "every30days");
   };
 
+  // Thin closure that binds TODAY_ISO so call sites stay unchanged.
+  const latestPastEntry = (existing) => latestPastEntryPure(existing, TODAY_ISO);
+
   const startEditExp = (exp) => {
-    const latest = exp.history?.length
-      ? exp.history.reduce((b, e) => e.effectiveFrom > b.effectiveFrom ? e : b)
-      : { weekly: exp.weekly ?? [0, 0, 0, 0] };
+    const existing = exp.history?.length
+      ? exp.history
+      : [{ effectiveFrom: FISCAL_YEAR_START, weekly: exp.weekly ?? [0, 0, 0, 0] }];
+    const base = latestPastEntry(existing);
     const cycle = resolveExpenseCycle(exp, ap);
-    const anchorWeekly = latest.weekly[ap] ?? latest.weekly[0] ?? 0;
+    const anchorWeekly = base.weekly?.[ap] ?? base.weekly?.[0] ?? 0;
     setEditId(exp.id);
     setEditVals({
       amount: cycleAmountFromPerPaycheck(anchorWeekly, cycle, cpm).toFixed(2),
@@ -348,7 +343,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setExpenses(prev => prev.map(e => {
       if (e.id !== id) return e;
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
-      const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
+      const latest = latestPastEntry(existing);
       const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
       const byPhase = {
         ...(e.billingMeta?.byPhase ?? {}),
@@ -436,7 +431,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setExpenses(prev => prev.map(e => {
       if (e.id !== id) return e;
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
-      const latest = existing.reduce((b, entry) => entry.effectiveFrom > b.effectiveFrom ? entry : b, existing[0]);
+      const latest = latestPastEntry(existing);
       const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
       // Zero out active phase and forward; preserve phases before the active one
       const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : 0);

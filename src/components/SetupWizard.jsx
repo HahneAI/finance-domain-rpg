@@ -1536,7 +1536,10 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
       background: "var(--color-bg-base)",
       display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center",
-      padding: "16px", zIndex: 100,
+      paddingTop: "max(16px, env(safe-area-inset-top))",
+      paddingBottom: "max(16px, env(safe-area-inset-bottom))",
+      paddingLeft: "16px", paddingRight: "16px",
+      zIndex: 100,
     }}>
       <div style={{
         width: "100%", maxWidth: "480px",
@@ -1544,7 +1547,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
         border: "1px solid var(--color-border-subtle)",
         borderRadius: "20px",
         display: "flex", flexDirection: "column",
-        height: "calc(100vh - 32px)", maxHeight: "680px",
+        flex: 1, minHeight: 0, maxHeight: "680px",
         overflow: "hidden",
       }}>
 

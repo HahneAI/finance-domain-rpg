@@ -118,9 +118,18 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
 
   const scheduledDays = week.workedDayNames;
   const missedScheduledDays = scheduledDays.filter(d => dayToggles[d] === false);
+  const hasCustomSchedule = config.customWeeklyHours != null && config.employerPreset === "DHL";
+
+  // DHL OT tracking — must be declared before pickupDays/totalHoursPlanned/extraPickupCandidates
+  // which all reference workedOtDays. Moving these up avoids a TDZ ReferenceError when
+  // hasCustomSchedule is true (short-circuit no longer hides the access).
+  const requiresOtSelection = config.employerPreset === "DHL" && requiredOtCount > 0;
+  const anyOtMissed = otDays.some(d => d === "missed");
+  const missedOtCount = otDays.filter(d => d === "missed").length;
+  const workedOtDays = otDays.filter(d => d && d !== "missed");
+
   // Custom-schedule users: exclude confirmed OT days from pickups so hitting the
   // custom target via requiredOtShifts doesn't inflate netShiftDelta as a "bonus".
-  const hasCustomSchedule = config.customWeeklyHours != null && config.employerPreset === "DHL";
   const pickupDays = DAY_NAMES.filter(d =>
     !scheduledDays.includes(d) &&
     (!hasCustomSchedule || !workedOtDays.includes(d)) &&
@@ -147,12 +156,6 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
   // Pay period starts the day after payPeriodEndDay (e.g. end=Sun→start=Mon=1)
   const payPeriodStartDow = ((config.payPeriodEndDay ?? 0) + 1) % 7;
   const rotationDisplay = formatRotationDisplay(week, { isAdmin });
-
-  // DHL OT tracking
-  const requiresOtSelection = config.employerPreset === "DHL" && requiredOtCount > 0;
-  const anyOtMissed = otDays.some(d => d === "missed");
-  const missedOtCount = otDays.filter(d => d === "missed").length;
-  const workedOtDays = otDays.filter(d => d && d !== "missed");
 
   useEffect(() => {
     if (!requiresOtSelection && otDays.some(d => d !== null)) {

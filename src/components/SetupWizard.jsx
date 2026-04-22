@@ -1534,23 +1534,25 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
     <div style={{
       position: "fixed", inset: 0,
       background: "var(--color-bg-base)",
-      overflowY: "auto", WebkitOverflowScrolling: "touch",
       display: "flex", flexDirection: "column",
-      alignItems: "center",
-      padding: "24px 16px", zIndex: 100,
+      alignItems: "center", justifyContent: "center",
+      paddingTop: "max(16px, env(safe-area-inset-top))",
+      paddingBottom: "max(16px, env(safe-area-inset-bottom))",
+      paddingLeft: "16px", paddingRight: "16px",
+      zIndex: 100,
     }}>
       <div style={{
         width: "100%", maxWidth: "480px",
-        margin: "auto",
         background: "var(--color-bg-surface)",
         border: "1px solid var(--color-border-subtle)",
         borderRadius: "20px",
-        padding: "28px 24px",
-        display: "flex", flexDirection: "column", gap: "28px",
+        display: "flex", flexDirection: "column",
+        flex: 1, minHeight: 0, maxHeight: "680px",
+        overflow: "hidden",
       }}>
 
         {/* ── Header: step counter + title + progress bar ── */}
-        <div>
+        <div style={{ padding: "24px 24px 0", flexShrink: 0 }}>
           <div style={{
             fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase",
             color: "var(--color-text-disabled)", marginBottom: "6px",
@@ -1576,8 +1578,13 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
           </div>
         </div>
 
-        {/* ── Step content ── */}
-        <div style={{ minHeight: "160px" }}>
+        {/* ── Step content — scrolls independently; header + nav stay fixed ── */}
+        <div style={{
+          flex: "1 1 0", minHeight: 0,
+          overflowY: "auto", WebkitOverflowScrolling: "touch",
+          overscrollBehavior: "contain",
+          padding: "20px 24px 0",
+        }}>
           {StepComponent
             ? <StepComponent
                 formData={formData}
@@ -1590,7 +1597,11 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
         </div>
 
         {/* ── Navigation ── */}
-        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+        <div style={{
+          padding: "14px 24px 20px", flexShrink: 0,
+          display: "flex", gap: "10px", justifyContent: "flex-end",
+          borderTop: "1px solid var(--color-border-subtle)",
+        }}>
           {onCancel && (
             <button
               onClick={onCancel}

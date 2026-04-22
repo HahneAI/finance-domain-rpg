@@ -832,6 +832,9 @@ export default function App() {
           transform: scale(0.85) translateY(12px) !important;
           transition: opacity 0.2s ease, transform 0.2s ease !important;
         }
+        body.modal-open .mobile-bottom-nav button {
+          pointer-events: none !important;
+        }
         body.modal-open .mobile-header {
           opacity: 0 !important;
           pointer-events: none !important;

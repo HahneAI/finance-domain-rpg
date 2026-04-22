@@ -82,6 +82,8 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
   const [edits, setEdits]       = useState({});
   const [expandedExpId, setExpandedExpId] = useState(null);
   const [draftVals, setDraftVals] = useState({ amount: "", cycle: "every30days" });
+  // 'forward' = cascade from this month onward (default), 'month-only' = revert next month
+  const [draftScope, setDraftScope] = useState("forward");
 
   // { [expId]: 'month-only' | 'forward' }
   const [deletions, setDeletions] = useState({});
@@ -104,6 +106,7 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
     const staged = edits[exp.id];
     if (staged) {
       setDraftVals({ amount: staged.amount, cycle: staged.cycle });
+      setDraftScope(staged.scope ?? "forward");
     } else {
       const cycle = resolveExpenseCycle(exp, phaseIdx);
       const baseEntry = getBaseEntryAt(exp, selectedMonthIso);
@@ -112,12 +115,13 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
         amount: cycleAmountFromPerPaycheck(perPaycheck, cycle, cpm).toFixed(2),
         cycle,
       });
+      setDraftScope("forward");
     }
     setExpandedExpId(exp.id);
   };
 
   const stageEdit = (expId) => {
-    setEdits(prev => ({ ...prev, [expId]: { amount: draftVals.amount, cycle: draftVals.cycle } }));
+    setEdits(prev => ({ ...prev, [expId]: { amount: draftVals.amount, cycle: draftVals.cycle, scope: draftScope } }));
     setDeletions(prev => { const n = { ...prev }; delete n[expId]; return n; });
     setExpandedExpId(null);
   };
@@ -166,15 +170,23 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
 
   // ── Save ─────────────────────────────────────────────────────
   const handleSave = () => {
-    const editPatches = Object.entries(edits).map(([expId, { amount, cycle }]) => {
+    const editPatches = Object.entries(edits).flatMap(([expId, { amount, cycle, scope }]) => {
       const exp = expenses.find(e => e.id === expId);
-      if (!exp) return null;
+      if (!exp) return [];
       const baseWeekly = getBaseEntryAt(exp, selectedMonthIso)?.weekly ?? [0, 0, 0, 0];
       const perPaycheck = perPaycheckFromCycle(parseFloat(amount) || 0, cycle, cpm);
-      const newWeekly = buildCascadedWeekly(phaseIdx, perPaycheck, baseWeekly, exp.billingMeta?.byPhase);
       const newByPhase = { ...(exp.billingMeta?.byPhase ?? {}), [phaseIdx]: { amount: parseFloat(amount), cycle, effectiveFrom: selectedMonthIso } };
-      return { expId, effectiveFrom: selectedMonthIso, newWeekly, newByPhase };
-    }).filter(Boolean);
+      if (scope === "month-only") {
+        // Set new amount for this phase this month only; next month restores to base
+        const thisMonthWeekly = baseWeekly.map((w, q) => q === phaseIdx ? perPaycheck : w);
+        return [
+          { expId, effectiveFrom: selectedMonthIso, newWeekly: thisMonthWeekly, newByPhase },
+          { expId, effectiveFrom: nextMonthIso(selectedMonthIso), newWeekly: [...baseWeekly] },
+        ];
+      }
+      const newWeekly = buildCascadedWeekly(phaseIdx, perPaycheck, baseWeekly, exp.billingMeta?.byPhase);
+      return [{ expId, effectiveFrom: selectedMonthIso, newWeekly, newByPhase }];
+    });
 
     const deletionPatches = Object.entries(deletions).flatMap(([expId, type]) => {
       const exp = expenses.find(e => e.id === expId);
@@ -368,7 +380,11 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
                               textDecoration: isDeleted ? "line-through" : "none",
                             }}>
                               {exp.label}
-                              {isEdited && <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-accent-primary)", letterSpacing: "1px" }}>CHANGED</span>}
+                              {isEdited && (
+                                <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-accent-primary)", letterSpacing: "1px" }}>
+                                  {edits[exp.id]?.scope === "month-only" ? "THIS MONTH" : "CHANGED →"}
+                                </span>
+                              )}
                               {isDeleted && (
                                 <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-red)", letterSpacing: "1px" }}>
                                   {deletions[exp.id] === "forward" ? "REMOVED →" : "THIS MONTH"}
@@ -495,11 +511,38 @@ export function PhaseAdvancedEditModal({ phaseIdx, expenses, cpm, TODAY_ISO, onS
                                 </select>
                               </div>
                             </div>
-                            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
+                            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>
                               Per-paycheck reserve: <span style={{ color: "var(--color-accent-primary)" }}>{f2(draftPerPaycheck)}</span>
                             </div>
+                            {/* Scope toggle */}
+                            <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
+                              <SmBtn
+                                onClick={() => setDraftScope("month-only")}
+                                bg={draftScope === "month-only" ? "rgba(245,158,11,0.15)" : "var(--color-bg-raised)"}
+                                c={draftScope === "month-only" ? "var(--color-warning)" : "var(--color-text-secondary)"}
+                                style={{
+                                  flex: 1, fontSize: "9px", letterSpacing: "1px", padding: "6px 8px", minHeight: "30px",
+                                  border: draftScope === "month-only" ? "1px solid rgba(245,158,11,0.35)" : undefined,
+                                }}
+                              >
+                                THIS MONTH ONLY
+                              </SmBtn>
+                              <SmBtn
+                                onClick={() => setDraftScope("forward")}
+                                bg={draftScope === "forward" ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)"}
+                                c={draftScope === "forward" ? "var(--color-accent-primary)" : "var(--color-text-secondary)"}
+                                style={{
+                                  flex: 1, fontSize: "9px", letterSpacing: "1px", padding: "6px 8px", minHeight: "30px",
+                                  border: draftScope === "forward" ? "1px solid rgba(0,200,150,0.28)" : undefined,
+                                }}
+                              >
+                                & FORWARD
+                              </SmBtn>
+                            </div>
                             <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px", letterSpacing: "0.5px" }}>
-                              Effective from {months[selectedMonthIdx].label} · cascades through Q{phaseIdx + 1}–Q4
+                              {draftScope === "month-only"
+                                ? `${months[selectedMonthIdx].label} only · reverts to prior amount next month`
+                                : `Effective from ${months[selectedMonthIdx].label} · cascades through Q${phaseIdx + 1}–Q4`}
                             </div>
                             <div style={{ display: "flex", gap: "6px" }}>
                               <SmBtn

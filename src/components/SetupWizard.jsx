@@ -325,7 +325,7 @@ function Step1({ formData, onChange, lifeEvent, attempted }) {
       {gateTouched && (
         <>
           {/* ── Pay Schedule ── */}
-          {(!isDHL || formData.dhlTeam) && <Field label="How do you get paid?">
+          {(!isDHL || formData.dhlTeam) && <Field label="How do you get paid?" error={attempted && !formData.userPaySchedule ? "Select a pay schedule" : null}>
             <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap", alignItems: "center" }}>
               {isDHL ? (
                 <>
@@ -1697,13 +1697,15 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
           )}
           <button
             onClick={handleNext}
+            disabled={!canProceed}
             style={{
               background: canProceed ? "var(--color-gold)" : "var(--color-bg-raised)",
               color: canProceed ? "var(--color-bg-base)" : "var(--color-text-disabled)",
               border: "none", borderRadius: "12px", padding: "8px 22px",
               fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
               fontWeight: "bold",
-              cursor: "pointer",
+              cursor: canProceed ? "pointer" : "not-allowed",
+              opacity: 1,
               transition: "background 0.2s ease, color 0.2s ease",
             }}
           >

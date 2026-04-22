@@ -64,7 +64,7 @@ function DetailCard({ children, style }) {
 
 // ── Sub-views ───────────────────────────────────────────────────────────────
 
-function AccountDetail({ authedUser, config, onBack, onLocalSignOut }) {
+function AccountDetail({ authedUser, config, onBack }) {
   const setupColor  = config.setupComplete ? "var(--color-green)"           : "var(--color-gold)";
   const setupBg     = config.setupComplete ? "rgba(76,175,125,0.12)"        : "rgba(0,200,150,0.08)";
   const setupBorder = config.setupComplete ? "rgba(76,175,125,0.3)"         : "rgba(0,200,150,0.22)";
@@ -353,18 +353,6 @@ function AccountDetail({ authedUser, config, onBack, onLocalSignOut }) {
           </div>
         </button>
       </DetailCard>
-
-      <button
-        onClick={onLocalSignOut ?? (async () => { await supabase.auth.signOut({ scope: "local" }); })}
-        style={{ width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-red)", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
-      >
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-          <polyline points="16 17 21 12 16 7"/>
-          <line x1="21" y1="12" x2="9" y2="12"/>
-        </svg>
-        Sign Out (This Device)
-      </button>
 
       {showDeleteDialog && (
         <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
@@ -1362,16 +1350,33 @@ function ListRow({ label, summary, onPress, last }) {
 
 export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, today }) {
   const [activeSection, setActiveSection] = useState(null);
+  const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
+  const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });
 
   const isDHL     = config.employerPreset === "DHL";
   const employer  = isDHL ? "DHL / P&G" : (config.employerPreset || "Independent");
   const has401k   = config.k401Rate > 0;
   const enrolled  = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
   const matchRate = isDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
+  const localSignOutAction = onLocalSignOut ?? (async () => { await supabase.auth.signOut({ scope: "local" }); });
+
+  async function confirmLocalSignOut() {
+    setLocalSignOutState({ loading: true, error: null });
+    try {
+      await localSignOutAction();
+      setShowLocalSignOutConfirm(false);
+      setLocalSignOutState({ loading: false, error: null });
+    } catch (error) {
+      setLocalSignOutState({
+        loading: false,
+        error: error?.message || "Unable to sign out right now.",
+      });
+    }
+  }
 
   // Sub-view routing
   if (activeSection === "account") {
-    return <AccountDetail authedUser={authedUser} config={config} onBack={() => setActiveSection(null)} onLocalSignOut={onLocalSignOut} />;
+    return <AccountDetail authedUser={authedUser} config={config} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "employment") {
     return <EmploymentDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
@@ -1438,6 +1443,38 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           />
         )}
       </div>
+
+      <button
+        onClick={() => { setLocalSignOutState({ loading: false, error: null }); setShowLocalSignOutConfirm(true); }}
+        style={{ width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-red)", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
+      >
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        Sign Out (This Device)
+      </button>
+
+      {showLocalSignOutConfirm && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
+          <div style={{ width: "100%", maxWidth: "420px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>Sign Out</div>
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.55" }}>
+              Sign out from this device now?
+            </div>
+            {localSignOutState.error && (
+              <div style={{ fontSize: "11px", color: "var(--color-red)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>
+                {localSignOutState.error}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => setShowLocalSignOutConfirm(false)} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: localSignOutState.loading ? "default" : "pointer" }}>Cancel</button>
+              <button onClick={confirmLocalSignOut} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-red)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: localSignOutState.loading ? "default" : "pointer" }}>{localSignOutState.loading ? "..." : "Confirm"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -31,6 +31,7 @@ const safeDate = (raw) => {
 
 export function HomePanel({
   navigate,
+  onLocalSignOut,
   weeklyIncome,
   adjustedTakeHome,
   remainingSpend,
@@ -476,6 +477,14 @@ export function HomePanel({
         <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
           {subtitle}
         </div>
+        {typeof onLocalSignOut === "function" && (
+          <button
+            onClick={onLocalSignOut}
+            style={{ marginTop: "14px", padding: "9px 14px", background: "transparent", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-red)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "700", cursor: "pointer" }}
+          >
+            Sign Out
+          </button>
+        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>

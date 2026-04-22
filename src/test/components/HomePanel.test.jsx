@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { HomePanel } from '../../components/HomePanel.jsx'
 
 const baseProps = {
@@ -22,5 +22,12 @@ describe('HomePanel', () => {
     const tile = tiles[0].closest('button')
     expect(tile).not.toBeNull()
     expect(tile).toHaveTextContent(/\$\d+/)
+  })
+
+  it('shows a Home sign-out action wired to the provided handler', () => {
+    const onLocalSignOut = vi.fn()
+    render(<HomePanel {...baseProps} onLocalSignOut={onLocalSignOut} />)
+    fireEvent.click(screen.getByRole('button', { name: /sign out/i }))
+    expect(onLocalSignOut).toHaveBeenCalledTimes(1)
   })
 })

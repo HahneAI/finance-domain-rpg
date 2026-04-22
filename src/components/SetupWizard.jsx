@@ -181,6 +181,9 @@ function Step1({ formData, onChange, lifeEvent, attempted }) {
     if (yes) {
       onChange({
         employerPreset: "DHL",
+        otThreshold: 40,
+        otMultiplier: 1.5,
+        payPeriodEndDay: 0,
         scheduleIsVariable: true,
         bucketStartBalance: 64,
         bucketCap: 128,
@@ -406,48 +409,52 @@ function Step1({ formData, onChange, lifeEvent, attempted }) {
             />
           </Field>
 
-          {/* ── OT Threshold ── */}
-          <Field label="Overtime Threshold (hrs/wk)">
-            <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
-              {OT_THRESHOLDS.map(h => (
-                <Pill
-                  key={h} label={`${h}h`}
-                  active={!otCustom && formData.otThreshold === h}
-                  onClick={() => { setOtCustom(false); onChange({ otThreshold: h }); }}
-                />
-              ))}
-              <Pill
-                label="Custom"
-                active={otCustom}
-                onClick={() => setOtCustom(true)}
-              />
-            </div>
-            {otCustom && (
-              <div style={{ marginTop: "10px" }}>
-                <label style={lS}>Hours/week</label>
-                <input
-                  style={{ ...iS }}
-                  type="number" min="1" step="1"
-                  value={formData.otThreshold ?? ""}
-                  onChange={e => onChange({ otThreshold: e.target.value === "" ? null : parseInt(e.target.value) })}
-                  placeholder="e.g. 40"
-                />
-              </div>
-            )}
-          </Field>
+          {!isDHL && (
+            <>
+              {/* ── OT Threshold ── */}
+              <Field label="Overtime Threshold (hrs/wk)">
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
+                  {OT_THRESHOLDS.map(h => (
+                    <Pill
+                      key={h} label={`${h}h`}
+                      active={!otCustom && formData.otThreshold === h}
+                      onClick={() => { setOtCustom(false); onChange({ otThreshold: h }); }}
+                    />
+                  ))}
+                  <Pill
+                    label="Custom"
+                    active={otCustom}
+                    onClick={() => setOtCustom(true)}
+                  />
+                </div>
+                {otCustom && (
+                  <div style={{ marginTop: "10px" }}>
+                    <label style={lS}>Hours/week</label>
+                    <input
+                      style={{ ...iS }}
+                      type="number" min="1" step="1"
+                      value={formData.otThreshold ?? ""}
+                      onChange={e => onChange({ otThreshold: e.target.value === "" ? null : parseInt(e.target.value) })}
+                      placeholder="e.g. 40"
+                    />
+                  </div>
+                )}
+              </Field>
 
-          {/* ── OT Multiplier ── */}
-          <Field label="OT Multiplier">
-            <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-              {OT_MULTIPLIERS.map(m => (
-                <Pill
-                  key={m} label={`${m}×`}
-                  active={formData.otMultiplier === m}
-                  onClick={() => onChange({ otMultiplier: m })}
-                />
-              ))}
-            </div>
-          </Field>
+              {/* ── OT Multiplier ── */}
+              <Field label="OT Multiplier">
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                  {OT_MULTIPLIERS.map(m => (
+                    <Pill
+                      key={m} label={`${m}×`}
+                      active={formData.otMultiplier === m}
+                      onClick={() => onChange({ otMultiplier: m })}
+                    />
+                  ))}
+                </div>
+              </Field>
+            </>
+          )}
 
           {/* ── Commission (life event only) ── */}
           {lifeEvent === "commission_job" && (
@@ -566,23 +573,25 @@ function Step2({ formData, onChange, attempted }) {
       )}
 
       {/* ── Pay period end day ── */}
-      <Field label="Pay Period Closes On">
-        <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
-          {DAY_LABELS.map((d, i) => (
-            <Pill
-              key={i} label={d}
-              active={formData.payPeriodEndDay === i}
-              onClick={() => onChange({ payPeriodEndDay: i })}
-            />
-          ))}
-        </div>
-        <div style={{
-          marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
-          lineHeight: "1.5",
-        }}>
-          Weekly confirmation prompt fires on this day.
-        </div>
-      </Field>
+      {!isDHL && (
+        <Field label="Pay Period Closes On">
+          <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+            {DAY_LABELS.map((d, i) => (
+              <Pill
+                key={i} label={d}
+                active={formData.payPeriodEndDay === i}
+                onClick={() => onChange({ payPeriodEndDay: i })}
+              />
+            ))}
+          </div>
+          <div style={{
+            marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
+            lineHeight: "1.5",
+          }}>
+            Weekly confirmation prompt fires on this day.
+          </div>
+        </Field>
+      )}
 
     </div>
   );
@@ -1554,11 +1563,14 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   }
 
   function handleComplete() {
-    const allWeeks   = buildYear(formData);
+    const finalData = formData.employerPreset === "DHL"
+      ? { ...formData, payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5 }
+      : formData;
+    const allWeeks   = buildYear(finalData);
     const taxedWeeks = allWeeks
-      .filter(w => w.idx >= (formData.firstActiveIdx ?? 0))
+      .filter(w => w.idx >= (finalData.firstActiveIdx ?? 0))
       .map(w => w.idx);
-    onComplete({ ...formData, taxedWeeks, setupComplete: true });
+    onComplete({ ...finalData, taxedWeeks, setupComplete: true });
   }
 
   const progressPct = ((stepIdx + 1) / activeSteps.length) * 100;
@@ -1703,7 +1715,5 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
     </div>
   );
 }
-
-
 
 

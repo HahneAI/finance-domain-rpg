@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { SetupWizard } from '../../components/SetupWizard.jsx'
 import { DEFAULT_CONFIG } from '../../constants/config.js'
 
@@ -173,6 +173,52 @@ describe('SetupWizard — validation gates', () => {
     expect(nextBtn).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: /standard time off/i }))
     expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled()
+  })
+})
+
+describe('SetupWizard — DHL hidden defaults', () => {
+  it('hides OT fields for DHL users and keeps them visible for non-DHL users', () => {
+    const dhlConfig = { ...BASE_CONFIG, employerPreset: 'DHL', dhlTeam: 'A', userPaySchedule: 'weekly' }
+    renderWizard({ config: dhlConfig })
+
+    expect(screen.queryByText(/overtime threshold/i)).toBeNull()
+    expect(screen.queryByText(/ot multiplier/i)).toBeNull()
+    cleanup()
+
+    renderWizard({ config: { ...BASE_CONFIG, employerPreset: null } })
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
+    expect(screen.getByText(/overtime threshold/i)).toBeTruthy()
+    expect(screen.getByText(/ot multiplier/i)).toBeTruthy()
+  })
+
+  it('hides pay-period selector for DHL users on Schedule step', () => {
+    const config = { ...BASE_CONFIG, employerPreset: 'DHL', dhlTeam: 'A', userPaySchedule: 'weekly' }
+    renderWizard({ config })
+    clickNext()
+    clickNext()
+    expect(screen.queryByText(/pay period closes on/i)).toBeNull()
+  })
+
+  it('auto-applies Sunday/40/1.5 defaults for DHL users in onComplete payload', async () => {
+    const config = {
+      ...BASE_CONFIG,
+      employerPreset: 'DHL',
+      dhlTeam: 'A',
+      userPaySchedule: 'weekly',
+      payPeriodEndDay: 2,
+      otThreshold: 44,
+      otMultiplier: 2,
+    }
+    const { onComplete } = renderWizard({ lifeEvent: 'changed_jobs', config })
+    advanceSteps(5)
+    fireEvent.click(screen.getByRole('button', { name: /finish/i }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const payload = onComplete.mock.calls[0][0]
+    expect(payload.payPeriodEndDay).toBe(0)
+    expect(payload.otThreshold).toBe(40)
+    expect(payload.otMultiplier).toBe(1.5)
   })
 })
 

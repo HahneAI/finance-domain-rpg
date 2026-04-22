@@ -899,7 +899,7 @@ export function loanPaymentsRemaining(loan) {
   const daysPerPayment = DAYS_PER_FREQ[freq] ?? 7;
   const elapsed = Math.floor(
     (new Date(today) - new Date(loan.firstPaymentDate)) / (daysPerPayment * 24 * 60 * 60 * 1000)
-  );
+  ) + 1; // firstPaymentDate itself is payment #1
   return Math.max(total - elapsed, 0);
 }
 

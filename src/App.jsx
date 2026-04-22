@@ -345,6 +345,10 @@ export default function App() {
     saveUserData({ config: newConfig, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
   }, [expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
 
+  const handleLocalSignOut = useCallback(async () => {
+    await supabase.auth.signOut({ scope: "local" });
+  }, []);
+
   // ── today: reactive date string — ticks at midnight so everything auto-advances ──
   const [today, setToday] = useState(() => toLocalIso(new Date()));
   useEffect(() => {
@@ -646,6 +650,7 @@ export default function App() {
     <>
       {currentView === "home" && <HomePanel
         navigate={navigate}
+        onLocalSignOut={handleLocalSignOut}
         weeklyIncome={weeklyIncome}
         adjustedTakeHome={logTotals.adjustedTakeHome}
         remainingSpend={remainingSpend}
@@ -716,6 +721,7 @@ export default function App() {
         config={config}
         setConfig={setConfig}
         saveConfigNow={saveConfigNow}
+        onLocalSignOut={handleLocalSignOut}
         allWeeks={allWeeks}
         taxDerived={taxDerived}
         showExtra={showExtra}

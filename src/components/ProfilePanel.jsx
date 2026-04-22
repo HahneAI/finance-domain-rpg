@@ -64,7 +64,7 @@ function DetailCard({ children, style }) {
 
 // ── Sub-views ───────────────────────────────────────────────────────────────
 
-function AccountDetail({ authedUser, config, onBack }) {
+function AccountDetail({ authedUser, config, onBack, onLocalSignOut }) {
   const setupColor  = config.setupComplete ? "var(--color-green)"           : "var(--color-gold)";
   const setupBg     = config.setupComplete ? "rgba(76,175,125,0.12)"        : "rgba(0,200,150,0.08)";
   const setupBorder = config.setupComplete ? "rgba(76,175,125,0.3)"         : "rgba(0,200,150,0.22)";
@@ -355,7 +355,7 @@ function AccountDetail({ authedUser, config, onBack }) {
       </DetailCard>
 
       <button
-        onClick={async () => { await supabase.auth.signOut({ scope: "local" }); }}
+        onClick={onLocalSignOut ?? (async () => { await supabase.auth.signOut({ scope: "local" }); })}
         style={{ width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-red)", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
       >
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1136,16 +1136,58 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
   );
 }
 
-function PreferencesDetail({ config, onBack }) {
+function PreferencesDetail({ config, setConfig, onSaveConfig, onBack }) {
+  const [editingBuffer, setEditingBuffer] = useState(false);
+  const [bufferEnabled, setBufferEnabled] = useState(config.bufferEnabled ?? true);
+  const [paycheckBuffer, setPaycheckBuffer] = useState(config.paycheckBuffer ?? 50);
+
+  const handleSaveBuffer = () => {
+    const clampedBuffer = Math.max(0, Math.min(Number(paycheckBuffer) || 0, 200));
+    const newConfig = { ...config, bufferEnabled, paycheckBuffer: clampedBuffer };
+    setConfig(newConfig);
+    onSaveConfig?.(newConfig);
+    setEditingBuffer(false);
+  };
+
   return (
     <>
       <BackBar onBack={onBack} title="App Preferences" />
       <DetailCard>
-        <DetailRow
-          label="Paycheck Buffer"
-          value={config.bufferEnabled ? `On — $${config.paycheckBuffer}/check` : "Off"}
-          valueColor={config.bufferEnabled ? undefined : "var(--color-text-disabled)"}
-        />
+        {!editingBuffer ? (
+          <button
+            onClick={() => setEditingBuffer(true)}
+            style={{ width: "100%", background: "transparent", border: "none", textAlign: "left", cursor: "pointer", padding: 0 }}
+          >
+            <DetailRow
+              label="Paycheck Buffer"
+              value={config.bufferEnabled ? `On — $${config.paycheckBuffer}/check` : "Off"}
+              valueColor={config.bufferEnabled ? undefined : "var(--color-text-disabled)"}
+            />
+          </button>
+        ) : (
+          <div style={{ padding: "13px 16px", borderBottom: "1px solid #1e1e1e" }}>
+            <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>Paycheck Buffer</div>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+              <button onClick={() => setBufferEnabled(true)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: bufferEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: bufferEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>On</button>
+              <button onClick={() => setBufferEnabled(false)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !bufferEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: !bufferEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Off</button>
+            </div>
+            <label style={lS}>Buffer Amount ($ / check)</label>
+            <input
+              type="number"
+              min="0"
+              max="200"
+              step="1"
+              value={paycheckBuffer}
+              onChange={e => setPaycheckBuffer(e.target.value)}
+              style={{ ...iS, marginTop: "6px", marginBottom: "12px", opacity: bufferEnabled ? 1 : 0.65 }}
+              disabled={!bufferEnabled}
+            />
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => { setEditingBuffer(false); setBufferEnabled(config.bufferEnabled ?? true); setPaycheckBuffer(config.paycheckBuffer ?? 50); }} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleSaveBuffer} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</button>
+            </div>
+          </div>
+        )}
         <DetailRow
           label="Tax Exempt"
           value={config.taxExemptOptIn ? "Opted in" : "Standard withholding"}
@@ -1154,7 +1196,7 @@ function PreferencesDetail({ config, onBack }) {
         />
       </DetailCard>
       <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
-        Buffer is managed in the Income panel. Tax settings are managed in Account → Tax Plan or via Life Events.
+        Buffer and tax settings can also be updated from setup flows and Life Events.
       </div>
     </>
   );
@@ -1318,7 +1360,7 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, today }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, today }) {
   const [activeSection, setActiveSection] = useState(null);
 
   const isDHL     = config.employerPreset === "DHL";
@@ -1329,7 +1371,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, all
 
   // Sub-view routing
   if (activeSection === "account") {
-    return <AccountDetail authedUser={authedUser} config={config} onBack={() => setActiveSection(null)} />;
+    return <AccountDetail authedUser={authedUser} config={config} onBack={() => setActiveSection(null)} onLocalSignOut={onLocalSignOut} />;
   }
   if (activeSection === "employment") {
     return <EmploymentDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
@@ -1341,7 +1383,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, all
     return <BenefitsDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "preferences") {
-    return <PreferencesDetail config={config} onBack={() => setActiveSection(null)} />;
+    return <PreferencesDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "taxplan") {
     return <TaxPlanDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} today={today} />;

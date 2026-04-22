@@ -23,4 +23,9 @@ describe('HomePanel', () => {
     expect(tile).not.toBeNull()
     expect(tile).toHaveTextContent(/\$\d+/)
   })
+
+  it('does not show a sign-out action on Home', () => {
+    render(<HomePanel {...baseProps} />)
+    expect(screen.queryByRole('button', { name: /sign out/i })).toBeNull()
+  })
 })

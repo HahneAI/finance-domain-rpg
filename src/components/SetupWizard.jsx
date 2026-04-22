@@ -14,7 +14,7 @@
 // Steps 5, 6, 8, 15 removed from STEP_DEFS — content folded into adjacent steps.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { buildYear, dhlEmployerMatchRate } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
 import { FISCAL_YEAR_START, DHL_PRESET, DHL_BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
@@ -127,13 +127,22 @@ function FieldRow({ children }) {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children, error }) {
   return (
     <div>
-      <label style={lS}>{label}</label>
+      <label style={{ ...lS, ...(error ? { color: "var(--color-red)" } : {}) }}>{label}</label>
       {children}
+      {error && (
+        <div style={{ fontSize: "10px", color: "var(--color-red)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>
+          ↑ {error}
+        </div>
+      )}
     </div>
   );
+}
+
+function errBorder(show) {
+  return show ? { border: "1px solid var(--color-red)" } : {};
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -142,7 +151,7 @@ function Field({ label, children }) {
 const OT_THRESHOLDS = [40, 48];
 const OT_MULTIPLIERS = [1.5, 2];
 
-function Step1({ formData, onChange, lifeEvent }) {
+function Step1({ formData, onChange, lifeEvent, attempted }) {
   // Gate: has the user answered "Do you work for DHL?" yet?
   const [gateTouched, setGateTouched] = useState(
     formData.employerPreset === "DHL" || formData.setupComplete === true
@@ -158,6 +167,12 @@ function Step1({ formData, onChange, lifeEvent }) {
     (formData.commissionMonthly ?? 0) > 0
   );
 
+  // String draft for customWeeklyHours — allows blank display while typing.
+  // formData stores 0 as sentinel for "custom mode, field blank" so isValid can catch it.
+  const [hoursDraft, setHoursDraft] = useState(
+    formData.customWeeklyHours > 0 ? String(formData.customWeeklyHours) : ""
+  );
+
   const isDHL    = formData.employerPreset === "DHL";
   const isSalary = formData.userPaySchedule === "salary";
 
@@ -166,6 +181,9 @@ function Step1({ formData, onChange, lifeEvent }) {
     if (yes) {
       onChange({
         employerPreset: "DHL",
+        otThreshold: 40,
+        otMultiplier: 1.5,
+        payPeriodEndDay: 0,
         scheduleIsVariable: true,
         bucketStartBalance: 64,
         bucketCap: 128,
@@ -258,26 +276,37 @@ function Step1({ formData, onChange, lifeEvent }) {
               <Pill
                 label="Standard rotation"
                 active={formData.customWeeklyHours == null}
-                onClick={() => onChange({ customWeeklyHours: null, dhlCustomSchedule: false })}
+                onClick={() => { onChange({ customWeeklyHours: null, dhlCustomSchedule: false }); setHoursDraft(""); }}
               />
               <Pill
                 label="Custom schedule"
                 active={formData.customWeeklyHours != null}
-                onClick={() => onChange({ customWeeklyHours: formData.customWeeklyHours ?? 60, dhlCustomSchedule: false })}
+                onClick={() => {
+                  const v = (formData.customWeeklyHours ?? 0) > 0 ? formData.customWeeklyHours : 60;
+                  onChange({ customWeeklyHours: v, dhlCustomSchedule: false });
+                  setHoursDraft(String(v));
+                }}
               />
             </div>
             {formData.customWeeklyHours != null ? (
               <div style={{ marginTop: "10px" }}>
-                <label style={lS}>Hours per week</label>
+                <label style={{ ...lS, ...(attempted && formData.customWeeklyHours === 0 ? { color: "var(--color-red)" } : {}) }}>Hours per week</label>
                 <input
                   type="number"
                   step="1"
                   min="1"
                   max="168"
-                  value={formData.customWeeklyHours}
-                  onChange={e => onChange({ customWeeklyHours: parseFloat(e.target.value) || 60, dhlCustomSchedule: false })}
-                  style={{ ...iS, marginTop: "4px" }}
+                  value={hoursDraft}
+                  onChange={e => {
+                    setHoursDraft(e.target.value);
+                    const n = parseFloat(e.target.value);
+                    onChange({ customWeeklyHours: (!isNaN(n) && n > 0) ? n : 0, dhlCustomSchedule: false });
+                  }}
+                  style={{ ...iS, marginTop: "4px", ...errBorder(attempted && formData.customWeeklyHours === 0) }}
                 />
+                {attempted && formData.customWeeklyHours === 0 && (
+                  <div style={{ fontSize: "10px", color: "var(--color-red)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>↑ Required</div>
+                )}
                 <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
                   Projections will use this as your weekly hours baseline. Your DHL rotation is still used to show scheduled days in weekly confirmation.
                 </div>
@@ -325,9 +354,9 @@ function Step1({ formData, onChange, lifeEvent }) {
 
           {/* ── Rate fields — salary vs hourly ── */}
           {isSalary ? (
-            <Field label="Annual Salary ($)">
+            <Field label="Annual Salary ($)" error={attempted && !((formData.annualSalary ?? 0) > 0) ? "Enter your annual salary" : null}>
               <input
-                style={{ ...iS }}
+                style={{ ...iS, ...errBorder(attempted && !((formData.annualSalary ?? 0) > 0)) }}
                 type="number" min="0" step="1000"
                 value={formData.annualSalary ?? ""}
                 onChange={e => {
@@ -348,18 +377,18 @@ function Step1({ formData, onChange, lifeEvent }) {
             </Field>
           ) : (
             <FieldRow>
-            <Field label="Base Rate ($/hr)">
+            <Field label="Base Rate ($/hr)" error={attempted && !((formData.baseRate ?? 0) > 0) ? "Required" : null}>
               <input
-                style={{ ...iS }}
+                style={{ ...iS, ...errBorder(attempted && !((formData.baseRate ?? 0) > 0)) }}
                 type="number" min="0" step="0.01"
                 value={formData.baseRate ?? ""}
                 onChange={e => onChange({ baseRate: e.target.value === "" ? null : parseFloat(e.target.value) })}
                 placeholder="e.g. 19.65"
               />
             </Field>
-            <Field label="Shift Length (hrs)">
+            <Field label="Shift Length (hrs)" error={attempted && !((formData.shiftHours ?? 0) > 0) ? "Required" : null}>
               <input
-                style={{ ...iS }}
+                style={{ ...iS, ...errBorder(attempted && !((formData.shiftHours ?? 0) > 0)) }}
                 type="number" min="1" step="0.5"
                 value={formData.shiftHours ?? ""}
                 onChange={e => onChange({ shiftHours: e.target.value === "" ? null : parseFloat(e.target.value) })}
@@ -380,48 +409,52 @@ function Step1({ formData, onChange, lifeEvent }) {
             />
           </Field>
 
-          {/* ── OT Threshold ── */}
-          <Field label="Overtime Threshold (hrs/wk)">
-            <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
-              {OT_THRESHOLDS.map(h => (
-                <Pill
-                  key={h} label={`${h}h`}
-                  active={!otCustom && formData.otThreshold === h}
-                  onClick={() => { setOtCustom(false); onChange({ otThreshold: h }); }}
-                />
-              ))}
-              <Pill
-                label="Custom"
-                active={otCustom}
-                onClick={() => setOtCustom(true)}
-              />
-            </div>
-            {otCustom && (
-              <div style={{ marginTop: "10px" }}>
-                <label style={lS}>Hours/week</label>
-                <input
-                  style={{ ...iS }}
-                  type="number" min="1" step="1"
-                  value={formData.otThreshold ?? ""}
-                  onChange={e => onChange({ otThreshold: e.target.value === "" ? null : parseInt(e.target.value) })}
-                  placeholder="e.g. 40"
-                />
-              </div>
-            )}
-          </Field>
+          {!isDHL && (
+            <>
+              {/* ── OT Threshold ── */}
+              <Field label="Overtime Threshold (hrs/wk)">
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
+                  {OT_THRESHOLDS.map(h => (
+                    <Pill
+                      key={h} label={`${h}h`}
+                      active={!otCustom && formData.otThreshold === h}
+                      onClick={() => { setOtCustom(false); onChange({ otThreshold: h }); }}
+                    />
+                  ))}
+                  <Pill
+                    label="Custom"
+                    active={otCustom}
+                    onClick={() => setOtCustom(true)}
+                  />
+                </div>
+                {otCustom && (
+                  <div style={{ marginTop: "10px" }}>
+                    <label style={lS}>Hours/week</label>
+                    <input
+                      style={{ ...iS }}
+                      type="number" min="1" step="1"
+                      value={formData.otThreshold ?? ""}
+                      onChange={e => onChange({ otThreshold: e.target.value === "" ? null : parseInt(e.target.value) })}
+                      placeholder="e.g. 40"
+                    />
+                  </div>
+                )}
+              </Field>
 
-          {/* ── OT Multiplier ── */}
-          <Field label="OT Multiplier">
-            <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-              {OT_MULTIPLIERS.map(m => (
-                <Pill
-                  key={m} label={`${m}×`}
-                  active={formData.otMultiplier === m}
-                  onClick={() => onChange({ otMultiplier: m })}
-                />
-              ))}
-            </div>
-          </Field>
+              {/* ── OT Multiplier ── */}
+              <Field label="OT Multiplier">
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                  {OT_MULTIPLIERS.map(m => (
+                    <Pill
+                      key={m} label={`${m}×`}
+                      active={formData.otMultiplier === m}
+                      onClick={() => onChange({ otMultiplier: m })}
+                    />
+                  ))}
+                </div>
+              </Field>
+            </>
+          )}
 
           {/* ── Commission (life event only) ── */}
           {lifeEvent === "commission_job" && (
@@ -472,7 +505,7 @@ function dateToWeekIdx(dateStr) {
   return Math.max(0, Math.ceil(diffDays / 7));
 }
 
-function Step2({ formData, onChange }) {
+function Step2({ formData, onChange, attempted }) {
   const isDHL = formData.employerPreset === "DHL";
 
   function handleDateChange(dateStr) {
@@ -484,9 +517,9 @@ function Step2({ formData, onChange }) {
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
       {/* ── Job start date ── */}
-      <Field label="Job Start Date">
+      <Field label="Job Start Date" error={attempted && !formData.startDate ? "Select your job start date" : null}>
         <input
-          style={{ ...iS }}
+          style={{ ...iS, ...errBorder(attempted && !formData.startDate) }}
           type="date"
           value={formData.startDate ?? ""}
           onChange={e => handleDateChange(e.target.value)}
@@ -540,23 +573,25 @@ function Step2({ formData, onChange }) {
       )}
 
       {/* ── Pay period end day ── */}
-      <Field label="Pay Period Closes On">
-        <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
-          {DAY_LABELS.map((d, i) => (
-            <Pill
-              key={i} label={d}
-              active={formData.payPeriodEndDay === i}
-              onClick={() => onChange({ payPeriodEndDay: i })}
-            />
-          ))}
-        </div>
-        <div style={{
-          marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
-          lineHeight: "1.5",
-        }}>
-          Weekly confirmation prompt fires on this day.
-        </div>
-      </Field>
+      {!isDHL && (
+        <Field label="Pay Period Closes On">
+          <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+            {DAY_LABELS.map((d, i) => (
+              <Pill
+                key={i} label={d}
+                active={formData.payPeriodEndDay === i}
+                onClick={() => onChange({ payPeriodEndDay: i })}
+              />
+            ))}
+          </div>
+          <div style={{
+            marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
+            lineHeight: "1.5",
+          }}>
+            Weekly confirmation prompt fires on this day.
+          </div>
+        </Field>
+      )}
 
     </div>
   );
@@ -974,7 +1009,7 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
   );
 }
 
-function Step4({ formData, onChange }) {
+function Step4({ formData, onChange, attempted }) {
   const isDHL      = formData.employerPreset === "DHL";
   const isVariable = formData.scheduleIsVariable;
   const stateConfig = formData.userState ? STATE_TAX_TABLE[formData.userState] : null;
@@ -1048,9 +1083,9 @@ function Step4({ formData, onChange }) {
       )}
 
       {/* State dropdown */}
-      <Field label="Your State">
+      <Field label="Your State" error={attempted && !formData.userState ? "Select your state" : null}>
         <select
-          style={{ ...iS, appearance: "none", WebkitAppearance: "none" }}
+          style={{ ...iS, appearance: "none", WebkitAppearance: "none", ...errBorder(attempted && !formData.userState) }}
           value={formData.userState ?? ""}
           onChange={e => handleStateChange(e.target.value)}
         >
@@ -1428,6 +1463,7 @@ const STEP_DEFS = [
     isValid: (d) => {
       if (!d.userPaySchedule) return false;
       if (d.employerPreset === "DHL" && !d.dhlTeam) return false;
+      if (d.customWeeklyHours === 0) return false; // custom mode, hours field blank
       if (d.userPaySchedule === "salary") return (d.annualSalary ?? 0) > 0;
       return (d.baseRate ?? 0) > 0 && (d.shiftHours ?? 0) > 0;
     },
@@ -1500,31 +1536,41 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   const [stepIdx,   setStepIdx]   = useState(0);
   const [formData,  setFormData]  = useState({ ...config });
   const [lifeEvent, setLifeEvent] = useState(initialLifeEvent);
+  const [attempted, setAttempted] = useState(false);
 
   const activeSteps = STEP_DEFS.filter(s => s.showIf(formData, lifeEvent));
   const current     = activeSteps[stepIdx];
   const isLast      = stepIdx === activeSteps.length - 1;
   const canProceed  = current?.isValid(formData, lifeEvent) ?? false;
 
+  // Reset error state whenever the user moves to a new step
+  useEffect(() => { setAttempted(false); }, [stepIdx]);
+
   function update(patch) {
     setFormData(prev => ({ ...prev, ...patch }));
   }
 
   function handleNext() {
+    if (!canProceed) { setAttempted(true); return; }
+    setAttempted(false);
     if (!isLast) setStepIdx(i => i + 1);
     else handleComplete();
   }
 
   function handleBack() {
+    setAttempted(false);
     if (stepIdx > 0) setStepIdx(i => i - 1);
   }
 
   function handleComplete() {
-    const allWeeks   = buildYear(formData);
+    const finalData = formData.employerPreset === "DHL"
+      ? { ...formData, payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5 }
+      : formData;
+    const allWeeks   = buildYear(finalData);
     const taxedWeeks = allWeeks
-      .filter(w => w.idx >= (formData.firstActiveIdx ?? 0))
+      .filter(w => w.idx >= (finalData.firstActiveIdx ?? 0))
       .map(w => w.idx);
-    onComplete({ ...formData, taxedWeeks, setupComplete: true });
+    onComplete({ ...finalData, taxedWeeks, setupComplete: true });
   }
 
   const progressPct = ((stepIdx + 1) / activeSteps.length) * 100;
@@ -1591,6 +1637,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
                 onChange={update}
                 lifeEvent={lifeEvent}
                 onLifeEventChange={setLifeEvent}
+                attempted={attempted}
               />
             : <StepStub title={current?.title} sprint={current?.sprint} />
           }
@@ -1650,14 +1697,13 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
           )}
           <button
             onClick={handleNext}
-            disabled={!canProceed}
             style={{
               background: canProceed ? "var(--color-gold)" : "var(--color-bg-raised)",
               color: canProceed ? "var(--color-bg-base)" : "var(--color-text-disabled)",
               border: "none", borderRadius: "12px", padding: "8px 22px",
               fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
               fontWeight: "bold",
-              cursor: canProceed ? "pointer" : "not-allowed",
+              cursor: "pointer",
               transition: "background 0.2s ease, color 0.2s ease",
             }}
           >
@@ -1669,7 +1715,5 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
     </div>
   );
 }
-
-
 
 

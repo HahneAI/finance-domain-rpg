@@ -423,7 +423,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       label: newExp.label,
       note: [newExp.note, newExp.note, newExp.note, newExp.note],
       billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO },
-      history: [{ effectiveFrom: TODAY_ISO, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }]
+      history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }]
     }]);
     setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   };

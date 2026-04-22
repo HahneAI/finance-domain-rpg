@@ -135,6 +135,34 @@ CANCEL: bg-raised, text-secondary, border-subtle, radius 12px, pad 7px 14px, 10p
 SAVE:   bg-green or bg-gold (teal), color bg-base, radius 12px, pad 8px 16px, 10px bold uppercase
 ```
 
+### Numeric Input Standard (required for all new number inputs)
+
+Number inputs must allow blank display while the user is mid-edit. **Never coerce on `onChange`.**
+
+**Rules:**
+1. `value` — use a string draft state or `field ?? ""` so the field can visually go empty
+2. `onChange` — store the raw string; do NOT use `parseFloat(v) || fallback` (the fallback snaps the display). Only parse at commit time (blur, save button, form submit)
+3. On commit: `parseFloat(draft) || 0` or explicit null-check is fine
+4. For required fields with a multi-step flow: pass an `attempted` boolean (set when user taps Next/Save on a blank required field). When `attempted && fieldEmpty`, show: red label (`color: var(--color-red)`), red input border (`border: 1px solid var(--color-red)`), and an inline `↑ Required` message below the input
+
+**Wizard pattern** (SetupWizard `Field` + `errBorder` helper already support this):
+```jsx
+const [draft, setDraft] = useState(String(config.field ?? ""));
+<Field label="Rate" error={attempted && !draft ? "Required" : null}>
+  <input type="number" value={draft}
+    onChange={e => setDraft(e.target.value)}
+    style={{ ...iS, ...errBorder(attempted && !draft) }} />
+</Field>
+// On save: parseFloat(draft) || 0
+```
+
+**Inline panel edit pattern** (BudgetPanel, ProfilePanel, etc.):
+```jsx
+value={editDraft.amount}   // "" is allowed
+onChange={e => setEditDraft(v => ({ ...v, amount: e.target.value }))}
+// On save: parseFloat(editDraft.amount) || 0
+```
+
 ### Animation Rules
 - Entrance stagger: `entranceIndex` on MetricCard → `fadeSlideUp` 400ms, 80ms/card, capped 400ms
 - Countup: `rawVal` prop → 0→target over 1200ms on mount/change

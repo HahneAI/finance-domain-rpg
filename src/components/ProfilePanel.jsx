@@ -354,18 +354,6 @@ function AccountDetail({ authedUser, config, onBack }) {
         </button>
       </DetailCard>
 
-      <button
-        onClick={async () => { await supabase.auth.signOut({ scope: "local" }); }}
-        style={{ width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-red)", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
-      >
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-          <polyline points="16 17 21 12 16 7"/>
-          <line x1="21" y1="12" x2="9" y2="12"/>
-        </svg>
-        Sign Out (This Device)
-      </button>
-
       {showDeleteDialog && (
         <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div style={{ width: "100%", maxWidth: "430px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -1136,16 +1124,58 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
   );
 }
 
-function PreferencesDetail({ config, onBack }) {
+function PreferencesDetail({ config, setConfig, onSaveConfig, onBack }) {
+  const [editingBuffer, setEditingBuffer] = useState(false);
+  const [bufferEnabled, setBufferEnabled] = useState(config.bufferEnabled ?? true);
+  const [paycheckBuffer, setPaycheckBuffer] = useState(config.paycheckBuffer ?? 50);
+
+  const handleSaveBuffer = () => {
+    const clampedBuffer = Math.max(0, Math.min(Number(paycheckBuffer) || 0, 200));
+    const newConfig = { ...config, bufferEnabled, paycheckBuffer: clampedBuffer };
+    setConfig(newConfig);
+    onSaveConfig?.(newConfig);
+    setEditingBuffer(false);
+  };
+
   return (
     <>
       <BackBar onBack={onBack} title="App Preferences" />
       <DetailCard>
-        <DetailRow
-          label="Paycheck Buffer"
-          value={config.bufferEnabled ? `On — $${config.paycheckBuffer}/check` : "Off"}
-          valueColor={config.bufferEnabled ? undefined : "var(--color-text-disabled)"}
-        />
+        {!editingBuffer ? (
+          <button
+            onClick={() => setEditingBuffer(true)}
+            style={{ width: "100%", background: "transparent", border: "none", textAlign: "left", cursor: "pointer", padding: 0 }}
+          >
+            <DetailRow
+              label="Paycheck Buffer"
+              value={config.bufferEnabled ? `On — $${config.paycheckBuffer}/check` : "Off"}
+              valueColor={config.bufferEnabled ? undefined : "var(--color-text-disabled)"}
+            />
+          </button>
+        ) : (
+          <div style={{ padding: "13px 16px", borderBottom: "1px solid #1e1e1e" }}>
+            <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>Paycheck Buffer</div>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+              <button onClick={() => setBufferEnabled(true)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: bufferEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: bufferEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>On</button>
+              <button onClick={() => setBufferEnabled(false)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !bufferEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: !bufferEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Off</button>
+            </div>
+            <label style={lS}>Buffer Amount ($ / check)</label>
+            <input
+              type="number"
+              min="0"
+              max="200"
+              step="1"
+              value={paycheckBuffer}
+              onChange={e => setPaycheckBuffer(e.target.value)}
+              style={{ ...iS, marginTop: "6px", marginBottom: "12px", opacity: bufferEnabled ? 1 : 0.65 }}
+              disabled={!bufferEnabled}
+            />
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => { setEditingBuffer(false); setBufferEnabled(config.bufferEnabled ?? true); setPaycheckBuffer(config.paycheckBuffer ?? 50); }} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleSaveBuffer} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</button>
+            </div>
+          </div>
+        )}
         <DetailRow
           label="Tax Exempt"
           value={config.taxExemptOptIn ? "Opted in" : "Standard withholding"}
@@ -1154,7 +1184,7 @@ function PreferencesDetail({ config, onBack }) {
         />
       </DetailCard>
       <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
-        Buffer is managed in the Income panel. Tax settings are managed in Account → Tax Plan or via Life Events.
+        Buffer and tax settings can also be updated from setup flows and Life Events.
       </div>
     </>
   );
@@ -1195,14 +1225,14 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
           <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px", lineHeight: 1 }}>Tax Strategy & Planning</div>
           {taxDraft === null ? (
             <button onClick={() => setTaxDraft({
-              fedStdDeduction: config.fedStdDeduction,
-              moFlatRate: config.moFlatRate,
-              targetOwedAtFiling: config.targetOwedAtFiling,
-              firstActiveIdx: config.firstActiveIdx,
+              fedStdDeduction: String(config.fedStdDeduction ?? ""),
+              moFlatRate: String(config.moFlatRate ?? ""),
+              targetOwedAtFiling: String(config.targetOwedAtFiling ?? ""),
+              firstActiveIdx: String(config.firstActiveIdx ?? ""),
             })} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Edit Tax Plan</button>
           ) : (
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => { const nc = { ...config, ...taxDraft }; setConfig(nc); onSaveConfig?.(nc); setTaxDraft(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</button>
+              <button onClick={() => { const nc = { ...config, fedStdDeduction: parseFloat(taxDraft.fedStdDeduction) || 0, moFlatRate: parseFloat(taxDraft.moFlatRate) || 0, targetOwedAtFiling: parseFloat(taxDraft.targetOwedAtFiling) || 0, firstActiveIdx: parseInt(taxDraft.firstActiveIdx) || 0 }; setConfig(nc); onSaveConfig?.(nc); setTaxDraft(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</button>
               <button onClick={() => setTaxDraft(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
             </div>
           )}
@@ -1214,10 +1244,10 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-            <div><label style={lS}>Federal Std Deduction ($)</label><input type="number" step="100" value={taxDraft.fedStdDeduction} onChange={e => setTaxDraft(v => ({ ...v, fedStdDeduction: parseFloat(e.target.value) || 0 }))} style={iS} /></div>
-            {!config.userState && <div><label style={lS}>State Rate (fallback)</label><input type="number" step="0.001" value={taxDraft.moFlatRate} onChange={e => setTaxDraft(v => ({ ...v, moFlatRate: parseFloat(e.target.value) || 0 }))} style={iS} /></div>}
-            <div><label style={lS}>Target Owed at Filing ($)</label><input type="number" step="100" value={taxDraft.targetOwedAtFiling} onChange={e => setTaxDraft(v => ({ ...v, targetOwedAtFiling: parseFloat(e.target.value) || 0 }))} style={iS} /></div>
-            <div><label style={lS}>First Active Week Index</label><input type="number" step="1" value={taxDraft.firstActiveIdx} onChange={e => setTaxDraft(v => ({ ...v, firstActiveIdx: parseFloat(e.target.value) || 0 }))} style={iS} /></div>
+            <div><label style={lS}>Federal Std Deduction ($)</label><input type="number" step="100" value={taxDraft.fedStdDeduction} onChange={e => setTaxDraft(v => ({ ...v, fedStdDeduction: e.target.value }))} style={iS} /></div>
+            {!config.userState && <div><label style={lS}>State Rate (fallback)</label><input type="number" step="0.001" value={taxDraft.moFlatRate} onChange={e => setTaxDraft(v => ({ ...v, moFlatRate: e.target.value }))} style={iS} /></div>}
+            <div><label style={lS}>Target Owed at Filing ($)</label><input type="number" step="100" value={taxDraft.targetOwedAtFiling} onChange={e => setTaxDraft(v => ({ ...v, targetOwedAtFiling: e.target.value }))} style={iS} /></div>
+            <div><label style={lS}>First Active Week Index</label><input type="number" step="1" value={taxDraft.firstActiveIdx} onChange={e => setTaxDraft(v => ({ ...v, firstActiveIdx: e.target.value }))} style={iS} /></div>
           </div>
         )}
       </div>
@@ -1318,14 +1348,31 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, today }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, today }) {
   const [activeSection, setActiveSection] = useState(null);
+  const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
+  const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });
 
   const isDHL     = config.employerPreset === "DHL";
   const employer  = isDHL ? "DHL / P&G" : (config.employerPreset || "Independent");
   const has401k   = config.k401Rate > 0;
   const enrolled  = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
   const matchRate = isDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
+  const localSignOutAction = onLocalSignOut ?? (async () => { await supabase.auth.signOut({ scope: "local" }); });
+
+  async function confirmLocalSignOut() {
+    setLocalSignOutState({ loading: true, error: null });
+    try {
+      await localSignOutAction();
+      setShowLocalSignOutConfirm(false);
+      setLocalSignOutState({ loading: false, error: null });
+    } catch (error) {
+      setLocalSignOutState({
+        loading: false,
+        error: error?.message || "Unable to sign out right now.",
+      });
+    }
+  }
 
   // Sub-view routing
   if (activeSection === "account") {
@@ -1341,7 +1388,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, all
     return <BenefitsDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "preferences") {
-    return <PreferencesDetail config={config} onBack={() => setActiveSection(null)} />;
+    return <PreferencesDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "taxplan") {
     return <TaxPlanDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} today={today} />;
@@ -1396,6 +1443,38 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, all
           />
         )}
       </div>
+
+      <button
+        onClick={() => { setLocalSignOutState({ loading: false, error: null }); setShowLocalSignOutConfirm(true); }}
+        style={{ width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-red)", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
+      >
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        Sign Out (This Device)
+      </button>
+
+      {showLocalSignOutConfirm && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
+          <div style={{ width: "100%", maxWidth: "420px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>Sign Out</div>
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.55" }}>
+              Sign out from this device now?
+            </div>
+            {localSignOutState.error && (
+              <div style={{ fontSize: "11px", color: "var(--color-red)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>
+                {localSignOutState.error}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button onClick={() => setShowLocalSignOutConfirm(false)} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: localSignOutState.loading ? "default" : "pointer" }}>Cancel</button>
+              <button onClick={confirmLocalSignOut} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-red)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: localSignOutState.loading ? "default" : "pointer" }}>{localSignOutState.loading ? "..." : "Confirm"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
 import { getEffectiveAmount, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
+import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure } from "../lib/expense.js";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
@@ -64,16 +65,6 @@ const fromMonthlyCost = (monthly, cycle) => {
 const perPaycheckFromCycle = (amount, cycle, cpm) =>
   roundToQuarter(toMonthlyCost(amount, cycle) / cpm);
 
-// Builds the weekly[4] array for a new history entry.
-// Cascade rule: phases before phaseIdx are untouched; phaseIdx and forward
-// get perPaycheck UNLESS that future phase already has an explicit byPhase override.
-function buildCascadedWeekly(phaseIdx, perPaycheck, baseWeekly, existingByPhase) {
-  return [0, 1, 2, 3].map(q => {
-    if (q < phaseIdx) return baseWeekly[q] ?? 0;
-    if (q === phaseIdx) return perPaycheck;
-    return existingByPhase?.[q] ? (baseWeekly[q] ?? 0) : perPaycheck;
-  });
-}
 
 // Recover the original entered cycle amount from the stored per-paycheck value
 const cycleAmountFromPerPaycheck = (perPaycheck, cycle, cpm) =>
@@ -329,15 +320,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     return normalizeCycle(phaseBillingMeta?.cycle ?? exp.billingMeta?.cycle ?? exp.cycle ?? "every30days");
   };
 
-  // Returns the most recent history entry with effectiveFrom <= today.
-  // Future ADV. EDIT entries (e.g. June overrides edited in April) are excluded so
-  // regular card edits never accidentally overwrite scheduled future changes.
-  const latestPastEntry = (existing) => {
-    const past = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
-    return past.length > 0
-      ? past.reduce((b, en) => en.effectiveFrom > b.effectiveFrom ? en : b, past[0])
-      : existing[0];
-  };
+  // Thin closure that binds TODAY_ISO so call sites stay unchanged.
+  const latestPastEntry = (existing) => latestPastEntryPure(existing, TODAY_ISO);
 
   const startEditExp = (exp) => {
     const existing = exp.history?.length

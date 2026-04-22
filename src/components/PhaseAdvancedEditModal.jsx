@@ -1,17 +1,8 @@
 import { useState } from "react";
-import { PHASES, CATEGORY_COLORS, FISCAL_YEAR_START } from "../constants/config.js";
+import { PHASES, CATEGORY_COLORS } from "../constants/config.js";
 import { getEffectiveAmount } from "../lib/finance.js";
+import { buildCascadedWeekly, getBaseEntryAt, nextMonthIso } from "../lib/expense.js";
 import { SmBtn, SH, iS, lS } from "./ui.jsx";
-
-// Cascade rule: phases before phaseIdx untouched; phaseIdx and forward get
-// perPaycheck unless that future phase already has an explicit byPhase override.
-function buildCascadedWeekly(phaseIdx, perPaycheck, baseWeekly, existingByPhase) {
-  return [0, 1, 2, 3].map(q => {
-    if (q < phaseIdx) return baseWeekly[q] ?? 0;
-    if (q === phaseIdx) return perPaycheck;
-    return existingByPhase?.[q] ? (baseWeekly[q] ?? 0) : perPaycheck;
-  });
-}
 
 // ─── Month definitions per quarter (2026 fiscal year) ────────────────────────
 const QUARTER_MONTHS = [
@@ -55,21 +46,6 @@ const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", 
 const resolveExpenseCycle = (exp, phaseIdx) => {
   const phaseBillingMeta = exp.billingMeta?.byPhase?.[phaseIdx];
   return normalizeCycle(phaseBillingMeta?.cycle ?? exp.billingMeta?.cycle ?? exp.cycle ?? "every30days");
-};
-
-const getBaseEntryAt = (exp, iso) => {
-  const history = exp.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: exp.weekly ?? [0, 0, 0, 0] }];
-  return history
-    .filter(en => en.effectiveFrom <= iso)
-    .reduce((b, en) => !b || en.effectiveFrom >= b.effectiveFrom ? en : b, null)
-    ?? history[0];
-};
-
-const nextMonthIso = (iso) => {
-  const [y, m] = iso.split("-").map(Number);
-  const ny = m === 12 ? y + 1 : y;
-  const nm = m === 12 ? 1 : m + 1;
-  return `${ny}-${String(nm).padStart(2, "0")}-01`;
 };
 
 // ─── Component ───────────────────────────────────────────────────────────────

@@ -826,7 +826,7 @@ export function HomePanel({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              padding: "16px",
+              padding: "24px",
             }}
           >
             <div
@@ -837,7 +837,7 @@ export function HomePanel({
                 background: "var(--color-bg-surface)",
                 borderRadius: "20px",
                 padding: "20px 20px 24px",
-                maxHeight: "88vh",
+                maxHeight: "78vh",
                 display: "flex",
                 flexDirection: "column",
                 boxShadow: "0 24px 64px rgba(0,0,0,0.6)",

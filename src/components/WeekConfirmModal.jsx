@@ -109,6 +109,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
   const [confirming, setConfirming] = useState(false);
   const [wentToLayer2, setWentToLayer2] = useState(false);
   const [skipWarning, setSkipWarning] = useState(false);
+  const [isMissedCoreEntry, setIsMissedCoreEntry] = useState(false);
 
   // ── Layer 2 form state (mirrors LogPanel's blank event shape) ─────────────
   const [eventVals, setEventVals] = useState({});
@@ -134,10 +135,15 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
         : (config.customWeeklyHoursShort ?? config.customWeeklyHours ?? 0))
     : 0;
 
+  const isDHL = config.employerPreset === "DHL";
+  // hasBucket: DHL (separate bucket system) or non-DHL with attendance bucket enabled.
+  // Used to show bucket-impact warnings on unapproved absence types.
+  const hasBucket = isDHL || config.attendanceBucketEnabled === true;
+
   // DHL OT tracking — must be declared before pickupDays/totalHoursPlanned/extraPickupCandidates
   // which all reference workedOtDays. Moving these up avoids a TDZ ReferenceError when
   // hasCustomSchedule is true (short-circuit no longer hides the access).
-  const requiresOtSelection = config.employerPreset === "DHL" && requiredOtCount > 0;
+  const requiresOtSelection = isDHL && requiredOtCount > 0;
   const anyOtMissed = otDays.some(d => d === "missed");
   const missedOtCount = otDays.filter(d => d === "missed").length;
   const workedOtDays = otDays.filter(d => d && d !== "missed");
@@ -304,6 +310,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
         ptoHours: 0,
         note: `Core shift${missedCoreDays.length > 1 ? "s" : ""} missed: ${missedCoreDays.join(", ")}`,
       });
+      setIsMissedCoreEntry(true);
       setLayer(2);
       setWentToLayer2(true);
       return;
@@ -364,6 +371,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
         ? workedOtDays.map(d => `OT day: ${d}${["Sat", "Sun"].includes(d) ? " (weekend — diff applies)" : ""}`).join("; ")
         : "",
     });
+    if (isDeficit && showCoreDayPills && missedCoreDays.length > 0) setIsMissedCoreEntry(true);
     setLayer(2);
     setWentToLayer2(true);
   };
@@ -908,11 +916,63 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
               {/* Event type */}
               <div style={{ marginBottom: "12px" }}>
                 <label style={lS}>What happened?</label>
-                <select value={eventVals.type || ""} onChange={e => changeEventType(e.target.value)} style={{ ...iS, marginTop: "4px" }}>
-                  {Object.entries(EVENT_TYPES).map(([k, v]) => (
-                    <option key={k} value={k}>{v.icon} {v.label}</option>
-                  ))}
-                </select>
+                {isMissedCoreEntry ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
+                    {[
+                      {
+                        key: "missed_unpaid",
+                        label: "Approved Day Off",
+                        sub: "Approved absence — no attendance impact",
+                      },
+                      {
+                        key: "missed_unapproved",
+                        label: "Unapproved — Unpaid",
+                        sub: hasBucket
+                          ? "Not approved — docks your attendance bucket"
+                          : "Not approved — income lost for this shift",
+                      },
+                      ...(hasBucket || config.ptoHoursOverride != null
+                        ? [{
+                            key: "pto_unapproved",
+                            label: "Unapproved — PTO Used",
+                            sub: hasBucket
+                              ? "PTO applied but still docks attendance bucket"
+                              : "PTO applied to cover the absence",
+                          }]
+                        : []),
+                    ].map(opt => {
+                      const selected = eventVals.type === opt.key;
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => changeEventType(opt.key)}
+                          style={{
+                            textAlign: "left",
+                            background: selected ? "rgba(0,200,150,0.12)" : "var(--color-bg-surface)",
+                            border: `1px solid ${selected ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
+                            borderRadius: "8px",
+                            padding: "10px 14px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div style={{ fontSize: "11px", fontWeight: "bold", color: selected ? "var(--color-accent-primary)" : "var(--color-text-primary)", letterSpacing: "0.5px" }}>
+                            {opt.label}
+                          </div>
+                          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "3px" }}>
+                            {opt.sub}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <select value={eventVals.type || ""} onChange={e => changeEventType(e.target.value)} style={{ ...iS, marginTop: "4px" }}>
+                    {Object.entries(EVENT_TYPES).map(([k, v]) => (
+                      <option key={k} value={k}>{v.icon} {v.label}</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {/* DayPicker + shifts/hours override — for missed types and pto_unapproved */}
@@ -1077,7 +1137,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
             <div style={{ padding: "14px 20px", borderTop: "1px solid var(--color-border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               {!confirming ? (
                 <>
-                  <button onClick={() => { setLayer(1); setConfirming(false); }} style={{
+                  <button onClick={() => { setLayer(1); setConfirming(false); setIsMissedCoreEntry(false); }} style={{
                     background: "transparent", border: "none", color: "var(--color-text-disabled)",
                     fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
                     cursor: "pointer", padding: "6px 0",

@@ -24,7 +24,7 @@
  *   onDismiss() — session-only skip; badge persists in sidebar until confirmed
  */
 import { useState, useEffect } from "react";
-import { EVENT_TYPES } from "../constants/config.js";
+import { EVENT_TYPES, DHL_PRESET } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { iS, lS } from "./ui.jsx";
@@ -119,6 +119,20 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
   const scheduledDays = week.workedDayNames;
   const missedScheduledDays = scheduledDays.filter(d => dayToggles[d] === false);
   const hasCustomSchedule = config.customWeeklyHours != null && config.employerPreset === "DHL";
+  // Core-day pill UI: custom schedule users only (not Anthony's legacy dhlCustomSchedule path).
+  const DOW_TO_NAME = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const showCoreDayPills = hasCustomSchedule && !config.dhlCustomSchedule;
+  const coreDayNames = showCoreDayPills
+    ? (week.isHighWeek ? DHL_PRESET.rotation.long.days : DHL_PRESET.rotation.short.days)
+        .map(i => DOW_TO_NAME[i])
+    : [];
+  const missedCoreDays = coreDayNames.filter(d => dayToggles[d] === false);
+  // Per-week-type target (Sprint 2): uses long/short fields when set, falls back to flat customWeeklyHours.
+  const weeklyTarget = hasCustomSchedule
+    ? (week.isHighWeek
+        ? (config.customWeeklyHoursLong ?? config.customWeeklyHours ?? 0)
+        : (config.customWeeklyHoursShort ?? config.customWeeklyHours ?? 0))
+    : 0;
 
   // DHL OT tracking — must be declared before pickupDays/totalHoursPlanned/extraPickupCandidates
   // which all reference workedOtDays. Moving these up avoids a TDZ ReferenceError when
@@ -145,7 +159,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
   const totalHoursPlanned = hasCustomSchedule
     ? (scheduledDays.length - missedScheduledDays.length + workedOtDays.length + pickupDays.length) * config.shiftHours
     : null;
-  const customGap = hasCustomSchedule ? Math.max((config.customWeeklyHours ?? 0) - totalHoursPlanned, 0) : null;
+  const customGap = hasCustomSchedule ? Math.max(weeklyTarget - totalHoursPlanned, 0) : null;
   const customShiftsNeeded = customGap != null ? Math.ceil(customGap / config.shiftHours) : 0;
   // Days available to close the custom gap (not scheduled, not already confirmed as OT, not yet picked up)
   const extraPickupCandidates = hasCustomSchedule
@@ -266,8 +280,29 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
         amount: 0,
         ptoHours: 0,
         note: hasCustomSchedule
-          ? (missedOtCount === 1 ? `Custom schedule extension shift not worked (${config.customWeeklyHours}h target)` : `${missedOtCount} custom schedule extension shifts not worked (${config.customWeeklyHours}h target)`)
+          ? (missedOtCount === 1 ? `Custom schedule extension shift not worked (${weeklyTarget}h target)` : `${missedOtCount} custom schedule extension shifts not worked (${weeklyTarget}h target)`)
           : (missedOtCount === 1 ? "Mandatory OT shift not worked" : `${missedOtCount} mandatory OT shifts not worked`),
+      });
+      setLayer(2);
+      setWentToLayer2(true);
+      return;
+    }
+
+    // Missed core day with net-zero pickup: force Layer 2 so the absence is logged.
+    // Normally net-zero skips Layer 2, but a missed core shift still hits bucket hours.
+    if (showCoreDayPills && missedCoreDays.length > 0 && netShiftDelta === 0) {
+      setEventVals({
+        weekEnd: weekEndIso,
+        weekIdx: week.idx,
+        weekRotation: week.rotation,
+        type: "missed_unpaid",
+        missedDays: missedCoreDays,
+        shiftsLost: missedCoreDays.length,
+        weekendShifts: missedCoreDays.filter(d => ["Fri", "Sat", "Sun"].includes(d)).length,
+        hoursLost: missedCoreDays.length * config.shiftHours,
+        amount: 0,
+        ptoHours: 0,
+        note: `Core shift${missedCoreDays.length > 1 ? "s" : ""} missed: ${missedCoreDays.join(", ")}`,
       });
       setLayer(2);
       setWentToLayer2(true);
@@ -373,7 +408,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       hoursLost: customShiftsNeeded * config.shiftHours,
       amount: 0,
       ptoHours: 0,
-      note: `Custom schedule shortfall — ${customShiftsNeeded} shift${customShiftsNeeded !== 1 ? 's' : ''} not worked (${config.customWeeklyHours}h/week target)`,
+      note: `Custom schedule shortfall — ${customShiftsNeeded} shift${customShiftsNeeded !== 1 ? 's' : ''} not worked (${weeklyTarget}h/week target)`,
     });
     setLayer(2);
     setWentToLayer2(true);
@@ -583,16 +618,46 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                 </div>
               )}
 
+              {showCoreDayPills && (
+                <div style={{ margin: "12px 20px 0", padding: "12px 14px", background: "var(--color-bg-base)", border: `1px solid ${missedCoreDays.length > 0 ? "rgba(239,68,68,0.35)" : "var(--color-border-subtle)"}`, borderRadius: "6px" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "8px" }}>
+                    Core Shifts — {week.isHighWeek ? "Long Week" : "Short Week"}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: missedCoreDays.length > 0 ? "8px" : "0" }}>
+                    {coreDayNames.map(day => {
+                      const worked = dayToggles[day] !== false;
+                      const weekend = day === "Fri" || day === "Sat" || day === "Sun";
+                      return (
+                        <button key={day} type="button" onClick={() => toggleDay(day)} style={{
+                          padding: "6px 14px", borderRadius: "4px", fontSize: "9px", letterSpacing: "1px",
+                          textTransform: "uppercase", cursor: "pointer", fontWeight: worked ? "bold" : "normal",
+                          border: worked ? `1px solid ${weekend ? "rgba(34,197,94,0.6)" : "rgba(0,200,150,0.4)"}` : "1px solid rgba(239,68,68,0.5)",
+                          background: worked ? (weekend ? "rgba(34,197,94,0.1)" : "rgba(0,200,150,0.1)") : "rgba(239,68,68,0.1)",
+                          color: worked ? (weekend ? "var(--color-green)" : "var(--color-accent-primary)") : "var(--color-red)",
+                        }}>
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {missedCoreDays.length > 0 && (
+                    <div style={{ fontSize: "10px", color: "var(--color-red)", lineHeight: "1.5" }}>
+                      {missedCoreDays.length} core shift{missedCoreDays.length > 1 ? "s" : ""} missed ({missedCoreDays.length * config.shiftHours}h). This will be logged as an attendance miss.
+                    </div>
+                  )}
+                </div>
+              )}
+
               {requiresOtSelection && (
                 <div style={{ margin: "12px 20px 0", padding: "12px 14px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "6px" }}>
                     {hasCustomSchedule
-                      ? `Schedule Extension — ${requiredOtCount === 1 ? "1 additional shift" : `${requiredOtCount} additional shifts`} to reach ${config.customWeeklyHours}h`
+                      ? `Schedule Extension — ${requiredOtCount === 1 ? "1 additional shift" : `${requiredOtCount} additional shifts`} to reach ${weeklyTarget}h`
                       : `Mandatory OT ${requiredOtCount === 1 ? "Shift" : `Shifts (${requiredOtCount} required)`}`}
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5", marginBottom: "10px" }}>
                     {hasCustomSchedule
-                      ? `Your ${config.customWeeklyHours}h/week target requires ${requiredOtCount === 1 ? "1 extra shift" : `${requiredOtCount} extra shifts`} beyond your base rotation. Pick the day${requiredOtCount !== 1 ? "s" : ""} you worked or mark as missed — missed shifts hit your attendance bucket.`
+                      ? `Your ${weeklyTarget}h/week target requires ${requiredOtCount === 1 ? "1 extra shift" : `${requiredOtCount} extra shifts`} beyond your base rotation. Pick the day${requiredOtCount !== 1 ? "s" : ""} you worked or mark as missed — missed shifts hit your attendance bucket.`
                       : `DHL rotations include ${requiredOtCount === 1 ? "a required OT shift" : `${requiredOtCount} required OT shifts`} each week. Pick the day you worked or mark "Missed". Weekend selections automatically apply the differential.`}
                   </div>
                   {Array.from({ length: requiredOtCount }, (_, slotIdx) => {
@@ -695,7 +760,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                       Custom Schedule Target
                     </span>
                     <span style={{ fontSize: "10px", fontWeight: "bold", color: customGap === 0 ? "var(--color-green)" : "var(--color-warning)" }}>
-                      {totalHoursPlanned}h / {config.customWeeklyHours}h
+                      {totalHoursPlanned}h / {weeklyTarget}h
                     </span>
                   </div>
                   {customGap === 0 ? (
@@ -703,7 +768,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   ) : (
                     <>
                       <div style={{ fontSize: "10px", color: "var(--color-warning)", marginBottom: "10px", lineHeight: "1.5" }}>
-                        {customShiftsNeeded} shift{customShiftsNeeded !== 1 ? "s" : ""} ({customGap}h) short of your {config.customWeeklyHours}h target.
+                        {customShiftsNeeded} shift{customShiftsNeeded !== 1 ? "s" : ""} ({customGap}h) short of your {weeklyTarget}h target.
                         {requiresOtSelection && otSelectionMissing ? " Complete the extension shift selection above first." : " Add a day below or mark the shortfall."}
                       </div>
                       {!otSelectionMissing && extraPickupCandidates.length > 0 && (

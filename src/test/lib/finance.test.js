@@ -382,6 +382,58 @@ describe('customWeeklyHours', () => {
     expect(long.grossPay).toBeGreaterThan(short.grossPay)
   })
 
+  it('DHL: customWeeklyHours=48 trims long week worked days to 4 (drops Mon OT day)', () => {
+    // B-team long rotation: 5 days (Tue/Wed/Sat/Sun + Mon OT) = 60h.
+    // With customWeeklyHours=48, targetShifts=4, Mon (OT default) is dropped first.
+    // weekendHours stays 24 (Sat+Sun) since Mon has no diff contribution.
+    const cfg = {
+      ...DEFAULT_CONFIG,
+      employerPreset: 'DHL',
+      dhlTeam: 'B',
+      dhlCustomSchedule: false,
+      startingWeekIsLong: true,
+      customWeeklyHours: 48,
+      firstActiveIdx: 0,
+    }
+    const weeks = buildYear(cfg)
+    const long = weeks.find(w => w.active && w.rotation === '6-Day')
+    const short = weeks.find(w => w.active && w.rotation === '4-Day')
+    // Both weeks flat at 48h
+    expect(long.totalHours).toBe(48)
+    expect(short.totalHours).toBe(48)
+    // Long week trimmed from 5 to 4 shifts (dropped Mon OT day)
+    expect(long.workedDayNames).toHaveLength(4)
+    expect(long.workedDayNames).not.toContain('Mon')
+    // Short week already 4 shifts — unchanged
+    expect(short.workedDayNames).toHaveLength(4)
+    // weekend hours: long keeps Sat+Sun (24h), short keeps Fri half (6h)
+    expect(long.weekendHours).toBe(24)
+    expect(short.weekendHours).toBe(6)
+  })
+
+  it('DHL: dhlCustomSchedule=true bypasses trim — totalHours reflects hardcoded worked arrays', () => {
+    // dhlCustomSchedule=true uses hardcoded day arrays and skips the customWeeklyHours override block.
+    // Long: Tue–Sun (6 days × 12h = 72h). Short: Mon/Wed/Thu/Fri (4 days × 12h = 48h).
+    const anthonyCfg = {
+      ...DEFAULT_CONFIG,
+      employerPreset: 'DHL',
+      dhlTeam: 'B',
+      dhlCustomSchedule: true,
+      startingWeekIsLong: true,
+      customWeeklyHours: 60,
+      firstActiveIdx: 0,
+    }
+    const weeks = buildYear(anthonyCfg)
+    const long = weeks.find(w => w.active && w.rotation === '6-Day')
+    const short = weeks.find(w => w.active && w.rotation === '4-Day')
+    // dhlCustomSchedule=true: customWeeklyHours override is skipped → totalHours from actual worked days
+    expect(long.totalHours).toBe(72)  // 6 days × 12h
+    expect(short.totalHours).toBe(48) // 4 days × 12h
+    // Hardcoded arrays unchanged — no trimming
+    expect(long.workedDayNames).toHaveLength(6)
+    expect(short.workedDayNames).toHaveLength(4)
+  })
+
   it('non-DHL: sets totalHours to customWeeklyHours and rotation to "Custom"', () => {
     const cfg = {
       ...DEFAULT_CONFIG,

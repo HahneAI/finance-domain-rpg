@@ -388,9 +388,24 @@ export function buildYear(cfg) {
       totalHours = worked.length * cfg.shiftHours;
       // Weekend pay: Sat 12:00am → Mon 6:00am (Fri nights only count midnight→6am Sat)
       weekendHours = worked.reduce((sum, day) => sum + dhlWeekendHoursForDate(day, cfg.shiftHours), 0);
-      // Custom weekly hours fallback chain: perWeekType -> customWeeklyHours -> rotation.
       if (!cfg.dhlCustomSchedule) {
-        totalHours = resolveDhlWeeklyHours(cfg, isHighWeek, totalHours);
+        const resolvedHours = resolveDhlWeeklyHours(cfg, isHighWeek, totalHours);
+        const targetShifts = Math.round(resolvedHours / cfg.shiftHours);
+        if (targetShifts < worked.length) {
+          // Trim rotation to target shifts: preserve weekend days (Sat/Sun > Fri > core weekdays),
+          // dropping the default OT day first, then non-weekend core days.
+          const otDayDow = getStandardDhlOtDay(isHighWeek, cfg);
+          const shiftPriority = (date) => {
+            const dow = date.getDay();
+            if (dow === 6 || dow === 0) return 3;
+            if (dow === 5) return 2;
+            if (otDayDow != null && dow === otDayDow) return 0;
+            return 1;
+          };
+          worked = [...worked].sort((a, b) => shiftPriority(b) - shiftPriority(a)).slice(0, targetShifts);
+          weekendHours = worked.reduce((sum, day) => sum + dhlWeekendHoursForDate(day, cfg.shiftHours), 0);
+        }
+        totalHours = resolvedHours;
       }
     } else {
       // Standard / non-DHL path.

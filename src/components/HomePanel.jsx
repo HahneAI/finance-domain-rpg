@@ -314,6 +314,11 @@ export function HomePanel({
   })();
 
   useEffect(() => {
+    document.body.classList.toggle("modal-open", showReorderModal);
+    return () => document.body.classList.remove("modal-open");
+  }, [showReorderModal]);
+
+  useEffect(() => {
     if (!currentWeek || !setGoals) return;
     const needsUpdate = tl.filter((g) => g.eW !== null && !g.dueWeek);
     if (!needsUpdate.length) return;
@@ -826,7 +831,7 @@ export function HomePanel({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              padding: "24px",
+              padding: "24px 12px",
             }}
           >
             <div

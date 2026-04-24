@@ -167,10 +167,17 @@ function Step1({ formData, onChange, lifeEvent, attempted }) {
     (formData.commissionMonthly ?? 0) > 0
   );
 
-  // String draft for customWeeklyHours — allows blank display while typing.
+  // String drafts for per-week custom hours — allow blank display while typing.
   // formData stores 0 as sentinel for "custom mode, field blank" so isValid can catch it.
-  const [hoursDraft, setHoursDraft] = useState(
-    formData.customWeeklyHours > 0 ? String(formData.customWeeklyHours) : ""
+  const [longHoursDraft, setLongHoursDraft] = useState(
+    formData.customWeeklyHoursLong > 0
+      ? String(formData.customWeeklyHoursLong)
+      : (formData.customWeeklyHours > 0 ? String(formData.customWeeklyHours) : "")
+  );
+  const [shortHoursDraft, setShortHoursDraft] = useState(
+    formData.customWeeklyHoursShort > 0
+      ? String(formData.customWeeklyHoursShort)
+      : (formData.customWeeklyHours > 0 ? String(formData.customWeeklyHours) : "")
   );
 
   const isDHL    = formData.employerPreset === "DHL";
@@ -276,39 +283,71 @@ function Step1({ formData, onChange, lifeEvent, attempted }) {
               <Pill
                 label="Standard rotation"
                 active={formData.customWeeklyHours == null}
-                onClick={() => { onChange({ customWeeklyHours: null, dhlCustomSchedule: false }); setHoursDraft(""); }}
+                onClick={() => {
+                  onChange({
+                    customWeeklyHours: null,
+                    customWeeklyHoursLong: null,
+                    customWeeklyHoursShort: null,
+                    dhlCustomSchedule: false,
+                  });
+                  setLongHoursDraft("");
+                  setShortHoursDraft("");
+                }}
               />
               <Pill
                 label="Custom schedule"
                 active={formData.customWeeklyHours != null}
                 onClick={() => {
-                  const v = (formData.customWeeklyHours ?? 0) > 0 ? formData.customWeeklyHours : 60;
-                  onChange({ customWeeklyHours: v, dhlCustomSchedule: false });
-                  setHoursDraft(String(v));
+                  const fallback = (formData.customWeeklyHours ?? 0) > 0 ? formData.customWeeklyHours : 60;
+                  const longV = (formData.customWeeklyHoursLong ?? 0) > 0 ? formData.customWeeklyHoursLong : fallback;
+                  const shortV = (formData.customWeeklyHoursShort ?? 0) > 0 ? formData.customWeeklyHoursShort : fallback;
+                  onChange({
+                    customWeeklyHours: fallback,
+                    customWeeklyHoursLong: longV,
+                    customWeeklyHoursShort: shortV,
+                    dhlCustomSchedule: false,
+                  });
+                  setLongHoursDraft(String(longV));
+                  setShortHoursDraft(String(shortV));
                 }}
               />
             </div>
             {formData.customWeeklyHours != null ? (
               <div style={{ marginTop: "10px" }}>
-                <label style={{ ...lS, ...(attempted && formData.customWeeklyHours === 0 ? { color: "var(--color-red)" } : {}) }}>Hours per week</label>
+                <label style={{ ...lS, ...(attempted && (formData.customWeeklyHoursLong === 0 || formData.customWeeklyHoursShort === 0) ? { color: "var(--color-red)" } : {}) }}>Hours per week</label>
+                <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-secondary)" }}>Long week</div>
                 <input
                   type="number"
                   step="1"
                   min="1"
                   max="168"
-                  value={hoursDraft}
+                  value={longHoursDraft}
                   onChange={e => {
-                    setHoursDraft(e.target.value);
+                    setLongHoursDraft(e.target.value);
                     const n = parseFloat(e.target.value);
-                    onChange({ customWeeklyHours: (!isNaN(n) && n > 0) ? n : 0, dhlCustomSchedule: false });
+                    onChange({ customWeeklyHoursLong: (!isNaN(n) && n > 0) ? n : 0, dhlCustomSchedule: false });
                   }}
-                  style={{ ...iS, marginTop: "4px", ...errBorder(attempted && formData.customWeeklyHours === 0) }}
+                  style={{ ...iS, marginTop: "4px", ...errBorder(attempted && formData.customWeeklyHoursLong === 0) }}
                 />
-                {attempted && formData.customWeeklyHours === 0 && (
+                <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-secondary)" }}>Short week</div>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  max="168"
+                  value={shortHoursDraft}
+                  onChange={e => {
+                    setShortHoursDraft(e.target.value);
+                    const n = parseFloat(e.target.value);
+                    onChange({ customWeeklyHoursShort: (!isNaN(n) && n > 0) ? n : 0, dhlCustomSchedule: false });
+                  }}
+                  style={{ ...iS, marginTop: "6px", ...errBorder(attempted && formData.customWeeklyHoursShort === 0) }}
+                />
+                {attempted && (formData.customWeeklyHoursLong === 0 || formData.customWeeklyHoursShort === 0) && (
                   <div style={{ fontSize: "10px", color: "var(--color-red)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>↑ Required</div>
                 )}
                 <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
-                  Projections will use this as your weekly hours baseline. Your DHL rotation is still used to show scheduled days in weekly confirmation.
+                  Projections use long/short targets by week type. DHL rotation still shows scheduled days in weekly confirmation.
                 </div>
               </div>
             ) : (
@@ -1240,6 +1279,14 @@ function estimateWeeklyGross(d) {
       const ot = Math.max(h - (d.otThreshold || 40), 0);
       return reg * base + ot * base * (d.otMultiplier || 1.5);
     };
+    const longCustom = d.customWeeklyHoursLong;
+    const shortCustom = d.customWeeklyHoursShort;
+    if (longCustom != null || shortCustom != null) {
+      const fallback = d.customWeeklyHours ?? 60;
+      const longHours = longCustom ?? fallback;
+      const shortHours = shortCustom ?? fallback;
+      return (gross(shortHours) + gross(longHours)) / 2;
+    }
     if (d.customWeeklyHours != null) {
       // Flat custom hours — same projected total every week
       return gross(d.customWeeklyHours);
@@ -1463,7 +1510,8 @@ const STEP_DEFS = [
     isValid: (d) => {
       if (!d.userPaySchedule) return false;
       if (d.employerPreset === "DHL" && !d.dhlTeam) return false;
-      if (d.customWeeklyHours === 0) return false; // custom mode, hours field blank
+      if (d.customWeeklyHours != null && (d.customWeeklyHoursLong === 0 || d.customWeeklyHoursShort === 0)) return false; // custom mode, hours fields blank
+      if (d.customWeeklyHours === 0) return false; // backward-compat sentinel
       if (d.userPaySchedule === "salary") return (d.annualSalary ?? 0) > 0;
       return (d.baseRate ?? 0) > 0 && (d.shiftHours ?? 0) > 0;
     },
@@ -1717,5 +1765,3 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
     </div>
   );
 }
-
-

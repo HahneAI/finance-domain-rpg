@@ -226,6 +226,8 @@ export function HomePanel({
   const [showReorderModal, setShowReorderModal] = useState(false);
   const [draggingReorderId, setDraggingReorderId] = useState(null);
   const [dragOverReorderId, setDragOverReorderId] = useState(null);
+  const [enterAnims, setEnterAnims] = useState({});
+  const [animPhase, setAnimPhase] = useState(null);
   const [isMobile] = useState(() => typeof window !== "undefined" ? window.innerWidth < 768 : false);
   const [isCoarsePointer] = useState(() => (
     typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -451,6 +453,22 @@ export function HomePanel({
     setShowReorderModal(false);
     setDraggingReorderId(null);
     setDragOverReorderId(null);
+  };
+  const CARD_SLOT_PX = 94;
+  const handleMoveWithAnim = (id, dir, i) => {
+    if (animPhase !== null) return;
+    if (dir === -1 && i === 0) return;
+    if (dir === 1 && i === activeGoals.length - 1) return;
+    const swapId = activeGoals[i + dir].id;
+    moveGoalInActiveList(id, dir);
+    setEnterAnims({ [id]: -dir * CARD_SLOT_PX, [swapId]: dir * CARD_SLOT_PX });
+    setAnimPhase('init');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setAnimPhase('settle');
+        setTimeout(() => { setEnterAnims({}); setAnimPhase(null); }, 320);
+      });
+    });
   };
 
   return (
@@ -804,11 +822,11 @@ export function HomePanel({
               position: "fixed",
               inset: 0,
               zIndex: 300,
-              background: "rgba(0,0,0,0.82)",
+              background: "rgba(0,0,0,0.86)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              padding: "16px",
+              padding: "24px",
             }}
           >
             <div
@@ -818,32 +836,43 @@ export function HomePanel({
                 maxWidth: "480px",
                 background: "var(--color-bg-surface)",
                 borderRadius: "20px",
-                padding: "20px",
-                maxHeight: "88vh",
+                padding: "20px 20px 24px",
+                maxHeight: "78vh",
                 display: "flex",
                 flexDirection: "column",
+                boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
               }}
             >
               {/* Header */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", flexShrink: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px", flexShrink: 0 }}>
                 <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>
                   REORDER GOALS
                 </div>
                 <button
                   onClick={closeReorderModal}
-                  style={{ background: "none", border: "none", color: "var(--color-text-primary)", cursor: "pointer", fontSize: "16px", lineHeight: 1 }}
+                  style={{ background: "none", border: "none", color: "var(--color-text-secondary)", cursor: "pointer", fontSize: "16px", lineHeight: 1, padding: "4px" }}
                 >
                   ✕
                 </button>
               </div>
-              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "16px", flexShrink: 0 }}>
-                {isCoarsePointer ? "Use ↑ ↓ to move each goal." : "Drag goals to reorder."}
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "18px", flexShrink: 0 }}>
+                {isCoarsePointer ? "Tap ↑ ↓ to reprioritize. Goals fund in order." : "Drag goals to reorder. Goals fund in order."}
               </div>
               {/* Vertical card list */}
-              <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "10px" }}>
                 {activeGoals.map((g, i) => {
                   const isDragging = draggingReorderId === g.id;
                   const isDropTarget = dragOverReorderId === g.id && draggingReorderId !== g.id;
+                  const displaced = enterAnims[g.id];
+                  const isEntering = displaced !== undefined;
+                  const cardTransform = isEntering
+                    ? (animPhase === 'init' ? `translateY(${displaced}px)` : 'translateY(0)')
+                    : undefined;
+                  const cardTransition = isEntering && animPhase === 'settle'
+                    ? 'transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 150ms, opacity 120ms'
+                    : 'border-color 150ms, opacity 120ms';
+                  const upDisabled = i === 0 || animPhase !== null;
+                  const downDisabled = i === activeGoals.length - 1 || animPhase !== null;
                   return (
                     <div
                       key={g.id}
@@ -858,31 +887,34 @@ export function HomePanel({
                       } : undefined}
                       onDragOver={!isCoarsePointer ? (e) => { e.preventDefault(); setDragOverReorderId(g.id); } : undefined}
                       style={{
-                        height: "72px",
+                        height: "84px",
                         background: "var(--color-bg-raised)",
                         border: `1px solid ${isDropTarget ? "var(--color-accent-primary)" : "var(--color-border-subtle)"}`,
-                        borderRadius: "12px",
-                        padding: "0 14px",
+                        borderRadius: "14px",
+                        padding: "0 16px",
                         position: "relative",
                         overflow: "hidden",
                         display: "flex",
                         alignItems: "center",
-                        gap: "10px",
+                        gap: "12px",
                         cursor: isCoarsePointer ? "default" : "grab",
-                        opacity: isDragging ? 0.4 : 1,
+                        opacity: isDragging ? 0.35 : 1,
                         flexShrink: 0,
-                        transition: "border-color 120ms, opacity 120ms",
+                        transform: cardTransform,
+                        transition: cardTransition,
+                        zIndex: isEntering ? 10 : 1,
+                        willChange: isEntering ? "transform" : undefined,
                       }}
                     >
                       {/* Ghost ordinal */}
                       <div style={{
-                        fontSize: "56px",
+                        fontSize: "68px",
                         fontWeight: 900,
                         fontFamily: "var(--font-display)",
-                        color: "rgba(255,255,255,0.06)",
+                        color: "rgba(255,255,255,0.05)",
                         position: "absolute",
-                        top: "-6px",
-                        right: "10px",
+                        top: "-8px",
+                        right: "12px",
                         pointerEvents: "none",
                         zIndex: 0,
                         lineHeight: 1,
@@ -895,7 +927,7 @@ export function HomePanel({
                         fontSize: "11px",
                         fontWeight: 700,
                         color: "var(--color-text-disabled)",
-                        width: "18px",
+                        width: "16px",
                         textAlign: "center",
                         flexShrink: 0,
                         zIndex: 1,
@@ -905,58 +937,74 @@ export function HomePanel({
                       {/* Label + target */}
                       <div style={{ flex: 1, zIndex: 1, minWidth: 0 }}>
                         <div style={{
-                          fontSize: "13px",
+                          fontSize: "15px",
                           fontWeight: 700,
                           color: "var(--color-text-primary)",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
+                          marginBottom: "4px",
                         }}>
                           {g.label}
                         </div>
                         <div style={{
-                          fontSize: "11px",
-                          color: "var(--color-text-secondary)",
-                          marginTop: "2px",
+                          fontSize: "12px",
+                          color: "var(--color-accent-primary)",
+                          fontWeight: 600,
                         }}>
-                          ${Number(g.target || 0).toLocaleString()}
+                          {fmt$(g.target)}
                         </div>
                       </div>
-                      {/* Touch: inline ↑ ↓ per card */}
+                      {/* Touch: inline ↑ ↓ per card — pill control */}
                       {isCoarsePointer && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "4px", zIndex: 1, flexShrink: 0 }}>
+                        <div style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          border: "1px solid var(--color-border-subtle)",
+                          borderRadius: "10px",
+                          overflow: "hidden",
+                          zIndex: 1,
+                          flexShrink: 0,
+                        }}>
                           <button
-                            onClick={() => moveGoalInActiveList(g.id, -1)}
-                            disabled={i === 0}
+                            onClick={() => handleMoveWithAnim(g.id, -1, i)}
+                            disabled={upDisabled}
+                            onPointerDown={e => { if (!upDisabled) e.currentTarget.style.background = 'rgba(0,200,150,0.12)'; }}
+                            onPointerUp={e => { e.currentTarget.style.background = ''; }}
+                            onPointerLeave={e => { e.currentTarget.style.background = ''; }}
                             style={{
                               background: "none",
-                              border: `1px solid ${i === 0 ? "var(--color-border-subtle)" : "var(--color-border-accent)"}`,
-                              color: i === 0 ? "var(--color-text-disabled)" : "var(--color-text-primary)",
-                              borderRadius: "6px",
-                              width: "30px",
-                              height: "26px",
-                              cursor: i === 0 ? "default" : "pointer",
-                              fontSize: "12px",
+                              border: "none",
+                              borderBottom: "1px solid var(--color-border-subtle)",
+                              color: upDisabled ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                              width: "44px",
+                              height: "38px",
+                              cursor: upDisabled ? "default" : "pointer",
+                              fontSize: "14px",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
+                              transition: "background 80ms",
                             }}
                           >↑</button>
                           <button
-                            onClick={() => moveGoalInActiveList(g.id, 1)}
-                            disabled={i === activeGoals.length - 1}
+                            onClick={() => handleMoveWithAnim(g.id, 1, i)}
+                            disabled={downDisabled}
+                            onPointerDown={e => { if (!downDisabled) e.currentTarget.style.background = 'rgba(0,200,150,0.12)'; }}
+                            onPointerUp={e => { e.currentTarget.style.background = ''; }}
+                            onPointerLeave={e => { e.currentTarget.style.background = ''; }}
                             style={{
                               background: "none",
-                              border: `1px solid ${i === activeGoals.length - 1 ? "var(--color-border-subtle)" : "var(--color-border-accent)"}`,
-                              color: i === activeGoals.length - 1 ? "var(--color-text-disabled)" : "var(--color-text-primary)",
-                              borderRadius: "6px",
-                              width: "30px",
-                              height: "26px",
-                              cursor: i === activeGoals.length - 1 ? "default" : "pointer",
-                              fontSize: "12px",
+                              border: "none",
+                              color: downDisabled ? "var(--color-text-disabled)" : "var(--color-text-primary)",
+                              width: "44px",
+                              height: "38px",
+                              cursor: downDisabled ? "default" : "pointer",
+                              fontSize: "14px",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
+                              transition: "background 80ms",
                             }}
                           >↓</button>
                         </div>
@@ -964,7 +1012,7 @@ export function HomePanel({
                       {/* Desktop: drag handle */}
                       {!isCoarsePointer && (
                         <div style={{
-                          fontSize: "18px",
+                          fontSize: "20px",
                           color: "var(--color-text-disabled)",
                           zIndex: 1,
                           flexShrink: 0,
@@ -979,6 +1027,27 @@ export function HomePanel({
                   );
                 })}
               </div>
+              {/* Done button */}
+              <button
+                onClick={closeReorderModal}
+                style={{
+                  marginTop: "18px",
+                  flexShrink: 0,
+                  background: "var(--color-bg-raised)",
+                  border: "1px solid var(--color-border-subtle)",
+                  borderRadius: "12px",
+                  color: "var(--color-text-primary)",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  padding: "12px",
+                  cursor: "pointer",
+                  width: "100%",
+                }}
+              >
+                Done
+              </button>
             </div>
           </div>
         )}

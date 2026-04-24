@@ -294,6 +294,23 @@ export function HomePanel({
   const goalTimelineScale = progressiveScale(rollingGoalTimeline.scaleProgress, 0.15);
   const lastGoalEW = tl.length ? Math.max(...tl.map((g) => (Number.isFinite(g.eW) ? g.eW : 0))) : 0;
 
+  const nextYearSequentialEstimates = (() => {
+    if (!config) return {};
+    const estimates = {};
+    let cumulativeWeeks = 0;
+    for (const g of tl) {
+      if (Number.isFinite(g.eW)) continue;
+      const est = estimateGoalNextYear(g.remainingAtEnd ?? g.target, config, expenses);
+      if (!est) continue;
+      cumulativeWeeks += est.weeksFromFYStart;
+      const [fy, fm, fd] = FISCAL_YEAR_START.split('-').map(Number);
+      const nextFYStart = new Date(fy + 1, fm - 1, fd);
+      const estDate = new Date(nextFYStart.getTime() + cumulativeWeeks * 7 * DAY_MS);
+      estimates[g.id] = { ...est, estDate, label: fiscalMonthLabel(estDate) };
+    }
+    return estimates;
+  })();
+
   useEffect(() => {
     if (!currentWeek || !setGoals) return;
     const needsUpdate = tl.filter((g) => g.eW !== null && !g.dueWeek);
@@ -348,12 +365,8 @@ export function HomePanel({
   const resolveGoalFinishLabel = (goal) => {
     const primary = Number.isFinite(goal.eW) ? buildGoalFinishLabel(goal.eW) : null;
     if (primary) return primary;
-    // Goal can't complete this fiscal year — project into next year using proper surplus math
-    if (config) {
-      const nextYr = estimateGoalNextYear(goal.remainingAtEnd ?? goal.target, config, expenses);
-      if (nextYr) return `~${nextYr.label}`;
-    }
-    // Fallback when config unavailable
+    const nextYr = nextYearSequentialEstimates[goal.id];
+    if (nextYr) return `~${nextYr.label}`;
     const startOffset = Number.isFinite(goal.sW) ? goal.sW : 0;
     const duration = Number.isFinite(goal.wN) ? goal.wN : null;
     if (!Number.isFinite(duration)) return "Timeline pending";
@@ -544,8 +557,10 @@ export function HomePanel({
             <ScrollSnapRow itemWidth="calc(100% - 40px)">
               {tl.map((g, i) => {
                 const isEditing = editGoalId === g.id;
-                const projectedWeeks = Number.isFinite(g.eW) ? Math.max(0, Math.ceil(g.eW)) : 0;
-                const fillWidthPct = clamp01(projectedWeeks / Math.max(weeksLeft, 1)) * 100;
+                const isNextYear = !Number.isFinite(g.eW);
+                const sWPct = clamp01((g.sW ?? 0) / Math.max(weeksLeft, 1)) * 100;
+                const eWPct = isNextYear ? sWPct : clamp01(Math.ceil(g.eW) / Math.max(weeksLeft, 1)) * 100;
+                const fillWidthPct = Math.max(0, eWPct - sWPct);
                 return (
                   <div
                     key={g.id}
@@ -599,7 +614,7 @@ export function HomePanel({
                             {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                           </div>
                         </div>
-                        <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px" }}>
+                        <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
                           {visibleTimelineSegments.map((seg) => (
                             <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }}>
                               {seg.subdivisions.map((sub) => (
@@ -607,7 +622,7 @@ export function HomePanel({
                               ))}
                             </div>
                           ))}
-                          <div style={{ position: "absolute", top: "2px", left: 0, width: `${Math.max(fillWidthPct, celebrating === g.id ? 100 : 0)}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
+                          <div style={{ position: "absolute", top: "2px", left: `${celebrating === g.id ? 0 : sWPct}%`, width: `${celebrating === g.id ? 100 : fillWidthPct}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
                         </div>
                         <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
                           {visibleTimelineSegments.map((seg) => (
@@ -662,8 +677,10 @@ export function HomePanel({
             <>
               {tl.map((g, i) => {
                 const isEditing = editGoalId === g.id;
-                const projectedWeeks = Number.isFinite(g.eW) ? Math.max(0, Math.ceil(g.eW)) : 0;
-                const fillWidthPct = clamp01(projectedWeeks / Math.max(weeksLeft, 1)) * 100;
+                const isNextYear = !Number.isFinite(g.eW);
+                const sWPct = clamp01((g.sW ?? 0) / Math.max(weeksLeft, 1)) * 100;
+                const eWPct = isNextYear ? sWPct : clamp01(Math.ceil(g.eW) / Math.max(weeksLeft, 1)) * 100;
+                const fillWidthPct = Math.max(0, eWPct - sWPct);
                 return (
                   <div
                     key={g.id}
@@ -719,7 +736,7 @@ export function HomePanel({
                             {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                           </div>
                         </div>
-                        <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px" }}>
+                        <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
                           {visibleTimelineSegments.map((seg) => (
                             <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }}>
                               {seg.subdivisions.map((sub) => (
@@ -727,7 +744,7 @@ export function HomePanel({
                               ))}
                             </div>
                           ))}
-                          <div style={{ position: "absolute", top: "2px", left: 0, width: `${Math.max(fillWidthPct, celebrating === g.id ? 100 : 0)}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
+                          <div style={{ position: "absolute", top: "2px", left: `${celebrating === g.id ? 0 : sWPct}%`, width: `${celebrating === g.id ? 100 : fillWidthPct}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
                         </div>
                         <div style={{ position: "relative", height: `${Math.round(14 * goalTimelineScale)}px`, marginBottom: "8px" }}>
                           {visibleTimelineSegments.map((seg) => (

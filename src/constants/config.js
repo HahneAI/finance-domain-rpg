@@ -33,6 +33,13 @@ export const DEFAULT_CONFIG = {
   //   Non-DHL      (customWeeklyHours: N)     — flat N h/week; no rotation; simplified conf
   // null = inactive — rotation or standardWeeklyHours is used instead.
   customWeeklyHours: null,
+  // Sprint 2 (custom schedule): optional per-week-type overrides for DHL custom schedules.
+  // When set, finance resolution prefers these over customWeeklyHours:
+  //   long week  -> customWeeklyHoursLong
+  //   short week -> customWeeklyHoursShort
+  // If null, falls back to customWeeklyHours, then to rotation-derived hours.
+  customWeeklyHoursLong: null,
+  customWeeklyHoursShort: null,
 
   // ── Pay structure ────────────────────────────────────────────
   baseRate: 19.65, shiftHours: 12, diffRate: 1.75, nightDiffRate: 1.50, otThreshold: 40, otMultiplier: 1.5,

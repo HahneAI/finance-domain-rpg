@@ -1,0 +1,93 @@
+{
+  "task_id": "FEATURE_custom_schedule_sprint2_variable_week_hours",
+  "task_type": "feature",
+
+  "environment_domain": "authority-finance-core",
+  "allowed_environment_domains": [
+    "authority-finance-core",
+    "authority-finance-ui"
+  ],
+  "environment_reason": "This task modifies how weekly hours are modeled and consumed in the scheduling + finance pipeline (core logic), with a small UI change in the setup wizard to collect the new inputs.",
+  "environment_policy": "scope_enforced_with_ui_override",
+  "environment_runtime_visibility_policy": "report_if_available_do_not_fail_if_missing",
+
+  "scope": {
+    "allowed_files": [
+      "setup wizard components (hours input step)",
+      "config state / persistence logic",
+      "custom schedule logic (perWeekType resolution)",
+      "finance pipeline inputs if they consume weekly hours",
+      "minimal UI for input replacement",
+      "tests directly related to weekly hours"
+    ],
+    "restricted_files": [
+      "unrelated dashboard panels",
+      "goal system",
+      "budget system",
+      "auth logic",
+      "navigation structure",
+      "visual styling outside the wizard input swap"
+    ]
+  },
+
+  "constraints": [
+    "Codex MUST read the custom schedule sprint markdown file and fully interpret Sprint 2 before implementing",
+    "Do NOT rely only on this task description — the markdown file is the source of truth",
+    "Replace the single weekly hours input with two distinct inputs: long week and short week",
+    "Maintain backward compatibility with existing configs",
+    "Preserve fallback chain: perWeekType → customWeeklyHours → rotation",
+    "Do NOT break Anthony’s existing 60h setup or existing saved configs",
+    "UI changes must remain minimal and limited to the wizard input layer"
+  ],
+
+  "implementation_steps": [
+    "Locate and read the custom schedule sprint markdown file in the repo and fully interpret Sprint 2 requirements before writing code",
+    "Identify where the current 'Hours per week' input exists in the setup wizard",
+    "Replace the single input with two inputs: customWeeklyHoursLong and customWeeklyHoursShort",
+    "Update local wizard state to track both values cleanly",
+    "Persist both values into config/user_data",
+    "Update the schedule resolution logic so that weekly hours are resolved via perWeekType (long vs short)",
+    "Ensure fallback chain works correctly: perWeekType → customWeeklyHours → rotation",
+    "Ensure existing users with only customWeeklyHours continue to function without breaking",
+    "Audit where weekly hours are consumed downstream (timeline, computeNet, etc.) and ensure they still resolve correctly",
+    "Keep UI simple — no redesign, only input replacement",
+    "Run lint/tests and confirm no regressions in schedule math"
+  ],
+
+  "risk_areas": [
+    "wizard input replacement → incorrect state mapping between long/short values",
+    "config persistence → older users missing new fields",
+    "fallback chain → incorrect resolution order causing wrong weekly hours",
+    "timeline/finance math → incorrect weekly totals if long/short not respected",
+    "UI mismatch → labels unclear between long vs short week"
+  ],
+
+  "potential_bugs": [
+    {
+      "area": "backward compatibility",
+      "risk": "existing configs without long/short values may break or return undefined"
+    },
+    {
+      "area": "fallback chain",
+      "risk": "engine may skip customWeeklyHours fallback and produce incorrect values"
+    },
+    {
+      "area": "wizard state",
+      "risk": "inputs may not persist correctly to config or may overwrite each other"
+    },
+    {
+      "area": "finance pipeline",
+      "risk": "weekly net calculations may not reflect alternating week types correctly"
+    }
+  ],
+
+  "validation": [
+    "Wizard shows two inputs instead of one (long + short week hours)",
+    "Values persist correctly after setup",
+    "Existing users without new fields still function correctly",
+    "Anthony’s 60h setup remains unaffected",
+    "Weekly calculations reflect correct long/short behavior",
+    "No console errors",
+    "No unrelated file changes"
+  ]
+}

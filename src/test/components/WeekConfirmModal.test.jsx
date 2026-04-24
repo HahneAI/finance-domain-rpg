@@ -483,3 +483,97 @@ describe('WeekConfirmModal — 4-Day week', () => {
     expect(screen.getByText('Short Week')).toBeTruthy()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 3 — Core-day pill UI for DHL custom schedule users
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DHL_CUSTOM_CONFIG = {
+  ...DEFAULT_CONFIG,
+  employerPreset: 'DHL',
+  dhlTeam: 'B',
+  dhlCustomSchedule: false,
+  customWeeklyHours: 48,
+  customWeeklyHoursLong: 60,
+  customWeeklyHoursShort: 48,
+  shiftHours: 12,
+  baseRate: 19.65,
+  ficaRate: 0.0765,
+  k401StartDate: '2026-01-01',
+}
+
+// Long week: Tue/Wed/Sat/Sun are core days; Mon is the standard OT day
+const DHL_LONG_WEEK = {
+  idx: 7,
+  rotation: '6-Day',
+  isHighWeek: true,
+  weekStart: new Date(2026, 2, 16),
+  weekEnd:   new Date(2026, 2, 22),
+  workedDayNames: ['Tue', 'Wed', 'Sat', 'Sun', 'Mon'],
+  requiredOtShifts: 1,
+}
+
+// Short week: Mon/Thu/Fri are core days; Tue is the standard OT day
+const DHL_SHORT_WEEK = {
+  idx: 8,
+  rotation: '4-Day',
+  isHighWeek: false,
+  weekStart: new Date(2026, 2, 23),
+  weekEnd:   new Date(2026, 2, 29),
+  workedDayNames: ['Mon', 'Thu', 'Fri', 'Tue'],
+  requiredOtShifts: 0,
+}
+
+describe('WeekConfirmModal — Sprint 3 core-day pills', () => {
+  it('renders core-day pills for DHL custom schedule long week (Tue/Wed/Sat/Sun)', () => {
+    renderModal({ week: DHL_LONG_WEEK, config: DHL_CUSTOM_CONFIG })
+    expect(screen.getByText(/core shifts/i)).toBeTruthy()
+    // All 4 core days should appear as pill buttons
+    const pills = ['Tue', 'Wed', 'Sat', 'Sun']
+    pills.forEach(day => expect(screen.getAllByRole('button', { name: new RegExp(`^${day}$`, 'i') }).length).toBeGreaterThan(0))
+    // Mon (OT day) should NOT appear in the core-day section (it's in the OT selector)
+  })
+
+  it('renders core-day pills for DHL custom schedule short week (Mon/Thu/Fri)', () => {
+    renderModal({ week: DHL_SHORT_WEEK, config: DHL_CUSTOM_CONFIG })
+    expect(screen.getByText(/core shifts/i)).toBeTruthy()
+    const pills = ['Mon', 'Thu', 'Fri']
+    pills.forEach(day => expect(screen.getAllByRole('button', { name: new RegExp(`^${day}$`, 'i') }).length).toBeGreaterThan(0))
+  })
+
+  it('does NOT render core-day pills for standard (non-custom) DHL users', () => {
+    const standardConfig = { ...DHL_CUSTOM_CONFIG, customWeeklyHours: null, customWeeklyHoursLong: null, customWeeklyHoursShort: null }
+    renderModal({ week: DHL_LONG_WEEK, config: standardConfig })
+    expect(screen.queryByText(/core shifts/i)).toBeNull()
+  })
+
+  it('does NOT render core-day pills for dhlCustomSchedule=true (legacy path)', () => {
+    const legacyConfig = { ...DHL_CUSTOM_CONFIG, dhlCustomSchedule: true }
+    renderModal({ week: DHL_LONG_WEEK, config: legacyConfig })
+    expect(screen.queryByText(/core shifts/i)).toBeNull()
+  })
+
+  it('toggling a core pill to missed shows the missed-core warning', () => {
+    renderModal({ week: DHL_LONG_WEEK, config: DHL_CUSTOM_CONFIG })
+    // Click Tue pill to mark it as missed
+    const tuePills = screen.getAllByRole('button', { name: /^tue$/i })
+    fireEvent.click(tuePills[0])
+    expect(screen.getByText(/core shift.*missed/i)).toBeTruthy()
+    expect(screen.getByText(/attendance miss/i)).toBeTruthy()
+  })
+
+  it('unchecking a core day reduces the actualHours count shown in the target tracker', () => {
+    renderModal({ week: DHL_LONG_WEEK, config: DHL_CUSTOM_CONFIG })
+    // Initially all core days + Mon OT slot unanswered → totalHoursPlanned starts at core only
+    // Mark Tue as missed — the tracker should show one fewer shift
+    const tuePills = screen.getAllByRole('button', { name: /^tue$/i })
+    fireEvent.click(tuePills[0])
+    // Target tracker should show a lower hours/target ratio
+    expect(screen.getByText(/short of your 60h target/i)).toBeTruthy()
+  })
+
+  it('OT selector is still present and required for long week custom schedule', () => {
+    renderModal({ week: DHL_LONG_WEEK, config: DHL_CUSTOM_CONFIG })
+    expect(screen.getByText(/schedule extension/i)).toBeTruthy()
+  })
+})

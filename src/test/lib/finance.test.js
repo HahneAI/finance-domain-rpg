@@ -434,6 +434,36 @@ describe('customWeeklyHours', () => {
     expect(short.workedDayNames).toHaveLength(4)
   })
 
+  it('DHL: per-week-type custom hours override customWeeklyHours fallback', () => {
+    const cfg = {
+      ...DHL_CONFIG,
+      customWeeklyHours: 60,
+      customWeeklyHoursLong: 66,
+      customWeeklyHoursShort: 54,
+    }
+    const weeks = buildYear(cfg)
+    const long = weeks.find(w => w.active && w.rotation === '6-Day')
+    const short = weeks.find(w => w.active && w.rotation === '4-Day')
+    expect(long.totalHours).toBe(66)
+    expect(short.totalHours).toBe(54)
+    expect(projectedGross(true, cfg)).toBeCloseTo(long.grossPay)
+    expect(projectedGross(false, cfg)).toBeCloseTo(short.grossPay)
+  })
+
+  it('DHL: when per-week-type values are missing, customWeeklyHours remains the fallback', () => {
+    const cfg = {
+      ...DHL_CONFIG,
+      customWeeklyHours: 60,
+      customWeeklyHoursLong: null,
+      customWeeklyHoursShort: null,
+    }
+    const weeks = buildYear(cfg)
+    const long = weeks.find(w => w.active && w.rotation === '6-Day')
+    const short = weeks.find(w => w.active && w.rotation === '4-Day')
+    expect(long.totalHours).toBe(60)
+    expect(short.totalHours).toBe(60)
+  })
+
   it('non-DHL: sets totalHours to customWeeklyHours and rotation to "Custom"', () => {
     const cfg = {
       ...DEFAULT_CONFIG,

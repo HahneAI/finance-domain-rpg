@@ -242,19 +242,31 @@ function getDhlRotationLabel(isLongWeek) {
   return meta.displayName || meta.label || (isLongWeek ? "Long Week" : "Short Week");
 }
 
+function resolveDhlWeeklyHours(cfg, isLongWeek, rotationHours) {
+  const perWeekTypeHours = isLongWeek ? cfg.customWeeklyHoursLong : cfg.customWeeklyHoursShort;
+  if (perWeekTypeHours != null) return perWeekTypeHours;
+  if (cfg.customWeeklyHours != null) return cfg.customWeeklyHours;
+  return rotationHours;
+}
+
 function getDhlPlannedPattern(cfg, isLongWeek) {
   const indexes = getDhlPlannedDayIndexes(cfg, isLongWeek);
   const totalHours = indexes.length * cfg.shiftHours;
   const weekendHours = indexes.reduce((sum, idx) => sum + dhlWeekendHoursPerDayIndex(idx, cfg.shiftHours), 0);
   const rotationLabel = getDhlRotationLabel(isLongWeek);
   let requiredOtShifts;
-  if (cfg.customWeeklyHours != null && !cfg.dhlCustomSchedule) {
+  const resolvedHours = resolveDhlWeeklyHours(cfg, isLongWeek, totalHours);
+  const hasCustomTarget = !cfg.dhlCustomSchedule && (
+    cfg.customWeeklyHoursLong != null ||
+    cfg.customWeeklyHoursShort != null ||
+    cfg.customWeeklyHours != null
+  );
+  if (hasCustomTarget) {
     // Custom hours: additional OT shifts = (weekly target − already-scheduled rotation hours) / shift length.
     // Uses rotationHours (indexes already include the default OT day) so requiredOtShifts represents
     // only the EXTRA shifts beyond the existing schedule needed to reach the custom target.
     // e.g. customWeeklyHours=60: long (5 days×12=60h) → 0 extra; short (4 days×12=48h) → 1 extra.
-    const rotationHours = indexes.length * cfg.shiftHours;
-    requiredOtShifts = Math.max(0, Math.round((cfg.customWeeklyHours - rotationHours) / cfg.shiftHours));
+    requiredOtShifts = Math.max(0, Math.round((resolvedHours - totalHours) / cfg.shiftHours));
   } else {
     requiredOtShifts = cfg.dhlCustomSchedule ? 0 : (DHL_PRESET.requiredOtShifts ?? 0);
   }
@@ -376,8 +388,9 @@ export function buildYear(cfg) {
       totalHours = worked.length * cfg.shiftHours;
       // Weekend pay: Sat 12:00am → Mon 6:00am (Fri nights only count midnight→6am Sat)
       weekendHours = worked.reduce((sum, day) => sum + dhlWeekendHoursForDate(day, cfg.shiftHours), 0);
-      if (!cfg.dhlCustomSchedule && cfg.customWeeklyHours != null) {
-        const targetShifts = Math.round(cfg.customWeeklyHours / cfg.shiftHours);
+      if (!cfg.dhlCustomSchedule) {
+        const resolvedHours = resolveDhlWeeklyHours(cfg, isHighWeek, totalHours);
+        const targetShifts = Math.round(resolvedHours / cfg.shiftHours);
         if (targetShifts < worked.length) {
           // Trim rotation to target shifts: preserve weekend days (Sat/Sun > Fri > core weekdays),
           // dropping the default OT day first, then non-weekend core days.
@@ -392,7 +405,7 @@ export function buildYear(cfg) {
           worked = [...worked].sort((a, b) => shiftPriority(b) - shiftPriority(a)).slice(0, targetShifts);
           weekendHours = worked.reduce((sum, day) => sum + dhlWeekendHoursForDate(day, cfg.shiftHours), 0);
         }
-        totalHours = cfg.customWeeklyHours;
+        totalHours = resolvedHours;
       }
     } else {
       // Standard / non-DHL path.
@@ -481,7 +494,7 @@ export function projectedGross(isWeek2, cfg) {
   let totalH, wkndH;
   if (cfg.employerPreset === "DHL") {
     const pattern = getDhlPlannedPattern(cfg, isWeek2);
-    totalH = cfg.customWeeklyHours != null ? cfg.customWeeklyHours : pattern.totalHours;
+    totalH = resolveDhlWeeklyHours(cfg, isWeek2, pattern.totalHours);
     wkndH = pattern.weekendHours;
   } else {
     // Non-DHL: no weekend differential. customWeeklyHours overrides everything.
@@ -1030,6 +1043,7 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
     ? !!weekMeta.isHighWeek
     : ["6-Day", "Week 2", "Long Week"].includes(event.weekRotation);
   const plannedPattern = isDHL ? getDhlPlannedPattern(cfg, isWeek2) : null;
+  const resolvedDhlHours = plannedPattern ? resolveDhlWeeklyHours(cfg, isWeek2, plannedPattern.totalHours) : null;
   // Non-DHL total hours: customWeeklyHours overrides; variable uses long/short; else flat.
   const nonDhlTotalH = cfg.customWeeklyHours != null
     ? cfg.customWeeklyHours
@@ -1040,8 +1054,8 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
   // plannedPattern.indexes.length only covers the base rotation (may need extra OT shifts to
   // reach the custom target — those are tracked in requiredOtShifts but not in indexes).
   const normalShifts = plannedPattern
-    ? (cfg.customWeeklyHours != null
-        ? Math.round(cfg.customWeeklyHours / cfg.shiftHours)
+    ? (resolvedDhlHours != null
+        ? Math.round(resolvedDhlHours / cfg.shiftHours)
         : plannedPattern.indexes.length)
     : nonDhlTotalH / (cfg.shiftHours || 8);
   const normalWeekendHours = plannedPattern ? plannedPattern.weekendHours : 0;

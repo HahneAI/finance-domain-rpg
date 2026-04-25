@@ -1,13 +1,13 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
 import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
-import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths } from "../lib/expense.js";
+import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
-import { PhaseAdvancedEditModal } from "./PhaseAdvancedEditModal.jsx";
 import { MonthQuarterSelector } from "./MonthQuarterSelector.jsx";
+import { BulkEditPanel } from "./BulkEditPanel.jsx";
 
 const EXPENSE_DRAG_PREVIEW_TINT = {
   Needs: "rgba(201, 96, 96, 0.18)",
@@ -26,53 +26,6 @@ const EXPENSE_DRAG_EASE = "cubic-bezier(.22,.7,.2,1)";
 const EXPENSE_INSERT_MARKER_BG = "rgba(255,255,255,0.72)";
 const EXPENSE_INSERT_MARKER_BORDER = "rgba(255,255,255,0.14)";
 
-const EXPENSE_CYCLE_OPTIONS = [
-  { value: "weekly", label: "Weekly", days: 7 },
-  { value: "biweekly", label: "Biweekly", days: 14 },
-  { value: "every30days", label: "Every 30 days", days: 30 },
-  { value: "yearly", label: "Yearly", days: 365 },
-];
-
-const cycleByValue = EXPENSE_CYCLE_OPTIONS.reduce((acc, opt) => {
-  acc[opt.value] = opt;
-  return acc;
-}, {});
-
-const roundToQuarter = (n) => Math.round(n * 4) / 4;
-const CHECKS_PER_MONTH = { weekly: 4, biweekly: 2, monthly: 1, salary: 2 };
-const normalizeCycle = (cycle) => cycleByValue[cycle] ? cycle : "every30days";
-
-// Convert a bill's entered amount to its monthly equivalent cost
-const toMonthlyCost = (amount, cycle) => {
-  const c = normalizeCycle(cycle);
-  if (c === "every30days") return amount;
-  if (c === "weekly")      return amount * 4;
-  if (c === "biweekly")    return amount * 2;
-  if (c === "yearly")      return amount / 12;
-  return amount;
-};
-
-// Recover the original cycle-period amount from a monthly cost
-const fromMonthlyCost = (monthly, cycle) => {
-  const c = normalizeCycle(cycle);
-  if (c === "every30days") return monthly;
-  if (c === "weekly")      return monthly / 4;
-  if (c === "biweekly")    return monthly / 2;
-  if (c === "yearly")      return monthly * 12;
-  return monthly;
-};
-
-// How much to reserve from each paycheck for this bill
-const perPaycheckFromCycle = (amount, cycle, cpm) =>
-  roundToQuarter(toMonthlyCost(amount, cycle) / cpm);
-
-
-// Recover the original entered cycle amount from the stored per-paycheck value
-const cycleAmountFromPerPaycheck = (perPaycheck, cycle, cpm) =>
-  fromMonthlyCost(roundToQuarter(perPaycheck * cpm), cycle);
-
-// Monthly total for display
-const monthlyFromPerPaycheck = (perPaycheck, cpm) => roundToQuarter(perPaycheck * cpm);
 
 export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, isAdmin = false }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
@@ -89,14 +42,9 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [addingExp, setAddingExp] = useState(false);
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   const [pendingDelete, setPendingDelete] = useState(null); // { id, mode: "month"|"quarter" } | null
-  const [advEditPhaseIdx, setAdvEditPhaseIdx] = useState(null); // null=closed, 0-3=open for that quarter
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
   // Month-level period selector state
   const [activeMonth, setActiveMonth] = useState(null); // "2026-MM" | null — null = quarter mode
-  // Hide mobile nav bar while this modal is open (body class drives the CSS rule in App.jsx)
-  useEffect(() => {
-    document.body.classList.toggle("modal-open", advEditPhaseIdx !== null);
-    return () => document.body.classList.remove("modal-open");
-  }, [advEditPhaseIdx]);
   // Keep the viewed phase in sync with the real current quarter so that
   // advanced-edit month amounts are always reflected as time advances.
   useEffect(() => {
@@ -106,10 +54,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const handleSelectMonth = (monthKey) => {
     setActiveMonth(monthKey);
     setAp(phaseIdxForMonth(monthKey));
+    setBulkEditOpen(false);
   };
   const handleSelectQuarter = (phaseIdx) => {
     setActiveMonth(null);
     setAp(phaseIdx);
+    setBulkEditOpen(false);
   };
   // Loan CRUD state
   const [editLoanId, setEditLoanId] = useState(null);
@@ -460,7 +410,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
       return [...updated, ...newExps];
     });
-    setAdvEditPhaseIdx(null);
+    setBulkEditOpen(false);
   };
 
   const addExp = () => {
@@ -839,8 +789,19 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       monthsWithOverrides={monthsWithOverrides}
       onSelectMonth={handleSelectMonth}
       onSelectQuarter={handleSelectQuarter}
-      onAdvEdit={setAdvEditPhaseIdx}
+      onAdvEdit={(phaseIdx) => { setAp(phaseIdx); setActiveMonth(null); setBulkEditOpen(true); }}
     />
+    {/* Inline bulk-edit panel — opens when ADV. EDIT is tapped */}
+    {bulkEditOpen && (
+      <BulkEditPanel
+        phaseIdx={ap}
+        selectedMonthIso={`${displayMonthKey}-01`}
+        expenses={regularExpenses}
+        cpm={cpm}
+        onSave={saveAdvancedEdit}
+        onClose={() => setBulkEditOpen(false)}
+      />
+    )}
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
       <Card label="This Week’s Check" val={f2(prevWeekNet ?? weeklyIncome)} sub="This Week’s Check" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
@@ -1476,16 +1437,6 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     >
       {touchDragOverlay.label}
     </div>}
-    {advEditPhaseIdx !== null && (
-      <PhaseAdvancedEditModal
-        phaseIdx={advEditPhaseIdx}
-        expenses={regularExpenses}
-        cpm={cpm}
-        TODAY_ISO={TODAY_ISO}
-        onSave={saveAdvancedEdit}
-        onClose={() => setAdvEditPhaseIdx(null)}
-      />
-    )}
   </div>);
 }
 

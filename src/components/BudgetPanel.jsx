@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
-import { getEffectiveAmount, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
-import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure } from "../lib/expense.js";
+import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
+import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths } from "../lib/expense.js";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
@@ -89,6 +89,9 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   const [delExpId, setDelExpId] = useState(null);
   const [advEditPhaseIdx, setAdvEditPhaseIdx] = useState(null); // null=closed, 0-3=open for that quarter
+  // Month-level period selector state (Phase 2 will wire this to the UI)
+  const [activeMonth, setActiveMonth] = useState(null); // "2026-MM" | null — null = quarter mode
+  const [pendingDelete, setPendingDelete] = useState(null); // { id, mode: "month"|"quarter" } | null
   // Hide mobile nav bar while this modal is open (body class drives the CSS rule in App.jsx)
   useEffect(() => {
     document.body.classList.toggle("modal-open", advEditPhaseIdx !== null);
@@ -450,6 +453,32 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     }));
     setDelExpId(null);
   };
+
+  // Month-scoped handlers — used by Phase 2+ UI. activeMonth must be set before calling.
+  const saveMonthEdit = (expId, newAmount, newCycle) => {
+    const perPaycheck = perPaycheckFromCycle(parseFloat(newAmount) || 0, newCycle, cpm);
+    setExpenses(prev => prev.map(e =>
+      e.id !== expId ? e : applyMonthEditForward(e, activeMonth, perPaycheck, parseFloat(newAmount) || 0, newCycle)
+    ));
+  };
+
+  const deleteMonthOnly = (expId) => {
+    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonth(e, activeMonth)));
+    setPendingDelete(null);
+  };
+
+  const deleteMonthForward = (expId) => {
+    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonthForward(e, activeMonth)));
+    setPendingDelete(null);
+  };
+
+  const deleteQuarterOnly = (expId) => {
+    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearQuarterMonths(e, ap)));
+    setPendingDelete(null);
+  };
+
+  // deleteQuarterForward = existing deleteExp(id) — zeros active phase forward in history
+
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mq = window.matchMedia("(pointer: coarse)");

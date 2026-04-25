@@ -146,8 +146,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
   // First calendar month of each quarter — used as the representative month in quarter mode.
   const QUARTER_FIRST_MONTHS = ["2026-01", "2026-04", "2026-07", "2026-10"];
+  const MONTH_SHORT = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
   // Month key for today — used to highlight the current month pill.
   const currentMonthKey = TODAY_ISO.slice(0, 7);
+  // Short label for the active month (e.g. "MAY"), null in quarter mode.
+  const activeMonthLabel = activeMonth ? MONTH_SHORT[parseInt(activeMonth.slice(5, 7), 10) - 1] : null;
   // In month mode, resolve amounts for the selected month; in quarter mode, use the
   // first month of the active quarter so the quarter view stays month-consistent.
   const displayMonthKey = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
@@ -181,6 +184,18 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     () => computeRemainingSpend(expenses, futureWeeks ?? []).avgWeeklySpend ?? 0,
     [expenses, futureWeeks],
   );
+  // Set of month keys that have at least one expense with a monthlyOverride entry.
+  // Used by MonthQuarterSelector to render the override indicator dots on pills.
+  const monthsWithOverrides = useMemo(() => {
+    const keys = new Set();
+    for (const exp of regularExpenses) {
+      if (!exp.monthlyOverrides) continue;
+      for (const key of Object.keys(exp.monthlyOverrides)) {
+        keys.add(key);
+      }
+    }
+    return keys;
+  }, [regularExpenses]);
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
@@ -345,6 +360,21 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const latestPastEntry = (existing) => latestPastEntryPure(existing, TODAY_ISO);
 
   const startEditExp = (exp) => {
+    if (activeMonth !== null) {
+      // Month mode: read from monthlyOverrides if present, else derive from month resolver
+      const override = exp.monthlyOverrides?.[activeMonth];
+      if (override?.amount != null) {
+        setEditId(exp.id);
+        setEditVals({ amount: String(override.amount), cycle: override.cycle ?? "every30days" });
+        return;
+      }
+      const cycle = resolveExpenseCycle(exp, ap);
+      const perPaycheck = getEffectiveAmountForMonth(exp, activeMonth, ap);
+      setEditId(exp.id);
+      setEditVals({ amount: cycleAmountFromPerPaycheck(perPaycheck, cycle, cpm).toFixed(2), cycle });
+      return;
+    }
+    // Quarter mode: existing history-based pre-fill
     const existing = exp.history?.length
       ? exp.history
       : [{ effectiveFrom: FISCAL_YEAR_START, weekly: exp.weekly ?? [0, 0, 0, 0] }];
@@ -807,6 +837,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       activeQuarter={ap}
       currentMonthKey={currentMonthKey}
       currentPhaseIdx={currentPhaseIdx}
+      monthsWithOverrides={monthsWithOverrides}
       onSelectMonth={handleSelectMonth}
       onSelectQuarter={handleSelectQuarter}
       onAdvEdit={setAdvEditPhaseIdx}
@@ -1020,8 +1051,21 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
                   Per-paycheck reserve: {f2(perPaycheckFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days", cpm))}
                 </div>
+                {activeMonthLabel && (
+                  <div style={{ fontSize: "9px", color: "var(--color-accent-primary)", opacity: 0.85, letterSpacing: "0.5px" }}>
+                    Applies from {activeMonthLabel} onward — earlier months unchanged
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: "6px" }}>
-                  <button onClick={() => saveEditExp(exp.id)} style={{ background: "var(--color-green)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", flex: 1 }}>SAVE</button>
+                  <button
+                    onClick={() => activeMonth !== null
+                      ? saveMonthEdit(exp.id, editVals.amount, editVals.cycle ?? "every30days")
+                      : saveEditExp(exp.id)
+                    }
+                    style={{ background: "var(--color-green)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", flex: 1 }}
+                  >
+                    {activeMonthLabel ? `SAVE FROM ${activeMonthLabel} +` : "SAVE"}
+                  </button>
                   <button onClick={() => setEditId(null)} style={{ background: "var(--color-border-subtle)", color: "var(--color-text-secondary)", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", }}>✕</button>
                 </div>
               </div> : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>

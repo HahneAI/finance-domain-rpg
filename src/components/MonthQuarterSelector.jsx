@@ -15,6 +15,7 @@ export function MonthQuarterSelector({
   activeQuarter,
   currentMonthKey,
   currentPhaseIdx,
+  monthsWithOverrides,
   onSelectMonth,
   onSelectQuarter,
   onAdvEdit,
@@ -63,6 +64,7 @@ export function MonthQuarterSelector({
         {MONTH_KEYS.map((key, i) => {
           const isActive = activeMonth === key;
           const isCurrent = key === currentMonthKey;
+          const hasOverride = monthsWithOverrides?.has(key);
           // Stronger divider after each quarter boundary (Mar, Jun, Sep)
           const isQuarterEnd = (i + 1) % 3 === 0 && i < 11;
           return (
@@ -97,6 +99,7 @@ export function MonthQuarterSelector({
               }}
             >
               {MONTH_LABELS[i]}
+              {/* "now" dot for today's month */}
               {isCurrent && (
                 <span style={{
                   display: "block",
@@ -107,6 +110,17 @@ export function MonthQuarterSelector({
                   margin: "2px auto 0",
                   opacity: 0.9,
                 }} />
+              )}
+              {/* override indicator — small gold diamond for months with custom values */}
+              {hasOverride && !isCurrent && (
+                <span style={{
+                  display: "block",
+                  fontSize: "5px",
+                  lineHeight: 1,
+                  color: "var(--color-warning)",
+                  margin: "2px auto 0",
+                  opacity: 0.8,
+                }}>◆</span>
               )}
             </button>
           );

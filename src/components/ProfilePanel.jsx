@@ -486,7 +486,9 @@ const PAY_SCHEDULE_LABELS = {
 function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
   const isDHL = config.employerPreset === "DHL";
   const scheduleLabel = config.customWeeklyHours != null
-    ? `${config.customWeeklyHours} hrs / week (custom)`
+    ? (config.customWeeklyHoursLong != null && config.customWeeklyHoursShort != null
+        ? `Long ${config.customWeeklyHoursLong}h / Short ${config.customWeeklyHoursShort}h (custom)`
+        : `${config.customWeeklyHours} hrs / week (custom)`)
     : config.scheduleIsVariable
       ? "Variable hours"
       : `${config.standardWeeklyHours || 40} hrs / week`;
@@ -508,6 +510,8 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
       standardWeeklyHours: config.standardWeeklyHours != null ? String(config.standardWeeklyHours) : "",
       customScheduleEnabled: config.customWeeklyHours != null,
       customWeeklyHours: config.customWeeklyHours != null ? String(config.customWeeklyHours) : "",
+      customWeeklyHoursLong: config.customWeeklyHoursLong != null ? String(config.customWeeklyHoursLong) : "",
+      customWeeklyHoursShort: config.customWeeklyHoursShort != null ? String(config.customWeeklyHoursShort) : "",
     });
     setError(null);
     setEditing(true);
@@ -590,14 +594,35 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
     }
 
     if (payDraft.customScheduleEnabled) {
-      const customHrs = parseFloat(payDraft.customWeeklyHours);
-      if (!Number.isFinite(customHrs) || customHrs <= 0 || customHrs > 168) {
-        setError("Custom hours must be between 1 and 168.");
-        return;
+      if (isDHL) {
+        const longHrs = parseFloat(payDraft.customWeeklyHoursLong);
+        const shortHrs = parseFloat(payDraft.customWeeklyHoursShort);
+        if (!Number.isFinite(longHrs) || longHrs <= 0 || longHrs > 168) {
+          setError("Long week hours must be between 1 and 168.");
+          return;
+        }
+        if (!Number.isFinite(shortHrs) || shortHrs <= 0 || shortHrs > 168) {
+          setError("Short week hours must be between 1 and 168.");
+          return;
+        }
+        updates.customWeeklyHoursLong = parseFloat(longHrs.toFixed(1));
+        updates.customWeeklyHoursShort = parseFloat(shortHrs.toFixed(1));
+        // Keep flat fallback as average so non-per-week-aware code still has a value.
+        updates.customWeeklyHours = parseFloat(((longHrs + shortHrs) / 2).toFixed(1));
+      } else {
+        const customHrs = parseFloat(payDraft.customWeeklyHours);
+        if (!Number.isFinite(customHrs) || customHrs <= 0 || customHrs > 168) {
+          setError("Custom hours must be between 1 and 168.");
+          return;
+        }
+        updates.customWeeklyHours = parseFloat(customHrs.toFixed(1));
+        updates.customWeeklyHoursLong = null;
+        updates.customWeeklyHoursShort = null;
       }
-      updates.customWeeklyHours = parseFloat(customHrs.toFixed(1));
     } else {
       updates.customWeeklyHours = null;
+      updates.customWeeklyHoursLong = null;
+      updates.customWeeklyHoursShort = null;
     }
 
     const newConfig = { ...config, ...updates };
@@ -630,7 +655,14 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
           {config.shiftHours > 0 && <DetailRow label="Shift Length" value={`${config.shiftHours}h`} />}
           <DetailRow label="Schedule" value={scheduleLabel} />
           {config.customWeeklyHours != null && (
-            <DetailRow label="Custom Override" value={`${config.customWeeklyHours} hrs/wk`} valueColor="var(--color-gold)" />
+            config.customWeeklyHoursLong != null && config.customWeeklyHoursShort != null ? (
+              <>
+                <DetailRow label="Long Week Override" value={`${config.customWeeklyHoursLong} hrs`} valueColor="var(--color-gold)" />
+                <DetailRow label="Short Week Override" value={`${config.customWeeklyHoursShort} hrs`} valueColor="var(--color-gold)" />
+              </>
+            ) : (
+              <DetailRow label="Custom Override" value={`${config.customWeeklyHours} hrs/wk`} valueColor="var(--color-gold)" />
+            )
           )}
           <DetailRow label="Weekend Diff" value={config.diffRate > 0 ? `+$${config.diffRate}/hr` : "$0.00/hr"} />
           {isDHL && (
@@ -740,32 +772,49 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                       </button>
                     </div>
                     {payDraft.customScheduleEnabled && (
-                      <div style={{ marginTop: "10px" }}>
+                      <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
                         <label style={lS}>Hours per week</label>
-                        <input
-                          type="number"
-                          step="1"
-                          min="1"
-                          max="168"
-                          value={payDraft.customWeeklyHours}
-                          onChange={e => handleDraftChange("customWeeklyHours", e.target.value)}
-                          style={{ ...iS, marginTop: "4px" }}
-                        />
-                        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
-                          Projections use this flat total. DHL rotation still shows scheduled days in weekly confirmation.
+                        <div>
+                          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>Long week</div>
+                          <input
+                            type="number"
+                            step="1"
+                            min="1"
+                            max="168"
+                            value={payDraft.customWeeklyHoursLong}
+                            onChange={e => handleDraftChange("customWeeklyHoursLong", e.target.value)}
+                            style={iS}
+                          />
+                          {(() => {
+                            const h = parseFloat(payDraft.customWeeklyHoursLong);
+                            const sh = parseFloat(payDraft.shiftHours) || config.shiftHours || 12;
+                            if (!Number.isFinite(h) || h <= 0) return null;
+                            const ot = Math.max(0, Math.round((h - DHL_PRESET.rotation.long.baseHours) / sh));
+                            return <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-disabled)" }}>OT pickups required: {ot}</div>;
+                          })()}
                         </div>
-                        {(() => {
-                          const h = parseFloat(payDraft.customWeeklyHours);
-                          const sh = parseFloat(payDraft.shiftHours) || config.shiftHours || 12;
-                          if (!Number.isFinite(h) || h <= 0) return null;
-                          const longOt = Math.max(0, Math.round((h - DHL_PRESET.rotation.long.baseHours) / sh));
-                          const shortOt = Math.max(0, Math.round((h - DHL_PRESET.rotation.short.baseHours) / sh));
-                          return (
-                            <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
-                              OT pickups required: long week → {longOt}, short week → {shortOt}
-                            </div>
-                          );
-                        })()}
+                        <div>
+                          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>Short week</div>
+                          <input
+                            type="number"
+                            step="1"
+                            min="1"
+                            max="168"
+                            value={payDraft.customWeeklyHoursShort}
+                            onChange={e => handleDraftChange("customWeeklyHoursShort", e.target.value)}
+                            style={iS}
+                          />
+                          {(() => {
+                            const h = parseFloat(payDraft.customWeeklyHoursShort);
+                            const sh = parseFloat(payDraft.shiftHours) || config.shiftHours || 12;
+                            if (!Number.isFinite(h) || h <= 0) return null;
+                            const ot = Math.max(0, Math.round((h - DHL_PRESET.rotation.short.baseHours) / sh));
+                            return <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-disabled)" }}>OT pickups required: {ot}</div>;
+                          })()}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+                          Projections use long/short targets by week type. DHL rotation still shows scheduled days in weekly confirmation.
+                        </div>
                       </div>
                     )}
                   </>

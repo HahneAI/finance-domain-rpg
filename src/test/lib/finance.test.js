@@ -6,6 +6,8 @@ import {
   projectedGross,
   getPhaseIndex,
   getEffectiveAmount,
+  getEffectiveAmountForMonth,
+  phaseIdxForMonth,
   normalizeToMonthlyAmount,
   projectMonthlyNetTakeHome,
   resolveBudgetHealthMonthBoundary,
@@ -1693,5 +1695,85 @@ describe('loanRunwayStartDate', () => {
   it('start date is strictly before firstPaymentDate', () => {
     const result = loanRunwayStartDate({ ...baseLoan, paymentFrequency: 'weekly' })
     expect(result < baseLoan.firstPaymentDate).toBe(true)
+  })
+})
+
+// phaseIdxForMonth
+// ─────────────────────────────────────────────────────────────
+
+describe('phaseIdxForMonth', () => {
+  it('maps Q1 months to phase 0', () => {
+    expect(phaseIdxForMonth('2026-01')).toBe(0)
+    expect(phaseIdxForMonth('2026-02')).toBe(0)
+    expect(phaseIdxForMonth('2026-03')).toBe(0)
+  })
+
+  it('maps Q2 months to phase 1', () => {
+    expect(phaseIdxForMonth('2026-04')).toBe(1)
+    expect(phaseIdxForMonth('2026-05')).toBe(1)
+    expect(phaseIdxForMonth('2026-06')).toBe(1)
+  })
+
+  it('maps Q3 months to phase 2', () => {
+    expect(phaseIdxForMonth('2026-07')).toBe(2)
+    expect(phaseIdxForMonth('2026-08')).toBe(2)
+    expect(phaseIdxForMonth('2026-09')).toBe(2)
+  })
+
+  it('maps Q4 months to phase 3', () => {
+    expect(phaseIdxForMonth('2026-10')).toBe(3)
+    expect(phaseIdxForMonth('2026-11')).toBe(3)
+    expect(phaseIdxForMonth('2026-12')).toBe(3)
+  })
+})
+
+// getEffectiveAmountForMonth
+// ─────────────────────────────────────────────────────────────
+
+describe('getEffectiveAmountForMonth', () => {
+  const baseExpense = {
+    history: [{ effectiveFrom: '2026-01-05', weekly: [100, 100, 100, 100] }],
+  }
+
+  it('falls back to history resolution when no monthlyOverrides', () => {
+    expect(getEffectiveAmountForMonth(baseExpense, '2026-05', 1)).toBe(100)
+  })
+
+  it('returns the override perPaycheck when monthlyOverrides has an entry', () => {
+    const exp = {
+      ...baseExpense,
+      monthlyOverrides: { '2026-05': { perPaycheck: 87.5, amount: 350, cycle: 'every30days' } },
+    }
+    expect(getEffectiveAmountForMonth(exp, '2026-05', 1)).toBe(87.5)
+  })
+
+  it('returns 0 for a zeroed (soft-deleted) month override', () => {
+    const exp = {
+      ...baseExpense,
+      monthlyOverrides: { '2026-06': { perPaycheck: 0, amount: 0, cycle: 'every30days' } },
+    }
+    expect(getEffectiveAmountForMonth(exp, '2026-06', 1)).toBe(0)
+  })
+
+  it('override for one month does not affect other months', () => {
+    const exp = {
+      ...baseExpense,
+      monthlyOverrides: { '2026-05': { perPaycheck: 87.5, amount: 350, cycle: 'every30days' } },
+    }
+    expect(getEffectiveAmountForMonth(exp, '2026-04', 1)).toBe(100) // April falls back to history
+    expect(getEffectiveAmountForMonth(exp, '2026-06', 1)).toBe(100) // June falls back to history
+  })
+
+  it('uses phaseIdx to pick the correct history weekly slot when no override', () => {
+    const exp = {
+      history: [{ effectiveFrom: '2026-01-05', weekly: [50, 75, 100, 125] }],
+    }
+    expect(getEffectiveAmountForMonth(exp, '2026-02', 0)).toBe(50)  // Q1
+    expect(getEffectiveAmountForMonth(exp, '2026-08', 2)).toBe(100) // Q3
+    expect(getEffectiveAmountForMonth(exp, '2026-11', 3)).toBe(125) // Q4
+  })
+
+  it('handles expense with no history and no overrides', () => {
+    expect(getEffectiveAmountForMonth({}, '2026-05', 1)).toBe(0)
   })
 })

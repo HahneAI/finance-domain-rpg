@@ -2,7 +2,7 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { DHL_BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
-import { iS, lS, Card, PanelHero } from "./ui.jsx";
+import { iS, lS, Card, PanelHero, SH } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 
 const BENEFIT_LABELS = {

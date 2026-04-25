@@ -88,11 +88,10 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [editVals, setEditVals] = useState({});
   const [addingExp, setAddingExp] = useState(false);
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
-  const [delExpId, setDelExpId] = useState(null);
-  const [advEditPhaseIdx, setAdvEditPhaseIdx] = useState(null); // null=closed, 0-3=open for that quarter
-  // Month-level period selector state (Phase 2 will wire this to the UI)
-  const [activeMonth, setActiveMonth] = useState(null); // "2026-MM" | null — null = quarter mode
   const [pendingDelete, setPendingDelete] = useState(null); // { id, mode: "month"|"quarter" } | null
+  const [advEditPhaseIdx, setAdvEditPhaseIdx] = useState(null); // null=closed, 0-3=open for that quarter
+  // Month-level period selector state
+  const [activeMonth, setActiveMonth] = useState(null); // "2026-MM" | null — null = quarter mode
   // Hide mobile nav bar while this modal is open (body class drives the CSS rule in App.jsx)
   useEffect(() => {
     document.body.classList.toggle("modal-open", advEditPhaseIdx !== null);
@@ -499,7 +498,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       }
       return { ...e, history: [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }] };
     }));
-    setDelExpId(null);
+    setPendingDelete(null);
   };
 
   // Month-scoped handlers — used by Phase 2+ UI. activeMonth must be set before calling.
@@ -1114,10 +1113,25 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{monthlyDisplay}</div>
                   </div>
                   <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
-                  {delExpId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
-                    <SmBtn onClick={() => deleteExp(exp.id)} c="var(--color-red)" bg="#2d1a1a">DEL</SmBtn>
-                    <SmBtn onClick={() => setDelExpId(null)}>NO</SmBtn>
-                  </div> : <SmBtn onClick={() => setDelExpId(exp.id)} c="var(--color-red)">✕</SmBtn>}
+                  {pendingDelete?.id === exp.id ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-end" }}>
+                      <div style={{ fontSize: "8px", color: "var(--color-red)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
+                        {pendingDelete.mode === "month" ? `Delete ${activeMonthLabel}?` : `Delete Q${ap + 1}?`}
+                      </div>
+                      <div style={{ display: "flex", gap: "3px" }}>
+                        {pendingDelete.mode === "month" ? (<>
+                          <SmBtn onClick={() => deleteMonthOnly(exp.id)} c="var(--color-red)" bg="#2d1a1a">MO. ONLY</SmBtn>
+                          <SmBtn onClick={() => deleteMonthForward(exp.id)} c="var(--color-red)" bg="#2d1a1a">+ ONWARD</SmBtn>
+                        </>) : (<>
+                          <SmBtn onClick={() => deleteQuarterOnly(exp.id)} c="var(--color-red)" bg="#2d1a1a">QTR ONLY</SmBtn>
+                          <SmBtn onClick={() => deleteExp(exp.id)} c="var(--color-red)" bg="#2d1a1a">+ ONWARD</SmBtn>
+                        </>)}
+                        <SmBtn onClick={() => setPendingDelete(null)}>✕</SmBtn>
+                      </div>
+                    </div>
+                  ) : (
+                    <SmBtn onClick={() => setPendingDelete({ id: exp.id, mode: activeMonth !== null ? "month" : "quarter" })} c="var(--color-red)">✕</SmBtn>
+                  )}
                 </div>
               </div>}
             </div>;

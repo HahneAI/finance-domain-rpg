@@ -550,8 +550,9 @@ grid-template-columns: repeat(${visibleMonths.length}, 1fr)
 - [x] Quarter blocks: `flex: visiblePerQ[i]` so each quarter spans exactly its visible month count; quarters with 0 visible months return `null`
 - [x] Sliding teal indicator bar repositioned proportionally — `barLeft` and `barWidth` computed from `visiblePerQ` ratios
 - [x] Past month (immediately preceding) rendered with `--color-text-disabled` color — visually subdued but still tappable
-- [ ] Cross-panel audit: identify any other month-label rows that need the same drop-off treatment
-- [ ] Test: set system clock to June 1, verify May is last visible in Q2 with only 1 pill spanning its Q2 column
+- [x] Cross-panel audit: IncomePanel uses week-level rolling rows (no horizontal month bar); LogPanel and BenefitsPanel use month labels only for date formatting — no other panels need drop-off treatment
+- [x] HomePanel goal timeline bar: anchored to start of previous calendar month (was anchored to current fiscal week, causing intra-month bar shrink); removed weekly subdivision ticks; updated fill-bar positions to calendar coordinate system; `lookbackMonths` changed from 0→1 to show previous month as reference
+- [ ] Test: set system clock to June 1, verify May is last visible in Q2 with only 1 pill spanning its Q2 column (deferred — visual QA)
 
 ---
 

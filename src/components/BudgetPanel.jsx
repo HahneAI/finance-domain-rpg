@@ -117,8 +117,13 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const shortMonth = (iso) =>
     ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(iso.split("-")[1], 10) - 1];
   const quarterEffective = (exp, phaseIdx) => getEffectiveAmount(exp, Q_REP_DATES[phaseIdx], phaseIdx);
+  // Sum across all 12 months so monthlyOverrides are reflected in the breakdown table.
+  // 52/12 weeks per month keeps the annual total at exactly 52 weeks.
   const yearlyExpenseCost = (exp) =>
-    [0, 1, 2, 3].reduce((s, q) => s + quarterEffective(exp, q) * WEEKS_PER_Q[q], 0);
+    [0,1,2,3,4,5,6,7,8,9,10,11].reduce((s, m) => {
+      const key = `2026-${String(m + 1).padStart(2, "0")}`;
+      return s + getEffectiveAmountForMonth(exp, key, Math.floor(m / 3)) * (52 / 12);
+    }, 0);
 
   // Split loans from regular expenses for display purposes
   const loans = expenses.filter(e => e.type === "loan");

@@ -440,10 +440,10 @@ Expenses currently use `id: "exp_${timestamp}"` generated at creation. This is u
 - Globally unique (UUID preferred)
 
 **Investigation checklist:**
-- [ ] Audit current `db.js` save/load path — does it read/write `expenses` as a full array or by ID?
+- [x] Audit current `db.js` save/load path — full array read/write confirmed; `saveUserData` upserts the entire `expenses` JSONB blob on every save; no per-ID targeting
 - [ ] Check if any Supabase RLS policies reference expense shape
 - [ ] Prototype per-quarter column approach on staging — measure write amplification on a 10-expense account with 6 months of history
-- [ ] Decide: UUID expense IDs or keep timestamp IDs (lean UUID — use `crypto.randomUUID()`)
+- [x] Decide: UUID expense IDs — switched all three generation sites in `BudgetPanel.jsx` and `BulkEditPanel.jsx` to `crypto.randomUUID()` (non-breaking; existing rows keep their old IDs)
 - [ ] If per-quarter columns: write a migration SQL + update `db.js` to split/merge on read/write
 - [ ] Document the "onward delete cascade" logic for multi-column writes
 

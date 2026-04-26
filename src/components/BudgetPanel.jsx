@@ -400,7 +400,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       });
 
       const newExps = additions.map(a => ({
-        id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        id: `exp_${crypto.randomUUID()}`,
         category: a.category,
         label: a.label,
         note: ["", "", "", ""],
@@ -423,7 +423,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     const cycle = newExp.cycle ?? "every30days";
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
     setExpenses(prev => [...prev, {
-      id: `exp_${Date.now()}`,
+      id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
       label: newExp.label,
       note: [newExp.note, newExp.note, newExp.note, newExp.note],
@@ -772,7 +772,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       firstPaymentDate: newLoan.firstPaymentDate || TODAY_ISO,
     };
     setExpenses(prev => [...prev, {
-      id: `loan_${Date.now()}`, type: "loan", category: "Loans",
+      id: `loan_${crypto.randomUUID()}`, type: "loan", category: "Loans",
       label: newLoan.label, note: [newLoan.note, newLoan.note, newLoan.note],
       loanMeta: meta, history: buildLoanHistory(meta)
     }]);

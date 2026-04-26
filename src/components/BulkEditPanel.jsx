@@ -87,7 +87,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
     const amt = parseFloat(addDraft.amount);
     if (!addDraft.label.trim() || !amt || amt <= 0) return;
     setAdditions(prev => [...prev, {
-      tempId: `new-${Date.now()}`,
+      tempId: `new-${crypto.randomUUID()}`,
       label: addDraft.label.trim(),
       category: addDraft.category,
       amount: addDraft.amount,

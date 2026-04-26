@@ -360,28 +360,32 @@ May 2026  ·  4 pay periods  ·  $87.50/wk avg  ·  $350.00/mo
 
 ## Implementation Order
 
-### Phase 1 — Data layer (no UI changes yet)
-- [ ] Add `getEffectiveAmountForMonth(expense, monthKey, phaseIdx)` to `finance.js`
-- [ ] Add `monthlyOverrides` read/write to `expense.js` helpers
-- [ ] Add `saveMonthEdit`, `deleteMonthOnly`, `deleteMonthForward`, `deleteQuarterOnly` handlers in `BudgetPanel.jsx` (no UI wired yet)
-- [ ] Write Vitest tests for `getEffectiveAmountForMonth` covering: no overrides (falls back to history), override present, override = 0 (deletion)
+### Phase 1 — Data layer ✅ COMPLETE
+- [x] Add `getEffectiveAmountForMonth(expense, monthKey, phaseIdx)` to `finance.js`
+- [x] Add `monthlyOverrides` read/write to `expense.js` helpers
+- [x] Add `saveMonthEdit`, `deleteMonthOnly`, `deleteMonthForward`, `deleteQuarterOnly` handlers in `BudgetPanel.jsx`
+- [x] Vitest tests: `getEffectiveAmountForMonth` (6 cases) + expense helpers (21 cases)
 
-### Phase 2 — Period selector component
-- [ ] Build `MonthQuarterSelector.jsx` with static layout and click handlers
-- [ ] Replace `ap` / quarter `VT` buttons in `BudgetPanel` with `MonthQuarterSelector`
-- [ ] Derive `displayMonthKey` and `displayPhaseIdx` from new state
-- [ ] Update `ts` (total spend) and all expense card `displayAmt` calls to use `getEffectiveAmountForMonth`
-- [ ] Verify: switching months shows correct amounts; switching quarters shows first-month amounts
+### Phase 2 — Period selector component ✅ COMPLETE
+- [x] Build `MonthQuarterSelector.jsx` — month row (Jan–Dec) + quarter row (Q1–Q4) in one LiquidGlass card
+- [x] Replace inline LiquidGlass quarter block in `BudgetPanel` with `<MonthQuarterSelector>`
+- [x] `displayMonthKey` = activeMonth or first month of active quarter (Jan/Apr/Jul/Oct)
+- [x] All spend calculations (ts, category totals, expense cards, breakdown, loans) use `displayEffective`
+- [x] Quarter click → `activeMonth = null`, resolves from first month of quarter ✓
+- [x] Month click → `activeMonth = "2026-MM"`, resolves exact month amounts ✓
 
-### Phase 3 — Edit flow
-- [ ] Wire month-mode edit form to `saveMonthEdit` when `activeMonth !== null`
-- [ ] Keep quarter-mode edit wired to existing `saveEditExp` (history-based)
-- [ ] Display overridden months with a subtle indicator dot on the month pill (so user knows a custom value exists)
+### Phase 3 — Edit flow ✅ COMPLETE
+- [x] `startEditExp` pre-fills from `monthlyOverrides[activeMonth]` in month mode; history-based in quarter mode
+- [x] Save button routes to `saveMonthEdit` (month mode) or `saveEditExp` (quarter mode)
+- [x] Button label: `SAVE FROM MAY +` in month mode; `SAVE` in quarter mode
+- [x] Context note: "Applies from MAY onward — earlier months unchanged" shown in month mode
+- [x] Override indicator: gold `◆` on month pills that have at least one `monthlyOverride` entry
 
-### Phase 4 — Delete flow
-- [ ] Replace `delExpId` with `pendingDelete` state
-- [ ] Build scoped delete confirmation UI (month vs. quarter options)
-- [ ] Wire all four delete handlers
+### Phase 4 — Delete flow ✅ COMPLETE
+- [x] Replace `delExpId` with `pendingDelete: { id, mode: "month"|"quarter" } | null`
+- [x] Month mode confirmation: `[MO. ONLY]` `[+ ONWARD]` `[✕]`
+- [x] Quarter mode confirmation: `[QTR ONLY]` `[+ ONWARD]` `[✕]`
+- [x] All four handlers wired; `deleteExp` updated to call `setPendingDelete(null)`
 
 ### Phase 5 — Inline bulk edit
 - [ ] Extract patch/addition assembly from `PhaseAdvancedEditModal.jsx` into `expense.js`
@@ -394,6 +398,160 @@ May 2026  ·  4 pay periods  ·  $87.50/wk avg  ·  $350.00/mo
 - [ ] Verify annual breakdown table still correct after `monthlyOverrides` changes
 - [ ] Run `npm run test:run` — fix any snapshot drift from state shape changes
 - [ ] Check `account-reference.json` computed expectations still match
+
+---
+
+## Post-Sprint 5 Investigations
+
+### Phase 7 — Supabase Schema Investigation
+
+**Context:** With month-level overrides and per-quarter editing now exposed in the UI, the current flat `expenses` JSONB column in `user_data` is carrying more structure than it was designed for. This phase is a design investigation before any migration.
+
+**Current schema (inferred):**
+```
+user_data
+  id           uuid
+  user_id      uuid
+  config       jsonb   -- pay rate, schedule, state, etc.
+  expenses     jsonb   -- array of expense objects including history[] + monthlyOverrides
+  goals        jsonb
+  logs         jsonb
+  week_confirmations jsonb
+  pto_goal     jsonb
+```
+
+**Problem 1 — Single JSONB column for all expenses:**
+All 12 months of overrides + full history for every expense live in one column. When the user makes a "forward" delete that cascades through Q2, Q3, Q4 overrides, the entire `expenses` blob is rewritten on every save. This is fine for now but will degrade with many expenses and frequent edits.
+
+**User's proposal:** Break into per-quarter columns (`expenses_q1`, `expenses_q2`, `expenses_q3`, `expenses_q4`) so each quarter's data is isolated. An "onward" delete or edit from Q2 forward would then need to update `expenses_q2`, `expenses_q3`, `expenses_q4` — three targeted column writes instead of one full rewrite.
+
+**Tradeoffs to investigate:**
+
+| Approach | Pros | Cons |
+|---|---|---|
+| Keep single `expenses` column | Zero migration, works today | Full blob rewrite on every edit; grows unbounded |
+| Per-quarter columns | Targeted writes; quarter-isolated reads | Schema migration; "onward" edits touch multiple columns; cross-quarter queries are awkward |
+| Separate `expenses` table (one row per expense) | True relational; targeted row updates | Breaking change; requires FK joins; RLS rules need rework |
+| Hybrid: `expenses` + `expense_month_overrides` table | Clean separation of base vs. override data | Two tables to keep in sync; adds complexity |
+
+**Problem 2 — Expense ID consistency:**
+Expenses currently use `id: "exp_${timestamp}"` generated at creation. This is unique per session but not guaranteed globally unique across devices or if the user creates expenses in rapid succession. The `history[]` and `monthlyOverrides` maps already key off the expense `id` for lookups. For Supabase row-level targeting (if we move to a per-expense table) or for efficient JSONB path queries, IDs need to be:
+- Deterministic and stable across saves
+- Globally unique (UUID preferred)
+
+**Investigation checklist:**
+- [ ] Audit current `db.js` save/load path — does it read/write `expenses` as a full array or by ID?
+- [ ] Check if any Supabase RLS policies reference expense shape
+- [ ] Prototype per-quarter column approach on staging — measure write amplification on a 10-expense account with 6 months of history
+- [ ] Decide: UUID expense IDs or keep timestamp IDs (lean UUID — use `crypto.randomUUID()`)
+- [ ] If per-quarter columns: write a migration SQL + update `db.js` to split/merge on read/write
+- [ ] Document the "onward delete cascade" logic for multi-column writes
+
+**Recommendation (preliminary):** Stay on single `expenses` column with `monthlyOverrides` nested for now. Introduce UUID expense IDs immediately (non-breaking — just change the generation function). Revisit schema split when expense count or edit frequency causes visible latency.
+
+---
+
+### Phase 8 — Three-Day Buffer Edit Audit
+
+**Context:** The existing `saveEditExp` function has a 72-hour buffer: if the most recent history entry was created within 3 days, edits overwrite that entry in place rather than appending a new one. This prevents unbounded history growth from rapid corrections.
+
+**Current buffer location:** `BudgetPanel.jsx → saveEditExp()` and `deleteExp()`:
+```js
+const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
+if (daysDiff <= 3) {
+  // update in place
+} else {
+  // append new history entry
+}
+```
+
+**Problem:** This buffer only applies to quarter-mode history-based edits. The new month-mode `saveMonthEdit` and `applyMonthEditForward` helpers write directly to `monthlyOverrides[key]` with no timestamp check — they always overwrite the override entry. This means month-mode edits already have implicit idempotency (same key = same slot), but there's no record of *when* the override was written, making it impossible to distinguish "created 30 seconds ago and being corrected" from "created last week."
+
+**What needs auditing:**
+
+| Edit path | Buffer applied? | Notes |
+|---|---|---|
+| `saveEditExp` (quarter mode) | ✅ Yes — 72h check on latest history entry | Working as designed |
+| `deleteExp` (quarter forward) | ✅ Yes — 72h check before appending | Working as designed |
+| `saveMonthEdit` → `applyMonthEditForward` | ⚠️ Implicit only — key overwrite, no timestamp | Corrections always land; no history bloat risk |
+| `deleteMonthOnly` → `clearMonth` | ⚠️ Implicit only | Same as above |
+| `saveAdvancedEdit` (ADV. EDIT modal) | ✅ Partial — checks `effectiveFrom` exact match | Works but keyed on date string, not wall clock |
+
+**Action items:**
+- [ ] Add `lastEditedAt: ISO_TIMESTAMP` to each `monthlyOverrides` entry when written
+- [ ] In `applyMonthEditForward`: if an override entry already exists AND `lastEditedAt` is within 72h, overwrite silently; if older, preserve the old value and write a new one (or log the change — TBD based on whether month override history is wanted)
+- [ ] Audit `saveAdvancedEdit` patch path — the `effectiveFrom` exact-match check is correct but should also respect the 72h window for partial-day edits
+- [ ] Add `lastEditedAt` field to `expense.js` helper signatures so all write paths stamp it consistently
+- [ ] Write tests: same-month edit within 72h should overwrite; same-month edit after 72h should create a new dated entry (or log it)
+
+---
+
+### Phase 9 — Rolling Month Drop-Off in MonthQuarterSelector
+
+**Context:** As months pass, the period selector should not keep showing stale past months. Displaying January in June creates confusion and wastes tappable space. The rule is: **show the most recently completed month + all current and future months**. Past months beyond the immediately preceding one drop off.
+
+**Drop-off rule:**
+```
+visibleMonths = { lastCompletedMonth } ∪ { currentMonth } ∪ { all future months }
+
+On May 1:  visible = [Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec]
+On Jun 1:  visible = [May, Jun, Jul, Aug, Sep, Oct, Nov, Dec]
+On Jul 1:  visible = [Jun, Jul, Aug, Sep, Oct, Nov, Dec]
+```
+
+**Quarter-row behavior when pills drop off:**
+When one or more months drop off from a quarter, the quarter row must still visually align with the remaining month pills above it. The quarter block should span only its *visible* months — and visible months fill space equally.
+
+```
+May 1 — Q2 has Apr (dropped), May, Jun:
+  Month row: [Apr✗] [May ][Jun ]  →  [ May  ][ Jun  ]  (2 pills fill Q2 space)
+  Quarter:   [       Q2          ]
+
+Jun 1 — Q2 has Apr (dropped), May (dropped), Jun:
+  Month row: [May✗][Jun ]  →  [  Jun   ]  (1 pill fills Q2 space)
+  Quarter:   [    Q2    ]
+
+Q1 is entirely past (all 3 months dropped beyond the buffer):
+  Month row: Q1 has no visible pills — Q1 quarter block collapses entirely
+  Quarter:   [  Q2  ][  Q3  ][  Q4  ]  (3 quarters share full width)
+```
+
+**Implementation approach:**
+
+```js
+// In MonthQuarterSelector (or BudgetPanel, passed as prop)
+const lastCompletedMonthKey = (() => {
+  const [y, m] = currentMonthKey.split("-").map(Number);
+  if (m === 1) return `${y - 1}-12`;
+  return `${y}-${String(m - 1).padStart(2, "0")}`;
+})();
+
+const visibleMonths = MONTH_KEYS.filter(key =>
+  key >= lastCompletedMonthKey  // keeps last completed + current + future
+);
+```
+
+**Layout change:** Replace the fixed `flex: 1` equal-width approach with a CSS grid where each column represents one *visible* month pill. Quarter blocks span `grid-column: span N` where N = number of their months that are still visible. Quarters with 0 visible months are hidden entirely.
+
+```
+grid-template-columns: repeat(${visibleMonths.length}, 1fr)
+```
+
+**Propagation beyond BudgetPanel:** The user noted this should affect all panels. Scope:
+- `MonthQuarterSelector` (BudgetPanel) — primary target
+- `IncomePanel` rolling timeline — already uses fiscal weeks, but any month-label header row should also drop off
+- `HomePanel` — if it gains a period selector in future
+- `LogPanel` — if it gains a month filter
+
+**Action items:**
+- [ ] Add `lastCompletedMonthKey` derivation to `MonthQuarterSelector` (or pass from BudgetPanel as prop)
+- [ ] Filter `MONTH_KEYS` to `visibleMonths` before rendering month pills
+- [ ] Switch month row layout to `display: grid; grid-template-columns: repeat(N, 1fr)`
+- [ ] Quarter blocks: compute `gridColumn: span ${visibleCount}` per quarter; hide quarters with `visibleCount === 0`
+- [ ] Ensure the sliding teal indicator bar position still maps correctly to the active quarter after columns collapse
+- [ ] When the user's active month gets dropped (they were viewing April, now it's May 1 and April fades to "last completed"), keep it selectable but render it visually subdued (dimmed pill, not full teal background)
+- [ ] Cross-panel audit: identify any other month-label rows that need the same drop-off treatment
+- [ ] Test: set system clock to June 1, verify April is last visible in Q2 with only 1 pill spanning the full Q2 space
 
 ---
 

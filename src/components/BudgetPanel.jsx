@@ -789,7 +789,6 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       monthsWithOverrides={monthsWithOverrides}
       onSelectMonth={handleSelectMonth}
       onSelectQuarter={handleSelectQuarter}
-      onAdvEdit={(phaseIdx) => { setAp(phaseIdx); setActiveMonth(null); setBulkEditOpen(true); }}
     />
     {/* Inline bulk-edit panel — opens when ADV. EDIT is tapped */}
     {bulkEditOpen && (

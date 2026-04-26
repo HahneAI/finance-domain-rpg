@@ -18,7 +18,6 @@ export function MonthQuarterSelector({
   monthsWithOverrides,
   onSelectMonth,
   onSelectQuarter,
-  onAdvEdit,
 }) {
   return (
     <LiquidGlass
@@ -189,33 +188,6 @@ export function MonthQuarterSelector({
         })}
       </div>
 
-      {/* Divider */}
-      <div style={{ height: "1px", background: "rgba(0, 200, 150, 0.22)", position: "relative", zIndex: 2 }} />
-
-      {/* ── ADV. EDIT row — preserved until Phase 5 inline replacement ── */}
-      <div style={{ display: "flex", position: "relative", zIndex: 2 }}>
-        {PHASES.map((p, i) => (
-          <button
-            key={`adv-${p.id}`}
-            onClick={() => onAdvEdit(i)}
-            style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              borderRight: i < 3 ? "1px solid rgba(0, 200, 150, 0.15)" : "none",
-              color: "rgba(127, 163, 154, 0.70)",
-              cursor: "pointer",
-              padding: "7px 4px 9px",
-              fontSize: "8px",
-              letterSpacing: "1.5px",
-              textTransform: "uppercase",
-              fontFamily: "var(--font-sans)",
-            }}
-          >
-            ADV. EDIT
-          </button>
-        ))}
-      </div>
     </LiquidGlass>
   );
 }

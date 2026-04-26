@@ -545,6 +545,20 @@ export function getEffectiveAmount(expense, weekEndDate, phaseIdx) {
   return best?.weekly[phaseIdx] ?? 0;
 }
 
+// Returns the quarter index (0–3) for a "YYYY-MM" month key.
+export function phaseIdxForMonth(monthKey) {
+  return getPhaseIndex(new Date(`${monthKey}-15`));
+}
+
+// Resolves the per-paycheck amount for a specific calendar month.
+// Checks monthlyOverrides first; falls back to the history-based resolver
+// using the 15th of the month as the representative date.
+export function getEffectiveAmountForMonth(expense, monthKey, phaseIdx) {
+  const override = expense.monthlyOverrides?.[monthKey];
+  if (override != null) return override.perPaycheck ?? 0;
+  return getEffectiveAmount(expense, new Date(`${monthKey}-15`), phaseIdx);
+}
+
 const MONTHLY_NORMALIZATION_FACTORS = {
   weekly: 4.33,
   biweekly: 2.166,

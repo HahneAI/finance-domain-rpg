@@ -544,14 +544,14 @@ grid-template-columns: repeat(${visibleMonths.length}, 1fr)
 - `LogPanel` — if it gains a month filter
 
 **Action items:**
-- [ ] Add `lastCompletedMonthKey` derivation to `MonthQuarterSelector` (or pass from BudgetPanel as prop)
-- [ ] Filter `MONTH_KEYS` to `visibleMonths` before rendering month pills
-- [ ] Switch month row layout to `display: grid; grid-template-columns: repeat(N, 1fr)`
-- [ ] Quarter blocks: compute `gridColumn: span ${visibleCount}` per quarter; hide quarters with `visibleCount === 0`
-- [ ] Ensure the sliding teal indicator bar position still maps correctly to the active quarter after columns collapse
-- [ ] When the user's active month gets dropped (they were viewing April, now it's May 1 and April fades to "last completed"), keep it selectable but render it visually subdued (dimmed pill, not full teal background)
+- [x] Add `lastCompletedMonthKey` derivation inside `MonthQuarterSelector` (`prevMonth()` helper, self-contained)
+- [x] Filter `MONTH_KEYS` to `visibleMonths` before rendering month pills
+- [x] Layout: used `flex: 1` per visible month pill (same alignment as grid `repeat(N, 1fr)` — simpler, no grid needed)
+- [x] Quarter blocks: `flex: visiblePerQ[i]` so each quarter spans exactly its visible month count; quarters with 0 visible months return `null`
+- [x] Sliding teal indicator bar repositioned proportionally — `barLeft` and `barWidth` computed from `visiblePerQ` ratios
+- [x] Past month (immediately preceding) rendered with `--color-text-disabled` color — visually subdued but still tappable
 - [ ] Cross-panel audit: identify any other month-label rows that need the same drop-off treatment
-- [ ] Test: set system clock to June 1, verify April is last visible in Q2 with only 1 pill spanning the full Q2 space
+- [ ] Test: set system clock to June 1, verify May is last visible in Q2 with only 1 pill spanning its Q2 column
 
 ---
 

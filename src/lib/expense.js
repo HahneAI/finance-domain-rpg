@@ -1,8 +1,7 @@
 import { FISCAL_YEAR_START } from "../constants/config.js";
 
 // ─── Billing cycle math helpers ──────────────────────────────────────────────
-// Exported so BudgetPanel, BulkEditPanel, and PhaseAdvancedEditModal all share
-// a single source of truth instead of duplicating these constants.
+// Exported so BudgetPanel and BulkEditPanel share a single source of truth.
 
 export const EXPENSE_CYCLE_OPTIONS = [
   { value: "weekly",      label: "Weekly",       days: 7 },
@@ -165,8 +164,8 @@ export function clearQuarterMonths(expense, phaseIdx, fiscalYear = 2026, editedA
 }
 
 // ─── Advanced edit payload builder ───────────────────────────────────────────
-// Extracts the handleSave logic from PhaseAdvancedEditModal / BulkEditPanel so
-// it can be reused by both callers without duplicating the patch-building logic.
+// Extracts the handleSave logic from BulkEditPanel so it can be unit-tested
+// and reused without duplicating the patch-building logic.
 //
 // monthIso: full ISO-01 date string like "2026-05-01" (start-of-month)
 // Returns { patches: [...], additions: [...] } ready for saveAdvancedEdit()

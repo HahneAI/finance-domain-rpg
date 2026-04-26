@@ -387,17 +387,17 @@ May 2026  ·  4 pay periods  ·  $87.50/wk avg  ·  $350.00/mo
 - [x] Quarter mode confirmation: `[QTR ONLY]` `[+ ONWARD]` `[✕]`
 - [x] All four handlers wired; `deleteExp` updated to call `setPendingDelete(null)`
 
-### Phase 5 — Inline bulk edit
-- [ ] Extract patch/addition assembly from `PhaseAdvancedEditModal.jsx` into `expense.js`
-- [ ] Build inline `BulkEditPanel` below the period selector
-- [ ] Remove `PhaseAdvancedEditModal.jsx` and `advEditPhaseIdx` state
-- [ ] Remove `document.body.classList.toggle("modal-open", ...)` side-effect
+### Phase 5 — Inline bulk edit ✅ COMPLETE
+- [x] Extract patch/addition assembly from `PhaseAdvancedEditModal.jsx` into `expense.js` (`buildAdvancedEditPayload`)
+- [x] Build inline `BulkEditPanel` below the period selector
+- [x] Remove `PhaseAdvancedEditModal.jsx` and `advEditPhaseIdx` state — file deleted, state already gone
+- [x] Remove `document.body.classList.toggle("modal-open", ...)` from BudgetPanel — already gone; remaining usage in HomePanel (goal reorder modal) is correct
 
-### Phase 6 — QA
-- [ ] Mobile: month pills tap targets ≥ 44px, no horizontal overflow at 390px
-- [ ] Verify annual breakdown table still correct after `monthlyOverrides` changes
-- [ ] Run `npm run test:run` — fix any snapshot drift from state shape changes
-- [ ] Check `account-reference.json` computed expectations still match
+### Phase 6 — QA ✅ COMPLETE
+- [x] Mobile: month pills tap targets ≥ 44px, no horizontal overflow at 390px
+- [x] Verify annual breakdown table still correct after `monthlyOverrides` changes — `yearlyExpenseCost` fixed to iterate all 12 months via `getEffectiveAmountForMonth`
+- [x] Run `npm run test:run` — 514 tests passing
+- [x] Check `account-reference.json` computed expectations still match — `db_record` updated from 2026-04-25 Supabase snapshot
 
 ---
 

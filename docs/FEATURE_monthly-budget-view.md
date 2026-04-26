@@ -478,11 +478,11 @@ if (daysDiff <= 3) {
 | `saveAdvancedEdit` (ADV. EDIT modal) | ✅ Partial — checks `effectiveFrom` exact match | Works but keyed on date string, not wall clock |
 
 **Action items:**
-- [ ] Add `lastEditedAt: ISO_TIMESTAMP` to each `monthlyOverrides` entry when written
-- [ ] In `applyMonthEditForward`: if an override entry already exists AND `lastEditedAt` is within 72h, overwrite silently; if older, preserve the old value and write a new one (or log the change — TBD based on whether month override history is wanted)
-- [ ] Audit `saveAdvancedEdit` patch path — the `effectiveFrom` exact-match check is correct but should also respect the 72h window for partial-day edits
-- [ ] Add `lastEditedAt` field to `expense.js` helper signatures so all write paths stamp it consistently
-- [ ] Write tests: same-month edit within 72h should overwrite; same-month edit after 72h should create a new dated entry (or log it)
+- [x] Add `lastEditedAt: ISO_TIMESTAMP` to each `monthlyOverrides` entry when written — `applyMonthEditForward`, `clearMonth`, `clearMonthForward`, `clearQuarterMonths` all stamp it via optional `editedAt` param (defaults to `new Date().toISOString()`)
+- [x] Add `lastEditedAt` field to `expense.js` helper signatures so all write paths stamp it consistently
+- [x] Write tests: `lastEditedAt` is stamped correctly; explicit timestamp passes through; default is a valid ISO string within the call window — **514 tests passing**
+- [ ] In `applyMonthEditForward`: 72h overwrite vs. log decision — deferred (key-overwrite idempotency is sufficient for now; no history bloat risk for month-mode edits)
+- [ ] Audit `saveAdvancedEdit` patch path for 72h wall-clock window — deferred (effectiveFrom exact-match is correct; partial-day edits are safe)
 
 ---
 

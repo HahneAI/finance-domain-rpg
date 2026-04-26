@@ -118,48 +118,48 @@ export function applyMonthEdit(expense, monthKey, perPaycheck, amount, cycle) {
 // Write monthKey and all following months through end of the fiscal year.
 // Skips months that already have a custom override so future customizations
 // are preserved — always overwrites the explicitly selected month.
-export function applyMonthEditForward(expense, monthKey, perPaycheck, amount, cycle, fiscalYear = 2026) {
+export function applyMonthEditForward(expense, monthKey, perPaycheck, amount, cycle, fiscalYear = 2026, editedAt = new Date().toISOString()) {
   const [, startMon] = monthKey.split("-").map(Number);
   const overrides = { ...(expense.monthlyOverrides ?? {}) };
   for (let m = startMon; m <= 12; m++) {
     const key = `${fiscalYear}-${String(m).padStart(2, "0")}`;
-    if (!overrides[key]) overrides[key] = { perPaycheck, amount, cycle };
+    if (!overrides[key]) overrides[key] = { perPaycheck, amount, cycle, lastEditedAt: editedAt };
   }
-  overrides[monthKey] = { perPaycheck, amount, cycle };
+  overrides[monthKey] = { perPaycheck, amount, cycle, lastEditedAt: editedAt };
   return { ...expense, monthlyOverrides: overrides };
 }
 
 // Zero a single month (soft-delete for that month only).
-export function clearMonth(expense, monthKey) {
+export function clearMonth(expense, monthKey, editedAt = new Date().toISOString()) {
   return {
     ...expense,
     monthlyOverrides: {
       ...(expense.monthlyOverrides ?? {}),
-      [monthKey]: { perPaycheck: 0, amount: 0, cycle: "every30days" },
+      [monthKey]: { perPaycheck: 0, amount: 0, cycle: "every30days", lastEditedAt: editedAt },
     },
   };
 }
 
 // Zero this month and all following months through end of the fiscal year.
-export function clearMonthForward(expense, monthKey, fiscalYear = 2026) {
+export function clearMonthForward(expense, monthKey, fiscalYear = 2026, editedAt = new Date().toISOString()) {
   const [, startMon] = monthKey.split("-").map(Number);
   const overrides = { ...(expense.monthlyOverrides ?? {}) };
   for (let m = startMon; m <= 12; m++) {
     const key = `${fiscalYear}-${String(m).padStart(2, "0")}`;
-    overrides[key] = { perPaycheck: 0, amount: 0, cycle: "every30days" };
+    overrides[key] = { perPaycheck: 0, amount: 0, cycle: "every30days", lastEditedAt: editedAt };
   }
   return { ...expense, monthlyOverrides: overrides };
 }
 
 // Zero just the three calendar months belonging to a quarter (phaseIdx 0–3).
 // Leaves all other months untouched.
-export function clearQuarterMonths(expense, phaseIdx, fiscalYear = 2026) {
+export function clearQuarterMonths(expense, phaseIdx, fiscalYear = 2026, editedAt = new Date().toISOString()) {
   const QUARTER_MONTHS = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]];
   const months = QUARTER_MONTHS[phaseIdx] ?? [];
   const overrides = { ...(expense.monthlyOverrides ?? {}) };
   for (const m of months) {
     const key = `${fiscalYear}-${String(m).padStart(2, "0")}`;
-    overrides[key] = { perPaycheck: 0, amount: 0, cycle: "every30days" };
+    overrides[key] = { perPaycheck: 0, amount: 0, cycle: "every30days", lastEditedAt: editedAt };
   }
   return { ...expense, monthlyOverrides: overrides };
 }

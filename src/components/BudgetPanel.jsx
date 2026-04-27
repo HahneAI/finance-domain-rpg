@@ -41,7 +41,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [editVals, setEditVals] = useState({});
   const [addingExp, setAddingExp] = useState(false);
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
-  const [pendingDelete, setPendingDelete] = useState(null); // { id, mode: "month"|"quarter" } | null
+  const [pendingDelete, setPendingDelete] = useState(null); // { id } | null
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   // Month-level period selector state
   const [activeMonth, setActiveMonth] = useState(null); // "2026-MM" | null — null = quarter mode
@@ -1081,21 +1081,19 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   {pendingDelete?.id === exp.id ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-end" }}>
                       <div style={{ fontSize: "8px", color: "var(--color-red)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
-                        {pendingDelete.mode === "month" ? `Delete ${activeMonthLabel}?` : `Delete Q${ap + 1}?`}
+                        {activeMonth ? `Delete ${activeMonthLabel}?` : `Delete Q${ap + 1}?`}
                       </div>
-                      <div style={{ display: "flex", gap: "3px" }}>
-                        {pendingDelete.mode === "month" ? (<>
+                      <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        {activeMonth && (
                           <SmBtn onClick={() => deleteMonthOnly(exp.id)} c="var(--color-red)" bg="#2d1a1a">MO. ONLY</SmBtn>
-                          <SmBtn onClick={() => deleteMonthForward(exp.id)} c="var(--color-red)" bg="#2d1a1a">+ ONWARD</SmBtn>
-                        </>) : (<>
-                          <SmBtn onClick={() => deleteQuarterOnly(exp.id)} c="var(--color-red)" bg="#2d1a1a">QTR ONLY</SmBtn>
-                          <SmBtn onClick={() => deleteExp(exp.id)} c="var(--color-red)" bg="#2d1a1a">+ ONWARD</SmBtn>
-                        </>)}
+                        )}
+                        <SmBtn onClick={() => deleteQuarterOnly(exp.id)} c="var(--color-red)" bg="#2d1a1a">QTR ONLY</SmBtn>
+                        <SmBtn onClick={() => activeMonth ? deleteMonthForward(exp.id) : deleteExp(exp.id)} c="var(--color-red)" bg="#2d1a1a">+ ONWARD</SmBtn>
                         <SmBtn onClick={() => setPendingDelete(null)}>✕</SmBtn>
                       </div>
                     </div>
                   ) : (
-                    <SmBtn onClick={() => setPendingDelete({ id: exp.id, mode: activeMonth !== null ? "month" : "quarter" })} c="var(--color-red)">✕</SmBtn>
+                    <SmBtn onClick={() => setPendingDelete({ id: exp.id })} c="var(--color-red)">✕</SmBtn>
                   )}
                 </div>
               </div>}

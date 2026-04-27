@@ -105,14 +105,15 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const displayMonthKey = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
   const displayEffective = (exp, phaseIdx) => getEffectiveAmountForMonth(exp, displayMonthKey, phaseIdx);
 
-  // Returns the ISO start date of the next future history entry where weekly[ap] > 0,
-  // or null if the expense has no future activation (permanently zeroed for this phase).
-  const getNextNonZeroIso = (exp, ap, todayIso) => {
-    if (!exp.history?.length) return null;
-    const found = exp.history
-      .filter(en => en.effectiveFrom > todayIso && (en.weekly?.[ap] ?? 0) > 0)
-      .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))[0];
-    return found?.effectiveFrom ?? null;
+  // Returns the ISO "YYYY-MM" key of the next future month where the effective amount
+  // is non-zero, respecting monthlyOverrides. Returns null if all remaining months are zero.
+  const getNextNonZeroIso = (exp, phaseIdx, todayIso) => {
+    const currentMon = parseInt(todayIso.slice(5, 7), 10);
+    for (let m = currentMon + 1; m <= 12; m++) {
+      const key = `2026-${String(m).padStart(2, "0")}`;
+      if (getEffectiveAmountForMonth(exp, key, phaseIdx) > 0) return key;
+    }
+    return null;
   };
   const shortMonth = (iso) =>
     ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(iso.split("-")[1], 10) - 1];

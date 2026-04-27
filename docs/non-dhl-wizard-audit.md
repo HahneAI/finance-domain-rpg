@@ -263,7 +263,52 @@ completing setup.
 
 ### Step 4 — Tax Rates
 
-- [ ] Audit
+**Status: Functional — two known approximations, no blockers**
+
+**UI shown (non-DHL path):**
+1. "Does your pay vary week to week?" — Yes / No pills (non-DHL only; DHL auto-shows an info note that variable is pre-set)
+2. Your State — full state dropdown with tax model hint below selection
+3. Paystub Calculator — open by default when no rates set; "Recalculate from Paystub" link when rates exist
+   - Fixed schedule: one paystub section (Gross, Fed Withheld, State Withheld)
+   - Variable schedule: two sections (Shorter Week, Longer Week) — second is optional; if blank, `fedRateHigh = fedRateLow`
+4. "Estimate" fallback button — pre-fills rates without a paystub and marks as Estimated
+5. Tax Picture summary card — shows Standard Deduction, FICA, Fed rate(s), State rate(s) with Estimated/Confirmed badge
+
+**Fields written to formData (non-DHL):**
+`scheduleIsVariable`, `userState`, `fedRateLow`, `fedRateHigh`, `stateRateLow`, `stateRateHigh`, `taxRatesEstimated`
+
+**DHL vs non-DHL difference:**
+- Variable-schedule gate is non-DHL only. DHL auto-sets `scheduleIsVariable: true` and shows an info note instead.
+- DHL MO preset load button only appears for `isDHL && !hasRates && userState === "MO"`. Non-DHL users never see it.
+- Both paths share the same `PaystubCalc` component, `handleEstimate` logic, and Tax Picture summary.
+
+**`isValid`:** `fedRateLow > 0 && userState != null` — no requirement on `stateRateLow`, `scheduleIsVariable`,
+or confirmation status. A user on the estimate path passes as soon as fed rates and state are set.
+
+---
+
+**Issues found:**
+
+**[APPROXIMATION — KNOWN] PROGRESSIVE state estimate falls back to 5%**
+`handleEstimate()` uses `stateConfig?.flatRate ?? 0.05`. PROGRESSIVE states have no `flatRate` field,
+so any non-flat state (CA, OR, NY, MN, NJ, etc.) gets a hardcoded 5% estimate regardless of brackets.
+This is communicated to the user via the "Estimated" badge and the "Progressive brackets — estimate uses
+a mid-bracket approximation" hint, and users can sharpen later via Sharpen Rates in Income. But a
+California user at a $60k income (~9.3% effective state rate) or an Oregon user (~9.9%) starts with a
+materially wrong estimate. Low-urgency since the paystub path gives exact rates, but worth flagging.
+Fix when the user base diversifies: add a bracket midpoint lookup per state to replace the flat 5%.
+Tag: `[CC]`
+
+**[APPROXIMATION — KNOWN] No filing status; standard deduction hardcoded at $15,000**
+`fedStdDeduction: 15000` in DEFAULT_CONFIG is never prompted in the wizard. The Tax Picture summary
+displays it as a fixed value. MFJ users have a $30,000 deduction for 2025 — roughly double — so their
+tax picture is meaningfully understated. Single filers at $15,000 are accurate for 2025.
+This only affects the wizard summary display and the paystub-derived rates are empirical so the
+actual withholding math stays correct. Fix when filing status is added to onboarding. Tag: `[CC]`
+
+**Verdict:** Step 4 is well-constructed for non-DHL users. The variable-schedule gate, state dropdown,
+paystub calculator, and estimate path all work correctly. Both approximations are disclosed to the user
+and correctable via Sharpen Rates post-setup. No blocking issues.
 
 ---
 

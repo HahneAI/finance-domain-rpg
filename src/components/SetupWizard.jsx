@@ -1610,6 +1610,12 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
     if (stepIdx > 0) setStepIdx(i => i - 1);
   }
 
+  function handleSkip() {
+    setAttempted(false);
+    if (!isLast) setStepIdx(i => i + 1);
+    else handleComplete();
+  }
+
   function handleComplete() {
     const finalData = formData.employerPreset === "DHL"
       ? { ...formData, payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5 }
@@ -1730,7 +1736,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
           )}
           {current?.skippable && (
             <button
-              onClick={handleNext}
+              onClick={handleSkip}
               style={{
                 background: "transparent",
                 color: "var(--color-text-secondary)",

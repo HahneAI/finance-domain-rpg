@@ -139,18 +139,19 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     () => computeRemainingSpend(expenses, futureWeeks ?? []).avgWeeklySpend ?? 0,
     [expenses, futureWeeks],
   );
-  // Set of month keys that have at least one expense with a monthlyOverride entry.
-  // Used by MonthQuarterSelector to render the override indicator dots on pills.
+  // Set of month keys that have at least one non-loan expense with a monthlyOverride entry.
+  // Used by MonthQuarterSelector to render the monthly change indicator dots on pills.
   const monthsWithOverrides = useMemo(() => {
     const keys = new Set();
-    for (const exp of regularExpenses) {
+    for (const exp of expenses) {
+      if (exp?.type === "loan" || exp?.category === "Loans") continue;
       if (!exp.monthlyOverrides) continue;
       for (const key of Object.keys(exp.monthlyOverrides)) {
         keys.add(key);
       }
     }
     return keys;
-  }, [regularExpenses]);
+  }, [expenses]);
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];

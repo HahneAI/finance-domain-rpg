@@ -1377,28 +1377,28 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       </div>
 
       {/* ── Check History — Past Tax Status Editor ─────────────────────────── */}
-      <div style={{ marginBottom: “20px” }}>
-        <div style={{ display: “flex”, justifyContent: “space-between”, alignItems: “center”, marginBottom: “10px”, gap: “8px” }}>
+      <div style={{ marginBottom: "20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", gap: "8px" }}>
           <div>
-            <div style={{ fontSize: “14px”, fontWeight: 700, color: “var(--color-text-primary)” }}>Check History — Tax Status</div>
-            <div style={{ fontSize: “10px”, color: “var(--color-text-secondary)”, marginTop: “2px” }}>
-              Overrides only affect extra withholding math · {sortedCheckWeeks.length} check{sortedCheckWeeks.length !== 1 ? “s” : “”} recorded
+            <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)" }}>Check History — Tax Status</div>
+            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+              Overrides only affect extra withholding math · {sortedCheckWeeks.length} check{sortedCheckWeeks.length !== 1 ? "s" : ""} recorded
             </div>
           </div>
-          <span style={{ fontSize: “9px”, padding: “3px 8px”, borderRadius: “10px”, flexShrink: 0, background: “rgba(0,200,150,0.08)”, border: “1px solid rgba(0,200,150,0.18)”, color: “var(--color-gold)”, letterSpacing: “1px”, textTransform: “uppercase” }}>
-            {PAY_SCHEDULE_LABELS[paySchedule] ?? “Weekly”}
+          <span style={{ fontSize: "9px", padding: "3px 8px", borderRadius: "10px", flexShrink: 0, background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.18)", color: "var(--color-gold)", letterSpacing: "1px", textTransform: "uppercase" }}>
+            {PAY_SCHEDULE_LABELS[paySchedule] ?? "Weekly"}
           </span>
         </div>
 
         <div style={{
-          border: “1px solid var(--color-border-subtle)”,
-          borderRadius: “10px”,
-          overflowY: “auto”,
-          maxHeight: “400px”,
-          background: “var(--color-bg-base)”,
+          border: "1px solid var(--color-border-subtle)",
+          borderRadius: "10px",
+          overflowY: "auto",
+          maxHeight: "400px",
+          background: "var(--color-bg-base)",
         }}>
           {sortedCheckWeeks.length === 0 ? (
-            <div style={{ padding: “24px 16px”, textAlign: “center”, fontSize: “11px”, color: “var(--color-text-disabled)” }}>
+            <div style={{ padding: "24px 16px", textAlign: "center", fontSize: "11px", color: "var(--color-text-disabled)" }}>
               No checks recorded yet — weeks slide in here as they pass.
             </div>
           ) : sortedCheckWeeks.map((w, i) => {
@@ -1411,38 +1411,38 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
               <div
                 key={w.idx}
                 style={{
-                  display: “flex”, justifyContent: “space-between”, alignItems: “center”,
-                  gap: “10px”, padding: “10px 14px”,
-                  borderBottom: i < sortedCheckWeeks.length - 1 ? “1px solid var(--color-border-subtle)” : “none”,
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  gap: "10px", padding: "10px 14px",
+                  borderBottom: i < sortedCheckWeeks.length - 1 ? "1px solid var(--color-border-subtle)" : "none",
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: “flex”, alignItems: “center”, gap: “6px”, marginBottom: “2px”, flexWrap: “wrap” }}>
-                    <span style={{ fontSize: “10px”, color: “var(--color-text-disabled)”, fontFamily: “var(--font-mono)” }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "10px", color: "var(--color-text-disabled)", fontFamily: "var(--font-mono)" }}>
                       #{checkNum}
                     </span>
-                    <span style={{ fontSize: “12px”, fontWeight: 600, color: “var(--color-text-primary)” }}>
-                      {w.weekEnd.toLocaleDateString(“en-US”, { month: “short”, day: “numeric” })}
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+                      {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                     </span>
                     {isConfirmed && (
-                      <span style={{ fontSize: “8px”, padding: “1px 5px”, borderRadius: “3px”, background: “rgba(34,197,94,0.12)”, color: “var(--color-green)”, border: “1px solid rgba(34,197,94,0.25)”, letterSpacing: “0.5px”, textTransform: “uppercase” }}>
+                      <span style={{ fontSize: "8px", padding: "1px 5px", borderRadius: "3px", background: "rgba(34,197,94,0.12)", color: "var(--color-green)", border: "1px solid rgba(34,197,94,0.25)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
                         confirmed
                       </span>
                     )}
                     {isOverride && (
-                      <span style={{ fontSize: “8px”, padding: “1px 5px”, borderRadius: “3px”, background: “rgba(0,200,150,0.08)”, color: “var(--color-accent-primary)”, border: “1px solid rgba(0,200,150,0.18)”, letterSpacing: “0.5px”, textTransform: “uppercase” }}>
+                      <span style={{ fontSize: "8px", padding: "1px 5px", borderRadius: "3px", background: "rgba(0,200,150,0.08)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
                         override
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: “10px”, color: “var(--color-text-disabled)” }}>
+                  <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>
                     {rotLabel} · {f2(w.grossPay)}
                   </div>
                 </div>
-                <div style={{ display: “flex”, background: “var(--color-bg-surface)”, border: “1px solid var(--color-border-subtle)”, borderRadius: “6px”, overflow: “hidden”, flexShrink: 0 }}>
-                  <button onClick={() => setPastStatus(w.idx, true)} style={{ padding: “6px 10px”, fontSize: “9px”, textTransform: “uppercase”, letterSpacing: “1.5px”, border: “none”, cursor: “pointer”, background: taxed ? “rgba(0,200,150,0.16)” : “transparent”, color: taxed ? “var(--color-accent-primary)” : “var(--color-text-secondary)”, fontWeight: taxed ? “bold” : “normal” }}>Taxed</button>
-                  <div style={{ width: “1px”, background: “var(--color-border-subtle)” }} />
-                  <button onClick={() => setPastStatus(w.idx, false)} style={{ padding: “6px 10px”, fontSize: “9px”, textTransform: “uppercase”, letterSpacing: “1.5px”, border: “none”, cursor: “pointer”, background: !taxed ? “rgba(34,197,94,0.16)” : “transparent”, color: !taxed ? “var(--color-green)” : “var(--color-text-secondary)”, fontWeight: !taxed ? “bold” : “normal” }}>Exempt</button>
+                <div style={{ display: "flex", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", overflow: "hidden", flexShrink: 0 }}>
+                  <button onClick={() => setPastStatus(w.idx, true)} style={{ padding: "6px 10px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: taxed ? "rgba(0,200,150,0.16)" : "transparent", color: taxed ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontWeight: taxed ? "bold" : "normal" }}>Taxed</button>
+                  <div style={{ width: "1px", background: "var(--color-border-subtle)" }} />
+                  <button onClick={() => setPastStatus(w.idx, false)} style={{ padding: "6px 10px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: !taxed ? "rgba(34,197,94,0.16)" : "transparent", color: !taxed ? "var(--color-green)" : "var(--color-text-secondary)", fontWeight: !taxed ? "bold" : "normal" }}>Exempt</button>
                 </div>
               </div>
             );

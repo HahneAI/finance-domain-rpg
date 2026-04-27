@@ -457,12 +457,67 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setPendingDelete(null);
   };
 
-  // Month-scoped handlers — used by Phase 2+ UI. activeMonth must be set before calling.
-  const saveMonthEdit = (expId, newAmount, newCycle) => {
-    const perPaycheck = perPaycheckFromCycle(parseFloat(newAmount) || 0, newCycle, cpm);
+  // ── Edit scope helpers ────────────────────────────────────────────────────────
+  // Shared read for all three save scopes.
+  const _editParsed = () => ({
+    cycle: normalizeCycle(editVals.cycle ?? "every30days"),
+    amount: parseFloat(editVals.amount) || 0,
+  });
+
+  // MO. ONLY — writes a single monthlyOverrides entry; no history change.
+  const saveThisMonth = (expId) => {
+    const { cycle, amount } = _editParsed();
+    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
     setExpenses(prev => prev.map(e =>
-      e.id !== expId ? e : applyMonthEditForward(e, activeMonth, perPaycheck, parseFloat(newAmount) || 0, newCycle)
+      e.id !== expId ? e : applyMonthEdit(e, activeMonth, perPaycheck, amount, cycle)
     ));
+    setEditId(null);
+  };
+
+  // FROM [MON] + — force-overwrites monthlyOverrides for activeMonth through Dec
+  // AND adds a history entry so quarterly totals also update.
+  const saveFromMonthForward = (expId) => {
+    const { cycle, amount } = _editParsed();
+    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    const [year, startMon] = activeMonth.split("-").map(Number);
+    setExpenses(prev => prev.map(e => {
+      if (e.id !== expId) return e;
+      const overrides = { ...(e.monthlyOverrides ?? {}) };
+      for (let m = startMon; m <= 12; m++) {
+        const key = `${year}-${String(m).padStart(2, "0")}`;
+        overrides[key] = { perPaycheck, amount, cycle };
+      }
+      const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
+      const latest = latestPastEntry(existing);
+      const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
+      const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : perPaycheck);
+      const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
+      const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
+      const newHistory = daysDiff <= 3
+        ? existing.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
+        : [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
+      return { ...e, history: newHistory, billingMeta, monthlyOverrides: overrides };
+    }));
+    setEditId(null);
+  };
+
+  // ALL QTR — updates history from current quarter forward, ignoring drop-offs.
+  const saveAllQuarters = (expId) => {
+    const { cycle, amount } = _editParsed();
+    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    setExpenses(prev => prev.map(e => {
+      if (e.id !== expId) return e;
+      const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
+      const latest = latestPastEntry(existing);
+      const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
+      const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : perPaycheck);
+      const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
+      const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
+      const newHistory = daysDiff <= 3
+        ? existing.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
+        : [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
+      return { ...e, history: newHistory, billingMeta };
+    }));
     setEditId(null);
   };
 
@@ -1017,23 +1072,22 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
                   Per-paycheck reserve: {f2(perPaycheckFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days", cpm))}
                 </div>
-                {activeMonthLabel && (
-                  <div style={{ fontSize: "9px", color: "var(--color-accent-primary)", opacity: 0.85, letterSpacing: "0.5px" }}>
-                    Applies from {activeMonthLabel} onward — earlier months unchanged
+                {activeMonth !== null ? (
+                  <>
+                    <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>Save scope:</div>
+                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", alignItems: "center" }}>
+                      <SmBtn onClick={() => saveThisMonth(exp.id)} c="var(--color-accent-primary)">MO. ONLY</SmBtn>
+                      <SmBtn onClick={() => saveFromMonthForward(exp.id)} c="var(--color-green)">FROM {activeMonthLabel} +</SmBtn>
+                      <SmBtn onClick={() => saveAllQuarters(exp.id)} c="var(--color-green)">ALL QTR</SmBtn>
+                      <SmBtn onClick={() => setEditId(null)}>✕</SmBtn>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <button onClick={() => saveAllQuarters(exp.id)} style={{ background: "var(--color-green)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", flex: 1 }}>SAVE</button>
+                    <button onClick={() => setEditId(null)} style={{ background: "var(--color-border-subtle)", color: "var(--color-text-secondary)", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px" }}>✕</button>
                   </div>
                 )}
-                <div style={{ display: "flex", gap: "6px" }}>
-                  <button
-                    onClick={() => activeMonth !== null
-                      ? saveMonthEdit(exp.id, editVals.amount, editVals.cycle ?? "every30days")
-                      : saveEditExp(exp.id)
-                    }
-                    style={{ background: "var(--color-green)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", flex: 1 }}
-                  >
-                    {activeMonthLabel ? `SAVE FROM ${activeMonthLabel} +` : "SAVE"}
-                  </button>
-                  <button onClick={() => setEditId(null)} style={{ background: "var(--color-border-subtle)", color: "var(--color-text-secondary)", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", }}>✕</button>
-                </div>
               </div> : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
                 {!isPinnedFoodCard && <button
                   type="button"

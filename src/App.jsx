@@ -743,6 +743,7 @@ export default function App() {
         setShowExtra={setShowExtra}
         isAdmin={isAdmin}
         today={today}
+        weekConfirmations={weekConfirmations}
       />}
     </>
   );

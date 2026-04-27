@@ -1241,7 +1241,7 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack }) {
 
 // ── TaxPlanDetail ────────────────────────────────────────────────────────────
 
-function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, showExtra, setShowExtra, onBack, isAdmin = false, today }) {
+function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, showExtra, setShowExtra, onBack, isAdmin = false, today, weekConfirmations = {} }) {
   const { extraPerCheck, taxedWeekCount, fedLiability, moLiability, ficaTotal, fedWithheldBase, moWithheldBase, fedGap, moGap, totalGap, targetExtraTotal, fedAGI } = taxDerived;
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1266,11 +1266,49 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
     return { ...prev, taxedWeeks: [...s].sort((a, b) => a - b) };
   });
 
+  // A week belongs in the "past" section if it's been confirmed via WeekConfirmModal
+  // OR its end date is before today. Using confirmation lets a week slide over the
+  // moment the user taps Confirm in the modal, even when weekEnd === today.
+  const isPastOrConfirmed = (w) =>
+    Boolean(weekConfirmations[w.idx]) || (today != null && toLocalIso(w.weekEnd) < today);
+
+  // Future schedule only shows weeks not yet past/confirmed.
   const scheduleByMonth = MONTH_FULL.map((name, mi) => {
-    const wks = allWeeks.filter(w => w.active && w.weekEnd.getFullYear() === 2026 && w.weekEnd.getMonth() === mi && (!today || toLocalIso(w.weekEnd) >= today));
+    const wks = allWeeks.filter(w =>
+      w.active &&
+      w.weekEnd.getFullYear() === 2026 &&
+      w.weekEnd.getMonth() === mi &&
+      !isPastOrConfirmed(w)
+    );
     return { name, wks };
   }).filter(m => m.wks.length > 0);
-  const pastWeeks = allWeeks.filter(w => w.active && today && toLocalIso(w.weekEnd) < today);
+
+  // Pay-schedule-aware check history ─────────────────────────────────────────
+  const paySchedule = config.userPaySchedule ?? "weekly";
+  const firstActiveIdx = config.firstActiveIdx ?? 0;
+  const PAY_SCHEDULE_LABELS = { weekly: "Weekly", biweekly: "Biweekly", monthly: "Monthly", salary: "Salary (Biweekly)" };
+
+  const allPastWeeks = allWeeks.filter(w => w.active && isPastOrConfirmed(w));
+
+  let pastCheckWeeks;
+  if (paySchedule === "biweekly" || paySchedule === "salary") {
+    // Every other week from firstActiveIdx is a check; offset 0 = check week
+    pastCheckWeeks = allPastWeeks.filter(w => ((w.idx - firstActiveIdx) % 2 + 2) % 2 === 0);
+  } else if (paySchedule === "monthly") {
+    // Last active week of each calendar month = the pay week
+    const byMonth = {};
+    allPastWeeks.forEach(w => {
+      const key = `${w.weekEnd.getFullYear()}-${w.weekEnd.getMonth()}`;
+      if (!byMonth[key] || w.weekEnd > byMonth[key].weekEnd) byMonth[key] = w;
+    });
+    pastCheckWeeks = Object.values(byMonth).sort((a, b) => a.weekEnd - b.weekEnd);
+  } else {
+    // weekly: every past active week is a check
+    pastCheckWeeks = allPastWeeks;
+  }
+
+  // Newest check first so the most recent work is at the top of the scroll box
+  const sortedCheckWeeks = [...pastCheckWeeks].reverse();
 
   return (
     <>
@@ -1338,27 +1376,73 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
         <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.8" }}>Add <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerCheck)}</span> extra federal withholding on each of your <span style={{ color: "var(--color-gold)" }}>{taxedWeekCount} remaining taxed checks</span>.</div>
       </div>
 
-      {/* Past-week remediation-only editor */}
-      <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "16px", marginBottom: "20px" }}>
-        <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "8px" }}>Past Week Tax Status Editor</div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "12px" }}>“changing past weeks tax status only affects your extra withholding math for remediating your taxes”</div>
-        <div style={{ display: "grid", gap: "8px", maxHeight: "280px", overflowY: "auto", paddingRight: "4px" }}>
-          {pastWeeks.length === 0 && (
-            <div style={{ fontSize: "11px", color: "var(--color-text-disabled)" }}>No prior fiscal weeks yet.</div>
-          )}
-          {pastWeeks.map(w => {
+      {/* ── Check History — Past Tax Status Editor ─────────────────────────── */}
+      <div style={{ marginBottom: “20px” }}>
+        <div style={{ display: “flex”, justifyContent: “space-between”, alignItems: “center”, marginBottom: “10px”, gap: “8px” }}>
+          <div>
+            <div style={{ fontSize: “14px”, fontWeight: 700, color: “var(--color-text-primary)” }}>Check History — Tax Status</div>
+            <div style={{ fontSize: “10px”, color: “var(--color-text-secondary)”, marginTop: “2px” }}>
+              Overrides only affect extra withholding math · {sortedCheckWeeks.length} check{sortedCheckWeeks.length !== 1 ? “s” : “”} recorded
+            </div>
+          </div>
+          <span style={{ fontSize: “9px”, padding: “3px 8px”, borderRadius: “10px”, flexShrink: 0, background: “rgba(0,200,150,0.08)”, border: “1px solid rgba(0,200,150,0.18)”, color: “var(--color-gold)”, letterSpacing: “1px”, textTransform: “uppercase” }}>
+            {PAY_SCHEDULE_LABELS[paySchedule] ?? “Weekly”}
+          </span>
+        </div>
+
+        <div style={{
+          border: “1px solid var(--color-border-subtle)”,
+          borderRadius: “10px”,
+          overflowY: “auto”,
+          maxHeight: “400px”,
+          background: “var(--color-bg-base)”,
+        }}>
+          {sortedCheckWeeks.length === 0 ? (
+            <div style={{ padding: “24px 16px”, textAlign: “center”, fontSize: “11px”, color: “var(--color-text-disabled)” }}>
+              No checks recorded yet — weeks slide in here as they pass.
+            </div>
+          ) : sortedCheckWeeks.map((w, i) => {
             const taxed = getPastStatus(w.idx);
             const isOverride = hasPastOverride(w.idx);
+            const isConfirmed = Boolean(weekConfirmations[w.idx]);
+            const checkNum = pastCheckWeeks.length - i;
+            const rotLabel = formatRotationDisplay(w, { isAdmin });
             return (
-              <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", padding: "8px 10px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
-                <div>
-                  <div style={{ fontSize: "11px", color: "var(--color-text-primary)", fontWeight: 600 }}>Week {w.idx + 1} · Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
-                  <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{isOverride ? "Custom remediation status" : "Using scheduled status"}</div>
+              <div
+                key={w.idx}
+                style={{
+                  display: “flex”, justifyContent: “space-between”, alignItems: “center”,
+                  gap: “10px”, padding: “10px 14px”,
+                  borderBottom: i < sortedCheckWeeks.length - 1 ? “1px solid var(--color-border-subtle)” : “none”,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: “flex”, alignItems: “center”, gap: “6px”, marginBottom: “2px”, flexWrap: “wrap” }}>
+                    <span style={{ fontSize: “10px”, color: “var(--color-text-disabled)”, fontFamily: “var(--font-mono)” }}>
+                      #{checkNum}
+                    </span>
+                    <span style={{ fontSize: “12px”, fontWeight: 600, color: “var(--color-text-primary)” }}>
+                      {w.weekEnd.toLocaleDateString(“en-US”, { month: “short”, day: “numeric” })}
+                    </span>
+                    {isConfirmed && (
+                      <span style={{ fontSize: “8px”, padding: “1px 5px”, borderRadius: “3px”, background: “rgba(34,197,94,0.12)”, color: “var(--color-green)”, border: “1px solid rgba(34,197,94,0.25)”, letterSpacing: “0.5px”, textTransform: “uppercase” }}>
+                        confirmed
+                      </span>
+                    )}
+                    {isOverride && (
+                      <span style={{ fontSize: “8px”, padding: “1px 5px”, borderRadius: “3px”, background: “rgba(0,200,150,0.08)”, color: “var(--color-accent-primary)”, border: “1px solid rgba(0,200,150,0.18)”, letterSpacing: “0.5px”, textTransform: “uppercase” }}>
+                        override
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: “10px”, color: “var(--color-text-disabled)” }}>
+                    {rotLabel} · {f2(w.grossPay)}
+                  </div>
                 </div>
-                <div style={{ display: "flex", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", overflow: "hidden", flexShrink: 0 }}>
-                  <button onClick={() => setPastStatus(w.idx, true)} style={{ padding: "6px 10px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: taxed ? "rgba(0,200,150,0.16)" : "transparent", color: taxed ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontWeight: taxed ? "bold" : "normal" }}>Taxed</button>
-                  <div style={{ width: "1px", background: "var(--color-border-subtle)" }} />
-                  <button onClick={() => setPastStatus(w.idx, false)} style={{ padding: "6px 10px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: !taxed ? "rgba(34,197,94,0.16)" : "transparent", color: !taxed ? "var(--color-green)" : "var(--color-text-secondary)", fontWeight: !taxed ? "bold" : "normal" }}>Exempt</button>
+                <div style={{ display: “flex”, background: “var(--color-bg-surface)”, border: “1px solid var(--color-border-subtle)”, borderRadius: “6px”, overflow: “hidden”, flexShrink: 0 }}>
+                  <button onClick={() => setPastStatus(w.idx, true)} style={{ padding: “6px 10px”, fontSize: “9px”, textTransform: “uppercase”, letterSpacing: “1.5px”, border: “none”, cursor: “pointer”, background: taxed ? “rgba(0,200,150,0.16)” : “transparent”, color: taxed ? “var(--color-accent-primary)” : “var(--color-text-secondary)”, fontWeight: taxed ? “bold” : “normal” }}>Taxed</button>
+                  <div style={{ width: “1px”, background: “var(--color-border-subtle)” }} />
+                  <button onClick={() => setPastStatus(w.idx, false)} style={{ padding: “6px 10px”, fontSize: “9px”, textTransform: “uppercase”, letterSpacing: “1.5px”, border: “none”, cursor: “pointer”, background: !taxed ? “rgba(34,197,94,0.16)” : “transparent”, color: !taxed ? “var(--color-green)” : “var(--color-text-secondary)”, fontWeight: !taxed ? “bold” : “normal” }}>Exempt</button>
                 </div>
               </div>
             );
@@ -1438,7 +1522,7 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, today }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, today, weekConfirmations = {} }) {
   const [activeSection, setActiveSection] = useState(null);
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
   const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });
@@ -1481,7 +1565,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
     return <PreferencesDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "taxplan") {
-    return <TaxPlanDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} today={today} />;
+    return <TaxPlanDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} today={today} weekConfirmations={weekConfirmations} />;
   }
 
   // ── Main list ─────────────────────────────────────────────────────────────

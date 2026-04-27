@@ -10,6 +10,14 @@ const MONTH_KEYS = [
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const Q_LABELS = ["Q1", "Q2", "Q3", "Q4"];
 
+// One month back from a "YYYY-MM" key
+function prevMonth(key) {
+  const [y, m] = key.split("-").map(Number);
+  const pm = m === 1 ? 12 : m - 1;
+  const py = m === 1 ? y - 1 : y;
+  return `${py}-${String(pm).padStart(2, "0")}`;
+}
+
 export function MonthQuarterSelector({
   activeMonth,
   activeQuarter,
@@ -18,8 +26,33 @@ export function MonthQuarterSelector({
   monthsWithOverrides,
   onSelectMonth,
   onSelectQuarter,
-  onAdvEdit,
 }) {
+  // Rolling drop-off: only show the previous month + current + future.
+  // Jan and Feb disappear in April; all of Q1 disappears once May is current.
+  const cutoff = prevMonth(currentMonthKey);
+  const visibleMonthKeys = MONTH_KEYS.filter(k => k >= cutoff);
+
+  // Visible month count per quarter (index 0–3)
+  const visiblePerQ = [0, 1, 2, 3].map(q =>
+    visibleMonthKeys.filter(k => Math.floor((parseInt(k.slice(5, 7), 10) - 1) / 3) === q).length
+  );
+  const totalVisible = visibleMonthKeys.length;
+
+  // Strong quarter-boundary divider after the last visible month in each non-final quarter
+  const dividerAfter = new Set();
+  [0, 1, 2, 3].forEach(q => {
+    const qVisible = visibleMonthKeys.filter(k => Math.floor((parseInt(k.slice(5, 7), 10) - 1) / 3) === q);
+    const hasNextQ = visiblePerQ.slice(q + 1).some(n => n > 0);
+    if (qVisible.length > 0 && hasNextQ) dividerAfter.add(qVisible.at(-1));
+  });
+
+  // Indicator bar: position and width are proportional to visible month slots
+  const barLeftMonths = visibleMonthKeys.filter(
+    k => Math.floor((parseInt(k.slice(5, 7), 10) - 1) / 3) < activeQuarter
+  ).length;
+  const barLeft = totalVisible > 0 ? (barLeftMonths / totalVisible) * 100 : 0;
+  const barWidth = totalVisible > 0 ? ((visiblePerQ[activeQuarter] ?? 0) / totalVisible) * 100 : 25;
+
   return (
     <LiquidGlass
       purpose="phase-btn"
@@ -46,27 +79,27 @@ export function MonthQuarterSelector({
         zIndex: 1,
       }} />
 
-      {/* Sliding quarter-level indicator bar — always tracks the active quarter */}
+      {/* Indicator bar — proportional to visible month slots */}
       <div style={{
         position: "absolute",
         top: 0,
-        left: `${activeQuarter * 25}%`,
-        width: "25%",
+        left: `${barLeft}%`,
+        width: `${barWidth}%`,
         height: "2px",
         background: "var(--color-accent-primary)",
-        transition: "left 0.3s ease",
+        transition: "left 0.3s ease, width 0.3s ease",
         borderRadius: "0 0 1px 1px",
         zIndex: 2,
       }} />
 
-      {/* ── Month row ── */}
+      {/* ── Month row — only visible months, each flex:1 so they scale to fill ── */}
       <div style={{ display: "flex", position: "relative", zIndex: 2 }}>
-        {MONTH_KEYS.map((key, i) => {
+        {visibleMonthKeys.map((key) => {
+          const i = MONTH_KEYS.indexOf(key);
           const isActive = activeMonth === key;
           const isCurrent = key === currentMonthKey;
+          const isPast = key < currentMonthKey;
           const hasOverride = monthsWithOverrides?.has(key);
-          // Stronger divider after each quarter boundary (Mar, Jun, Sep)
-          const isQuarterEnd = (i + 1) % 3 === 0 && i < 11;
           return (
             <button
               key={key}
@@ -76,14 +109,16 @@ export function MonthQuarterSelector({
                 minWidth: 0,
                 background: isActive ? "rgba(0, 200, 150, 0.22)" : "transparent",
                 border: "none",
-                borderRight: isQuarterEnd
+                borderRight: dividerAfter.has(key)
                   ? "1px solid rgba(0, 200, 150, 0.28)"
                   : "1px solid rgba(0, 200, 150, 0.07)",
                 color: isActive
                   ? "var(--color-accent-primary)"
                   : isCurrent
                   ? "var(--color-text-primary)"
-                  : "var(--color-text-disabled)",
+                  : isPast
+                  ? "var(--color-text-disabled)"
+                  : "var(--color-text-secondary)",
                 cursor: "pointer",
                 padding: "9px 2px 5px",
                 fontSize: "8px",
@@ -94,12 +129,10 @@ export function MonthQuarterSelector({
                 textAlign: "center",
                 position: "relative",
                 transition: "background 150ms ease, color 150ms ease",
-                // Ensure minimum tap target height
-                minHeight: "36px",
+                minHeight: "44px",
               }}
             >
               {MONTH_LABELS[i]}
-              {/* "now" dot for today's month */}
               {isCurrent && (
                 <span style={{
                   display: "block",
@@ -111,7 +144,6 @@ export function MonthQuarterSelector({
                   opacity: 0.9,
                 }} />
               )}
-              {/* override indicator — small gold diamond for months with custom values */}
               {hasOverride && !isCurrent && (
                 <span style={{
                   display: "block",
@@ -130,24 +162,25 @@ export function MonthQuarterSelector({
       {/* Divider */}
       <div style={{ height: "1px", background: "rgba(0, 200, 150, 0.22)", position: "relative", zIndex: 2 }} />
 
-      {/* ── Quarter row ── */}
+      {/* ── Quarter row — hidden quarters (all months dropped) are omitted;
+           flex matches visible month count so columns align perfectly ── */}
       <div style={{ display: "flex", position: "relative", zIndex: 2 }}>
         {PHASES.map((p, i) => {
+          if (visiblePerQ[i] === 0) return null;
           const isCurrent = i === currentPhaseIdx;
           const isActive = activeQuarter === i;
-          // Quarter is highlighted when it's active AND no specific month is selected
           const isQActive = isActive && activeMonth === null;
-          // Quarter label dims when a month from a different quarter is selected
           const isOtherQuarterMonthSelected = activeMonth !== null && !isActive;
+          const hasNextVisibleQ = visiblePerQ.slice(i + 1).some(n => n > 0);
           return (
             <button
               key={p.id}
               onClick={() => onSelectQuarter(i)}
               style={{
-                flex: 1,
+                flex: visiblePerQ[i],
                 background: "transparent",
                 border: "none",
-                borderRight: i < 3 ? "1px solid rgba(0, 200, 150, 0.15)" : "none",
+                borderRight: i < 3 && hasNextVisibleQ ? "1px solid rgba(0, 200, 150, 0.15)" : "none",
                 color: isQActive
                   ? "var(--color-accent-primary)"
                   : isActive && activeMonth !== null
@@ -165,6 +198,7 @@ export function MonthQuarterSelector({
                 position: "relative",
                 textAlign: "center",
                 transition: "color 150ms ease",
+                minHeight: "44px",
               }}
             >
               {isCurrent && !isQActive && (
@@ -187,34 +221,6 @@ export function MonthQuarterSelector({
             </button>
           );
         })}
-      </div>
-
-      {/* Divider */}
-      <div style={{ height: "1px", background: "rgba(0, 200, 150, 0.22)", position: "relative", zIndex: 2 }} />
-
-      {/* ── ADV. EDIT row — preserved until Phase 5 inline replacement ── */}
-      <div style={{ display: "flex", position: "relative", zIndex: 2 }}>
-        {PHASES.map((p, i) => (
-          <button
-            key={`adv-${p.id}`}
-            onClick={() => onAdvEdit(i)}
-            style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              borderRight: i < 3 ? "1px solid rgba(0, 200, 150, 0.15)" : "none",
-              color: "rgba(127, 163, 154, 0.70)",
-              cursor: "pointer",
-              padding: "7px 4px 9px",
-              fontSize: "8px",
-              letterSpacing: "1.5px",
-              textTransform: "uppercase",
-              fontFamily: "var(--font-sans)",
-            }}
-          >
-            ADV. EDIT
-          </button>
-        ))}
       </div>
     </LiquidGlass>
   );

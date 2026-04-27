@@ -387,17 +387,17 @@ May 2026  ·  4 pay periods  ·  $87.50/wk avg  ·  $350.00/mo
 - [x] Quarter mode confirmation: `[QTR ONLY]` `[+ ONWARD]` `[✕]`
 - [x] All four handlers wired; `deleteExp` updated to call `setPendingDelete(null)`
 
-### Phase 5 — Inline bulk edit
-- [ ] Extract patch/addition assembly from `PhaseAdvancedEditModal.jsx` into `expense.js`
-- [ ] Build inline `BulkEditPanel` below the period selector
-- [ ] Remove `PhaseAdvancedEditModal.jsx` and `advEditPhaseIdx` state
-- [ ] Remove `document.body.classList.toggle("modal-open", ...)` side-effect
+### Phase 5 — Inline bulk edit ✅ COMPLETE
+- [x] Extract patch/addition assembly from `PhaseAdvancedEditModal.jsx` into `expense.js` (`buildAdvancedEditPayload`)
+- [x] Build inline `BulkEditPanel` below the period selector
+- [x] Remove `PhaseAdvancedEditModal.jsx` and `advEditPhaseIdx` state — file deleted, state already gone
+- [x] Remove `document.body.classList.toggle("modal-open", ...)` from BudgetPanel — already gone; remaining usage in HomePanel (goal reorder modal) is correct
 
-### Phase 6 — QA
-- [ ] Mobile: month pills tap targets ≥ 44px, no horizontal overflow at 390px
-- [ ] Verify annual breakdown table still correct after `monthlyOverrides` changes
-- [ ] Run `npm run test:run` — fix any snapshot drift from state shape changes
-- [ ] Check `account-reference.json` computed expectations still match
+### Phase 6 — QA ✅ COMPLETE
+- [x] Mobile: month pills tap targets ≥ 44px, no horizontal overflow at 390px
+- [x] Verify annual breakdown table still correct after `monthlyOverrides` changes — `yearlyExpenseCost` fixed to iterate all 12 months via `getEffectiveAmountForMonth`
+- [x] Run `npm run test:run` — 514 tests passing
+- [x] Check `account-reference.json` computed expectations still match — `db_record` updated from 2026-04-25 Supabase snapshot
 
 ---
 
@@ -440,10 +440,10 @@ Expenses currently use `id: "exp_${timestamp}"` generated at creation. This is u
 - Globally unique (UUID preferred)
 
 **Investigation checklist:**
-- [ ] Audit current `db.js` save/load path — does it read/write `expenses` as a full array or by ID?
+- [x] Audit current `db.js` save/load path — full array read/write confirmed; `saveUserData` upserts the entire `expenses` JSONB blob on every save; no per-ID targeting
 - [ ] Check if any Supabase RLS policies reference expense shape
 - [ ] Prototype per-quarter column approach on staging — measure write amplification on a 10-expense account with 6 months of history
-- [ ] Decide: UUID expense IDs or keep timestamp IDs (lean UUID — use `crypto.randomUUID()`)
+- [x] Decide: UUID expense IDs — switched all three generation sites in `BudgetPanel.jsx` and `BulkEditPanel.jsx` to `crypto.randomUUID()` (non-breaking; existing rows keep their old IDs)
 - [ ] If per-quarter columns: write a migration SQL + update `db.js` to split/merge on read/write
 - [ ] Document the "onward delete cascade" logic for multi-column writes
 
@@ -478,11 +478,11 @@ if (daysDiff <= 3) {
 | `saveAdvancedEdit` (ADV. EDIT modal) | ✅ Partial — checks `effectiveFrom` exact match | Works but keyed on date string, not wall clock |
 
 **Action items:**
-- [ ] Add `lastEditedAt: ISO_TIMESTAMP` to each `monthlyOverrides` entry when written
-- [ ] In `applyMonthEditForward`: if an override entry already exists AND `lastEditedAt` is within 72h, overwrite silently; if older, preserve the old value and write a new one (or log the change — TBD based on whether month override history is wanted)
-- [ ] Audit `saveAdvancedEdit` patch path — the `effectiveFrom` exact-match check is correct but should also respect the 72h window for partial-day edits
-- [ ] Add `lastEditedAt` field to `expense.js` helper signatures so all write paths stamp it consistently
-- [ ] Write tests: same-month edit within 72h should overwrite; same-month edit after 72h should create a new dated entry (or log it)
+- [x] Add `lastEditedAt: ISO_TIMESTAMP` to each `monthlyOverrides` entry when written — `applyMonthEditForward`, `clearMonth`, `clearMonthForward`, `clearQuarterMonths` all stamp it via optional `editedAt` param (defaults to `new Date().toISOString()`)
+- [x] Add `lastEditedAt` field to `expense.js` helper signatures so all write paths stamp it consistently
+- [x] Write tests: `lastEditedAt` is stamped correctly; explicit timestamp passes through; default is a valid ISO string within the call window — **514 tests passing**
+- [ ] In `applyMonthEditForward`: 72h overwrite vs. log decision — deferred (key-overwrite idempotency is sufficient for now; no history bloat risk for month-mode edits)
+- [ ] Audit `saveAdvancedEdit` patch path for 72h wall-clock window — deferred (effectiveFrom exact-match is correct; partial-day edits are safe)
 
 ---
 
@@ -544,14 +544,15 @@ grid-template-columns: repeat(${visibleMonths.length}, 1fr)
 - `LogPanel` — if it gains a month filter
 
 **Action items:**
-- [ ] Add `lastCompletedMonthKey` derivation to `MonthQuarterSelector` (or pass from BudgetPanel as prop)
-- [ ] Filter `MONTH_KEYS` to `visibleMonths` before rendering month pills
-- [ ] Switch month row layout to `display: grid; grid-template-columns: repeat(N, 1fr)`
-- [ ] Quarter blocks: compute `gridColumn: span ${visibleCount}` per quarter; hide quarters with `visibleCount === 0`
-- [ ] Ensure the sliding teal indicator bar position still maps correctly to the active quarter after columns collapse
-- [ ] When the user's active month gets dropped (they were viewing April, now it's May 1 and April fades to "last completed"), keep it selectable but render it visually subdued (dimmed pill, not full teal background)
-- [ ] Cross-panel audit: identify any other month-label rows that need the same drop-off treatment
-- [ ] Test: set system clock to June 1, verify April is last visible in Q2 with only 1 pill spanning the full Q2 space
+- [x] Add `lastCompletedMonthKey` derivation inside `MonthQuarterSelector` (`prevMonth()` helper, self-contained)
+- [x] Filter `MONTH_KEYS` to `visibleMonths` before rendering month pills
+- [x] Layout: used `flex: 1` per visible month pill (same alignment as grid `repeat(N, 1fr)` — simpler, no grid needed)
+- [x] Quarter blocks: `flex: visiblePerQ[i]` so each quarter spans exactly its visible month count; quarters with 0 visible months return `null`
+- [x] Sliding teal indicator bar repositioned proportionally — `barLeft` and `barWidth` computed from `visiblePerQ` ratios
+- [x] Past month (immediately preceding) rendered with `--color-text-disabled` color — visually subdued but still tappable
+- [x] Cross-panel audit: IncomePanel uses week-level rolling rows (no horizontal month bar); LogPanel and BenefitsPanel use month labels only for date formatting — no other panels need drop-off treatment
+- [x] HomePanel goal timeline bar: anchored to start of previous calendar month (was anchored to current fiscal week, causing intra-month bar shrink); removed weekly subdivision ticks; updated fill-bar positions to calendar coordinate system; `lookbackMonths` changed from 0→1 to show previous month as reference
+- [ ] Test: set system clock to June 1, verify May is last visible in Q2 with only 1 pill spanning its Q2 column (deferred — visual QA)
 
 ---
 

@@ -12,7 +12,6 @@ const resolveExpenseCycle = (exp, phaseIdx) => {
   return EXPENSE_CYCLE_OPTIONS.find(o => o.value === raw) ? raw : "every30days";
 };
 
-// Inline card that replaces PhaseAdvancedEditModal without an overlay.
 // selectedMonthIso: "YYYY-MM-01" full ISO date of the month to edit
 export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSave, onClose }) {
   const [edits, setEdits] = useState({});
@@ -87,7 +86,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
     const amt = parseFloat(addDraft.amount);
     if (!addDraft.label.trim() || !amt || amt <= 0) return;
     setAdditions(prev => [...prev, {
-      tempId: `new-${Date.now()}`,
+      tempId: `new-${crypto.randomUUID()}`,
       label: addDraft.label.trim(),
       category: addDraft.category,
       amount: addDraft.amount,

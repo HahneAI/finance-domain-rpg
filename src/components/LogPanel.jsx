@@ -128,7 +128,18 @@ export function LogPanel({
   const effectiveAdjP = config.ptoHoursOverride != null
     ? config.ptoHoursOverride + ptoEarnedSinceOverride - ptoConsumedSinceOverride - ptoAccrualLostSinceOverride
     : Math.max(ptoBs - logPTOHoursLost / 20 - ptoUsedAll, 0);
-  const avail = effectiveAdjP + negCap;
+
+  // For the goal tracker we need projected balance AT goal date, not just current confirmed balance.
+  // When override is active, ptoEarnedSinceOverride only counts confirmed past weeks — which
+  // understates the projection. Instead, sum ALL active weeks from override index to goal date.
+  const ptoProjectedFromOverrideToGoal = config.ptoHoursOverride != null && ptoCutoff
+    ? allWeeks.filter(w => w.active && w.idx > overrideIdx && w.weekEnd <= ptoCutoff).reduce((s, w) => s + w.totalHours, 0) / 20
+    : 0;
+  const goalPtoProjected = config.ptoHoursOverride != null
+    ? config.ptoHoursOverride + ptoProjectedFromOverrideToGoal - ptoConsumedSinceOverride - ptoAccrualLostSinceOverride
+    : effectiveAdjP;
+
+  const avail = goalPtoProjected + negCap;
   const hoursNeed = ptoGoal?.hoursNeeded ?? 0;
   const onTrack = ptoGoal ? avail >= hoursNeed : false;
   const shiftHours = config.shiftHours ?? 12;
@@ -877,7 +888,6 @@ export function LogPanel({
           ) : (
             <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
               <SmBtn onClick={() => { setPtoInput(String(effectiveAdjP.toFixed(1))); setEditingPto(true); }} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Set Balance</SmBtn>
-              {config.ptoHoursOverride != null && <SmBtn onClick={() => setConfig?.(c => ({ ...c, ptoHoursOverride: null, ptoOverrideWeekIdx: null }))} c="var(--color-text-disabled)" bg="var(--color-bg-raised)">Clear Override</SmBtn>}
             </div>
           )}
         </div>
@@ -885,13 +895,22 @@ export function LogPanel({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
           <Card label="Accrual Rate" val="1 hr / 20 worked" color="#7eb8c9" size="14px" />
           {config.ptoHoursOverride != null ? (<>
-            {/* Override active — show delta cards relative to override starting point */}
-            <Card
-              label="Earned Since Override"
-              val={`+${ptoEarnedSinceOverride.toFixed(1)} hrs`}
-              sub={`${Object.values(weekConfirmations).filter(Boolean).length > 0 ? "from confirmed weeks" : "no weeks confirmed yet"}`}
-              color="var(--color-green)" size="14px"
-            />
+            {/* Override active — show projected accrual to goal date (all weeks, not just confirmed) */}
+            {ptoGoal ? (
+              <Card
+                label={`Proj. Earned by ${fmtDate(ptoGoal.targetDate)}`}
+                val={`+${ptoProjectedFromOverrideToGoal.toFixed(1)} hrs`}
+                sub="from override point · incl. future weeks"
+                color="var(--color-green)" size="14px"
+              />
+            ) : (
+              <Card
+                label="Earned Since Override"
+                val={`+${ptoEarnedSinceOverride.toFixed(1)} hrs`}
+                sub={Object.values(weekConfirmations).filter(Boolean).length > 0 ? "from confirmed weeks" : "no weeks confirmed yet"}
+                color="var(--color-green)" size="14px"
+              />
+            )}
             {(ptoConsumedSinceOverride > 0 || ptoAccrualLostSinceOverride > 0)
               ? <Card
                   label="Used / Lost Since Override"
@@ -917,7 +936,7 @@ export function LogPanel({
         {!formOpen && ptoGoal && (
           <div style={{ background: onTrack ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${onTrack ? "var(--color-green)" : "var(--color-red)"}`, borderRadius: "6px", padding: "14px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
-              <div><div style={{ fontSize: "11px", color: onTrack ? "var(--color-green)" : "var(--color-red)", fontWeight: "bold", marginBottom: "4px" }}>{ptoGoal.label}</div><div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Need {hoursNeed} hrs · {effectiveAdjP.toFixed(1)} accrued + {negCap} neg cap = <strong style={{ color: "var(--color-text-primary)" }}>{avail.toFixed(1)} available</strong></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "3px" }}>Leave starts {fmtDate(ptoGoal.targetDate)} · ≈ {Math.ceil(hoursNeed / shiftHours)} shifts</div></div>
+              <div><div style={{ fontSize: "11px", color: onTrack ? "var(--color-green)" : "var(--color-red)", fontWeight: "bold", marginBottom: "4px" }}>{ptoGoal.label}</div><div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Need {hoursNeed} hrs · {goalPtoProjected.toFixed(1)} proj. by {fmtDate(ptoGoal.targetDate)} + {negCap} neg cap = <strong style={{ color: "var(--color-text-primary)" }}>{avail.toFixed(1)} available</strong></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "3px" }}>Leave starts {fmtDate(ptoGoal.targetDate)} · ≈ {Math.ceil(hoursNeed / shiftHours)} shifts</div></div>
               <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
                 <div style={{ fontSize: "14px", fontWeight: "bold", color: onTrack ? "var(--color-green)" : "var(--color-red)" }}>{onTrack ? "On Track" : "Shortfall"}</div>
                 {!onTrack && <div style={{ fontSize: "10px", color: "var(--color-red)" }}>Short {(hoursNeed - avail).toFixed(1)} hrs</div>}

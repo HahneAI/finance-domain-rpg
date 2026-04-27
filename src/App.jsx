@@ -274,19 +274,24 @@ export default function App() {
     if (!authedUser) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
-    loadUserData().then((data) => {
-      setConfig(data.config);
-      setShowExtra(data.showExtra);
-      setLogs(data.logs);
-      setExpenses(data.expenses);
-      setGoals(data.goals);
-      setWeekConfirmations(data.weekConfirmations ?? {});
-      setIsDHL(data.isDHL);
-      setIsAdmin(data.isAdmin);
-      setPtoGoal(data.ptoGoal);
-      if (!data.config.setupComplete) setWizardEntry(false);
-      setLoading(false);
-    });
+    loadUserData()
+      .then((data) => {
+        setConfig(data.config);
+        setShowExtra(data.showExtra);
+        setLogs(data.logs);
+        setExpenses(data.expenses);
+        setGoals(data.goals);
+        setWeekConfirmations(data.weekConfirmations ?? {});
+        setIsDHL(data.isDHL);
+        setIsAdmin(data.isAdmin);
+        setPtoGoal(data.ptoGoal);
+        if (!data.config.setupComplete) setWizardEntry(false);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("[App] loadUserData failed:", err);
+        setLoading(false);
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authedUser?.id]);
 

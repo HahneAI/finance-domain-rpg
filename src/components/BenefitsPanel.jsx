@@ -62,9 +62,18 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
     ? allWeeks.filter(w => w.active && w.weekEnd <= ptoCutoff).reduce((s, w) => s + w.totalHours, 0) / 20
     : 0;
   const adjP      = Math.max(ptoBs - logPTOHoursLost / 20, 0);
+  // Current balance display: override value as-is; non-override: projected to goal date minus losses
   const effectiveAdjP = config.ptoHoursOverride != null ? config.ptoHoursOverride : adjP;
+  // Goal tracker projection: when override is set, add future accrual from override index to goal date
+  const overrideIdx = config.ptoOverrideWeekIdx ?? -1;
+  const ptoProjectedFromOverrideToGoal = config.ptoHoursOverride != null && ptoCutoff
+    ? allWeeks.filter(w => w.active && w.idx > overrideIdx && w.weekEnd <= ptoCutoff).reduce((s, w) => s + w.totalHours, 0) / 20
+    : 0;
+  const goalProjected = config.ptoHoursOverride != null
+    ? config.ptoHoursOverride + ptoProjectedFromOverrideToGoal
+    : adjP;
   const negCap    = ptoGoal?.negativeBalanceCap ?? 40;
-  const avail     = effectiveAdjP + negCap;
+  const avail     = goalProjected + negCap;
   const hoursNeed = ptoGoal?.hoursNeeded ?? 0;
   const onTrack   = avail >= hoursNeed;
 
@@ -248,12 +257,6 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
                 onClick={() => { setPtoInput(String(effectiveAdjP.toFixed(1))); setEditingPto(true); }}
                 c="var(--color-text-secondary)" bg="var(--color-bg-raised)"
               >Set Balance</SmBtn>
-              {config.ptoHoursOverride != null && (
-                <SmBtn
-                  onClick={() => setConfig(c => ({ ...c, ptoHoursOverride: null }))}
-                  c="var(--color-text-disabled)" bg="var(--color-bg-raised)"
-                >Clear Override</SmBtn>
-              )}
             </div>
           )}
         </div>
@@ -263,15 +266,27 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
           <Card label="Accrual Rate" val="1 hr / 20 worked" color="#7eb8c9" size="14px" />
           {ptoGoal ? (
             <>
-              <Card
-                label={`Base Accrued by ${fmtDate(ptoGoal.targetDate)}`}
-                val={`~${ptoBs.toFixed(1)} hrs`}
-                color="var(--color-text-primary)"
-                size="18px"
-              />
-              {logPTOHoursLost > 0
-                ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
-                : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="var(--color-text-primary)" size="14px" />
+              {config.ptoHoursOverride != null ? (
+                <Card
+                  label={`Override Balance`}
+                  val={`${effectiveAdjP.toFixed(1)} hrs`}
+                  sub="manually set"
+                  color="var(--color-text-primary)"
+                  size="18px"
+                />
+              ) : (
+                <Card
+                  label={`Base Accrued by ${fmtDate(ptoGoal.targetDate)}`}
+                  val={`~${ptoBs.toFixed(1)} hrs`}
+                  color="var(--color-text-primary)"
+                  size="18px"
+                />
+              )}
+              {config.ptoHoursOverride != null
+                ? <Card label={`Proj. Total by ${fmtDate(ptoGoal.targetDate)}`} val={`~${goalProjected.toFixed(1)} hrs`} sub={`${effectiveAdjP.toFixed(1)} base + ${ptoProjectedFromOverrideToGoal.toFixed(1)} earned`} color="var(--color-gold)" size="18px" />
+                : logPTOHoursLost > 0
+                  ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
+                  : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="#888" size="14px" />
               }
             </>
           ) : (
@@ -291,7 +306,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
                   {ptoGoal.label}
                 </div>
                 <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
-                  Need {hoursNeed} hrs · {effectiveAdjP.toFixed(1)} accrued + {negCap} neg cap = <strong style={{ color: "var(--color-text-primary)" }}>{avail.toFixed(1)} available</strong>
+                  Need {hoursNeed} hrs · {goalProjected.toFixed(1)} proj. by {fmtDate(ptoGoal.targetDate)} + {negCap} neg cap = <strong style={{ color: "var(--color-text-primary)" }}>{avail.toFixed(1)} available</strong>
                 </div>
                 <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "3px" }}>
                   Leave starts {fmtDate(ptoGoal.targetDate)} · ≈ {Math.ceil(hoursNeed / shiftHours)} shifts

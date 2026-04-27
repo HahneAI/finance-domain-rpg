@@ -1,7 +1,7 @@
 -- Authority Finance — Expense History Reset (Phase 3)
 -- Scope: Jesse, Food
 -- Date: 2026-04-27
--- Depends on: 007_fix_expenses_phase1.sql, 008_fix_expenses_phase2.sql
+-- Depends on: 007_fix_expenses_phase1.sql
 -- Target: Anthony — 57318ced-60a0-4fdf-9a58-a6409ba8c9db
 
 -- ── System reference ─────────────────────────────────────────────────────────

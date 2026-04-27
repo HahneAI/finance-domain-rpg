@@ -10,7 +10,6 @@ const MONTH_KEYS = [
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const Q_LABELS = ["Q1", "Q2", "Q3", "Q4"];
 
-// One month back from a "YYYY-MM" key
 function prevMonth(key) {
   const [y, m] = key.split("-").map(Number);
   const pm = m === 1 ? 12 : m - 1;
@@ -27,31 +26,22 @@ export function MonthQuarterSelector({
   onSelectMonth,
   onSelectQuarter,
 }) {
-  // Rolling drop-off: only show the previous month + current + future.
-  // Jan and Feb disappear in April; all of Q1 disappears once May is current.
   const cutoff = prevMonth(currentMonthKey);
   const visibleMonthKeys = MONTH_KEYS.filter(k => k >= cutoff);
 
-  // Visible month count per quarter (index 0–3)
-  const visiblePerQ = [0, 1, 2, 3].map(q =>
-    visibleMonthKeys.filter(k => Math.floor((parseInt(k.slice(5, 7), 10) - 1) / 3) === q).length
+  // Months grouped by quarter index — determines which quarters are visible
+  const monthsByQ = [0, 1, 2, 3].map(q =>
+    visibleMonthKeys.filter(k => Math.floor((parseInt(k.slice(5, 7), 10) - 1) / 3) === q)
   );
-  const totalVisible = visibleMonthKeys.length;
 
-  // Strong quarter-boundary divider after the last visible month in each non-final quarter
-  const dividerAfter = new Set();
-  [0, 1, 2, 3].forEach(q => {
-    const qVisible = visibleMonthKeys.filter(k => Math.floor((parseInt(k.slice(5, 7), 10) - 1) / 3) === q);
-    const hasNextQ = visiblePerQ.slice(q + 1).some(n => n > 0);
-    if (qVisible.length > 0 && hasNextQ) dividerAfter.add(qVisible.at(-1));
-  });
+  // A quarter is visible only if it still has at least one visible month
+  const visibleQIndices = [0, 1, 2, 3].filter(q => monthsByQ[q].length > 0);
+  const totalVisibleQ = visibleQIndices.length;
 
-  // Indicator bar: position and width are proportional to visible month slots
-  const barLeftMonths = visibleMonthKeys.filter(
-    k => Math.floor((parseInt(k.slice(5, 7), 10) - 1) / 3) < activeQuarter
-  ).length;
-  const barLeft = totalVisible > 0 ? (barLeftMonths / totalVisible) * 100 : 0;
-  const barWidth = totalVisible > 0 ? ((visiblePerQ[activeQuarter] ?? 0) / totalVisible) * 100 : 25;
+  // Indicator bar — equal-width quarters, tracks by visible quarter position
+  const activeQPos = Math.max(0, visibleQIndices.indexOf(activeQuarter));
+  const barLeft  = totalVisibleQ > 0 ? (activeQPos / totalVisibleQ) * 100 : 0;
+  const barWidth = totalVisibleQ > 0 ? (1 / totalVisibleQ) * 100 : 25;
 
   return (
     <LiquidGlass
@@ -79,7 +69,7 @@ export function MonthQuarterSelector({
         zIndex: 1,
       }} />
 
-      {/* Indicator bar — proportional to visible month slots */}
+      {/* Indicator bar — 1/N of total width, equal per visible quarter */}
       <div style={{
         position: "absolute",
         top: 0,
@@ -92,69 +82,83 @@ export function MonthQuarterSelector({
         zIndex: 2,
       }} />
 
-      {/* ── Month row — only visible months, each flex:1 so they scale to fill ── */}
+      {/* ── Month row: each visible quarter gets flex:1; months inside fill that space ── */}
       <div style={{ display: "flex", position: "relative", zIndex: 2 }}>
-        {visibleMonthKeys.map((key) => {
-          const i = MONTH_KEYS.indexOf(key);
-          const isActive = activeMonth === key;
-          const isCurrent = key === currentMonthKey;
-          const isPast = key < currentMonthKey;
-          const hasOverride = monthsWithOverrides?.has(key);
+        {visibleQIndices.map((q, qPos) => {
+          const months = monthsByQ[q];
+          const isLastQ = qPos === visibleQIndices.length - 1;
           return (
-            <button
-              key={key}
-              onClick={() => onSelectMonth(key)}
+            <div
+              key={q}
               style={{
                 flex: 1,
-                minWidth: 0,
-                background: isActive ? "rgba(0, 200, 150, 0.22)" : "transparent",
-                border: "none",
-                borderRight: dividerAfter.has(key)
-                  ? "1px solid rgba(0, 200, 150, 0.28)"
-                  : "1px solid rgba(0, 200, 150, 0.07)",
-                color: isActive
-                  ? "var(--color-accent-primary)"
-                  : isCurrent
-                  ? "var(--color-text-primary)"
-                  : isPast
-                  ? "var(--color-text-disabled)"
-                  : "var(--color-text-secondary)",
-                cursor: "pointer",
-                padding: "9px 2px 5px",
-                fontSize: "8px",
-                letterSpacing: "0.5px",
-                textTransform: "uppercase",
-                fontWeight: isActive ? "bold" : "normal",
-                fontFamily: "var(--font-sans)",
-                textAlign: "center",
-                position: "relative",
-                transition: "background 150ms ease, color 150ms ease",
-                minHeight: "44px",
+                display: "flex",
+                borderRight: isLastQ ? "none" : "1px solid rgba(0, 200, 150, 0.28)",
               }}
             >
-              {MONTH_LABELS[i]}
-              {isCurrent && (
-                <span style={{
-                  display: "block",
-                  width: "4px",
-                  height: "4px",
-                  borderRadius: "50%",
-                  background: "var(--color-accent-primary)",
-                  margin: "2px auto 0",
-                  opacity: 0.9,
-                }} />
-              )}
-              {hasOverride && !isCurrent && (
-                <span style={{
-                  display: "block",
-                  fontSize: "5px",
-                  lineHeight: 1,
-                  color: "var(--color-warning)",
-                  margin: "2px auto 0",
-                  opacity: 0.8,
-                }}>◆</span>
-              )}
-            </button>
+              {months.map((key, mPos) => {
+                const i = MONTH_KEYS.indexOf(key);
+                const isActive = activeMonth === key;
+                const isCurrent = key === currentMonthKey;
+                const isPast = key < currentMonthKey;
+                const hasOverride = monthsWithOverrides?.has(key);
+                const isLastInQ = mPos === months.length - 1;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => onSelectMonth(key)}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      background: isActive ? "rgba(0, 200, 150, 0.22)" : "transparent",
+                      border: "none",
+                      borderRight: isLastInQ ? "none" : "1px solid rgba(0, 200, 150, 0.07)",
+                      color: isActive
+                        ? "var(--color-accent-primary)"
+                        : isCurrent
+                        ? "var(--color-text-primary)"
+                        : isPast
+                        ? "var(--color-text-disabled)"
+                        : "var(--color-text-secondary)",
+                      cursor: "pointer",
+                      padding: "9px 2px 5px",
+                      fontSize: "8px",
+                      letterSpacing: "0.5px",
+                      textTransform: "uppercase",
+                      fontWeight: isActive ? "bold" : "normal",
+                      fontFamily: "var(--font-sans)",
+                      textAlign: "center",
+                      position: "relative",
+                      transition: "background 150ms ease, color 150ms ease",
+                      minHeight: "44px",
+                    }}
+                  >
+                    {MONTH_LABELS[i]}
+                    {isCurrent && (
+                      <span style={{
+                        display: "block",
+                        width: "4px",
+                        height: "4px",
+                        borderRadius: "50%",
+                        background: "var(--color-accent-primary)",
+                        margin: "2px auto 0",
+                        opacity: 0.9,
+                      }} />
+                    )}
+                    {hasOverride && !isCurrent && (
+                      <span style={{
+                        display: "block",
+                        fontSize: "5px",
+                        lineHeight: 1,
+                        color: "var(--color-warning)",
+                        margin: "2px auto 0",
+                        opacity: 0.8,
+                      }}>◆</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           );
         })}
       </div>
@@ -162,30 +166,28 @@ export function MonthQuarterSelector({
       {/* Divider */}
       <div style={{ height: "1px", background: "rgba(0, 200, 150, 0.22)", position: "relative", zIndex: 2 }} />
 
-      {/* ── Quarter row — hidden quarters (all months dropped) are omitted;
-           flex matches visible month count so columns align perfectly ── */}
+      {/* ── Quarter row — equal divisions; drops only when last month in quarter drops off ── */}
       <div style={{ display: "flex", position: "relative", zIndex: 2 }}>
-        {PHASES.map((p, i) => {
-          if (visiblePerQ[i] === 0) return null;
-          const isCurrent = i === currentPhaseIdx;
-          const isActive = activeQuarter === i;
+        {visibleQIndices.map((q, qPos) => {
+          const p = PHASES[q];
+          const isCurrent = q === currentPhaseIdx;
+          const isActive = activeQuarter === q;
           const isQActive = isActive && activeMonth === null;
-          const isOtherQuarterMonthSelected = activeMonth !== null && !isActive;
-          const hasNextVisibleQ = visiblePerQ.slice(i + 1).some(n => n > 0);
+          const isLastQ = qPos === visibleQIndices.length - 1;
           return (
             <button
               key={p.id}
-              onClick={() => onSelectQuarter(i)}
+              onClick={() => onSelectQuarter(q)}
               style={{
-                flex: visiblePerQ[i],
+                flex: 1,
                 background: "transparent",
                 border: "none",
-                borderRight: i < 3 && hasNextVisibleQ ? "1px solid rgba(0, 200, 150, 0.15)" : "none",
+                borderRight: isLastQ ? "none" : "1px solid rgba(0, 200, 150, 0.15)",
                 color: isQActive
                   ? "var(--color-accent-primary)"
                   : isActive && activeMonth !== null
                   ? "rgba(0,200,150,0.6)"
-                  : isOtherQuarterMonthSelected
+                  : activeMonth !== null && !isActive
                   ? "var(--color-text-disabled)"
                   : "var(--color-text-secondary)",
                 cursor: "pointer",
@@ -208,7 +210,7 @@ export function MonthQuarterSelector({
                   background: "var(--color-accent-primary)",
                 }} />
               )}
-              {Q_LABELS[i]}
+              {Q_LABELS[q]}
               <br />
               <span style={{ fontSize: "7px", fontWeight: "normal", opacity: isQActive ? 0.85 : 0.5 }}>
                 {p.label}

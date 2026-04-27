@@ -2,7 +2,7 @@
   "_meta": {
     "description": "Primary account ground-truth reference for Anthony (DHL B-team, custom schedule). Used for three-tier test validation: db_record → computed_expectations → ui_assertions. Update the relevant section whenever account data or config changes; do NOT fabricate values — leave null and fill in from actual sources.",
     "account_label": "Anthony — primary DHL account",
-    "last_updated": "2026-04-26",
+    "last_updated": "2026-04-27",
     "fiscal_year": 2026,
     "fiscal_year_start": "2026-01-05",
     "supabase_table": "public.user_data",
@@ -11,7 +11,7 @@
       "2_computed_expectations": "Values finance.js/rollingTimeline.js should produce from db_record. Derive from running the app or unit tests.",
       "3_ui_assertions": "What each panel should display. Compare against live app or component snapshots."
     },
-    "source": "Live Supabase row provided by account owner on 2026-04-26; schema-aligned with public.user_data.",
+    "source": "Live Supabase row provided by account owner on 2026-04-26; expenses updated 2026-04-27 by migrations 007+009 (expense history cleanup).",
     "schema_reference": {
       "columns": [
         "user_id",
@@ -171,16 +171,13 @@
         "note": ["", "", "", ""],
         "label": "Housing",
         "history": [
-          {"weekly": [50, 50, 150, 150], "effectiveFrom": "2026-04-19"}
+          {"weekly": [50, 50, 150, 150], "effectiveFrom": "2026-03-01"}
         ],
         "category": "Needs",
         "billingMeta": {
           "cycle": "every30days",
           "amount": 600,
-          "byPhase": {
-            "2": {"cycle": "every30days", "amount": 600, "effectiveFrom": "2026-04-19"}
-          },
-          "effectiveFrom": "2026-04-19"
+          "effectiveFrom": "2026-03-01"
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false
@@ -190,19 +187,17 @@
         "note": ["", "", "", ""],
         "label": "Angel",
         "history": [
-          {"weekly": [525, 525, 525, 525], "effectiveFrom": "2026-04-19"},
-          {"weekly": [525, 400, 400, 400], "effectiveFrom": "2026-06-01"},
-          {"weekly": [525, 500, 400, 400], "effectiveFrom": "2026-04-24"}
+          {"weekly": [450, 400, 400, 400], "effectiveFrom": "2026-02-01"}
         ],
+        "monthlyOverrides": {
+          "2026-04": {"perPaycheck": 525, "amount": 525, "cycle": "weekly"},
+          "2026-05": {"perPaycheck": 500, "amount": 500, "cycle": "weekly"}
+        },
         "category": "Needs",
         "billingMeta": {
           "cycle": "weekly",
           "amount": 400,
-          "byPhase": {
-            "1": {"cycle": "weekly", "amount": 500, "effectiveFrom": "2026-04-24"},
-            "2": {"cycle": "weekly", "amount": 400, "effectiveFrom": "2026-04-24"}
-          },
-          "effectiveFrom": "2026-04-24"
+          "effectiveFrom": "2026-02-01"
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false
@@ -212,34 +207,13 @@
         "note": ["", "", "", ""],
         "label": "Car Insurance",
         "history": [
-          {"weekly": [32.5, 32.5, 32.5, 32.5], "effectiveFrom": "2026-04-18"}
+          {"weekly": [32.5, 32.5, 32.5, 32.5], "effectiveFrom": "2026-05-01"}
         ],
         "category": "Needs",
         "billingMeta": {
           "cycle": "every30days",
           "amount": 130,
-          "effectiveFrom": "2026-04-18"
-        },
-        "isFoodPrimary": false,
-        "isFoodHighlighted": false
-      },
-      {
-        "id": "exp_1776582411500",
-        "note": ["", "", "", ""],
-        "label": "Car",
-        "history": [
-          {"weekly": [50, 0, 0, 0], "effectiveFrom": "2026-04-24"},
-          {"weekly": [50, 0, 0, 0], "effectiveFrom": "2026-04-01"},
-          {"weekly": [50, 50, 50, 50], "effectiveFrom": "2026-05-01"},
-          {"weekly": [0, 0, 0, 0], "effectiveFrom": "2026-01-01"},
-          {"weekly": [0, 0, 0, 0], "effectiveFrom": "2026-02-01"},
-          {"weekly": [0, 0, 0, 0], "effectiveFrom": "2026-03-01"}
-        ],
-        "category": "Needs",
-        "billingMeta": {
-          "cycle": "every30days",
-          "amount": 200,
-          "effectiveFrom": "2026-04-19"
+          "effectiveFrom": "2026-05-01"
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false
@@ -249,15 +223,13 @@
         "note": ["", "", "", ""],
         "label": "Gas",
         "history": [
-          {"weekly": [100, 100, 100, 100], "effectiveFrom": "2026-04-19"},
-          {"weekly": [0, 100, 100, 100], "effectiveFrom": "2026-01-01"},
-          {"weekly": [100, 100, 100, 100], "effectiveFrom": "2026-02-01"}
+          {"weekly": [100, 100, 100, 100], "effectiveFrom": "2026-04-01"}
         ],
         "category": "Needs",
         "billingMeta": {
           "cycle": "every30days",
           "amount": 400,
-          "effectiveFrom": "2026-04-19"
+          "effectiveFrom": "2026-04-01"
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false
@@ -267,13 +239,13 @@
         "note": ["", "", "", ""],
         "label": "Phone",
         "history": [
-          {"weekly": [13.75, 13.75, 13.75, 13.75], "effectiveFrom": "2026-04-19"}
+          {"weekly": [11.25, 13.75, 13.75, 13.75], "effectiveFrom": "2026-01-05"}
         ],
         "category": "Needs",
         "billingMeta": {
           "cycle": "every30days",
           "amount": 55,
-          "effectiveFrom": "2026-04-19"
+          "effectiveFrom": "2026-01-05"
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false
@@ -283,16 +255,16 @@
         "note": ["Card plus loan", "Card plus loan", "Card plus loan", "Card plus loan"],
         "label": "Jesse",
         "history": [
-          {"weekly": [10, 40, 40, 0], "effectiveFrom": "2026-04-24"}
+          {"weekly": [100, 60, 60, 20], "effectiveFrom": "2026-03-01"}
         ],
+        "monthlyOverrides": {
+          "2026-09": {"perPaycheck": 20, "amount": 20, "cycle": "weekly"}
+        },
         "category": "Needs",
         "billingMeta": {
           "cycle": "weekly",
-          "amount": 40,
-          "byPhase": {
-            "1": {"cycle": "weekly", "amount": 40, "effectiveFrom": "2026-04-21"}
-          },
-          "effectiveFrom": "2026-04-21"
+          "amount": 60,
+          "effectiveFrom": "2026-03-01"
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false
@@ -302,19 +274,13 @@
         "note": ["", "", "", ""],
         "label": "Food",
         "history": [
-          {"weekly": [65, 65, 65, 65], "effectiveFrom": "2026-01-27"},
-          {"weekly": [65, 75, 75, 75], "effectiveFrom": "2026-04-04"}
+          {"weekly": [65, 100, 100, 100], "effectiveFrom": "2026-01-27"}
         ],
         "category": "Needs",
         "billingMeta": {
           "cycle": "every30days",
-          "amount": 300,
-          "byPhase": {
-            "1": {"cycle": "every30days", "amount": 300, "effectiveFrom": "2026-04-04"},
-            "2": {"cycle": "every30days", "amount": 300, "effectiveFrom": "2026-04-04"},
-            "3": {"cycle": "every30days", "amount": 300, "effectiveFrom": "2026-04-04"}
-          },
-          "effectiveFrom": "2026-04-04"
+          "amount": 400,
+          "effectiveFrom": "2026-01-27"
         },
         "isFoodPrimary": true,
         "isFoodHighlighted": true
@@ -324,16 +290,13 @@
         "note": ["", "", "", ""],
         "label": "Fireblood",
         "history": [
-          {"weekly": [17.5, 17.5, 17.5, 17.5], "effectiveFrom": "2026-04-21"}
+          {"weekly": [17.5, 17.5, 17.5, 17.5], "effectiveFrom": "2026-03-01"}
         ],
         "category": "Lifestyle",
         "billingMeta": {
           "cycle": "every30days",
           "amount": 70,
-          "byPhase": {
-            "1": {"cycle": "every30days", "amount": 70, "effectiveFrom": "2026-04-21"}
-          },
-          "effectiveFrom": "2026-04-21"
+          "effectiveFrom": "2026-03-01"
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false
@@ -343,13 +306,13 @@
         "note": ["", "", "", ""],
         "label": "Disney",
         "history": [
-          {"weekly": [5, 5, 5, 5], "effectiveFrom": "2026-04-19"}
+          {"weekly": [5, 5, 5, 5], "effectiveFrom": "2026-03-01"}
         ],
         "category": "Lifestyle",
         "billingMeta": {
           "cycle": "every30days",
           "amount": 20,
-          "effectiveFrom": "2026-04-19"
+          "effectiveFrom": "2026-03-01"
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false
@@ -359,13 +322,13 @@
         "note": ["", "", "", ""],
         "label": "Claude",
         "history": [
-          {"weekly": [5, 5, 5, 5], "effectiveFrom": "2026-04-19"}
+          {"weekly": [5, 5, 5, 5], "effectiveFrom": "2026-03-01"}
         ],
         "category": "Lifestyle",
         "billingMeta": {
           "cycle": "every30days",
           "amount": 20,
-          "effectiveFrom": "2026-04-19"
+          "effectiveFrom": "2026-03-01"
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false
@@ -391,13 +354,13 @@
         "note": ["", "", "", ""],
         "label": "Nicotine",
         "history": [
-          {"weekly": [30, 30, 30, 30], "effectiveFrom": "2026-04-21"}
+          {"weekly": [30, 30, 30, 30], "effectiveFrom": "2026-02-01"}
         ],
         "category": "Lifestyle",
         "billingMeta": {
           "cycle": "every30days",
           "amount": 120,
-          "effectiveFrom": "2026-04-21"
+          "effectiveFrom": "2026-02-01"
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false
@@ -424,13 +387,13 @@
         "note": ["", "", "", ""],
         "label": "Gym",
         "history": [
-          {"weekly": [10, 10, 10, 10], "effectiveFrom": "2026-01-05"}
+          {"weekly": [10, 10, 10, 10], "effectiveFrom": "2026-03-01"}
         ],
         "category": "Lifestyle",
         "billingMeta": {
           "cycle": "every30days",
           "amount": 40,
-          "effectiveFrom": "2026-04-24"
+          "effectiveFrom": "2026-03-01"
         },
         "isFoodPrimary": false,
         "isFoodHighlighted": false

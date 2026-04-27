@@ -434,6 +434,71 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     }]);
     setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   };
+
+  const _closeAddForm = () => {
+    setAddingExp(false);
+    setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
+  };
+
+  const addExpThisMonth = () => {
+    if (!newExp.label || !activeMonth) return;
+    const amount = parseFloat(newExp.amount) || 0;
+    const cycle = newExp.cycle ?? "every30days";
+    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    setExpenses(prev => [...prev, {
+      id: `exp_${crypto.randomUUID()}`,
+      category: newExp.category,
+      label: newExp.label,
+      note: [newExp.note, newExp.note, newExp.note, newExp.note],
+      billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO },
+      history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [0, 0, 0, 0] }],
+      monthlyOverrides: { [activeMonth]: { perPaycheck, amount, cycle } },
+    }]);
+    _closeAddForm();
+  };
+
+  const addExpFromMonthForward = () => {
+    if (!newExp.label || !activeMonth) return;
+    const amount = parseFloat(newExp.amount) || 0;
+    const cycle = newExp.cycle ?? "every30days";
+    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    const [year, startMon] = activeMonth.split("-").map(Number);
+    const overrides = {};
+    for (let m = startMon; m <= 12; m++) {
+      const key = `${year}-${String(m).padStart(2, "0")}`;
+      overrides[key] = { perPaycheck, amount, cycle };
+    }
+    const effectiveFrom = `${activeMonth}-01`;
+    const weekly = [0, 1, 2, 3].map(q => q < ap ? 0 : perPaycheck);
+    setExpenses(prev => [...prev, {
+      id: `exp_${crypto.randomUUID()}`,
+      category: newExp.category,
+      label: newExp.label,
+      note: [newExp.note, newExp.note, newExp.note, newExp.note],
+      billingMeta: { amount, cycle, effectiveFrom },
+      history: [{ effectiveFrom, weekly }],
+      monthlyOverrides: overrides,
+    }]);
+    _closeAddForm();
+  };
+
+  const addExpAllQuarters = () => {
+    if (!newExp.label) return;
+    const amount = parseFloat(newExp.amount) || 0;
+    const cycle = newExp.cycle ?? "every30days";
+    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    const weekly = [0, 1, 2, 3].map(q => q < ap ? 0 : perPaycheck);
+    setExpenses(prev => [...prev, {
+      id: `exp_${crypto.randomUUID()}`,
+      category: newExp.category,
+      label: newExp.label,
+      note: [newExp.note, newExp.note, newExp.note, newExp.note],
+      billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO },
+      history: [{ effectiveFrom: TODAY_ISO, weekly }],
+    }]);
+    _closeAddForm();
+  };
+
   const deleteExp = (id) => {
     setExpenses(prev => prev.map(e => {
       if (e.id !== id) return e;
@@ -523,7 +588,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   };
 
   const deleteMonthOnly = (expId) => {
-    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonth(e, activeMonth)));
+    const monthKey = activeMonth ?? currentMonthKey;
+    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonth(e, monthKey)));
     setPendingDelete(null);
   };
 
@@ -1141,9 +1207,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                         {activeMonth ? `Delete ${activeMonthLabel}?` : `Delete Q${ap + 1}?`}
                       </div>
                       <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        {activeMonth && (
-                          <SmBtn onClick={() => deleteMonthOnly(exp.id)} c="var(--color-red)" bg="#2d1a1a">MO. ONLY</SmBtn>
-                        )}
+                        <SmBtn onClick={() => deleteMonthOnly(exp.id)} c="var(--color-red)" bg="#2d1a1a">{activeMonth ? "MO. ONLY" : "TODAY'S MONTH"}</SmBtn>
                         <SmBtn onClick={() => deleteQuarterOnly(exp.id)} c="var(--color-red)" bg="#2d1a1a">QTR ONLY</SmBtn>
                         <SmBtn onClick={() => activeMonth ? deleteMonthForward(exp.id) : deleteExp(exp.id)} c="var(--color-red)" bg="#2d1a1a">+ ONWARD</SmBtn>
                         <SmBtn onClick={() => setPendingDelete(null)}>✕</SmBtn>
@@ -1228,9 +1292,21 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             This sets aside {f2(perPaycheckFromCycle(parseFloat(newExp.amount) || 0, newExp.cycle, cpm))} from each paycheck.
           </div>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>ADD</button>
-          <button onClick={() => { setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+          {activeMonth !== null ? (
+            <>
+              <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px", width: "100%" }}>Save scope:</div>
+              <SmBtn onClick={addExpThisMonth} c={newExp.label ? "var(--color-accent-primary)" : "var(--color-text-disabled)"}>MO. ONLY</SmBtn>
+              <SmBtn onClick={addExpFromMonthForward} c={newExp.label ? "var(--color-green)" : "var(--color-text-disabled)"}>FROM {activeMonthLabel} +</SmBtn>
+              <SmBtn onClick={addExpAllQuarters} c={newExp.label ? "var(--color-green)" : "var(--color-text-disabled)"}>ALL QTR</SmBtn>
+              <SmBtn onClick={_closeAddForm}>✕</SmBtn>
+            </>
+          ) : (
+            <>
+              <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>ADD</button>
+              <button onClick={_closeAddForm} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</button>
+            </>
+          )}
         </div>
       </div> : <button onClick={() => setAddingExp(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
     </div>}

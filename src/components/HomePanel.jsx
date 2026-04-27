@@ -4,7 +4,7 @@ import { FISCAL_YEAR_START } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { FlowSparklineCard, MetricCard, SmBtn, iS, lS, ScrollSnapRow } from "./ui.jsx";
+import { MetricCard, SmBtn, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
@@ -68,28 +68,6 @@ export function HomePanel({
   const totalGoalTarget = goals.reduce((s, g) => s + g.target, 0);
   const completedGoalValue = completedGoals.reduce((s, g) => s + g.target, 0);
   const topGoal = goals.find((g) => !g.completed)?.label?.toLowerCase() ?? "financial";
-
-  const flowScore = Math.min(
-    100,
-    Math.round(
-      Math.max(
-        0,
-        (1 - spendRatio) * 55
-          + (projectedWeeklyLeft > 0 ? 25 : 10)
-          + (goals.length ? (completedGoals.length / goals.length) * 20 : 0),
-      ),
-    ),
-  );
-
-  const flowTrendSource = [projectedWeeklyLeft, ...(futureWeekNets || []).slice(0, 5)].filter((v) => v != null);
-  const flowTrendPoints = (
-    flowTrendSource.length > 1
-      ? flowTrendSource
-      : [projectedWeeklyLeft, weeklyIncome * 0.92, weeklyIncome * 0.98, weeklyIncome * 1.04, weeklyIncome * 1.09, weeklyIncome * 1.12]
-  ).map((amount) => {
-    const base = Math.max(1, weeklyIncome || 1);
-    return Math.max(5, Math.min(98, Math.round(50 + ((amount - base * 0.9) / (base * 0.9)) * 22)));
-  });
 
   const todayDate = today ? new Date(`${today}T12:00:00`) : null;
   const weekdayName = todayDate ? todayDate.toLocaleDateString("en-US", { weekday: "long" }) : null;
@@ -538,13 +516,6 @@ export function HomePanel({
           />
         ))}
       </div>
-
-      <FlowSparklineCard
-        label="Flow Score"
-        score={flowScore}
-        points={flowTrendPoints}
-        trendLabel={`Projected pace · ${flowTrendPoints.length} checkpoints`}
-      />
 
       <div id="home-goals-section" style={{ marginTop: "28px" }}>
         <div style={{ marginBottom: "24px", textAlign: "center" }}>

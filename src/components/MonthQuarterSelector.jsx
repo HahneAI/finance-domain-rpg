@@ -10,6 +10,10 @@ const MONTH_KEYS = [
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const Q_LABELS = ["Q1", "Q2", "Q3", "Q4"];
 
+// Spring-overshoot easing for left/right jitter
+const SPRING = "cubic-bezier(0.34, 1.56, 0.64, 1)";
+const SLIDE  = "cubic-bezier(0.4, 0, 0.2, 1)";
+
 function prevMonth(key) {
   const [y, m] = key.split("-").map(Number);
   const pm = m === 1 ? 12 : m - 1;
@@ -29,19 +33,52 @@ export function MonthQuarterSelector({
   const cutoff = prevMonth(currentMonthKey);
   const visibleMonthKeys = MONTH_KEYS.filter(k => k >= cutoff);
 
-  // Months grouped by quarter index — determines which quarters are visible
   const monthsByQ = [0, 1, 2, 3].map(q =>
     visibleMonthKeys.filter(k => Math.floor((parseInt(k.slice(5, 7), 10) - 1) / 3) === q)
   );
 
-  // A quarter is visible only if it still has at least one visible month
   const visibleQIndices = [0, 1, 2, 3].filter(q => monthsByQ[q].length > 0);
   const totalVisibleQ = visibleQIndices.length;
+  const isMonthMode = activeMonth !== null;
 
-  // Indicator bar — equal-width quarters, tracks by visible quarter position
+  // Active quarter's position in the visible list
   const activeQPos = Math.max(0, visibleQIndices.indexOf(activeQuarter));
-  const barLeft  = totalVisibleQ > 0 ? (activeQPos / totalVisibleQ) * 100 : 0;
-  const barWidth = totalVisibleQ > 0 ? (1 / totalVisibleQ) * 100 : 25;
+
+  // ── Top bar (month row) — tracks the selected month pill ──
+  const monthsInActiveQ = monthsByQ[activeQuarter]?.length || 1;
+  const activeMInQIdx  = activeMonth
+    ? Math.max(0, monthsByQ[activeQuarter]?.indexOf(activeMonth) ?? 0)
+    : 0;
+  const topBarLeft  = totalVisibleQ > 0
+    ? (activeQPos / totalVisibleQ + activeMInQIdx / (monthsInActiveQ * totalVisibleQ)) * 100
+    : 0;
+  const topBarWidth = totalVisibleQ > 0
+    ? (1 / (monthsInActiveQ * totalVisibleQ)) * 100
+    : 25;
+
+  // ── Bottom bar (quarter row) — spans the selected quarter column ──
+  const botBarLeft  = totalVisibleQ > 0 ? (activeQPos / totalVisibleQ) * 100 : 0;
+  const botBarWidth = totalVisibleQ > 0 ? (1 / totalVisibleQ) * 100 : 25;
+
+  const indicatorBar = (left, width, visible, slideIn, slideOut) => ({
+    position: "absolute",
+    top: 0,
+    left: `${left}%`,
+    width: `${width}%`,
+    height: "2px",
+    background: "var(--color-accent-primary)",
+    borderRadius: "0 0 1px 1px",
+    zIndex: 3,
+    pointerEvents: "none",
+    opacity: visible ? 1 : 0,
+    transform: visible ? "translateY(0)" : `translateY(${slideOut})`,
+    transition: [
+      `left 0.28s ${SPRING}`,
+      `width 0.22s ${SLIDE}`,
+      `opacity 0.18s ease`,
+      `transform 0.18s ease`,
+    ].join(", "),
+  });
 
   return (
     <LiquidGlass
@@ -69,21 +106,11 @@ export function MonthQuarterSelector({
         zIndex: 1,
       }} />
 
-      {/* Indicator bar — 1/N of total width, equal per visible quarter */}
-      <div style={{
-        position: "absolute",
-        top: 0,
-        left: `${barLeft}%`,
-        width: `${barWidth}%`,
-        height: "2px",
-        background: "var(--color-accent-primary)",
-        transition: "left 0.3s ease, width 0.3s ease",
-        borderRadius: "0 0 1px 1px",
-        zIndex: 2,
-      }} />
-
-      {/* ── Month row: each visible quarter gets flex:1; months inside fill that space ── */}
+      {/* ── Month row ── */}
       <div style={{ display: "flex", position: "relative", zIndex: 2 }}>
+        {/* Top indicator bar — slides to selected month, fades out when quarter mode active */}
+        <div style={indicatorBar(topBarLeft, topBarWidth, isMonthMode, "slideIn", "6px")} />
+
         {visibleQIndices.map((q, qPos) => {
           const months = monthsByQ[q];
           const isLastQ = qPos === visibleQIndices.length - 1;
@@ -137,8 +164,7 @@ export function MonthQuarterSelector({
                     {isCurrent && (
                       <span style={{
                         display: "block",
-                        width: "4px",
-                        height: "4px",
+                        width: "4px", height: "4px",
                         borderRadius: "50%",
                         background: "var(--color-accent-primary)",
                         margin: "2px auto 0",
@@ -166,13 +192,16 @@ export function MonthQuarterSelector({
       {/* Divider */}
       <div style={{ height: "1px", background: "rgba(0, 200, 150, 0.22)", position: "relative", zIndex: 2 }} />
 
-      {/* ── Quarter row — equal divisions; drops only when last month in quarter drops off ── */}
+      {/* ── Quarter row ── */}
       <div style={{ display: "flex", position: "relative", zIndex: 2 }}>
+        {/* Bottom indicator bar — spans the selected quarter, fades out when month mode active */}
+        <div style={indicatorBar(botBarLeft, botBarWidth, !isMonthMode, "slideIn", "-6px")} />
+
         {visibleQIndices.map((q, qPos) => {
           const p = PHASES[q];
           const isCurrent = q === currentPhaseIdx;
           const isActive = activeQuarter === q;
-          const isQActive = isActive && activeMonth === null;
+          const isQActive = isActive && !isMonthMode;
           const isLastQ = qPos === visibleQIndices.length - 1;
           return (
             <button
@@ -185,9 +214,9 @@ export function MonthQuarterSelector({
                 borderRight: isLastQ ? "none" : "1px solid rgba(0, 200, 150, 0.15)",
                 color: isQActive
                   ? "var(--color-accent-primary)"
-                  : isActive && activeMonth !== null
+                  : isActive && isMonthMode
                   ? "rgba(0,200,150,0.6)"
-                  : activeMonth !== null && !isActive
+                  : !isActive && isMonthMode
                   ? "var(--color-text-disabled)"
                   : "var(--color-text-secondary)",
                 cursor: "pointer",

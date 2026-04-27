@@ -64,7 +64,7 @@ function Divider({ label }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "4px 0" }}>
       <div style={{ flex: 1, height: "1px", background: "#222" }} />
-      <span style={{ fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "#444" }}>{label}</span>
+      <span style={{ fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>{label}</span>
       <div style={{ flex: 1, height: "1px", background: "#222" }} />
     </div>
   );

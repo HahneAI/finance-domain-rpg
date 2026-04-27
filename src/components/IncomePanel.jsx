@@ -463,7 +463,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
       <div onClick={e => e.stopPropagation()} style={{ background: "var(--color-bg-surface)", borderRadius: "8px", maxWidth: "860px", margin: "0 auto", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
           <span style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase" }}>Weekly Breakdown — Active Window Detail</span>
-          <button onClick={() => setShowWeekDetail(false)} style={{ background: "transparent", border: "none", color: "#888", fontSize: "16px", cursor: "pointer", padding: "4px 8px" }}>✕</button>
+          <button onClick={() => setShowWeekDetail(false)} style={{ background: "transparent", border: "none", color: "var(--color-text-primary)", fontSize: "16px", cursor: "pointer", padding: "4px 8px" }}>✕</button>
         </div>
         <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}><table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
           <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
@@ -490,8 +490,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
                 </td>
                 <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: rotationColor }}>{rotationDisplay}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center", color: "var(--color-text-secondary)" }}>{w.active ? w.totalHours : "—"}</td>
-                <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "var(--color-red)" : "#666" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
-                <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "var(--color-gold)" : "#666" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "var(--color-red)" : "var(--color-text-primary)" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "var(--color-gold)" : "var(--color-text-primary)" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{w.active ? f2(w.grossPay) : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{w.active ? f2(resolveWeekNet(w)) : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center" }}>

@@ -17,7 +17,7 @@
 import { useState, useEffect } from "react";
 import { buildYear, dhlEmployerMatchRate } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
-import { FISCAL_YEAR_START, DHL_PRESET, DHL_BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { FISCAL_YEAR_START, DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR } from "../lib/fiscalWeek.js";
 
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
@@ -643,7 +643,7 @@ function Step2({ formData, onChange, attempted }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 3 — Deductions
 // ─────────────────────────────────────────────────────────────────────────────
-const BENEFIT_DEFS = DHL_BENEFIT_OPTIONS;
+const BENEFIT_DEFS = BENEFIT_OPTIONS;
 
 function BenefitCard({ def, selected, formData, onChange, onToggle, attempted }) {
   const amtErr  = attempted && selected && def.type === "weekly" && !((formData[def.field] ?? 0) > 0);

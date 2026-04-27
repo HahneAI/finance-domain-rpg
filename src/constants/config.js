@@ -207,7 +207,7 @@ export const DHL_PRESET = {
 
 // DHL payroll-deduction benefit options (single source of truth for setup/profile flows).
 // Count: 9 options total (8 weekly-dollar deductions + 401k rate-based deduction).
-export const DHL_BENEFIT_OPTIONS = [
+export const BENEFIT_OPTIONS = [
   { id: "health", label: "Health / Medical", sub: "Medical insurance premium", type: "weekly", field: "healthPremium", placeholder: "e.g. 18.50" },
   { id: "dental", label: "Dental", sub: "Dental insurance premium", type: "weekly", field: "dentalPremium", placeholder: "e.g. 4.00" },
   { id: "vision", label: "Vision", sub: "Vision insurance premium", type: "weekly", field: "visionPremium", placeholder: "e.g. 2.00" },

@@ -86,7 +86,7 @@ function SidebarNavItem({ item, active, onClick }) {
         textTransform: "uppercase",
        
         background: active ? "var(--color-bg-surface)" : "transparent",
-        color: active ? "var(--color-gold)" : "#888",
+        color: active ? "var(--color-gold)" : "var(--color-text-primary)",
         borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
         border: "none",
         cursor: "pointer",
@@ -497,6 +497,13 @@ export default function App() {
   // ── Tax derived values ──
   const taxDerived = useMemo(() => {
     const activeWeeks = allWeeks.filter(w => w.active);
+    const overrides = config.pastWeekTaxStatusOverrides ?? {};
+    const hasOverride = (idx) => Object.prototype.hasOwnProperty.call(overrides, idx);
+    const remediationTaxedForWeek = (w) => {
+      const isPast = toLocalIso(w.weekEnd) < today;
+      if (!isPast) return w.taxedBySchedule;
+      return hasOverride(w.idx) ? Boolean(overrides[w.idx]) : w.taxedBySchedule;
+    };
     const adjustedTaxableGrossByWeek = new Map(
       activeWeeks.map(w => [w.idx, Math.max((w.taxableGross ?? 0) + (eventImpact.grossDeltaByWeek[w.idx] || 0), 0)])
     );
@@ -511,12 +518,12 @@ export default function App() {
     const fedHigh = config.fedRateHigh  ?? config.w2FedRate;
     const stLow   = config.stateRateLow  ?? config.w1StateRate;
     const stHigh  = config.stateRateHigh ?? config.w2StateRate;
-    const fWB = activeWeeks.filter(w => w.taxedBySchedule).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? fedHigh : fedLow), 0);
-    const mWB = activeWeeks.filter(w => w.taxedBySchedule).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? stHigh : stLow), 0);
+    const fWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? fedHigh : fedLow), 0);
+    const mWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? stHigh : stLow), 0);
     const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - config.targetOwedAtFiling, 0);
-    const twC = activeWeeks.filter(w => w.taxedBySchedule).length;
-    return { fedAGI: fAGI, fedLiability: fL, moLiability: mL, ficaTotal: ficaT, fedWithheldBase: fWB, moWithheldBase: mWB, fedGap: fG, moGap: mG, totalGap: tG, targetExtraTotal: tET, taxedWeekCount: twC, extraPerCheck: twC > 0 ? tET / twC : 0 };
-  }, [allWeeks, config, eventImpact.grossDeltaByWeek]);
+    const remainingTaxedChecks = activeWeeks.filter(w => toLocalIso(w.weekEnd) >= today && w.taxedBySchedule).length;
+    return { fedAGI: fAGI, fedLiability: fL, moLiability: mL, ficaTotal: ficaT, fedWithheldBase: fWB, moWithheldBase: mWB, fedGap: fG, moGap: mG, totalGap: tG, targetExtraTotal: tET, taxedWeekCount: remainingTaxedChecks, extraPerCheck: remainingTaxedChecks > 0 ? tET / remainingTaxedChecks : 0 };
+  }, [allWeeks, config, eventImpact.grossDeltaByWeek, today]);
 
   // ── Live projected net from income engine ──
   const projectedAnnualNet = useMemo(() =>
@@ -600,8 +607,11 @@ export default function App() {
     adjustedWeeklyAvg: baseWeeklyUnallocated + eventImpact.adjustedWeeklyDelta
   }), [eventImpact, projectedAnnualNet, baseWeeklyUnallocated, fundedGoalSpend]);
 
-  // ── Attendance bucket model ──
-  const bucketModel = useMemo(() => computeBucketModel(logs, config), [logs, config]);
+  // ── Attendance bucket model — DHL preset only ──
+  // computeBucketModel encodes DHL's specific tier system and overflow payout mechanic.
+  // Non-DHL users may have attendanceBucketEnabled=true but get no bucket model;
+  // their attendance tracking is handled separately without payout math.
+  const bucketModel = useMemo(() => isDHL ? computeBucketModel(logs, config) : null, [isDHL, logs, config]);
 
   // ── Per-week targeted deductions for current/future-week events ──────────────────
   // Shape: { [weekIdx: number]: netLost (dollars) }
@@ -733,6 +743,7 @@ export default function App() {
         setShowExtra={setShowExtra}
         isAdmin={isAdmin}
         today={today}
+        weekConfirmations={weekConfirmations}
       />}
     </>
   );
@@ -917,7 +928,7 @@ export default function App() {
                 padding: "14px 20px", fontSize: "11px",
                 letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
-                color: lifeEventMenu ? "var(--color-gold)" : "#888",
+                color: lifeEventMenu ? "var(--color-gold)" : "var(--color-text-primary)",
                 borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
@@ -938,7 +949,7 @@ export default function App() {
                       display: "block", width: "100%", textAlign: "left",
                       padding: "10px 24px", fontSize: "10px",
                       letterSpacing: "1.5px", textTransform: "uppercase",
-                      background: "transparent", color: "#666",
+                      background: "transparent", color: "var(--color-text-primary)",
                       border: "none", borderLeft: "3px solid transparent",
                       cursor: "pointer", transition: "color 0.15s",
                     }}
@@ -1024,7 +1035,7 @@ export default function App() {
             style={{
               background: "transparent",
               border: "none",
-              color: unconfirmedCount > 0 ? "var(--color-red)" : "#555",
+              color: unconfirmedCount > 0 ? "var(--color-red)" : "var(--color-text-primary)",
               cursor: "pointer",
               width: "44px",
               height: "44px",
@@ -1117,7 +1128,7 @@ export default function App() {
             </button>
             <button
               onClick={() => setDrawerOpen(false)}
-              style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: "2px 4px", marginTop: "2px" }}
+              style={{ background: "transparent", border: "none", color: "var(--color-text-primary)", cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: "2px 4px", marginTop: "2px" }}
               aria-label="Close navigation"
             >
               ✕
@@ -1140,7 +1151,7 @@ export default function App() {
                 padding: "14px 20px", fontSize: "11px",
                 letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
-                color: lifeEventMenu ? "var(--color-gold)" : "#888",
+                color: lifeEventMenu ? "var(--color-gold)" : "var(--color-text-primary)",
                 borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
@@ -1161,7 +1172,7 @@ export default function App() {
                       display: "block", width: "100%", textAlign: "left",
                       padding: "10px 24px", fontSize: "10px",
                       letterSpacing: "1.5px", textTransform: "uppercase",
-                      background: "transparent", color: "#666",
+                      background: "transparent", color: "var(--color-text-primary)",
                       border: "none", borderLeft: "3px solid transparent",
                       cursor: "pointer", transition: "color 0.15s",
                     }}
@@ -1175,7 +1186,7 @@ export default function App() {
         </nav>
 
         {/* Active section indicator at bottom */}
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: "10px", color: "#555", letterSpacing: "1px", textTransform: "uppercase" }}>
+        <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: "10px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
           Viewing: <span style={{ color: "var(--color-gold)" }}>{currentView}</span>
         </div>
       </div>

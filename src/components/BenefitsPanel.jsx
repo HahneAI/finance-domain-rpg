@@ -62,9 +62,18 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
     ? allWeeks.filter(w => w.active && w.weekEnd <= ptoCutoff).reduce((s, w) => s + w.totalHours, 0) / 20
     : 0;
   const adjP      = Math.max(ptoBs - logPTOHoursLost / 20, 0);
+  // Current balance display: override value as-is; non-override: projected to goal date minus losses
   const effectiveAdjP = config.ptoHoursOverride != null ? config.ptoHoursOverride : adjP;
+  // Goal tracker projection: when override is set, add future accrual from override index to goal date
+  const overrideIdx = config.ptoOverrideWeekIdx ?? -1;
+  const ptoProjectedFromOverrideToGoal = config.ptoHoursOverride != null && ptoCutoff
+    ? allWeeks.filter(w => w.active && w.idx > overrideIdx && w.weekEnd <= ptoCutoff).reduce((s, w) => s + w.totalHours, 0) / 20
+    : 0;
+  const goalProjected = config.ptoHoursOverride != null
+    ? config.ptoHoursOverride + ptoProjectedFromOverrideToGoal
+    : adjP;
   const negCap    = ptoGoal?.negativeBalanceCap ?? 40;
-  const avail     = effectiveAdjP + negCap;
+  const avail     = goalProjected + negCap;
   const hoursNeed = ptoGoal?.hoursNeeded ?? 0;
   const onTrack   = avail >= hoursNeed;
 
@@ -248,12 +257,6 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
                 onClick={() => { setPtoInput(String(effectiveAdjP.toFixed(1))); setEditingPto(true); }}
                 c="var(--color-text-secondary)" bg="var(--color-bg-raised)"
               >Set Balance</SmBtn>
-              {config.ptoHoursOverride != null && (
-                <SmBtn
-                  onClick={() => setConfig(c => ({ ...c, ptoHoursOverride: null }))}
-                  c="var(--color-text-disabled)" bg="var(--color-bg-raised)"
-                >Clear Override</SmBtn>
-              )}
             </div>
           )}
         </div>
@@ -263,21 +266,33 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
           <Card label="Accrual Rate" val="1 hr / 20 worked" color="#7eb8c9" size="14px" />
           {ptoGoal ? (
             <>
-              <Card
-                label={`Base Accrued by ${fmtDate(ptoGoal.targetDate)}`}
-                val={`~${ptoBs.toFixed(1)} hrs`}
-                color="var(--color-text-primary)"
-                size="18px"
-              />
-              {logPTOHoursLost > 0
-                ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
-                : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="#888" size="14px" />
+              {config.ptoHoursOverride != null ? (
+                <Card
+                  label={`Override Balance`}
+                  val={`${effectiveAdjP.toFixed(1)} hrs`}
+                  sub="manually set"
+                  color="var(--color-text-primary)"
+                  size="18px"
+                />
+              ) : (
+                <Card
+                  label={`Base Accrued by ${fmtDate(ptoGoal.targetDate)}`}
+                  val={`~${ptoBs.toFixed(1)} hrs`}
+                  color="var(--color-text-primary)"
+                  size="18px"
+                />
+              )}
+              {config.ptoHoursOverride != null
+                ? <Card label={`Proj. Total by ${fmtDate(ptoGoal.targetDate)}`} val={`~${goalProjected.toFixed(1)} hrs`} sub={`${effectiveAdjP.toFixed(1)} base + ${ptoProjectedFromOverrideToGoal.toFixed(1)} earned`} color="var(--color-gold)" size="18px" />
+                : logPTOHoursLost > 0
+                  ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
+                  : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="#888" size="14px" />
               }
             </>
           ) : (
             <>
               <Card label="Accrued by Leave Date" val="— set a goal" color="var(--color-text-disabled)" size="14px" />
-              <Card label="Negative Balance Cap" val="40 hrs (after 90d)" color="#888" size="14px" />
+              <Card label="Negative Balance Cap" val="40 hrs (after 90d)" color="var(--color-text-primary)" size="14px" />
             </>
           )}
         </div>
@@ -291,7 +306,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
                   {ptoGoal.label}
                 </div>
                 <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
-                  Need {hoursNeed} hrs · {effectiveAdjP.toFixed(1)} accrued + {negCap} neg cap = <strong style={{ color: "var(--color-text-primary)" }}>{avail.toFixed(1)} available</strong>
+                  Need {hoursNeed} hrs · {goalProjected.toFixed(1)} proj. by {fmtDate(ptoGoal.targetDate)} + {negCap} neg cap = <strong style={{ color: "var(--color-text-primary)" }}>{avail.toFixed(1)} available</strong>
                 </div>
                 <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "3px" }}>
                   Leave starts {fmtDate(ptoGoal.targetDate)} · ≈ {Math.ceil(hoursNeed / shiftHours)} shifts
@@ -494,26 +509,26 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
                 {bm.monthHistory.map(row => (
                   <tr key={row.month} style={{ borderBottom: "1px solid #181818" }}>
                     <td style={{ padding: "7px 12px", color: "var(--color-text-primary)" }}>{fmtMonth(row.month)}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: row.M > 0 ? "var(--color-red)" : "#444" }}>{row.M > 0 ? `${row.M}h` : "—"}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: row.M > 0 ? "var(--color-red)" : "var(--color-text-primary)" }}>{row.M > 0 ? `${row.M}h` : "—"}</td>
                     <td style={{ padding: "7px 8px", textAlign: "right", color: row.net >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{row.net >= 0 ? "+" : ""}{row.net}h</td>
                     <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-secondary)" }}>{row.closingBalance}h</td>
-                    <td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "var(--color-gold)" : "#444" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td>
+                    <td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "var(--color-gold)" : "var(--color-text-primary)" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td>
                   </tr>
                 ))}
                 <tr style={{ borderBottom: "1px solid #252525", background: "var(--color-bg-surface)" }}>
                   <td style={{ padding: "7px 12px", color: "var(--color-gold)" }}>{fmtMonth(currentMonthStr)} <span style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>in progress</span></td>
-                  <td style={{ padding: "7px 8px", textAlign: "right", color: bm.currentM > 0 ? "var(--color-red)" : "#444" }}>{bm.currentM > 0 ? `${bm.currentM}h` : "—"}</td>
-                  <td style={{ padding: "7px 8px", textAlign: "right", color: "#444" }}>—</td>
-                  <td style={{ padding: "7px 8px", textAlign: "right", color: "#666" }}>{bm.currentBalance}h</td>
-                  <td style={{ padding: "7px 12px", textAlign: "right", color: "#444" }}>—</td>
+                  <td style={{ padding: "7px 8px", textAlign: "right", color: bm.currentM > 0 ? "var(--color-red)" : "var(--color-text-primary)" }}>{bm.currentM > 0 ? `${bm.currentM}h` : "—"}</td>
+                  <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td>
+                  <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>{bm.currentBalance}h</td>
+                  <td style={{ padding: "7px 12px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td>
                 </tr>
                 {bm.projectedHistory.map(row => (
                   <tr key={row.month} style={{ borderBottom: "1px solid #181818", opacity: 0.45 }}>
-                    <td style={{ padding: "7px 12px", color: "#666", fontStyle: "italic" }}>{fmtMonth(row.month)}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#444" }}>—</td>
+                    <td style={{ padding: "7px 12px", color: "var(--color-text-primary)", fontStyle: "italic" }}>{fmtMonth(row.month)}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td>
                     <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-disabled)" }}>+{row.net}h</td>
                     <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-disabled)" }}>{row.closingBalance}h</td>
-                    <td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "#8a6e20" : "#444" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td>
+                    <td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "#8a6e20" : "var(--color-text-primary)" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -524,7 +539,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
           <div style={{ background: bandBg, border: `1px solid ${bandColor}33`, borderRadius: "6px", padding: "12px 14px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "5px 16px", fontSize: "11px", alignItems: "center" }}>
               <span style={{ color: "var(--color-text-secondary)" }}>Realized overflow payout:</span>
-              <span style={{ textAlign: "right", color: bm.realizedPayout > 0 ? "var(--color-gold)" : "#555" }}>{f2(bm.realizedPayout)}</span>
+              <span style={{ textAlign: "right", color: bm.realizedPayout > 0 ? "var(--color-gold)" : "var(--color-text-primary)" }}>{f2(bm.realizedPayout)}</span>
               <span style={{ color: "var(--color-text-secondary)" }}>Projected (perfect attendance):</span>
               <span style={{ textAlign: "right", color: "var(--color-green)" }}>{f2(bm.projectedPayout)}</span>
               <span style={{ color: "var(--color-text-primary)", fontWeight: "bold", borderTop: "1px solid #ffffff11", paddingTop: "6px" }}>Total projected bonus income:</span>

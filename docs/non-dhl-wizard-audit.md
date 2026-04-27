@@ -314,4 +314,65 @@ and correctable via Sharpen Rates post-setup. No blocking issues.
 
 ### Step 5 — Wrap Up
 
-- [ ] Audit
+**Status: Functional with one real bug — `longWeeklyHours` never set for non-DHL variable schedule**
+
+**UI shown (non-DHL and DHL — no path difference):**
+1. Live net estimate — breakdown card: Gross, Fed Tax, State Tax, FICA, 401k, Benefits, Other Deductions, Net
+2. Paycheck Buffer — On/Off pills + amount input (default $50, max $200, clamped on save)
+3. Tax-Exempt Gate — disclaimer + "Unlock projections" button (non-blocking placeholder)
+
+**Fields written to formData:** `bufferEnabled`, `paycheckBuffer`, `taxExemptOptIn`
+
+**`isValid`:** `() => true` — always passes, non-blocking.
+
+**`showIf`:** `(_, ev) => ev === null || ev === "changed_jobs"` — step is skipped for the "lost_job"
+life event (buffer and tax-exempt state preserved in config but not re-prompted).
+
+**DHL vs non-DHL difference:** None. Both see the same Wrap Up step.
+
+---
+
+**Issues found:**
+
+**[BUG — MEDIUM] `longWeeklyHours` is never set; non-DHL variable schedule is income-broken**
+`buildYear` in `finance.js` (line 507) uses `cfg.longWeeklyHours` for non-DHL long weeks:
+```
+totalH = isWeek2
+  ? (cfg.longWeeklyHours || cfg.standardWeeklyHours || 40)
+  : (cfg.standardWeeklyHours || 40);
+```
+`longWeeklyHours` is not in `DEFAULT_CONFIG` and no wizard step ever prompts for it. It is always
+`undefined`, so long weeks and short weeks both resolve to `standardWeeklyHours`. A non-DHL user who
+says "my pay varies week to week" in Step 4, enters two separate paystubs (deriving two tax rates),
+and proceeds — will have identical income for every week despite the two-rate tax setup. The variable
+schedule tag affects how `taxRatesEstimated` is displayed and which paystub sections appear, but the
+actual income model never alternates.
+
+The same gap appears in `estimateWeeklyGross` (line 1311): `const h2 = (d.longWeeklyHours || 50)` —
+the fallback is a hardcoded 50h, not user-provided data, so the Wrap Up gross preview is also wrong
+for these users.
+
+Fix: add `longWeeklyHours` to Step 2 for non-DHL users when `scheduleIsVariable = true` — a second
+hours field after the standard-week hours field. Wire it through `DEFAULT_CONFIG` with a reasonable
+default (e.g. `null`). Tag: `[CC]` — touches Step 2 UI, finance.js, DEFAULT_CONFIG, and the
+`estimateWeeklyGross` preview.
+
+**[PLACEHOLDER — KNOWN] `taxExemptOptIn` is stored but unused**
+`TaxExemptPreview` shows a static confirmation message ("Tax-Exempt Projections Unlocked") marked
+in code as "Phase 5." `taxExemptOptIn` is saved to config but nothing in `App.jsx` or `IncomePanel`
+reads it to gate or change any display. The opt-in UI is correct and the disclaimer copy is solid —
+the backend wire-up is just deferred. No action needed until Phase 5.
+
+**[CONFIRMED OK] Buffer $200 max is enforced in both wizard and ProfilePanel**
+`SetupWizard` clamps inline via `Math.min(parseFloat(e.target.value) || 0, BUFFER_MAX)`.
+`ProfilePanel` clamps on save via `Math.max(0, Math.min(Number(paycheckBuffer) || 0, 200))`.
+Consistent — no bypass path found.
+
+**[CONFIRMED OK] Salary users' gross estimate is correct**
+`estimateWeeklyGross` for salary path: `40 * (baseRate)` where `baseRate = annualSalary / 2080`
+(set by Step 1 on salary entry). This correctly yields `annualSalary / 52` weekly. ✓
+
+**Verdict:** Wrap Up is clean for non-DHL fixed-schedule users. The `longWeeklyHours` gap means the
+variable-schedule path is broken for income modeling (not just the preview) — it should be addressed
+alongside Step 2 since the fix requires adding a new field there. Everything else is either confirmed
+correct or intentionally deferred.

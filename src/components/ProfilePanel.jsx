@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
-import { DHL_BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
+import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, PanelHero, SH } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 
@@ -994,14 +994,14 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
   const [k401Start, setK401Start] = useState(config.k401StartDate ?? "");
   const [benefitsStartDate, setBenefitsStartDate] = useState(config.benefitsStartDate ?? "");
   const [weeklyValues, setWeeklyValues] = useState(
-    DHL_BENEFIT_OPTIONS
+    BENEFIT_OPTIONS
       .filter(b => b.type === "weekly")
       .reduce((acc, b) => ({ ...acc, [b.field]: String(config[b.field] ?? "") }), {})
   );
 
   function handleSave() {
     const nextSelected = [...selectedBenefits];
-    const weeklyPatch = DHL_BENEFIT_OPTIONS
+    const weeklyPatch = BENEFIT_OPTIONS
       .filter(b => b.type === "weekly")
       .reduce((acc, b) => ({ ...acc, [b.field]: parseFloat(weeklyValues[b.field]) || 0 }), {});
     const newConfig = {
@@ -1062,10 +1062,10 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
         <DetailCard>
           <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
-              Payroll-Deduction Benefits ({DHL_BENEFIT_OPTIONS.length})
+              Payroll-Deduction Benefits ({BENEFIT_OPTIONS.length})
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
-              {DHL_BENEFIT_OPTIONS.map((benefit) => (
+              {BENEFIT_OPTIONS.map((benefit) => (
                 <button
                   key={benefit.id}
                   onClick={() => toggleBenefit(benefit.id)}
@@ -1112,9 +1112,9 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
                 </div>
               </>}
             </div>
-            {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).length > 0 && (
+            {BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).map((benefit) => (
+                {BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).map((benefit) => (
                   <div key={benefit.id}>
                     <label style={lS}>{benefit.label} ($ / week)</label>
                     <input

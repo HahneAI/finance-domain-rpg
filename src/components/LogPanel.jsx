@@ -979,7 +979,7 @@ export function LogPanel({
       const bandBg = bm.status === "safe" ? "#1a2d1e" : bm.status === "caution" ? "#2d2710" : "#2d1a1a";
       return (
         <div style={{ marginBottom: "24px" }}>
-          <SectionHeader>Attendance Bucket</SectionHeader>
+          <SectionHeader>DHL Attendance Bucket</SectionHeader>
 
           {/* Compact status bar */}
           {(() => {

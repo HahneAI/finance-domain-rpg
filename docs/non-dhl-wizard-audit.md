@@ -181,9 +181,83 @@ the fiscal year end produces `firstActiveIdx > max week index`, resulting in zer
 
 ### Step 3 — Deductions
 
-- [ ] Audit
+**Status: Functional — three gaps, no blockers**
 
-**Backlog:** PTO needs its own subsection here for non-DHL users — see Open Items above.
+**UI shown (non-DHL path):**
+1. Benefits checklist — Health/Medical, Dental, Vision, LTD, STD, Life/AD&D, 401k, HSA, FSA
+   (same list as DHL — `BENEFIT_DEFS = DHL_BENEFIT_OPTIONS` alias)
+2. 401k card expands to: Your Contribution %, Employer Match %, Enrollment Date (all three required if 401k is selected)
+3. Benefits Start Date — optional free-form date; blank = already active
+4. Other Recurring Deductions — free-form label + per-paycheck amount rows; "+ Add Deduction" button
+5. Attendance policy gate (non-DHL only) — "Yes — points or hours system" / "No — standard time off" pills
+
+**Fields written to formData (non-DHL):**
+`selectedBenefits`, `healthPremium`, `dentalPremium`, `visionPremium`, `ltd`, `stdWeekly`,
+`lifePremium`, `k401Rate`, `k401MatchRate`, `k401StartDate`, `hsaWeekly`, `fsaWeekly`,
+`benefitsStartDate`, `otherDeductions[]`, `attendanceBucketEnabled`
+
+**DHL vs non-DHL difference:**
+- DHL 401k card shows computed DHL tiered match (formula-driven); non-DHL shows free-form "Employer Match %" input.
+- Attendance policy gate renders only for non-DHL; DHL bucket is always active via `isDHL` in WeekConfirmModal.
+- Step is `skippable: true` — user can bypass entirely. Skipping leaves `attendanceBucketEnabled: null`, which correctly defaults to no-bucket-tracking in the rest of the app (`hasBucket = isDHL || attendanceBucketEnabled === true`).
+
+---
+
+**Issues found:**
+
+**[PLANNING NOTE] Non-DHL attendance policy — general point/hours system design**
+
+Most real-world non-DHL attendance systems share the same two-threshold shape: a number at which
+the employee faces corrective action or suspension, and a higher number at which they are terminated.
+The unit varies by employer (points, hours, occurrences) but the employee always knows both numbers.
+
+**Design direction (for the eventual implementation):**
+Capture three policy-agnostic fields when `attendanceBucketEnabled = true`:
+- `attendanceWarnThreshold` — corrective action / suspension risk level
+- `attendanceTerminateThreshold` — termination level
+- `attendanceCurrentBalance` — where the employee is right now (starting point)
+
+Unit label ("points", "hours", "occurrences") is cosmetic and user-supplied. Unapproved absence
+events increment the balance by a configurable `attendanceIncrement` (default 1; user can set 0.5
+or 2 for policies that assign fractional or weighted values per event). The model just tracks a
+running number against the two thresholds — no monetary output, no tier bonus math.
+
+**What this system explicitly does NOT include:**
+- Overflow payout — DHL-exclusive. Do not port `payoutRate`, payout columns, or bonus math.
+- Monthly tier bonuses (Tier 1–4 / 18h recovery) — DHL preset only.
+- `bucketPayoutRate` — DHL preset only.
+
+**Current state (shipped):**
+- The yes/no gate in Step 3 saves `attendanceBucketEnabled` to config.
+- `computeBucketModel` is gated to DHL-only in App.jsx — non-DHL users receive `bucketModel = null`.
+- The "DHL Attendance Bucket" chart in LogPanel is gated on `hasBucket = isDHL` and will not
+  render for non-DHL users even if `attendanceBucketEnabled = true`.
+- WeekConfirmModal still shows "⚠ BUCKET HIT" for non-DHL users with the flag set — acceptable
+  for now; the label will be generalized when the full non-DHL tracker ships.
+
+**Next step:** add the three threshold fields as a conditional expansion below the "Yes" pill in
+Step 3, then wire them into a simple threshold-status display in the relevant panel. Tag: `[CC]`
+
+**[NAMING — FIXED] `DHL_BENEFIT_OPTIONS` renamed to `BENEFIT_OPTIONS`**
+Shipped. `config.js`, `SetupWizard.jsx`, and `ProfilePanel.jsx` updated.
+
+**[NAMING — LOW] `otherDeductions[].weeklyAmount` stores a per-paycheck value**
+The UI label says "per paycheck" and the placeholder says "$/check". The field name `weeklyAmount`
+contradicts this. `otherPostTaxDeductions()` in finance.js correctly treats it as per-paycheck
+(`perCheck * checksPerYear / 52`), so the math is right, but the field name will mislead future
+developers who read the config shape. Rename field to `perCheckAmount` in config + finance + wizard.
+Tag: `[CODEX]`
+
+**[MISSING — BACKLOG] No PTO section**
+Non-DHL users have no PTO question in the entire wizard. See Open Items above for the full spec.
+Must be added here as a dedicated subsection with: PTO offered? (Y/N gate) → accrual method →
+accrual rate → current balance → cap. Also requires migrating `PTO_RATE` from a module-level constant
+to a per-user config field. Tag: `[CC]`
+
+**Verdict:** Step 3 proceeds correctly for non-DHL users. The attendance gate works, 401k employer
+match is properly uncoupled from the DHL formula, `benefitsStartDate` is safely optional, and
+`otherDeductions` math is correct. The three gaps above are tracking/UX issues, not blockers to
+completing setup.
 
 ---
 

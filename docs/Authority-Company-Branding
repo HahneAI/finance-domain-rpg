@@ -382,3 +382,32 @@ Authority becomes:
 Authority is not helping users manage their life.
 
 Authority is helping users **take ownership of it.**
+
+---
+
+## 26. Archived Concept — Flow Score
+
+### What it was
+Flow Score was a single composite metric (0–100) displayed as a sparkline card on the Authority Finance home dashboard. It rolled three signals into one number: spending discipline (55 pts), projected weekly surplus (25 pts), and goal completion rate (20 pts). The card rendered a 6-point SVG sparkline built from projected week-over-week net figures, giving the score a trajectory rather than just a snapshot.
+
+### Why it fit the brand
+The name "Flow" is the identity word for Authority's primary UI layer — usability, movement, simplicity. A score that captured financial momentum under that name was intentional: it put the brand's design language directly into a measurable output. It also used the teal accent gradient and typography style of the Flow layer rather than the blue/purple Pulse signal palette, marking it as a user-facing performance indicator rather than an AI insight.
+
+### Why it was removed (for now)
+The formula was an early-stage approximation. Without multiple weeks of real user data, the score moved in ways that felt arbitrary rather than earned, which risked eroding trust in the product. It was removed from the home UI to keep the dashboard grounded in concrete, explainable numbers until the data model matures.
+
+### Cross-pillar potential
+Flow Score is worth revisiting as a system-wide concept when other Authority pillars ship:
+
+- **A:Fin** — financial discipline, surplus trajectory, goal pace
+- **A:Perf** — workout consistency, recovery adherence, body metric trends
+- **A:Intel** — learning streak, knowledge depth, skill progression
+- **A:Legacy** — relationship investment, long-term planning completion
+
+A unified **Authority Flow Score** could become the single cross-domain momentum metric that sits at the top of Authority OS — a number that answers "how well am I operating across my whole life right now?" That is the kind of differentiated, brand-native metric that no single-domain app can produce.
+
+### Implementation notes (for future reference)
+- Component: `FlowSparklineCard` in `src/components/ui.jsx` — still present, just not rendered
+- Score logic was in `HomePanel.jsx` (`flowScore`, `flowTrendPoints` computed values)
+- The SVG sparkline approach (area fill + gradient line + end-dot) is solid and reusable
+- When revived, the formula should be data-driven per domain and weighted by recency, not a static coefficient mix

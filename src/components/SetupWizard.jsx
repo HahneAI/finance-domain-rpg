@@ -641,7 +641,11 @@ function Step2({ formData, onChange, attempted }) {
 // ─────────────────────────────────────────────────────────────────────────────
 const BENEFIT_DEFS = DHL_BENEFIT_OPTIONS;
 
-function BenefitCard({ def, selected, formData, onChange, onToggle }) {
+function BenefitCard({ def, selected, formData, onChange, onToggle, attempted }) {
+  const amtErr  = attempted && selected && def.type === "weekly" && !((formData[def.field] ?? 0) > 0);
+  const rateErr = attempted && selected && def.type === "k401"   && !((formData.k401Rate ?? 0) > 0);
+  const dateErr = attempted && selected && def.type === "k401"   && !formData.k401StartDate;
+
   return (
     <div style={{
       border: `1px solid ${selected ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
@@ -690,9 +694,9 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
           display: "flex", flexDirection: "column", gap: "12px",
         }}>
           {def.type === "weekly" && (
-            <Field label="Per-paycheck Deduction ($)">
+            <Field label="Per-paycheck Deduction ($)" error={amtErr ? "Required" : null}>
               <input
-                style={{ ...iS }}
+                style={{ ...iS, ...errBorder(amtErr) }}
                 type="number" min="0" step="0.01"
                 value={formData[def.field] ?? ""}
                 onChange={e => onChange({ [def.field]: e.target.value === "" ? null : parseFloat(e.target.value) })}
@@ -703,9 +707,9 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
           {def.type === "k401" && (
             <>
               <FieldRow>
-                <Field label="Your Contribution (%)">
+                <Field label="Your Contribution (%)" error={rateErr ? "Required" : null}>
                   <input
-                    style={{ ...iS }}
+                    style={{ ...iS, ...errBorder(rateErr) }}
                     type="number" min="0" max="100" step="0.5"
                     value={
                       formData.k401Rate != null
@@ -747,9 +751,9 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
                   </Field>
                 )}
               </FieldRow>
-              <Field label="Enrollment / Start Date">
+              <Field label="Enrollment / Start Date" error={dateErr ? "Required" : null}>
                 <input
-                  style={{ ...iS }}
+                  style={{ ...iS, ...errBorder(dateErr) }}
                   type="date"
                   value={formData.k401StartDate ?? ""}
                   onChange={e => onChange({ k401StartDate: e.target.value || null })}
@@ -758,7 +762,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
                   marginTop: "6px", fontSize: "11px",
                   color: "var(--color-text-disabled)", lineHeight: "1.5",
                 }}>
-                  Contributions begin the week this date falls in. Past dates mark 401k as already active.
+                  Enter your enrollment date — past dates mark 401k as already active.
                 </div>
               </Field>
             </>
@@ -769,10 +773,11 @@ function BenefitCard({ def, selected, formData, onChange, onToggle }) {
   );
 }
 
-function Step3({ formData, onChange }) {
+function Step3({ formData, onChange, attempted }) {
   const selected = new Set(formData.selectedBenefits ?? []);
   const isDHL    = formData.employerPreset === "DHL";
   const others   = formData.otherDeductions ?? [];
+  const attendErr = attempted && !isDHL && formData.attendanceBucketEnabled === null;
 
   function toggle(id) {
     const next = new Set(selected);
@@ -820,6 +825,7 @@ function Step3({ formData, onChange }) {
               formData={formData}
               onChange={onChange}
               onToggle={() => toggle(def.id)}
+              attempted={attempted}
             />
           ))}
         </div>
@@ -894,7 +900,7 @@ function Step3({ formData, onChange }) {
 
       {/* ── Attendance policy gate — standard users only ── */}
       {!isDHL && (
-        <Field label="Does your employer track attendance with a formal policy?">
+        <Field label="Does your employer track attendance with a formal policy?" error={attendErr ? "Selection required" : null}>
           <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px", lineHeight: "1.5" }}>
             Points systems, hours-based buckets, or similar.
           </div>
@@ -1526,7 +1532,18 @@ const STEP_DEFS = [
   {
     id: 3, title: "Deductions",
     showIf: () => true,
-    isValid: (d) => d.employerPreset === "DHL" || d.attendanceBucketEnabled !== null,
+    isValid: (d) => {
+      if (d.employerPreset !== "DHL" && d.attendanceBucketEnabled === null) return false;
+      const sel = new Set(d.selectedBenefits ?? []);
+      if (sel.has("k401")) {
+        if (!((d.k401Rate ?? 0) > 0)) return false;
+        if (!d.k401StartDate) return false;
+      }
+      for (const def of BENEFIT_DEFS.filter(b => b.type === "weekly")) {
+        if (sel.has(def.id) && !((d[def.field] ?? 0) > 0)) return false;
+      }
+      return true;
+    },
     skippable: true,
     component: Step3,
   },
@@ -1608,6 +1625,12 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   function handleBack() {
     setAttempted(false);
     if (stepIdx > 0) setStepIdx(i => i - 1);
+  }
+
+  function handleSkip() {
+    setAttempted(false);
+    if (!isLast) setStepIdx(i => i + 1);
+    else handleComplete();
   }
 
   function handleComplete() {
@@ -1730,7 +1753,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
           )}
           {current?.skippable && (
             <button
-              onClick={handleNext}
+              onClick={handleSkip}
               style={{
                 background: "transparent",
                 color: "var(--color-text-secondary)",

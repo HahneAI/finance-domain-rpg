@@ -579,9 +579,9 @@ export function HomePanel({
         <div style={{ marginBottom: "16px", padding: "12px 0", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0", padding: "0 12px" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>Active Goals</div>
-            <div style={{ fontSize: "10px", color: "#666" }}>{tl.length}</div>
+            <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{tl.length}</div>
           </div>
-          {!tl.length && <div style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", color: "#666", letterSpacing: "1px", textTransform: "uppercase", margin: "0 12px" }}>No active goals yet</div>}
+          {!tl.length && <div style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", margin: "0 12px" }}>No active goals yet</div>}
           {isMobile ? (
             <ScrollSnapRow itemWidth="calc(100% - 40px)">
               {tl.map((g, i) => {
@@ -1081,13 +1081,13 @@ export function HomePanel({
           <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "12px" }}>
             <button onClick={() => setShowCompleted((v) => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer" }}>
               <span style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Funded History ({completedGoals.length})</span>
-              <span style={{ fontSize: "11px", color: "#666" }}>{showCompleted ? "Hide" : "Show"}</span>
+              <span style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>{showCompleted ? "Hide" : "Show"}</span>
             </button>
             {showCompleted && completedGoals.map((g) => (
               <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ color: "#777", textDecoration: "line-through" }}>{g.label}</div>
+                <div style={{ color: "var(--color-text-primary)", textDecoration: "line-through" }}>{g.label}</div>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                  <div style={{ color: "#666" }}>{fmt$(g.target)}</div>
+                  <div style={{ color: "var(--color-text-primary)" }}>{fmt$(g.target)}</div>
                   <SmBtn onClick={() => toggleComplete(g.id)} c="#555">UNDO</SmBtn>
                 </div>
               </div>

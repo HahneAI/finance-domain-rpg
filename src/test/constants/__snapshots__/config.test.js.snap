@@ -41,6 +41,7 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
   "otMultiplier": 1.5,
   "otThreshold": 40,
   "otherDeductions": [],
+  "pastWeekTaxStatusOverrides": {},
   "payPeriodEndDay": 0,
   "paycheckBuffer": 50,
   "ptoHoursOverride": null,

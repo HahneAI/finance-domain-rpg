@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
-import { DHL_BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
+import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, PanelHero, SH } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 
@@ -994,14 +994,14 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
   const [k401Start, setK401Start] = useState(config.k401StartDate ?? "");
   const [benefitsStartDate, setBenefitsStartDate] = useState(config.benefitsStartDate ?? "");
   const [weeklyValues, setWeeklyValues] = useState(
-    DHL_BENEFIT_OPTIONS
+    BENEFIT_OPTIONS
       .filter(b => b.type === "weekly")
       .reduce((acc, b) => ({ ...acc, [b.field]: String(config[b.field] ?? "") }), {})
   );
 
   function handleSave() {
     const nextSelected = [...selectedBenefits];
-    const weeklyPatch = DHL_BENEFIT_OPTIONS
+    const weeklyPatch = BENEFIT_OPTIONS
       .filter(b => b.type === "weekly")
       .reduce((acc, b) => ({ ...acc, [b.field]: parseFloat(weeklyValues[b.field]) || 0 }), {});
     const newConfig = {
@@ -1062,10 +1062,10 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
         <DetailCard>
           <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
-              Payroll-Deduction Benefits ({DHL_BENEFIT_OPTIONS.length})
+              Payroll-Deduction Benefits ({BENEFIT_OPTIONS.length})
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
-              {DHL_BENEFIT_OPTIONS.map((benefit) => (
+              {BENEFIT_OPTIONS.map((benefit) => (
                 <button
                   key={benefit.id}
                   onClick={() => toggleBenefit(benefit.id)}
@@ -1112,9 +1112,9 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
                 </div>
               </>}
             </div>
-            {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).length > 0 && (
+            {BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).length > 0 && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                {DHL_BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).map((benefit) => (
+                {BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).map((benefit) => (
                   <div key={benefit.id}>
                     <label style={lS}>{benefit.label} ($ / week)</label>
                     <input
@@ -1247,6 +1247,18 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gN = w => computeNet(w, config, extraPerCheck, showExtra);
   const [taxDraft, setTaxDraft] = useState(null);
+  const pastOverrides = config.pastWeekTaxStatusOverrides ?? {};
+  const hasPastOverride = (idx) => Object.prototype.hasOwnProperty.call(pastOverrides, idx);
+  const getPastStatus = (idx) => hasPastOverride(idx) ? Boolean(pastOverrides[idx]) : config.taxedWeeks.includes(idx);
+  const setPastStatus = (idx, taxed) => {
+    setConfig(prev => ({
+      ...prev,
+      pastWeekTaxStatusOverrides: {
+        ...(prev.pastWeekTaxStatusOverrides ?? {}),
+        [idx]: taxed,
+      },
+    }));
+  };
 
   const toggleWeek = (idx) => setConfig(prev => {
     const s = new Set(prev.taxedWeeks);
@@ -1255,9 +1267,10 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
   });
 
   const scheduleByMonth = MONTH_FULL.map((name, mi) => {
-    const wks = allWeeks.filter(w => w.active && w.weekEnd.getFullYear() === 2026 && w.weekEnd.getMonth() === mi);
+    const wks = allWeeks.filter(w => w.active && w.weekEnd.getFullYear() === 2026 && w.weekEnd.getMonth() === mi && (!today || toLocalIso(w.weekEnd) >= today));
     return { name, wks };
   }).filter(m => m.wks.length > 0);
+  const pastWeeks = allWeeks.filter(w => w.active && today && toLocalIso(w.weekEnd) < today);
 
   return (
     <>
@@ -1320,14 +1333,42 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "20px", marginBottom: "28px" }}>
         <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px", lineHeight: 1, marginBottom: "12px" }}>Extra Withholding Plan</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: "12px", marginBottom: "16px" }}>
-          {[{ l: "Extra Needed", v: f(targetExtraTotal), c: "var(--color-red)" }, { l: "Taxed Checks", v: taxedWeekCount, c: "var(--color-text-primary)" }, { l: "Extra Per Check", v: f2(extraPerCheck), c: "var(--color-gold)" }].map(c => <div key={c.l} style={{ textAlign: "center", padding: "12px", background: "var(--color-bg-base)", borderRadius: "6px" }}><div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-primary)", textTransform: "uppercase", marginBottom: "6px" }}>{c.l}</div><div style={{ fontSize: "20px", fontWeight: "bold", color: c.c }}>{c.v}</div></div>)}
+          {[{ l: "Extra Needed", v: f(targetExtraTotal), c: "var(--color-red)" }, { l: "Remaining Taxed Checks", v: taxedWeekCount, c: "var(--color-text-primary)" }, { l: "Extra Per Check", v: f2(extraPerCheck), c: "var(--color-gold)" }].map(c => <div key={c.l} style={{ textAlign: "center", padding: "12px", background: "var(--color-bg-base)", borderRadius: "6px" }}><div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-primary)", textTransform: "uppercase", marginBottom: "6px" }}>{c.l}</div><div style={{ fontSize: "20px", fontWeight: "bold", color: c.c }}>{c.v}</div></div>)}
         </div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.8" }}>Add <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerCheck)}</span> extra federal withholding on each of your <span style={{ color: "var(--color-gold)" }}>{taxedWeekCount} taxed checks</span>.</div>
+        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.8" }}>Add <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerCheck)}</span> extra federal withholding on each of your <span style={{ color: "var(--color-gold)" }}>{taxedWeekCount} remaining taxed checks</span>.</div>
+      </div>
+
+      {/* Past-week remediation-only editor */}
+      <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "16px", marginBottom: "20px" }}>
+        <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: "8px" }}>Past Week Tax Status Editor</div>
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "12px" }}>“changing past weeks tax status only affects your extra withholding math for remediating your taxes”</div>
+        <div style={{ display: "grid", gap: "8px", maxHeight: "280px", overflowY: "auto", paddingRight: "4px" }}>
+          {pastWeeks.length === 0 && (
+            <div style={{ fontSize: "11px", color: "var(--color-text-disabled)" }}>No prior fiscal weeks yet.</div>
+          )}
+          {pastWeeks.map(w => {
+            const taxed = getPastStatus(w.idx);
+            const isOverride = hasPastOverride(w.idx);
+            return (
+              <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", padding: "8px 10px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
+                <div>
+                  <div style={{ fontSize: "11px", color: "var(--color-text-primary)", fontWeight: 600 }}>Week {w.idx + 1} · Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                  <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{isOverride ? "Custom remediation status" : "Using scheduled status"}</div>
+                </div>
+                <div style={{ display: "flex", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", overflow: "hidden", flexShrink: 0 }}>
+                  <button onClick={() => setPastStatus(w.idx, true)} style={{ padding: "6px 10px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: taxed ? "rgba(0,200,150,0.16)" : "transparent", color: taxed ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontWeight: taxed ? "bold" : "normal" }}>Taxed</button>
+                  <div style={{ width: "1px", background: "var(--color-border-subtle)" }} />
+                  <button onClick={() => setPastStatus(w.idx, false)} style={{ padding: "6px 10px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: !taxed ? "rgba(34,197,94,0.16)" : "transparent", color: !taxed ? "var(--color-green)" : "var(--color-text-secondary)", fontWeight: !taxed ? "bold" : "normal" }}>Exempt</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Per-week toggle schedule */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
-        <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px", lineHeight: 1 }}>Weekly Tax Schedule</div>
+        <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px", lineHeight: 1 }}>Future Weekly Tax Schedule</div>
         <div style={{ display: "flex", gap: "10px", fontSize: "10px" }}>
           <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "#7a8bbf", display: "inline-block" }} />Taxed weeks: <strong style={{ color: "var(--color-red)" }}>{config.taxedWeeks.length}</strong></span>
           <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "var(--color-green)", display: "inline-block" }} />Exempt weeks: <strong style={{ color: "var(--color-green)" }}>{allWeeks.filter(w => w.active).length - config.taxedWeeks.length}</strong></span>

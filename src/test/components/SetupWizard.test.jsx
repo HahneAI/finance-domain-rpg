@@ -163,6 +163,20 @@ describe('SetupWizard — validation gates', () => {
     expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled()
   })
 
+  it('Step 2: non-DHL requires standardWeeklyHours and payPeriodEndDay', () => {
+    const config = { ...BASE_CONFIG, employerPreset: null, standardWeeklyHours: null, payPeriodEndDay: null }
+    renderWizard({ config })
+    clickNext()
+    clickNext()
+    expect(screen.getByRole('button', { name: /next/i })).toBeDisabled()
+
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 40/i), { target: { value: '40' } })
+    expect(screen.getByRole('button', { name: /next/i })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: /^sun$/i }))
+    expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled()
+  })
+
   it('Step 3: Non-DHL users must answer the attendance question', () => {
     const config = { ...BASE_CONFIG, attendanceBucketEnabled: null }
     renderWizard({ config })
@@ -177,6 +191,29 @@ describe('SetupWizard — validation gates', () => {
 })
 
 describe('SetupWizard — DHL hidden defaults', () => {
+  it('switching DHL off restores non-DHL schedule defaults', async () => {
+    const config = {
+      ...BASE_CONFIG,
+      employerPreset: 'DHL',
+      dhlTeam: 'A',
+      userPaySchedule: 'weekly',
+      scheduleIsVariable: true,
+    }
+    const { onComplete } = renderWizard({ lifeEvent: 'changed_jobs', config })
+
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
+
+    advanceSteps(4)
+    fireEvent.click(screen.getByRole('button', { name: /finish/i }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const payload = onComplete.mock.calls[0][0]
+    expect(payload.employerPreset).toBeNull()
+    expect(payload.scheduleIsVariable).toBe(false)
+  })
+
   it('hides OT fields for DHL users and keeps them visible for non-DHL users', () => {
     const dhlConfig = { ...BASE_CONFIG, employerPreset: 'DHL', dhlTeam: 'A', userPaySchedule: 'weekly' }
     renderWizard({ config: dhlConfig })

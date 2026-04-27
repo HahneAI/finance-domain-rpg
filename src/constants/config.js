@@ -102,6 +102,9 @@ export const DEFAULT_CONFIG = {
 
   // ── Tax schedule ─────────────────────────────────────────────
   taxedWeeks: [7, 8, 19, 20, 21, 22, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52],
+  // Optional overrides for prior weeks, used only by remediation math.
+  // Record shape: { [weekIdx: number]: boolean } where true=taxed, false=exempt.
+  pastWeekTaxStatusOverrides: {},
 
   // ── DHL attendance bucket (DHL preset only) ──────────────────
   bucketStartBalance: 64,      // hours — new hire starting balance
@@ -204,7 +207,7 @@ export const DHL_PRESET = {
 
 // DHL payroll-deduction benefit options (single source of truth for setup/profile flows).
 // Count: 9 options total (8 weekly-dollar deductions + 401k rate-based deduction).
-export const DHL_BENEFIT_OPTIONS = [
+export const BENEFIT_OPTIONS = [
   { id: "health", label: "Health / Medical", sub: "Medical insurance premium", type: "weekly", field: "healthPremium", placeholder: "e.g. 18.50" },
   { id: "dental", label: "Dental", sub: "Dental insurance premium", type: "weekly", field: "dentalPremium", placeholder: "e.g. 4.00" },
   { id: "vision", label: "Vision", sub: "Vision insurance premium", type: "weekly", field: "visionPremium", placeholder: "e.g. 2.00" },

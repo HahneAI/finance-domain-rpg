@@ -17,7 +17,8 @@
 import { useState, useEffect } from "react";
 import { buildYear, dhlEmployerMatchRate } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
-import { FISCAL_YEAR_START, DHL_PRESET, DHL_BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { FISCAL_YEAR_START, DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { FISCAL_WEEKS_PER_YEAR } from "../lib/fiscalWeek.js";
 
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 
@@ -197,7 +198,7 @@ function Step1({ formData, onChange, lifeEvent, attempted }) {
         bucketPayoutRate: 9.825,
       });
     } else {
-      onChange({ employerPreset: null });
+      onChange({ employerPreset: null, userPaySchedule: null, diffRate: 0, scheduleIsVariable: false });
     }
   }
 
@@ -468,14 +469,17 @@ function Step1({ formData, onChange, lifeEvent, attempted }) {
                 </div>
                 {otCustom && (
                   <div style={{ marginTop: "10px" }}>
-                    <label style={lS}>Hours/week</label>
+                    <label style={{ ...lS, ...(attempted && !((formData.otThreshold ?? 0) > 0) ? { color: "var(--color-red)" } : {}) }}>Hours/week</label>
                     <input
-                      style={{ ...iS }}
+                      style={{ ...iS, ...errBorder(attempted && !((formData.otThreshold ?? 0) > 0)) }}
                       type="number" min="1" step="1"
                       value={formData.otThreshold ?? ""}
                       onChange={e => onChange({ otThreshold: e.target.value === "" ? null : parseInt(e.target.value) })}
                       placeholder="e.g. 40"
                     />
+                    {attempted && !((formData.otThreshold ?? 0) > 0) && (
+                      <div style={{ fontSize: "10px", color: "var(--color-red)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>↑ Required</div>
+                    )}
                   </div>
                 )}
               </Field>
@@ -541,7 +545,7 @@ function dateToWeekIdx(dateStr) {
   const weekZeroEnd = new Date(FISCAL_YEAR_START + "T00:00:00");
   const target      = new Date(dateStr       + "T00:00:00");
   const diffDays    = (target - weekZeroEnd) / 86400000;
-  return Math.max(0, Math.ceil(diffDays / 7));
+  return Math.max(0, Math.min(Math.ceil(diffDays / 7), FISCAL_WEEKS_PER_YEAR - 1));
 }
 
 function Step2({ formData, onChange, attempted }) {
@@ -595,9 +599,9 @@ function Step2({ formData, onChange, attempted }) {
           </div>
         </Field>
       ) : (
-        <Field label="Standard Weekly Hours">
+        <Field label="Standard Weekly Hours" error={attempted && !((formData.standardWeeklyHours ?? 0) > 0 && (formData.standardWeeklyHours ?? 0) <= 168) ? "Enter hours between 1 and 168" : null}>
           <input
-            style={{ ...iS }}
+            style={{ ...iS, ...errBorder(attempted && !((formData.standardWeeklyHours ?? 0) > 0 && (formData.standardWeeklyHours ?? 0) <= 168)) }}
             type="number" min="1" step="0.5"
             value={formData.standardWeeklyHours ?? ""}
             onChange={e => onChange({ standardWeeklyHours: e.target.value === "" ? null : parseFloat(e.target.value) })}
@@ -613,7 +617,7 @@ function Step2({ formData, onChange, attempted }) {
 
       {/* ── Pay period end day ── */}
       {!isDHL && (
-        <Field label="Pay Period Closes On">
+        <Field label="Pay Period Closes On" error={attempted && !Number.isInteger(formData.payPeriodEndDay) ? "Select a day" : null}>
           <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
             {DAY_LABELS.map((d, i) => (
               <Pill
@@ -639,7 +643,7 @@ function Step2({ formData, onChange, attempted }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 3 — Deductions
 // ─────────────────────────────────────────────────────────────────────────────
-const BENEFIT_DEFS = DHL_BENEFIT_OPTIONS;
+const BENEFIT_DEFS = BENEFIT_OPTIONS;
 
 function BenefitCard({ def, selected, formData, onChange, onToggle, attempted }) {
   const amtErr  = attempted && selected && def.type === "weekly" && !((formData[def.field] ?? 0) > 0);
@@ -1516,8 +1520,9 @@ const STEP_DEFS = [
     isValid: (d) => {
       if (!d.userPaySchedule) return false;
       if (d.employerPreset === "DHL" && !d.dhlTeam) return false;
-      if (d.customWeeklyHours != null && (d.customWeeklyHoursLong === 0 || d.customWeeklyHoursShort === 0)) return false; // custom mode, hours fields blank
-      if (d.customWeeklyHours === 0) return false; // backward-compat sentinel
+      if (d.customWeeklyHours != null && (d.customWeeklyHoursLong === 0 || d.customWeeklyHoursShort === 0)) return false;
+      if (d.customWeeklyHours === 0) return false;
+      if (d.employerPreset !== "DHL" && !((d.otThreshold ?? 0) > 0)) return false;
       if (d.userPaySchedule === "salary") return (d.annualSalary ?? 0) > 0;
       return (d.baseRate ?? 0) > 0 && (d.shiftHours ?? 0) > 0;
     },
@@ -1526,7 +1531,13 @@ const STEP_DEFS = [
   {
     id: 2, title: "Schedule",
     showIf: () => true,
-    isValid: (d) => d.startDate != null,
+    isValid: (d) => {
+      if (!d.startDate) return false;
+      if ((d.firstActiveIdx ?? 0) < 0 || (d.firstActiveIdx ?? 0) >= FISCAL_WEEKS_PER_YEAR) return false;
+      if (d.employerPreset === "DHL") return true;
+      if (!((d.standardWeeklyHours ?? 0) > 0) || (d.standardWeeklyHours ?? 0) > 168) return false;
+      return Number.isInteger(d.payPeriodEndDay) && d.payPeriodEndDay >= 0 && d.payPeriodEndDay <= 6;
+    },
     component: Step2,
   },
   {

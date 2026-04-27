@@ -14,39 +14,90 @@ expenses/goals, the home dashboard displayed:
 
 **Account state at time of bug:** no expenses, no goals, no deductions — clean setup.
 
-**Primary hypothesis:** The displayed number is suspiciously exactly `paycheckBuffer: 50`, which is
-enabled by default in `DEFAULT_CONFIG`. If something in the post-wizard income pipeline subtracts the
-buffer from the projected net before display, and the underlying net-after-taxes is near zero due to
-a separate issue (wrong rate application, wrong hours multiplier, etc.), you'd land at exactly −$50.
+**Root cause (confirmed via Step 0 audit):** `weeklyIncome` in App.jsx is computed as:
+```
+weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek
+```
+`bufferPerWeek = 50` by default (DEFAULT_CONFIG: `bufferEnabled: true`, `paycheckBuffer: 50`).
+If `projectedAnnualNet = 0`, `weeklyIncome` is exactly **−$50**. `projectedAnnualNet = 0` occurs
+when `allWeeks.filter(w => w.active)` is empty — i.e., no weeks are active. This happens when
+`cfg.firstActiveIdx` exceeds the last week index in the fiscal year (max idx ≈ 52). A user who
+enters a start date beyond the fiscal year end (e.g. 2027+) gets `firstActiveIdx = 53+` and
+zero active weeks. Step 2 only validates that `startDate != null` — it does **not** validate that
+the date falls within the current fiscal year.
 
-**Secondary hypothesis:** `DEFAULT_CONFIG` seeds DHL-specific values (`fedRateLow: 0.0784`,
-`stateRateLow: 0.0338`, `userState: "MO"`, `shiftHours: 12`) that a non-DHL user likely never
-overwrites. A non-DHL user who picks "Use Estimate for Now" on the tax step gets new rates written;
-one who enters paystub values also writes them. But if any DHL-preset values bleed into the
-non-DHL computation path (rotation logic, DHL-specific multipliers, etc.), the weekly gross
-estimate or `buildYear` output could be wrong.
+**Secondary issue also confirmed:** `DEFAULT_CONFIG` seeds DHL-specific values that non-DHL users
+never see prompted to change. Several are harmlessly neutralized in calculations by `isDHL` guards,
+but `diffRate: 1.75` pre-fills the weekend differential input in Step 1 — a non-DHL user with no
+weekend differential must manually clear it to 0 or it persists in their config (though it does not
+affect calculations since `weekendHours = 0` for non-DHL in `buildYear`).
 
-**Where to look:**
-- `estimateWeeklyGross()` in `SetupWizard.jsx` — non-DHL branch uses `standardWeeklyHours ?? 40`,
-  NOT `shiftHours`. `shiftHours` is required in Step 1 validation but not used in gross calc.
-- `buildYear()` in `finance.js` — does the non-DHL path reach any DHL-gated branch incorrectly?
-- `computeNet()` in `finance.js` — does it apply buffer deduction to the projected weekly net?
-- `HomePanel.jsx` `projectedWeeklyLeft` — what is the source value and does it double-count buffer?
-- `PAYCHECKS_PER_YEAR` factor in `StepWrapUp` vs in `buildYear` — could be inconsistent for
-  biweekly/monthly users (factor applied in one place but not the other).
+**Fix needed (Step 2):** Validate that `startDate` falls within the active fiscal year, or clamp
+`firstActiveIdx` to `max(0, min(dateToWeekIdx(date), FISCAL_WEEKS_PER_YEAR - 1))` to prevent the
+zero-active-weeks case.
+
+---
+
+## Open Items from Step 0 (non-step-specific)
+
+### PTO — Non-DHL Has No Policy Question
+Non-DHL users currently have no PTO question anywhere in the wizard. The BenefitsPanel PTO section
+is DHL-only. Add a dedicated PTO subsection to Step 3 (Deductions) for non-DHL users:
+- Does your employer offer PTO? (Y/N gate)
+- If yes: accrual method (per hour / per pay period / lump sum annually), accrual rate, current
+  balance, cap (if any).
+
+`PTO_RATE = 19.65` in `config.js` is a module-level hardcoded constant tied to Anthony's base rate
+— it is not derived from the user's `baseRate`. This must become a config field for non-DHL PTO
+tracking to work correctly.
+
+### DHL Values Seeded in DEFAULT_CONFIG That Non-DHL Wizard Never Prompts to Change
+
+| Field | DEFAULT value | Neutralized by isDHL guard? | Action needed |
+|-------|--------------|-----|------|
+| `diffRate` | 1.75 | Harmless (wkndH = 0 for non-DHL) but pre-fills UI | Ask clearly in Step 1; default to 0 for non-DHL gate |
+| `nightDiffRate` | 1.50 | Yes — `(isDHL && dhlNightShift)` check | None (never applied) |
+| `dhlNightShift` | true | Yes | None (never applied) |
+| `bucketStartBalance/Cap/PayoutRate` | DHL values | Yes — `computeBucketModel` gated on employerPreset=DHL | None for now |
+| `PTO_RATE` | 19.65 | No — module-level constant | Migrate to config field |
+| `taxedWeeks` | Anthony's DHL schedule | Rebuilt at wizard completion | OK |
+| `firstActiveIdx` | 7 | N/A — set from startDate in Step 2 | Clamp to fiscal year bounds |
 
 ---
 
 ## Step-by-Step Audit
 
-Work through each step in order. For each: document what the non-DHL UI shows, what gets written to
-`formData`, whether the validation gates are correct, and what a DHL user sees differently.
-
 ---
 
 ### Step 0 — Welcome
 
-- [ ] Audit
+**Status: Complete**
+
+**UI shown (first-run, `lifeEvent === null`):**
+Two paragraphs of static text — "Set up your pay in a few steps" and a note about paystubs for tax
+sharpening. No inputs, no fields, no choices. `isValid: () => true` auto-passes.
+
+**UI shown (re-entry, life event):**
+Three life event buttons: Lost my job / Changed jobs / Got a commission job. These write to
+`lifeEvent` state (not `formData`). No DHL/non-DHL difference here.
+
+**What gets written to formData:** Nothing. Step 0 is purely informational.
+
+**DHL vs non-DHL difference:** None at the UI level. Both see the same welcome screen.
+
+**Issues found:**
+1. `formData` is initialized from `{ ...config }` = `DEFAULT_CONFIG` before Step 0 renders.
+   This means ALL DHL-seeded values are live in `formData` from the first frame. Values that
+   the non-DHL wizard path overwrites later are fine; values it never prompts for persist silently.
+   See the table above for the full inventory.
+2. The welcome text does not hint at what to have ready (e.g., OT policy, any shift differentials,
+   whether PTO applies). A non-DHL user has no idea the wizard will ask about these. DHL users
+   similarly have no "have your team assignment handy" cue. Low priority but worth a copy pass.
+3. Life events don't include "Got a raise / changed pay rate" — common scenario that currently
+   requires re-running the full "Changed jobs" flow. Backlog item, not a blocker.
+
+**Verdict:** Step 0 itself is not broken. The `DEFAULT_CONFIG` initialization that happens before
+Step 0 is the source of the bleed-through issues tracked above.
 
 ---
 
@@ -60,11 +111,17 @@ Work through each step in order. For each: document what the non-DHL UI shows, w
 
 - [ ] Audit
 
+**Known bug (pre-flagged):** `startDate` is not validated against fiscal year bounds. A date beyond
+the fiscal year end produces `firstActiveIdx > max week index`, resulting in zero active weeks,
+`projectedAnnualNet = 0`, and `weeklyIncome = −$50` (buffer only). Fix: clamp or validate date.
+
 ---
 
 ### Step 3 — Deductions
 
 - [ ] Audit
+
+**Backlog:** PTO needs its own subsection here for non-DHL users — see Open Items above.
 
 ---
 

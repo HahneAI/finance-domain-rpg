@@ -607,8 +607,11 @@ export default function App() {
     adjustedWeeklyAvg: baseWeeklyUnallocated + eventImpact.adjustedWeeklyDelta
   }), [eventImpact, projectedAnnualNet, baseWeeklyUnallocated, fundedGoalSpend]);
 
-  // ── Attendance bucket model ──
-  const bucketModel = useMemo(() => computeBucketModel(logs, config), [logs, config]);
+  // ── Attendance bucket model — DHL preset only ──
+  // computeBucketModel encodes DHL's specific tier system and overflow payout mechanic.
+  // Non-DHL users may have attendanceBucketEnabled=true but get no bucket model;
+  // their attendance tracking is handled separately without payout math.
+  const bucketModel = useMemo(() => isDHL ? computeBucketModel(logs, config) : null, [isDHL, logs, config]);
 
   // ── Per-week targeted deductions for current/future-week events ──────────────────
   // Shape: { [weekIdx: number]: netLost (dollars) }

@@ -205,23 +205,41 @@ the fiscal year end produces `firstActiveIdx > max week index`, resulting in zer
 
 **Issues found:**
 
-**[BUG — MEDIUM] Attendance bucket has no configuration fields for non-DHL users**
-When a non-DHL user answers "Yes — points or hours system," no follow-up fields appear to configure
-the bucket. `computeBucketModel` then falls back to DHL defaults: `bucketStartBalance ?? 64` (64 hrs),
-`bucketCap ?? 128` (128 hrs), `bucketPayoutRate ?? baseRate/2`. A warehouse or retail worker with a
-2-point monthly cap and a 10-point annual cutoff has no way to express this. The attendance gate
-question is misleading as-written — it implies the app will track their policy, but tracking uses
-DHL-tuned defaults silently.
-Fix needed: either (a) add a follow-up mini-form asking for starting balance, cap, and payout rate when
-`attendanceBucketEnabled = true`, or (b) change the question copy to "track your own unapproved absences
-for visibility" without implying policy fidelity. Tag: `[CC]`
+**[PLANNING NOTE] Non-DHL attendance policy — general point/hours system design**
 
-**[NAMING — LOW] `BENEFIT_DEFS = DHL_BENEFIT_OPTIONS` alias is misleading**
-The exported constant is named `DHL_BENEFIT_OPTIONS` but all nine benefit types (health, dental, vision,
-LTD, STD, life, 401k, HSA, FSA) are universal — none are DHL-specific. Any developer reading
-`BENEFIT_DEFS` in Step3 and tracing it to `DHL_BENEFIT_OPTIONS` in config.js may incorrectly conclude
-non-DHL users shouldn't see these cards. Rename to `BENEFIT_OPTIONS` or `STANDARD_BENEFIT_OPTIONS`.
-Tag: `[CODEX]`
+Most real-world non-DHL attendance systems share the same two-threshold shape: a number at which
+the employee faces corrective action or suspension, and a higher number at which they are terminated.
+The unit varies by employer (points, hours, occurrences) but the employee always knows both numbers.
+
+**Design direction (for the eventual implementation):**
+Capture three policy-agnostic fields when `attendanceBucketEnabled = true`:
+- `attendanceWarnThreshold` — corrective action / suspension risk level
+- `attendanceTerminateThreshold` — termination level
+- `attendanceCurrentBalance` — where the employee is right now (starting point)
+
+Unit label ("points", "hours", "occurrences") is cosmetic and user-supplied. Unapproved absence
+events increment the balance by a configurable `attendanceIncrement` (default 1; user can set 0.5
+or 2 for policies that assign fractional or weighted values per event). The model just tracks a
+running number against the two thresholds — no monetary output, no tier bonus math.
+
+**What this system explicitly does NOT include:**
+- Overflow payout — DHL-exclusive. Do not port `payoutRate`, payout columns, or bonus math.
+- Monthly tier bonuses (Tier 1–4 / 18h recovery) — DHL preset only.
+- `bucketPayoutRate` — DHL preset only.
+
+**Current state (shipped):**
+- The yes/no gate in Step 3 saves `attendanceBucketEnabled` to config.
+- `computeBucketModel` is gated to DHL-only in App.jsx — non-DHL users receive `bucketModel = null`.
+- The "DHL Attendance Bucket" chart in LogPanel is gated on `hasBucket = isDHL` and will not
+  render for non-DHL users even if `attendanceBucketEnabled = true`.
+- WeekConfirmModal still shows "⚠ BUCKET HIT" for non-DHL users with the flag set — acceptable
+  for now; the label will be generalized when the full non-DHL tracker ships.
+
+**Next step:** add the three threshold fields as a conditional expansion below the "Yes" pill in
+Step 3, then wire them into a simple threshold-status display in the relevant panel. Tag: `[CC]`
+
+**[NAMING — FIXED] `DHL_BENEFIT_OPTIONS` renamed to `BENEFIT_OPTIONS`**
+Shipped. `config.js`, `SetupWizard.jsx`, and `ProfilePanel.jsx` updated.
 
 **[NAMING — LOW] `otherDeductions[].weeklyAmount` stores a per-paycheck value**
 The UI label says "per paycheck" and the placeholder says "$/check". The field name `weeklyAmount`

@@ -971,8 +971,11 @@ function prevMonth(yyyyMM) {
   return `${y}-${String(m).padStart(2, "0")}`;
 }
 
+// DHL preset only. Encodes DHL's specific tier system (Tier 1–4), 18h/month perfect-attendance
+// bonus, and overflow payout mechanic. payoutRate is a DHL-exclusive concept — do not port
+// this to general attendance tracking for non-DHL users.
 export function computeBucketModel(logs, cfg) {
-  const payoutRate = cfg.bucketPayoutRate ?? (cfg.baseRate / 2);
+  const payoutRate = cfg.bucketPayoutRate ?? (cfg.baseRate / 2); // DHL-only: bucket overflow earns pay
   const cap = cfg.bucketCap ?? 128;
 
   // When both override fields are set, use the override as the rolling starting point for

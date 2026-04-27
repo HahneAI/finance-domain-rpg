@@ -249,7 +249,8 @@ export function HomePanel({
   // Stable timeline anchor: start of previous calendar month.
   // Using the current fiscal week start caused month bars to shrink as weeks passed.
   const prevMonthStart = (() => {
-    const [y, m] = today.slice(0, 7).split("-").map(Number);
+    const iso = today ?? new Date().toISOString().slice(0, 10);
+    const [y, m] = iso.slice(0, 7).split("-").map(Number);
     const pm = m === 1 ? 12 : m - 1;
     const py = m === 1 ? y - 1 : y;
     return new Date(py, pm - 1, 1);

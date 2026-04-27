@@ -463,6 +463,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setExpenses(prev => prev.map(e =>
       e.id !== expId ? e : applyMonthEditForward(e, activeMonth, perPaycheck, parseFloat(newAmount) || 0, newCycle)
     ));
+    setEditId(null);
   };
 
   const deleteMonthOnly = (expId) => {

@@ -285,17 +285,11 @@ export function HomePanel({
       if (segEnd > segStart) {
         const leftPct = ((segStart - timelineBounds.startMs) / timelineBounds.spanMs) * 100;
         const widthPct = ((segEnd - segStart) / timelineBounds.spanMs) * 100;
-        const blockWidthPct = widthPct / MONTH_SUBDIVISIONS;
         segments.push({
           key: `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, "0")}`,
           label: fiscalMonthLabel(monthStart).toUpperCase(),
           leftPct,
           widthPct,
-          subdivisions: Array.from({ length: MONTH_SUBDIVISIONS }, (_, idx) => ({
-            key: idx,
-            leftPct: leftPct + (blockWidthPct * idx),
-            widthPct: blockWidthPct,
-          })),
         });
       }
       cursor.setMonth(cursor.getMonth() + 1);

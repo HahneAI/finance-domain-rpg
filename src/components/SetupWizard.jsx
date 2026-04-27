@@ -197,7 +197,7 @@ function Step1({ formData, onChange, lifeEvent, attempted }) {
         bucketPayoutRate: 9.825,
       });
     } else {
-      onChange({ employerPreset: null });
+      onChange({ employerPreset: null, userPaySchedule: null, diffRate: 0 });
     }
   }
 
@@ -468,14 +468,17 @@ function Step1({ formData, onChange, lifeEvent, attempted }) {
                 </div>
                 {otCustom && (
                   <div style={{ marginTop: "10px" }}>
-                    <label style={lS}>Hours/week</label>
+                    <label style={{ ...lS, ...(attempted && !((formData.otThreshold ?? 0) > 0) ? { color: "var(--color-red)" } : {}) }}>Hours/week</label>
                     <input
-                      style={{ ...iS }}
+                      style={{ ...iS, ...errBorder(attempted && !((formData.otThreshold ?? 0) > 0)) }}
                       type="number" min="1" step="1"
                       value={formData.otThreshold ?? ""}
                       onChange={e => onChange({ otThreshold: e.target.value === "" ? null : parseInt(e.target.value) })}
                       placeholder="e.g. 40"
                     />
+                    {attempted && !((formData.otThreshold ?? 0) > 0) && (
+                      <div style={{ fontSize: "10px", color: "var(--color-red)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>↑ Required</div>
+                    )}
                   </div>
                 )}
               </Field>
@@ -1516,8 +1519,9 @@ const STEP_DEFS = [
     isValid: (d) => {
       if (!d.userPaySchedule) return false;
       if (d.employerPreset === "DHL" && !d.dhlTeam) return false;
-      if (d.customWeeklyHours != null && (d.customWeeklyHoursLong === 0 || d.customWeeklyHoursShort === 0)) return false; // custom mode, hours fields blank
-      if (d.customWeeklyHours === 0) return false; // backward-compat sentinel
+      if (d.customWeeklyHours != null && (d.customWeeklyHoursLong === 0 || d.customWeeklyHoursShort === 0)) return false;
+      if (d.customWeeklyHours === 0) return false;
+      if (d.employerPreset !== "DHL" && !((d.otThreshold ?? 0) > 0)) return false;
       if (d.userPaySchedule === "salary") return (d.annualSalary ?? 0) > 0;
       return (d.baseRate ?? 0) > 0 && (d.shiftHours ?? 0) > 0;
     },

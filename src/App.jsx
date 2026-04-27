@@ -86,7 +86,7 @@ function SidebarNavItem({ item, active, onClick }) {
         textTransform: "uppercase",
        
         background: active ? "var(--color-bg-surface)" : "transparent",
-        color: active ? "var(--color-gold)" : "#888",
+        color: active ? "var(--color-gold)" : "var(--color-text-primary)",
         borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
         border: "none",
         cursor: "pointer",
@@ -274,19 +274,24 @@ export default function App() {
     if (!authedUser) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
-    loadUserData().then((data) => {
-      setConfig(data.config);
-      setShowExtra(data.showExtra);
-      setLogs(data.logs);
-      setExpenses(data.expenses);
-      setGoals(data.goals);
-      setWeekConfirmations(data.weekConfirmations ?? {});
-      setIsDHL(data.isDHL);
-      setIsAdmin(data.isAdmin);
-      setPtoGoal(data.ptoGoal);
-      if (!data.config.setupComplete) setWizardEntry(false);
-      setLoading(false);
-    });
+    loadUserData()
+      .then((data) => {
+        setConfig(data.config);
+        setShowExtra(data.showExtra);
+        setLogs(data.logs);
+        setExpenses(data.expenses);
+        setGoals(data.goals);
+        setWeekConfirmations(data.weekConfirmations ?? {});
+        setIsDHL(data.isDHL);
+        setIsAdmin(data.isAdmin);
+        setPtoGoal(data.ptoGoal);
+        if (!data.config.setupComplete) setWizardEntry(false);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("[App] loadUserData failed:", err);
+        setLoading(false);
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authedUser?.id]);
 
@@ -912,7 +917,7 @@ export default function App() {
                 padding: "14px 20px", fontSize: "11px",
                 letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
-                color: lifeEventMenu ? "var(--color-gold)" : "#888",
+                color: lifeEventMenu ? "var(--color-gold)" : "var(--color-text-primary)",
                 borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
@@ -933,7 +938,7 @@ export default function App() {
                       display: "block", width: "100%", textAlign: "left",
                       padding: "10px 24px", fontSize: "10px",
                       letterSpacing: "1.5px", textTransform: "uppercase",
-                      background: "transparent", color: "#666",
+                      background: "transparent", color: "var(--color-text-primary)",
                       border: "none", borderLeft: "3px solid transparent",
                       cursor: "pointer", transition: "color 0.15s",
                     }}
@@ -1019,7 +1024,7 @@ export default function App() {
             style={{
               background: "transparent",
               border: "none",
-              color: unconfirmedCount > 0 ? "var(--color-red)" : "#555",
+              color: unconfirmedCount > 0 ? "var(--color-red)" : "var(--color-text-primary)",
               cursor: "pointer",
               width: "44px",
               height: "44px",
@@ -1112,7 +1117,7 @@ export default function App() {
             </button>
             <button
               onClick={() => setDrawerOpen(false)}
-              style={{ background: "transparent", border: "none", color: "#666", cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: "2px 4px", marginTop: "2px" }}
+              style={{ background: "transparent", border: "none", color: "var(--color-text-primary)", cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: "2px 4px", marginTop: "2px" }}
               aria-label="Close navigation"
             >
               ✕
@@ -1135,7 +1140,7 @@ export default function App() {
                 padding: "14px 20px", fontSize: "11px",
                 letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
-                color: lifeEventMenu ? "var(--color-gold)" : "#888",
+                color: lifeEventMenu ? "var(--color-gold)" : "var(--color-text-primary)",
                 borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
@@ -1156,7 +1161,7 @@ export default function App() {
                       display: "block", width: "100%", textAlign: "left",
                       padding: "10px 24px", fontSize: "10px",
                       letterSpacing: "1.5px", textTransform: "uppercase",
-                      background: "transparent", color: "#666",
+                      background: "transparent", color: "var(--color-text-primary)",
                       border: "none", borderLeft: "3px solid transparent",
                       cursor: "pointer", transition: "color 0.15s",
                     }}
@@ -1170,7 +1175,7 @@ export default function App() {
         </nav>
 
         {/* Active section indicator at bottom */}
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: "10px", color: "#555", letterSpacing: "1px", textTransform: "uppercase" }}>
+        <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: "10px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
           Viewing: <span style={{ color: "var(--color-gold)" }}>{currentView}</span>
         </div>
       </div>

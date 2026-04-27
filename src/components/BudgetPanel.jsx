@@ -835,7 +835,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     </div>
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#aaa", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "var(--color-red)" : "var(--color-green)" }}>{sp.toFixed(1)}%</span></div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--color-text-primary)", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "var(--color-red)" : "var(--color-green)" }}>{sp.toFixed(1)}%</span></div>
       <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden" }}><div style={{ height: "100%", borderRadius: "4px", width: `${sp}%`, background: sp > 90 ? "var(--color-red)" : sp > 70 ? "var(--color-gold)" : "var(--color-green)", transition: "width 0.3s" }} /></div>
     </div>
     {/* View tabs */}
@@ -1041,8 +1041,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   onContextMenu={(e) => e.preventDefault()}
                   style={{
                     background: pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}22` : "transparent",
-                    color: pendingExpenseTouchId === exp.id ? CATEGORY_COLORS[cat] : "#666",
-                    border: `1px solid ${pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}66` : "#444"}`,
+                    color: pendingExpenseTouchId === exp.id ? CATEGORY_COLORS[cat] : "var(--color-text-primary)",
+                    border: `1px solid ${pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}66` : "var(--color-text-primary)"}`,
                     borderRadius: "8px",
                     width: "26px",
                     height: "26px",
@@ -1135,7 +1135,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     {isPaidOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>✓ PAID OFF</span>}
                     {!isPaidOff && !inRunway && dropsOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>drops off {payoffDate}</span>}
                   </div>
-                  {meta && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>
+                  {meta && <div style={{ fontSize: "10px", color: "var(--color-text-primary)", marginTop: "2px" }}>
                     {inRunway
                       ? `saving toward ${meta.firstPaymentDate} · ${f(meta.paymentAmount ?? 0)}/${freqLabel} due`
                       : `${loanPaymentsRemaining(meta)} payments left · ${f(meta.paymentAmount ?? meta.paymentPerCheck ?? 0)}/${freqLabel} · ${f(meta.totalAmount)} total`
@@ -1144,8 +1144,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "#555" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
-                    <div style={{ fontSize: "10px", color: "#777" }}>{f(monthlyFromPerPaycheck(effAmt, cpm))}/mo</div>
+                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
+                    <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(monthlyFromPerPaycheck(effAmt, cpm))}/mo</div>
                   </div>
                   <SmBtn onClick={() => startEditLoan(exp)} c="var(--color-gold)">EDIT</SmBtn>
                   {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
@@ -1173,7 +1173,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>ADD</button>
+          <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>ADD</button>
           <button onClick={() => { setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
         </div>
       </div> : <button onClick={() => setAddingExp(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
@@ -1197,16 +1197,16 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Incoming Paycheck</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(incomingWeekNet)}</div></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", textAlign: "right" }}>Running week<br />net pay</div></div>
         </div>
         <div style={{ background: "rgba(239,68,68,0.10)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-red)", marginBottom: "4px" }}>Payroll Deductions</div><div style={{ fontSize: "10px", color: "#666" }}>Benefits + 401k — already factored into net pay</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-red)" }}>{f2(payrollDeductionsTotal)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((payrollDeductionsTotal / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-red)", marginBottom: "4px" }}>Payroll Deductions</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Benefits + 401k — already factored into net pay</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-red)" }}>{f2(payrollDeductionsTotal)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((payrollDeductionsTotal / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
         </div>
         <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "#666" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((checkingTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((checkingTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
         </div>
         {loans.length > 0 && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "#666" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-gold)" }}>{f2(loansTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((loansTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-gold)" }}>{f2(loansTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((loansTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
         </div>}
         <div style={{ background: wr >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wr >= 0 ? "var(--color-green)" : "var(--color-red)"}`, borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-red)", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "#666" }}>Weekly unallocated cashflow snapshot</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{f2(wr)}</div><div style={{ fontSize: "10px", color: "#666" }}>{f(wr * 52 / 12)}/mo</div></div></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-red)", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Weekly unallocated cashflow snapshot</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{f2(wr)}</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(wr * 52 / 12)}/mo</div></div></div>
         </div>
         <div style={{ height: "1px", background: "var(--color-bg-raised)", marginBottom: "20px" }} />
         {cats.map(cat => {
@@ -1233,7 +1233,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               </td>
               <td style={{ padding: "8px 4px", textAlign: "right", color: isLoan ? "var(--color-gold)" : CATEGORY_COLORS[exp.category] }}>{f2(weeklyAvg)}</td>
               <td style={{ padding: "8px 4px", textAlign: "right", color: "var(--color-text-secondary)" }}>{f(annual / 12)}</td>
-              <td style={{ padding: "8px 4px", textAlign: "right", color: "#666" }}>{f(annual)}</td>
+              <td style={{ padding: "8px 4px", textAlign: "right", color: "var(--color-text-primary)" }}>{f(annual)}</td>
             </tr>;
           })}</tbody>
           <tfoot>
@@ -1276,7 +1276,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           />
         </div>
 
-        {loans.length === 0 && <div style={{ textAlign: "center", padding: "40px 20px", color: "#444", fontSize: "12px", letterSpacing: "1px" }}>No active loans. Add one below.</div>}
+        {loans.length === 0 && <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--color-text-primary)", fontSize: "12px", letterSpacing: "1px" }}>No active loans. Add one below.</div>}
 
         {loans.map(exp => {
           const meta = exp.loanMeta;
@@ -1308,17 +1308,17 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     {inRunway && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
                     {isPaidOff && <span style={{ fontSize: "9px", background: "rgba(76,175,125,0.13)", color: "var(--color-green)", padding: "2px 6px", borderRadius: "2px" }}>✓ PAID OFF</span>}
                   </div>
-                  {exp.note[0] && <div style={{ fontSize: "10px", color: "#666" }}>{exp.note[0]}</div>}
+                  {exp.note[0] && <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{exp.note[0]}</div>}
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "#555" : inRunway ? "#7a8bbf" : "var(--color-gold)" }}>{f2(weeklyAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
-                  <div style={{ fontSize: "10px", color: "#666" }}>{f(meta.totalAmount)} total</div>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : inRunway ? "#7a8bbf" : "var(--color-gold)" }}>{f2(weeklyAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
+                  <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(meta.totalAmount)} total</div>
                 </div>
               </div>
 
               {/* Progress bar — during runway shows savings progress toward first payment */}
               <div style={{ marginBottom: "8px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#666", marginBottom: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-primary)", marginBottom: "4px" }}>
                   {inRunway
                     ? <span>saving toward first payment · {weeksUntilFirst} week{weeksUntilFirst !== 1 ? "s" : ""} away</span>
                     : <span>{paymentsMade} of {paymentsTotal} payments made</span>
@@ -1333,15 +1333,15 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               {/* Stats row */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(90px,1fr))", gap: "8px", fontSize: "11px", marginBottom: "10px" }}>
                 <div style={{ background: "var(--color-bg-surface)", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
-                  <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>{inRunway ? "FIRST PAYMENT" : "PAYMENTS LEFT"}</div>
+                  <div style={{ color: "var(--color-text-primary)", fontSize: "9px", marginBottom: "2px" }}>{inRunway ? "FIRST PAYMENT" : "PAYMENTS LEFT"}</div>
                   <div style={{ color: inRunway ? "#7a8bbf" : isPaidOff ? "var(--color-green)" : "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{inRunway ? meta.firstPaymentDate : paymentsLeft}</div>
                 </div>
                 <div style={{ background: "var(--color-bg-surface)", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
-                  <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>PAYOFF DATE</div>
+                  <div style={{ color: "var(--color-text-primary)", fontSize: "9px", marginBottom: "2px" }}>PAYOFF DATE</div>
                   <div style={{ color: dropsThisYear ? "var(--color-green)" : "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{payoffDate}</div>
                 </div>
                 <div style={{ background: "var(--color-bg-surface)", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
-                  <div style={{ color: "#666", fontSize: "9px", marginBottom: "2px" }}>TERM PAYMENT</div>
+                  <div style={{ color: "var(--color-text-primary)", fontSize: "9px", marginBottom: "2px" }}>TERM PAYMENT</div>
                   <div style={{ color: "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{f2(payAmt)} / {freqShort}</div>
                 </div>
               </div>
@@ -1377,9 +1377,9 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             <div style={{ gridColumn: "1/-1" }}>
               <label style={lS}>Term Payment</label>
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <span style={{ color: "#666", fontSize: "13px" }}>$</span>
+                <span style={{ color: "var(--color-text-primary)", fontSize: "13px" }}>$</span>
                 <input type="number" value={newLoan.paymentAmount} onChange={e => setNewLoan(v => ({ ...v, paymentAmount: e.target.value }))} style={{ ...iS, flex: 1 }} placeholder="150" />
-                <span style={{ color: "#666", fontSize: "12px", whiteSpace: "nowrap" }}>every</span>
+                <span style={{ color: "var(--color-text-primary)", fontSize: "12px", whiteSpace: "nowrap" }}>every</span>
                 <select value={newLoan.paymentFrequency} onChange={e => setNewLoan(v => ({ ...v, paymentFrequency: e.target.value }))} style={{ ...iS, flex: 1 }}>
                   <option value="monthly">Month</option>
                   <option value="biweekly">Two Weeks</option>
@@ -1399,14 +1399,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             const freqLabel = { weekly: "week", biweekly: "2 weeks", monthly: "month" }[meta.paymentFrequency];
             return <div style={{ background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px", fontSize: "11px" }}>
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-                <span style={{ color: "#666" }}>Weekly cost: <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(weeklyAmt)}/wk</span></span>
-                <span style={{ color: "#666" }}>{total} payments ({freqLabel})</span>
-                <span style={{ color: "#666" }}>Payoff: <span style={{ color: payoff <= fiscalYearEnd ? "var(--color-green)" : "var(--color-text-primary)" }}>{payoff}</span></span>
+                <span style={{ color: "var(--color-text-primary)" }}>Weekly cost: <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(weeklyAmt)}/wk</span></span>
+                <span style={{ color: "var(--color-text-primary)" }}>{total} payments ({freqLabel})</span>
+                <span style={{ color: "var(--color-text-primary)" }}>Payoff: <span style={{ color: payoff <= fiscalYearEnd ? "var(--color-green)" : "var(--color-text-primary)" }}>{payoff}</span></span>
               </div>
             </div>;
           })()}
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-green)" : "var(--color-border-subtle)", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontWeight: "bold" }}>ADD LOAN</button>
+            <button onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-green)" : "var(--color-border-subtle)", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontWeight: "bold" }}>ADD LOAN</button>
             <button onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
           </div>
         </div> : <button onClick={() => setAddingLoan(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</button>}
@@ -1453,9 +1453,9 @@ function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
       <div style={{ gridColumn: "1/-1" }}>
         <label style={lS}>Term Payment</label>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <span style={{ color: "#666", fontSize: "13px" }}>$</span>
+          <span style={{ color: "var(--color-text-primary)", fontSize: "13px" }}>$</span>
           <input type="number" value={vals.paymentAmount ?? vals.paymentPerCheck ?? ""} onChange={e => setVals(v => ({ ...v, paymentAmount: e.target.value }))} style={{ ...iS, flex: 1 }} placeholder="150" />
-          <span style={{ color: "#666", fontSize: "12px", whiteSpace: "nowrap" }}>every</span>
+          <span style={{ color: "var(--color-text-primary)", fontSize: "12px", whiteSpace: "nowrap" }}>every</span>
           <select value={vals.paymentFrequency ?? vals.payFrequency ?? "monthly"} onChange={e => setVals(v => ({ ...v, paymentFrequency: e.target.value }))} style={{ ...iS, flex: 1 }}>
             <option value="monthly">Month</option>
             <option value="biweekly">Two Weeks</option>

@@ -179,6 +179,49 @@ the fiscal year end produces `firstActiveIdx > max week index`, resulting in zer
 
 ---
 
+**[PLANNING NOTE] Non-DHL variable schedule — replace short/long week pair with `maxWeeklyHours` ceiling**
+
+The current wizard asks "does your pay vary week to week?" for non-DHL users and, if yes, tries to
+collect a short-week and long-week hours pair (via `standardWeeklyHours` / `longWeeklyHours`). This
+model is abandoned. The new direction:
+
+**Single field: `maxWeeklyHours`**
+Non-DHL users set one number — the most hours they would ever be scheduled in a given week. This
+becomes the projection ceiling. Income, net-pay estimates, and budget/expense panel formulas all
+project off `maxWeeklyHours` as the baseline. There is no separate "short week" or "long week"
+concept for non-DHL users.
+
+For non-variable users (fixed schedule), `maxWeeklyHours` and their actual hours are the same — the
+field still applies and replaces `standardWeeklyHours` in the non-DHL engine path.
+
+**Weekly confirm modal for non-DHL users**
+No preset rotation or scheduled days. Instead, the modal presents an open 7-day selector. The user
+checks off whatever days they worked that week. The modal computes the day count × `shiftHours` and
+compares to `maxWeeklyHours`:
+- If actual worked hours = max → full projection week, no adjustment
+- If actual worked hours < max → projection adjusts down proportionally (income delta logged)
+- No day is ever "expected" or "required" — the ceiling is the only reference point
+
+This means non-DHL users never have to configure a schedule. They configure their pay rate (Step 1),
+their max hours (Step 2), and the weekly modal handles week-by-week reality against that ceiling.
+
+**Implications for Step 4 (Tax Rates):**
+The "does your pay vary?" question in Step 4 and the two-paystub path exist to derive separate
+withholding rates for short vs long weeks. With the `maxWeeklyHours` model, non-DHL users provide
+one paystub at a representative pay level. The `scheduleIsVariable` flag and second paystub section
+can be removed from the non-DHL path — one rate set, one paystub. Revisit Step 4 when implementing.
+
+**Implications for `buildYear` / `estimateWeeklyGross`:**
+- Replace `cfg.standardWeeklyHours` and `cfg.longWeeklyHours` references in the non-DHL path with
+  `cfg.maxWeeklyHours`
+- `estimateWeeklyGross` for non-DHL: `maxWeeklyHours * baseRate` (no alternating week logic)
+- `scheduleIsVariable` becomes unused for non-DHL and can be removed from that branch
+
+**New config fields needed:** `maxWeeklyHours` (number, required for non-DHL). `standardWeeklyHours`
+and `longWeeklyHours` are retired from the non-DHL engine path. Tag: `[CC]`
+
+---
+
 ### Step 3 — Deductions
 
 **Status: Functional — three gaps, no blockers**
@@ -334,28 +377,13 @@ life event (buffer and tax-exempt state preserved in config but not re-prompted)
 
 **Issues found:**
 
-**[BUG — MEDIUM] `longWeeklyHours` is never set; non-DHL variable schedule is income-broken**
-`buildYear` in `finance.js` (line 507) uses `cfg.longWeeklyHours` for non-DHL long weeks:
-```
-totalH = isWeek2
-  ? (cfg.longWeeklyHours || cfg.standardWeeklyHours || 40)
-  : (cfg.standardWeeklyHours || 40);
-```
-`longWeeklyHours` is not in `DEFAULT_CONFIG` and no wizard step ever prompts for it. It is always
-`undefined`, so long weeks and short weeks both resolve to `standardWeeklyHours`. A non-DHL user who
-says "my pay varies week to week" in Step 4, enters two separate paystubs (deriving two tax rates),
-and proceeds — will have identical income for every week despite the two-rate tax setup. The variable
-schedule tag affects how `taxRatesEstimated` is displayed and which paystub sections appear, but the
-actual income model never alternates.
-
-The same gap appears in `estimateWeeklyGross` (line 1311): `const h2 = (d.longWeeklyHours || 50)` —
-the fallback is a hardcoded 50h, not user-provided data, so the Wrap Up gross preview is also wrong
-for these users.
-
-Fix: add `longWeeklyHours` to Step 2 for non-DHL users when `scheduleIsVariable = true` — a second
-hours field after the standard-week hours field. Wire it through `DEFAULT_CONFIG` with a reasonable
-default (e.g. `null`). Tag: `[CC]` — touches Step 2 UI, finance.js, DEFAULT_CONFIG, and the
-`estimateWeeklyGross` preview.
+**[BUG — SUPERSEDED] `longWeeklyHours` / `standardWeeklyHours` short-long pair is abandoned**
+The original fix direction (add `longWeeklyHours` to Step 2) is superseded by the design decision
+documented in the Step 2 planning note above. The short/long week pair model is dropped entirely
+for non-DHL. The replacement is a single `maxWeeklyHours` ceiling field — see Step 2 planning note
+for the full spec including `buildYear`, `estimateWeeklyGross`, and `scheduleIsVariable` implications.
+The `longWeeklyHours` references in `finance.js` lines 507 and 1068, and `estimateWeeklyGross`
+line 1311, will be replaced when that work ships. Tag: `[CC]`
 
 **[PLACEHOLDER — KNOWN] `taxExemptOptIn` is stored but unused**
 `TaxExemptPreview` shows a static confirmation message ("Tax-Exempt Projections Unlocked") marked
@@ -372,7 +400,7 @@ Consistent — no bypass path found.
 `estimateWeeklyGross` for salary path: `40 * (baseRate)` where `baseRate = annualSalary / 2080`
 (set by Step 1 on salary entry). This correctly yields `annualSalary / 52` weekly. ✓
 
-**Verdict:** Wrap Up is clean for non-DHL fixed-schedule users. The `longWeeklyHours` gap means the
-variable-schedule path is broken for income modeling (not just the preview) — it should be addressed
-alongside Step 2 since the fix requires adding a new field there. Everything else is either confirmed
-correct or intentionally deferred.
+**Verdict:** Wrap Up is clean for all non-DHL users. The `longWeeklyHours` gap is superseded by the
+`maxWeeklyHours` redesign documented in Step 2. The Wrap Up step itself needs no changes — fixes
+land in Step 2 UI, `buildYear`, and `estimateWeeklyGross`. Everything else here is confirmed correct
+or intentionally deferred to Phase 5.

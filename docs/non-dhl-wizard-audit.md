@@ -181,9 +181,65 @@ the fiscal year end produces `firstActiveIdx > max week index`, resulting in zer
 
 ### Step 3 — Deductions
 
-- [ ] Audit
+**Status: Functional — three gaps, no blockers**
 
-**Backlog:** PTO needs its own subsection here for non-DHL users — see Open Items above.
+**UI shown (non-DHL path):**
+1. Benefits checklist — Health/Medical, Dental, Vision, LTD, STD, Life/AD&D, 401k, HSA, FSA
+   (same list as DHL — `BENEFIT_DEFS = DHL_BENEFIT_OPTIONS` alias)
+2. 401k card expands to: Your Contribution %, Employer Match %, Enrollment Date (all three required if 401k is selected)
+3. Benefits Start Date — optional free-form date; blank = already active
+4. Other Recurring Deductions — free-form label + per-paycheck amount rows; "+ Add Deduction" button
+5. Attendance policy gate (non-DHL only) — "Yes — points or hours system" / "No — standard time off" pills
+
+**Fields written to formData (non-DHL):**
+`selectedBenefits`, `healthPremium`, `dentalPremium`, `visionPremium`, `ltd`, `stdWeekly`,
+`lifePremium`, `k401Rate`, `k401MatchRate`, `k401StartDate`, `hsaWeekly`, `fsaWeekly`,
+`benefitsStartDate`, `otherDeductions[]`, `attendanceBucketEnabled`
+
+**DHL vs non-DHL difference:**
+- DHL 401k card shows computed DHL tiered match (formula-driven); non-DHL shows free-form "Employer Match %" input.
+- Attendance policy gate renders only for non-DHL; DHL bucket is always active via `isDHL` in WeekConfirmModal.
+- Step is `skippable: true` — user can bypass entirely. Skipping leaves `attendanceBucketEnabled: null`, which correctly defaults to no-bucket-tracking in the rest of the app (`hasBucket = isDHL || attendanceBucketEnabled === true`).
+
+---
+
+**Issues found:**
+
+**[BUG — MEDIUM] Attendance bucket has no configuration fields for non-DHL users**
+When a non-DHL user answers "Yes — points or hours system," no follow-up fields appear to configure
+the bucket. `computeBucketModel` then falls back to DHL defaults: `bucketStartBalance ?? 64` (64 hrs),
+`bucketCap ?? 128` (128 hrs), `bucketPayoutRate ?? baseRate/2`. A warehouse or retail worker with a
+2-point monthly cap and a 10-point annual cutoff has no way to express this. The attendance gate
+question is misleading as-written — it implies the app will track their policy, but tracking uses
+DHL-tuned defaults silently.
+Fix needed: either (a) add a follow-up mini-form asking for starting balance, cap, and payout rate when
+`attendanceBucketEnabled = true`, or (b) change the question copy to "track your own unapproved absences
+for visibility" without implying policy fidelity. Tag: `[CC]`
+
+**[NAMING — LOW] `BENEFIT_DEFS = DHL_BENEFIT_OPTIONS` alias is misleading**
+The exported constant is named `DHL_BENEFIT_OPTIONS` but all nine benefit types (health, dental, vision,
+LTD, STD, life, 401k, HSA, FSA) are universal — none are DHL-specific. Any developer reading
+`BENEFIT_DEFS` in Step3 and tracing it to `DHL_BENEFIT_OPTIONS` in config.js may incorrectly conclude
+non-DHL users shouldn't see these cards. Rename to `BENEFIT_OPTIONS` or `STANDARD_BENEFIT_OPTIONS`.
+Tag: `[CODEX]`
+
+**[NAMING — LOW] `otherDeductions[].weeklyAmount` stores a per-paycheck value**
+The UI label says "per paycheck" and the placeholder says "$/check". The field name `weeklyAmount`
+contradicts this. `otherPostTaxDeductions()` in finance.js correctly treats it as per-paycheck
+(`perCheck * checksPerYear / 52`), so the math is right, but the field name will mislead future
+developers who read the config shape. Rename field to `perCheckAmount` in config + finance + wizard.
+Tag: `[CODEX]`
+
+**[MISSING — BACKLOG] No PTO section**
+Non-DHL users have no PTO question in the entire wizard. See Open Items above for the full spec.
+Must be added here as a dedicated subsection with: PTO offered? (Y/N gate) → accrual method →
+accrual rate → current balance → cap. Also requires migrating `PTO_RATE` from a module-level constant
+to a per-user config field. Tag: `[CC]`
+
+**Verdict:** Step 3 proceeds correctly for non-DHL users. The attendance gate works, 401k employer
+match is properly uncoupled from the DHL formula, `benefitsStartDate` is safely optional, and
+`otherDeductions` math is correct. The three gaps above are tracking/UX issues, not blockers to
+completing setup.
 
 ---
 

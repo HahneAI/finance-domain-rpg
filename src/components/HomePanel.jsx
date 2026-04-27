@@ -7,7 +7,6 @@ import { formatRotationDisplay } from "../lib/rotation.js";
 import { FlowSparklineCard, MetricCard, SmBtn, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MONTH_SUBDIVISIONS = 4;
 const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
 const FY_YEAR = parseInt(FISCAL_YEAR_START.split('-')[0]);
 
@@ -247,17 +246,29 @@ export function HomePanel({
     futureEventDeductions ?? {},
   );
 
+  // Stable timeline anchor: start of previous calendar month.
+  // Using the current fiscal week start caused month bars to shrink as weeks passed.
+  const prevMonthStart = (() => {
+    const [y, m] = today.slice(0, 7).split("-").map(Number);
+    const pm = m === 1 ? 12 : m - 1;
+    const py = m === 1 ? y - 1 : y;
+    return new Date(py, pm - 1, 1);
+  })();
+
+  const currentWeekStartMs = futureWeeks?.length
+    ? (safeDate(futureWeeks[0]?.weekStart)?.getTime() ?? prevMonthStart.getTime())
+    : prevMonthStart.getTime();
+
   const timelineBounds = (() => {
     if (!futureWeeks?.length) return null;
     const validWeeks = futureWeeks
-      .map((week) => ({ start: safeDate(week?.weekStart), end: safeDate(week?.weekEnd) }))
-      .filter((week) => week.start && week.end && week.end > week.start);
+      .map((week) => ({ end: safeDate(week?.weekEnd) }))
+      .filter((week) => week.end);
     if (!validWeeks.length) return null;
-    const startMs = Math.min(...validWeeks.map((week) => week.start.getTime()));
+    const startMs = prevMonthStart.getTime();
     const rawEndMs = Math.max(...validWeeks.map((week) => week.end.getTime())) + DAY_MS;
-    const endMs = rawEndMs;
-    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
-    return { startMs, endMs, spanMs: endMs - startMs };
+    if (!Number.isFinite(rawEndMs) || rawEndMs <= startMs) return null;
+    return { startMs, endMs: rawEndMs, spanMs: rawEndMs - startMs };
   })();
 
   const timelineMonthSegments = (() => {
@@ -291,7 +302,7 @@ export function HomePanel({
     return segments;
   })();
 
-  const rollingGoalTimeline = deriveRollingTimelineMonths(timelineMonthSegments, today, 0);
+  const rollingGoalTimeline = deriveRollingTimelineMonths(timelineMonthSegments, today, 1);
   const visibleTimelineSegments = rollingGoalTimeline.visibleMonths;
   const goalTimelineScale = progressiveScale(rollingGoalTimeline.scaleProgress, 0.15);
   const lastGoalEW = tl.length ? Math.max(...tl.map((g) => (Number.isFinite(g.eW) ? g.eW : 0))) : 0;
@@ -581,8 +592,12 @@ export function HomePanel({
               {tl.map((g, i) => {
                 const isEditing = editGoalId === g.id;
                 const isNextYear = !Number.isFinite(g.eW);
-                const sWPct = clamp01((g.sW ?? 0) / Math.max(weeksLeft, 1)) * 100;
-                const eWPct = isNextYear ? sWPct : clamp01(Math.ceil(g.eW) / Math.max(weeksLeft, 1)) * 100;
+                const sWPct = timelineBounds
+                  ? clamp01((currentWeekStartMs + (g.sW ?? 0) * 7 * DAY_MS - timelineBounds.startMs) / timelineBounds.spanMs) * 100
+                  : clamp01((g.sW ?? 0) / Math.max(weeksLeft, 1)) * 100;
+                const eWPct = isNextYear ? sWPct : (timelineBounds
+                  ? clamp01((currentWeekStartMs + Math.ceil(g.eW) * 7 * DAY_MS - timelineBounds.startMs) / timelineBounds.spanMs) * 100
+                  : clamp01(Math.ceil(g.eW) / Math.max(weeksLeft, 1)) * 100);
                 const fillWidthPct = Math.max(0, eWPct - sWPct);
                 return (
                   <div
@@ -639,11 +654,7 @@ export function HomePanel({
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
                           {visibleTimelineSegments.map((seg) => (
-                            <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }}>
-                              {seg.subdivisions.map((sub) => (
-                                <div key={`${seg.key}-${sub.key}`} style={{ position: "absolute", top: "1px", bottom: "1px", left: `${sub.leftPct - seg.leftPct}%`, width: `${sub.widthPct}%`, borderRight: sub.key < MONTH_SUBDIVISIONS - 1 ? "1px solid rgba(255,255,255,0.07)" : "none" }} />
-                              ))}
-                            </div>
+                            <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }} />
                           ))}
                           <div style={{ position: "absolute", top: "2px", left: `${celebrating === g.id ? 0 : sWPct}%`, width: `${celebrating === g.id ? 100 : fillWidthPct}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
                         </div>
@@ -701,8 +712,12 @@ export function HomePanel({
               {tl.map((g, i) => {
                 const isEditing = editGoalId === g.id;
                 const isNextYear = !Number.isFinite(g.eW);
-                const sWPct = clamp01((g.sW ?? 0) / Math.max(weeksLeft, 1)) * 100;
-                const eWPct = isNextYear ? sWPct : clamp01(Math.ceil(g.eW) / Math.max(weeksLeft, 1)) * 100;
+                const sWPct = timelineBounds
+                  ? clamp01((currentWeekStartMs + (g.sW ?? 0) * 7 * DAY_MS - timelineBounds.startMs) / timelineBounds.spanMs) * 100
+                  : clamp01((g.sW ?? 0) / Math.max(weeksLeft, 1)) * 100;
+                const eWPct = isNextYear ? sWPct : (timelineBounds
+                  ? clamp01((currentWeekStartMs + Math.ceil(g.eW) * 7 * DAY_MS - timelineBounds.startMs) / timelineBounds.spanMs) * 100
+                  : clamp01(Math.ceil(g.eW) / Math.max(weeksLeft, 1)) * 100);
                 const fillWidthPct = Math.max(0, eWPct - sWPct);
                 return (
                   <div
@@ -761,11 +776,7 @@ export function HomePanel({
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
                           {visibleTimelineSegments.map((seg) => (
-                            <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }}>
-                              {seg.subdivisions.map((sub) => (
-                                <div key={`${seg.key}-${sub.key}`} style={{ position: "absolute", top: "1px", bottom: "1px", left: `${sub.leftPct - seg.leftPct}%`, width: `${sub.widthPct}%`, borderRight: sub.key < MONTH_SUBDIVISIONS - 1 ? "1px solid rgba(255,255,255,0.07)" : "none" }} />
-                              ))}
-                            </div>
+                            <div key={seg.key} style={{ position: "absolute", top: 0, left: `${seg.leftPct}%`, width: `${seg.widthPct}%`, height: "100%", borderLeft: "1px solid #232323", opacity: seg.key < today.slice(0, 7) ? 0.28 : 0.72 }} />
                           ))}
                           <div style={{ position: "absolute", top: "2px", left: `${celebrating === g.id ? 0 : sWPct}%`, width: `${celebrating === g.id ? 100 : fillWidthPct}%`, height: "calc(100% - 4px)", borderRadius: "3px", background: celebrating === g.id ? "var(--color-green)" : GOAL_SYSTEM_COLOR }} />
                         </div>

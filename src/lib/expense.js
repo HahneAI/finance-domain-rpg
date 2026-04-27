@@ -1,8 +1,7 @@
 import { FISCAL_YEAR_START } from "../constants/config.js";
 
 // ─── Billing cycle math helpers ──────────────────────────────────────────────
-// Exported so BudgetPanel, BulkEditPanel, and PhaseAdvancedEditModal all share
-// a single source of truth instead of duplicating these constants.
+// Exported so BudgetPanel and BulkEditPanel share a single source of truth.
 
 export const EXPENSE_CYCLE_OPTIONS = [
   { value: "weekly",      label: "Weekly",       days: 7 },
@@ -118,55 +117,55 @@ export function applyMonthEdit(expense, monthKey, perPaycheck, amount, cycle) {
 // Write monthKey and all following months through end of the fiscal year.
 // Skips months that already have a custom override so future customizations
 // are preserved — always overwrites the explicitly selected month.
-export function applyMonthEditForward(expense, monthKey, perPaycheck, amount, cycle, fiscalYear = 2026) {
+export function applyMonthEditForward(expense, monthKey, perPaycheck, amount, cycle, fiscalYear = 2026, editedAt = new Date().toISOString()) {
   const [, startMon] = monthKey.split("-").map(Number);
   const overrides = { ...(expense.monthlyOverrides ?? {}) };
   for (let m = startMon; m <= 12; m++) {
     const key = `${fiscalYear}-${String(m).padStart(2, "0")}`;
-    if (!overrides[key]) overrides[key] = { perPaycheck, amount, cycle };
+    if (!overrides[key]) overrides[key] = { perPaycheck, amount, cycle, lastEditedAt: editedAt };
   }
-  overrides[monthKey] = { perPaycheck, amount, cycle };
+  overrides[monthKey] = { perPaycheck, amount, cycle, lastEditedAt: editedAt };
   return { ...expense, monthlyOverrides: overrides };
 }
 
 // Zero a single month (soft-delete for that month only).
-export function clearMonth(expense, monthKey) {
+export function clearMonth(expense, monthKey, editedAt = new Date().toISOString()) {
   return {
     ...expense,
     monthlyOverrides: {
       ...(expense.monthlyOverrides ?? {}),
-      [monthKey]: { perPaycheck: 0, amount: 0, cycle: "every30days" },
+      [monthKey]: { perPaycheck: 0, amount: 0, cycle: "every30days", lastEditedAt: editedAt },
     },
   };
 }
 
 // Zero this month and all following months through end of the fiscal year.
-export function clearMonthForward(expense, monthKey, fiscalYear = 2026) {
+export function clearMonthForward(expense, monthKey, fiscalYear = 2026, editedAt = new Date().toISOString()) {
   const [, startMon] = monthKey.split("-").map(Number);
   const overrides = { ...(expense.monthlyOverrides ?? {}) };
   for (let m = startMon; m <= 12; m++) {
     const key = `${fiscalYear}-${String(m).padStart(2, "0")}`;
-    overrides[key] = { perPaycheck: 0, amount: 0, cycle: "every30days" };
+    overrides[key] = { perPaycheck: 0, amount: 0, cycle: "every30days", lastEditedAt: editedAt };
   }
   return { ...expense, monthlyOverrides: overrides };
 }
 
 // Zero just the three calendar months belonging to a quarter (phaseIdx 0–3).
 // Leaves all other months untouched.
-export function clearQuarterMonths(expense, phaseIdx, fiscalYear = 2026) {
+export function clearQuarterMonths(expense, phaseIdx, fiscalYear = 2026, editedAt = new Date().toISOString()) {
   const QUARTER_MONTHS = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]];
   const months = QUARTER_MONTHS[phaseIdx] ?? [];
   const overrides = { ...(expense.monthlyOverrides ?? {}) };
   for (const m of months) {
     const key = `${fiscalYear}-${String(m).padStart(2, "0")}`;
-    overrides[key] = { perPaycheck: 0, amount: 0, cycle: "every30days" };
+    overrides[key] = { perPaycheck: 0, amount: 0, cycle: "every30days", lastEditedAt: editedAt };
   }
   return { ...expense, monthlyOverrides: overrides };
 }
 
 // ─── Advanced edit payload builder ───────────────────────────────────────────
-// Extracts the handleSave logic from PhaseAdvancedEditModal / BulkEditPanel so
-// it can be reused by both callers without duplicating the patch-building logic.
+// Extracts the handleSave logic from BulkEditPanel so it can be unit-tested
+// and reused without duplicating the patch-building logic.
 //
 // monthIso: full ISO-01 date string like "2026-05-01" (start-of-month)
 // Returns { patches: [...], additions: [...] } ready for saveAdvancedEdit()

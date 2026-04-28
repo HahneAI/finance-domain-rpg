@@ -179,6 +179,49 @@ the fiscal year end produces `firstActiveIdx > max week index`, resulting in zer
 
 ---
 
+**[PLANNING NOTE] Non-DHL variable schedule — replace short/long week pair with `maxWeeklyHours` ceiling**
+
+The current wizard asks "does your pay vary week to week?" for non-DHL users and, if yes, tries to
+collect a short-week and long-week hours pair (via `standardWeeklyHours` / `longWeeklyHours`). This
+model is abandoned. The new direction:
+
+**Single field: `maxWeeklyHours`**
+Non-DHL users set one number — the most hours they would ever be scheduled in a given week. This
+becomes the projection ceiling. Income, net-pay estimates, and budget/expense panel formulas all
+project off `maxWeeklyHours` as the baseline. There is no separate "short week" or "long week"
+concept for non-DHL users.
+
+For non-variable users (fixed schedule), `maxWeeklyHours` and their actual hours are the same — the
+field still applies and replaces `standardWeeklyHours` in the non-DHL engine path.
+
+**Weekly confirm modal for non-DHL users**
+No preset rotation or scheduled days. Instead, the modal presents an open 7-day selector. The user
+checks off whatever days they worked that week. The modal computes the day count × `shiftHours` and
+compares to `maxWeeklyHours`:
+- If actual worked hours = max → full projection week, no adjustment
+- If actual worked hours < max → projection adjusts down proportionally (income delta logged)
+- No day is ever "expected" or "required" — the ceiling is the only reference point
+
+This means non-DHL users never have to configure a schedule. They configure their pay rate (Step 1),
+their max hours (Step 2), and the weekly modal handles week-by-week reality against that ceiling.
+
+**Implications for Step 4 (Tax Rates):**
+The "does your pay vary?" question in Step 4 and the two-paystub path exist to derive separate
+withholding rates for short vs long weeks. With the `maxWeeklyHours` model, non-DHL users provide
+one paystub at a representative pay level. The `scheduleIsVariable` flag and second paystub section
+can be removed from the non-DHL path — one rate set, one paystub. Revisit Step 4 when implementing.
+
+**Implications for `buildYear` / `estimateWeeklyGross`:**
+- Replace `cfg.standardWeeklyHours` and `cfg.longWeeklyHours` references in the non-DHL path with
+  `cfg.maxWeeklyHours`
+- `estimateWeeklyGross` for non-DHL: `maxWeeklyHours * baseRate` (no alternating week logic)
+- `scheduleIsVariable` becomes unused for non-DHL and can be removed from that branch
+
+**New config fields needed:** `maxWeeklyHours` (number, required for non-DHL). `standardWeeklyHours`
+and `longWeeklyHours` are retired from the non-DHL engine path. Tag: `[CC]`
+
+---
+
 ### Step 3 — Deductions
 
 **Status: Functional — three gaps, no blockers**
@@ -263,10 +306,101 @@ completing setup.
 
 ### Step 4 — Tax Rates
 
-- [ ] Audit
+**Status: Functional — two known approximations, no blockers**
+
+**UI shown (non-DHL path):**
+1. "Does your pay vary week to week?" — Yes / No pills (non-DHL only; DHL auto-shows an info note that variable is pre-set)
+2. Your State — full state dropdown with tax model hint below selection
+3. Paystub Calculator — open by default when no rates set; "Recalculate from Paystub" link when rates exist
+   - Fixed schedule: one paystub section (Gross, Fed Withheld, State Withheld)
+   - Variable schedule: two sections (Shorter Week, Longer Week) — second is optional; if blank, `fedRateHigh = fedRateLow`
+4. "Estimate" fallback button — pre-fills rates without a paystub and marks as Estimated
+5. Tax Picture summary card — shows Standard Deduction, FICA, Fed rate(s), State rate(s) with Estimated/Confirmed badge
+
+**Fields written to formData (non-DHL):**
+`scheduleIsVariable`, `userState`, `fedRateLow`, `fedRateHigh`, `stateRateLow`, `stateRateHigh`, `taxRatesEstimated`
+
+**DHL vs non-DHL difference:**
+- Variable-schedule gate is non-DHL only. DHL auto-sets `scheduleIsVariable: true` and shows an info note instead.
+- DHL MO preset load button only appears for `isDHL && !hasRates && userState === "MO"`. Non-DHL users never see it.
+- Both paths share the same `PaystubCalc` component, `handleEstimate` logic, and Tax Picture summary.
+
+**`isValid`:** `fedRateLow > 0 && userState != null` — no requirement on `stateRateLow`, `scheduleIsVariable`,
+or confirmation status. A user on the estimate path passes as soon as fed rates and state are set.
+
+---
+
+**Issues found:**
+
+**[APPROXIMATION — KNOWN] PROGRESSIVE state estimate falls back to 5%**
+`handleEstimate()` uses `stateConfig?.flatRate ?? 0.05`. PROGRESSIVE states have no `flatRate` field,
+so any non-flat state (CA, OR, NY, MN, NJ, etc.) gets a hardcoded 5% estimate regardless of brackets.
+This is communicated to the user via the "Estimated" badge and the "Progressive brackets — estimate uses
+a mid-bracket approximation" hint, and users can sharpen later via Sharpen Rates in Income. But a
+California user at a $60k income (~9.3% effective state rate) or an Oregon user (~9.9%) starts with a
+materially wrong estimate. Low-urgency since the paystub path gives exact rates, but worth flagging.
+Fix when the user base diversifies: add a bracket midpoint lookup per state to replace the flat 5%.
+Tag: `[CC]`
+
+**[APPROXIMATION — KNOWN] No filing status; standard deduction hardcoded at $15,000**
+`fedStdDeduction: 15000` in DEFAULT_CONFIG is never prompted in the wizard. The Tax Picture summary
+displays it as a fixed value. MFJ users have a $30,000 deduction for 2025 — roughly double — so their
+tax picture is meaningfully understated. Single filers at $15,000 are accurate for 2025.
+This only affects the wizard summary display and the paystub-derived rates are empirical so the
+actual withholding math stays correct. Fix when filing status is added to onboarding. Tag: `[CC]`
+
+**Verdict:** Step 4 is well-constructed for non-DHL users. The variable-schedule gate, state dropdown,
+paystub calculator, and estimate path all work correctly. Both approximations are disclosed to the user
+and correctable via Sharpen Rates post-setup. No blocking issues.
 
 ---
 
 ### Step 5 — Wrap Up
 
-- [ ] Audit
+**Status: Functional with one real bug — `longWeeklyHours` never set for non-DHL variable schedule**
+
+**UI shown (non-DHL and DHL — no path difference):**
+1. Live net estimate — breakdown card: Gross, Fed Tax, State Tax, FICA, 401k, Benefits, Other Deductions, Net
+2. Paycheck Buffer — On/Off pills + amount input (default $50, max $200, clamped on save)
+3. Tax-Exempt Gate — disclaimer + "Unlock projections" button (non-blocking placeholder)
+
+**Fields written to formData:** `bufferEnabled`, `paycheckBuffer`, `taxExemptOptIn`
+
+**`isValid`:** `() => true` — always passes, non-blocking.
+
+**`showIf`:** `(_, ev) => ev === null || ev === "changed_jobs"` — step is skipped for the "lost_job"
+life event (buffer and tax-exempt state preserved in config but not re-prompted).
+
+**DHL vs non-DHL difference:** None. Both see the same Wrap Up step.
+
+---
+
+**Issues found:**
+
+**[BUG — SUPERSEDED] `longWeeklyHours` / `standardWeeklyHours` short-long pair is abandoned**
+The original fix direction (add `longWeeklyHours` to Step 2) is superseded by the design decision
+documented in the Step 2 planning note above. The short/long week pair model is dropped entirely
+for non-DHL. The replacement is a single `maxWeeklyHours` ceiling field — see Step 2 planning note
+for the full spec including `buildYear`, `estimateWeeklyGross`, and `scheduleIsVariable` implications.
+The `longWeeklyHours` references in `finance.js` lines 507 and 1068, and `estimateWeeklyGross`
+line 1311, will be replaced when that work ships. Tag: `[CC]`
+
+**[PLACEHOLDER — KNOWN] `taxExemptOptIn` is stored but unused**
+`TaxExemptPreview` shows a static confirmation message ("Tax-Exempt Projections Unlocked") marked
+in code as "Phase 5." `taxExemptOptIn` is saved to config but nothing in `App.jsx` or `IncomePanel`
+reads it to gate or change any display. The opt-in UI is correct and the disclaimer copy is solid —
+the backend wire-up is just deferred. No action needed until Phase 5.
+
+**[CONFIRMED OK] Buffer $200 max is enforced in both wizard and ProfilePanel**
+`SetupWizard` clamps inline via `Math.min(parseFloat(e.target.value) || 0, BUFFER_MAX)`.
+`ProfilePanel` clamps on save via `Math.max(0, Math.min(Number(paycheckBuffer) || 0, 200))`.
+Consistent — no bypass path found.
+
+**[CONFIRMED OK] Salary users' gross estimate is correct**
+`estimateWeeklyGross` for salary path: `40 * (baseRate)` where `baseRate = annualSalary / 2080`
+(set by Step 1 on salary entry). This correctly yields `annualSalary / 52` weekly. ✓
+
+**Verdict:** Wrap Up is clean for all non-DHL users. The `longWeeklyHours` gap is superseded by the
+`maxWeeklyHours` redesign documented in Step 2. The Wrap Up step itself needs no changes — fixes
+land in Step 2 UI, `buildYear`, and `estimateWeeklyGross`. Everything else here is confirmed correct
+or intentionally deferred to Phase 5.

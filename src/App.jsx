@@ -196,6 +196,11 @@ export default function App() {
   // "home" is always the base — never popped below depth 1.
   const [viewStack, setViewStack] = useState(["home"]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [tempLockDate, setTempLockDate] = useState(() => {
+    const stored = localStorage.getItem("admin_temp_lock_date");
+    return stored && Date.parse(stored) > 0 ? stored : null;
+  });
+  const [adminDateDraft, setAdminDateDraft] = useState("");
   // Persisted to Supabase week_confirmations JSONB column.
   // Shape: { [weekIdx]: { confirmedAt, dayToggles, scheduledDays, missedScheduledDays,
   //                        pickupDays, netShiftDelta, eventId } }
@@ -371,6 +376,16 @@ export default function App() {
     return () => clearTimeout(timerId.current);
   }, []);
 
+  useEffect(() => {
+    if (tempLockDate) localStorage.setItem("admin_temp_lock_date", tempLockDate);
+    else localStorage.removeItem("admin_temp_lock_date");
+  }, [tempLockDate]);
+
+  const effectiveToday = useMemo(
+    () => (isAdmin && tempLockDate) ? tempLockDate : today,
+    [isAdmin, tempLockDate, today]
+  );
+
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config), [config]);
 
@@ -382,7 +397,7 @@ export default function App() {
   useEffect(() => {
     if (loading) return;
     if (Object.keys(weekConfirmations).length > 0) return;
-    const pastActiveWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
+    const pastActiveWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
     if (!pastActiveWeeks.length) return;
     const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const confirmedAt = new Date().toISOString();
@@ -402,15 +417,15 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setWeekConfirmations(bulk);
-  }, [loading, weekConfirmations, allWeeks, today]);
+  }, [loading, weekConfirmations, allWeeks, effectiveToday]);
 
   // ── Future active weeks: today onward, used for spend/goal simulation ──
   const futureWeeks = useMemo(() => {
-    return allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) >= today);
-  }, [allWeeks, today]);
+    return allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) >= effectiveToday);
+  }, [allWeeks, effectiveToday]);
 
   // ── Current week: first active week whose end date >= today ──
-  const currentWeek = useMemo(() => getCurrentFiscalWeek(allWeeks, today), [allWeeks, today]);
+  const currentWeek = useMemo(() => getCurrentFiscalWeek(allWeeks, effectiveToday), [allWeeks, effectiveToday]);
 
   // confirmDismissed: session-only flag; set when user clicks "Skip for now".
   // Cleared by badge click so the modal re-opens. Resets to false on page reload.
@@ -427,21 +442,21 @@ export default function App() {
   // confirmForced (badge click) still kept to surface the modal on demand in case the
   // user dismisses and wants to return to it without waiting for state to change.
   const confirmTriggerWeek = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
+    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
     // Find most recent week that has NOT been confirmed yet
     const unconfirmedWeeks = pastWeeks.filter(w => !weekConfirmations[w.idx]);
     if (!unconfirmedWeeks.length) return null;
     return unconfirmedWeeks[unconfirmedWeeks.length - 1]; // most recent unconfirmed
-  }, [allWeeks, today, weekConfirmations]);
+  }, [allWeeks, effectiveToday, weekConfirmations]);
 
   // Total count of all past active weeks lacking a confirmation record.
   // Used for the persistent badge in sidebar and mobile header.
   // Intentionally looks at ALL past weeks (not just the most recent) so skipped
   // weeks accumulate and the badge number keeps climbing until addressed.
   const unconfirmedCount = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
+    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
     return pastWeeks.filter(w => !weekConfirmations[w.idx]).length;
-  }, [allWeeks, today, weekConfirmations]);
+  }, [allWeeks, effectiveToday, weekConfirmations]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);
@@ -474,7 +489,7 @@ export default function App() {
       if (grossDelta !== 0) grossDeltaByWeek[eIdx] = (grossDeltaByWeek[eIdx] || 0) + grossDelta;
 
       const weekEndIso = typeof e.weekEnd === "string" ? e.weekEnd : (e.weekEnd ? toLocalIso(e.weekEnd) : null);
-      if (weekEndIso && isFutureWeek(weekEndIso, today) && i.netLost) {
+      if (weekEndIso && isFutureWeek(weekEndIso, effectiveToday) && i.netLost) {
         futureEventDeductionsByWeek[eIdx] = (futureEventDeductionsByWeek[eIdx] || 0) + i.netLost;
       }
     });
@@ -492,7 +507,7 @@ export default function App() {
       futureEventDeductionsByWeek,
       grossDeltaByWeek,
     };
-  }, [logs, config, futureWeeks, today, allWeeks]);
+  }, [logs, config, futureWeeks, effectiveToday, allWeeks]);
 
   // ── Tax derived values ──
   const taxDerived = useMemo(() => {
@@ -500,7 +515,7 @@ export default function App() {
     const overrides = config.pastWeekTaxStatusOverrides ?? {};
     const hasOverride = (idx) => Object.prototype.hasOwnProperty.call(overrides, idx);
     const remediationTaxedForWeek = (w) => {
-      const isPast = toLocalIso(w.weekEnd) < today;
+      const isPast = toLocalIso(w.weekEnd) < effectiveToday;
       if (!isPast) return w.taxedBySchedule;
       return hasOverride(w.idx) ? Boolean(overrides[w.idx]) : w.taxedBySchedule;
     };
@@ -521,9 +536,9 @@ export default function App() {
     const fWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? fedHigh : fedLow), 0);
     const mWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? stHigh : stLow), 0);
     const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - config.targetOwedAtFiling, 0);
-    const remainingTaxedChecks = activeWeeks.filter(w => toLocalIso(w.weekEnd) >= today && w.taxedBySchedule).length;
+    const remainingTaxedChecks = activeWeeks.filter(w => toLocalIso(w.weekEnd) >= effectiveToday && w.taxedBySchedule).length;
     return { fedAGI: fAGI, fedLiability: fL, moLiability: mL, ficaTotal: ficaT, fedWithheldBase: fWB, moWithheldBase: mWB, fedGap: fG, moGap: mG, totalGap: tG, targetExtraTotal: tET, taxedWeekCount: remainingTaxedChecks, extraPerCheck: remainingTaxedChecks > 0 ? tET / remainingTaxedChecks : 0 };
-  }, [allWeeks, config, eventImpact.grossDeltaByWeek, today]);
+  }, [allWeeks, config, eventImpact.grossDeltaByWeek, effectiveToday]);
 
   // ── Live projected net from income engine ──
   const projectedAnnualNet = useMemo(() =>
@@ -545,7 +560,7 @@ export default function App() {
   // (e.g. missed shifts logged via WeekConfirmModal). Falls back to weeklyIncome
   // average when no past weeks exist (first week of fiscal year).
   const prevWeekNet = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
+    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
     if (!pastWeeks.length) return weeklyIncome;
     const prevWeek = pastWeeks[pastWeeks.length - 1];
     const baseNet = computeNet(prevWeek, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek;
@@ -557,7 +572,7 @@ export default function App() {
         return sum + impact.netGained - impact.netLost;
       }, 0);
     return baseNet + weekAdjustment;
-  }, [allWeeks, today, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs]);
+  }, [allWeeks, effectiveToday, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs]);
 
   const weekNetLookup = useMemo(() => {
     const adjustments = eventImpact.weeklyNetAdjustments || {};
@@ -589,7 +604,7 @@ export default function App() {
 
   // ── Week-by-week remaining spend using history-aware amounts ──
   const remainingSpend = useMemo(() => computeRemainingSpend(expenses, futureWeeks), [expenses, futureWeeks]);
-  const fundedGoalSpend = useMemo(() => getFundedGoalSpend(goals, today), [goals, today]);
+  const fundedGoalSpend = useMemo(() => getFundedGoalSpend(goals, effectiveToday), [goals, effectiveToday]);
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
   // ── Event log cascade ──
@@ -682,7 +697,7 @@ export default function App() {
         prevWeekNet={prevWeekNet}
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
-        today={today}
+        today={effectiveToday}
         fundedGoalSpend={fundedGoalSpend}
         isAdmin={isAdmin}
       />}
@@ -695,7 +710,7 @@ export default function App() {
         projectedAnnualNet={projectedAnnualNet}
         currentWeek={currentWeek}
         isAdmin={isAdmin}
-        today={today}
+        today={effectiveToday}
         weekNetLookup={weekNetLookup}
       />}
       {currentView === "budget" && <BudgetPanel
@@ -706,7 +721,7 @@ export default function App() {
         futureWeekNets={futureWeekNets}
         currentWeek={currentWeek}
         fiscalWeekInfo={currentWeekNumber}
-        today={today}
+        today={effectiveToday}
         userPaySchedule={config.userPaySchedule ?? "weekly"}
         fundedGoalSpend={fundedGoalSpend}
         isAdmin={isAdmin}
@@ -742,7 +757,7 @@ export default function App() {
         showExtra={showExtra}
         setShowExtra={setShowExtra}
         isAdmin={isAdmin}
-        today={today}
+        today={effectiveToday}
         weekConfirmations={weekConfirmations}
       />}
     </>
@@ -913,6 +928,21 @@ export default function App() {
               ◷ {unconfirmedCount} {unconfirmedCount === 1 ? "week" : "weeks"} to confirm
             </button>
           )}
+          {isAdmin && tempLockDate && (
+            <div style={{ marginTop: "8px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: "3px", padding: "5px 8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-warning)" }}>
+                  {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+              </div>
+              <button
+                onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", fontSize: "14px", lineHeight: 1, padding: "0 2px", display: "flex", alignItems: "center" }}
+                aria-label="Clear lock date"
+              >×</button>
+            </div>
+          )}
         </div>
         <nav style={{ marginTop: "8px", flex: 1 }}>
           <SidebarNavItem item={{ key: "home", label: "Home" }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
@@ -960,6 +990,44 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {/* ── Admin Tools ── */}
+          {isAdmin && (
+            <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginTop: "8px", paddingTop: "8px" }}>
+              <div style={{ padding: "8px 20px 6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)" }}>
+                  Admin Tools{tempLockDate ? ` — ${new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                </span>
+              </div>
+              <div style={{ padding: "4px 20px 12px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Lock Date</div>
+                {tempLockDate ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "11px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
+                    <button
+                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                      style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-red)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 8px", cursor: "pointer" }}
+                    >Clear</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    <input
+                      type="date"
+                      value={adminDateDraft}
+                      onChange={e => setAdminDateDraft(e.target.value)}
+                      style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "11px", padding: "4px 6px", fontFamily: "var(--font-mono)", colorScheme: "dark" }}
+                    />
+                    <button
+                      onClick={() => { if (adminDateDraft) setTempLockDate(adminDateDraft); }}
+                      disabled={!adminDateDraft}
+                      style={{ background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "6px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold" }}
+                    >Set</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </nav>
       </div>
 
@@ -1024,6 +1092,19 @@ export default function App() {
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
                 {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>{currentWeekLabel}</div>}
+                {isAdmin && tempLockDate && (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "1px 4px 1px 6px", flexShrink: 0 }}>
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-warning)" }}>
+                      {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                    <button
+                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                      style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", padding: "0 2px", lineHeight: 1, fontSize: "11px", display: "flex", alignItems: "center" }}
+                      aria-label="Clear lock date"
+                    >×</button>
+                  </div>
+                )}
               </div>
               <div style={{ fontSize: "14px", fontWeight: "bold" }}>Authority Finance</div>
             </div>
@@ -1184,6 +1265,42 @@ export default function App() {
             )}
           </div>
         </nav>
+
+        {/* ── Admin Tools (drawer) ── */}
+        {isAdmin && (
+          <div style={{ borderTop: "1px solid var(--color-border-subtle)", padding: "10px 18px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)" }}>
+                Admin Tools{tempLockDate ? ` — ${new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+              </span>
+            </div>
+            <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Lock Date</div>
+            {tempLockDate ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "12px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
+                <button
+                  onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                  style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-red)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: "pointer" }}
+                >Clear</button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                <input
+                  type="date"
+                  value={adminDateDraft}
+                  onChange={e => setAdminDateDraft(e.target.value)}
+                  style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "16px", padding: "6px 8px", fontFamily: "var(--font-mono)", colorScheme: "dark" }}
+                />
+                <button
+                  onClick={() => { if (adminDateDraft) { setTempLockDate(adminDateDraft); setDrawerOpen(false); } }}
+                  disabled={!adminDateDraft}
+                  style={{ background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "6px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 12px", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold", whiteSpace: "nowrap" }}
+                >Set</button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Active section indicator at bottom */}
         <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: "10px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>

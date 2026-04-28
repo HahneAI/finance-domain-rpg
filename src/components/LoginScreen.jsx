@@ -15,7 +15,7 @@
  * Providers must be enabled in the Supabase dashboard under Authentication > Providers.
  */
 import { useState } from "react";
-import { supabase } from "../lib/supabase.js";
+import { supabase, validateInvestorCode } from "../lib/supabase.js";
 import { iS, lS } from "./ui.jsx";
 
 // ── OAuth provider button ────────────────────────────────────────────────────
@@ -70,9 +70,9 @@ function Divider({ label }) {
   );
 }
 
-// ── Shared wrapper ────────────────────────────────────────────────────────────
+// ── Shared wrapper (exported for investor auth screens) ───────────────────────
 
-function Shell({ title, subtitle, children }) {
+export function Shell({ title, subtitle, children }) {
   return (
     <div style={{ minHeight: "100vh", background: "var(--color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
       <div style={{ width: "100%", maxWidth: "360px", background: "var(--color-bg-surface)", border: "1px solid #222", borderRadius: "12px", padding: "32px 28px" }}>
@@ -89,7 +89,7 @@ function Shell({ title, subtitle, children }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function LoginScreen({ recoveryMode = false, onRecoveryDone }) {
+export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVerified }) {
   const [mode, setMode]         = useState("signin"); // "signin" | "signup" | "forgot"
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -98,6 +98,12 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone }) {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState(null);
   const [info, setInfo]         = useState(null); // success / info messages
+
+  // ── Investor code section ─────────────────────────────────────────────────
+  const [investorCode, setInvestorCode]       = useState("");
+  const [investorLoading, setInvestorLoading] = useState(false);
+  const [investorError, setInvestorError]     = useState(null);
+  const [investorShake, setInvestorShake]     = useState(false);
 
   const isSignUp = mode === "signup";
 
@@ -186,6 +192,21 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone }) {
     }
 
     setLoading(false);
+  }
+
+  async function handleInvestorSubmit() {
+    if (!investorCode.trim() || investorLoading) return;
+    setInvestorLoading(true);
+    setInvestorError(null);
+    const valid = await validateInvestorCode(investorCode);
+    setInvestorLoading(false);
+    if (valid) {
+      onInvestorVerified?.(investorCode.trim().toLowerCase());
+    } else {
+      setInvestorError("Invalid code.");
+      setInvestorShake(true);
+      setTimeout(() => setInvestorShake(false), 350);
+    }
   }
 
   // ── Info / confirmation screen ────────────────────────────────────────────
@@ -291,6 +312,57 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone }) {
           {isSignUp ? "Sign in" : "Create one"}
         </button>
       </div>
+
+      {/* ── Investor access ───────────────────────────────────────────────── */}
+      {!isSignUp && (
+        <div style={{ marginTop: "28px", paddingTop: "20px", borderTop: "1px solid #1a1a1a" }}>
+          <style>{`@keyframes investorShake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}`}</style>
+          <div style={{ marginBottom: "12px" }}>
+            <span style={{ fontSize: "15px", fontWeight: "700", color: "var(--color-green)", textDecoration: "underline", letterSpacing: "1px" }}>I</span>
+            <span style={{ fontSize: "10px", fontWeight: "600", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>NVESTOR</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <input
+              type="text"
+              value={investorCode}
+              onChange={e => {
+                setInvestorCode(e.target.value.replace(/[^a-zA-Z]/g, ""));
+                setInvestorError(null);
+              }}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleInvestorSubmit(); } }}
+              placeholder="enter access code"
+              autoComplete="off"
+              style={{
+                ...iS,
+                borderRadius: "8px",
+                border: investorError ? "1px solid var(--color-red)" : "1px solid var(--color-border-subtle)",
+                animation: investorShake ? "investorShake 0.3s ease" : "none",
+              }}
+            />
+            {investorError && (
+              <div style={{ fontSize: "11px", color: "var(--color-red)", letterSpacing: "0.3px" }}>{investorError}</div>
+            )}
+            <button
+              type="button"
+              disabled={investorLoading || !investorCode}
+              onClick={handleInvestorSubmit}
+              style={{
+                background: investorLoading ? "var(--color-bg-raised)" : "var(--color-green)",
+                color: investorLoading ? "var(--color-text-disabled)" : "var(--color-bg-base)",
+                border: "none", borderRadius: "8px",
+                padding: "11px 0", fontSize: "11px",
+                letterSpacing: "2px", textTransform: "uppercase",
+                fontWeight: "bold",
+                cursor: (investorLoading || !investorCode) ? "default" : "pointer",
+                transition: "background 0.15s", width: "100%",
+                opacity: !investorCode ? 0.45 : 1,
+              }}
+            >
+              {investorLoading ? "Verifying…" : "Access"}
+            </button>
+          </div>
+        </div>
+      )}
 
     </Shell>
   );

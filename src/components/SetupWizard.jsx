@@ -33,11 +33,20 @@ const LIFE_EVENTS = [
   { value: "commission_job", label: "Got a commission job",  sub: "Adds commission income to your pay structure" },
 ];
 
-function Step0({ lifeEvent, onLifeEventChange }) {
+function Step0({ lifeEvent, onLifeEventChange, formData, isInvestor = false }) {
   // ── First-run ──────────────────────────────────────────────────────────────
   if (lifeEvent === null) {
+    const firstName = isInvestor ? (formData?.investorName ?? "").split(" ")[0] : "";
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        {isInvestor && firstName && (
+          <p style={{
+            fontSize: "15px", lineHeight: "1.5",
+            color: "var(--color-text-primary)", margin: 0, fontWeight: 600,
+          }}>
+            Welcome, {firstName}.
+          </p>
+        )}
         <p style={{
           fontSize: "14px", lineHeight: "1.6",
           color: "var(--color-text-secondary)", margin: 0,
@@ -152,10 +161,11 @@ function errBorder(show) {
 const OT_THRESHOLDS = [40, 48];
 const OT_MULTIPLIERS = [1.5, 2];
 
-function Step1({ formData, onChange, lifeEvent, attempted }) {
+function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false }) {
   // Gate: has the user answered "Do you work for DHL?" yet?
+  // Investor accounts skip the gate entirely — always treated as non-DHL.
   const [gateTouched, setGateTouched] = useState(
-    formData.employerPreset === "DHL" || formData.setupComplete === true
+    isInvestor || formData.employerPreset === "DHL" || formData.setupComplete === true
   );
 
   // Local tracking for custom OT threshold input
@@ -223,21 +233,23 @@ function Step1({ formData, onChange, lifeEvent, attempted }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-      {/* ── Employer Preset Gate ── */}
-      <Field label="Do you work for DHL?">
-        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-          <Pill label="Yes" active={isDHL} onClick={() => setDHL(true)} />
-          <Pill label="No"  active={gateTouched && !isDHL} onClick={() => setDHL(false)} />
-        </div>
-        {isDHL && (
-          <div style={{
-            marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
-            lineHeight: "1.5",
-          }}>
-            Rotation, attendance, and dual-rate auto-configured. Weekend rate pre-filled.
+      {/* ── Employer Preset Gate (hidden for investor accounts) ── */}
+      {!isInvestor && (
+        <Field label="Do you work for DHL?">
+          <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+            <Pill label="Yes" active={isDHL} onClick={() => setDHL(true)} />
+            <Pill label="No"  active={gateTouched && !isDHL} onClick={() => setDHL(false)} />
           </div>
-        )}
-      </Field>
+          {isDHL && (
+            <div style={{
+              marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
+              lineHeight: "1.5",
+            }}>
+              Rotation, attendance, and dual-rate auto-configured. Weekend rate pre-filled.
+            </div>
+          )}
+        </Field>
+      )}
 
       {/* ── DHL: Team + shift ── */}
       {isDHL && (
@@ -1608,9 +1620,13 @@ function StepStub({ title, sprint }) {
 //                      receives taxedWeeks auto-populated + setupComplete: true
 //   lifeEvent        — null (first-run) | "lost_job" | "changed_jobs" | "commission_job"
 // ─────────────────────────────────────────────────────────────────────────────
-export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null }) {
+export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false }) {
   const [stepIdx,   setStepIdx]   = useState(0);
-  const [formData,  setFormData]  = useState({ ...config });
+  const [formData,  setFormData]  = useState(
+    isInvestor
+      ? { ...config, employerPreset: null, otThreshold: config.otThreshold || 40, standardWeeklyHours: config.standardWeeklyHours || 40 }
+      : { ...config }
+  );
   const [lifeEvent, setLifeEvent] = useState(initialLifeEvent);
   const [attempted, setAttempted] = useState(false);
 
@@ -1720,6 +1736,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
                 lifeEvent={lifeEvent}
                 onLifeEventChange={setLifeEvent}
                 attempted={attempted}
+                isInvestor={isInvestor}
               />
             : <StepStub title={current?.title} sprint={current?.sprint} />
           }

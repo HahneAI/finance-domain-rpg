@@ -12,6 +12,12 @@ export const DEFAULT_CONFIG = {
   paycheckBuffer: 50,          // $/week excluded per check (bufferEnabled must be true); max $200
   bufferOverrideAck: false,    // legacy — kept for backward compat with existing saved data
 
+  // ── Investor account ────────────────────────────────────────
+  isInvestor: false,           // true for accounts created via investor access code
+  investorName: null,          // display name from InvestorRegister form
+  investorCompany: null,       // optional company / LLC name
+  investorCity: null,          // optional city
+
   // ── Employer preset ─────────────────────────────────────────
   employerPreset: null,        // "DHL" | null — drives rotation, bucket, dual-rate logic
   startingWeekIsLong: null,    // DHL only: true = first active week is the higher-hour (long) week; null = derive from dhlTeam

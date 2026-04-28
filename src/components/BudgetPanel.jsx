@@ -153,6 +153,27 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     return keys;
   }, [expenses]);
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
+
+  // When viewing a future quarter or month, surface the projected first-check surplus
+  // for that period instead of the current-week baseline.
+  const isViewingFuture = ap > currentPhaseIdx || (activeMonth !== null && activeMonth > currentMonthKey);
+  const targetMonthForFirstCheck = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
+  const firstCheckWeek = useMemo(() => {
+    if (!isViewingFuture || !futureWeeks?.length) return null;
+    return futureWeeks.find(w => toLocalIso(w.weekEnd).slice(0, 7) === targetMonthForFirstCheck) ?? null;
+  }, [isViewingFuture, futureWeeks, targetMonthForFirstCheck]);
+  const firstCheckIdx = firstCheckWeek ? futureWeeks.indexOf(firstCheckWeek) : -1;
+  const firstCheckNet = firstCheckIdx >= 0 ? (futureWeekNets?.[firstCheckIdx] ?? weeklyIncome) : weeklyIncome;
+  const firstCheckMonthKey = firstCheckWeek ? toLocalIso(firstCheckWeek.weekEnd).slice(0, 7) : targetMonthForFirstCheck;
+  const firstCheckPhase = firstCheckWeek ? getPhaseIndex(firstCheckWeek.weekEnd) : ap;
+  const firstCheckExpenses = useMemo(() => {
+    if (!firstCheckWeek) return avgWeeklySpend;
+    return expenses.reduce((s, e) => s + getEffectiveAmountForMonth(e, firstCheckMonthKey, firstCheckPhase), 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstCheckWeek, expenses, firstCheckMonthKey, firstCheckPhase]);
+  const leftFirstCheck = firstCheckNet - firstCheckExpenses;
+  const firstCheckMonthShort = MONTH_SHORT[parseInt(targetMonthForFirstCheck.slice(5, 7), 10) - 1];
+
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
   const overviewCatOrder = ["Needs", "Lifestyle"];
@@ -559,9 +580,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : perPaycheck);
       const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
+      // Trim future-dated entries — they would otherwise take priority over this new entry
+      // for weeks past their effectiveFrom date, causing unexpected cost spikes.
+      const pastEntries = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
       const newHistory = daysDiff <= 3
-        ? existing.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
-        : [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
+        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
+        : [...pastEntries, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
       return { ...e, history: newHistory, billingMeta, monthlyOverrides: overrides };
     }));
     setEditId(null);
@@ -579,9 +603,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : perPaycheck);
       const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
+      // Trim future-dated entries so this override is authoritative for all future weeks.
+      const pastEntries = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
       const newHistory = daysDiff <= 3
-        ? existing.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
-        : [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
+        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
+        : [...pastEntries, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
       return { ...e, history: newHistory, billingMeta };
     }));
     setEditId(null);
@@ -941,20 +967,35 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           return              { arrow: "down",  delta: `${pct}% of income`, label: "· tighten spend", variant: "purple" };
         })() : undefined}
       />
-      <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"}
-        insight={weeklyIncome > 0 ? (() => {
-          const nextCheck = futureWeekNets?.[0] ?? null;
-          const lastCheck = prevWeekNet ?? weeklyIncome;
-          if (nextCheck != null) {
-            const diff = Math.round(nextCheck - lastCheck);
-            if (Math.abs(diff) >= 20) return { arrow: diff > 0 ? "up" : "down", delta: `${diff > 0 ? "+" : ""}${f(diff)}`, label: "next check vs last", variant: diff > 0 ? "blue" : "purple" };
-          }
-          const pct = Math.round((leftThisWeek / weeklyIncome) * 100);
-          if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: "of paycheck clear",    variant: "blue" };
-          if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: "of paycheck remaining", variant: "purple" };
-          return           { arrow: "flat",  delta: `${pct}%`, label: "of paycheck remaining", variant: "blue" };
-        })() : undefined}
-      />
+      {isViewingFuture && firstCheckWeek ? (
+        <Card
+          label={`First Check · ${firstCheckMonthShort}`}
+          val={f2(leftFirstCheck)}
+          rawVal={leftFirstCheck}
+          color={leftFirstCheck >= 0 ? "var(--color-green)" : "var(--color-red)"}
+          insight={weeklyIncome > 0 ? (() => {
+            const pct = Math.round((leftFirstCheck / firstCheckNet) * 100);
+            if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: `of ${firstCheckMonthShort} check clear`, variant: "blue" };
+            if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: `of ${firstCheckMonthShort} check left`,  variant: "purple" };
+            return           { arrow: "flat",  delta: `${pct}%`, label: `of ${firstCheckMonthShort} check left`,  variant: "blue" };
+          })() : undefined}
+        />
+      ) : (
+        <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"}
+          insight={weeklyIncome > 0 ? (() => {
+            const nextCheck = futureWeekNets?.[0] ?? null;
+            const lastCheck = prevWeekNet ?? weeklyIncome;
+            if (nextCheck != null) {
+              const diff = Math.round(nextCheck - lastCheck);
+              if (Math.abs(diff) >= 20) return { arrow: diff > 0 ? "up" : "down", delta: `${diff > 0 ? "+" : ""}${f(diff)}`, label: "next check vs last", variant: diff > 0 ? "blue" : "purple" };
+            }
+            const pct = Math.round((leftThisWeek / weeklyIncome) * 100);
+            if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: "of paycheck clear",    variant: "blue" };
+            if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: "of paycheck remaining", variant: "purple" };
+            return           { arrow: "flat",  delta: `${pct}%`, label: "of paycheck remaining", variant: "blue" };
+          })() : undefined}
+        />
+      )}
     </div>
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>

@@ -1355,6 +1355,9 @@ export default function App() {
                 );
               })}
             </div>
+          </div>
+        )}
+
         {/* ── Admin Tools (drawer) ── */}
         {isAdmin && (
           <div style={{ borderTop: "1px solid var(--color-border-subtle)", padding: "10px 18px 14px" }}>

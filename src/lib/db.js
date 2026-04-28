@@ -74,7 +74,7 @@ export async function loadUserData() {
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra, is_dhl, is_admin, pto_goal")
+    .select("config, expenses, goals, logs, show_extra, is_dhl, is_admin, pto_goal, is_investor")
     .eq("user_id", userId)
     .single();
 
@@ -84,6 +84,17 @@ export async function loadUserData() {
     .select("week_confirmations")
     .eq("user_id", userId)
     .single();
+
+  // Fetch investor profile when this is an investor account — needed to restore active_account.
+  let investorRow = null;
+  if (data?.is_investor) {
+    const { data: invData } = await supabase
+      .from("investor_users")
+      .select("investor_name, email, company_name, city, code_used, active_account")
+      .eq("auth_user_id", userId)
+      .maybeSingle();
+    investorRow = invData ?? null;
+  }
 
   if (error || !data) {
     console.warn("No user_data row found, using defaults.", error?.message);
@@ -221,15 +232,18 @@ export async function loadUserData() {
     : ensureInitialFoodExpense(migratedExpenses);
 
   return {
-    config:             mergedConfig,
-    expenses:           normalizedExpenses,
-    goals:              migratedGoals,
-    logs:               Array.isArray(data.logs)  ? data.logs  : [],
-    showExtra:          data.show_extra,
-    weekConfirmations:  wcData?.week_confirmations ?? {},
-    isDHL:              data.is_dhl   ?? false,
-    isAdmin:            data.is_admin ?? false,
-    ptoGoal:            data.pto_goal ?? null,
+    config:               mergedConfig,
+    expenses:             normalizedExpenses,
+    goals:                migratedGoals,
+    logs:                 Array.isArray(data.logs)  ? data.logs  : [],
+    showExtra:            data.show_extra,
+    weekConfirmations:    wcData?.week_confirmations ?? {},
+    isDHL:                data.is_dhl      ?? false,
+    isAdmin:              data.is_admin    ?? false,
+    ptoGoal:              data.pto_goal    ?? null,
+    isInvestor:           data.is_investor ?? false,
+    investorProfile:      investorRow,
+    activeInvestorAccount: investorRow?.active_account ?? 1,
   };
 }
 

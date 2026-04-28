@@ -204,6 +204,8 @@ export default function App() {
   // Active investor account tab — 1 = Demo 1, 2 = Demo 2, 3 = personal account.
   // Defaults to 1 so investors land on demo content on every login.
   const [activeInvestorAccount, setActiveInvestorAccount] = useState(1);
+  // Investor profile fetched from investor_users on login — null for non-investors.
+  const [investorProfile, setInvestorProfile] = useState(null);
   const [tempLockDate, setTempLockDate] = useState(() => {
     const stored = localStorage.getItem("admin_temp_lock_date");
     return stored && Date.parse(stored) > 0 ? stored : null;
@@ -298,6 +300,10 @@ export default function App() {
         setIsDHL(data.isDHL);
         setIsAdmin(data.isAdmin);
         setPtoGoal(data.ptoGoal);
+        if (data.isInvestor) {
+          setInvestorProfile(data.investorProfile ?? null);
+          setActiveInvestorAccount(data.activeInvestorAccount ?? 1);
+        }
         // Investors reach the wizard via account 3 selection — not on login.
         if (!data.config.setupComplete && !data.config.isInvestor) setWizardEntry(false);
         setLoading(false);
@@ -1240,7 +1246,7 @@ export default function App() {
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <button
               title="Sign out"
-              onClick={async () => { await supabase.auth.signOut({ scope: "local" }); setDrawerOpen(false); setInvestorSession(null); setActiveInvestorAccount(1); }}
+              onClick={async () => { await supabase.auth.signOut({ scope: "local" }); setDrawerOpen(false); setInvestorSession(null); setActiveInvestorAccount(1); setInvestorProfile(null); }}
               style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

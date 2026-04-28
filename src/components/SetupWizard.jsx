@@ -33,11 +33,20 @@ const LIFE_EVENTS = [
   { value: "commission_job", label: "Got a commission job",  sub: "Adds commission income to your pay structure" },
 ];
 
-function Step0({ lifeEvent, onLifeEventChange }) {
+function Step0({ lifeEvent, onLifeEventChange, formData, isInvestor = false }) {
   // ── First-run ──────────────────────────────────────────────────────────────
   if (lifeEvent === null) {
+    const firstName = isInvestor ? (formData?.investorName ?? "").split(" ")[0] : "";
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        {isInvestor && firstName && (
+          <p style={{
+            fontSize: "15px", lineHeight: "1.5",
+            color: "var(--color-text-primary)", margin: 0, fontWeight: 600,
+          }}>
+            Welcome, {firstName}.
+          </p>
+        )}
         <p style={{
           fontSize: "14px", lineHeight: "1.6",
           color: "var(--color-text-secondary)", margin: 0,

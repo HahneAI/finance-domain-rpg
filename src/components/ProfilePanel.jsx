@@ -1242,7 +1242,7 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack }) {
 // ── TaxPlanDetail ────────────────────────────────────────────────────────────
 
 function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, showExtra, setShowExtra, onBack, isAdmin = false, today, weekConfirmations = {} }) {
-  const { extraPerCheck, taxedWeekCount, fedLiability, moLiability, ficaTotal, fedWithheldBase, moWithheldBase, fedGap, moGap, totalGap, targetExtraTotal, fedAGI } = taxDerived;
+  const { extraPerCheck, taxedWeekCount, fedLiability, moLiability, ficaTotal, fedWithheldBase, moWithheldBase, fedGap, moGap, totalGap, targetExtraTotal, fedAGI, eventGrossDelta = 0, fedLiabilityEventDelta = 0, moLiabilityEventDelta = 0 } = taxDerived;
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gN = w => computeNet(w, config, extraPerCheck, showExtra);
@@ -1364,6 +1364,32 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
         <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px", lineHeight: 1, marginBottom: "12px" }}>Tax Gap Analysis</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "13px" }}>
           {[{ l: "Fed withheld (taxed weeks)", v: f(fedWithheldBase), c: "var(--color-green)" }, { l: "MO withheld (taxed weeks)", v: f(moWithheldBase), c: "var(--color-green)" }, { l: "Federal gap", v: f(fedGap), c: "var(--color-red)" }, { l: "Missouri gap", v: f(moGap), c: "var(--color-red)" }, { l: "Total income tax gap", v: f(totalGap), c: "var(--color-red)" }, { l: "Target owed at filing", v: f(config.targetOwedAtFiling), c: "var(--color-gold)" }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "var(--color-text-primary)" }}>{r.l}</span><span style={{ fontWeight: "bold", color: r.c }}>{r.v}</span></div>)}
+        </div>
+
+        {/* Event log pipeline indicator — always shown so user can confirm events are wired in */}
+        <div style={{ marginTop: "14px", padding: "10px 12px", background: "var(--color-bg-base)", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
+          <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "2px" }}>Log Event Impact (live)</div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+            <span style={{ color: "var(--color-text-secondary)" }}>Gross adjustment from events</span>
+            <span style={{ fontWeight: "bold", color: eventGrossDelta === 0 ? "var(--color-text-disabled)" : eventGrossDelta > 0 ? "var(--color-green)" : "var(--color-red)", fontVariantNumeric: "tabular-nums" }}>
+              {eventGrossDelta === 0 ? "—" : (eventGrossDelta > 0 ? "+" : "") + f2(eventGrossDelta)}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+            <span style={{ color: "var(--color-text-secondary)" }}>Fed liability shift from events</span>
+            <span style={{ fontWeight: "bold", color: fedLiabilityEventDelta === 0 ? "var(--color-text-disabled)" : fedLiabilityEventDelta > 0 ? "var(--color-red)" : "var(--color-green)", fontVariantNumeric: "tabular-nums" }}>
+              {fedLiabilityEventDelta === 0 ? "—" : (fedLiabilityEventDelta > 0 ? "+" : "") + f2(fedLiabilityEventDelta)}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+            <span style={{ color: "var(--color-text-secondary)" }}>State liability shift from events</span>
+            <span style={{ fontWeight: "bold", color: moLiabilityEventDelta === 0 ? "var(--color-text-disabled)" : moLiabilityEventDelta > 0 ? "var(--color-red)" : "var(--color-green)", fontVariantNumeric: "tabular-nums" }}>
+              {moLiabilityEventDelta === 0 ? "—" : (moLiabilityEventDelta > 0 ? "+" : "") + f2(moLiabilityEventDelta)}
+            </span>
+          </div>
+          {eventGrossDelta === 0 && (
+            <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "2px" }}>No logged events affecting gross yet — will update as you confirm weeks.</div>
+          )}
         </div>
       </div>
 

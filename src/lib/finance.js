@@ -1117,8 +1117,14 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
   } else if (event.type === "bonus") {
     grossGained = event.amount || 0;
   } else if (event.type === "other_loss") { grossLost = event.amount || 0; }
-  // Net impact accounts for FICA always, plus withholding on taxed weeks
-  const isTaxedWeek = Array.isArray(cfg.taxedWeeks) && cfg.taxedWeeks.includes(Number(event.weekIdx));
+  // Net impact accounts for FICA always, plus withholding on taxed weeks.
+  // Past-week overrides (pastWeekTaxStatusOverrides) take precedence over the
+  // scheduled status so net projections stay consistent with the tax plan view.
+  const _wIdx = Number(event.weekIdx);
+  const _overrides = cfg.pastWeekTaxStatusOverrides ?? {};
+  const isTaxedWeek = Object.prototype.hasOwnProperty.call(_overrides, _wIdx)
+    ? Boolean(_overrides[_wIdx])
+    : (Array.isArray(cfg.taxedWeeks) && cfg.taxedWeeks.includes(_wIdx));
   const withholdingRate = isTaxedWeek
     ? (isWeek2 ? cfg.w2FedRate + cfg.w2StateRate : cfg.w1FedRate + cfg.w1StateRate)
     : 0;

@@ -1,317 +1,182 @@
 # CLAUDE.md — Authority Finance
 
-**Line limit:** keep under practical cap; compact older sections before adding new content.
-
----
-
-## Agent Delegation Guide
-
-Two agents work this codebase. Route tasks correctly when logging to the backlog.
-
-### Claude Code (CC)
-Handles anything requiring planning, reasoning, or cross-file awareness.
-- Multi-file changes or cascading logic
-- Architectural decisions
-- Core engine work (`finance.js`, `App.jsx`, `rollingTimeline.js`)
-- Fuzzy or iterative tasks that need conversation
-- Anything that could break the income/tax/goals pipeline
-
-### Codex
-Best for scoped, self-contained execution with a clear spec.
-- Single component builds or rewrites
-- Tokenizing hardcoded colors/styles
-- Adding a panel, modal, or UI element with clear inputs/outputs
-- Isolated refactors that don't touch core state
-- Anything where a task spec can fully describe the job in one shot
-
-### Tagging Convention (todo backlog)
-- `[CC]` — Claude Code must handle this
-- `[CODEX]` — Good Codex candidate, write a task spec before firing
-- `[CODEX?]` — Probably Codex but verify scope first before delegating
-
-### Codex Handoff Rule
-Before delegating a `[CODEX]` task, ensure `docs/CODEX_MEMORY.md` is current.
-Claude Code should update it at the end of any session that changes
-architecture, state shape, or core logic.
-
----
-
 ## Product
-
 **Company:** Authority | **Product:** Authority OS | **Tagline:** *"You are missing out… on you."*
-
-**This app:** Authority Finance (A:Fin) — flagship pillar. Personal finance dashboard covering income modeling, budgeting, goals, and event logging.
-
-**Other pillars (post-launch):**
-
-| Label | Domain |
-|-------|--------|
-| A:Intel | Career / education / knowledge |
-| A:Perf | Fitness / physical optimization |
-| A:Legacy | Family planning / long-term structure |
-
-**Launch requirement:** A:Fin MVP complete → public launch → build remaining pillars.
-
+**This app:** Authority Finance (A:Fin) — personal finance dashboard: income modeling, budgeting, goals, event logging.
 **Design system:** Flow shell (live) + Pulse overlay (Phase 2). See `docs/authority-design-system`.
-
-**Liquid Glass UI layer (live):** `src/components/LiquidGlass.jsx` — frosted glass surfaces for nav, pulse pills, modals, log summaries. Glass sheen recipe (5-layer raised glass effect) documented in `docs/active-systems.md` §13 and `docs/premium-ui-TODO.md` §4. Codex reference: `AGENTS.md` §Liquid Glass.
+**Liquid Glass UI:** `src/components/LiquidGlass.jsx` — frosted glass for nav, pills, modals. Recipe in `docs/active-systems.md` §13.
 
 ---
 
 ## Tech Stack
-
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React 19 + Vite 8 |
 | Styling | Tailwind CSS v4 + CSS custom properties |
 | Auth + DB | Supabase (auth live, localStorage→Supabase migration path) |
 | Testing | Vitest + Testing Library |
-| PWA | vite-plugin-pwa (installed, manifest + service worker active) |
+| PWA | vite-plugin-pwa (manifest + service worker active) |
 | Hosting | Vercel |
 
-**No backend server.** Pure frontend app. No Express, no Railway, no Claude API, no Stripe — yet.
+**No backend server.** Pure frontend. No Express, no Claude API, no Stripe — yet.
 
 ---
 
 ## File Structure
-
 ```
 src/
 ├── App.jsx                  — root shell, nav, auth gate, fiscal week state
 ├── index.css                — @theme design tokens (single source of truth)
-├── main.jsx
 ├── components/
-│   ├── ui.jsx               — all shared primitives (MetricCard, NT, VT, SmBtn, SH, iS, lS)
+│   ├── ui.jsx               — shared primitives (MetricCard, NT, VT, SmBtn, SH, iS, lS)
 │   ├── HomePanel.jsx        — dashboard home tiles
 │   ├── IncomePanel.jsx      — income / tax / rolling weekly view
 │   ├── BudgetPanel.jsx      — expenses / goals / loans
 │   ├── BenefitsPanel.jsx    — 401k + PTO
 │   ├── LogPanel.jsx         — event log + Log Effect Summary
 │   ├── WeekConfirmModal.jsx — weekly schedule confirmation
-│   ├── SetupWizard.jsx      — multi-step onboarding
+│   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
 │   ├── LoginScreen.jsx      — auth shell
 │   └── ProfilePanel.jsx     — account + employment settings
 ├── constants/
-│   ├── config.js            — FISCAL_YEAR_START, PHASES, EVENT_TYPES, etc.
+│   ├── config.js            — FISCAL_YEAR_START, PHASES, EVENT_TYPES, DHL_PRESET, BENEFIT_OPTIONS
 │   └── stateTaxTable.js     — state tax rate table
-├── hooks/
-│   └── useLocalStorage.js
+├── hooks/useLocalStorage.js
 ├── lib/
 │   ├── finance.js           — buildYear, computeNet, computeGoalTimeline, calcEventImpact
-│   ├── rollingTimeline.js   — deriveRollingIncomeWeeks, deriveRollingTimelineMonths, progressiveScale
+│   ├── rollingTimeline.js   — deriveRollingIncomeWeeks, deriveRollingTimelineMonths
+│   ├── fiscalWeek.js        — FISCAL_WEEKS_PER_YEAR, week index helpers
 │   ├── db.js                — localStorage persistence
 │   └── supabase.js          — Supabase client
-└── test/                    — Vitest tests for lib, components, hooks, constants
-
+└── test/                    — Vitest tests
 docs/                        — project documentation
 database/migrations/         — Supabase SQL migrations
 ```
 
 ---
 
+## SetupWizard Quick Reference (`src/components/SetupWizard.jsx` ~1800 lines)
+
+**Export:** `SetupWizard({ config, onComplete, onCancel, lifeEvent })`
+- `config` — current app config; spread into `formData` on mount
+- `lifeEvent` — `null` (first-run) | `"lost_job"` | `"changed_jobs"` | `"commission_job"`
+- `onComplete(data)` — receives merged config + `taxedWeeks` array + `setupComplete: true`
+
+**Steps (controlled by `STEP_DEFS` — each has `showIf(formData, lifeEvent)` + `isValid(formData)`):**
+| Step ID | Title | Key fields / notes |
+|---------|-------|-------------------|
+| 0 | Welcome | First-run intro or life event picker (LIFE_EVENTS array) |
+| 1 | Pay Structure | DHL employer gate → team/shift/rotation; base rate, OT threshold/multiplier, weekend diff, commission |
+| 2 | Schedule | Job start date → `firstActiveIdx`; rotation week (DHL) or std hours + pay period close day |
+| 3 | Deductions | BenefitCard toggles (BENEFIT_OPTIONS), `otherDeductions` rows, attendance gate; `skippable: true` |
+| 4 | Tax Rates | State select, inline `PaystubCalc`, rate summary with FICA + std deduction; DHL MO preset |
+| 7 | Wrap Up | Live net preview (`estimateWeeklyGross`), paycheck buffer toggle ($50 default, $200 max), tax-exempt opt-in |
+
+**Life event routing:** `lost_job` → steps 0–4; `commission_job` → steps 0–4 + commission field in step 1; `null` / `"changed_jobs"` → all steps including WrapUp (step 7).
+
+**Internal helpers (file-private):** `Pill`, `Field`, `FieldRow`, `errBorder`, `BenefitCard`, `PaystubCalc`, `StepWrapUp`, `StepStub`, `estimateWeeklyGross`.
+
+**State:** `formData` is flat; `update(patch)` merges via `setFormData(prev => ({ ...prev, ...patch }))`. `attempted` bool set on failed Next — triggers red borders/labels; resets on step change.
+
+**On complete:** enforces DHL overrides (`payPeriodEndDay: 0, otThreshold: 40`), runs `buildYear`, derives `taxedWeeks` from `firstActiveIdx`, calls `onComplete`.
+
+---
+
 ## UI Component Standards
 
-Full token reference: ` ##UI Design System — Authority Finance` (Next Section). Full component reference: `docs/active-systems.md`.
-
 ### Shared Primitives (`src/components/ui.jsx`)
-
 | Export | What it is | Key props |
 |--------|-----------|-----------|
-| `MetricCard` / `Card` | Static + interactive metric card | `label`, `val`, `sub`, `status` (`green\|gold\|red`), `onClick`, `rawVal` (countup), `entranceIndex` (stagger), `span` |
+| `MetricCard` / `Card` | Static + interactive metric card | `label`, `val`, `sub`, `status` (`green\|gold\|red`), `onClick`, `rawVal`, `entranceIndex`, `span` |
 | `NT` | Nav tab | `label`, `active`, `onClick` — teal fill when active |
-| `VT` | View tab (sub-panel) | Same as NT, smaller padding |
-| `SmBtn` | Inline utility button | `children`, `onClick`, `c` (color), `bg` |
+| `VT` | View tab | Same as NT, smaller padding |
+| `SmBtn` | Inline utility button | `children`, `onClick`, `c`, `bg` |
 | `SH` | Section header | `children`, `color`, `right` — teal left-bar + uppercase |
 | `iS` | Input style object | Spread onto `<input>` / `<select>` — JetBrains Mono, 16px |
 | `lS` | Label style object | Spread onto `<label>` — 10px, 2px tracking, uppercase |
 
-### Layout Constants
-- Card grid gap: `12px` | Section `marginBottom`: `20px`
-- Card padding: `18px 16px` (static) · `16px 18px` + `minHeight: 88px` (interactive)
+**Layout:** card gap `12px` · section `marginBottom` `20px` · card pad `18px 16px` (static) / `16px 18px` + `minHeight: 88px` (interactive).
 
-### Inline Button Pattern
-```
-CANCEL: bg-raised, text-secondary, border-subtle, radius 12px, pad 7px 14px, 10px uppercase
-SAVE:   bg-green or bg-gold (teal), color bg-base, radius 12px, pad 8px 16px, 10px bold uppercase
-```
+**Button pattern:** CANCEL — bg-raised, text-secondary, border-subtle, radius 12px, pad 7px 14px, 10px uppercase. SAVE — bg-gold/green, color bg-base, radius 12px, pad 8px 16px, 10px bold uppercase.
 
-### Numeric Input Standard (required for all new number inputs)
-
-Number inputs must allow blank display while the user is mid-edit. **Never coerce on `onChange`.**
-
-**Rules:**
-1. `value` — use a string draft state or `field ?? ""` so the field can visually go empty
-2. `onChange` — store the raw string; do NOT use `parseFloat(v) || fallback` (the fallback snaps the display). Only parse at commit time (blur, save button, form submit)
-3. On commit: `parseFloat(draft) || 0` or explicit null-check is fine
-4. For required fields with a multi-step flow: pass an `attempted` boolean (set when user taps Next/Save on a blank required field). When `attempted && fieldEmpty`, show: red label (`color: var(--color-red)`), red input border (`border: 1px solid var(--color-red)`), and an inline `↑ Required` message below the input
-
-**Wizard pattern** (SetupWizard `Field` + `errBorder` helper already support this):
-```jsx
-const [draft, setDraft] = useState(String(config.field ?? ""));
-<Field label="Rate" error={attempted && !draft ? "Required" : null}>
-  <input type="number" value={draft}
-    onChange={e => setDraft(e.target.value)}
-    style={{ ...iS, ...errBorder(attempted && !draft) }} />
-</Field>
-// On save: parseFloat(draft) || 0
-```
-
-**Inline panel edit pattern** (BudgetPanel, ProfilePanel, etc.):
-```jsx
-value={editDraft.amount}   // "" is allowed
-onChange={e => setEditDraft(v => ({ ...v, amount: e.target.value }))}
-// On save: parseFloat(editDraft.amount) || 0
-```
+### Numeric Input Standard
+**Never coerce on `onChange`.** Use string draft state (`field ?? ""`); only `parseFloat` at commit (blur/save). For required fields, pass `attempted` bool — show red label + border + `↑ Required` when `attempted && fieldEmpty`. Reference implementation: `Field` + `errBorder` in SetupWizard.
 
 ### Animation Rules
 - Entrance stagger: `entranceIndex` on MetricCard → `fadeSlideUp` 400ms, 80ms/card, capped 400ms
-- Countup: `rawVal` prop → 0→target over 1200ms on mount/change
-- Value flash: `rawVal` change → `--color-gold-bright` 150ms, fades over 600ms
-- **No bounce, no spin, no scale-up on mount. Press = `scale(0.97)` only. All durations ≤ 500ms except countup.**
+- Countup: `rawVal` → 0→target 1200ms on mount/change · value flash → gold 150ms, fades 600ms
+- **No bounce, no spin, no scale-up on mount. Press = `scale(0.97)` only. All ≤ 500ms except countup.**
 
 ---
 
-## UI Design System — Authority Finance
-
-Design token source of truth. All values confirmed against `src/index.css` `@theme` block.
+## UI Design System — Color Tokens (`src/index.css` `@theme`)
 **Never use raw hex for accent, green, or red. Always reference tokens.**
-
----
-
-### Color Tokens (live in `src/index.css`)
 
 | Token | Value | Role |
 |-------|-------|------|
-| `--color-bg-base` | `#05100c` | App shell / page background |
+| `--color-bg-base` | `#05100c` | App shell background |
 | `--color-bg-surface` | `#112c1f` | Card background |
 | `--color-bg-raised` | `#163828` | Elevated surfaces, button hover |
-| `--color-bg-gradient` | `linear-gradient(180deg, #091a11, #05100c)` | Header / container gradient |
-| `--color-gold` | `#00c896` | Legacy alias → maps to `--color-accent-primary` |
-| `--color-accent-primary` | `#00c896` | Flow identity: active tabs, CTAs, section bars |
-| `--color-green` | `#22c55e` | Semantic positive: income values, healthy status |
-| `--color-red` | `#ef4444` | Negative / spend / risk |
+| `--color-bg-gradient` | `linear-gradient(180deg, #091a11, #05100c)` | Header gradient |
+| `--color-gold` / `--color-accent-primary` | `#00c896` | Active tabs, CTAs, section bars |
+| `--color-green` | `#22c55e` | Income values, positive status |
+| `--color-red` | `#ef4444` | Spend, negative, risk |
 | `--color-warning` | `#f59e0b` | Warning / attention |
 | `--color-text-primary` | `#e6f4ef` | Body text |
 | `--color-text-secondary` | `#7fa39a` | Labels, sublabels |
 | `--color-text-disabled` | `#4a645c` | Inactive / disabled |
 | `--color-border-subtle` | `#1f3b31` | Card borders |
-| `--color-border-accent` | `rgba(0,200,150,0.28)` | Accent-highlighted borders |
-| `--font-display` | `'Inter'` | Metric values, headings |
-| `--font-sans` | `'Inter'` | All UI body text |
-| `--font-mono` | `'JetBrains Mono'` | Inputs + data table cells only |
+| `--color-border-accent` | `rgba(0,200,150,0.28)` | Accent borders |
+| `--font-display` / `--font-sans` | `'Inter'` | Headings + body |
+| `--font-mono` | `'JetBrains Mono'` | Inputs + data cells only |
 
-**Note:** `index.html` still loads DM Serif Display + DM Sans via Google Fonts — dead weight, tracked for cleanup.
+**Status:** `green` = positive/ahead · `gold` = attention/mixed · `red` = risk/behind
 
----
-
-### Status Color Semantics (Global)
-
-Applied via `status` prop on `MetricCard` and inline throughout panels:
-
-- **green** = positive / healthy / ahead
-- **gold** = neutral attention / mixed / watchlist
-- **red** = negative / risk / behind
-
----
-
-### Pulse Signal Tokens (Phase 2 — not yet in `index.css`)
-
-Reserved for the intelligence overlay layer. Do not use on Flow UI elements.
-
-| Token | Value | Role |
-|-------|-------|------|
-| `--color-signal-blue` | `#5B8CFF` | Trend indicators, insight labels |
-| `--color-signal-purple` | `#7C5CFF` | AI-generated insight moments |
-| `--color-signal-glow` | `rgba(124,92,255,0.25)` | Subtle glow on AI insight surfaces |
-
+**Pulse tokens (Phase 2 — not in index.css):** `--color-signal-blue` `#5B8CFF` · `--color-signal-purple` `#7C5CFF` · `--color-signal-glow` `rgba(124,92,255,0.25)` — reserved for AI insight overlay, do not use on Flow elements.
 
 ---
 
 ## Development Workflow
-
-**30-minute sprints, 4x/week.**
-
-Before: know the task, state it clearly.
-After: commit (even if broken), one-sentence summary.
-
-**Key docs for context:**
+**30-min sprints, 4×/week.** Before: state the task clearly. After: commit + one-sentence summary.
 - `docs/active-systems.md` — how every live system works
-- `docs/authority-design-system` — Flow + Pulse visual system
 - `docs/TODO.md` — prioritized backlog
-- `docs/account-reference.json` — Anthony's primary account ground truth (see below)
+- `docs/account-reference.json` — Anthony's primary account ground truth
 
 ---
 
-## Mobile Checklist (run before any mobile ship)
-
-- [ ] No horizontal scroll at 390px and 375px
-- [ ] All tap targets ≥ 44×44px
-- [ ] Font-size ≥ 16px on all inputs (prevents iOS zoom)
-- [ ] Bottom nav clears home indicator (`safe-area-inset-bottom`)
-- [ ] PWA installs from Safari "Add to Home Screen"
-- [ ] Standalone display mode active (no browser chrome)
-- [ ] Dark status bar on iPhone (black-translucent)
-- [ ] Dynamic Island / notch not obscured
-
----
-
-## Account Reference (Ground Truth)
-
-`docs/account-reference.json` holds Anthony's primary DHL account data in three tiers:
-
-| Tier | Key | What it contains |
-|------|-----|-----------------|
-| 1 — DB | `db_record` | Raw Supabase `user_data` columns: config, logs, expenses, goals, week_confirmations, pto_goal |
-| 2 — Computed | `computed_expectations` | What finance.js should derive: income, bucket, PTO, 401k, goals, log impact |
-| 3 — UI | `ui_assertions` | What each panel should display (for manual QA + integration test expected values) |
-
-**Rules:**
-- Never fabricate expected values — derive `computed_expectations` from the actual `db_record`
-- Update `last_updated` + the changed section whenever config or real account data changes
-- Use `computed_expectations` as the expected-values source when writing tests against real account behavior
+## Account Reference (`docs/account-reference.json`)
+Three tiers: `db_record` (raw Supabase columns) → `computed_expectations` (what finance.js derives) → `ui_assertions` (what each panel displays). Derive `computed_expectations` from `db_record` — never fabricate. Update `last_updated` whenever config or account data changes.
 
 ---
 
 ## Testing
-
-Runner: **Vitest**. Tests in `src/test/`. Config lives in `vitest.config.js` (separate from `vite.config.js` — Vitest auto-prefers it).
-
+Runner: **Vitest**. Tests in `src/test/`. `vitest.config.js` is sandbox-safe — omits `@tailwindcss/vite`, `@rolldown/plugin-babel`, CSS processing (avoids native `.node` failures in CI).
 ```bash
+npm run test:run      # single pass — use this to verify changes
 npm test              # watch mode
-npm run test:run      # single pass  ← use this to verify a change
-npm run test:coverage
-npx vitest run -u     # update snapshots after intentional DEFAULT_CONFIG changes
+npx vitest run -u     # update snapshots after DEFAULT_CONFIG changes
 ```
+Reporter is `verbose` — Vitest 4's default misreports suite failures as "no tests." Do not use `-- --runInBand` (Jest flag, ignored by Vitest).
 
-**Reporter is set to `verbose` in `vitest.config.js`.** Without `verbose`, Vitest 4's default reporter can misreport suite failures as "no tests" when collection errors exist — the verbose mode always shows accurate per-file and per-test counts.
+---
 
-**Do not use `npm run test -- --runInBand`.** `--runInBand` is a Jest flag; Vitest ignores it. Use `npm run test:run` for a single serial pass.
-
-**`vitest.config.js` is sandbox-safe** — intentionally omits `@tailwindcss/vite`, `@rolldown/plugin-babel`, and CSS processing to avoid native `.node` binaries that fail in restricted environments (Codex, CI).
+## Mobile Checklist
+- [ ] No horizontal scroll at 390px / 375px · All tap targets ≥ 44×44px
+- [ ] Font-size ≥ 16px on all inputs (prevents iOS zoom)
+- [ ] Bottom nav clears `safe-area-inset-bottom` · PWA installs from Safari · Standalone mode active
+- [ ] Dark status bar (black-translucent) · Dynamic Island / notch not obscured
 
 ---
 
 ## Environment Variables
-
 ```
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
 ```
 
----
-
 ## Naming Conventions
+Files: kebab-case · Components: PascalCase · Utilities/hooks: camelCase · Database: snake_case
 
-- Files: kebab-case (`setup-wizard.jsx`)
-- Components: PascalCase (`SetupWizard`)
-- Utilities/hooks: camelCase (`useLocalStorage`)
-- Database: snake_case (`fiscal_year_start`)
-
----
-
-## Known Cleanup Items
-
-- `index.html` loads DM Serif Display + DM Sans from Google Fonts — stale, Inter is the active font
-- `index.html` `apple-mobile-web-app-title` = "Finance RPG" — update to "Authority Finance"
-- `index.html` `<title>` = "2026 Financial Dashboard" — update to "Authority Finance"
+## Known Cleanup
+- `index.html`: stale Google Fonts (DM Serif/Sans) · `<title>` "2026 Financial Dashboard" → "Authority Finance" · `apple-mobile-web-app-title` "Finance RPG" → "Authority Finance"
 - `WeekConfirmModal.jsx`, `LoginScreen.jsx`, `ProfilePanel.jsx` — hardcoded hex colors not yet tokenized (tracked in TODO §10)

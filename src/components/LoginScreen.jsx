@@ -15,7 +15,7 @@
  * Providers must be enabled in the Supabase dashboard under Authentication > Providers.
  */
 import { useState } from "react";
-import { supabase } from "../lib/supabase.js";
+import { supabase, validateInvestorCode } from "../lib/supabase.js";
 import { iS, lS } from "./ui.jsx";
 
 // ── OAuth provider button ────────────────────────────────────────────────────
@@ -198,9 +198,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
     if (!investorCode.trim() || investorLoading) return;
     setInvestorLoading(true);
     setInvestorError(null);
-    // Phase 1 placeholder — Phase 2: replace with validateInvestorCode(investorCode)
-    await new Promise(r => setTimeout(r, 420));
-    const valid = investorCode.trim().toLowerCase() === "success";
+    const valid = await validateInvestorCode(investorCode);
     setInvestorLoading(false);
     if (valid) {
       onInvestorVerified?.(investorCode.trim().toLowerCase());

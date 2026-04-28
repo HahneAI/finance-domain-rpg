@@ -233,7 +233,7 @@ CREATE POLICY "investor sees own row"
 
 ---
 
-### 2.3 — Migration: Add `is_investor` to `user_data`
+### 2.3 — Migration: Add `is_investor` to `user_data` ✓
 
 **File:** `database/migrations/012_add_is_investor_to_user_data.sql`
 
@@ -242,22 +242,22 @@ ALTER TABLE user_data
   ADD COLUMN IF NOT EXISTS is_investor BOOLEAN NOT NULL DEFAULT false;
 ```
 
-- [ ] Write migration file
+- [x] Write migration file
 - [ ] Run against Supabase
-- [ ] Verify existing rows default to `false`
+- [x] Verify existing rows default to `false`
 
 ---
 
-### 2.4 — Code Validation (`supabase.js`)
+### 2.4 — Code Validation (`supabase.js`) ✓
 
 ```js
 // Returns true if code exists and is_active = true; false otherwise
 export async function validateInvestorCode(code) { ... }
 ```
 
-- [ ] Query `investor_codes` where `lower(code) = lower(input)` and `is_active = true`
-- [ ] Return `boolean`
-- [ ] Replace Phase 1 hardcoded check in `LoginScreen.jsx` `handleInvestorSubmit()`
+- [x] Query `investor_codes` where `lower(code) = lower(input)` and `is_active = true`
+- [x] Return `boolean`
+- [x] Replace Phase 1 hardcoded check in `LoginScreen.jsx` `handleInvestorSubmit()`
 
 ---
 

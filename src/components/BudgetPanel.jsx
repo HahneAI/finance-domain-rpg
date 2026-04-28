@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
-import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
+import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions } from "../lib/finance.js";
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -27,7 +27,7 @@ const EXPENSE_INSERT_MARKER_BG = "rgba(255,255,255,0.72)";
 const EXPENSE_INSERT_MARKER_BORDER = "rgba(255,255,255,0.14)";
 
 
-export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, isAdmin = false }) {
+export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
@@ -43,6 +43,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   const [pendingDelete, setPendingDelete] = useState(null); // { id } | null
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [showCheckInfo, setShowCheckInfo] = useState(false);
   // Month-level period selector state
   const [activeMonth, setActiveMonth] = useState(null); // "2026-MM" | null — null = quarter mode
   // Keep the viewed phase in sync with the real current quarter so that
@@ -173,6 +174,47 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   }, [firstCheckWeek, expenses, firstCheckMonthKey, firstCheckPhase]);
   const leftFirstCheck = firstCheckNet - firstCheckExpenses;
   const firstCheckMonthShort = MONTH_SHORT[parseInt(targetMonthForFirstCheck.slice(5, 7), 10) - 1];
+
+  // Paycheck breakdown data for the info modal
+  const infoRefWeek    = isViewingFuture && firstCheckWeek ? firstCheckWeek : currentWeek;
+  const infoMonthKey   = isViewingFuture && firstCheckWeek ? firstCheckMonthKey : currentMonthKey;
+  const infoPhase      = isViewingFuture && firstCheckWeek ? firstCheckPhase : currentPhaseIdx;
+  const infoLabel      = isViewingFuture && firstCheckWeek ? `First Check · ${firstCheckMonthShort}` : "This Week";
+  const checkBreakdown = useMemo(() => {
+    if (!infoRefWeek || !config) return null;
+    const gross = infoRefWeek.grossPay ?? 0;
+    const fica  = gross * (config.ficaRate ?? 0);
+    const payroll   = deriveWeeklyPayrollDeductions(infoRefWeek, config);
+    const benefits  = payroll.benefits;
+    const k401      = payroll.k401Employee;
+    let fedTax = 0, stateTax = 0;
+    if (infoRefWeek.taxedBySchedule) {
+      const fedRate = infoRefWeek.isHighWeek
+        ? (config.fedRateHigh ?? config.w2FedRate ?? 0)
+        : (config.fedRateLow  ?? config.w1FedRate ?? 0);
+      const stRate  = infoRefWeek.isHighWeek
+        ? (config.stateRateHigh ?? config.w2StateRate ?? 0)
+        : (config.stateRateLow  ?? config.w1StateRate ?? 0);
+      fedTax   = (infoRefWeek.taxableGross ?? 0) * fedRate;
+      stateTax = (infoRefWeek.taxableGross ?? 0) * stRate;
+    }
+    const checksPerYear  = PAYCHECKS_PER_YEAR[config.userPaySchedule ?? "weekly"] ?? 52;
+    const otherPostTax   = (config.otherDeductions ?? []).reduce((sum, row) => {
+      const amt = row?.weeklyAmount;
+      return sum + (typeof amt === "number" ? amt : 0);
+    }, 0) * (checksPerYear / 52);
+    const netPay    = gross - fica - fedTax - stateTax - benefits - k401 - otherPostTax;
+    const spendable = netPay - bufferPerWeek;
+    const needsSpend     = regularExpenses.filter(e => e.category === "Needs")
+      .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
+    const lifestyleSpend = regularExpenses.filter(e => e.category === "Lifestyle")
+      .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
+    const loansSpend     = loans
+      .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
+    const left = spendable - needsSpend - lifestyleSpend - loansSpend;
+    return { gross, fica, fedTax, stateTax, benefits, k401, otherPostTax, netPay, spendable, needsSpend, lifestyleSpend, loansSpend, left, otherDeductions: config.otherDeductions ?? [] };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [infoRefWeek, config, bufferPerWeek, expenses, infoMonthKey, infoPhase]);
 
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
@@ -967,35 +1009,54 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           return              { arrow: "down",  delta: `${pct}% of income`, label: "· tighten spend", variant: "purple" };
         })() : undefined}
       />
-      {isViewingFuture && firstCheckWeek ? (
-        <Card
-          label={`First Check · ${firstCheckMonthShort}`}
-          val={f2(leftFirstCheck)}
-          rawVal={leftFirstCheck}
-          color={leftFirstCheck >= 0 ? "var(--color-green)" : "var(--color-red)"}
-          insight={weeklyIncome > 0 ? (() => {
-            const pct = Math.round((leftFirstCheck / firstCheckNet) * 100);
-            if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: `of ${firstCheckMonthShort} check clear`, variant: "blue" };
-            if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: `of ${firstCheckMonthShort} check left`,  variant: "purple" };
-            return           { arrow: "flat",  delta: `${pct}%`, label: `of ${firstCheckMonthShort} check left`,  variant: "blue" };
-          })() : undefined}
-        />
-      ) : (
-        <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"}
-          insight={weeklyIncome > 0 ? (() => {
-            const nextCheck = futureWeekNets?.[0] ?? null;
-            const lastCheck = prevWeekNet ?? weeklyIncome;
-            if (nextCheck != null) {
-              const diff = Math.round(nextCheck - lastCheck);
-              if (Math.abs(diff) >= 20) return { arrow: diff > 0 ? "up" : "down", delta: `${diff > 0 ? "+" : ""}${f(diff)}`, label: "next check vs last", variant: diff > 0 ? "blue" : "purple" };
-            }
-            const pct = Math.round((leftThisWeek / weeklyIncome) * 100);
-            if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: "of paycheck clear",    variant: "blue" };
-            if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: "of paycheck remaining", variant: "purple" };
-            return           { arrow: "flat",  delta: `${pct}%`, label: "of paycheck remaining", variant: "blue" };
-          })() : undefined}
-        />
-      )}
+      <div style={{ position: "relative" }}>
+        {isViewingFuture && firstCheckWeek ? (
+          <Card
+            label={`First Check · ${firstCheckMonthShort}`}
+            val={f2(leftFirstCheck)}
+            rawVal={leftFirstCheck}
+            color={leftFirstCheck >= 0 ? "var(--color-green)" : "var(--color-red)"}
+            insight={weeklyIncome > 0 ? (() => {
+              const pct = Math.round((leftFirstCheck / firstCheckNet) * 100);
+              if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: `of ${firstCheckMonthShort} check clear`, variant: "blue" };
+              if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: `of ${firstCheckMonthShort} check left`,  variant: "purple" };
+              return           { arrow: "flat",  delta: `${pct}%`, label: `of ${firstCheckMonthShort} check left`,  variant: "blue" };
+            })() : undefined}
+          />
+        ) : (
+          <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"}
+            insight={weeklyIncome > 0 ? (() => {
+              const nextCheck = futureWeekNets?.[0] ?? null;
+              const lastCheck = prevWeekNet ?? weeklyIncome;
+              if (nextCheck != null) {
+                const diff = Math.round(nextCheck - lastCheck);
+                if (Math.abs(diff) >= 20) return { arrow: diff > 0 ? "up" : "down", delta: `${diff > 0 ? "+" : ""}${f(diff)}`, label: "next check vs last", variant: diff > 0 ? "blue" : "purple" };
+              }
+              const pct = Math.round((leftThisWeek / weeklyIncome) * 100);
+              if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: "of paycheck clear",    variant: "blue" };
+              if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: "of paycheck remaining", variant: "purple" };
+              return           { arrow: "flat",  delta: `${pct}%`, label: "of paycheck remaining", variant: "blue" };
+            })() : undefined}
+          />
+        )}
+        {checkBreakdown && (
+          <button
+            onClick={() => setShowCheckInfo(true)}
+            aria-label="Show paycheck breakdown"
+            style={{
+              position: "absolute", top: "8px", right: "8px",
+              background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.28)",
+              borderRadius: "50%", width: "22px", height: "22px",
+              color: "var(--color-text-secondary)", fontSize: "12px", fontWeight: "600",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              lineHeight: 1, padding: 0, fontFamily: "var(--font-sans)",
+              transition: "background 150ms ease, color 150ms ease",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,200,150,0.18)"; e.currentTarget.style.color = "var(--color-accent-primary)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,200,150,0.08)"; e.currentTarget.style.color = "var(--color-text-secondary)"; }}
+          >ℹ</button>
+        )}
+      </div>
     </div>
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>
@@ -1613,6 +1674,86 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     >
       {touchDragOverlay.label}
     </div>}
+
+    {/* Paycheck breakdown info modal */}
+    {showCheckInfo && checkBreakdown && (
+      <div
+        onClick={() => setShowCheckInfo(false)}
+        style={{
+          position: "fixed", inset: 0, zIndex: 60,
+          background: "rgba(0,0,0,0.82)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "16px",
+        }}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            background: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border-subtle)",
+            borderRadius: "16px",
+            maxWidth: "400px", width: "100%",
+            padding: "24px 20px",
+            maxHeight: "90vh", overflowY: "auto",
+            boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <div>
+              <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "3px" }}>Paycheck Breakdown</div>
+              <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--color-accent-primary)", fontFamily: "var(--font-sans)" }}>{infoLabel}</div>
+            </div>
+            <button
+              onClick={() => setShowCheckInfo(false)}
+              style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1 }}
+            >×</button>
+          </div>
+
+          {/* Income section */}
+          <InfoRow label="Gross Pay" val={f2(checkBreakdown.gross)} color="var(--color-text-primary)" large />
+          <InfoDivider />
+          <InfoRow label="FICA (Social Security + Medicare)" val={`− ${f2(checkBreakdown.fica)}`} color="var(--color-text-secondary)" />
+          <InfoRow label="Federal Tax Withholding" val={`− ${f2(checkBreakdown.fedTax)}`} color="var(--color-text-secondary)" />
+          <InfoRow label="State Tax Withholding" val={`− ${f2(checkBreakdown.stateTax)}`} color="var(--color-text-secondary)" />
+          <InfoRow label="Benefits / Insurance" val={`− ${f2(checkBreakdown.benefits)}`} color="var(--color-text-secondary)" />
+          <InfoRow label="401(k) Contribution" val={`− ${f2(checkBreakdown.k401)}`} color="var(--color-text-secondary)" />
+          {checkBreakdown.otherDeductions.map((row, i) => (
+            <InfoRow key={i} label={row.label ?? `Other Deduction ${i + 1}`} val={`− ${f2((row.weeklyAmount ?? 0) * ((PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52) / 52))}`} color="var(--color-text-secondary)" />
+          ))}
+          <InfoDivider thick />
+          <InfoRow label="Net Pay" val={f2(checkBreakdown.netPay)} color="var(--color-green)" large />
+
+          {/* Buffer */}
+          {bufferPerWeek > 0 && <>
+            <InfoDivider />
+            <InfoRow label="Paycheck Buffer (savings)" val={`− ${f2(bufferPerWeek)}`} color="var(--color-warning)" />
+            <InfoDivider thick />
+            <InfoRow label="Spendable" val={f2(checkBreakdown.spendable)} color="var(--color-text-primary)" large />
+          </>}
+
+          {/* Expenses */}
+          <InfoDivider />
+          {checkBreakdown.needsSpend > 0 && <InfoRow label="Needs" val={`− ${f2(checkBreakdown.needsSpend)}`} color="var(--color-text-secondary)" />}
+          {checkBreakdown.lifestyleSpend > 0 && <InfoRow label="Lifestyle" val={`− ${f2(checkBreakdown.lifestyleSpend)}`} color="var(--color-text-secondary)" />}
+          {checkBreakdown.loansSpend > 0 && <InfoRow label="Loans" val={`− ${f2(checkBreakdown.loansSpend)}`} color="var(--color-text-secondary)" />}
+          <InfoDivider thick />
+          <InfoRow label="Left" val={f2(checkBreakdown.left)} color={checkBreakdown.left >= 0 ? "var(--color-green)" : "var(--color-red)"} large />
+
+          <div style={{ marginTop: "20px", textAlign: "center" }}>
+            <button
+              onClick={() => setShowCheckInfo(false)}
+              style={{
+                background: "var(--color-bg-raised)", color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
+                padding: "8px 20px", fontSize: "10px", letterSpacing: "2px",
+                textTransform: "uppercase", cursor: "pointer", fontFamily: "var(--font-sans)",
+              }}
+            >Close</button>
+          </div>
+        </div>
+      </div>
+    )}
   </div>);
 }
 
@@ -1644,4 +1785,19 @@ function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
       <button onClick={onCancel} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
     </div>
   </div>;
+}
+
+function InfoRow({ label, val, color, large }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: large ? "6px 0" : "4px 0" }}>
+      <span style={{ fontSize: large ? "12px" : "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)", letterSpacing: "0.2px" }}>{label}</span>
+      <span style={{ fontSize: large ? "18px" : "14px", fontWeight: large ? "700" : "500", color: color ?? "var(--color-text-primary)", fontFamily: "var(--font-mono)", letterSpacing: "-0.5px" }}>{val}</span>
+    </div>
+  );
+}
+
+function InfoDivider({ thick }) {
+  return (
+    <div style={{ height: thick ? "1px" : "0.5px", background: thick ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)", margin: thick ? "8px 0" : "2px 0" }} />
+  );
 }

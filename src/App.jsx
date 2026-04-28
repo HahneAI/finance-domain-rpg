@@ -535,10 +535,10 @@ export default function App() {
     const stHigh  = config.stateRateHigh ?? config.w2StateRate;
     const fWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? fedHigh : fedLow), 0);
     const mWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? stHigh : stLow), 0);
-    const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - config.targetOwedAtFiling, 0);
+    const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - (isAdmin ? (config.targetOwedAtFiling ?? 0) : 0), 0);
     const remainingTaxedChecks = activeWeeks.filter(w => toLocalIso(w.weekEnd) >= effectiveToday && w.taxedBySchedule).length;
     return { fedAGI: fAGI, fedLiability: fL, moLiability: mL, ficaTotal: ficaT, fedWithheldBase: fWB, moWithheldBase: mWB, fedGap: fG, moGap: mG, totalGap: tG, targetExtraTotal: tET, taxedWeekCount: remainingTaxedChecks, extraPerCheck: remainingTaxedChecks > 0 ? tET / remainingTaxedChecks : 0 };
-  }, [allWeeks, config, eventImpact.grossDeltaByWeek, effectiveToday]);
+  }, [allWeeks, config, eventImpact.grossDeltaByWeek, effectiveToday, isAdmin]);
 
   // ── Live projected net from income engine ──
   const projectedAnnualNet = useMemo(() =>

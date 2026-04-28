@@ -265,6 +265,95 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
 }
 
 /**
+ * Creates a full investor account in three atomic steps:
+ *   1. Supabase auth user (email + password)
+ *   2. investor_users profile row
+ *   3. user_data row seeded with investor config
+ *
+ * Returns { session, error, needsConfirmation }.
+ *   session           — Supabase session (null if email confirmation required)
+ *   error             — string on failure, null on success
+ *   needsConfirmation — true when Supabase sends a confirmation email before
+ *                       granting a session (project email-confirm setting is on)
+ *
+ * On investor_users insert failure the auth user already exists — the investor
+ * can re-attempt; signUp is idempotent for unconfirmed users. On user_data
+ * failure we delete the investor_users row and surface the error.
+ */
+export async function createInvestorAccount({ name, email, password, company, city, codeUsed }) {
+  // Step 1 — auth user
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { display_name: name } },
+  });
+  if (authError) return { session: null, error: authError.message, needsConfirmation: false };
+
+  const user = authData.user;
+  if (!user) return { session: null, error: "Account creation failed — no user returned.", needsConfirmation: false };
+
+  const needsConfirmation = !authData.session;
+
+  // Step 2 — investor_users profile
+  const { error: profileError } = await supabase.from("investor_users").insert({
+    auth_user_id:   user.id,
+    investor_name:  name,
+    email,
+    company_name:   company ?? null,
+    city:           city ?? null,
+    code_used:      codeUsed ?? null,
+    code_used_at:   codeUsed ? new Date().toISOString() : null,
+    active_account: 1,
+  });
+  if (profileError) {
+    return { session: null, error: profileError.message, needsConfirmation: false };
+  }
+
+  // Step 3 — user_data row seeded with investor config
+  const investorConfig = {
+    ...DEFAULT_CONFIG,
+    isInvestor:      true,
+    investorName:    name,
+    investorCompany: company ?? null,
+    investorCity:    city ?? null,
+    setupComplete:   false,
+  };
+  const { error: dataError } = await supabase.from("user_data").upsert(
+    {
+      user_id:    user.id,
+      is_investor: true,
+      config:     investorConfig,
+      expenses:   [],
+      goals:      [],
+      logs:       [],
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" }
+  );
+  if (dataError) {
+    // Rollback investor_users so a re-attempt can cleanly re-insert
+    await supabase.from("investor_users").delete().eq("auth_user_id", user.id);
+    return { session: null, error: dataError.message, needsConfirmation: false };
+  }
+
+  return { session: authData.session, error: null, needsConfirmation };
+}
+
+/**
+ * Persists the investor's active account tab selection (1 | 2 | 3) to
+ * investor_users.active_account. Fire-and-forget from the accounts pill.
+ */
+export async function saveInvestorActiveAccount(accountNum) {
+  const userId = await getCurrentUserId();
+  if (!userId) return;
+  const { error } = await supabase
+    .from("investor_users")
+    .update({ active_account: accountNum })
+    .eq("auth_user_id", userId);
+  if (error) console.error("saveInvestorActiveAccount failed:", error.message);
+}
+
+/**
  * Called on every SIGNED_IN auth event. Does two things:
  *   1. Seeds a user_data row for OAuth users (email sign-up does this explicitly;
  *      OAuth sign-in does not — this closes that gap).

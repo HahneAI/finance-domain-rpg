@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from ".
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount } from "./lib/db.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
@@ -654,6 +654,7 @@ export default function App() {
   function handleSelectInvestorAccount(n) {
     setActiveInvestorAccount(n);
     setDrawerOpen(false);
+    saveInvestorActiveAccount(n); // fire-and-forget persistence
     if (n === 3 && !config.setupComplete) {
       setWizardEntry(false);
     }
@@ -668,9 +669,17 @@ export default function App() {
   if (investorSession && !authedUser) {
     return (
       <InvestorRegister
-        onRegister={_formData => {
-          // Phase 1 placeholder — Phase 2: call createInvestorAccount(_formData)
-          // from supabase.js; onAuthStateChange fires on success → authedUser set.
+        onRegister={async formData => {
+          const { error, needsConfirmation } = await createInvestorAccount({
+            name:     formData.name,
+            email:    formData.email,
+            password: formData.password,
+            company:  formData.company,
+            city:     formData.city,
+            codeUsed: investorSession?.code ?? null,
+          });
+          return { error, needsConfirmation };
+          // On success with session: onAuthStateChange → authedUser set → app renders.
         }}
         onBack={() => setInvestorSession(null)}
       />

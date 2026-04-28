@@ -32,10 +32,11 @@ export function InvestorRegister({ onRegister, onBack }) {
   const [form, setForm] = useState({
     name: "", email: "", password: "", confirm: "", company: "", city: "",
   });
-  const [showPw, setShowPw]       = useState(false);
-  const [attempted, setAttempted] = useState(false);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState(null);
+  const [showPw, setShowPw]             = useState(false);
+  const [attempted, setAttempted]       = useState(false);
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState(null);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
 
@@ -57,20 +58,34 @@ export function InvestorRegister({ onRegister, onBack }) {
     if (!validate()) return;
     setLoading(true);
     setError(null);
-    // Phase 1: pass validated data up
-    // Phase 2: replace with createInvestorAccount(formData) from supabase.js
-    await new Promise(r => setTimeout(r, 0));
-    setLoading(false);
-    onRegister?.({
-      name:    form.name.trim(),
-      email:   form.email.trim(),
+    const result = await onRegister?.({
+      name:     form.name.trim(),
+      email:    form.email.trim(),
       password: form.password,
-      company: form.company.trim() || null,
-      city:    form.city.trim() || null,
+      company:  form.company.trim() || null,
+      city:     form.city.trim() || null,
     });
+    setLoading(false);
+    if (result?.needsConfirmation) { setNeedsConfirmation(true); return; }
+    if (result?.error) setError(result.error);
+    // On success with session: App.jsx onAuthStateChange fires → component unmounts
   }
 
   const inp = { ...iS, borderRadius: "8px" };
+
+  if (needsConfirmation) {
+    return (
+      <Shell title="Check your email." subtitle="Investor Account">
+        <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: 1.7 }}>
+          A confirmation link has been sent to <strong>{form.email}</strong>.
+          Click it to activate your account, then return here and sign in.
+        </div>
+        <button type="button" onClick={onBack} style={{ ...linkStyle, marginTop: "20px", display: "block" }}>
+          ← Back to sign in
+        </button>
+      </Shell>
+    );
+  }
 
   return (
     <Shell title="Create Your Account" subtitle="You'll be able to explore demo accounts and set up your own.">

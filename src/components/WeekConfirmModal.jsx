@@ -405,9 +405,15 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       shiftsLost: missedDaysForLog.length,
       weekendShifts: missedDaysForLog.filter(d => d === "Fri" || d === "Sat" || d === "Sun").length,
       hoursLost: missedDaysForLog.length * config.shiftHours,
-      // Surplus: estimate gross (pre-tax) from pickup shifts so the amount field
-      // has a useful starting value. User should verify the actual payout.
-      amount: !isDeficit ? pickupDays.length * config.shiftHours * config.baseRate : 0,
+      // Surplus: estimate gross from pickup shifts. DHL weekend days (Sat/Sun) earn
+      // diffRate; all other days earn baseRate. User should verify the actual payout.
+      amount: !isDeficit ? pickupDays.reduce((sum, d) => {
+        const isWeekend = d === "Sat" || d === "Sun";
+        const rate = (config.employerPreset === "DHL" && isWeekend)
+          ? (config.diffRate ?? config.baseRate)
+          : config.baseRate;
+        return sum + (config.shiftHours || 0) * rate;
+      }, 0) : 0,
       ptoHours: 0,
       note: requiresOtSelection && workedOtDays.length > 0
         ? workedOtDays.map(d => `OT day: ${d}${["Sat", "Sun"].includes(d) ? " (weekend — diff applies)" : ""}`).join("; ")

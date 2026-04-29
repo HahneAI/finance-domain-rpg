@@ -550,10 +550,30 @@ export default function App() {
     const stHigh  = config.stateRateHigh ?? config.w2StateRate;
     const fWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? fedHigh : fedLow), 0);
     const mWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? stHigh : stLow), 0);
-    const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - (isAdmin ? (config.targetOwedAtFiling ?? 0) : 0), 0);
-    const remainingTaxedChecks = activeWeeks.filter(w => toLocalIso(w.weekEnd) >= effectiveToday && w.taxedBySchedule).length;
-    return { fedAGI: fAGI, fedLiability: fL, moLiability: mL, ficaTotal: ficaT, fedWithheldBase: fWB, moWithheldBase: mWB, fedGap: fG, moGap: mG, totalGap: tG, targetExtraTotal: tET, taxedWeekCount: remainingTaxedChecks, extraPerCheck: remainingTaxedChecks > 0 ? tET / remainingTaxedChecks : 0 };
-  }, [allWeeks, config, eventImpact.grossDeltaByWeek, effectiveToday, isAdmin]);
+    const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - config.targetOwedAtFiling, 0);
+    const remainingTaxedChecks = activeWeeks.filter(w => toLocalIso(w.weekEnd) >= today && w.taxedBySchedule).length;
+
+    // How much events have shifted total taxable gross (+ = bonus/pickup, - = missed shifts)
+    const eventGrossDelta = activeWeeks.reduce((s, w) => s + (eventImpact.grossDeltaByWeek[w.idx] || 0), 0);
+    // Baseline AGI with no events to show the event-driven tax shift
+    const baseAGI = Math.max(tt - eventGrossDelta - config.fedStdDeduction, 0);
+    const fedLiabilityBase = fedTax(baseAGI);
+    const moLiabilityBase = stateConfig ? stateTax(tt - eventGrossDelta, stateConfig) : (tt - eventGrossDelta) * (config.moFlatRate ?? 0.047);
+    const fedLiabilityEventDelta = fL - fedLiabilityBase;
+    const moLiabilityEventDelta  = mL - moLiabilityBase;
+
+    return {
+      fedAGI: fAGI, fedLiability: fL, moLiability: mL, ficaTotal: ficaT,
+      fedWithheldBase: fWB, moWithheldBase: mWB,
+      fedGap: fG, moGap: mG, totalGap: tG, targetExtraTotal: tET,
+      taxedWeekCount: remainingTaxedChecks,
+      extraPerCheck: remainingTaxedChecks > 0 ? tET / remainingTaxedChecks : 0,
+      // Event pipeline visibility fields
+      eventGrossDelta,
+      fedLiabilityEventDelta,
+      moLiabilityEventDelta,
+    };
+  }, [allWeeks, config, eventImpact.grossDeltaByWeek, today]);
 
   // ── Live projected net from income engine ──
   const projectedAnnualNet = useMemo(() =>

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
-import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
+import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions } from "../lib/finance.js";
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -27,7 +27,7 @@ const EXPENSE_INSERT_MARKER_BG = "rgba(255,255,255,0.72)";
 const EXPENSE_INSERT_MARKER_BORDER = "rgba(255,255,255,0.14)";
 
 
-export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, isAdmin = false }) {
+export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
@@ -43,6 +43,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   const [pendingDelete, setPendingDelete] = useState(null); // { id } | null
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [showCheckInfo, setShowCheckInfo] = useState(false);
   // Month-level period selector state
   const [activeMonth, setActiveMonth] = useState(null); // "2026-MM" | null — null = quarter mode
   // Keep the viewed phase in sync with the real current quarter so that
@@ -153,6 +154,68 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     return keys;
   }, [expenses]);
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
+
+  // When viewing a future quarter or month, surface the projected first-check surplus
+  // for that period instead of the current-week baseline.
+  const isViewingFuture = ap > currentPhaseIdx || (activeMonth !== null && activeMonth > currentMonthKey);
+  const targetMonthForFirstCheck = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
+  const firstCheckWeek = useMemo(() => {
+    if (!isViewingFuture || !futureWeeks?.length) return null;
+    return futureWeeks.find(w => toLocalIso(w.weekEnd).slice(0, 7) === targetMonthForFirstCheck) ?? null;
+  }, [isViewingFuture, futureWeeks, targetMonthForFirstCheck]);
+  const firstCheckIdx = firstCheckWeek ? futureWeeks.indexOf(firstCheckWeek) : -1;
+  const firstCheckNet = firstCheckIdx >= 0 ? (futureWeekNets?.[firstCheckIdx] ?? weeklyIncome) : weeklyIncome;
+  const firstCheckMonthKey = firstCheckWeek ? toLocalIso(firstCheckWeek.weekEnd).slice(0, 7) : targetMonthForFirstCheck;
+  const firstCheckPhase = firstCheckWeek ? getPhaseIndex(firstCheckWeek.weekEnd) : ap;
+  const firstCheckExpenses = useMemo(() => {
+    if (!firstCheckWeek) return avgWeeklySpend;
+    return expenses.reduce((s, e) => s + getEffectiveAmountForMonth(e, firstCheckMonthKey, firstCheckPhase), 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstCheckWeek, expenses, firstCheckMonthKey, firstCheckPhase]);
+  const leftFirstCheck = firstCheckNet - firstCheckExpenses;
+  const firstCheckMonthShort = MONTH_SHORT[parseInt(targetMonthForFirstCheck.slice(5, 7), 10) - 1];
+
+  // Paycheck breakdown data for the info modal
+  const infoRefWeek    = isViewingFuture && firstCheckWeek ? firstCheckWeek : currentWeek;
+  const infoMonthKey   = isViewingFuture && firstCheckWeek ? firstCheckMonthKey : currentMonthKey;
+  const infoPhase      = isViewingFuture && firstCheckWeek ? firstCheckPhase : currentPhaseIdx;
+  const infoLabel      = isViewingFuture && firstCheckWeek ? `First Check · ${firstCheckMonthShort}` : "This Week";
+  const checkBreakdown = useMemo(() => {
+    if (!infoRefWeek || !config) return null;
+    const gross = infoRefWeek.grossPay ?? 0;
+    const fica  = gross * (config.ficaRate ?? 0);
+    const payroll   = deriveWeeklyPayrollDeductions(infoRefWeek, config);
+    const benefits  = payroll.benefits;
+    const k401      = payroll.k401Employee;
+    let fedTax = 0, stateTax = 0;
+    if (infoRefWeek.taxedBySchedule) {
+      const fedRate = infoRefWeek.isHighWeek
+        ? (config.fedRateHigh ?? config.w2FedRate ?? 0)
+        : (config.fedRateLow  ?? config.w1FedRate ?? 0);
+      const stRate  = infoRefWeek.isHighWeek
+        ? (config.stateRateHigh ?? config.w2StateRate ?? 0)
+        : (config.stateRateLow  ?? config.w1StateRate ?? 0);
+      fedTax   = (infoRefWeek.taxableGross ?? 0) * fedRate;
+      stateTax = (infoRefWeek.taxableGross ?? 0) * stRate;
+    }
+    const checksPerYear  = PAYCHECKS_PER_YEAR[config.userPaySchedule ?? "weekly"] ?? 52;
+    const otherPostTax   = (config.otherDeductions ?? []).reduce((sum, row) => {
+      const amt = row?.weeklyAmount;
+      return sum + (typeof amt === "number" ? amt : 0);
+    }, 0) * (checksPerYear / 52);
+    const netPay    = gross - fica - fedTax - stateTax - benefits - k401 - otherPostTax;
+    const spendable = netPay - bufferPerWeek;
+    const needsSpend     = regularExpenses.filter(e => e.category === "Needs")
+      .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
+    const lifestyleSpend = regularExpenses.filter(e => e.category === "Lifestyle")
+      .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
+    const loansSpend     = loans
+      .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
+    const left = spendable - needsSpend - lifestyleSpend - loansSpend;
+    return { gross, fica, fedTax, stateTax, benefits, k401, otherPostTax, netPay, spendable, needsSpend, lifestyleSpend, loansSpend, left, otherDeductions: config.otherDeductions ?? [] };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [infoRefWeek, config, bufferPerWeek, expenses, infoMonthKey, infoPhase]);
+
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
   const overviewCatOrder = ["Needs", "Lifestyle"];
@@ -434,6 +497,71 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     }]);
     setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   };
+
+  const _closeAddForm = () => {
+    setAddingExp(false);
+    setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
+  };
+
+  const addExpThisMonth = () => {
+    if (!newExp.label || !activeMonth) return;
+    const amount = parseFloat(newExp.amount) || 0;
+    const cycle = newExp.cycle ?? "every30days";
+    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    setExpenses(prev => [...prev, {
+      id: `exp_${crypto.randomUUID()}`,
+      category: newExp.category,
+      label: newExp.label,
+      note: [newExp.note, newExp.note, newExp.note, newExp.note],
+      billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO },
+      history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [0, 0, 0, 0] }],
+      monthlyOverrides: { [activeMonth]: { perPaycheck, amount, cycle } },
+    }]);
+    _closeAddForm();
+  };
+
+  const addExpFromMonthForward = () => {
+    if (!newExp.label || !activeMonth) return;
+    const amount = parseFloat(newExp.amount) || 0;
+    const cycle = newExp.cycle ?? "every30days";
+    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    const [year, startMon] = activeMonth.split("-").map(Number);
+    const overrides = {};
+    for (let m = startMon; m <= 12; m++) {
+      const key = `${year}-${String(m).padStart(2, "0")}`;
+      overrides[key] = { perPaycheck, amount, cycle };
+    }
+    const effectiveFrom = `${activeMonth}-01`;
+    const weekly = [0, 1, 2, 3].map(q => q < ap ? 0 : perPaycheck);
+    setExpenses(prev => [...prev, {
+      id: `exp_${crypto.randomUUID()}`,
+      category: newExp.category,
+      label: newExp.label,
+      note: [newExp.note, newExp.note, newExp.note, newExp.note],
+      billingMeta: { amount, cycle, effectiveFrom },
+      history: [{ effectiveFrom, weekly }],
+      monthlyOverrides: overrides,
+    }]);
+    _closeAddForm();
+  };
+
+  const addExpAllQuarters = () => {
+    if (!newExp.label) return;
+    const amount = parseFloat(newExp.amount) || 0;
+    const cycle = newExp.cycle ?? "every30days";
+    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    const weekly = [0, 1, 2, 3].map(q => q < ap ? 0 : perPaycheck);
+    setExpenses(prev => [...prev, {
+      id: `exp_${crypto.randomUUID()}`,
+      category: newExp.category,
+      label: newExp.label,
+      note: [newExp.note, newExp.note, newExp.note, newExp.note],
+      billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO },
+      history: [{ effectiveFrom: TODAY_ISO, weekly }],
+    }]);
+    _closeAddForm();
+  };
+
   const deleteExp = (id) => {
     setExpenses(prev => prev.map(e => {
       if (e.id !== id) return e;
@@ -494,9 +622,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : perPaycheck);
       const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
+      // Trim future-dated entries — they would otherwise take priority over this new entry
+      // for weeks past their effectiveFrom date, causing unexpected cost spikes.
+      const pastEntries = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
       const newHistory = daysDiff <= 3
-        ? existing.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
-        : [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
+        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
+        : [...pastEntries, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
       return { ...e, history: newHistory, billingMeta, monthlyOverrides: overrides };
     }));
     setEditId(null);
@@ -514,16 +645,19 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : perPaycheck);
       const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
+      // Trim future-dated entries so this override is authoritative for all future weeks.
+      const pastEntries = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
       const newHistory = daysDiff <= 3
-        ? existing.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
-        : [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
+        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
+        : [...pastEntries, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
       return { ...e, history: newHistory, billingMeta };
     }));
     setEditId(null);
   };
 
   const deleteMonthOnly = (expId) => {
-    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonth(e, activeMonth)));
+    const monthKey = activeMonth ?? currentMonthKey;
+    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonth(e, monthKey)));
     setPendingDelete(null);
   };
 
@@ -867,7 +1001,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
       <Card label="This Week’s Check" val={f2(prevWeekNet ?? weeklyIncome)} sub="This Week’s Check" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
-      <Card label="Weekly Spend" val={f2(ts)} rawVal={ts} color="var(--color-red)"
+      <Card label="Weekly Spend" val={f2(ts)} rawVal={ts} color="var(--color-deduction)"
         insight={weeklyIncome > 0 ? (() => {
           const pct = Math.round(sp);
           if (sp < 50) return { arrow: "up",   delta: `${pct}% of income`, label: "· well-managed",  variant: "blue" };
@@ -875,25 +1009,59 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           return              { arrow: "down",  delta: `${pct}% of income`, label: "· tighten spend", variant: "purple" };
         })() : undefined}
       />
-      <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"}
-        insight={weeklyIncome > 0 ? (() => {
-          const nextCheck = futureWeekNets?.[0] ?? null;
-          const lastCheck = prevWeekNet ?? weeklyIncome;
-          if (nextCheck != null) {
-            const diff = Math.round(nextCheck - lastCheck);
-            if (Math.abs(diff) >= 20) return { arrow: diff > 0 ? "up" : "down", delta: `${diff > 0 ? "+" : ""}${f(diff)}`, label: "next check vs last", variant: diff > 0 ? "blue" : "purple" };
-          }
-          const pct = Math.round((leftThisWeek / weeklyIncome) * 100);
-          if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: "of paycheck clear",    variant: "blue" };
-          if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: "of paycheck remaining", variant: "purple" };
-          return           { arrow: "flat",  delta: `${pct}%`, label: "of paycheck remaining", variant: "blue" };
-        })() : undefined}
-      />
+      <div style={{ position: "relative" }}>
+        {isViewingFuture && firstCheckWeek ? (
+          <Card
+            label={`First Check · ${firstCheckMonthShort}`}
+            val={f2(leftFirstCheck)}
+            rawVal={leftFirstCheck}
+            color={leftFirstCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
+            insight={weeklyIncome > 0 ? (() => {
+              const pct = Math.round((leftFirstCheck / firstCheckNet) * 100);
+              if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: `of ${firstCheckMonthShort} check clear`, variant: "blue" };
+              if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: `of ${firstCheckMonthShort} check left`,  variant: "purple" };
+              return           { arrow: "flat",  delta: `${pct}%`, label: `of ${firstCheckMonthShort} check left`,  variant: "blue" };
+            })() : undefined}
+          />
+        ) : (
+          <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
+            insight={weeklyIncome > 0 ? (() => {
+              const nextCheck = futureWeekNets?.[0] ?? null;
+              const lastCheck = prevWeekNet ?? weeklyIncome;
+              if (nextCheck != null) {
+                const diff = Math.round(nextCheck - lastCheck);
+                if (Math.abs(diff) >= 20) return { arrow: diff > 0 ? "up" : "down", delta: `${diff > 0 ? "+" : ""}${f(diff)}`, label: "next check vs last", variant: diff > 0 ? "blue" : "purple" };
+              }
+              const pct = Math.round((leftThisWeek / weeklyIncome) * 100);
+              if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: "of paycheck clear",    variant: "blue" };
+              if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: "of paycheck remaining", variant: "purple" };
+              return           { arrow: "flat",  delta: `${pct}%`, label: "of paycheck remaining", variant: "blue" };
+            })() : undefined}
+          />
+        )}
+        {checkBreakdown && (
+          <button
+            onClick={() => setShowCheckInfo(true)}
+            aria-label="Show paycheck breakdown"
+            style={{
+              display: "block", width: "100%", textAlign: "right",
+              background: "none", border: "none",
+              color: "var(--color-text-disabled)", fontSize: "9px",
+              letterSpacing: "1.5px", textTransform: "uppercase",
+              cursor: "pointer", padding: "5px 4px 0",
+              fontFamily: "var(--font-sans)",
+              transition: "color 150ms ease",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = "var(--color-accent-primary)"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "var(--color-text-disabled)"; }}
+          >breakdown ↗</button>
+        )}
+      </div>
     </div>
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--color-text-primary)", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "var(--color-red)" : "var(--color-green)" }}>{sp.toFixed(1)}%</span></div>
-      <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden" }}><div style={{ height: "100%", borderRadius: "4px", width: `${sp}%`, background: sp > 90 ? "var(--color-red)" : sp > 70 ? "var(--color-gold)" : "var(--color-green)", transition: "width 0.3s" }} /></div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--color-text-primary)", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "var(--color-deduction)" : "var(--color-green)" }}>{sp.toFixed(1)}%</span></div>
+      <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden" }}><div style={{ height: "100%", borderRadius: "4px", width: `${sp}%`, background: sp > 90 ? "var(--color-deduction)" : sp > 70 ? "var(--color-gold)" : "var(--color-green)", transition: "width 0.3s" }} /></div>
     </div>
     {/* View tabs */}
     <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
@@ -1137,20 +1305,18 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
                   {pendingDelete?.id === exp.id ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-end" }}>
-                      <div style={{ fontSize: "8px", color: "var(--color-red)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
+                      <div style={{ fontSize: "8px", color: "var(--color-deduction)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
                         {activeMonth ? `Delete ${activeMonthLabel}?` : `Delete Q${ap + 1}?`}
                       </div>
                       <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        {activeMonth && (
-                          <SmBtn onClick={() => deleteMonthOnly(exp.id)} c="var(--color-red)" bg="#2d1a1a">MO. ONLY</SmBtn>
-                        )}
-                        <SmBtn onClick={() => deleteQuarterOnly(exp.id)} c="var(--color-red)" bg="#2d1a1a">QTR ONLY</SmBtn>
-                        <SmBtn onClick={() => activeMonth ? deleteMonthForward(exp.id) : deleteExp(exp.id)} c="var(--color-red)" bg="#2d1a1a">+ ONWARD</SmBtn>
+                        <SmBtn onClick={() => deleteMonthOnly(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">{activeMonth ? "MO. ONLY" : "TODAY'S MONTH"}</SmBtn>
+                        <SmBtn onClick={() => deleteQuarterOnly(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">QTR ONLY</SmBtn>
+                        <SmBtn onClick={() => activeMonth ? deleteMonthForward(exp.id) : deleteExp(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">+ ONWARD</SmBtn>
                         <SmBtn onClick={() => setPendingDelete(null)}>✕</SmBtn>
                       </div>
                     </div>
                   ) : (
-                    <SmBtn onClick={() => setPendingDelete({ id: exp.id })} c="var(--color-red)">✕</SmBtn>
+                    <SmBtn onClick={() => setPendingDelete({ id: exp.id })} c="var(--color-deduction)">✕</SmBtn>
                   )}
                 </div>
               </div>}
@@ -1205,9 +1371,9 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   </div>
                   <SmBtn onClick={() => startEditLoan(exp)} c="var(--color-gold)">EDIT</SmBtn>
                   {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
-                    <SmBtn onClick={() => deleteLoan(exp.id)} c="var(--color-red)" bg="#2d1a1a">DEL</SmBtn>
+                    <SmBtn onClick={() => deleteLoan(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">DEL</SmBtn>
                     <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
-                  </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="var(--color-red)">✕</SmBtn>}
+                  </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="var(--color-deduction)">✕</SmBtn>}
                 </div>
               </div>}
             </div>;
@@ -1228,9 +1394,21 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             This sets aside {f2(perPaycheckFromCycle(parseFloat(newExp.amount) || 0, newExp.cycle, cpm))} from each paycheck.
           </div>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>ADD</button>
-          <button onClick={() => { setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+          {activeMonth !== null ? (
+            <>
+              <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px", width: "100%" }}>Save scope:</div>
+              <SmBtn onClick={addExpThisMonth} c={newExp.label ? "var(--color-accent-primary)" : "var(--color-text-disabled)"}>MO. ONLY</SmBtn>
+              <SmBtn onClick={addExpFromMonthForward} c={newExp.label ? "var(--color-green)" : "var(--color-text-disabled)"}>FROM {activeMonthLabel} +</SmBtn>
+              <SmBtn onClick={addExpAllQuarters} c={newExp.label ? "var(--color-green)" : "var(--color-text-disabled)"}>ALL QTR</SmBtn>
+              <SmBtn onClick={_closeAddForm}>✕</SmBtn>
+            </>
+          ) : (
+            <>
+              <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>ADD</button>
+              <button onClick={_closeAddForm} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</button>
+            </>
+          )}
         </div>
       </div> : <button onClick={() => setAddingExp(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
     </div>}
@@ -1253,7 +1431,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Incoming Paycheck</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(incomingWeekNet)}</div></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", textAlign: "right" }}>Running week<br />net pay</div></div>
         </div>
         <div style={{ background: "rgba(239,68,68,0.10)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-red)", marginBottom: "4px" }}>Payroll Deductions</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Benefits + 401k — already factored into net pay</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-red)" }}>{f2(payrollDeductionsTotal)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((payrollDeductionsTotal / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-deduction)", marginBottom: "4px" }}>Payroll Deductions</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Benefits + 401k — already factored into net pay</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-deduction)" }}>{f2(payrollDeductionsTotal)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((payrollDeductionsTotal / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
         </div>
         <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((checkingTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
@@ -1261,8 +1439,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         {loans.length > 0 && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-gold)" }}>{f2(loansTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((loansTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
         </div>}
-        <div style={{ background: wr >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wr >= 0 ? "var(--color-green)" : "var(--color-red)"}`, borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-red)", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Weekly unallocated cashflow snapshot</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{f2(wr)}</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(wr * 52 / 12)}/mo</div></div></div>
+        <div style={{ background: wr >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wr >= 0 ? "var(--color-green)" : "var(--color-deduction)"}`, borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-deduction)", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Weekly unallocated cashflow snapshot</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>{f2(wr)}</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(wr * 52 / 12)}/mo</div></div></div>
         </div>
         <div style={{ height: "1px", background: "var(--color-bg-raised)", marginBottom: "20px" }} />
         {cats.map(cat => {
@@ -1293,7 +1471,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             </tr>;
           })}</tbody>
           <tfoot>
-            <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td style={{ padding: "10px 4px", color: "var(--color-gold)" }}>TRUE SPEND</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-red)" }}>{f2(tsWeeklyAvg)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-red)" }}>{f(tsAnnual / 12)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-red)" }}>{f(tsAnnual)}</td></tr>
+            <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td style={{ padding: "10px 4px", color: "var(--color-gold)" }}>TRUE SPEND</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f2(tsWeeklyAvg)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f(tsAnnual / 12)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f(tsAnnual)}</td></tr>
             <tr style={{ fontWeight: "bold" }}><td style={{ padding: "6px 4px", color: "var(--color-green)" }}>REMAINING</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(wrWeeklyAvg)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual / 12)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual)}</td></tr>
           </tfoot>
         </table>
@@ -1315,7 +1493,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Total Loan Balance" val={f(totalOwed)} rawVal={totalOwed} color="var(--color-gold)" />
-          <Card label="Weekly Committed" val={f2(weeklyCommitted)} rawVal={weeklyCommitted} color="var(--color-red)"
+          <Card label="Weekly Committed" val={f2(weeklyCommitted)} rawVal={weeklyCommitted} color="var(--color-deduction)"
             insight={weeklyIncome > 0 && weeklyCommitted > 0 ? (() => {
               const ratio = weeklyCommitted / weeklyIncome;
               const pct   = Math.round(ratio * 100);
@@ -1416,9 +1594,9 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               <div style={{ display: "flex", gap: "6px", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
                 <SmBtn onClick={() => startEditLoan(exp)} c="var(--color-gold)">EDIT</SmBtn>
                 {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
-                  <SmBtn onClick={() => deleteLoan(exp.id)} c="var(--color-red)" bg="#2d1a1a">DEL</SmBtn>
+                  <SmBtn onClick={() => deleteLoan(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">DEL</SmBtn>
                   <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
-                </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="var(--color-red)">✕</SmBtn>}
+                </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="var(--color-deduction)">✕</SmBtn>}
               </div>
             </div>}
           </div>;
@@ -1496,6 +1674,103 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     >
       {touchDragOverlay.label}
     </div>}
+
+    {/* Paycheck breakdown info modal */}
+    {showCheckInfo && checkBreakdown && (
+      <div
+        onClick={() => setShowCheckInfo(false)}
+        style={{
+          position: "fixed", inset: 0, zIndex: 60,
+          background: "rgba(0,0,0,0.82)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "16px",
+        }}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            background: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border-subtle)",
+            borderRadius: "16px",
+            maxWidth: "400px", width: "100%",
+            padding: "24px 20px",
+            maxHeight: "90vh", overflowY: "auto",
+            boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "2px" }}>{infoLabel}</div>
+                <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--color-accent-primary)", fontFamily: "var(--font-sans)" }}>Breakdown</div>
+              </div>
+              {config?.taxExemptOptIn && infoRefWeek && (
+                <span style={{
+                  fontSize: "9px", padding: "2px 7px", borderRadius: "12px", letterSpacing: "0.5px",
+                  background: infoRefWeek.taxedBySchedule ? "#1e1e3a" : "#1e4a30",
+                  color: infoRefWeek.taxedBySchedule ? "#7a8bbf" : "var(--color-green)",
+                  border: "1px solid " + (infoRefWeek.taxedBySchedule ? "#7a8bbf" : "var(--color-green)"),
+                }}>
+                  {infoRefWeek.taxedBySchedule ? "TAXED" : "EXEMPT"}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => setShowCheckInfo(false)}
+              style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1, flexShrink: 0 }}
+            >×</button>
+          </div>
+
+          {/* ── Subtraction math formula ── */}
+
+          {/* Gross — the starting number, no operator */}
+          <MathRow op=" " label="Gross Pay" val={f2(checkBreakdown.gross)} valColor="var(--color-text-primary)" large />
+          <MathDivider />
+
+          {/* Deductions block */}
+          <MathRow op="−" label="Total Tax Withholding" val={f2(checkBreakdown.fica + checkBreakdown.fedTax + checkBreakdown.stateTax)} note="FICA · fed · state" />
+          <MathRow op="−" label="Benefits / Insurance" val={f2(checkBreakdown.benefits)} />
+          <MathRow op="−" label="401(k) Contribution" val={f2(checkBreakdown.k401)} />
+          {checkBreakdown.otherDeductions.map((row, i) => {
+            const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
+            return <MathRow key={i} op="−" label={row.label ?? `Other Deduction ${i + 1}`} val={f2((row.weeklyAmount ?? 0) * (checksPerYear / 52))} />;
+          })}
+          <MathDivider thick />
+
+          {/* Net Pay result */}
+          <MathRow op="=" label="Net Pay" val={f2(checkBreakdown.netPay)} valColor="var(--color-green)" large />
+
+          {/* Buffer block */}
+          {bufferPerWeek > 0 && <>
+            <MathDivider />
+            <MathRow op="−" label="Paycheck Buffer" val={f2(bufferPerWeek)} valColor="var(--color-warning)" note="reserved savings" />
+            <MathDivider thick />
+            <MathRow op="=" label="Spendable" val={f2(checkBreakdown.spendable)} valColor="var(--color-text-primary)" large />
+          </>}
+
+          {/* Expenses block */}
+          <MathDivider />
+          {checkBreakdown.needsSpend > 0 && <MathRow op="−" label="Needs" val={f2(checkBreakdown.needsSpend)} />}
+          {checkBreakdown.lifestyleSpend > 0 && <MathRow op="−" label="Lifestyle" val={f2(checkBreakdown.lifestyleSpend)} />}
+          {checkBreakdown.loansSpend > 0 && <MathRow op="−" label="Loans" val={f2(checkBreakdown.loansSpend)} />}
+          <MathDivider thick />
+          <MathRow op="=" label="Left" val={f2(checkBreakdown.left)} valColor={checkBreakdown.left >= 0 ? "var(--color-green)" : "var(--color-deduction)"} large />
+
+          <div style={{ marginTop: "20px", textAlign: "center" }}>
+            <button
+              onClick={() => setShowCheckInfo(false)}
+              style={{
+                background: "var(--color-bg-raised)", color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
+                padding: "8px 20px", fontSize: "10px", letterSpacing: "2px",
+                textTransform: "uppercase", cursor: "pointer", fontFamily: "var(--font-sans)",
+              }}
+            >Close</button>
+          </div>
+        </div>
+      </div>
+    )}
   </div>);
 }
 
@@ -1527,4 +1802,32 @@ function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
       <button onClick={onCancel} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
     </div>
   </div>;
+}
+
+// op: " " (no operator, indent), "−" (subtraction), "=" (result)
+// Deduction rows (op="−") use --color-deduction for the value; results use valColor.
+function MathRow({ op, label, val, valColor, note, large }) {
+  const isDeduction = op === "−";
+  const isResult    = op === "=";
+  const computedValColor = valColor ?? (isDeduction ? "var(--color-deduction)" : "var(--color-text-primary)");
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 0, padding: large ? "7px 0" : "4px 0" }}>
+      <span style={{
+        fontSize: large ? "15px" : "13px", fontWeight: "700",
+        color: isDeduction ? "var(--color-deduction)" : isResult ? "var(--color-text-disabled)" : "transparent",
+        fontFamily: "var(--font-mono)", width: "18px", flexShrink: 0, userSelect: "none",
+      }}>{op}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ fontSize: large ? "13px" : "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)", letterSpacing: "0.2px" }}>{label}</span>
+        {note && <span style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginLeft: "6px", letterSpacing: "0.3px" }}>{note}</span>}
+      </div>
+      <span style={{ fontSize: large ? "19px" : "14px", fontWeight: large ? "700" : "500", color: computedValColor, fontFamily: "var(--font-mono)", letterSpacing: "-0.5px", paddingLeft: "8px" }}>{val}</span>
+    </div>
+  );
+}
+
+function MathDivider({ thick }) {
+  return (
+    <div style={{ height: thick ? "1px" : "0.5px", background: thick ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.06)", margin: thick ? "8px 0" : "3px 0" }} />
+  );
 }

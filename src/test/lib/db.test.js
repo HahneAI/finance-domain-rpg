@@ -52,7 +52,7 @@ function makeRow(overrides = {}) {
     goals:     [],
     logs:      [],
     show_extra: true,
-    is_dhl:    false,
+    is_employer_dhl:    false,
     is_admin:  false,
     ...overrides,
   }
@@ -76,7 +76,7 @@ describe('loadUserData — no row / error fallback', () => {
     expect(result.logs).toEqual(INITIAL_LOGS)
     expect(result.showExtra).toBe(true)
     expect(result.weekConfirmations).toEqual({})
-    expect(result.isDHL).toBe(false)
+    expect(result.isEmployerDHL).toBe(false)
     expect(result.isAdmin).toBe(false)
   })
 })
@@ -89,7 +89,7 @@ describe('loadUserData — config merge', () => {
       shiftHours: 12,
       // Missing: setupComplete, taxExemptOptIn, paycheckBuffer, employerPreset, etc.
     }
-    setupLoadMock(makeRow({ config: oldConfig, is_dhl: false }))
+    setupLoadMock(makeRow({ config: oldConfig, is_employer_dhl: false }))
 
     const result = await loadUserData()
 
@@ -283,7 +283,7 @@ describe('loadUserData — Food signal + setup default injection', () => {
 })
 
 describe('loadUserData — pre-wizard DHL migration', () => {
-  it('stamps DHL preset when is_dhl=true and setupComplete is absent', async () => {
+  it('stamps DHL preset when is_employer_dhl=true and setupComplete is absent', async () => {
     const oldDhlConfig = {
       ...DEFAULT_CONFIG,
       setupComplete: false,  // not yet through wizard
@@ -292,7 +292,7 @@ describe('loadUserData — pre-wizard DHL migration', () => {
       w1StateRate: 0.03,
       w2StateRate: 0.04,
     }
-    setupLoadMock(makeRow({ config: oldDhlConfig, is_dhl: true }))
+    setupLoadMock(makeRow({ config: oldDhlConfig, is_employer_dhl: true }))
 
     const result = await loadUserData()
     expect(result.config.employerPreset).toBe('DHL')
@@ -315,7 +315,7 @@ describe('loadUserData — pre-wizard DHL migration', () => {
       w1StateRate: 0.033,
       w2StateRate: 0.042,
     }
-    setupLoadMock(makeRow({ config: oldDhlConfig, is_dhl: true }))
+    setupLoadMock(makeRow({ config: oldDhlConfig, is_employer_dhl: true }))
 
     const result = await loadUserData()
     expect(result.config.fedRateLow).toBe(0.082)
@@ -326,7 +326,7 @@ describe('loadUserData — pre-wizard DHL migration', () => {
 
   it('does NOT fire migration when setupComplete is already true', async () => {
     const config = { ...DEFAULT_CONFIG, setupComplete: true, employerPreset: 'DHL' }
-    setupLoadMock(makeRow({ config, is_dhl: true }))
+    setupLoadMock(makeRow({ config, is_employer_dhl: true }))
 
     const result = await loadUserData()
     // Should not overwrite existing setup
@@ -334,9 +334,9 @@ describe('loadUserData — pre-wizard DHL migration', () => {
     expect(result.config.employerPreset).toBe('DHL')
   })
 
-  it('does NOT fire migration when is_dhl is false', async () => {
+  it('does NOT fire migration when is_employer_dhl is false', async () => {
     const config = { ...DEFAULT_CONFIG, setupComplete: false }
-    setupLoadMock(makeRow({ config, is_dhl: false }))
+    setupLoadMock(makeRow({ config, is_employer_dhl: false }))
 
     const result = await loadUserData()
     // Standard user — no DHL fields stamped
@@ -345,7 +345,7 @@ describe('loadUserData — pre-wizard DHL migration', () => {
 })
 
 describe('loadUserData — rotation correction', () => {
-  it('corrects dhlTeam=null to B + custom schedule when is_dhl=true', async () => {
+  it('corrects dhlTeam=null to B + custom schedule when is_employer_dhl=true', async () => {
     const config = {
       ...DEFAULT_CONFIG,
       setupComplete: true,
@@ -353,7 +353,7 @@ describe('loadUserData — rotation correction', () => {
       dhlTeam: null,            // never corrected pre-wizard
     startingWeekIsLong: true, // wrong initial value — gets corrected to false
     }
-    setupLoadMock(makeRow({ config, is_dhl: true }))
+    setupLoadMock(makeRow({ config, is_employer_dhl: true }))
 
     const result = await loadUserData()
     expect(result.config.dhlTeam).toBe('B')
@@ -364,7 +364,7 @@ describe('loadUserData — rotation correction', () => {
 
   it('does NOT fire rotation correction when dhlTeam is already set', async () => {
     const config = { ...DEFAULT_CONFIG, setupComplete: true, employerPreset: 'DHL', dhlTeam: 'A' }
-    setupLoadMock(makeRow({ config, is_dhl: true }))
+    setupLoadMock(makeRow({ config, is_employer_dhl: true }))
 
     const result = await loadUserData()
     expect(result.config.dhlTeam).toBe('A')  // unchanged
@@ -444,12 +444,12 @@ describe('saveUserData', () => {
 
     expect(supabase.from).toHaveBeenCalledWith('user_data')
     const [upsertData] = mockUpsert.mock.calls[0]
-    expect(upsertData.is_dhl).toBe(true)
+    expect(upsertData.is_employer_dhl).toBe(true)
     expect(upsertData.config).toBe(payload.config)
     expect(upsertData.user_id).toBe('test-user-id')
   })
 
-  it('sets is_dhl=false when employerPreset is not DHL', async () => {
+  it('sets is_employer_dhl=false when employerPreset is not DHL', async () => {
     const mockUpsert = vi.fn().mockResolvedValue({ error: null })
     supabase.from.mockReturnValue({ upsert: mockUpsert })
 
@@ -459,7 +459,7 @@ describe('saveUserData', () => {
     })
 
     const [upsertData] = mockUpsert.mock.calls[0]
-    expect(upsertData.is_dhl).toBe(false)
+    expect(upsertData.is_employer_dhl).toBe(false)
   })
 
   it('persists ptoGoal payloads as pto_goal during save', async () => {

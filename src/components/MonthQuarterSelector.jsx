@@ -130,6 +130,10 @@ export function MonthQuarterSelector({
                 const isPast = key < currentMonthKey;
                 const hasOverride = monthsWithOverrides?.has(key);
                 const isLastInQ = mPos === months.length - 1;
+                // In quarter mode, highlight the first month of the active quarter —
+                // that's the month whose data the quarter view is actually showing.
+                const monthNum = parseInt(key.slice(5, 7), 10);
+                const isFirstMonthOfActiveQ = !isMonthMode && mPos === 0 && Math.floor((monthNum - 1) / 3) === activeQuarter;
                 return (
                   <button
                     key={key}
@@ -137,11 +141,17 @@ export function MonthQuarterSelector({
                     style={{
                       flex: 1,
                       minWidth: 0,
-                      background: isActive ? "rgba(0, 200, 150, 0.22)" : "transparent",
+                      background: isActive
+                        ? "rgba(0, 200, 150, 0.22)"
+                        : isFirstMonthOfActiveQ
+                        ? "rgba(0, 200, 150, 0.08)"
+                        : "transparent",
                       border: "none",
                       borderRight: isLastInQ ? "none" : "1px solid rgba(0, 200, 150, 0.07)",
                       color: isActive
                         ? "var(--color-accent-primary)"
+                        : isFirstMonthOfActiveQ
+                        ? "rgba(0, 200, 150, 0.75)"
                         : isCurrent
                         ? "var(--color-text-primary)"
                         : isPast
@@ -152,7 +162,7 @@ export function MonthQuarterSelector({
                       fontSize: "8px",
                       letterSpacing: "0.5px",
                       textTransform: "uppercase",
-                      fontWeight: isActive ? "bold" : "normal",
+                      fontWeight: isActive ? "bold" : isFirstMonthOfActiveQ ? "600" : "normal",
                       fontFamily: "var(--font-sans)",
                       textAlign: "center",
                       position: "relative",
@@ -171,7 +181,18 @@ export function MonthQuarterSelector({
                         opacity: 0.9,
                       }} />
                     )}
-                    {hasOverride && !isCurrent && (
+                    {isFirstMonthOfActiveQ && !isCurrent && (
+                      <span style={{
+                        display: "block",
+                        width: "12px",
+                        height: "1px",
+                        background: "var(--color-accent-primary)",
+                        margin: "3px auto 0",
+                        opacity: 0.45,
+                        borderRadius: "0.5px",
+                      }} />
+                    )}
+                    {hasOverride && !isCurrent && !isFirstMonthOfActiveQ && (
                       <span style={{
                         display: "block",
                         fontSize: "5px",

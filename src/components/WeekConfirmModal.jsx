@@ -135,15 +135,20 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
         : (config.customWeeklyHoursShort ?? config.customWeeklyHours ?? 0))
     : 0;
 
-  const isDHL = config.employerPreset === "DHL";
-  // hasBucket: DHL (separate bucket system) or non-DHL with attendance bucket enabled.
+  const isEmployerDHL = config.employerPreset === "DHL";
+  // hasBucket: DHL (separate bucket system) or base user with attendance bucket enabled.
   // Used to show bucket-impact warnings on unapproved absence types.
-  const hasBucket = isDHL || config.attendanceBucketEnabled === true;
+  const hasBucket = isEmployerDHL || config.attendanceBucketEnabled === true;
+
+  // Base user ceiling model: income projects off maxWeeklyHours; checked days are "worked" (not pickups).
+  const isBaseUser = !isEmployerDHL;
+  const baseCeilingHours = isBaseUser ? (config.maxWeeklyHours ?? config.standardWeeklyHours ?? 0) : 0;
+  const baseCeilingShifts = baseCeilingHours > 0 ? Math.round(baseCeilingHours / (config.shiftHours || 8)) : 0;
 
   // DHL OT tracking — must be declared before pickupDays/totalHoursPlanned/extraPickupCandidates
   // which all reference workedOtDays. Moving these up avoids a TDZ ReferenceError when
   // hasCustomSchedule is true (short-circuit no longer hides the access).
-  const requiresOtSelection = isDHL && requiredOtCount > 0;
+  const requiresOtSelection = isEmployerDHL && requiredOtCount > 0;
   const anyOtMissed = otDays.some(d => d === "missed");
   const missedOtCount = otDays.filter(d => d === "missed").length;
   const workedOtDays = otDays.filter(d => d && d !== "missed");
@@ -156,6 +161,10 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
     dayToggles[d] === true
   );
   const netShiftDelta = pickupDays.length - missedScheduledDays.length;
+  // Base user: pickupDays = all days marked worked; compare against the maxWeeklyHours ceiling.
+  const baseWorkedShifts = isBaseUser ? pickupDays.length : 0;
+  const baseHoursWorked = baseWorkedShifts * (config.shiftHours || 8);
+  const baseHourDelta = isBaseUser && baseCeilingHours > 0 ? baseHoursWorked - baseCeilingHours : null;
   // True when every currently-missed day is already covered by an existing log entry.
   // Used to suppress the "Previously Logged" overflow note and skip duplicate log creation.
   const allMissedPreLogged = preLoggedMissedDays.size > 0
@@ -335,6 +344,39 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       return;
     }
 
+    // Base user: compare worked hours against maxWeeklyHours ceiling instead of shift delta.
+    if (isBaseUser && baseCeilingHours > 0) {
+      if (baseHourDelta === 0) {
+        onConfirm({
+          confirmedAt: new Date().toISOString(),
+          dayToggles, scheduledDays: [], missedScheduledDays: [], pickupDays,
+          netShiftDelta: 0, eventId: null,
+        }, null);
+        return;
+      }
+      const isDeficitNonDHL = baseHourDelta < 0;
+      const hoursGap = Math.abs(baseHourDelta);
+      const shiftGap = Math.round(hoursGap / (config.shiftHours || 8));
+      setEventVals({
+        weekEnd: weekEndIso,
+        weekIdx: week.idx,
+        weekRotation: week.rotation,
+        type: isDeficitNonDHL ? "missed_unpaid" : "bonus",
+        missedDays: [],
+        shiftsLost: isDeficitNonDHL ? shiftGap : 0,
+        weekendShifts: 0,
+        hoursLost: isDeficitNonDHL ? hoursGap : 0,
+        amount: !isDeficitNonDHL ? baseHourDelta * (config.baseRate || 0) : 0,
+        ptoHours: 0,
+        note: isDeficitNonDHL
+          ? `Under weekly ceiling — worked ${baseWorkedShifts} of ${baseCeilingShifts} max shift${baseCeilingShifts !== 1 ? "s" : ""}`
+          : `Over weekly ceiling by ${hoursGap}h`,
+      });
+      setLayer(2);
+      setWentToLayer2(true);
+      return;
+    }
+
     if (netShiftDelta === 0) {
       // Net-zero: same total hours regardless of which days — confirm clean
       onConfirm({
@@ -494,7 +536,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
           <>
             <div style={{ overflowY: "auto", flex: 1 }}>
               <div style={{ padding: "6px 20px 4px", fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
-                Mark your actual week — tap any day to update
+                {isBaseUser ? `Mark days worked — ceiling: ${baseCeilingHours}h / ${baseCeilingShifts} shift${baseCeilingShifts !== 1 ? "s" : ""}` : "Mark your actual week — tap any day to update"}
               </div>
 
               {/* ── Previously Logged — shown when existing logs exist for this week ── */}
@@ -556,7 +598,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                       {isScheduled
                         ? <span style={{ fontSize: "9px", color: "var(--color-text-disabled)", textTransform: "uppercase", letterSpacing: "1px" }}>{config.shiftHours}h shift</span>
                         : isPickup
-                          ? <span style={{ fontSize: "9px", color: "rgba(34,197,94,0.53)", textTransform: "uppercase", letterSpacing: "1px" }}>pickup</span>
+                          ? <span style={{ fontSize: "9px", color: "rgba(34,197,94,0.53)", textTransform: "uppercase", letterSpacing: "1px" }}>{isEmployerDHL ? "pickup" : "worked"}</span>
                           : <span style={{ fontSize: "9px", color: "var(--color-text-disabled)", textTransform: "uppercase", letterSpacing: "1px" }}>off</span>
                       }
                     </div>
@@ -593,17 +635,29 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                         color: isPickup ? "var(--color-green)" : "var(--color-text-disabled)",
                         transition: "background 0.15s, color 0.15s, border-color 0.15s",
                       }}>
-                        {isPickup ? "✓ Pickup" : "+ Pickup"}
+                        {isPickup ? (isEmployerDHL ? "✓ Pickup" : "✓ Worked") : (isEmployerDHL ? "+ Pickup" : "+ Mark")}
                       </button>
                     )}
                   </div>
                 );
               })}
 
-              {/* Net summary row — only shown when at least one day is non-default.
-                  Shows the running delta so the user can see the impact before saving.
-                  "Net hours unchanged" copy is intentionally calm — it's good news. */}
-              {(missedScheduledDays.length > 0 || pickupDays.length > 0) && (
+              {/* Net summary row — DHL: shows missed/pickup delta; base user: shows ceiling comparison */}
+              {isBaseUser && baseCeilingHours > 0 ? (
+                <div style={{ margin: "10px 20px", padding: "10px 14px", background: "var(--color-bg-base)", border: `1px solid ${baseHourDelta === 0 ? "var(--color-border-subtle)" : baseHourDelta < 0 ? "rgba(239,68,68,0.25)" : "rgba(34,197,94,0.25)"}`, borderRadius: "6px", fontSize: "10px" }}>
+                  <div style={{ color: "var(--color-text-secondary)", marginBottom: "4px" }}>
+                    {baseWorkedShifts} / {baseCeilingShifts} shift{baseCeilingShifts !== 1 ? "s" : ""} worked ({baseHoursWorked}h / {baseCeilingHours}h ceiling)
+                  </div>
+                  {baseHourDelta === 0 && (
+                    <div style={{ color: "var(--color-green)", fontSize: "9px", letterSpacing: "1px" }}>Full ceiling reached — confirming clean</div>
+                  )}
+                  {baseHourDelta !== 0 && (
+                    <div style={{ color: baseHourDelta > 0 ? "var(--color-green)" : "var(--color-deduction)", fontWeight: "bold", fontSize: "9px", letterSpacing: "1px" }}>
+                      {baseHourDelta > 0 ? `+${baseHourDelta}h over ceiling` : `${baseHourDelta}h under ceiling`} — review on next screen
+                    </div>
+                  )}
+                </div>
+              ) : (missedScheduledDays.length > 0 || pickupDays.length > 0) && (
                 <div style={{ margin: "10px 20px", padding: "10px 14px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", fontSize: "10px" }}>
                   {missedScheduledDays.length > 0 && (
                     <div style={{ color: "var(--color-deduction)", marginBottom: pickupDays.length ? "4px" : 0 }}>

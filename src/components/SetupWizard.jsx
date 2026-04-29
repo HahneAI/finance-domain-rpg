@@ -163,7 +163,7 @@ const OT_MULTIPLIERS = [1.5, 2];
 
 function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false }) {
   // Gate: has the user answered "Do you work for DHL?" yet?
-  // Investor accounts skip the gate entirely — always treated as non-DHL.
+  // Investor accounts skip the gate entirely — always treated as base user.
   const [gateTouched, setGateTouched] = useState(
     isInvestor || formData.employerPreset === "DHL" || formData.setupComplete === true
   );
@@ -191,7 +191,8 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
       : (formData.customWeeklyHours > 0 ? String(formData.customWeeklyHours) : "")
   );
 
-  const isDHL    = formData.employerPreset === "DHL";
+  const isEmployerDHL    = formData.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const isSalary = formData.userPaySchedule === "salary";
 
   function setDHL(yes) {
@@ -237,10 +238,10 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
       {!isInvestor && (
         <Field label="Do you work for DHL?">
           <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-            <Pill label="Yes" active={isDHL} onClick={() => setDHL(true)} />
-            <Pill label="No"  active={gateTouched && !isDHL} onClick={() => setDHL(false)} />
+            <Pill label="Yes" active={isEmployerDHL} onClick={() => setDHL(true)} />
+            <Pill label="No"  active={gateTouched && isBaseUser} onClick={() => setDHL(false)} />
           </div>
-          {isDHL && (
+          {isEmployerDHL && (
             <div style={{
               marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
               lineHeight: "1.5",
@@ -252,7 +253,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
       )}
 
       {/* ── DHL: Team + shift ── */}
-      {isDHL && (
+      {isEmployerDHL && (
         <>
           <Field label="Which DHL team are you on?">
             <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
@@ -377,9 +378,9 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
       {gateTouched && (
         <>
           {/* ── Pay Schedule ── */}
-          {(!isDHL || formData.dhlTeam) && <Field label="How do you get paid?" error={attempted && !formData.userPaySchedule ? "Select a pay schedule" : null}>
+          {(isBaseUser || formData.dhlTeam) && <Field label="How do you get paid?" error={attempted && !formData.userPaySchedule ? "Select a pay schedule" : null}>
             <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap", alignItems: "center" }}>
-              {isDHL ? (
+              {isEmployerDHL ? (
                 <>
                   <Pill label="Weekly"            active={formData.userPaySchedule === "weekly"} onClick={() => onChange({ userPaySchedule: "weekly",  annualSalary: null })} />
                   <Pill label="Salary (Biweekly)" active={formData.userPaySchedule === "salary"} onClick={() => onChange({ userPaySchedule: "salary" })} />
@@ -461,7 +462,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
             />
           </Field>
 
-          {!isDHL && (
+          {isBaseUser && (
             <>
               {/* ── OT Threshold ── */}
               <Field label="Overtime Threshold (hrs/wk)">
@@ -507,6 +508,34 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
                     />
                   ))}
                 </div>
+              </Field>
+
+              {/* ── Night Differential ── */}
+              <Field label="Do you receive a night differential?">
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                  <Pill
+                    label="Yes"
+                    active={formData.nightDiffEnabled === true}
+                    onClick={() => onChange({ nightDiffEnabled: true })}
+                  />
+                  <Pill
+                    label="No"
+                    active={formData.nightDiffEnabled === false}
+                    onClick={() => onChange({ nightDiffEnabled: false, nightDiffRate: 0 })}
+                  />
+                </div>
+                {formData.nightDiffEnabled === true && (
+                  <div style={{ marginTop: "10px" }}>
+                    <label style={{ ...lS }}>Night Diff Rate ($/hr)</label>
+                    <input
+                      style={{ ...iS }}
+                      type="number" min="0" step="0.25"
+                      value={formData.nightDiffRate ?? ""}
+                      onChange={e => onChange({ nightDiffRate: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                      placeholder="e.g. 1.50"
+                    />
+                  </div>
+                )}
               </Field>
             </>
           )}
@@ -561,7 +590,8 @@ function dateToWeekIdx(dateStr) {
 }
 
 function Step2({ formData, onChange, attempted }) {
-  const isDHL = formData.employerPreset === "DHL";
+  const isEmployerDHL = formData.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
 
   function handleDateChange(dateStr) {
     if (!dateStr) return;
@@ -589,7 +619,7 @@ function Step2({ formData, onChange, attempted }) {
       </Field>
 
       {/* ── Hours / rotation ── */}
-      {isDHL ? (
+      {isEmployerDHL ? (
         <Field label="Which week are you currently on?">
           <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
             <Pill
@@ -611,24 +641,24 @@ function Step2({ formData, onChange, attempted }) {
           </div>
         </Field>
       ) : (
-        <Field label="Standard Weekly Hours" error={attempted && !((formData.standardWeeklyHours ?? 0) > 0 && (formData.standardWeeklyHours ?? 0) <= 168) ? "Enter hours between 1 and 168" : null}>
+        <Field label="Max Weekly Hours" error={attempted && !((formData.maxWeeklyHours ?? 0) > 0 && (formData.maxWeeklyHours ?? 0) <= 168) ? "Enter hours between 1 and 168" : null}>
           <input
-            style={{ ...iS, ...errBorder(attempted && !((formData.standardWeeklyHours ?? 0) > 0 && (formData.standardWeeklyHours ?? 0) <= 168)) }}
+            style={{ ...iS, ...errBorder(attempted && !((formData.maxWeeklyHours ?? 0) > 0 && (formData.maxWeeklyHours ?? 0) <= 168)) }}
             type="number" min="1" step="0.5"
-            value={formData.standardWeeklyHours ?? ""}
-            onChange={e => onChange({ standardWeeklyHours: e.target.value === "" ? null : parseFloat(e.target.value) })}
+            value={formData.maxWeeklyHours ?? ""}
+            onChange={e => onChange({ maxWeeklyHours: e.target.value === "" ? null : parseFloat(e.target.value) })}
             placeholder="e.g. 40"
           />
           <div style={{
             marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)",
           }}>
-            Deviations are logged week-by-week from the dashboard.
+            Income projects from this ceiling; weekly check-in tracks actual hours worked.
           </div>
         </Field>
       )}
 
       {/* ── Pay period end day ── */}
-      {!isDHL && (
+      {isBaseUser && (
         <Field label="Pay Period Closes On" error={attempted && !Number.isInteger(formData.payPeriodEndDay) ? "Select a day" : null}>
           <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
             {DAY_LABELS.map((d, i) => (
@@ -791,9 +821,10 @@ function BenefitCard({ def, selected, formData, onChange, onToggle, attempted })
 
 function Step3({ formData, onChange, attempted }) {
   const selected = new Set(formData.selectedBenefits ?? []);
-  const isDHL    = formData.employerPreset === "DHL";
+  const isEmployerDHL    = formData.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const others   = formData.otherDeductions ?? [];
-  const attendErr = attempted && !isDHL && formData.attendanceBucketEnabled === null;
+  const attendErr = attempted && isBaseUser && formData.attendanceBucketEnabled === null;
 
   function toggle(id) {
     const next = new Set(selected);
@@ -810,7 +841,7 @@ function Step3({ formData, onChange, attempted }) {
 
   function addRow() {
     const id = Date.now().toString(36);
-    onChange({ otherDeductions: [...others, { id, label: "", weeklyAmount: 0 }] });
+    onChange({ otherDeductions: [...others, { id, label: "", perCheckAmount: 0 }] });
   }
 
   function updateRow(id, patch) {
@@ -885,8 +916,8 @@ function Step3({ formData, onChange, attempted }) {
                 style={{ ...iS }}
                 type="number" min="0" step="0.01"
                 placeholder="$/check"
-                value={row.weeklyAmount || ""}
-                onChange={e => updateRow(row.id, { weeklyAmount: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                value={row.perCheckAmount ?? row.weeklyAmount ?? ""}
+                onChange={e => updateRow(row.id, { perCheckAmount: e.target.value === "" ? null : parseFloat(e.target.value) })}
               />
               <button
                 onClick={() => removeRow(row.id)}
@@ -915,7 +946,7 @@ function Step3({ formData, onChange, attempted }) {
       </div>
 
       {/* ── Attendance policy gate — standard users only ── */}
-      {!isDHL && (
+      {isBaseUser && (
         <Field label="Does your employer track attendance with a formal policy?" error={attendErr ? "Selection required" : null}>
           <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px", lineHeight: "1.5" }}>
             Points systems, hours-based buckets, or similar.
@@ -933,6 +964,127 @@ function Step3({ formData, onChange, attempted }) {
             />
           </div>
         </Field>
+      )}
+
+      {/* Attendance threshold sub-fields — only when answered Yes */}
+      {isBaseUser && formData.attendanceBucketEnabled === true && (
+        <>
+          <Field label="What unit does your policy use?">
+            <input
+              style={{ ...iS }}
+              type="text"
+              placeholder="e.g. points, hours, occurrences"
+              value={formData.attendanceUnit ?? ""}
+              onChange={e => onChange({ attendanceUnit: e.target.value || null })}
+            />
+          </Field>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <Field label="Warning Threshold">
+              <input
+                style={{ ...iS }}
+                type="number" min="0" step="0.5"
+                value={formData.attendanceWarnThreshold ?? ""}
+                onChange={e => onChange({ attendanceWarnThreshold: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                placeholder="e.g. 6"
+              />
+            </Field>
+            <Field label="Termination Threshold">
+              <input
+                style={{ ...iS }}
+                type="number" min="0" step="0.5"
+                value={formData.attendanceTerminateThreshold ?? ""}
+                onChange={e => onChange({ attendanceTerminateThreshold: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                placeholder="e.g. 12"
+              />
+            </Field>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <Field label="Current Balance">
+              <input
+                style={{ ...iS }}
+                type="number" min="0" step="0.5"
+                value={formData.attendanceCurrentBalance ?? ""}
+                onChange={e => onChange({ attendanceCurrentBalance: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                placeholder="e.g. 2"
+              />
+            </Field>
+            <Field label="Per-Event Increment">
+              <input
+                style={{ ...iS }}
+                type="number" min="0.1" step="0.5"
+                value={formData.attendanceIncrement ?? ""}
+                onChange={e => onChange({ attendanceIncrement: e.target.value === "" ? 1 : parseFloat(e.target.value) })}
+                placeholder="e.g. 1"
+              />
+              <div style={{ marginTop: "4px", fontSize: "10px", color: "var(--color-text-disabled)" }}>Default 1 per absence</div>
+            </Field>
+          </div>
+        </>
+      )}
+
+      {/* ── PTO policy — standard users only ── */}
+      {isBaseUser && (
+        <Field label="Does your employer offer PTO?">
+          <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+            <Pill label="Yes" active={formData.ptoEnabled === true}
+              onClick={() => onChange({ ptoEnabled: true })} />
+            <Pill label="No" active={formData.ptoEnabled === false}
+              onClick={() => onChange({ ptoEnabled: false })} />
+          </div>
+        </Field>
+      )}
+
+      {/* PTO sub-fields — only when answered Yes */}
+      {isBaseUser && formData.ptoEnabled === true && (
+        <>
+          <Field label="How does your PTO accrue?">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
+              <Pill label="Per Hour Worked" active={formData.ptoAccrualMethod === "per_hour"}
+                onClick={() => onChange({ ptoAccrualMethod: "per_hour" })} />
+              <Pill label="Per Pay Period" active={formData.ptoAccrualMethod === "per_period"}
+                onClick={() => onChange({ ptoAccrualMethod: "per_period" })} />
+              <Pill label="Lump Sum (Annual)" active={formData.ptoAccrualMethod === "lump_sum"}
+                onClick={() => onChange({ ptoAccrualMethod: "lump_sum" })} />
+            </div>
+          </Field>
+
+          {formData.ptoAccrualMethod && (
+            <Field label={
+              formData.ptoAccrualMethod === "per_hour" ? "Accrual Rate (hrs per hour worked)" :
+              formData.ptoAccrualMethod === "per_period" ? "Accrual Rate (hrs per pay period)" :
+              "Annual Total (hrs)"
+            }>
+              <input
+                style={{ ...iS }}
+                type="number" min="0" step="0.01"
+                value={formData.ptoAccrualRate ?? ""}
+                onChange={e => onChange({ ptoAccrualRate: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                placeholder={formData.ptoAccrualMethod === "per_hour" ? "e.g. 0.05" : "e.g. 4"}
+              />
+            </Field>
+          )}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <Field label="Current Balance (hrs)">
+              <input
+                style={{ ...iS }}
+                type="number" min="0" step="0.5"
+                value={formData.ptoCurrentBalance ?? ""}
+                onChange={e => onChange({ ptoCurrentBalance: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                placeholder="e.g. 40"
+              />
+            </Field>
+            <Field label="Cap (hrs, optional)">
+              <input
+                style={{ ...iS }}
+                type="number" min="0" step="1"
+                value={formData.ptoCap ?? ""}
+                onChange={e => onChange({ ptoCap: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                placeholder="e.g. 120"
+              />
+            </Field>
+          </div>
+        </>
       )}
     </div>
   );
@@ -1071,7 +1223,8 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
 }
 
 function Step4({ formData, onChange, attempted }) {
-  const isDHL      = formData.employerPreset === "DHL";
+  const isEmployerDHL      = formData.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const isVariable = formData.scheduleIsVariable;
   const stateConfig = formData.userState ? STATE_TAX_TABLE[formData.userState] : null;
   const isNoTax    = stateConfig?.model === "NONE";
@@ -1090,7 +1243,7 @@ function Step4({ formData, onChange, attempted }) {
   }
 
   function handleEstimate() {
-    const stateEst = isNoTax ? 0 : (stateConfig?.flatRate ?? 0.05);
+    const stateEst = isNoTax ? 0 : (stateConfig?.flatRate ?? stateConfig?.midpointRate ?? 0.05);
     onChange({
       fedRateLow:    0.10,
       fedRateHigh:   isVariable ? 0.12 : 0.10,
@@ -1119,29 +1272,40 @@ function Step4({ formData, onChange, attempted }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-      {/* Variable schedule gate — non-DHL users only */}
-      {isDHL ? (
+      {/* Variable schedule note — DHL only */}
+      {isEmployerDHL && (
         <div style={{
           fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5",
           padding: "10px 12px", background: "var(--color-bg-raised)", borderRadius: "8px",
         }}>
           Variable schedule auto-enabled — your pay alternates between shorter and longer weeks.
         </div>
-      ) : (
-        <Field label="Does your pay vary week to week?">
-          <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-            <Pill label="Yes" active={isVariable === true}
-              onClick={() => onChange({ scheduleIsVariable: true })} />
-            <Pill label="No"  active={isVariable === false}
-              onClick={() => onChange({ scheduleIsVariable: false })} />
-          </div>
-          {isVariable && (
-            <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)" }}>
-              You'll enter two paystubs — one for each week type.
-            </div>
-          )}
-        </Field>
       )}
+
+      {/* Filing Status */}
+      <Field label="Filing Status">
+        <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
+          {[
+            { val: "single", label: "Single",   deduction: 15000 },
+            { val: "mfj",    label: "Married",   deduction: 30000 },
+            { val: "hoh",    label: "Head of Household", deduction: 22500 },
+          ].map(({ val, label, deduction }) => (
+            <Pill
+              key={val}
+              label={label}
+              active={formData.filingStatus === val}
+              onClick={() => onChange({ filingStatus: val, fedStdDeduction: deduction })}
+            />
+          ))}
+        </div>
+        {formData.filingStatus && (
+          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)" }}>
+            {formData.filingStatus === "single" && "Standard deduction: $15,000"}
+            {formData.filingStatus === "mfj"    && "Standard deduction: $30,000 (married filing jointly)"}
+            {formData.filingStatus === "hoh"    && "Standard deduction: $22,500 (head of household)"}
+          </div>
+        )}
+      </Field>
 
       {/* State dropdown */}
       <Field label="Your State" error={attempted && !formData.userState ? "Select your state" : null}>
@@ -1164,13 +1328,15 @@ function Step4({ formData, onChange, attempted }) {
           <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)" }}>
             {stateConfig.model === "FLAT"
               ? `Flat rate: ${(stateConfig.flatRate * 100).toFixed(1)}% — pre-filled on estimate path.`
+              : stateConfig.midpointRate != null
+              ? `Progressive brackets — estimate uses ~${(stateConfig.midpointRate * 100).toFixed(1)}% effective rate (~$50k income).`
               : "Progressive brackets — estimate uses a mid-bracket approximation."}
           </div>
         )}
       </Field>
 
       {/* DHL MO preset load button — only when no rates set yet */}
-      {isDHL && !hasRates && formData.userState === "MO" && (
+      {isEmployerDHL && !hasRates && formData.userState === "MO" && (
         <div style={{
           padding: "12px 14px",
           background: "rgba(0,200,150,0.05)",
@@ -1253,7 +1419,7 @@ function Step4({ formData, onChange, attempted }) {
             </span>
           </div>
           {[
-            { label: "Standard Deduction",             val: `$${(formData.fedStdDeduction ?? 15000).toLocaleString()}`, plain: true },
+            { label: "Standard Deduction",             val: `$${(formData.fedStdDeduction ?? 15000).toLocaleString()}${formData.filingStatus === "mfj" ? " (MFJ)" : formData.filingStatus === "hoh" ? " (HOH)" : ""}`, plain: true },
             { label: "FICA (SS + Medicare)",           val: pct(formData.ficaRate ?? 0.0765),                          plain: true },
             { label: `Fed ${isVariable ? "(short)" : "rate"}`, val: pct(formData.fedRateLow),               est: true },
             ...(isVariable ? [{ label: "Fed (long)",   val: pct(formData.fedRateHigh),                                 est: true }] : []),
@@ -1293,8 +1459,8 @@ function Step4({ formData, onChange, attempted }) {
 
 // Estimate a typical weekly gross from formData — does not require a week object.
 function estimateWeeklyGross(d) {
-  const isDHL = d.employerPreset === "DHL";
-  if (isDHL) {
+  const isEmployerDHL = d.employerPreset === "DHL";
+  if (isEmployerDHL) {
     const gross = (h) => {
       const base = d.baseRate || 0;
       const reg = Math.min(h, d.otThreshold || 40);
@@ -1317,22 +1483,13 @@ function estimateWeeklyGross(d) {
     const hoursPerShift = d.shiftHours || 12;
     return (gross(4 * hoursPerShift) + gross(5 * hoursPerShift)) / 2;
   }
-  if (d.scheduleIsVariable && d.customWeeklyHours == null) {
-    // Two-rate variable: average of short and long week estimates.
-    const h1 = (d.standardWeeklyHours || 40);
-    const h2 = (d.longWeeklyHours || 50);
-    const gross = (h) => {
-      const base = d.baseRate || 0;
-      const reg = Math.min(h, d.otThreshold || 40);
-      const ot = Math.max(h - (d.otThreshold || 40), 0);
-      return reg * base + ot * base * (d.otMultiplier || 1.5);
-    };
-    return (gross(h1) + gross(h2)) / 2;
-  }
-  // Standard fixed schedule (or variable with customWeeklyHours override).
-  // customWeeklyHours always takes precedence over standardWeeklyHours.
-  const h = d.customWeeklyHours ?? d.standardWeeklyHours ?? 40;
-  return h * (d.baseRate || 0);
+  // Base user: flat ceiling. customWeeklyHours overrides maxWeeklyHours; standardWeeklyHours is legacy fallback.
+  const h = d.customWeeklyHours ?? d.maxWeeklyHours ?? d.standardWeeklyHours ?? 40;
+  const base = d.baseRate || 0;
+  const nightDiff = d.nightDiffEnabled === true ? (d.nightDiffRate ?? 0) : 0;
+  const reg = Math.min(h, d.otThreshold || 40);
+  const ot = Math.max(h - (d.otThreshold || 40), 0);
+  return reg * (base + nightDiff) + ot * (base + nightDiff) * (d.otMultiplier || 1.5);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1389,7 +1546,7 @@ function StepWrapUp({ formData, onChange }) {
   const checksPerYear = PAYCHECKS_PER_YEAR[formData.userPaySchedule ?? "weekly"] ?? 52;
   const perWeekFactor = checksPerYear / 52;
   const benefits = benefitsActive ? baseBenefits * perWeekFactor : 0;
-  const otherPerCheck = (formData.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0);
+  const otherPerCheck = (formData.otherDeductions || []).reduce((s, r) => s + (r.perCheckAmount ?? r.weeklyAmount ?? 0), 0);
   const other = otherPerCheck * perWeekFactor;
   const fed   = gross * (formData.fedRateLow || 0);
   const state = gross * (formData.stateRateLow || 0);
@@ -1547,7 +1704,7 @@ const STEP_DEFS = [
       if (!d.startDate) return false;
       if ((d.firstActiveIdx ?? 0) < 0 || (d.firstActiveIdx ?? 0) >= FISCAL_WEEKS_PER_YEAR) return false;
       if (d.employerPreset === "DHL") return true;
-      if (!((d.standardWeeklyHours ?? 0) > 0) || (d.standardWeeklyHours ?? 0) > 168) return false;
+      if (!((d.maxWeeklyHours ?? 0) > 0) || (d.maxWeeklyHours ?? 0) > 168) return false;
       return Number.isInteger(d.payPeriodEndDay) && d.payPeriodEndDay >= 0 && d.payPeriodEndDay <= 6;
     },
     component: Step2,
@@ -1624,7 +1781,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   const [stepIdx,   setStepIdx]   = useState(0);
   const [formData,  setFormData]  = useState(
     isInvestor
-      ? { ...config, employerPreset: null, otThreshold: config.otThreshold || 40, standardWeeklyHours: config.standardWeeklyHours || 40 }
+      ? { ...config, employerPreset: null, otThreshold: config.otThreshold || 40, maxWeeklyHours: config.maxWeeklyHours || config.standardWeeklyHours || 40 }
       : { ...config }
   );
   const [lifeEvent, setLifeEvent] = useState(initialLifeEvent);

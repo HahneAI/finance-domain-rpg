@@ -1,43 +1,43 @@
 # TODO — Authority Finance
 
-## 0. Non-DHL Foundation — Priority Sprint
+## 0. Base user Foundation — Priority Sprint
 
-*Source: non-dhl-wizard-audit.md full audit, 2026-04-28. All 12 items are blockers or
-direct enablers for a shippable non-DHL user experience.*
+*Source: base user-wizard-audit.md full audit, 2026-04-28. All 12 items are blockers or
+direct enablers for a shippable base user user experience.*
 
 ---
 
 ### [CC] Implementation Work
 
 - [ ] **`maxWeeklyHours` engine redesign** — Replace the broken `standardWeeklyHours` /
-  `longWeeklyHours` short-long pair with a single ceiling field for non-DHL users.
-  - [ ] Add `maxWeeklyHours` (required) to Step 2 UI for non-DHL path
-  - [ ] Replace `cfg.standardWeeklyHours` / `cfg.longWeeklyHours` in `buildYear` non-DHL branch (finance.js lines 507, 1068) with `cfg.maxWeeklyHours`
-  - [ ] Update `estimateWeeklyGross` non-DHL path (line 1311) to use `maxWeeklyHours * baseRate`
-  - [ ] Remove `scheduleIsVariable` from non-DHL engine branch; retire the two-paystub path in Step 4 for non-DHL (one paystub, one rate set)
+  `longWeeklyHours` short-long pair with a single ceiling field for base users.
+  - [ ] Add `maxWeeklyHours` (required) to Step 2 UI for base user path
+  - [ ] Replace `cfg.standardWeeklyHours` / `cfg.longWeeklyHours` in `buildYear` base user branch (finance.js lines 507, 1068) with `cfg.maxWeeklyHours`
+  - [ ] Update `estimateWeeklyGross` base user path (line 1311) to use `maxWeeklyHours * baseRate`
+  - [ ] Remove `scheduleIsVariable` from base user engine branch; retire the two-paystub path in Step 4 for base user (one paystub, one rate set)
   - [ ] Add `maxWeeklyHours: null` to `DEFAULT_CONFIG`
-  - [ ] WeekConfirmModal non-DHL: open 7-day selector (no preset rotation); compare checked days × `shiftHours` against `maxWeeklyHours` ceiling; adjust projection down if under ceiling
+  - [ ] WeekConfirmModal base user: open 7-day selector (no preset rotation); compare checked days × `shiftHours` against `maxWeeklyHours` ceiling; adjust projection down if under ceiling
 
 - [ ] **Step 2 start-date clamp** — `firstActiveIdx` not bounded to fiscal year produces zero
-  active weeks and `weeklyIncome = −$50` on fresh non-DHL accounts.
+  active weeks and `weeklyIncome = −$50` on fresh base user accounts.
   - [ ] Clamp `firstActiveIdx` to `max(0, min(dateToWeekIdx(date), FISCAL_WEEKS_PER_YEAR - 1))` in Step 2 validation or on wizard completion
   - [ ] Add an error state / helper text when the entered date falls outside the current fiscal year
 
-- [ ] **PTO for non-DHL** — No PTO question exists anywhere in the wizard for non-DHL users.
+- [ ] **PTO for base user** — No PTO question exists anywhere in the wizard for base users.
   - [ ] Add PTO subsection to Step 3 (Deductions): Y/N gate → accrual method (per hour / per pay period / lump sum) → accrual rate → current balance → cap
   - [ ] Migrate `PTO_RATE = 19.65` from module-level constant in `config.js` to a per-user config field (`ptoRate`); update all call sites in `finance.js` and `LogPanel`
-  - [ ] Gate BenefitsPanel PTO section visibility on `config.ptoEnabled` (non-DHL) instead of `isDHL`
+  - [ ] Gate BenefitsPanel PTO section visibility on `config.ptoEnabled` (base user) instead of `isEmployerDHL`
 
-- [ ] **Attendance tracker build-out** — Non-DHL users who answer "Yes" to attendance tracking
+- [ ] **Attendance tracker build-out** — Base user users who answer "Yes" to attendance tracking
   have no config fields; `computeBucketModel` is already gated to DHL-only.
   - [ ] In Step 3, expand below "Yes" pill: `attendanceWarnThreshold`, `attendanceTerminateThreshold`, `attendanceCurrentBalance`, optional `attendanceIncrement` (default 1)
   - [ ] Wire into a simple threshold-status display (current balance vs warn/terminate thresholds) in the relevant panel — no payout math, no tier bonuses
   - [ ] Unit label ("points", "hours", "occurrences") is cosmetic and user-supplied
 
-- [ ] **Night differential for non-DHL** — `nightDiffRate` is gated behind `isDHL && dhlNightShift`
-  in `finance.js`; no wizard field exists for non-DHL workers with a night differential.
-  - [ ] Add night diff field to Step 1 for non-DHL (conditional on a "Do you receive a night differential?" toggle)
-  - [ ] Remove `isDHL` gate from night differential in `finance.js` engine; key off `cfg.nightDiffEnabled` or a non-null `cfg.nightDiffRate` instead
+- [ ] **Night differential for base user** — `nightDiffRate` is gated behind `isDHL && dhlNightShift`
+  in `finance.js`; no wizard field exists for base user workers with a night differential.
+  - [ ] Add night diff field to Step 1 for base user (conditional on a "Do you receive a night differential?" toggle)
+  - [ ] Remove `isEmployerDHL` gate from night differential in `finance.js` engine; key off `cfg.nightDiffEnabled` or a non-null `cfg.nightDiffRate` instead
 
 - [ ] **PROGRESSIVE state estimate accuracy** — `handleEstimate()` falls back to a hardcoded 5%
   for any state with progressive brackets (CA, OR, NY, MN, NJ, etc.).
@@ -75,7 +75,7 @@ direct enablers for a shippable non-DHL user experience.*
   *"Used for shift counting in event logging — income uses total weekly hours set in the next step."*
 
 - [ ] **Welcome copy pass** — Step 0 doesn't hint at what to have ready (paystub, OT policy,
-  PTO details). Add a brief "have these handy" line for non-DHL users before the first step.
+  PTO details). Add a brief "have these handy" line for base users before the first step.
 
 - [ ] **`taxExemptOptIn` wire-up** — Stored in config but nothing reads it in `App.jsx` or
   `IncomePanel`. The opt-in gate and disclaimer copy are correct; backend wire-up is deferred
@@ -92,12 +92,12 @@ for the new §0 priority items. Use these pointers when implementing.
 
 | §0 Priority Item | Old Section with Context |
 |---|---|
-| `maxWeeklyHours` engine redesign | §4 "Non-DHL schedule expectations" — describes the original `standardWeeklyHours`-based modal pre-fill approach being replaced |
-| `maxWeeklyHours` WeekConfirmModal | §4 "Non-DHL schedule expectations" — same; the open 7-day selector supersedes the pre-fill direction described there |
-| Step 2 start-date clamp | §4 "Week counter mismatch" — same root cause (`firstActiveIdx` seeding for non-DHL accounts) |
-| PTO for non-DHL | §4 "PTO/bucket visibility" — describes the goal of hiding/showing PTO components based on wizard answers; §9 Fiscal Week Features for accrual math already live for DHL |
+| `maxWeeklyHours` engine redesign | §4 "Base user schedule expectations" — describes the original `standardWeeklyHours`-based modal pre-fill approach being replaced |
+| `maxWeeklyHours` WeekConfirmModal | §4 "Base user schedule expectations" — same; the open 7-day selector supersedes the pre-fill direction described there |
+| Step 2 start-date clamp | §4 "Week counter mismatch" — same root cause (`firstActiveIdx` seeding for base user accounts) |
+| PTO for base user | §4 "PTO/bucket visibility" — describes the goal of hiding/showing PTO components based on wizard answers; §9 Fiscal Week Features for accrual math already live for DHL |
 | Attendance tracker build-out | §4 "PTO/bucket visibility" — same; the yes/no gate and bucket-hide logic described there is the precursor to the threshold-based tracker |
-| Night differential for non-DHL | §4 "Step 2 shift differential flow" — describes the desired night/weekend diff UI for non-DHL; the new item is a subset of that spec (night only; weekend diff remains separate) |
+| Night differential for base user | §4 "Step 2 shift differential flow" — describes the desired night/weekend diff UI for base user; the new item is a subset of that spec (night only; weekend diff remains separate) |
 | PROGRESSIVE state estimate | §11 Optional Deductions Mapping — filing status and deduction accuracy are related; both improve tax projection fidelity |
 | Filing status / standard deduction | §11 Optional Deductions Mapping — the itemized vs standard toggle spec there is downstream of filing status being available |
 | `otherDeductions` rename | §6 Benefits & Deductions Pipeline — `otherDeductions[].weeklyAmount` wired into `computeNet()` there; rename must preserve that wiring |
@@ -107,7 +107,7 @@ for the new §0 priority items. Use these pointers when implementing.
 
 ---
 
-> **Archived sections below — parked 2026-04-28 when §0 Non-DHL Foundation became the active sprint.
+> **Archived sections below — parked 2026-04-28 when §0 Base user Foundation became the active sprint.
 > Items left open are preserved for context; they are not lost, just queued.**
 
 ---
@@ -162,7 +162,7 @@ for the new §0 priority items. Use these pointers when implementing.
 
 ---
 
-## 4. Non-DHL Experience Sprint
+## 4. Base user Experience Sprint
 
 - [x] **Week counter mismatch** — superseded by §0 start-date clamp item. Root cause is the same `firstActiveIdx` seeding issue.
 - [x] **Step 2 shift differential flow** — superseded by §0 night differential item (night diff) and future weekend-diff work. The UI direction is preserved in the §0 spec.
@@ -173,9 +173,9 @@ for the new §0 priority items. Use these pointers when implementing.
   - [x] Persist these schedules in Supabase (`user_data`) so non-standard rotations survive across devices.
 - [x] **Step 4 paystub alignment** — layout polish; parked behind §0 functional work.
 - [x] **Deductions layout** — layout polish; parked behind §0 functional work.
-- [x] **Non-DHL schedule expectations** — superseded by §0 `maxWeeklyHours` + open 7-day modal design. The pre-fill approach described here is replaced.
+- [x] **Base user schedule expectations** — superseded by §0 `maxWeeklyHours` + open 7-day modal design. The pre-fill approach described here is replaced.
 - [x] **Pay frequency selection** — pay frequency is already threaded via `userPaySchedule` from Step 1. Parked.
-- [x] **PTO/bucket visibility** — superseded by §0 PTO for non-DHL and §0 Attendance tracker items.
+- [x] **PTO/bucket visibility** — superseded by §0 PTO for base user and §0 Attendance tracker items.
 
 ---
 

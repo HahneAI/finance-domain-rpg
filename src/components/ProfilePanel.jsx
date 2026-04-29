@@ -381,7 +381,8 @@ function AccountDetail({ authedUser, config, onBack }) {
 }
 
 function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
-  const isDHL = config.employerPreset === "DHL";
+  const isEmployerDHL = config.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
 
   // Start date: only editable if not already set
   const [startDate, setStartDate] = useState(config.startDate || "");
@@ -412,7 +413,7 @@ function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
     setTeamDirty(false);
   }
 
-  const employer = isDHL ? "DHL / P&G" : (config.employerPreset || "Independent");
+  const employer = isEmployerDHL ? "DHL / P&G" : (config.employerPreset || "Independent");
 
   return (
     <>
@@ -420,10 +421,10 @@ function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
 
       <DetailCard>
         <DetailRow label="Employer" value={employer} />
-        <DetailRow label="State"    value={config.userState || "—"} last={!isDHL && !!config.startDate} />
+        <DetailRow label="State"    value={config.userState || "—"} last={isBaseUser && !!config.startDate} />
         {/* Start date — read-only if already set, editable if not */}
         {config.startDate ? (
-          <DetailRow label="Job Start" value={fmt(config.startDate)} last={!isDHL} />
+          <DetailRow label="Job Start" value={fmt(config.startDate)} last={isBaseUser} />
         ) : (
           <div style={{ padding: "13px 16px", borderTop: "1px solid #1e1e1e" }}>
             <label style={lS}>Job Start Date</label>
@@ -436,7 +437,7 @@ function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
           </div>
         )}
         {/* DHL Team — always editable for DHL users */}
-        {isDHL && (
+        {isEmployerDHL && (
           <div style={{ padding: "13px 16px", borderTop: "1px solid #1e1e1e" }}>
             <label style={lS}>DHL Team</label>
             <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
@@ -485,7 +486,8 @@ const PAY_SCHEDULE_LABELS = {
 };
 
 function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
-  const isDHL = config.employerPreset === "DHL";
+  const isEmployerDHL = config.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const scheduleLabel = config.customWeeklyHours != null
     ? (config.customWeeklyHoursLong != null && config.customWeeklyHoursShort != null
         ? `Long ${config.customWeeklyHoursLong}h / Short ${config.customWeeklyHoursShort}h (custom)`
@@ -564,7 +566,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
     const diffRate = parseFloat(payDraft.diffRate);
     updates.diffRate = Number.isFinite(diffRate) ? parseFloat(diffRate.toFixed(2)) : 0;
 
-    if (isDHL) {
+    if (isEmployerDHL) {
       updates.dhlNightShift = !!payDraft.dhlNightShift;
       const nightDiffRate = parseFloat(payDraft.nightDiffRate);
       updates.nightDiffRate = Number.isFinite(nightDiffRate) ? parseFloat(nightDiffRate.toFixed(2)) : 0;
@@ -595,7 +597,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
     }
 
     if (payDraft.customScheduleEnabled) {
-      if (isDHL) {
+      if (isEmployerDHL) {
         const longHrs = parseFloat(payDraft.customWeeklyHoursLong);
         const shortHrs = parseFloat(payDraft.customWeeklyHoursShort);
         if (!Number.isFinite(longHrs) || longHrs <= 0 || longHrs > 168) {
@@ -666,7 +668,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
             )
           )}
           <DetailRow label="Weekend Diff" value={config.diffRate > 0 ? `+$${config.diffRate}/hr` : "$0.00/hr"} />
-          {isDHL && (
+          {isEmployerDHL && (
             <DetailRow
               label="Night Diff"
               value={config.dhlNightShift && config.nightDiffRate > 0 ? `+$${config.nightDiffRate}/hr` : "Off"}
@@ -739,7 +741,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
 
               <div style={{ gridColumn: "span 2" }}>
                 <SH color="var(--color-gold)" right={null}>Schedule Override</SH>
-                {isDHL ? (
+                {isEmployerDHL ? (
                   <>
                     <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
                       {`${config.dhlTeam ?? "B"}-Team · Long/Short alternating (DHL preset rotation)`}
@@ -882,7 +884,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                 />
               </div>
 
-              {isDHL && (
+              {isEmployerDHL && (
                 <div>
                   <label style={lS}>Night Differential ($/hr)</label>
                   <input
@@ -977,9 +979,10 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
 }
 
 function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
-  const isDHL     = config.employerPreset === "DHL";
+  const isEmployerDHL     = config.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const has401k   = config.k401Rate > 0;
-  const matchRate = isDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
+  const matchRate = isEmployerDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
   const effectiveK401Start = config.k401StartDate || config.benefitsStartDate || null;
   const k401StartSource = config.k401StartDate ? "k401" : (config.benefitsStartDate ? "benefits" : null);
   const k401StartLabel = effectiveK401Start
@@ -1047,14 +1050,14 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
             value={has401k ? `${(config.k401Rate * 100).toFixed(0)}%` : "Not enrolled"}
             valueColor={has401k ? undefined : "var(--color-text-disabled)"}
           />
-          {!isDHL && (
+          {isBaseUser && (
             <DetailRow
               label="Employer Match"
               value={has401k ? `${(matchRate * 100).toFixed(1)}%` : "—"}
               valueColor={has401k ? "var(--color-green)" : "var(--color-text-disabled)"}
             />
           )}
-          {isDHL && has401k && (
+          {isEmployerDHL && has401k && (
             <DetailRow label="Employer Match" value="Tiered (DHL formula)" valueColor="var(--color-green)" />
           )}
           <DetailRow label="Contribution Start" value={k401StartLabel} valueColor={k401StartColor} last />
@@ -1086,7 +1089,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
                 </button>
               ))}
             </div>
-            {isDHL && (
+            {isEmployerDHL && (
               <div style={{ padding: "8px 10px", background: "rgba(0,200,150,0.06)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "6px", fontSize: "10px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
                 <span style={{ color: "var(--color-accent-primary)", fontWeight: "bold" }}>PTO accrual</span> and <span style={{ color: "var(--color-accent-primary)", fontWeight: "bold" }}>attendance bucket</span> are automatically enabled for all DHL employees — no enrollment needed.
               </div>
@@ -1101,7 +1104,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
                   <label style={lS}>Employee % (decimal)</label>
                   <input type="number" step="0.01" min="0" max="1" value={k401Rate} onChange={e => setK401Rate(e.target.value)} style={iS} />
                 </div>
-                {!isDHL && (
+                {isBaseUser && (
                   <div>
                     <label style={lS}>Match % (decimal)</label>
                     <input type="number" step="0.01" min="0" max="1" value={k401Match} onChange={e => setK401Match(e.target.value)} style={iS} />
@@ -1151,7 +1154,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
           valueColor={enrolledConfig.length > 0 ? undefined : "var(--color-text-disabled)"}
           last={enrolledConfig.length === 0}
         />
-        {(enrolledConfig.length > 0 || isDHL) && (
+        {(enrolledConfig.length > 0 || isEmployerDHL) && (
           <div style={{ padding: "10px 16px 14px" }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
               {enrolledConfig.map(id => (
@@ -1159,14 +1162,14 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
                   {BENEFIT_LABELS[id] ?? id}
                 </span>
               ))}
-              {isDHL && (
+              {isEmployerDHL && (
                 <>
                   <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>PTO Accrual ✦</span>
                   <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>Attendance Bucket ✦</span>
                 </>
               )}
             </div>
-            {isDHL && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "6px" }}>✦ Auto-enabled for DHL employees</div>}
+            {isEmployerDHL && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "6px" }}>✦ Auto-enabled for DHL employees</div>}
           </div>
         )}
       </DetailCard>
@@ -1528,11 +1531,12 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
   const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });
 
-  const isDHL     = config.employerPreset === "DHL";
-  const employer  = isDHL ? "DHL / P&G" : (config.employerPreset || "Independent");
+  const isEmployerDHL     = config.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
+  const employer  = isEmployerDHL ? "DHL / P&G" : (config.employerPreset || "Independent");
   const has401k   = config.k401Rate > 0;
   const enrolled  = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
-  const matchRate = isDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
+  const matchRate = isEmployerDHL ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
   const localSignOutAction = onLocalSignOut ?? (async () => { await supabase.auth.signOut({ scope: "local" }); });
 
   async function confirmLocalSignOut() {

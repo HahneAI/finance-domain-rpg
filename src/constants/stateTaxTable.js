@@ -46,17 +46,17 @@ export const STATE_TAX_TABLE = {
   // ── Progressive — brackets listed as [maxIncome, rate] pairs ──
   // Same shape as FED_BRACKETS: iterate until income is covered.
   // Stubbed states use approximate effective rates; mark with TODO to refine.
-  AL: { model: "PROGRESSIVE", name: "Alabama", brackets: [
+  AL: { model: "PROGRESSIVE", name: "Alabama",              midpointRate: 0.049, brackets: [
     { max: 500,      rate: 0.02  },
     { max: 3000,     rate: 0.04  },
     { max: Infinity, rate: 0.05  },
   ]},
-  AR: { model: "PROGRESSIVE", name: "Arkansas", brackets: [
+  AR: { model: "PROGRESSIVE", name: "Arkansas",             midpointRate: 0.054, brackets: [
     { max: 4300,     rate: 0.02  },
     { max: 8500,     rate: 0.04  },
     { max: Infinity, rate: 0.059 },
   ]},
-  CA: { model: "PROGRESSIVE", name: "California", brackets: [
+  CA: { model: "PROGRESSIVE", name: "California",           midpointRate: 0.032, brackets: [
     { max: 10412,    rate: 0.01  },
     { max: 24684,    rate: 0.02  },
     { max: 38959,    rate: 0.04  },
@@ -67,7 +67,7 @@ export const STATE_TAX_TABLE = {
     { max: 698274,   rate: 0.113 },
     { max: Infinity, rate: 0.123 },
   ]},
-  CT: { model: "PROGRESSIVE", name: "Connecticut", brackets: [
+  CT: { model: "PROGRESSIVE", name: "Connecticut",          midpointRate: 0.046, brackets: [
     { max: 10000,    rate: 0.03  },
     { max: 50000,    rate: 0.05  },
     { max: 100000,   rate: 0.055 },
@@ -76,7 +76,7 @@ export const STATE_TAX_TABLE = {
     { max: 500000,   rate: 0.069 },
     { max: Infinity, rate: 0.0699 },
   ]},
-  DE: { model: "PROGRESSIVE", name: "Delaware", brackets: [
+  DE: { model: "PROGRESSIVE", name: "Delaware",             midpointRate: 0.048, brackets: [
     { max: 2000,     rate: 0.00  },
     { max: 5000,     rate: 0.022 },
     { max: 10000,    rate: 0.039 },
@@ -85,7 +85,7 @@ export const STATE_TAX_TABLE = {
     { max: 60000,    rate: 0.0555 },
     { max: Infinity, rate: 0.066 },
   ]},
-  DC: { model: "PROGRESSIVE", name: "District of Columbia", brackets: [
+  DC: { model: "PROGRESSIVE", name: "District of Columbia", midpointRate: 0.057, brackets: [
     { max: 10000,    rate: 0.04  },
     { max: 40000,    rate: 0.06  },
     { max: 60000,    rate: 0.065 },
@@ -94,7 +94,7 @@ export const STATE_TAX_TABLE = {
     { max: 1000000,  rate: 0.0975 },
     { max: Infinity, rate: 0.1075 },
   ]},
-  HI: { model: "PROGRESSIVE", name: "Hawaii", brackets: [
+  HI: { model: "PROGRESSIVE", name: "Hawaii",               midpointRate: 0.068, brackets: [
     { max: 2400,     rate: 0.014 },
     { max: 4800,     rate: 0.032 },
     { max: 9600,     rate: 0.055 },
@@ -108,17 +108,17 @@ export const STATE_TAX_TABLE = {
     { max: 200000,   rate: 0.10  },
     { max: Infinity, rate: 0.11  },
   ]},
-  KS: { model: "PROGRESSIVE", name: "Kansas", brackets: [
+  KS: { model: "PROGRESSIVE", name: "Kansas",               midpointRate: 0.048, brackets: [
     { max: 15000,    rate: 0.031 },
     { max: 30000,    rate: 0.0525 },
     { max: Infinity, rate: 0.057 },
   ]},
-  ME: { model: "PROGRESSIVE", name: "Maine", brackets: [
+  ME: { model: "PROGRESSIVE", name: "Maine",                midpointRate: 0.063, brackets: [
     { max: 24500,    rate: 0.058 },
     { max: 58050,    rate: 0.0675 },
     { max: Infinity, rate: 0.0715 },
   ]},
-  MD: { model: "PROGRESSIVE", name: "Maryland", brackets: [
+  MD: { model: "PROGRESSIVE", name: "Maryland",             midpointRate: 0.046, brackets: [
     { max: 1000,     rate: 0.02  },
     { max: 2000,     rate: 0.03  },
     { max: 3000,     rate: 0.04  },
@@ -128,17 +128,17 @@ export const STATE_TAX_TABLE = {
     { max: 250000,   rate: 0.055 },
     { max: Infinity, rate: 0.0575 },
   ]},
-  MN: { model: "PROGRESSIVE", name: "Minnesota", brackets: [
+  MN: { model: "PROGRESSIVE", name: "Minnesota",            midpointRate: 0.059, brackets: [
     { max: 30070,    rate: 0.0535 },
     { max: 98760,    rate: 0.068  },
     { max: 183340,   rate: 0.0785 },
     { max: Infinity, rate: 0.0985 },
   ]},
-  MA: { model: "PROGRESSIVE", name: "Massachusetts", brackets: [
+  MA: { model: "PROGRESSIVE", name: "Massachusetts",        midpointRate: 0.05,  brackets: [
     { max: 1000000,  rate: 0.05 },
     { max: Infinity, rate: 0.09 },
   ]},
-  MO: { model: "PROGRESSIVE", name: "Missouri", brackets: [
+  MO: { model: "PROGRESSIVE", name: "Missouri",             midpointRate: 0.044, brackets: [
     // 2025 individual income tax table: top marginal rate reduced to 4.7%.
     // Brackets are marginal; only income above each threshold is taxed at that rate.
     { max: 1273,     rate: 0.00 },
@@ -150,17 +150,17 @@ export const STATE_TAX_TABLE = {
     { max: 8911,     rate: 0.045 },
     { max: Infinity, rate: 0.047 },
   ]},
-  MT: { model: "PROGRESSIVE", name: "Montana", brackets: [
+  MT: { model: "PROGRESSIVE", name: "Montana",              midpointRate: 0.054, brackets: [
     { max: 20500,    rate: 0.047 },
     { max: Infinity, rate: 0.059 },
   ]},
-  NE: { model: "PROGRESSIVE", name: "Nebraska", brackets: [
+  NE: { model: "PROGRESSIVE", name: "Nebraska",             midpointRate: 0.045, brackets: [
     { max: 3700,     rate: 0.0246 },
     { max: 22170,    rate: 0.0351 },
     { max: 35730,    rate: 0.0501 },
     { max: Infinity, rate: 0.0584 },
   ]},
-  NJ: { model: "PROGRESSIVE", name: "New Jersey", brackets: [
+  NJ: { model: "PROGRESSIVE", name: "New Jersey",           midpointRate: 0.025, brackets: [
     { max: 20000,    rate: 0.014  },
     { max: 35000,    rate: 0.0175 },
     { max: 40000,    rate: 0.035  },
@@ -169,14 +169,14 @@ export const STATE_TAX_TABLE = {
     { max: 1000000,  rate: 0.0897 },
     { max: Infinity, rate: 0.1075 },
   ]},
-  NM: { model: "PROGRESSIVE", name: "New Mexico", brackets: [
+  NM: { model: "PROGRESSIVE", name: "New Mexico",           midpointRate: 0.043, brackets: [
     { max: 5500,     rate: 0.017 },
     { max: 11000,    rate: 0.032 },
     { max: 16000,    rate: 0.047 },
     { max: 210000,   rate: 0.049 },
     { max: Infinity, rate: 0.059 },
   ]},
-  NY: { model: "PROGRESSIVE", name: "New York", brackets: [
+  NY: { model: "PROGRESSIVE", name: "New York",             midpointRate: 0.05,  brackets: [
     { max: 17150,    rate: 0.04   },
     { max: 23600,    rate: 0.045  },
     { max: 27900,    rate: 0.0525 },
@@ -187,17 +187,17 @@ export const STATE_TAX_TABLE = {
     { max: 25000000, rate: 0.103  },
     { max: Infinity, rate: 0.109  },
   ]},
-  OH: { model: "PROGRESSIVE", name: "Ohio", brackets: [
+  OH: { model: "PROGRESSIVE", name: "Ohio",                 midpointRate: 0.013, brackets: [
     { max: 26050,    rate: 0.00 },
     { max: 100000,   rate: 0.0275 },
     { max: Infinity, rate: 0.035 },
   ]},
-  ND: { model: "PROGRESSIVE", name: "North Dakota", brackets: [
+  ND: { model: "PROGRESSIVE", name: "North Dakota",         midpointRate: 0.02,  brackets: [
     { max: 44725,    rate: 0.0195 },
     { max: 225975,   rate: 0.0245 },
     { max: Infinity, rate: 0.029  },
   ]},
-  OK: { model: "PROGRESSIVE", name: "Oklahoma", brackets: [
+  OK: { model: "PROGRESSIVE", name: "Oklahoma",             midpointRate: 0.044, brackets: [
     { max: 1000,     rate: 0.0025 },
     { max: 2500,     rate: 0.0075 },
     { max: 3750,     rate: 0.0175 },
@@ -205,41 +205,41 @@ export const STATE_TAX_TABLE = {
     { max: 7200,     rate: 0.0375 },
     { max: Infinity, rate: 0.0475 },
   ]},
-  OR: { model: "PROGRESSIVE", name: "Oregon", brackets: [
+  OR: { model: "PROGRESSIVE", name: "Oregon",               midpointRate: 0.062, brackets: [
     { max: 18400,    rate: 0.0475 },
     { max: 46200,    rate: 0.0675 },
     { max: 250000,   rate: 0.0875 },
     { max: Infinity, rate: 0.099  },
   ]},
-  RI: { model: "PROGRESSIVE", name: "Rhode Island", brackets: [
+  RI: { model: "PROGRESSIVE", name: "Rhode Island",         midpointRate: 0.038, brackets: [
     { max: 77450,    rate: 0.0375 },
     { max: 176050,   rate: 0.0475 },
     { max: Infinity, rate: 0.0599 },
   ]},
-  SC: { model: "PROGRESSIVE", name: "South Carolina", brackets: [
+  SC: { model: "PROGRESSIVE", name: "South Carolina",       midpointRate: 0.058, brackets: [
     { max: 3460,     rate: 0.00  },
     { max: 6440,     rate: 0.03  },
     { max: Infinity, rate: 0.064 },
   ]},
-  VT: { model: "PROGRESSIVE", name: "Vermont", brackets: [
+  VT: { model: "PROGRESSIVE", name: "Vermont",              midpointRate: 0.036, brackets: [
     { max: 45400,    rate: 0.0335 },
     { max: 110050,   rate: 0.066  },
     { max: 229550,   rate: 0.076  },
     { max: Infinity, rate: 0.0875 },
   ]},
-  VA: { model: "PROGRESSIVE", name: "Virginia", brackets: [
+  VA: { model: "PROGRESSIVE", name: "Virginia",             midpointRate: 0.052, brackets: [
     { max: 3000,     rate: 0.02  },
     { max: 5000,     rate: 0.03  },
     { max: 17000,    rate: 0.05  },
     { max: Infinity, rate: 0.0575 },
   ]},
-  WI: { model: "PROGRESSIVE", name: "Wisconsin", brackets: [
+  WI: { model: "PROGRESSIVE", name: "Wisconsin",            midpointRate: 0.045, brackets: [
     { max: 14320,    rate: 0.035  },
     { max: 28640,    rate: 0.044  },
     { max: 315310,   rate: 0.053  },
     { max: Infinity, rate: 0.0765 },
   ]},
-  WV: { model: "PROGRESSIVE", name: "West Virginia", brackets: [
+  WV: { model: "PROGRESSIVE", name: "West Virginia",        midpointRate: 0.044, brackets: [
     { max: 10000,    rate: 0.03  },
     { max: 25000,    rate: 0.04  },
     { max: 40000,    rate: 0.045 },

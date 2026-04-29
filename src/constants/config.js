@@ -29,14 +29,15 @@ export const DEFAULT_CONFIG = {
   dhlCustomSchedule: false,    // false = use DHL_PRESET.rotation days; true = custom/hardcoded arrays (Anthony)
   dhlNightShift: true,         // true = night shift; applies nightDiffRate on all hours in buildYear()
 
-  // ── Schedule type (non-DHL users) ───────────────────────────
+  // ── Schedule type (base users) ───────────────────────────
   scheduleIsVariable: false,   // true = pay varies week-to-week (two paystub calculators)
-  standardWeeklyHours: 40,     // standard path only — flat hours per week baseline
+  standardWeeklyHours: 40,     // legacy — kept for backward-compat reads; base user engine uses maxWeeklyHours
+  maxWeeklyHours: null,        // base user ceiling: max hours in any given week; income projects off this
   // customWeeklyHours: when set, overrides the rotation-derived hours in buildYear() for all
   // income projections and goal timelines. Three tiers:
   //   DHL preset   (customWeeklyHours: null)  — rotation drives hours; weekly conf picks OT day
   //   DHL custom   (customWeeklyHours: 60)    — flat 60h/week; rotation still shown in weekly conf
-  //   Non-DHL      (customWeeklyHours: N)     — flat N h/week; no rotation; simplified conf
+  //   Base user      (customWeeklyHours: N)     — flat N h/week; no rotation; simplified conf
   // null = inactive — rotation or standardWeeklyHours is used instead.
   customWeeklyHours: null,
   // Sprint 2 (custom schedule): optional per-week-type overrides for DHL custom schedules.
@@ -48,6 +49,7 @@ export const DEFAULT_CONFIG = {
   customWeeklyHoursShort: null,
 
   // ── Pay structure ────────────────────────────────────────────
+  nightDiffEnabled: null,        // base user: true = receives night differential; DHL uses dhlNightShift instead
   baseRate: 19.65, shiftHours: 12, diffRate: 1.75, nightDiffRate: 1.50, otThreshold: 40, otMultiplier: 1.5,
   commissionMonthly: 0,          // $ / month average; 0 = not a commission job
 
@@ -68,11 +70,27 @@ export const DEFAULT_CONFIG = {
   // Benefits start date — when health/dental/vision coverage activates
   benefitsStartDate: null,        // "YYYY-MM-DD" | null = already active / not enrolled
   // Other recurring deductions not covered by preset benefit fields
-  // Array of { id, label, weeklyAmount } — each entry stores a per-paycheck amount
+  // Array of { id, label, perCheckAmount } — each entry stores a per-paycheck amount
   otherDeductions: [],
   // Attendance policy — whether employer uses a formal points/hours-based system
   // null = not yet answered (wizard gate); true = bucket model active; false = log-only
   attendanceBucketEnabled: null,  // DHL users: always null (bucket handled separately)
+  // Base user attendance threshold tracker (no payout math — simple balance vs thresholds)
+  attendanceUnit: null,           // cosmetic label: "points" | "hours" | "occurrences" | custom string
+  attendanceWarnThreshold: null,  // corrective-action / suspension risk level
+  attendanceTerminateThreshold: null, // termination level
+  attendanceCurrentBalance: null, // starting balance at time of setup
+  attendanceIncrement: 1,         // balance added per unapproved-absence event (can be fractional)
+
+  // ── PTO (base users) ──────────────────────────────────────
+  // null = not yet answered; true = has PTO; false = no PTO
+  ptoEnabled: null,
+  // 'per_hour' | 'per_period' | 'lump_sum' | null
+  ptoAccrualMethod: null,
+  // hours per unit: per worked hour / per pay period / annual total
+  ptoAccrualRate: null,
+  ptoCurrentBalance: null,        // starting balance in hours
+  ptoCap: null,                   // max accrual cap in hours; null = no cap
 
   // ── Schedule ─────────────────────────────────────────────────
   startDate: null,             // "YYYY-MM-DD" job start — used to derive firstActiveIdx; null = not yet set
@@ -97,6 +115,7 @@ export const DEFAULT_CONFIG = {
   w1FedRate: 0.0784, w2FedRate: 0.1283, w1StateRate: 0.0338, w2StateRate: 0.040,
 
   // ── FICA / federal tax constants ─────────────────────────────
+  filingStatus: null,            // 'single' | 'mfj' | 'hoh' | null
   ficaRate: 0.0765, fedStdDeduction: 15000,
 
   // ── State tax ────────────────────────────────────────────────

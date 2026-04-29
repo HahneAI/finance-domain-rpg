@@ -82,6 +82,25 @@ database/migrations/         — Supabase SQL migrations
 
 ---
 
+## Employer Preset Naming Convention
+
+**Adopted 2026-04-29.** DHL is the first employer preset; the pattern generalizes to future partners (Amazon, FedEx, etc.).
+
+| Variable | Meaning | Derived from |
+|----------|---------|--------------|
+| `isEmployerDHL` | User has the DHL employer preset | `config.employerPreset === "DHL"` |
+| `isBaseUser` | User has no employer preset | `!isEmployerDHL` (currently; more precisely `!config.employerPreset`) |
+| `isEmployerAmazon` | (future) User has Amazon preset | `config.employerPreset === "AMAZON"` |
+
+**Rules:**
+- Every component/function that gates on employer type must declare `const isEmployerDHL = config.employerPreset === "DHL"` locally (or receive it as a prop).
+- Every component that gates base-user behavior must also declare `const isBaseUser = !isEmployerDHL` immediately after.
+- Prop names follow the same pattern: `isEmployerDHL={isEmployerDHL}` (not `isDHL`).
+- The Supabase column was renamed from `is_dhl` → `is_employer_dhl` via migration `014_rename_is_dhl_to_is_employer_dhl.sql`. In JS, `loadUserData()` maps it to the `isEmployerDHL` property.
+- Source-code comments say "base user" (not "non-DHL"). Doc files use whatever phrasing is clearest.
+
+---
+
 ## UI Component Standards
 
 ### Shared Primitives (`src/components/ui.jsx`)

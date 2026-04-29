@@ -140,10 +140,10 @@ function FieldRow({ children }) {
 function Field({ label, children, error }) {
   return (
     <div>
-      <label style={{ ...lS, ...(error ? { color: "var(--color-red)" } : {}) }}>{label}</label>
+      <label style={{ ...lS, ...(error ? { color: "var(--color-deduction)" } : {}) }}>{label}</label>
       {children}
       {error && (
-        <div style={{ fontSize: "10px", color: "var(--color-red)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>
+        <div style={{ fontSize: "10px", color: "var(--color-deduction)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>
           ↑ {error}
         </div>
       )}
@@ -152,7 +152,7 @@ function Field({ label, children, error }) {
 }
 
 function errBorder(show) {
-  return show ? { border: "1px solid var(--color-red)" } : {};
+  return show ? { border: "1px solid var(--color-deduction)" } : {};
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -327,7 +327,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
             </div>
             {formData.customWeeklyHours != null ? (
               <div style={{ marginTop: "10px" }}>
-                <label style={{ ...lS, ...(attempted && (formData.customWeeklyHoursLong === 0 || formData.customWeeklyHoursShort === 0) ? { color: "var(--color-red)" } : {}) }}>Hours per week</label>
+                <label style={{ ...lS, ...(attempted && (formData.customWeeklyHoursLong === 0 || formData.customWeeklyHoursShort === 0) ? { color: "var(--color-deduction)" } : {}) }}>Hours per week</label>
                 <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-secondary)" }}>Long week</div>
                 <input
                   type="number"
@@ -357,7 +357,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
                   style={{ ...iS, marginTop: "6px", ...errBorder(attempted && formData.customWeeklyHoursShort === 0) }}
                 />
                 {attempted && (formData.customWeeklyHoursLong === 0 || formData.customWeeklyHoursShort === 0) && (
-                  <div style={{ fontSize: "10px", color: "var(--color-red)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>↑ Required</div>
+                  <div style={{ fontSize: "10px", color: "var(--color-deduction)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>↑ Required</div>
                 )}
                 <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
                   Projections use long/short targets by week type. DHL rotation still shows scheduled days in weekly confirmation.
@@ -481,7 +481,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
                 </div>
                 {otCustom && (
                   <div style={{ marginTop: "10px" }}>
-                    <label style={{ ...lS, ...(attempted && !((formData.otThreshold ?? 0) > 0) ? { color: "var(--color-red)" } : {}) }}>Hours/week</label>
+                    <label style={{ ...lS, ...(attempted && !((formData.otThreshold ?? 0) > 0) ? { color: "var(--color-deduction)" } : {}) }}>Hours/week</label>
                     <input
                       style={{ ...iS, ...errBorder(attempted && !((formData.otThreshold ?? 0) > 0)) }}
                       type="number" min="1" step="1"
@@ -490,7 +490,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
                       placeholder="e.g. 40"
                     />
                     {attempted && !((formData.otThreshold ?? 0) > 0) && (
-                      <div style={{ fontSize: "10px", color: "var(--color-red)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>↑ Required</div>
+                      <div style={{ fontSize: "10px", color: "var(--color-deduction)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>↑ Required</div>
                     )}
                   </div>
                 )}
@@ -1436,7 +1436,7 @@ function StepWrapUp({ formData, onChange }) {
             <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>Net</span>
             <span style={{
               fontFamily: "var(--font-mono)", fontSize: "18px", fontWeight: 700,
-              color: net >= 0 ? "var(--color-green)" : "var(--color-red)",
+              color: net >= 0 ? "var(--color-green)" : "var(--color-deduction)",
             }}>
               {fmt(net)}
             </span>

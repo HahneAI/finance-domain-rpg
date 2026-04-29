@@ -299,10 +299,10 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
 
         {/* ── PTO Leave Goal tracker / form ── */}
         {!formOpen && ptoGoal && (
-          <div style={{ background: onTrack ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${onTrack ? "var(--color-green)" : "var(--color-red)"}`, borderRadius: "6px", padding: "14px" }}>
+          <div style={{ background: onTrack ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${onTrack ? "var(--color-green)" : "var(--color-deduction)"}`, borderRadius: "6px", padding: "14px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
               <div>
-                <div style={{ fontSize: "11px", color: onTrack ? "var(--color-green)" : "var(--color-red)", fontWeight: "bold", marginBottom: "4px" }}>
+                <div style={{ fontSize: "11px", color: onTrack ? "var(--color-green)" : "var(--color-deduction)", fontWeight: "bold", marginBottom: "4px" }}>
                   {ptoGoal.label}
                 </div>
                 <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
@@ -313,13 +313,13 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
                 </div>
               </div>
               <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
-                <div style={{ fontSize: "14px", fontWeight: "bold", color: onTrack ? "var(--color-green)" : "var(--color-red)" }}>
+                <div style={{ fontSize: "14px", fontWeight: "bold", color: onTrack ? "var(--color-green)" : "var(--color-deduction)" }}>
                   {onTrack ? "On Track" : "Shortfall"}
                 </div>
-                {!onTrack && <div style={{ fontSize: "10px", color: "var(--color-red)" }}>Short {(hoursNeed - avail).toFixed(1)} hrs</div>}
+                {!onTrack && <div style={{ fontSize: "10px", color: "var(--color-deduction)" }}>Short {(hoursNeed - avail).toFixed(1)} hrs</div>}
                 <div style={{ display: "flex", gap: "6px", marginTop: "2px" }}>
                   <SmBtn onClick={openEdit} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Edit</SmBtn>
-                  <SmBtn onClick={() => setPtoGoal(null)} c="var(--color-red)" bg="var(--color-bg-raised)">Clear</SmBtn>
+                  <SmBtn onClick={() => setPtoGoal(null)} c="var(--color-deduction)" bg="var(--color-bg-raised)">Clear</SmBtn>
                 </div>
               </div>
             </div>
@@ -422,7 +422,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
     {bucketModel && (() => {
       const bm = bucketModel;
       const cap = config.bucketCap ?? 128;
-      const bandColor = bm.status === "safe" ? "var(--color-green)" : bm.status === "caution" ? "var(--color-gold)" : "var(--color-red)";
+      const bandColor = bm.status === "safe" ? "var(--color-green)" : bm.status === "caution" ? "var(--color-gold)" : "var(--color-deduction)";
       const bandBg    = bm.status === "safe" ? "#1a2d1e"  : bm.status === "caution" ? "#2d2710"  : "#2d1a1a";
       const pct = Math.min((bm.currentBalance / cap) * 100, 100);
       return (
@@ -489,8 +489,8 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
             <span style={{ color: "var(--color-text-secondary)", marginRight: "8px" }}>{fmtMonth(currentMonthStr)} — Tier {bm.currentTier}</span>
             {bm.currentTier === 1 && <span style={{ color: "var(--color-green)" }}>perfect so far · any unapproved absence changes tier</span>}
             {bm.currentTier === 2 && <span style={{ color: "var(--color-gold)" }}>{bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
-            {bm.currentTier === 3 && <span style={{ color: "var(--color-red)" }}>{bm.currentM}h unapproved · {bm.hoursToNextTier}h to worst tier</span>}
-            {bm.currentTier === 4 && <span style={{ color: "var(--color-red)" }}>worst tier · {bm.currentM}h unapproved this month</span>}
+            {bm.currentTier === 3 && <span style={{ color: "var(--color-deduction)" }}>{bm.currentM}h unapproved · {bm.hoursToNextTier}h to worst tier</span>}
+            {bm.currentTier === 4 && <span style={{ color: "var(--color-deduction)" }}>worst tier · {bm.currentM}h unapproved this month</span>}
           </div>
 
           {/* Month table */}
@@ -509,15 +509,15 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
                 {bm.monthHistory.map(row => (
                   <tr key={row.month} style={{ borderBottom: "1px solid #181818" }}>
                     <td style={{ padding: "7px 12px", color: "var(--color-text-primary)" }}>{fmtMonth(row.month)}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: row.M > 0 ? "var(--color-red)" : "var(--color-text-primary)" }}>{row.M > 0 ? `${row.M}h` : "—"}</td>
-                    <td style={{ padding: "7px 8px", textAlign: "right", color: row.net >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{row.net >= 0 ? "+" : ""}{row.net}h</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: row.M > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{row.M > 0 ? `${row.M}h` : "—"}</td>
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: row.net >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>{row.net >= 0 ? "+" : ""}{row.net}h</td>
                     <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-secondary)" }}>{row.closingBalance}h</td>
                     <td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "var(--color-gold)" : "var(--color-text-primary)" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td>
                   </tr>
                 ))}
                 <tr style={{ borderBottom: "1px solid #252525", background: "var(--color-bg-surface)" }}>
                   <td style={{ padding: "7px 12px", color: "var(--color-gold)" }}>{fmtMonth(currentMonthStr)} <span style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>in progress</span></td>
-                  <td style={{ padding: "7px 8px", textAlign: "right", color: bm.currentM > 0 ? "var(--color-red)" : "var(--color-text-primary)" }}>{bm.currentM > 0 ? `${bm.currentM}h` : "—"}</td>
+                  <td style={{ padding: "7px 8px", textAlign: "right", color: bm.currentM > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{bm.currentM > 0 ? `${bm.currentM}h` : "—"}</td>
                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td>
                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>{bm.currentBalance}h</td>
                   <td style={{ padding: "7px 12px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td>

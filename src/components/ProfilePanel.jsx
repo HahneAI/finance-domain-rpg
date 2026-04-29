@@ -4,6 +4,7 @@ import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js"
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, PanelHero, SH } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
+import { InvestorAdminPanel } from "./InvestorAdminPanel.jsx";
 
 const BENEFIT_LABELS = {
   health: "Health / Medical",
@@ -1567,6 +1568,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   if (activeSection === "taxplan") {
     return <TaxPlanDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} today={today} weekConfirmations={weekConfirmations} />;
   }
+  if (activeSection === "investorcodes") {
+    return <InvestorAdminPanel onBack={() => setActiveSection(null)} />;
+  }
 
   // ── Main list ─────────────────────────────────────────────────────────────
   return (
@@ -1613,6 +1617,13 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
             label="Tax Plan"
             summary={`${config.taxedWeeks?.length ?? 0} taxed weeks · target $${config.targetOwedAtFiling} owed`}
             onPress={() => setActiveSection("taxplan")}
+          />
+        )}
+        {isAdmin && (
+          <ListRow
+            label="Investor Codes"
+            summary="Manage access codes and view registrations"
+            onPress={() => setActiveSection("investorcodes")}
             last
           />
         )}

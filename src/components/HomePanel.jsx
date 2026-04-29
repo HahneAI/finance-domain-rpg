@@ -613,9 +613,9 @@ export function HomePanel({
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
                             <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                            <div style={{ fontSize: "10px", color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-red)") }}>{resolveGoalFinishLabel(g)}</div>
+                            <div style={{ fontSize: "10px", color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
                             {!Number.isFinite(g.eW) && <div style={{ fontSize: "9px", color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
-                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
+                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                           </div>
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
@@ -660,10 +660,10 @@ export function HomePanel({
                             <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
                               <>
-                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)" style={{ flex: 1 }}>DEL</SmBtn>
+                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>DEL</SmBtn>
                                 <SmBtn onClick={() => setDelGoalId(null)} style={{ flex: 1 }}>NO</SmBtn>
                               </>
-                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)" style={{ flex: 1 }}>✕</SmBtn>}
+                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>✕</SmBtn>}
                           </div>
                         </div>
                       </div>
@@ -735,9 +735,9 @@ export function HomePanel({
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
                             <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                            <div style={{ fontSize: "10px", color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-red)") }}>{resolveGoalFinishLabel(g)}</div>
+                            <div style={{ fontSize: "10px", color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
                             {!Number.isFinite(g.eW) && <div style={{ fontSize: "9px", color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
-                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
+                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                           </div>
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
@@ -782,10 +782,10 @@ export function HomePanel({
                             <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
                               <>
-                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)" style={{ flex: 1 }}>DEL</SmBtn>
+                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>DEL</SmBtn>
                                 <SmBtn onClick={() => setDelGoalId(null)} style={{ flex: 1 }}>NO</SmBtn>
                               </>
-                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)" style={{ flex: 1 }}>✕</SmBtn>}
+                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>✕</SmBtn>}
                           </div>
                         </div>
                       </div>
@@ -1080,7 +1080,7 @@ export function HomePanel({
             <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div>
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-red)" }}>-{fmt$(fundedGoalSpend)}</div>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-deduction)" }}>-{fmt$(fundedGoalSpend)}</div>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Adj. projected savings</div>
@@ -1089,7 +1089,7 @@ export function HomePanel({
             <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
-              <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - totalActiveGoals >= 0 ? "var(--color-green)" : "var(--color-red)" }}>
+              <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - totalActiveGoals >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
                 {fmt$(annualSavings - totalActiveGoals)}
               </div>
             </div>

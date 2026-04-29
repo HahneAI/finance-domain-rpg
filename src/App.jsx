@@ -958,7 +958,7 @@ export default function App() {
             <button
               title="Sign out"
               onClick={async () => { await supabase.auth.signOut({ scope: "local" }); }}
-              style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", padding: "2px 0", marginTop: "1px", lineHeight: 1, display: "flex", alignItems: "center" }}
+              style={{ background: "transparent", border: "none", color: "var(--color-deduction)", cursor: "pointer", padding: "2px 0", marginTop: "1px", lineHeight: 1, display: "flex", alignItems: "center" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -971,7 +971,7 @@ export default function App() {
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
-            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-red)", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
+            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-deduction)", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
               ◷ {unconfirmedCount} {unconfirmedCount === 1 ? "week" : "weeks"} to confirm
             </button>
           )}
@@ -1054,7 +1054,7 @@ export default function App() {
                     <span style={{ fontSize: "11px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
                     <button
                       onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                      style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-red)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 8px", cursor: "pointer" }}
+                      style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 8px", cursor: "pointer" }}
                     >Clear</button>
                   </div>
                 ) : (
@@ -1163,7 +1163,7 @@ export default function App() {
             style={{
               background: "transparent",
               border: "none",
-              color: unconfirmedCount > 0 ? "var(--color-red)" : "var(--color-text-primary)",
+              color: unconfirmedCount > 0 ? "var(--color-deduction)" : "var(--color-text-primary)",
               cursor: "pointer",
               width: "44px",
               height: "44px",
@@ -1183,7 +1183,7 @@ export default function App() {
                 position: "absolute",
                 top: "6px",
                 right: "6px",
-                background: "var(--color-red)",
+                background: "var(--color-deduction)",
                 color: "var(--color-bg-base)",
                 borderRadius: "50%",
                 width: "16px",
@@ -1249,7 +1249,7 @@ export default function App() {
             <button
               title="Sign out"
               onClick={async () => { await supabase.auth.signOut({ scope: "local" }); setDrawerOpen(false); setInvestorSession(null); setActiveInvestorAccount(1); setInvestorProfile(null); }}
-              style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
+              style={{ background: "transparent", border: "none", color: "var(--color-deduction)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -1375,7 +1375,7 @@ export default function App() {
                 <span style={{ fontSize: "12px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
                 <button
                   onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                  style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-red)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: "pointer" }}
+                  style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: "pointer" }}
                 >Clear</button>
               </div>
             ) : (

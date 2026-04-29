@@ -335,12 +335,12 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
               style={{
                 ...iS,
                 borderRadius: "8px",
-                border: investorError ? "1px solid var(--color-red)" : "1px solid var(--color-border-subtle)",
+                border: investorError ? "1px solid var(--color-deduction)" : "1px solid var(--color-border-subtle)",
                 animation: investorShake ? "investorShake 0.3s ease" : "none",
               }}
             />
             {investorError && (
-              <div style={{ fontSize: "11px", color: "var(--color-red)", letterSpacing: "0.3px" }}>{investorError}</div>
+              <div style={{ fontSize: "11px", color: "var(--color-deduction)", letterSpacing: "0.3px" }}>{investorError}</div>
             )}
             <button
               type="button"
@@ -378,7 +378,7 @@ const linkBtnStyle = {
 
 function ErrorBox({ children }) {
   return (
-    <div style={{ padding: "10px 14px", background: "rgba(224,92,92,0.1)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "6px", fontSize: "11px", color: "var(--color-red)", lineHeight: 1.5 }}>
+    <div style={{ padding: "10px 14px", background: "rgba(224,92,92,0.1)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "6px", fontSize: "11px", color: "var(--color-deduction)", lineHeight: 1.5 }}>
       {children}
     </div>
   );

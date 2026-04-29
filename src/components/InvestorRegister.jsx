@@ -15,17 +15,17 @@ import { Shell } from "./LoginScreen.jsx";
 function Field({ label, children, error }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-      <label style={{ ...lS, ...(error ? { color: "var(--color-red)" } : {}) }}>{label}</label>
+      <label style={{ ...lS, ...(error ? { color: "var(--color-deduction)" } : {}) }}>{label}</label>
       {children}
       {error && (
-        <div style={{ fontSize: "11px", color: "var(--color-red)", marginTop: "1px" }}>↑ {error}</div>
+        <div style={{ fontSize: "11px", color: "var(--color-deduction)", marginTop: "1px" }}>↑ {error}</div>
       )}
     </div>
   );
 }
 
 function errBorder(show) {
-  return show ? { border: "1px solid var(--color-red)" } : {};
+  return show ? { border: "1px solid var(--color-deduction)" } : {};
 }
 
 export function InvestorRegister({ onRegister, onBack }) {
@@ -172,7 +172,7 @@ export function InvestorRegister({ onRegister, onBack }) {
         </Field>
 
         {error && (
-          <div style={{ padding: "10px 14px", background: "rgba(224,92,92,0.1)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "6px", fontSize: "11px", color: "var(--color-red)", lineHeight: 1.5 }}>
+          <div style={{ padding: "10px 14px", background: "rgba(224,92,92,0.1)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "6px", fontSize: "11px", color: "var(--color-deduction)", lineHeight: 1.5 }}>
             {error}
           </div>
         )}

@@ -256,7 +256,7 @@ export const INITIAL_GOALS = [];
 export const INITIAL_LOGS = [];
 
 export const EVENT_TYPES = {
-  missed_unpaid:     { label: "Missed Shift (Unpaid/Approved)", color: "var(--color-red)", icon: "✕" },
+  missed_unpaid:     { label: "Missed Shift (Unpaid/Approved)", color: "var(--color-deduction)", icon: "✕" },
   missed_unapproved: { label: "Missed Work (Unapproved)",       color: "#e8622a", icon: "⚠" },
   pto:               { label: "PTO Used",                       color: "#7a8bbf", icon: "◷" },
   pto_unapproved:    { label: "PTO Used (Unapproved)",          color: "#c8922a", icon: "⚠" },

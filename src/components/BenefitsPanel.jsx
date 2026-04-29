@@ -211,8 +211,8 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
       })()}
     </div>
 
-    {/* ── PTO Accrual + Leave Goal — DHL users only ── */}
-    {isDHL && (
+    {/* ── PTO Accrual + Leave Goal — DHL users and non-DHL users with PTO enabled ── */}
+    {(isDHL || config.ptoEnabled === true) && (
       <div style={{ marginBottom: "24px" }}>
         <SH>PTO Accrual</SH>
 

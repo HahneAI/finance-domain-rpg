@@ -143,6 +143,17 @@ export async function loadUserData() {
     ? { ...DEFAULT_CONFIG, ...data.config }
     : DEFAULT_CONFIG;
 
+  // ── otherDeductions: weeklyAmount → perCheckAmount rename ────────────────────
+  if (Array.isArray(mergedConfig.otherDeductions)) {
+    mergedConfig.otherDeductions = mergedConfig.otherDeductions.map(row => {
+      if (row && "weeklyAmount" in row && !("perCheckAmount" in row)) {
+        const { weeklyAmount, ...rest } = row;
+        return { ...rest, perCheckAmount: weeklyAmount };
+      }
+      return row;
+    });
+  }
+
   // ── Pre-wizard migration for DHL users ───────────────────────────────────────
   // Fires once for any DHL user whose row pre-dates the setup wizard (setupComplete absent).
   // Sets the DHL employer preset, marks setupComplete, and promotes legacy rate field names.

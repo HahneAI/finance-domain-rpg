@@ -147,7 +147,7 @@ export function LogPanel({
   // Benefit gates — DHL checks selectedBenefits enrollment; non-DHL uses config values directly.
   const enrolledBenefits = new Set(Array.isArray(config.selectedBenefits) ? config.selectedBenefits : []);
   const has401k = isDHL ? (enrolledBenefits.has("k401") && config.k401Rate > 0) : config.k401Rate > 0;
-  const hasPTO = isDHL;
+  const hasPTO = isDHL || config.ptoEnabled === true;
   const hasBucket = isDHL;
 
   const [formOpen, setFormOpen] = useState(false);
@@ -1078,6 +1078,52 @@ export function LogPanel({
               <span style={{ color: "var(--color-text-secondary)" }}>Projected (perfect attendance):</span><span style={{ textAlign: "right", color: "var(--color-green)" }}>{f2(bm.projectedPayout)}</span>
               <span style={{ color: "var(--color-text-primary)", fontWeight: "bold", borderTop: "1px solid #ffffff11", paddingTop: "6px" }}>Total projected bonus income:</span><span style={{ textAlign: "right", color: "var(--color-gold)", fontWeight: "bold", borderTop: "1px solid #ffffff11", paddingTop: "6px" }}>{f2(bm.totalProjectedBonus)}</span>
             </div>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* ── Non-DHL Attendance Tracker ── */}
+    {!isDHL && config.attendanceBucketEnabled === true && config.attendanceTerminateThreshold != null && (() => {
+      const unit = config.attendanceUnit || "points";
+      const warnT = config.attendanceWarnThreshold ?? null;
+      const termT = config.attendanceTerminateThreshold;
+      const increment = config.attendanceIncrement ?? 1;
+      const unapprovedCount = logs.filter(l => l.type === "missed_unapproved" || l.type === "pto_unapproved").length;
+      const currentBalance = (config.attendanceCurrentBalance ?? 0) + unapprovedCount * increment;
+      const status = warnT != null && currentBalance >= termT ? "danger"
+        : warnT != null && currentBalance >= warnT ? "caution"
+        : "safe";
+      const bandColor = status === "safe" ? "var(--color-green)" : status === "caution" ? "var(--color-warning)" : "var(--color-red)";
+      const pct = Math.min((currentBalance / termT) * 100, 100);
+      return (
+        <div style={{ marginBottom: "24px" }}>
+          <SectionHeader>Attendance Tracker</SectionHeader>
+          <div style={{ background: "var(--color-bg-surface)", border: `1px solid ${bandColor}44`, borderRadius: "6px", padding: "12px 14px", marginBottom: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "7px" }}>
+              <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Balance</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "12px", fontWeight: "bold", color: bandColor }}>
+                  {currentBalance % 1 === 0 ? currentBalance : currentBalance.toFixed(1)} <span style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>/ {termT} {unit}</span>
+                </span>
+                <span style={{ fontSize: "9px", background: bandColor + "22", color: bandColor, padding: "2px 7px", borderRadius: "12px", letterSpacing: "1.5px" }}>
+                  ● {status.toUpperCase()}
+                </span>
+              </div>
+            </div>
+            <div style={{ height: "5px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden", marginBottom: "7px" }}>
+              <div style={{ height: "100%", width: `${pct}%`, background: bandColor, borderRadius: "3px" }} />
+            </div>
+            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
+              {unapprovedCount} unapproved absence{unapprovedCount !== 1 ? "s" : ""} logged this year (+{unapprovedCount * increment} {unit})
+              {warnT != null && status === "safe" && ` · ${(warnT - currentBalance).toFixed(1)} ${unit} until warning`}
+              {warnT != null && status === "caution" && ` · ${(termT - currentBalance).toFixed(1)} ${unit} until termination threshold`}
+              {status === "danger" && ` · termination threshold reached`}
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+            {warnT != null && <Card label={`Warning (${unit})`} val={String(warnT)} color="var(--color-warning)" size="18px" />}
+            <Card label={`Termination (${unit})`} val={String(termT)} color="var(--color-red)" size="18px" />
           </div>
         </div>
       );

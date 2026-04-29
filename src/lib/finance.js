@@ -171,7 +171,7 @@ export function getWeeklyBudgetBreakdownPayrollDeductions(week, cfg) {
 
 function otherPostTaxDeductions(cfg) {
   const perCheck = (cfg.otherDeductions ?? []).reduce((sum, row) => {
-    const amt = row?.weeklyAmount;
+    const amt = row?.perCheckAmount ?? row?.weeklyAmount;
     return sum + (typeof amt === "number" ? amt : 0);
   }, 0);
   const checksPerYear = checksPerYearFor(cfg.userPaySchedule);
@@ -340,7 +340,7 @@ export function getStateConfig(userState) {
 //     If customWeeklyHours is ALSO set, totalHours is still overridden below.
 //
 //   Standard / non-DHL (!employerPreset)
-//     Flat customWeeklyHours ?? standardWeeklyHours hours/week, no rotation.
+//     Flat customWeeklyHours ?? maxWeeklyHours ?? standardWeeklyHours hours/week, no rotation.
 //     rotation = "Custom" when customWeeklyHours is set, "Standard" otherwise.
 //
 // Note: cfg.dhlNightShift is stored but NOT used here — weekend diff (diffRate)
@@ -412,7 +412,7 @@ export function buildYear(cfg) {
       isHighWeek = false;
       worked = [];
       const customHrs = cfg.customWeeklyHours;
-      totalHours = customHrs ?? cfg.standardWeeklyHours ?? 40;
+      totalHours = customHrs ?? cfg.maxWeeklyHours ?? cfg.standardWeeklyHours ?? 40;
       rotation = customHrs != null ? "Custom" : "Standard";
       rotationLabel = rotation;
       adminRotationTag = rotation;
@@ -427,7 +427,8 @@ export function buildYear(cfg) {
     const nonWeekendH = totalHours - weekendHours;
     const regWkndH = Math.max(0, Math.min(weekendHours, cfg.otThreshold - nonWeekendH));
     const otWkndH  = weekendHours - regWkndH;
-    const nightDiffHr = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
+    const nightDiffEnabled = isDHL ? cfg.dhlNightShift !== false : cfg.nightDiffEnabled === true;
+    const nightDiffHr = nightDiffEnabled ? (cfg.nightDiffRate ?? 0) : 0;
     grossPay = regularHours  * (cfg.baseRate + nightDiffHr)
              + regWkndH      * cfg.diffRate
              + overtimeHours * (cfg.baseRate + nightDiffHr) * cfg.otMultiplier
@@ -499,23 +500,15 @@ export function projectedGross(isWeek2, cfg) {
   } else {
     // Non-DHL: no weekend differential. customWeeklyHours overrides everything.
     wkndH = 0;
-    if (cfg.customWeeklyHours != null) {
-      totalH = cfg.customWeeklyHours;
-    } else if (cfg.scheduleIsVariable) {
-      // Variable schedule: isWeek2 = long week, !isWeek2 = short week
-      totalH = isWeek2
-        ? (cfg.longWeeklyHours || cfg.standardWeeklyHours || 40)
-        : (cfg.standardWeeklyHours || 40);
-    } else {
-      totalH = cfg.standardWeeklyHours || 40;
-    }
+    totalH = cfg.customWeeklyHours ?? cfg.maxWeeklyHours ?? cfg.standardWeeklyHours ?? 40;
   }
   const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
   const nonWkndH = totalH - wkndH;
   const regWknd = Math.max(0, Math.min(wkndH, cfg.otThreshold - nonWkndH));
   const otWknd  = wkndH - regWknd;
   const isDHL = cfg.employerPreset === "DHL";
-  const nightDiff = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
+  const nightDiffEnabled = isDHL ? cfg.dhlNightShift !== false : cfg.nightDiffEnabled === true;
+  const nightDiff = nightDiffEnabled ? (cfg.nightDiffRate ?? 0) : 0;
   return reg     * (cfg.baseRate + nightDiff)
        + regWknd * cfg.diffRate
        + ot      * (cfg.baseRate + nightDiff) * cfg.otMultiplier
@@ -1057,18 +1050,15 @@ export function computeBucketModel(logs, cfg) {
 // Falls back to event.weekRotation / projectedGross when weekMeta is absent.
 export function calcEventImpact(event, cfg, weekMeta = null) {
   const isDHL = cfg.employerPreset === "DHL";
-  const nightDiffPerHour = (isDHL && cfg.dhlNightShift) ? (cfg.nightDiffRate ?? 0) : 0;
+  const nightDiffEnabled = isDHL ? cfg.dhlNightShift !== false : cfg.nightDiffEnabled === true;
+  const nightDiffPerHour = nightDiffEnabled ? (cfg.nightDiffRate ?? 0) : 0;
   const isWeek2 = weekMeta != null
     ? !!weekMeta.isHighWeek
     : ["6-Day", "Week 2", "Long Week"].includes(event.weekRotation);
   const plannedPattern = isDHL ? getDhlPlannedPattern(cfg, isWeek2) : null;
   const resolvedDhlHours = plannedPattern ? resolveDhlWeeklyHours(cfg, isWeek2, plannedPattern.totalHours) : null;
   // Non-DHL total hours: customWeeklyHours overrides; variable uses long/short; else flat.
-  const nonDhlTotalH = cfg.customWeeklyHours != null
-    ? cfg.customWeeklyHours
-    : cfg.scheduleIsVariable
-      ? (isWeek2 ? (cfg.longWeeklyHours || cfg.standardWeeklyHours || 40) : (cfg.standardWeeklyHours || 40))
-      : (cfg.standardWeeklyHours || 40);
+  const nonDhlTotalH = cfg.customWeeklyHours ?? cfg.maxWeeklyHours ?? cfg.standardWeeklyHours ?? 40;
   // For DHL with customWeeklyHours, the actual shifts worked equals total hours / shift length.
   // plannedPattern.indexes.length only covers the base rotation (may need extra OT shifts to
   // reach the custom target — those are tracked in requiredOtShifts but not in indexes).

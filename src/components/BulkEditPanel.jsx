@@ -204,13 +204,13 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                               </span>
                             )}
                             {isDeleted && (
-                              <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-red)", letterSpacing: "1px" }}>
+                              <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-deduction)", letterSpacing: "1px" }}>
                                 {deletions[exp.id] === "forward" ? "REMOVED →" : "THIS MONTH"}
                               </span>
                             )}
                             {isInactive && <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1px" }}>INACTIVE</span>}
                           </div>
-                          <div style={{ fontSize: "11px", color: isDeleted ? "var(--color-red)" : isEdited ? "var(--color-accent-primary)" : "var(--color-text-secondary)", marginTop: "2px" }}>
+                          <div style={{ fontSize: "11px", color: isDeleted ? "var(--color-deduction)" : isEdited ? "var(--color-accent-primary)" : "var(--color-text-secondary)", marginTop: "2px" }}>
                             {f2(displayAmt)}/wk
                           </div>
                         </div>
@@ -244,7 +244,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                                 </SmBtn>
                                 <SmBtn
                                   onClick={() => openDeletePopup(exp.id)}
-                                  c="var(--color-red)"
+                                  c="var(--color-deduction)"
                                   style={{ fontSize: "9px", letterSpacing: "1px", padding: "5px 8px", minHeight: "28px" }}
                                 >
                                   DEL
@@ -270,7 +270,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                                   setMonthOnlyArmed(exp.id);
                                 }
                               }}
-                              bg={monthOnlyArmed === exp.id ? "var(--color-red)" : "var(--color-bg-raised)"}
+                              bg={monthOnlyArmed === exp.id ? "var(--color-deduction)" : "var(--color-bg-raised)"}
                               c={monthOnlyArmed === exp.id ? "#fff" : "var(--color-text-primary)"}
                               style={{
                                 fontSize: "9px", letterSpacing: "1px", padding: "6px 10px", minHeight: "30px",
@@ -282,7 +282,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                             </SmBtn>
                             <SmBtn
                               onClick={() => stageDeletion(exp.id, "forward")}
-                              c="var(--color-red)"
+                              c="var(--color-deduction)"
                               style={{ fontSize: "9px", letterSpacing: "1px", padding: "6px 10px", minHeight: "30px" }}
                             >
                               FROM HERE FORWARD
@@ -370,7 +370,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                             {isEdited && (
                               <SmBtn
                                 onClick={() => clearEdit(exp.id)}
-                                c="var(--color-red)"
+                                c="var(--color-deduction)"
                                 style={{ fontSize: "9px", letterSpacing: "1px", padding: "6px 10px", minHeight: "30px" }}
                               >
                                 CLEAR

@@ -4,6 +4,7 @@ import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js"
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, PanelHero, SH } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
+import { InvestorAdminPanel } from "./InvestorAdminPanel.jsx";
 
 const BENEFIT_LABELS = {
   health: "Health / Medical",
@@ -246,7 +247,7 @@ function AccountDetail({ authedUser, config, onBack }) {
             </button>
           )}
           {linkState.error && (
-            <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-red)" }}>{linkState.error}</div>
+            <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-deduction)" }}>{linkState.error}</div>
           )}
         </div>
       </DetailCard>
@@ -271,7 +272,7 @@ function AccountDetail({ authedUser, config, onBack }) {
               Supabase will send a confirmation email to the new address.
             </div>
             {emailStatus.error && (
-              <div style={{ fontSize: "11px", color: "var(--color-red)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{emailStatus.error}</div>
+              <div style={{ fontSize: "11px", color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{emailStatus.error}</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
               <button type="button" onClick={() => { setShowEmailForm(false); setEmailStatus({ error: null, success: null, loading: false }); setNewEmail(authedUser?.email ?? ""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
@@ -311,7 +312,7 @@ function AccountDetail({ authedUser, config, onBack }) {
               <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
             </div>
             {pwError && (
-              <div style={{ fontSize: "11px", color: "var(--color-red)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{pwError}</div>
+              <div style={{ fontSize: "11px", color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{pwError}</div>
             )}
             {pwSaved && (
               <div style={{ fontSize: "11px", color: "var(--color-green)" }}>Password updated.</div>
@@ -336,7 +337,7 @@ function AccountDetail({ authedUser, config, onBack }) {
           </div>
         </button>
         {(globalSignoutState.error || globalSignoutState.success) && (
-          <div style={{ padding: "0 16px 12px", fontSize: "11px", color: globalSignoutState.error ? "var(--color-red)" : "var(--color-green)" }}>
+          <div style={{ padding: "0 16px 12px", fontSize: "11px", color: globalSignoutState.error ? "var(--color-deduction)" : "var(--color-green)" }}>
             {globalSignoutState.error || globalSignoutState.success}
           </div>
         )}
@@ -347,7 +348,7 @@ function AccountDetail({ authedUser, config, onBack }) {
           onClick={() => { setDeleteText(""); setDeleteState({ error: null, loading: false }); setShowDeleteDialog(true); }}
           style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", textAlign: "left", cursor: "pointer" }}
         >
-          <div style={{ fontSize: "14px", color: "var(--color-red)", fontWeight: "600", marginBottom: "4px" }}>Delete Account</div>
+          <div style={{ fontSize: "14px", color: "var(--color-deduction)", fontWeight: "600", marginBottom: "4px" }}>Delete Account</div>
           <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
             This permanently deletes your account and dashboard data.
           </div>
@@ -357,7 +358,7 @@ function AccountDetail({ authedUser, config, onBack }) {
       {showDeleteDialog && (
         <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div style={{ width: "100%", maxWidth: "430px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-red)" }}>Delete Account</div>
+            <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-deduction)" }}>Delete Account</div>
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.55" }}>
               This action is irreversible. Your account, profile, and stored dashboard data will be permanently deleted.
             </div>
@@ -366,11 +367,11 @@ function AccountDetail({ authedUser, config, onBack }) {
               <input type="text" value={deleteText} onChange={e => setDeleteText(e.target.value)} placeholder="DELETE" style={{ ...iS, borderRadius: "8px" }} />
             </div>
             {deleteState.error && (
-              <div style={{ fontSize: "11px", color: "var(--color-red)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{deleteState.error}</div>
+              <div style={{ fontSize: "11px", color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{deleteState.error}</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={() => setShowDeleteDialog(false)} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
-              <button onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-red)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</button>
+              <button onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</button>
             </div>
           </div>
         </div>
@@ -945,7 +946,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
             </div>
 
             {error && (
-              <div style={{ fontSize: "11px", color: "var(--color-red)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>
+              <div style={{ fontSize: "11px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>
                 {error}
               </div>
             )}
@@ -1354,7 +1355,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
 
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "12px", marginBottom: "20px" }}>
-        <Card label="Full Year Fed Liability" val={f(fedLiability)} rawVal={fedLiability} sub={`On ${f(fedAGI)} AGI`} color="var(--color-red)" size="20px" />
+        <Card label="Full Year Fed Liability" val={f(fedLiability)} rawVal={fedLiability} sub={`On ${f(fedAGI)} AGI`} color="var(--color-deduction)" size="20px" />
         <Card label="Full Year MO Liability" val={f(moLiability)} rawVal={moLiability} sub="4.7% flat" color="var(--color-gold)" size="20px" />
         <Card label="FICA (Always Paid)" val={f(ficaTotal)} rawVal={ficaTotal} sub="7.65% every check" color="var(--color-text-primary)" size="20px" />
       </div>
@@ -1363,7 +1364,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
         <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px", lineHeight: 1, marginBottom: "12px" }}>Tax Gap Analysis</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "13px" }}>
-          {[{ l: "Fed withheld (taxed weeks)", v: f(fedWithheldBase), c: "var(--color-green)" }, { l: "MO withheld (taxed weeks)", v: f(moWithheldBase), c: "var(--color-green)" }, { l: "Federal gap", v: f(fedGap), c: "var(--color-red)" }, { l: "Missouri gap", v: f(moGap), c: "var(--color-red)" }, { l: "Total income tax gap", v: f(totalGap), c: "var(--color-red)" }, { l: "Target owed at filing", v: f(config.targetOwedAtFiling), c: "var(--color-gold)" }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "var(--color-text-primary)" }}>{r.l}</span><span style={{ fontWeight: "bold", color: r.c }}>{r.v}</span></div>)}
+          {[{ l: "Fed withheld (taxed weeks)", v: f(fedWithheldBase), c: "var(--color-green)" }, { l: "MO withheld (taxed weeks)", v: f(moWithheldBase), c: "var(--color-green)" }, { l: "Federal gap", v: f(fedGap), c: "var(--color-deduction)" }, { l: "Missouri gap", v: f(moGap), c: "var(--color-deduction)" }, { l: "Total income tax gap", v: f(totalGap), c: "var(--color-deduction)" }, { l: "Target owed at filing", v: f(config.targetOwedAtFiling), c: "var(--color-gold)" }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "var(--color-text-primary)" }}>{r.l}</span><span style={{ fontWeight: "bold", color: r.c }}>{r.v}</span></div>)}
         </div>
       </div>
 
@@ -1371,7 +1372,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "20px", marginBottom: "28px" }}>
         <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px", lineHeight: 1, marginBottom: "12px" }}>Extra Withholding Plan</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: "12px", marginBottom: "16px" }}>
-          {[{ l: "Extra Needed", v: f(targetExtraTotal), c: "var(--color-red)" }, { l: "Remaining Taxed Checks", v: taxedWeekCount, c: "var(--color-text-primary)" }, { l: "Extra Per Check", v: f2(extraPerCheck), c: "var(--color-gold)" }].map(c => <div key={c.l} style={{ textAlign: "center", padding: "12px", background: "var(--color-bg-base)", borderRadius: "6px" }}><div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-primary)", textTransform: "uppercase", marginBottom: "6px" }}>{c.l}</div><div style={{ fontSize: "20px", fontWeight: "bold", color: c.c }}>{c.v}</div></div>)}
+          {[{ l: "Extra Needed", v: f(targetExtraTotal), c: "var(--color-deduction)" }, { l: "Remaining Taxed Checks", v: taxedWeekCount, c: "var(--color-text-primary)" }, { l: "Extra Per Check", v: f2(extraPerCheck), c: "var(--color-gold)" }].map(c => <div key={c.l} style={{ textAlign: "center", padding: "12px", background: "var(--color-bg-base)", borderRadius: "6px" }}><div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-primary)", textTransform: "uppercase", marginBottom: "6px" }}>{c.l}</div><div style={{ fontSize: "20px", fontWeight: "bold", color: c.c }}>{c.v}</div></div>)}
         </div>
         <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.8" }}>Add <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerCheck)}</span> extra federal withholding on each of your <span style={{ color: "var(--color-gold)" }}>{taxedWeekCount} remaining taxed checks</span>.</div>
       </div>
@@ -1454,7 +1455,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
         <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px", lineHeight: 1 }}>Future Weekly Tax Schedule</div>
         <div style={{ display: "flex", gap: "10px", fontSize: "10px" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "#7a8bbf", display: "inline-block" }} />Taxed weeks: <strong style={{ color: "var(--color-red)" }}>{config.taxedWeeks.length}</strong></span>
+          <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "#7a8bbf", display: "inline-block" }} />Taxed weeks: <strong style={{ color: "var(--color-deduction)" }}>{config.taxedWeeks.length}</strong></span>
           <span style={{ display: "flex", alignItems: "center", gap: "5px" }}><span style={{ width: "8px", height: "8px", borderRadius: "2px", background: "var(--color-green)", display: "inline-block" }} />Exempt weeks: <strong style={{ color: "var(--color-green)" }}>{allWeeks.filter(w => w.active).length - config.taxedWeeks.length}</strong></span>
         </div>
       </div>
@@ -1567,6 +1568,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   if (activeSection === "taxplan") {
     return <TaxPlanDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} today={today} weekConfirmations={weekConfirmations} />;
   }
+  if (activeSection === "investorcodes") {
+    return <InvestorAdminPanel onBack={() => setActiveSection(null)} />;
+  }
 
   // ── Main list ─────────────────────────────────────────────────────────────
   return (
@@ -1613,6 +1617,13 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
             label="Tax Plan"
             summary={`${config.taxedWeeks?.length ?? 0} taxed weeks · target $${config.targetOwedAtFiling} owed`}
             onPress={() => setActiveSection("taxplan")}
+          />
+        )}
+        {isAdmin && (
+          <ListRow
+            label="Investor Codes"
+            summary="Manage access codes and view registrations"
+            onPress={() => setActiveSection("investorcodes")}
             last
           />
         )}
@@ -1620,7 +1631,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
 
       <button
         onClick={() => { setLocalSignOutState({ loading: false, error: null }); setShowLocalSignOutConfirm(true); }}
-        style={{ width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-red)", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
+        style={{ width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-deduction)", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
       >
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -1638,13 +1649,13 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
               Sign out from this device now?
             </div>
             {localSignOutState.error && (
-              <div style={{ fontSize: "11px", color: "var(--color-red)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>
+              <div style={{ fontSize: "11px", color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>
                 {localSignOutState.error}
               </div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={() => setShowLocalSignOutConfirm(false)} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: localSignOutState.loading ? "default" : "pointer" }}>Cancel</button>
-              <button onClick={confirmLocalSignOut} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-red)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: localSignOutState.loading ? "default" : "pointer" }}>{localSignOutState.loading ? "..." : "Confirm"}</button>
+              <button onClick={confirmLocalSignOut} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: localSignOutState.loading ? "default" : "pointer" }}>{localSignOutState.loading ? "..." : "Confirm"}</button>
             </div>
           </div>
         </div>

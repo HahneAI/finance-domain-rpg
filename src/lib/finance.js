@@ -606,7 +606,8 @@ export function computeRemainingSpend(expenses, futureWeeks, options = {}) {
   let total = 0;
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
-    for (const exp of expenses) total += getEffectiveAmount(exp, week.weekEnd, pi);
+    const monthKey = toLocalIso(week.weekEnd).slice(0, 7);
+    for (const exp of expenses) total += getEffectiveAmountForMonth(exp, monthKey, pi);
   }
   const avgWeeklySpend = total / futureWeeks.length;
   const monthlyExpenses = normalizeToMonthlyAmount(avgWeeklySpend, "weekly");
@@ -833,9 +834,10 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
   let weekOffset = 0;
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
+    const monthKey = toLocalIso(week.weekEnd).slice(0, 7);
     let spend = 0;
     for (const exp of expenses)
-      spend += getEffectiveAmount(exp, week.weekEnd, pi);
+      spend += getEffectiveAmountForMonth(exp, monthKey, pi);
     // ── Targeted deduction: current/future-week events hit their specific week ──
     const weekDeduction = futureEventDeductions[week.idx] ?? 0;
     let surplus = (weeklyNets[weekOffset] ?? 0) - weekDeduction - spend - perWeekLost + perWeekGain;

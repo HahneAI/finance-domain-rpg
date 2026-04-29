@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from ".
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount } from "./lib/db.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
@@ -13,6 +13,8 @@ import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
 import { SetupWizard } from "./components/SetupWizard.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
+import { InvestorRegister } from "./components/InvestorRegister.jsx";
+import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 
@@ -196,6 +198,14 @@ export default function App() {
   // "home" is always the base — never popped below depth 1.
   const [viewStack, setViewStack] = useState(["home"]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Investor pre-auth state — set when a valid code is entered on LoginScreen.
+  // Cleared on sign-out or when the user navigates back from InvestorRegister.
+  const [investorSession, setInvestorSession] = useState(null); // null | { code: string }
+  // Active investor account tab — 1 = Demo 1, 2 = Demo 2, 3 = personal account.
+  // Defaults to 1 so investors land on demo content on every login.
+  const [activeInvestorAccount, setActiveInvestorAccount] = useState(1);
+  // Investor profile fetched from investor_users on login — null for non-investors.
+  const [investorProfile, setInvestorProfile] = useState(null);
   const [tempLockDate, setTempLockDate] = useState(() => {
     const stored = localStorage.getItem("admin_temp_lock_date");
     return stored && Date.parse(stored) > 0 ? stored : null;
@@ -290,7 +300,12 @@ export default function App() {
         setIsDHL(data.isDHL);
         setIsAdmin(data.isAdmin);
         setPtoGoal(data.ptoGoal);
-        if (!data.config.setupComplete) setWizardEntry(false);
+        if (data.isInvestor) {
+          setInvestorProfile(data.investorProfile ?? null);
+          setActiveInvestorAccount(data.activeInvestorAccount ?? 1);
+        }
+        // Investors reach the wizard via account 3 selection — not on login.
+        if (!data.config.setupComplete && !data.config.isInvestor) setWizardEntry(false);
         setLoading(false);
       })
       .catch((err) => {
@@ -657,14 +672,44 @@ export default function App() {
     setWizardEntry(null);
   }
 
+  function handleSelectInvestorAccount(n) {
+    setActiveInvestorAccount(n);
+    setDrawerOpen(false);
+    saveInvestorActiveAccount(n); // fire-and-forget persistence
+    if (n === 3 && !config.setupComplete) {
+      setWizardEntry(false);
+    }
+  }
+
   // Checking localStorage for an existing session — avoid flash of login screen.
   if (!authChecked) {
     return <FullScreenLoadingState label="Checking session" />;
   }
 
+  // Investor code verified but no session yet — show registration form.
+  if (investorSession && !authedUser) {
+    return (
+      <InvestorRegister
+        onRegister={async formData => {
+          const { error, needsConfirmation } = await createInvestorAccount({
+            name:     formData.name,
+            email:    formData.email,
+            password: formData.password,
+            company:  formData.company,
+            city:     formData.city,
+            codeUsed: investorSession?.code ?? null,
+          });
+          return { error, needsConfirmation };
+          // On success with session: onAuthStateChange → authedUser set → app renders.
+        }}
+        onBack={() => setInvestorSession(null)}
+      />
+    );
+  }
+
   // No valid session — show login / create account screen.
   if (!authedUser) {
-    return <LoginScreen />;
+    return <LoginScreen onInvestorVerified={code => setInvestorSession({ code })} />;
   }
 
   // Supabase PASSWORD_RECOVERY event — user clicked a reset link, show set-new-password form.
@@ -724,6 +769,8 @@ export default function App() {
         today={effectiveToday}
         userPaySchedule={config.userPaySchedule ?? "weekly"}
         fundedGoalSpend={fundedGoalSpend}
+        config={config}
+        bufferPerWeek={bufferPerWeek}
         isAdmin={isAdmin}
       />}
       {currentView === "log" && <LogPanel
@@ -911,7 +958,7 @@ export default function App() {
             <button
               title="Sign out"
               onClick={async () => { await supabase.auth.signOut({ scope: "local" }); }}
-              style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", padding: "2px 0", marginTop: "1px", lineHeight: 1, display: "flex", alignItems: "center" }}
+              style={{ background: "transparent", border: "none", color: "var(--color-deduction)", cursor: "pointer", padding: "2px 0", marginTop: "1px", lineHeight: 1, display: "flex", alignItems: "center" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -924,7 +971,7 @@ export default function App() {
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
-            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-red)", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
+            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-deduction)", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
               ◷ {unconfirmedCount} {unconfirmedCount === 1 ? "week" : "weeks"} to confirm
             </button>
           )}
@@ -1007,7 +1054,7 @@ export default function App() {
                     <span style={{ fontSize: "11px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
                     <button
                       onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                      style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-red)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 8px", cursor: "pointer" }}
+                      style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 8px", cursor: "pointer" }}
                     >Clear</button>
                   </div>
                 ) : (
@@ -1116,7 +1163,7 @@ export default function App() {
             style={{
               background: "transparent",
               border: "none",
-              color: unconfirmedCount > 0 ? "var(--color-red)" : "var(--color-text-primary)",
+              color: unconfirmedCount > 0 ? "var(--color-deduction)" : "var(--color-text-primary)",
               cursor: "pointer",
               width: "44px",
               height: "44px",
@@ -1136,7 +1183,7 @@ export default function App() {
                 position: "absolute",
                 top: "6px",
                 right: "6px",
-                background: "var(--color-red)",
+                background: "var(--color-deduction)",
                 color: "var(--color-bg-base)",
                 borderRadius: "50%",
                 width: "16px",
@@ -1157,7 +1204,10 @@ export default function App() {
 
         {/* Panel content */}
         <div ref={mainContentCallbackRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
-          {activePanel}
+          {config.isInvestor && activeInvestorAccount !== 3
+            ? <DemoAccountTree accountNumber={activeInvestorAccount} />
+            : activePanel
+          }
         </div>
       </div>
 
@@ -1198,8 +1248,8 @@ export default function App() {
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <button
               title="Sign out"
-              onClick={async () => { await supabase.auth.signOut({ scope: "local" }); setDrawerOpen(false); }}
-              style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
+              onClick={async () => { await supabase.auth.signOut({ scope: "local" }); setDrawerOpen(false); setInvestorSession(null); setActiveInvestorAccount(1); setInvestorProfile(null); }}
+              style={{ background: "transparent", border: "none", color: "var(--color-deduction)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -1266,6 +1316,50 @@ export default function App() {
           </div>
         </nav>
 
+        {/* ── Investor accounts pill ── */}
+        {config.isInvestor && (
+          <div style={{ padding: "12px 16px 0", borderTop: "1px solid #1e1e1e" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "8px", fontFamily: "var(--font-sans)" }}>
+              Accounts
+            </div>
+            <div style={{
+              display: "flex",
+              background: "rgba(0,200,150,0.10)",
+              border: "1px solid rgba(0,200,150,0.28)",
+              borderRadius: "12px",
+              overflow: "hidden",
+            }}>
+              {[{ n: 1, label: "1" }, { n: 2, label: "2" }, { n: 3, label: "3*" }].map(({ n, label }) => {
+                const active = activeInvestorAccount === n;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => handleSelectInvestorAccount(n)}
+                    style={{
+                      flex: 1,
+                      padding: "10px 0",
+                      minHeight: "44px",
+                      fontSize: "11px",
+                      fontWeight: active ? "700" : "500",
+                      letterSpacing: "1px",
+                      background: active ? "var(--color-accent-primary)" : "transparent",
+                      color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)",
+                      border: "none",
+                      borderRight: n < 3 ? "1px solid rgba(0,200,150,0.2)" : "none",
+                      cursor: "pointer",
+                      transition: "background 0.15s, color 0.15s",
+                      fontFamily: "var(--font-sans)",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ── Admin Tools (drawer) ── */}
         {isAdmin && (
           <div style={{ borderTop: "1px solid var(--color-border-subtle)", padding: "10px 18px 14px" }}>
@@ -1281,7 +1375,7 @@ export default function App() {
                 <span style={{ fontSize: "12px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
                 <button
                   onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                  style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-red)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: "pointer" }}
+                  style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: "pointer" }}
                 >Clear</button>
               </div>
             ) : (
@@ -1433,8 +1527,15 @@ export default function App() {
         <SetupWizard
           config={config}
           onComplete={handleWizardComplete}
-          onCancel={wizardEntry !== false ? () => setWizardEntry(null) : undefined}
+          onCancel={
+            wizardEntry !== false
+              ? () => setWizardEntry(null)
+              : config.isInvestor
+                ? () => { setWizardEntry(null); setActiveInvestorAccount(1); }
+                : undefined
+          }
           lifeEvent={wizardEntry === false ? null : wizardEntry}
+          isInvestor={config.isInvestor}
         />
       )}
     </div>

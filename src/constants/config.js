@@ -12,6 +12,12 @@ export const DEFAULT_CONFIG = {
   paycheckBuffer: 50,          // $/week excluded per check (bufferEnabled must be true); max $200
   bufferOverrideAck: false,    // legacy — kept for backward compat with existing saved data
 
+  // ── Investor account ────────────────────────────────────────
+  isInvestor: false,           // true for accounts created via investor access code
+  investorName: null,          // display name from InvestorRegister form
+  investorCompany: null,       // optional company / LLC name
+  investorCity: null,          // optional city
+
   // ── Employer preset ─────────────────────────────────────────
   employerPreset: null,        // "DHL" | null — drives rotation, bucket, dual-rate logic
   startingWeekIsLong: null,    // DHL only: true = first active week is the higher-hour (long) week; null = derive from dhlTeam
@@ -250,7 +256,7 @@ export const INITIAL_GOALS = [];
 export const INITIAL_LOGS = [];
 
 export const EVENT_TYPES = {
-  missed_unpaid:     { label: "Missed Shift (Unpaid/Approved)", color: "var(--color-red)", icon: "✕" },
+  missed_unpaid:     { label: "Missed Shift (Unpaid/Approved)", color: "var(--color-deduction)", icon: "✕" },
   missed_unapproved: { label: "Missed Work (Unapproved)",       color: "#e8622a", icon: "⚠" },
   pto:               { label: "PTO Used",                       color: "#7a8bbf", icon: "◷" },
   pto_unapproved:    { label: "PTO Used (Unapproved)",          color: "#c8922a", icon: "⚠" },

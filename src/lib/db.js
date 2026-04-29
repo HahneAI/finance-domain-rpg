@@ -367,6 +367,65 @@ export async function saveInvestorActiveAccount(accountNum) {
   if (error) console.error("saveInvestorActiveAccount failed:", error.message);
 }
 
+// ── Admin: Investor Code Management ──────────────────────────────────────────
+// All functions below require is_admin = true in user_data (enforced by RLS
+// via migration 013_investor_admin_policies.sql).
+
+/**
+ * Fetches ALL investor_codes rows — including inactive ones — for the admin UI.
+ * Regular users (and anon) can only SELECT is_active = true via the existing policy.
+ */
+export async function fetchAllInvestorCodes() {
+  const { data, error } = await supabase
+    .from("investor_codes")
+    .select("id, code, label, is_active, notes, created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/**
+ * Fetches ALL investor_users rows for the admin usage log.
+ * Returns name, company, city, code used, and registration date.
+ */
+export async function fetchAllInvestorUsers() {
+  const { data, error } = await supabase
+    .from("investor_users")
+    .select("id, investor_name, company_name, city, code_used, created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/**
+ * Toggles is_active on a single investor_codes row.
+ */
+export async function setInvestorCodeActive(id, isActive) {
+  const { error } = await supabase
+    .from("investor_codes")
+    .update({ is_active: isActive })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Inserts a new investor_codes row. Code is stored lowercase.
+ * Returns the inserted row.
+ */
+export async function createInvestorCode({ code, label, notes }) {
+  const { data, error } = await supabase
+    .from("investor_codes")
+    .insert({
+      code:  code.trim().toLowerCase(),
+      label: label.trim() || null,
+      notes: notes.trim() || null,
+    })
+    .select("id, code, label, is_active, notes, created_at")
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 /**
  * Called on every SIGNED_IN auth event. Does two things:
  *   1. Seeds a user_data row for OAuth users (email sign-up does this explicitly;

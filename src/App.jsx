@@ -769,6 +769,8 @@ export default function App() {
         today={effectiveToday}
         userPaySchedule={config.userPaySchedule ?? "weekly"}
         fundedGoalSpend={fundedGoalSpend}
+        config={config}
+        bufferPerWeek={bufferPerWeek}
         isAdmin={isAdmin}
       />}
       {currentView === "log" && <LogPanel

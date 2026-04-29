@@ -65,7 +65,7 @@ export async function loadUserData() {
       logs:               INITIAL_LOGS,
       showExtra:          true,
       weekConfirmations:  {},
-      isDHL:              false,
+      isEmployerDHL:              false,
       isAdmin:            false,
     };
   }
@@ -105,7 +105,7 @@ export async function loadUserData() {
       logs:               INITIAL_LOGS,
       showExtra:          true,
       weekConfirmations:  {},
-      isDHL:              false,
+      isEmployerDHL:              false,
       isAdmin:            false,
     };
   }
@@ -249,7 +249,7 @@ export async function loadUserData() {
     logs:                 Array.isArray(data.logs)  ? data.logs  : [],
     showExtra:            data.show_extra,
     weekConfirmations:    wcData?.week_confirmations ?? {},
-    isDHL:                data.is_dhl      ?? false,
+    isEmployerDHL:                data.is_dhl      ?? false,
     isAdmin:              data.is_admin    ?? false,
     ptoGoal:              data.pto_goal    ?? null,
     isInvestor:           data.is_investor ?? false,

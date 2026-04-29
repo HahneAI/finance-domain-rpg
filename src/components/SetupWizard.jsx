@@ -163,7 +163,7 @@ const OT_MULTIPLIERS = [1.5, 2];
 
 function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false }) {
   // Gate: has the user answered "Do you work for DHL?" yet?
-  // Investor accounts skip the gate entirely — always treated as non-DHL.
+  // Investor accounts skip the gate entirely — always treated as base user.
   const [gateTouched, setGateTouched] = useState(
     isInvestor || formData.employerPreset === "DHL" || formData.setupComplete === true
   );
@@ -191,7 +191,8 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
       : (formData.customWeeklyHours > 0 ? String(formData.customWeeklyHours) : "")
   );
 
-  const isDHL    = formData.employerPreset === "DHL";
+  const isEmployerDHL    = formData.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const isSalary = formData.userPaySchedule === "salary";
 
   function setDHL(yes) {
@@ -237,10 +238,10 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
       {!isInvestor && (
         <Field label="Do you work for DHL?">
           <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-            <Pill label="Yes" active={isDHL} onClick={() => setDHL(true)} />
-            <Pill label="No"  active={gateTouched && !isDHL} onClick={() => setDHL(false)} />
+            <Pill label="Yes" active={isEmployerDHL} onClick={() => setDHL(true)} />
+            <Pill label="No"  active={gateTouched && isBaseUser} onClick={() => setDHL(false)} />
           </div>
-          {isDHL && (
+          {isEmployerDHL && (
             <div style={{
               marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
               lineHeight: "1.5",
@@ -252,7 +253,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
       )}
 
       {/* ── DHL: Team + shift ── */}
-      {isDHL && (
+      {isEmployerDHL && (
         <>
           <Field label="Which DHL team are you on?">
             <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
@@ -377,9 +378,9 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
       {gateTouched && (
         <>
           {/* ── Pay Schedule ── */}
-          {(!isDHL || formData.dhlTeam) && <Field label="How do you get paid?" error={attempted && !formData.userPaySchedule ? "Select a pay schedule" : null}>
+          {(isBaseUser || formData.dhlTeam) && <Field label="How do you get paid?" error={attempted && !formData.userPaySchedule ? "Select a pay schedule" : null}>
             <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap", alignItems: "center" }}>
-              {isDHL ? (
+              {isEmployerDHL ? (
                 <>
                   <Pill label="Weekly"            active={formData.userPaySchedule === "weekly"} onClick={() => onChange({ userPaySchedule: "weekly",  annualSalary: null })} />
                   <Pill label="Salary (Biweekly)" active={formData.userPaySchedule === "salary"} onClick={() => onChange({ userPaySchedule: "salary" })} />
@@ -461,7 +462,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
             />
           </Field>
 
-          {!isDHL && (
+          {isBaseUser && (
             <>
               {/* ── OT Threshold ── */}
               <Field label="Overtime Threshold (hrs/wk)">
@@ -589,7 +590,8 @@ function dateToWeekIdx(dateStr) {
 }
 
 function Step2({ formData, onChange, attempted }) {
-  const isDHL = formData.employerPreset === "DHL";
+  const isEmployerDHL = formData.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
 
   function handleDateChange(dateStr) {
     if (!dateStr) return;
@@ -617,7 +619,7 @@ function Step2({ formData, onChange, attempted }) {
       </Field>
 
       {/* ── Hours / rotation ── */}
-      {isDHL ? (
+      {isEmployerDHL ? (
         <Field label="Which week are you currently on?">
           <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
             <Pill
@@ -656,7 +658,7 @@ function Step2({ formData, onChange, attempted }) {
       )}
 
       {/* ── Pay period end day ── */}
-      {!isDHL && (
+      {isBaseUser && (
         <Field label="Pay Period Closes On" error={attempted && !Number.isInteger(formData.payPeriodEndDay) ? "Select a day" : null}>
           <div style={{ display: "flex", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
             {DAY_LABELS.map((d, i) => (
@@ -819,9 +821,10 @@ function BenefitCard({ def, selected, formData, onChange, onToggle, attempted })
 
 function Step3({ formData, onChange, attempted }) {
   const selected = new Set(formData.selectedBenefits ?? []);
-  const isDHL    = formData.employerPreset === "DHL";
+  const isEmployerDHL    = formData.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const others   = formData.otherDeductions ?? [];
-  const attendErr = attempted && !isDHL && formData.attendanceBucketEnabled === null;
+  const attendErr = attempted && isBaseUser && formData.attendanceBucketEnabled === null;
 
   function toggle(id) {
     const next = new Set(selected);
@@ -943,7 +946,7 @@ function Step3({ formData, onChange, attempted }) {
       </div>
 
       {/* ── Attendance policy gate — standard users only ── */}
-      {!isDHL && (
+      {isBaseUser && (
         <Field label="Does your employer track attendance with a formal policy?" error={attendErr ? "Selection required" : null}>
           <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px", lineHeight: "1.5" }}>
             Points systems, hours-based buckets, or similar.
@@ -964,7 +967,7 @@ function Step3({ formData, onChange, attempted }) {
       )}
 
       {/* Attendance threshold sub-fields — only when answered Yes */}
-      {!isDHL && formData.attendanceBucketEnabled === true && (
+      {isBaseUser && formData.attendanceBucketEnabled === true && (
         <>
           <Field label="What unit does your policy use?">
             <input
@@ -1020,7 +1023,7 @@ function Step3({ formData, onChange, attempted }) {
       )}
 
       {/* ── PTO policy — standard users only ── */}
-      {!isDHL && (
+      {isBaseUser && (
         <Field label="Does your employer offer PTO?">
           <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
             <Pill label="Yes" active={formData.ptoEnabled === true}
@@ -1032,7 +1035,7 @@ function Step3({ formData, onChange, attempted }) {
       )}
 
       {/* PTO sub-fields — only when answered Yes */}
-      {!isDHL && formData.ptoEnabled === true && (
+      {isBaseUser && formData.ptoEnabled === true && (
         <>
           <Field label="How does your PTO accrue?">
             <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
@@ -1220,7 +1223,8 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
 }
 
 function Step4({ formData, onChange, attempted }) {
-  const isDHL      = formData.employerPreset === "DHL";
+  const isEmployerDHL      = formData.employerPreset === "DHL";
+  const isBaseUser = !isEmployerDHL;
   const isVariable = formData.scheduleIsVariable;
   const stateConfig = formData.userState ? STATE_TAX_TABLE[formData.userState] : null;
   const isNoTax    = stateConfig?.model === "NONE";
@@ -1269,7 +1273,7 @@ function Step4({ formData, onChange, attempted }) {
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
       {/* Variable schedule note — DHL only */}
-      {isDHL && (
+      {isEmployerDHL && (
         <div style={{
           fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5",
           padding: "10px 12px", background: "var(--color-bg-raised)", borderRadius: "8px",
@@ -1332,7 +1336,7 @@ function Step4({ formData, onChange, attempted }) {
       </Field>
 
       {/* DHL MO preset load button — only when no rates set yet */}
-      {isDHL && !hasRates && formData.userState === "MO" && (
+      {isEmployerDHL && !hasRates && formData.userState === "MO" && (
         <div style={{
           padding: "12px 14px",
           background: "rgba(0,200,150,0.05)",
@@ -1455,8 +1459,8 @@ function Step4({ formData, onChange, attempted }) {
 
 // Estimate a typical weekly gross from formData — does not require a week object.
 function estimateWeeklyGross(d) {
-  const isDHL = d.employerPreset === "DHL";
-  if (isDHL) {
+  const isEmployerDHL = d.employerPreset === "DHL";
+  if (isEmployerDHL) {
     const gross = (h) => {
       const base = d.baseRate || 0;
       const reg = Math.min(h, d.otThreshold || 40);
@@ -1479,7 +1483,7 @@ function estimateWeeklyGross(d) {
     const hoursPerShift = d.shiftHours || 12;
     return (gross(4 * hoursPerShift) + gross(5 * hoursPerShift)) / 2;
   }
-  // Non-DHL: flat ceiling. customWeeklyHours overrides maxWeeklyHours; standardWeeklyHours is legacy fallback.
+  // Base user: flat ceiling. customWeeklyHours overrides maxWeeklyHours; standardWeeklyHours is legacy fallback.
   const h = d.customWeeklyHours ?? d.maxWeeklyHours ?? d.standardWeeklyHours ?? 40;
   const base = d.baseRate || 0;
   const nightDiff = d.nightDiffEnabled === true ? (d.nightDiffRate ?? 0) : 0;

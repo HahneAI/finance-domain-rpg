@@ -188,7 +188,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [showExtra, setShowExtra] = useState(true);
-  const [isDHL, setIsDHL] = useState(false);
+  const [isEmployerDHL, setIsEmployerDHL] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [ptoGoal, setPtoGoal] = useState(null);
   const [logs, setLogs] = useState(INITIAL_LOGS);
@@ -297,7 +297,7 @@ export default function App() {
         setExpenses(data.expenses);
         setGoals(data.goals);
         setWeekConfirmations(data.weekConfirmations ?? {});
-        setIsDHL(data.isDHL);
+        setIsEmployerDHL(data.isEmployerDHL);
         setIsAdmin(data.isAdmin);
         setPtoGoal(data.ptoGoal);
         if (data.isInvestor) {
@@ -639,9 +639,9 @@ export default function App() {
 
   // ── Attendance bucket model — DHL preset only ──
   // computeBucketModel encodes DHL's specific tier system and overflow payout mechanic.
-  // Non-DHL users may have attendanceBucketEnabled=true but get no bucket model;
+  // Base user users may have attendanceBucketEnabled=true but get no bucket model;
   // their attendance tracking is handled separately without payout math.
-  const bucketModel = useMemo(() => isDHL ? computeBucketModel(logs, config) : null, [isDHL, logs, config]);
+  const bucketModel = useMemo(() => isEmployerDHL ? computeBucketModel(logs, config) : null, [isEmployerDHL, logs, config]);
 
   // ── Per-week targeted deductions for current/future-week events ──────────────────
   // Shape: { [weekIdx: number]: netLost (dollars) }
@@ -774,7 +774,7 @@ export default function App() {
         isAdmin={isAdmin}
       />}
       {currentView === "log" && <LogPanel
-        logs={logs} setLogs={setLogs} config={config} isDHL={isDHL} isAdmin={isAdmin}
+        logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
         setConfig={setConfig} weekConfirmations={weekConfirmations}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}

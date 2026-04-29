@@ -32,7 +32,7 @@ const EMPTY_FORM = { label: "", hoursNeeded: "", targetDate: "", negativeBalance
 
 export function LogPanel({
   logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals,
-  fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isDHL = false, isAdmin = false, setConfig,
+  fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isEmployerDHL = false, isAdmin = false, setConfig,
   logK401kLost = 0, logK401kMatchLost = 0, logK401kGained = 0, logK401kMatchGained = 0, logPTOHoursLost = 0,
   ptoGoal, setPtoGoal, weekConfirmations = {},
 }) {
@@ -144,11 +144,12 @@ export function LogPanel({
   const onTrack = ptoGoal ? avail >= hoursNeed : false;
   const shiftHours = config.shiftHours ?? 12;
 
-  // Benefit gates — DHL checks selectedBenefits enrollment; non-DHL uses config values directly.
+  const isBaseUser = !isEmployerDHL;
+  // Benefit gates — employer preset checks selectedBenefits enrollment; base users use config values directly.
   const enrolledBenefits = new Set(Array.isArray(config.selectedBenefits) ? config.selectedBenefits : []);
-  const has401k = isDHL ? (enrolledBenefits.has("k401") && config.k401Rate > 0) : config.k401Rate > 0;
-  const hasPTO = isDHL || config.ptoEnabled === true;
-  const hasBucket = isDHL;
+  const has401k = isEmployerDHL ? (enrolledBenefits.has("k401") && config.k401Rate > 0) : config.k401Rate > 0;
+  const hasPTO = isEmployerDHL || config.ptoEnabled === true;
+  const hasBucket = isEmployerDHL;
 
   const [formOpen, setFormOpen] = useState(false);
   const [formVals, setFormVals] = useState(EMPTY_FORM);
@@ -1083,8 +1084,8 @@ export function LogPanel({
       );
     })()}
 
-    {/* ── Non-DHL Attendance Tracker ── */}
-    {!isDHL && config.attendanceBucketEnabled === true && config.attendanceTerminateThreshold != null && (() => {
+    {/* ── Base user Attendance Tracker ── */}
+    {isBaseUser && config.attendanceBucketEnabled === true && config.attendanceTerminateThreshold != null && (() => {
       const unit = config.attendanceUnit || "points";
       const warnT = config.attendanceWarnThreshold ?? null;
       const termT = config.attendanceTerminateThreshold;

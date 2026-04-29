@@ -76,7 +76,7 @@ describe('loadUserData — no row / error fallback', () => {
     expect(result.logs).toEqual(INITIAL_LOGS)
     expect(result.showExtra).toBe(true)
     expect(result.weekConfirmations).toEqual({})
-    expect(result.isDHL).toBe(false)
+    expect(result.isEmployerDHL).toBe(false)
     expect(result.isAdmin).toBe(false)
   })
 })

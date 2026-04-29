@@ -26,7 +26,7 @@ const SH = ({ children }) => (
 
 const EMPTY_FORM = { label: "", hoursNeeded: "", targetDate: "", negativeBalanceCap: "40" };
 
-export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = false, logK401kLost, logK401kMatchLost,
+export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAdmin = false, logK401kLost, logK401kMatchLost,
   logK401kGained, logK401kMatchGained, logPTOHoursLost, currentWeek, bucketModel,
   ptoGoal, setPtoGoal, fiscalWeekInfo }) {
 
@@ -211,8 +211,8 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isDHL, isAdmin = fa
       })()}
     </div>
 
-    {/* ── PTO Accrual + Leave Goal — DHL users and non-DHL users with PTO enabled ── */}
-    {(isDHL || config.ptoEnabled === true) && (
+    {/* ── PTO Accrual + Leave Goal — employer preset users and base users with PTO enabled ── */}
+    {(isEmployerDHL || config.ptoEnabled === true) && (
       <div style={{ marginBottom: "24px" }}>
         <SH>PTO Accrual</SH>
 

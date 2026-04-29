@@ -96,7 +96,7 @@ database/migrations/         — Supabase SQL migrations
 - Every component/function that gates on employer type must declare `const isEmployerDHL = config.employerPreset === "DHL"` locally (or receive it as a prop).
 - Every component that gates base-user behavior must also declare `const isBaseUser = !isEmployerDHL` immediately after.
 - Prop names follow the same pattern: `isEmployerDHL={isEmployerDHL}` (not `isDHL`).
-- The Supabase column `is_dhl` (in `user_data`) intentionally keeps its legacy name — renaming it is a separate schema migration tracked in TODO. In JS, `loadUserData()` maps it to the `isEmployerDHL` property.
+- The Supabase column was renamed from `is_dhl` → `is_employer_dhl` via migration `014_rename_is_dhl_to_is_employer_dhl.sql`. In JS, `loadUserData()` maps it to the `isEmployerDHL` property.
 - Source-code comments say "base user" (not "non-DHL"). Doc files use whatever phrasing is clearest.
 
 ---

@@ -74,7 +74,7 @@ export async function loadUserData() {
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra, is_dhl, is_admin, pto_goal, is_investor")
+    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, pto_goal, is_investor")
     .eq("user_id", userId)
     .single();
 
@@ -157,12 +157,12 @@ export async function loadUserData() {
   // ── Pre-wizard migration for DHL users ───────────────────────────────────────
   // Fires once for any DHL user whose row pre-dates the setup wizard (setupComplete absent).
   // Sets the DHL employer preset, marks setupComplete, and promotes legacy rate field names.
-  // Scoped to is_dhl === true so it never runs for standard or future multi-user accounts.
+  // Scoped to is_employer_dhl === true so it never runs for standard or future multi-user accounts.
   //
   // startingWeekIsLong: false — verified against INITIAL_LOGS week 10 = "6-Day":
   //   offset = ((10 - firstActiveIdx) % 2 + 2) % 2 = 1 → isHighWeek = !startingWeekIsLong
   //   so !startingWeekIsLong must be true → startingWeekIsLong must be false.
-  if (data.is_dhl && !mergedConfig.setupComplete) {
+  if (data.is_employer_dhl && !mergedConfig.setupComplete) {
     mergedConfig.employerPreset = "DHL";
     mergedConfig.startingWeekIsLong = false;    // corrected: false = odd-offset weeks are long
     mergedConfig.scheduleIsVariable = true;
@@ -192,9 +192,9 @@ export async function loadUserData() {
   // The initial migration set startingWeekIsLong: true. The intended follow-up
   // correction (checking dhlTeam === "B") never fired because dhlTeam was still
   // null in Supabase — the B-team migration ran before setupComplete was set.
-  // Trigger condition: is_dhl + dhlTeam still null (pre-wizard, never corrected).
+  // Trigger condition: is_employer_dhl + dhlTeam still null (pre-wizard, never corrected).
   // Sets all three fields needed for Anthony's custom schedule correctly.
-  if (data.is_dhl && mergedConfig.dhlTeam === null) {
+  if (data.is_employer_dhl && mergedConfig.dhlTeam === null) {
     mergedConfig.dhlTeam = "B";
     mergedConfig.customWeeklyHours = 60;   // Phase 4 migration: replaces dhlCustomSchedule:true
     mergedConfig.dhlCustomSchedule = false;
@@ -217,7 +217,7 @@ export async function loadUserData() {
   // baseRate (19.65 + 1.50 = 21.15) rather than tracked as nightDiffRate.
   // Correct stored value so night diff isn't double-counted now that buildYear()
   // computes it separately via nightDiffRate.
-  if (data.is_dhl && mergedConfig.baseRate === 21.15) {
+  if (data.is_employer_dhl && mergedConfig.baseRate === 21.15) {
     mergedConfig.baseRate = 19.65;
   }
 
@@ -225,7 +225,7 @@ export async function loadUserData() {
   // Prior to 2026-04 the weekend diff was assumed to be $3.00/hr. The actual rate
   // is $1.75/hr (weekend) and $1.50/hr (night, tracked separately via nightDiffRate).
   // Any stored value of exactly 3.00 is the old incorrect assumption.
-  if (data.is_dhl && mergedConfig.diffRate === 3) {
+  if (data.is_employer_dhl && mergedConfig.diffRate === 3) {
     mergedConfig.diffRate = 1.75;
   }
 
@@ -249,7 +249,7 @@ export async function loadUserData() {
     logs:                 Array.isArray(data.logs)  ? data.logs  : [],
     showExtra:            data.show_extra,
     weekConfirmations:    wcData?.week_confirmations ?? {},
-    isEmployerDHL:                data.is_dhl      ?? false,
+    isEmployerDHL:                data.is_employer_dhl      ?? false,
     isAdmin:              data.is_admin    ?? false,
     ptoGoal:              data.pto_goal    ?? null,
     isInvestor:           data.is_investor ?? false,
@@ -277,7 +277,7 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
         logs,
         show_extra:          showExtra,
         week_confirmations:  weekConfirmations,
-        is_dhl:              config.employerPreset === "DHL",
+        is_employer_dhl:              config.employerPreset === "DHL",
         pto_goal:            ptoGoal ?? null,
         updated_at:          new Date().toISOString(),
       },

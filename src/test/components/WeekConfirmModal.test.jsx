@@ -9,6 +9,7 @@ import { DEFAULT_CONFIG } from '../../constants/config.js'
 
 const BASE_CONFIG = {
   ...DEFAULT_CONFIG,
+  employerPreset: 'DHL',
   shiftHours: 12,
   baseRate: 21.15,
   ficaRate: 0.0765,

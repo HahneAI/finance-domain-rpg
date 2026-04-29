@@ -228,7 +228,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
               <span style={{ color: "var(--color-text-secondary)" }}>Missed event day take-home loss</span>
-              <strong style={{ color: "var(--color-red)" }}>-{f(missedEventDayNetLost)}</strong>
+              <strong style={{ color: "var(--color-deduction)" }}>-{f(missedEventDayNetLost)}</strong>
             </div>
             <div style={{ borderTop: "1px solid var(--color-border-subtle)", paddingTop: "8px", display: "flex", justifyContent: "space-between", gap: "8px" }}>
               <span style={{ color: "var(--color-text-secondary)" }}>Adjusted net shown on card</span>
@@ -490,7 +490,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
                 </td>
                 <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: rotationColor }}>{rotationDisplay}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center", color: "var(--color-text-secondary)" }}>{w.active ? w.totalHours : "—"}</td>
-                <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "var(--color-red)" : "var(--color-text-primary)" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "var(--color-gold)" : "var(--color-text-primary)" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{w.active ? f2(w.grossPay) : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{w.active ? f2(resolveWeekNet(w)) : "—"}</td>

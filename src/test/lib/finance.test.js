@@ -545,7 +545,7 @@ describe('computeNet', () => {
     const week = weeks.find(w => w.active && !w.taxedBySchedule)
     const cfg = DHL_CONFIG
     const benefits = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly
-    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0)
+    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.perCheckAmount ?? r.weeklyAmount ?? 0), 0)
     const expected = week.grossPay - week.grossPay * cfg.ficaRate - benefits - week.k401kEmployee - other
     expect(computeNet(week, cfg)).toBeCloseTo(expected)
   })
@@ -555,7 +555,7 @@ describe('computeNet', () => {
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly + week.k401kEmployee
-    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0)
+    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.perCheckAmount ?? r.weeklyAmount ?? 0), 0)
     const fed = week.taxableGross * cfg.fedRateLow  // 4-Day = short = fedRateLow
     const st = week.taxableGross * cfg.stateRateLow
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded - other)
@@ -566,7 +566,7 @@ describe('computeNet', () => {
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly + week.k401kEmployee
-    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0)
+    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.perCheckAmount ?? r.weeklyAmount ?? 0), 0)
     const fed = week.taxableGross * cfg.fedRateHigh  // 6-Day = long = fedRateHigh
     const st = week.taxableGross * cfg.stateRateHigh
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded - other)
@@ -630,7 +630,7 @@ describe('computeNet', () => {
   it('subtracts otherDeductions after taxes', () => {
     const cfg = {
       ...DHL_CONFIG,
-      otherDeductions: [{ id: 'parking', weeklyAmount: 18 }],
+      otherDeductions: [{ id: 'parking', perCheckAmount: 18 }],
     }
     const week = buildYear(cfg).find(w => w.active && w.taxedBySchedule)
     const withOther = computeNet(week, cfg)

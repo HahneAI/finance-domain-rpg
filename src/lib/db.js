@@ -65,7 +65,7 @@ export async function loadUserData() {
       logs:               INITIAL_LOGS,
       showExtra:          true,
       weekConfirmations:  {},
-      isDHL:              false,
+      isEmployerDHL:              false,
       isAdmin:            false,
     };
   }
@@ -74,7 +74,7 @@ export async function loadUserData() {
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra, is_dhl, is_admin, pto_goal")
+    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, pto_goal, is_investor")
     .eq("user_id", userId)
     .single();
 
@@ -85,6 +85,17 @@ export async function loadUserData() {
     .eq("user_id", userId)
     .single();
 
+  // Fetch investor profile when this is an investor account — needed to restore active_account.
+  let investorRow = null;
+  if (data?.is_investor) {
+    const { data: invData } = await supabase
+      .from("investor_users")
+      .select("investor_name, email, company_name, city, code_used, active_account")
+      .eq("auth_user_id", userId)
+      .maybeSingle();
+    investorRow = invData ?? null;
+  }
+
   if (error || !data) {
     console.warn("No user_data row found, using defaults.", error?.message);
     return {
@@ -94,7 +105,7 @@ export async function loadUserData() {
       logs:               INITIAL_LOGS,
       showExtra:          true,
       weekConfirmations:  {},
-      isDHL:              false,
+      isEmployerDHL:              false,
       isAdmin:            false,
     };
   }
@@ -132,15 +143,26 @@ export async function loadUserData() {
     ? { ...DEFAULT_CONFIG, ...data.config }
     : DEFAULT_CONFIG;
 
+  // ── otherDeductions: weeklyAmount → perCheckAmount rename ────────────────────
+  if (Array.isArray(mergedConfig.otherDeductions)) {
+    mergedConfig.otherDeductions = mergedConfig.otherDeductions.map(row => {
+      if (row && "weeklyAmount" in row && !("perCheckAmount" in row)) {
+        const { weeklyAmount, ...rest } = row;
+        return { ...rest, perCheckAmount: weeklyAmount };
+      }
+      return row;
+    });
+  }
+
   // ── Pre-wizard migration for DHL users ───────────────────────────────────────
   // Fires once for any DHL user whose row pre-dates the setup wizard (setupComplete absent).
   // Sets the DHL employer preset, marks setupComplete, and promotes legacy rate field names.
-  // Scoped to is_dhl === true so it never runs for standard or future multi-user accounts.
+  // Scoped to is_employer_dhl === true so it never runs for standard or future multi-user accounts.
   //
   // startingWeekIsLong: false — verified against INITIAL_LOGS week 10 = "6-Day":
   //   offset = ((10 - firstActiveIdx) % 2 + 2) % 2 = 1 → isHighWeek = !startingWeekIsLong
   //   so !startingWeekIsLong must be true → startingWeekIsLong must be false.
-  if (data.is_dhl && !mergedConfig.setupComplete) {
+  if (data.is_employer_dhl && !mergedConfig.setupComplete) {
     mergedConfig.employerPreset = "DHL";
     mergedConfig.startingWeekIsLong = false;    // corrected: false = odd-offset weeks are long
     mergedConfig.scheduleIsVariable = true;
@@ -170,9 +192,9 @@ export async function loadUserData() {
   // The initial migration set startingWeekIsLong: true. The intended follow-up
   // correction (checking dhlTeam === "B") never fired because dhlTeam was still
   // null in Supabase — the B-team migration ran before setupComplete was set.
-  // Trigger condition: is_dhl + dhlTeam still null (pre-wizard, never corrected).
+  // Trigger condition: is_employer_dhl + dhlTeam still null (pre-wizard, never corrected).
   // Sets all three fields needed for Anthony's custom schedule correctly.
-  if (data.is_dhl && mergedConfig.dhlTeam === null) {
+  if (data.is_employer_dhl && mergedConfig.dhlTeam === null) {
     mergedConfig.dhlTeam = "B";
     mergedConfig.customWeeklyHours = 60;   // Phase 4 migration: replaces dhlCustomSchedule:true
     mergedConfig.dhlCustomSchedule = false;
@@ -195,7 +217,7 @@ export async function loadUserData() {
   // baseRate (19.65 + 1.50 = 21.15) rather than tracked as nightDiffRate.
   // Correct stored value so night diff isn't double-counted now that buildYear()
   // computes it separately via nightDiffRate.
-  if (data.is_dhl && mergedConfig.baseRate === 21.15) {
+  if (data.is_employer_dhl && mergedConfig.baseRate === 21.15) {
     mergedConfig.baseRate = 19.65;
   }
 
@@ -203,7 +225,7 @@ export async function loadUserData() {
   // Prior to 2026-04 the weekend diff was assumed to be $3.00/hr. The actual rate
   // is $1.75/hr (weekend) and $1.50/hr (night, tracked separately via nightDiffRate).
   // Any stored value of exactly 3.00 is the old incorrect assumption.
-  if (data.is_dhl && mergedConfig.diffRate === 3) {
+  if (data.is_employer_dhl && mergedConfig.diffRate === 3) {
     mergedConfig.diffRate = 1.75;
   }
 
@@ -221,15 +243,18 @@ export async function loadUserData() {
     : ensureInitialFoodExpense(migratedExpenses);
 
   return {
-    config:             mergedConfig,
-    expenses:           normalizedExpenses,
-    goals:              migratedGoals,
-    logs:               Array.isArray(data.logs)  ? data.logs  : [],
-    showExtra:          data.show_extra,
-    weekConfirmations:  wcData?.week_confirmations ?? {},
-    isDHL:              data.is_dhl   ?? false,
-    isAdmin:            data.is_admin ?? false,
-    ptoGoal:            data.pto_goal ?? null,
+    config:               mergedConfig,
+    expenses:             normalizedExpenses,
+    goals:                migratedGoals,
+    logs:                 Array.isArray(data.logs)  ? data.logs  : [],
+    showExtra:            data.show_extra,
+    weekConfirmations:    wcData?.week_confirmations ?? {},
+    isEmployerDHL:                data.is_employer_dhl      ?? false,
+    isAdmin:              data.is_admin    ?? false,
+    ptoGoal:              data.pto_goal    ?? null,
+    isInvestor:           data.is_investor ?? false,
+    investorProfile:      investorRow,
+    activeInvestorAccount: investorRow?.active_account ?? 1,
   };
 }
 
@@ -252,7 +277,7 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
         logs,
         show_extra:          showExtra,
         week_confirmations:  weekConfirmations,
-        is_dhl:              config.employerPreset === "DHL",
+        is_employer_dhl:              config.employerPreset === "DHL",
         pto_goal:            ptoGoal ?? null,
         updated_at:          new Date().toISOString(),
       },
@@ -262,6 +287,154 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
   if (error) {
     console.error("Failed to save user data:", error.message);
   }
+}
+
+/**
+ * Creates a full investor account in three atomic steps:
+ *   1. Supabase auth user (email + password)
+ *   2. investor_users profile row
+ *   3. user_data row seeded with investor config
+ *
+ * Returns { session, error, needsConfirmation }.
+ *   session           — Supabase session (null if email confirmation required)
+ *   error             — string on failure, null on success
+ *   needsConfirmation — true when Supabase sends a confirmation email before
+ *                       granting a session (project email-confirm setting is on)
+ *
+ * On investor_users insert failure the auth user already exists — the investor
+ * can re-attempt; signUp is idempotent for unconfirmed users. On user_data
+ * failure we delete the investor_users row and surface the error.
+ */
+export async function createInvestorAccount({ name, email, password, company, city, codeUsed }) {
+  // Step 1 — auth user
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { display_name: name } },
+  });
+  if (authError) return { session: null, error: authError.message, needsConfirmation: false };
+
+  const user = authData.user;
+  if (!user) return { session: null, error: "Account creation failed — no user returned.", needsConfirmation: false };
+
+  const needsConfirmation = !authData.session;
+
+  // Step 2 — investor_users profile
+  const { error: profileError } = await supabase.from("investor_users").insert({
+    auth_user_id:   user.id,
+    investor_name:  name,
+    email,
+    company_name:   company ?? null,
+    city:           city ?? null,
+    code_used:      codeUsed ?? null,
+    code_used_at:   codeUsed ? new Date().toISOString() : null,
+    active_account: 1,
+  });
+  if (profileError) {
+    return { session: null, error: profileError.message, needsConfirmation: false };
+  }
+
+  // Step 3 — user_data row seeded with investor config
+  const investorConfig = {
+    ...DEFAULT_CONFIG,
+    isInvestor:      true,
+    investorName:    name,
+    investorCompany: company ?? null,
+    investorCity:    city ?? null,
+    setupComplete:   false,
+  };
+  const { error: dataError } = await supabase.from("user_data").upsert(
+    {
+      user_id:    user.id,
+      is_investor: true,
+      config:     investorConfig,
+      expenses:   [],
+      goals:      [],
+      logs:       [],
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" }
+  );
+  if (dataError) {
+    // Rollback investor_users so a re-attempt can cleanly re-insert
+    await supabase.from("investor_users").delete().eq("auth_user_id", user.id);
+    return { session: null, error: dataError.message, needsConfirmation: false };
+  }
+
+  return { session: authData.session, error: null, needsConfirmation };
+}
+
+/**
+ * Persists the investor's active account tab selection (1 | 2 | 3) to
+ * investor_users.active_account. Fire-and-forget from the accounts pill.
+ */
+export async function saveInvestorActiveAccount(accountNum) {
+  const userId = await getCurrentUserId();
+  if (!userId) return;
+  const { error } = await supabase
+    .from("investor_users")
+    .update({ active_account: accountNum })
+    .eq("auth_user_id", userId);
+  if (error) console.error("saveInvestorActiveAccount failed:", error.message);
+}
+
+// ── Admin: Investor Code Management ──────────────────────────────────────────
+// All functions below require is_admin = true in user_data (enforced by RLS
+// via migration 013_investor_admin_policies.sql).
+
+/**
+ * Fetches ALL investor_codes rows — including inactive ones — for the admin UI.
+ * Regular users (and anon) can only SELECT is_active = true via the existing policy.
+ */
+export async function fetchAllInvestorCodes() {
+  const { data, error } = await supabase
+    .from("investor_codes")
+    .select("id, code, label, is_active, notes, created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/**
+ * Fetches ALL investor_users rows for the admin usage log.
+ * Returns name, company, city, code used, and registration date.
+ */
+export async function fetchAllInvestorUsers() {
+  const { data, error } = await supabase
+    .from("investor_users")
+    .select("id, investor_name, company_name, city, code_used, created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/**
+ * Toggles is_active on a single investor_codes row.
+ */
+export async function setInvestorCodeActive(id, isActive) {
+  const { error } = await supabase
+    .from("investor_codes")
+    .update({ is_active: isActive })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Inserts a new investor_codes row. Code is stored lowercase.
+ * Returns the inserted row.
+ */
+export async function createInvestorCode({ code, label, notes }) {
+  const { data, error } = await supabase
+    .from("investor_codes")
+    .insert({
+      code:  code.trim().toLowerCase(),
+      label: label.trim() || null,
+      notes: notes.trim() || null,
+    })
+    .select("id, code, label, is_active, notes, created_at")
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 /**

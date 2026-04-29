@@ -121,6 +121,7 @@ database/migrations/         — Supabase SQL migrations
 | `--color-gold` / `--color-accent-primary` | `#00c896` | Active tabs, CTAs, section bars |
 | `--color-green` | `#22c55e` | Income values, positive status |
 | `--color-red` | `#ef4444` | Spend, negative, risk |
+| `--color-deduction` | `#f4a4a4` | Soft deduction rows — same H=0° hue as `--color-red`, lightness ~80%; not harsh on dark. Candidate to replace `--color-red` in low-emphasis negative contexts. |
 | `--color-warning` | `#f59e0b` | Warning / attention |
 | `--color-text-primary` | `#e6f4ef` | Body text |
 | `--color-text-secondary` | `#7fa39a` | Labels, sublabels |

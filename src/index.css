@@ -20,6 +20,7 @@
 
   --color-red:         #ef4444;
   --color-red-muted:   #8a2323;
+  --color-deduction:   #f4a4a4;  /* soft deduction row text — hsl(0°,52%,80%), same red hue, lighter lightness; candidate to replace --color-red in non-critical negative contexts */
   --color-warning:     #f59e0b;
 
   --color-text-primary:   #e6f4ef;

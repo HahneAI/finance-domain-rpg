@@ -1700,45 +1700,62 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         >
           {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-            <div>
-              <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "3px" }}>Paycheck Breakdown</div>
-              <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--color-accent-primary)", fontFamily: "var(--font-sans)" }}>{infoLabel}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "2px" }}>{infoLabel}</div>
+                <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--color-accent-primary)", fontFamily: "var(--font-sans)" }}>Breakdown</div>
+              </div>
+              {config?.taxExemptOptIn && infoRefWeek && (
+                <span style={{
+                  fontSize: "9px", padding: "2px 7px", borderRadius: "12px", letterSpacing: "0.5px",
+                  background: infoRefWeek.taxedBySchedule ? "#1e1e3a" : "#1e4a30",
+                  color: infoRefWeek.taxedBySchedule ? "#7a8bbf" : "var(--color-green)",
+                  border: "1px solid " + (infoRefWeek.taxedBySchedule ? "#7a8bbf" : "var(--color-green)"),
+                }}>
+                  {infoRefWeek.taxedBySchedule ? "TAXED" : "EXEMPT"}
+                </span>
+              )}
             </div>
             <button
               onClick={() => setShowCheckInfo(false)}
-              style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1 }}
+              style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1, flexShrink: 0 }}
             >×</button>
           </div>
 
-          {/* Income section */}
-          <InfoRow label="Gross Pay" val={f2(checkBreakdown.gross)} color="var(--color-text-primary)" large />
-          <InfoDivider />
-          <InfoRow label="FICA (Social Security + Medicare)" val={`− ${f2(checkBreakdown.fica)}`} color="var(--color-text-secondary)" />
-          <InfoRow label="Federal Tax Withholding" val={`− ${f2(checkBreakdown.fedTax)}`} color="var(--color-text-secondary)" />
-          <InfoRow label="State Tax Withholding" val={`− ${f2(checkBreakdown.stateTax)}`} color="var(--color-text-secondary)" />
-          <InfoRow label="Benefits / Insurance" val={`− ${f2(checkBreakdown.benefits)}`} color="var(--color-text-secondary)" />
-          <InfoRow label="401(k) Contribution" val={`− ${f2(checkBreakdown.k401)}`} color="var(--color-text-secondary)" />
-          {checkBreakdown.otherDeductions.map((row, i) => (
-            <InfoRow key={i} label={row.label ?? `Other Deduction ${i + 1}`} val={`− ${f2((row.weeklyAmount ?? 0) * ((PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52) / 52))}`} color="var(--color-text-secondary)" />
-          ))}
-          <InfoDivider thick />
-          <InfoRow label="Net Pay" val={f2(checkBreakdown.netPay)} color="var(--color-green)" large />
+          {/* ── Subtraction math formula ── */}
 
-          {/* Buffer */}
+          {/* Gross — the starting number, no operator */}
+          <MathRow op=" " label="Gross Pay" val={f2(checkBreakdown.gross)} valColor="var(--color-text-primary)" large />
+          <MathDivider />
+
+          {/* Deductions block */}
+          <MathRow op="−" label="Total Tax Withholding" val={f2(checkBreakdown.fica + checkBreakdown.fedTax + checkBreakdown.stateTax)} note="FICA · fed · state" />
+          <MathRow op="−" label="Benefits / Insurance" val={f2(checkBreakdown.benefits)} />
+          <MathRow op="−" label="401(k) Contribution" val={f2(checkBreakdown.k401)} />
+          {checkBreakdown.otherDeductions.map((row, i) => {
+            const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
+            return <MathRow key={i} op="−" label={row.label ?? `Other Deduction ${i + 1}`} val={f2((row.weeklyAmount ?? 0) * (checksPerYear / 52))} />;
+          })}
+          <MathDivider thick />
+
+          {/* Net Pay result */}
+          <MathRow op="=" label="Net Pay" val={f2(checkBreakdown.netPay)} valColor="var(--color-green)" large />
+
+          {/* Buffer block */}
           {bufferPerWeek > 0 && <>
-            <InfoDivider />
-            <InfoRow label="Paycheck Buffer (savings)" val={`− ${f2(bufferPerWeek)}`} color="var(--color-warning)" />
-            <InfoDivider thick />
-            <InfoRow label="Spendable" val={f2(checkBreakdown.spendable)} color="var(--color-text-primary)" large />
+            <MathDivider />
+            <MathRow op="−" label="Paycheck Buffer" val={f2(bufferPerWeek)} valColor="var(--color-warning)" note="reserved savings" />
+            <MathDivider thick />
+            <MathRow op="=" label="Spendable" val={f2(checkBreakdown.spendable)} valColor="var(--color-text-primary)" large />
           </>}
 
-          {/* Expenses */}
-          <InfoDivider />
-          {checkBreakdown.needsSpend > 0 && <InfoRow label="Needs" val={`− ${f2(checkBreakdown.needsSpend)}`} color="var(--color-text-secondary)" />}
-          {checkBreakdown.lifestyleSpend > 0 && <InfoRow label="Lifestyle" val={`− ${f2(checkBreakdown.lifestyleSpend)}`} color="var(--color-text-secondary)" />}
-          {checkBreakdown.loansSpend > 0 && <InfoRow label="Loans" val={`− ${f2(checkBreakdown.loansSpend)}`} color="var(--color-text-secondary)" />}
-          <InfoDivider thick />
-          <InfoRow label="Left" val={f2(checkBreakdown.left)} color={checkBreakdown.left >= 0 ? "var(--color-green)" : "var(--color-red)"} large />
+          {/* Expenses block */}
+          <MathDivider />
+          {checkBreakdown.needsSpend > 0 && <MathRow op="−" label="Needs" val={f2(checkBreakdown.needsSpend)} />}
+          {checkBreakdown.lifestyleSpend > 0 && <MathRow op="−" label="Lifestyle" val={f2(checkBreakdown.lifestyleSpend)} />}
+          {checkBreakdown.loansSpend > 0 && <MathRow op="−" label="Loans" val={f2(checkBreakdown.loansSpend)} />}
+          <MathDivider thick />
+          <MathRow op="=" label="Left" val={f2(checkBreakdown.left)} valColor={checkBreakdown.left >= 0 ? "var(--color-green)" : "var(--color-red)"} large />
 
           <div style={{ marginTop: "20px", textAlign: "center" }}>
             <button
@@ -1787,17 +1804,30 @@ function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
   </div>;
 }
 
-function InfoRow({ label, val, color, large }) {
+// op: " " (no operator, indent), "−" (subtraction), "=" (result)
+// Deduction rows (op="−") use --color-deduction for the value; results use valColor.
+function MathRow({ op, label, val, valColor, note, large }) {
+  const isDeduction = op === "−";
+  const isResult    = op === "=";
+  const computedValColor = valColor ?? (isDeduction ? "var(--color-deduction)" : "var(--color-text-primary)");
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: large ? "6px 0" : "4px 0" }}>
-      <span style={{ fontSize: large ? "12px" : "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)", letterSpacing: "0.2px" }}>{label}</span>
-      <span style={{ fontSize: large ? "18px" : "14px", fontWeight: large ? "700" : "500", color: color ?? "var(--color-text-primary)", fontFamily: "var(--font-mono)", letterSpacing: "-0.5px" }}>{val}</span>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 0, padding: large ? "7px 0" : "4px 0" }}>
+      <span style={{
+        fontSize: large ? "15px" : "13px", fontWeight: "700",
+        color: isDeduction ? "var(--color-deduction)" : isResult ? "var(--color-text-disabled)" : "transparent",
+        fontFamily: "var(--font-mono)", width: "18px", flexShrink: 0, userSelect: "none",
+      }}>{op}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ fontSize: large ? "13px" : "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)", letterSpacing: "0.2px" }}>{label}</span>
+        {note && <span style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginLeft: "6px", letterSpacing: "0.3px" }}>{note}</span>}
+      </div>
+      <span style={{ fontSize: large ? "19px" : "14px", fontWeight: large ? "700" : "500", color: computedValColor, fontFamily: "var(--font-mono)", letterSpacing: "-0.5px", paddingLeft: "8px" }}>{val}</span>
     </div>
   );
 }
 
-function InfoDivider({ thick }) {
+function MathDivider({ thick }) {
   return (
-    <div style={{ height: thick ? "1px" : "0.5px", background: thick ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)", margin: thick ? "8px 0" : "2px 0" }} />
+    <div style={{ height: thick ? "1px" : "0.5px", background: thick ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.06)", margin: thick ? "8px 0" : "3px 0" }} />
   );
 }

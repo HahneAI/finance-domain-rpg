@@ -44,6 +44,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [pendingDelete, setPendingDelete] = useState(null); // { id } | null
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [showCheckInfo, setShowCheckInfo] = useState(false);
+  const [undoDelete, setUndoDelete] = useState(null); // { expId, monthKey, prevValue } | null — clears after 8s
   // Month-level period selector state
   const [activeMonth, setActiveMonth] = useState(null); // "2026-MM" | null — null = quarter mode
   // Keep the viewed phase in sync with the real current quarter so that
@@ -657,21 +658,43 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
   const deleteMonthOnly = (expId) => {
     const monthKey = activeMonth ?? currentMonthKey;
+    const target = expenses.find(e => e.id === expId);
+    // Store previous override value so user can UNDO within 8s
+    const prevValue = target?.monthlyOverrides?.[monthKey] ?? null;
     setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonth(e, monthKey)));
+    setUndoDelete({ expId, monthKey, prevValue });
     setPendingDelete(null);
   };
 
   const deleteMonthForward = (expId) => {
-    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonthForward(e, activeMonth)));
+    // Always use clearMonthForward so monthlyOverrides are properly zeroed.
+    // In quarter mode activeMonth is null, so fall back to the first month of the active quarter.
+    const startKey = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
+    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonthForward(e, startKey)));
+    setUndoDelete(null);
     setPendingDelete(null);
+  };
+
+  const executeUndo = () => {
+    if (!undoDelete) return;
+    const { expId, monthKey, prevValue } = undoDelete;
+    setExpenses(prev => prev.map(e => {
+      if (e.id !== expId) return e;
+      const overrides = { ...(e.monthlyOverrides ?? {}) };
+      if (prevValue === null) {
+        delete overrides[monthKey];
+      } else {
+        overrides[monthKey] = prevValue;
+      }
+      return { ...e, monthlyOverrides: overrides };
+    }));
+    setUndoDelete(null);
   };
 
   const deleteQuarterOnly = (expId) => {
     setExpenses(prev => prev.map(e => e.id !== expId ? e : clearQuarterMonths(e, ap)));
     setPendingDelete(null);
   };
-
-  // deleteQuarterForward = existing deleteExp(id) — zeros active phase forward in history
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
@@ -681,6 +704,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     mq.addEventListener?.("change", sync);
     return () => mq.removeEventListener?.("change", sync);
   }, []);
+  useEffect(() => {
+    if (!undoDelete) return;
+    const t = setTimeout(() => setUndoDelete(null), 8000);
+    return () => clearTimeout(t);
+  }, [undoDelete]);
   useEffect(() => () => {
     if (expenseTouchAutoScrollRef.current.rafId) cancelAnimationFrame(expenseTouchAutoScrollRef.current.rafId);
     if (expenseTouchOverlayExitTimerRef.current) clearTimeout(expenseTouchOverlayExitTimerRef.current);
@@ -1189,7 +1217,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 padding: "10px 12px",
                 marginBottom: "6px",
                 position: "relative",
-                opacity: isDragging ? 0.72 : isScheduledFuture ? 0.48 : 1,
+                opacity: isDragging ? 0.72 : isScheduledFuture ? 0.65 : 1,
                 cursor: isPinnedFoodCard
                   ? "default"
                   : isEditing ? "default" : (isExpenseDropLane ? (isDragging ? "grabbing" : "grab") : "default"),
@@ -1303,15 +1331,29 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{monthlyDisplay}</div>
                   </div>
                   <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
-                  {pendingDelete?.id === exp.id ? (
+                  {isScheduledFuture ? (
+                    /* Grayed card — direct actions, no extra confirm needed since state is already clear */
+                    <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
+                      {undoDelete?.expId === exp.id && (
+                        <SmBtn onClick={executeUndo} c="var(--color-accent-primary)" bg="rgba(0,200,150,0.08)">UNDO</SmBtn>
+                      )}
+                      <SmBtn
+                        onClick={() => {
+                          setExpenses(prev => prev.map(e => e.id !== exp.id ? e : clearMonthForward(e, nextNonZeroIso)));
+                          setUndoDelete(null);
+                        }}
+                        c="var(--color-deduction)" bg="#2d1a1a"
+                      >CLR {shortMonth(nextNonZeroIso).toUpperCase()}+</SmBtn>
+                    </div>
+                  ) : pendingDelete?.id === exp.id ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-end" }}>
                       <div style={{ fontSize: "8px", color: "var(--color-deduction)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
                         {activeMonth ? `Delete ${activeMonthLabel}?` : `Delete Q${ap + 1}?`}
                       </div>
                       <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        <SmBtn onClick={() => deleteMonthOnly(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">{activeMonth ? "MO. ONLY" : "TODAY'S MONTH"}</SmBtn>
-                        <SmBtn onClick={() => deleteQuarterOnly(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">QTR ONLY</SmBtn>
-                        <SmBtn onClick={() => activeMonth ? deleteMonthForward(exp.id) : deleteExp(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">+ ONWARD</SmBtn>
+                        <SmBtn onClick={() => deleteMonthOnly(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">{activeMonth ? `${activeMonthLabel} ONLY` : "THIS MONTH"}</SmBtn>
+                        <SmBtn onClick={() => deleteQuarterOnly(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">Q{ap + 1} MONTHS</SmBtn>
+                        <SmBtn onClick={() => deleteMonthForward(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">+ ONWARD</SmBtn>
                         <SmBtn onClick={() => setPendingDelete(null)}>✕</SmBtn>
                       </div>
                     </div>

@@ -419,13 +419,14 @@ export function buildYear(cfg) {
       weekendHours = 0;
     }
 
-    regularHours = Math.min(totalHours, cfg.otThreshold);
-    overtimeHours = Math.max(totalHours - cfg.otThreshold, 0);
+    const effectiveOtThreshold = cfg.otThreshold ?? totalHours;
+    regularHours = Math.min(totalHours, effectiveOtThreshold);
+    overtimeHours = Math.max(totalHours - effectiveOtThreshold, 0);
     // OT: all differentials (weekend + night) are included in the 1.5× multiplier.
     // Non-weekend shifts come earlier in the week; weekend (Fri+) begin at hour nonWeekendH+1,
     // so weekend hours that push past the 40h threshold are fully at OT rate.
     const nonWeekendH = totalHours - weekendHours;
-    const regWkndH = Math.max(0, Math.min(weekendHours, cfg.otThreshold - nonWeekendH));
+    const regWkndH = Math.max(0, Math.min(weekendHours, effectiveOtThreshold - nonWeekendH));
     const otWkndH  = weekendHours - regWkndH;
     const nightDiffEnabled = isEmployerDHL ? cfg.dhlNightShift !== false : cfg.nightDiffEnabled === true;
     const nightDiffHr = nightDiffEnabled ? (cfg.nightDiffRate ?? 0) : 0;
@@ -502,9 +503,10 @@ export function projectedGross(isWeek2, cfg) {
     wkndH = 0;
     totalH = cfg.customWeeklyHours ?? cfg.maxWeeklyHours ?? cfg.standardWeeklyHours ?? 40;
   }
-  const reg = Math.min(totalH, cfg.otThreshold), ot = Math.max(totalH - cfg.otThreshold, 0);
+  const effectiveOtThreshold = cfg.otThreshold ?? totalH;
+  const reg = Math.min(totalH, effectiveOtThreshold), ot = Math.max(totalH - effectiveOtThreshold, 0);
   const nonWkndH = totalH - wkndH;
-  const regWknd = Math.max(0, Math.min(wkndH, cfg.otThreshold - nonWkndH));
+  const regWknd = Math.max(0, Math.min(wkndH, effectiveOtThreshold - nonWkndH));
   const otWknd  = wkndH - regWknd;
   const isEmployerDHL = cfg.employerPreset === "DHL";
   const nightDiffEnabled = isEmployerDHL ? cfg.dhlNightShift !== false : cfg.nightDiffEnabled === true;

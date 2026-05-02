@@ -352,7 +352,8 @@ export function HomePanel({
     const offset = Math.max(Math.ceil(offsetRaw), 0);
     const weekNum = Math.min(nowIdx + offset, FISCAL_WEEKS_PER_YEAR);
     const finishIdx = futureWeeks?.length ? Math.min(offset, futureWeeks.length - 1) : null;
-    const finishDate = finishIdx != null ? futureWeeks[finishIdx]?.weekEnd : null;
+    const finishWeek = finishIdx != null ? futureWeeks[finishIdx] : null;
+    const finishDate = finishWeek?.payPeriodEndDate ?? finishWeek?.weekEnd ?? null;
     const dateLabel = formatGoalFinishDate(finishDate);
     return dateLabel ? `By ${dateLabel}, week ${weekNum}` : `Week ${weekNum}`;
   };

@@ -304,7 +304,10 @@ export function HomePanel({
 
   useEffect(() => {
     if (!currentWeek || !setGoals) return;
-    const needsUpdate = tl.filter((g) => g.eW !== null && !g.dueWeek);
+    const needsUpdate = tl.filter((g) => {
+      if (g.eW === null) return false;
+      return g.dueWeek !== currentWeek.idx + Math.ceil(g.eW);
+    });
     if (!needsUpdate.length) return;
     setGoals((prev) => prev.map((goal) => {
       const match = needsUpdate.find((g) => g.id === goal.id);

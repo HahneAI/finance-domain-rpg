@@ -14,11 +14,11 @@
   - [ ] Propagate the same subtraction into forward-looking charts and monthly rollups (future taxed weeks and months).
   - [ ] Add consistency checks so weekly table, yearly projection math, and chart datasets all use one shared withholding-adjusted net value.
 
-- [ ] **Goal timeline ETA sensitivity bug (expenses change but finish week stays static)**
-  - [ ] Reproduce with a controlled scenario: increase recurring expenses by ~$150/week and compare goal #2 finish week before/after.
-  - [ ] Audit timeline inputs to verify the predictor is using live post-expense surplus instead of stale or averaged values.
-  - [ ] Fix dependency/recompute triggers so editing expenses immediately updates timeline completion weeks.
-  - [ ] Add regression coverage for at least two deltas (e.g., +$150/week, +$300/week) to ensure ETA moves later when surplus shrinks.
+- [x] **Goal timeline ETA sensitivity bug (expenses change but finish week stays static)**
+  - [x] Reproduce with a controlled scenario: increase recurring expenses by ~$150/week and compare goal #2 finish week before/after.
+  - [x] Audit timeline inputs to verify the predictor is using live post-expense surplus instead of stale or averaged values.
+  - [x] Fix dependency/recompute triggers so editing expenses immediately updates timeline completion weeks.
+  - [x] Add regression coverage for at least two deltas (e.g., +$150/week, +$300/week) to ensure ETA moves later when surplus shrinks.
 
 - [x] **Goals card + horizontal timeline UI rework prep (premium liquid-flow direction)**
   - [x] Create a UI spec pass for goals card simplification: remove low-value text blocks and define minimum info hierarchy.

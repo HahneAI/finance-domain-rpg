@@ -80,6 +80,9 @@ direct enablers for a shippable base user user experience.*
 - [ ] **`taxExemptOptIn` wire-up** — Stored in config but nothing reads it in `App.jsx` or
   `IncomePanel`. The opt-in gate and disclaimer copy are correct; backend wire-up is deferred
   to Phase 5. No action needed until then.
+  > **Note:** Before implementing, bring to an accountant's office for safe-tax feature insights.
+  > The mechanics (withholding suspension + catch-up) have tax risk implications that need
+  > professional sign-off before we expose them to users.
 
 ---
 

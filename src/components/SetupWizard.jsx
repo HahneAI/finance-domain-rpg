@@ -57,7 +57,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, isInvestor = false }) {
           fontSize: "12px", lineHeight: "1.6",
           color: "var(--color-text-secondary)", margin: 0,
         }}>
-          Have a recent paystub? You'll sharpen tax rates from the Income panel — no rush now.
+          Have these handy: a recent paystub (for tax rates), your overtime policy, and PTO details if applicable.
         </p>
       </div>
     );
@@ -170,7 +170,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
 
   // Local tracking for custom OT threshold input
   const [otCustom, setOtCustom] = useState(
-    !OT_THRESHOLDS.includes(formData.otThreshold)
+    formData.otThreshold !== null && !OT_THRESHOLDS.includes(formData.otThreshold)
   );
 
   // Commission toggle
@@ -447,6 +447,9 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
                 onChange={e => onChange({ shiftHours: e.target.value === "" ? null : parseFloat(e.target.value) })}
                 placeholder="e.g. 10"
               />
+              <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: 1.4 }}>
+                For shift counting in event logging — income uses total weekly hours set in the next step.
+              </div>
             </Field>
           </FieldRow>
           )}
@@ -478,6 +481,11 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
                     label="Custom"
                     active={otCustom}
                     onClick={() => setOtCustom(true)}
+                  />
+                  <Pill
+                    label="Exempt"
+                    active={formData.otThreshold === null && !otCustom}
+                    onClick={() => { setOtCustom(false); onChange({ otThreshold: null }); }}
                   />
                 </div>
                 {otCustom && (
@@ -1487,8 +1495,9 @@ function estimateWeeklyGross(d) {
   const h = d.customWeeklyHours ?? d.maxWeeklyHours ?? d.standardWeeklyHours ?? 40;
   const base = d.baseRate || 0;
   const nightDiff = d.nightDiffEnabled === true ? (d.nightDiffRate ?? 0) : 0;
-  const reg = Math.min(h, d.otThreshold || 40);
-  const ot = Math.max(h - (d.otThreshold || 40), 0);
+  const effectiveOtThreshold = d.otThreshold ?? h;
+  const reg = Math.min(h, effectiveOtThreshold);
+  const ot = Math.max(h - effectiveOtThreshold, 0);
   return reg * (base + nightDiff) + ot * (base + nightDiff) * (d.otMultiplier || 1.5);
 }
 
@@ -1691,7 +1700,7 @@ const STEP_DEFS = [
       if (d.employerPreset === "DHL" && !d.dhlTeam) return false;
       if (d.customWeeklyHours != null && (d.customWeeklyHoursLong === 0 || d.customWeeklyHoursShort === 0)) return false;
       if (d.customWeeklyHours === 0) return false;
-      if (d.employerPreset !== "DHL" && !((d.otThreshold ?? 0) > 0)) return false;
+      if (d.employerPreset !== "DHL" && d.otThreshold !== null && !((d.otThreshold ?? 0) > 0)) return false;
       if (d.userPaySchedule === "salary") return (d.annualSalary ?? 0) > 0;
       return (d.baseRate ?? 0) > 0 && (d.shiftHours ?? 0) > 0;
     },

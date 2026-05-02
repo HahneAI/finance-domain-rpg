@@ -204,6 +204,9 @@ export default function App() {
   // Active investor account tab — 1 = Demo 1, 2 = Demo 2, 3 = personal account.
   // Defaults to 1 so investors land on demo content on every login.
   const [activeInvestorAccount, setActiveInvestorAccount] = useState(1);
+  // Incremented after investor account creation to force a second loadUserData
+  // call once all DB writes (investor_users + user_data) have settled.
+  const [reloadTrigger, setReloadTrigger] = useState(0);
   // Investor profile fetched from investor_users on login — null for non-investors.
   const [investorProfile, setInvestorProfile] = useState(null);
   const [tempLockDate, setTempLockDate] = useState(() => {
@@ -305,7 +308,9 @@ export default function App() {
           setActiveInvestorAccount(data.activeInvestorAccount ?? 1);
         }
         // Investors reach the wizard via account 3 selection — not on login.
-        if (!data.config.setupComplete && !data.config.isInvestor) setWizardEntry(false);
+        // Guard against the race where onAuthStateChange fires before createInvestorAccount
+        // has finished writing investor config — investorSession still non-null at that point.
+        if (!data.config.setupComplete && !data.config.isInvestor && !investorSession) setWizardEntry(false);
         setLoading(false);
       })
       .catch((err) => {
@@ -313,7 +318,7 @@ export default function App() {
         setLoading(false);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authedUser?.id]);
+  }, [authedUser?.id, reloadTrigger]);
 
   // ── Debounced save to Supabase (800ms) ──
   const saveTimer = useRef(null);
@@ -719,8 +724,14 @@ export default function App() {
             city:     formData.city,
             codeUsed: investorSession?.code ?? null,
           });
+          if (!error && !needsConfirmation) {
+            // DB writes (investor_users + user_data) are now settled.
+            // Clear investorSession so the wizard guard re-arms for future non-investors,
+            // then force a second loadUserData call to pick up config.isInvestor = true.
+            setInvestorSession(null);
+            setReloadTrigger(n => n + 1);
+          }
           return { error, needsConfirmation };
-          // On success with session: onAuthStateChange → authedUser set → app renders.
         }}
         onBack={() => setInvestorSession(null)}
       />

@@ -31,6 +31,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
+  const checksPerYear = PAYCHECKS_PER_YEAR[userPaySchedule ?? "weekly"] ?? 52;
+  const perCheckFactor = 52 / checksPerYear; // 1 for weekly, 2 for biweekly/salary
 
   const currentPhaseIdx = useMemo(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0, [currentWeek]);
   const fiscalWeekLabel = formatFiscalWeekLabel(fiscalWeekInfo);
@@ -1064,7 +1066,13 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     )}
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
-      <Card label="This Week’s Check" val={f2(prevWeekNet ?? weeklyIncome)} sub="This Week’s Check" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
+      <Card
+        label={checksPerYear === 52 ? "This Week’s Check" : checksPerYear === 26 ? "This Paycheck" : "This Check"}
+        val={f2((prevWeekNet ?? weeklyIncome) * perCheckFactor)}
+        sub={checksPerYear === 52 ? "This Week’s Check" : checksPerYear === 26 ? "This Paycheck" : "This Check"}
+        status="green"
+        rawVal={(prevWeekNet ?? weeklyIncome) * perCheckFactor}
+      />
       <Card label="Weekly Spend" val={f2(ts)} rawVal={ts} color="var(--color-deduction)"
         insight={weeklyIncome > 0 ? (() => {
           const pct = Math.round(sp);

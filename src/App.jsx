@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
-import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
+import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
@@ -605,13 +605,25 @@ export default function App() {
     allWeeks.filter(w => w.active).reduce((s, w) => s + computeNet(w, config, taxDerived.extraPerCheck, showExtra), 0)
     , [allWeeks, config, taxDerived, showExtra]);
 
+  // ─── Pay schedule factor ─────────────────────────────────────────────────────
+  // checksPerYear: how many paychecks the user receives per year (52 weekly,
+  // 26 biweekly/salary, 12 monthly). Used to scale per-paycheck amounts to the
+  // weekly basis that all internal math runs on, and to scale weekly amounts back
+  // to per-paycheck for display.
+  const checksPerYear = PAYCHECKS_PER_YEAR[config.userPaySchedule ?? "weekly"] ?? 52;
+
   // ─── Paycheck Buffer ─────────────────────────────────────────────────────────
-  // When enabled, paycheckBuffer ($/week) is excluded from all downstream spendable
-  // math: weeklyIncome, baseWeeklyUnallocated, adjustedWeeklyAvg, futureWeekNets,
-  // goal timelines, and budget panel calculations all use the buffer-adjusted value.
+  // paycheckBuffer is stored as $/check. Convert to $/week by multiplying by the
+  // paycheck frequency ratio (checksPerYear/52), so the weekly deduction is the
+  // correct time-averaged amount regardless of pay schedule:
+  //   weekly  → $50/check × 52/52 = $50/week
+  //   biweekly/salary → $50/check × 26/52 = $25/week
+  //   monthly → $50/check × 12/52 ≈ $11.54/week
   // projectedAnnualNet (above) is intentionally untouched — the Income panel uses
   // it to display real earned income, not the spendable portion.
-  const bufferPerWeek = (config.bufferEnabled ?? true) ? (config.paycheckBuffer ?? 50) : 0;
+  const bufferPerWeek = (config.bufferEnabled ?? true)
+    ? (config.paycheckBuffer ?? 50) * (checksPerYear / 52)
+    : 0;
   const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
 
   // ── Previous week's actual paycheck (what you'll receive this payday) ──

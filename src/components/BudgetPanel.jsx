@@ -45,6 +45,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [showCheckInfo, setShowCheckInfo] = useState(false);
   const [undoDelete, setUndoDelete] = useState(null); // { expId, monthKey, prevValue } | null — clears after 8s
+  const [restoreSheetCat, setRestoreSheetCat] = useState(null); // "Needs" | "Lifestyle" | null
+  const [restorePendingExpId, setRestorePendingExpId] = useState(null); // expense id awaiting scope selection
   // Month-level period selector state
   const [activeMonth, setActiveMonth] = useState(null); // "2026-MM" | null — null = quarter mode
   // Keep the viewed phase in sync with the real current quarter so that
@@ -696,6 +698,40 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setPendingDelete(null);
   };
 
+  // Quarter-to-month mapping used by restore scope helpers.
+  const Q_MONTHS = [[1,2,3],[4,5,6],[7,8,9],[10,11,12]];
+
+  // Returns month keys to clear overrides for based on restore scope:
+  // "month"   → just the active month (or first month of active quarter)
+  // "quarter" → all 3 months of the active quarter
+  // "year"    → current month through December (active quarters only)
+  const getRestoreMonthKeys = (scope) => {
+    const fy = FISCAL_YEAR_START.slice(0, 4);
+    const todayMon = parseInt(TODAY_ISO.slice(5, 7), 10);
+    if (scope === "month") {
+      const key = activeMonth ?? `${fy}-${String(Q_MONTHS[ap][0]).padStart(2, "0")}`;
+      return [key];
+    }
+    if (scope === "quarter") {
+      return Q_MONTHS[ap].map(m => `${fy}-${String(m).padStart(2, "0")}`);
+    }
+    // "year": from the later of (today's month, start of active quarter) through December
+    const fromMon = Math.max(todayMon, Q_MONTHS[ap][0]);
+    return Array.from({ length: 12 - fromMon + 1 }, (_, i) => `${fy}-${String(fromMon + i).padStart(2, "0")}`);
+  };
+
+  const restoreExpense = (expId, scope) => {
+    const monthKeys = getRestoreMonthKeys(scope);
+    setExpenses(prev => prev.map(e => {
+      if (e.id !== expId) return e;
+      const overrides = { ...(e.monthlyOverrides ?? {}) };
+      for (const key of monthKeys) delete overrides[key];
+      return { ...e, monthlyOverrides: overrides };
+    }));
+    setRestorePendingExpId(null);
+    setRestoreSheetCat(null);
+  };
+
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mq = window.matchMedia("(pointer: coarse)");
@@ -1145,6 +1181,30 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           }}
         >
           <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot) + "/wk"}>{cat}</SH>
+          {(() => {
+            // Collect deleted expenses (zeroed in this view with non-zero history) for restore sheet
+            const deletedInCat = cExp.filter(exp => {
+              const amt = displayEffective(exp, ap);
+              if (amt !== 0) return false;
+              if (getNextNonZeroIso(exp, ap, TODAY_ISO) !== null) return false;
+              if (!(exp.history?.length)) return false;
+              // Only include if there's actually a non-zero historical amount somewhere
+              return (exp.history ?? []).some(entry => (entry.weekly ?? []).some(v => v > 0));
+            });
+            return deletedInCat.length > 0 ? (
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
+                <button
+                  onClick={() => { setRestoreSheetCat(cat); setRestorePendingExpId(null); }}
+                  style={{
+                    fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
+                    color: "var(--color-text-secondary)", background: "transparent",
+                    border: "1px solid var(--color-border-subtle)", borderRadius: "6px",
+                    padding: "3px 8px", cursor: "pointer", fontFamily: "var(--font-sans)",
+                  }}
+                >Restore Deleted</button>
+              </div>
+            ) : null;
+          })()}
           {cExp.map(exp => {
             const effAmt = displayEffective(exp, ap);
             // Resolve timeline state for this expense in the active phase
@@ -1813,6 +1873,118 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         </div>
       </div>
     )}
+
+    {/* ── Restore Deleted Expenses bottom sheet ── */}
+    {restoreSheetCat && (() => {
+      const fy = FISCAL_YEAR_START.slice(0, 4);
+      const sheetExps = regularExpenses.filter(exp => {
+        if (exp.category !== restoreSheetCat) return false;
+        const amt = displayEffective(exp, ap);
+        if (amt !== 0) return false;
+        if (getNextNonZeroIso(exp, ap, TODAY_ISO) !== null) return false;
+        if (!(exp.history?.length)) return false;
+        return (exp.history ?? []).some(entry => (entry.weekly ?? []).some(v => v > 0));
+      });
+      return (
+        <div
+          onClick={() => { setRestoreSheetCat(null); setRestorePendingExpId(null); }}
+          style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.72)" }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: "absolute", bottom: 0, left: 0, right: 0,
+              background: "var(--color-bg-surface)",
+              borderTop: "1px solid var(--color-border-subtle)",
+              borderRadius: "16px 16px 0 0",
+              padding: "20px 16px calc(20px + var(--safe-area-bottom))",
+              maxHeight: "70vh", overflowY: "auto",
+            }}
+          >
+            {/* Handle bar */}
+            <div style={{ width: "36px", height: "4px", borderRadius: "99px", background: "var(--color-border-subtle)", margin: "0 auto 16px" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+              <div>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "2px" }}>
+                  {restoreSheetCat} · {activeMonth ? activeMonthLabel : `Q${ap + 1}`}
+                </div>
+                <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--color-text-primary)" }}>Restore Deleted</div>
+              </div>
+              <button onClick={() => { setRestoreSheetCat(null); setRestorePendingExpId(null); }}
+                style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1 }}>×</button>
+            </div>
+
+            {sheetExps.length === 0 && (
+              <div style={{ textAlign: "center", padding: "24px 0", fontSize: "12px", color: "var(--color-text-disabled)" }}>
+                No deleted expenses for this period
+              </div>
+            )}
+
+            {sheetExps.map(exp => {
+              // Get the historical per-check amount for the active quarter
+              const histAmt = getEffectiveAmount(exp, Q_REP_DATES[ap], ap)
+                || Math.max(...(exp.history ?? []).map(h => h.weekly?.[ap] ?? 0));
+              const isPending = restorePendingExpId === exp.id;
+              return (
+                <div key={exp.id} style={{
+                  borderBottom: "1px solid var(--color-border-subtle)",
+                  padding: "12px 0",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: "13px", color: "var(--color-text-primary)" }}>{exp.label}</div>
+                      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px", fontFamily: "var(--font-mono)" }}>
+                        {histAmt > 0 ? `${f2(histAmt)}/wk · ${f(monthlyFromPerPaycheck(histAmt, cpm))}/mo` : "—"}
+                      </div>
+                    </div>
+                    {!isPending && (
+                      <button
+                        onClick={() => setRestorePendingExpId(exp.id)}
+                        style={{
+                          fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                          color: "var(--color-accent-primary)", background: "rgba(0,200,150,0.08)",
+                          border: "1px solid rgba(0,200,150,0.24)", borderRadius: "8px",
+                          padding: "5px 12px", cursor: "pointer", fontFamily: "var(--font-sans)", flexShrink: 0,
+                        }}
+                      >Restore</button>
+                    )}
+                  </div>
+
+                  {/* Scope picker — shown inline after RESTORE is tapped */}
+                  {isPending && (
+                    <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+                        Restore from…
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                        {activeMonth && (
+                          <button onClick={() => restoreExpense(exp.id, "month")}
+                            style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                            {activeMonthLabel} only
+                          </button>
+                        )}
+                        <button onClick={() => restoreExpense(exp.id, "quarter")}
+                          style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                          Q{ap + 1} months
+                        </button>
+                        <button onClick={() => restoreExpense(exp.id, "year")}
+                          style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-accent-primary)", background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.24)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                          Rest of year
+                        </button>
+                        <button onClick={() => setRestorePendingExpId(null)}
+                          style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", background: "transparent", border: "none", padding: "6px 4px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    })()}
   </div>);
 }
 

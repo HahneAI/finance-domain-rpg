@@ -1196,10 +1196,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 <button
                   onClick={() => { setRestoreSheetCat(cat); setRestorePendingExpId(null); }}
                   style={{
-                    fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
-                    color: "var(--color-text-secondary)", background: "transparent",
-                    border: "1px solid var(--color-border-subtle)", borderRadius: "6px",
-                    padding: "3px 8px", cursor: "pointer", fontFamily: "var(--font-sans)",
+                    fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+                    color: "var(--color-deduction)", background: "rgba(244,164,164,0.08)",
+                    border: "1px solid rgba(244,164,164,0.28)", borderRadius: "8px",
+                    padding: "5px 12px", cursor: "pointer", fontFamily: "var(--font-sans)",
+                    fontWeight: "500",
                   }}
                 >Restore Deleted</button>
               </div>
@@ -1888,7 +1889,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       return (
         <div
           onClick={() => { setRestoreSheetCat(null); setRestorePendingExpId(null); }}
-          style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.72)" }}
+          style={{
+            position: "fixed", inset: 0, zIndex: 70,
+            background: "rgba(0,0,0,0.55)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
+          }}
         >
           <div
             onClick={e => e.stopPropagation()}
@@ -1899,6 +1905,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               borderRadius: "16px 16px 0 0",
               padding: "20px 16px calc(20px + var(--safe-area-bottom))",
               maxHeight: "70vh", overflowY: "auto",
+              animation: "slideUpSheet 0.28s cubic-bezier(.2,.7,.2,1) both",
+              willChange: "transform",
             }}
           >
             {/* Handle bar */}

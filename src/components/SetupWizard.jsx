@@ -207,6 +207,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
         bucketStartBalance: 64,
         bucketCap: 128,
         bucketPayoutRate: 9.825,
+        diffRate: formData.diffRate ?? 1.75,
       });
     } else {
       onChange({ employerPreset: null, userPaySchedule: null, diffRate: 0, scheduleIsVariable: false });
@@ -1553,7 +1554,8 @@ function StepWrapUp({ formData, onChange }) {
   const benefitsStart = formData.benefitsStartDate ? new Date(formData.benefitsStartDate) : null;
   const benefitsActive = !benefitsStart || Number.isNaN(benefitsStart.getTime()) || benefitsStart <= new Date();
   const checksPerYear = PAYCHECKS_PER_YEAR[formData.userPaySchedule ?? "weekly"] ?? 52;
-  const perWeekFactor = checksPerYear / 52;
+  const perWeekFactor = checksPerYear / 52;  // weekly deduction factor (e.g. 0.5 for biweekly)
+  const perCheckFactor = 52 / checksPerYear; // display scale: weekly → per-paycheck (e.g. 2 for biweekly)
   const benefits = benefitsActive ? baseBenefits * perWeekFactor : 0;
   const otherPerCheck = (formData.otherDeductions || []).reduce((s, r) => s + (r.perCheckAmount ?? r.weeklyAmount ?? 0), 0);
   const other = otherPerCheck * perWeekFactor;
@@ -1566,14 +1568,26 @@ function StepWrapUp({ formData, onChange }) {
   const accepted = formData.taxExemptOptIn === true;
   const fmt = n => `$${Math.abs(n).toFixed(2)}`;
 
+  // Schedule-aware label for the preview header.
+  const payScheduleLabel =
+    formData.userPaySchedule === "biweekly" || formData.userPaySchedule === "salary"
+      ? "Per-Check Net (Biweekly)"
+      : formData.userPaySchedule === "monthly"
+        ? "Monthly Net"
+        : "Weekly Net";
+
+  // All row values scaled to per-paycheck basis for display.
+  // Internal weekly amounts × perCheckFactor:
+  //   benefits * perCheckFactor = baseBenefits (weekly avg → per-check, cancels out)
+  //   other   * perCheckFactor = otherPerCheck (same cancellation)
   const rows = [
-    { label: "Gross Pay",     val: gross,    sign: "" },
-    { label: "Federal Tax",   val: fed,      sign: "−" },
-    { label: "State Tax",     val: state,    sign: "−" },
-    { label: "FICA",          val: fica,     sign: "−" },
-    { label: "401(k)",        val: k401k,    sign: "−" },
-    { label: benefitsActive ? "Benefits" : "Benefits (start later)", val: benefits, sign: "−" },
-    { label: "Other Deduct.", val: other,    sign: "−" },
+    { label: "Gross Pay",     val: gross   * perCheckFactor, sign: "" },
+    { label: "Federal Tax",   val: fed     * perCheckFactor, sign: "−" },
+    { label: "State Tax",     val: state   * perCheckFactor, sign: "−" },
+    { label: "FICA",          val: fica    * perCheckFactor, sign: "−" },
+    { label: "401(k)",        val: k401k   * perCheckFactor, sign: "−" },
+    { label: benefitsActive ? "Benefits" : "Benefits (start later)", val: benefits * perCheckFactor, sign: "−" },
+    { label: "Other Deduct.", val: other   * perCheckFactor, sign: "−" },
   ];
 
   return (
@@ -1581,7 +1595,7 @@ function StepWrapUp({ formData, onChange }) {
 
       {/* ── Live net estimate ── */}
       <div>
-        <label style={lS}>Estimated Weekly Net</label>
+        <label style={lS}>Estimated {payScheduleLabel}</label>
         <div style={{
           marginTop: "10px", background: "var(--color-bg-raised)",
           borderRadius: "12px", padding: "14px",
@@ -1604,7 +1618,7 @@ function StepWrapUp({ formData, onChange }) {
               fontFamily: "var(--font-mono)", fontSize: "18px", fontWeight: 700,
               color: net >= 0 ? "var(--color-green)" : "var(--color-deduction)",
             }}>
-              {fmt(net)}
+              {fmt(net * perCheckFactor)}
             </span>
           </div>
         </div>
@@ -1635,7 +1649,7 @@ function StepWrapUp({ formData, onChange }) {
               placeholder="e.g. 50"
             />
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
-              At ${buf}/week — ${(buf * 52).toLocaleString()} reserved annually.
+              At ${buf}/check — ${(buf * checksPerYear).toLocaleString()} reserved annually.
             </div>
           </>
         )}

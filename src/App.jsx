@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
-import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek } from "./lib/finance.js";
+import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR } from "./constants/config.js";
+import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount } from "./lib/db.js";
@@ -409,6 +409,33 @@ export default function App() {
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config), [config]);
 
+  // ── Pay period past check ──
+  // Determines whether a week's pay period has closed, gating the confirmation modal
+  // and badge count. Uses payPeriodEndDate (the day within the fiscal week matching
+  // config.payPeriodEndDay) rather than weekEnd (always Monday) so the trigger fires
+  // on the correct day of the week.
+  //
+  // Base users: fires at 12:01 AM the day after payPeriodEndDay (pure date comparison).
+  // DHL: pays through Sunday but the overnight shift runs until Mon 6:00 AM, so the
+  //   trigger is gated to Monday 6:01 AM. Admin date-lock bypasses the hour gate so
+  //   manual testing works regardless of the wall-clock time.
+  const isPayPeriodPast = useCallback((week) => {
+    const isEmployerDHL = config.employerPreset === "DHL";
+    const payPeriodEndIso = toLocalIso(week.payPeriodEndDate);
+    if (isEmployerDHL) {
+      const triggerDate = new Date(week.payPeriodEndDate);
+      triggerDate.setDate(triggerDate.getDate() + 1); // Sunday → Monday
+      const triggerIso = toLocalIso(triggerDate);
+      if (effectiveToday < triggerIso) return false;
+      if (effectiveToday === triggerIso && !(isAdmin && tempLockDate)) {
+        return new Date().getHours() >= 6;
+      }
+      return true;
+    }
+    // Base user: any time after midnight following payPeriodEndDay.
+    return payPeriodEndIso < effectiveToday;
+  }, [config.employerPreset, effectiveToday, isAdmin, tempLockDate]);
+
   // ── Auto-confirm all past weeks on first load when no confirmations exist ──
   // Treats every historical week as fully worked (clean/net-zero). Over-assumption is fine:
   // income projections already assume full attendance from account creation.
@@ -417,7 +444,7 @@ export default function App() {
   useEffect(() => {
     if (loading) return;
     if (Object.keys(weekConfirmations).length > 0) return;
-    const pastActiveWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
+    const pastActiveWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
     if (!pastActiveWeeks.length) return;
     const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const confirmedAt = new Date().toISOString();
@@ -437,7 +464,7 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setWeekConfirmations(bulk);
-  }, [loading, weekConfirmations, allWeeks, effectiveToday]);
+  }, [loading, weekConfirmations, allWeeks, effectiveToday, isPayPeriodPast]);
 
   // ── Future active weeks: today onward, used for spend/goal simulation ──
   const futureWeeks = useMemo(() => {
@@ -452,31 +479,24 @@ export default function App() {
   const [confirmDismissed, setConfirmDismissed] = useState(false);
 
   // ── Week confirmation modal trigger ──
-  // Surfaces the most-recent UNCONFIRMED past week.
-  // The previous version grabbed the last past week and bailed if it was confirmed —
-  // meaning older unconfirmed weeks were silently skipped (the bug behind badge=3, modal=hidden).
-  // Fix: filter to unconfirmed weeks first, then take the most recent one.
-  //
-  // DOW gate removed from auto-trigger: with payPeriodEndDay=0 (default) the gate was
-  // a no-op anyway (0=Sun, todayDOW is always >= 0). Removing it simplifies reasoning.
-  // confirmForced (badge click) still kept to surface the modal on demand in case the
-  // user dismisses and wants to return to it without waiting for state to change.
+  // Surfaces the most-recent UNCONFIRMED week whose pay period has closed.
+  // Uses isPayPeriodPast() rather than weekEnd so the trigger respects the user's
+  // configured payPeriodEndDay (base: 12:01 AM day after; DHL: Mon 6:01 AM).
   const confirmTriggerWeek = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
-    // Find most recent week that has NOT been confirmed yet
+    const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
     const unconfirmedWeeks = pastWeeks.filter(w => !weekConfirmations[w.idx]);
     if (!unconfirmedWeeks.length) return null;
     return unconfirmedWeeks[unconfirmedWeeks.length - 1]; // most recent unconfirmed
-  }, [allWeeks, effectiveToday, weekConfirmations]);
+  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast]);
 
   // Total count of all past active weeks lacking a confirmation record.
   // Used for the persistent badge in sidebar and mobile header.
   // Intentionally looks at ALL past weeks (not just the most recent) so skipped
   // weeks accumulate and the badge number keeps climbing until addressed.
   const unconfirmedCount = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
+    const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
     return pastWeeks.filter(w => !weekConfirmations[w.idx]).length;
-  }, [allWeeks, effectiveToday, weekConfirmations]);
+  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);
@@ -585,13 +605,25 @@ export default function App() {
     allWeeks.filter(w => w.active).reduce((s, w) => s + computeNet(w, config, taxDerived.extraPerCheck, showExtra), 0)
     , [allWeeks, config, taxDerived, showExtra]);
 
+  // ─── Pay schedule factor ─────────────────────────────────────────────────────
+  // checksPerYear: how many paychecks the user receives per year (52 weekly,
+  // 26 biweekly/salary, 12 monthly). Used to scale per-paycheck amounts to the
+  // weekly basis that all internal math runs on, and to scale weekly amounts back
+  // to per-paycheck for display.
+  const checksPerYear = PAYCHECKS_PER_YEAR[config.userPaySchedule ?? "weekly"] ?? 52;
+
   // ─── Paycheck Buffer ─────────────────────────────────────────────────────────
-  // When enabled, paycheckBuffer ($/week) is excluded from all downstream spendable
-  // math: weeklyIncome, baseWeeklyUnallocated, adjustedWeeklyAvg, futureWeekNets,
-  // goal timelines, and budget panel calculations all use the buffer-adjusted value.
+  // paycheckBuffer is stored as $/check. Convert to $/week by multiplying by the
+  // paycheck frequency ratio (checksPerYear/52), so the weekly deduction is the
+  // correct time-averaged amount regardless of pay schedule:
+  //   weekly  → $50/check × 52/52 = $50/week
+  //   biweekly/salary → $50/check × 26/52 = $25/week
+  //   monthly → $50/check × 12/52 ≈ $11.54/week
   // projectedAnnualNet (above) is intentionally untouched — the Income panel uses
   // it to display real earned income, not the spendable portion.
-  const bufferPerWeek = (config.bufferEnabled ?? true) ? (config.paycheckBuffer ?? 50) : 0;
+  const bufferPerWeek = (config.bufferEnabled ?? true)
+    ? (config.paycheckBuffer ?? 50) * (checksPerYear / 52)
+    : 0;
   const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
 
   // ── Previous week's actual paycheck (what you'll receive this payday) ──
@@ -1542,10 +1574,12 @@ export default function App() {
       */}
       {confirmTriggerWeek && !confirmDismissed && (
         <WeekConfirmModal
+          key={confirmTriggerWeek.idx}
           week={confirmTriggerWeek}
           config={config}
           logs={logs}
           isAdmin={isAdmin}
+          pendingCount={unconfirmedCount}
           onConfirm={(confirmation, logEntry) => {
             setWeekConfirmations(c => ({ ...c, [confirmTriggerWeek.idx]: confirmation }));
             if (logEntry) setLogs(p => [...p, logEntry]);

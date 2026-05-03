@@ -206,6 +206,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
         bucketStartBalance: 64,
         bucketCap: 128,
         bucketPayoutRate: 9.825,
+        diffRate: formData.diffRate ?? 1.75,
       });
     } else {
       onChange({ employerPreset: null, userPaySchedule: null, diffRate: 0, scheduleIsVariable: false });

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { MONTH_FULL } from "../constants/config.js";
+import { MONTH_FULL, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet, toLocalIso } from "../lib/finance.js";
 import { deriveRollingIncomeWeeks, progressiveScale } from "../lib/rollingTimeline.js";
@@ -60,6 +60,18 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
     if (meta) return meta.adjustedNet;
     return gN(week);
   };
+
+  // Pay-schedule-aware display factors
+  const userPaySchedule = config?.userPaySchedule ?? "weekly";
+  const firstActiveIdx = config?.firstActiveIdx ?? 0;
+  const checksPerYear = PAYCHECKS_PER_YEAR[userPaySchedule] ?? 52;
+  const perCheckFactor = 52 / checksPerYear;
+  const isWeekly = checksPerYear === 52;
+  const isBiweekly = userPaySchedule === "biweekly" || userPaySchedule === "salary";
+  const isMonthlyPay = userPaySchedule === "monthly";
+  // For biweekly users: even-offset weeks from firstActiveIdx are paycheck weeks
+  const isPaycheckWeek = (w) => isBiweekly && ((w.idx - firstActiveIdx) % 2 + 2) % 2 === 0;
+
   const mo = MONTH_FULL.map((name, mi) => {
     const wks = allWeeks.filter(w => w.active && w.weekEnd.getFullYear() === 2026 && w.weekEnd.getMonth() === mi);
     return {
@@ -316,7 +328,9 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
             </div>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
               {isDesktopWeekly
-                ? `${weeklyRows.length} visible · rolling window`
+                ? isBiweekly
+                  ? `${weeklyRows.filter(isPaycheckWeek).length} paychecks · rolling window`
+                  : `${weeklyRows.length} visible · rolling window`
                 : `${rollingMonthCards.length} months`}
             </div>
           </div>
@@ -357,23 +371,24 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
 
                 <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginBottom: "8px" }} />
 
-                {/* Week rows */}
-                {m.wks.map(w => {
+                {/* Week rows — paycheck-aware */}
+                {(isMonthlyPay ? [] : isBiweekly ? m.wks.filter(isPaycheckWeek) : m.wks).map(w => {
                   const isCurrent = currentWeek && w.idx === currentWeek.idx;
                   const isPast = toLocalIso(w.weekEnd) < todayIso;
                   const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-accent-primary)" : "var(--color-green)");
                   const rotationDisplay = formatRotationDisplay(w, { isAdmin });
                   const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-secondary)";
+                  const displayNet = resolveWeekNet(w) * perCheckFactor;
                   return (
                     <div key={w.idx} style={{ marginBottom: "8px", opacity: isPastMonth ? 1 : (isPast ? 0.65 : 1) }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ fontSize: "11px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
-                          Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          {isBiweekly ? "Pay Period ending " : "Ends "}{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                           {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <span style={{ fontSize: "12px", fontWeight: "bold", color: netColor, fontVariantNumeric: "tabular-nums" }}>
-                            {w.active ? f2(resolveWeekNet(w)) : "—"}
+                            {w.active ? f2(displayNet) : "—"}
                           </span>
                           {w.active && (
                             <span style={{ fontSize: "8px", padding: "2px 5px", borderRadius: "2px", background: sb(w.taxedBySchedule), color: sc(w.taxedBySchedule), border: "1px solid " + sbd(w.taxedBySchedule), letterSpacing: "0.5px" }}>
@@ -382,8 +397,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
                           )}
                         </div>
                       </div>
-                      <div style={{ fontSize: "9px", color: rotationColor, marginTop: "2px" }}>
-                        {rotationDisplay} · {isPast ? "ACTUAL" : "PROJECTED"}
+                      <div style={{ fontSize: "9px", color: isBiweekly ? "var(--color-text-secondary)" : rotationColor, marginTop: "2px" }}>
+                        {!isBiweekly && `${rotationDisplay} · `}{isPast ? "ACTUAL" : "PROJECTED"}
                       </div>
                     </div>
                   );
@@ -392,7 +407,9 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
                 {/* Month total */}
                 <div style={{ borderTop: "1px solid var(--color-border-subtle)", marginTop: "4px", paddingTop: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: "10px", letterSpacing: "1.2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
-                    {m.wks.some(w => toLocalIso(w.weekEnd) >= todayIso) ? "Est. Take Home" : "Take Home"}
+                    {isMonthlyPay ? "1 Paycheck" :
+                     isBiweekly ? (() => { const n = m.wks.filter(isPaycheckWeek).length; return `${n} Paycheck${n !== 1 ? "s" : ""}`; })() :
+                     (m.wks.some(w => toLocalIso(w.weekEnd) >= todayIso) ? "Est. Take Home" : "Take Home")}
                   </span>
                   <span style={{ fontSize: "16px", fontWeight: "bold", color: m.isCurrentMonth ? "var(--color-accent-primary)" : "var(--color-green)", fontVariantNumeric: "tabular-nums" }}>
                     {f2(m.net)}
@@ -405,18 +422,19 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
       ) : (
         <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
           <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
-            <th style={{ textAlign: "left", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Wk End</th>
+            <th style={{ textAlign: "left", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>{isBiweekly ? "Pay Period End" : "Wk End"}</th>
             <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Gross</th>
             <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Take Home</th>
             <th style={{ textAlign: "center", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Status</th>
           </tr></thead>
-            <tbody>{weeklyRows.map(w => {
+            <tbody>{(isBiweekly ? weeklyRows.filter(isPaycheckWeek) : weeklyRows).map(w => {
               const isCurrent = currentWeek && w.idx === currentWeek.idx;
               const isPast = toLocalIso(w.weekEnd) < todayIso;
               const baseBg = isCurrent ? "#1a2a14" : isPast ? "#111111" : "transparent";
               const hoverBg = isCurrent ? "#1e3018" : isPast ? "#1a1a1a" : "var(--color-bg-surface)";
               const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)");
-              const displayNet = w.active ? f2(resolveWeekNet(w)) : "—";
+              const displayNet = w.active ? f2(resolveWeekNet(w) * perCheckFactor) : "—";
+              const displayGross = w.active ? f2(w.grossPay * perCheckFactor) : "—";
               const rotationDisplay = formatRotationDisplay(w, { isAdmin });
               const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-disabled)";
               return (
@@ -430,7 +448,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
                   <span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                   {isCurrent && <span style={{ marginLeft: "6px", fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
                 </td>
-                <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{w.active ? f2(w.grossPay) : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{displayGross}</td>
                 <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{displayNet}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center", color: rotationColor, fontWeight: "bold" }}>{rotationDisplay}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center" }}>
@@ -462,14 +480,14 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
     {showWeekDetail && <div onClick={() => setShowWeekDetail(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 1000, overflowY: "auto", padding: "16px" }}>
       <div onClick={e => e.stopPropagation()} style={{ background: "var(--color-bg-surface)", borderRadius: "8px", maxWidth: "860px", margin: "0 auto", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-          <span style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase" }}>Weekly Breakdown — Active Window Detail</span>
+          <span style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase" }}>{isBiweekly ? "Pay Period Breakdown" : isMonthlyPay ? "Monthly Breakdown" : "Weekly Breakdown"} — Active Window Detail</span>
           <button onClick={() => setShowWeekDetail(false)} style={{ background: "transparent", border: "none", color: "var(--color-text-primary)", fontSize: "16px", cursor: "pointer", padding: "4px 8px" }}>✕</button>
         </div>
         <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}><table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
           <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
-            <th style={{ textAlign: "left", padding: "8px 4px" }}>Wk End</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Hrs</th><th style={{ textAlign: "center", padding: "8px 4px" }}>OT</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Wknd</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
+            <th style={{ textAlign: "left", padding: "8px 4px" }}>{isBiweekly ? "Period End" : "Wk End"}</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Hrs</th><th style={{ textAlign: "center", padding: "8px 4px" }}>OT</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Wknd</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
           </tr></thead>
-          <tbody>{weeklyRows.map(w => {
+          <tbody>{(isBiweekly ? weeklyRows.filter(isPaycheckWeek) : weeklyRows).map(w => {
             const isCurrent = currentWeek && w.idx === currentWeek.idx;
             const isPast = toLocalIso(w.weekEnd) < todayIso;
             const baseBg = isCurrent ? "#1a2a14" : isPast ? "#111111" : "transparent";
@@ -492,8 +510,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
                 <td style={{ padding: "7px 4px", textAlign: "center", color: "var(--color-text-secondary)" }}>{w.active ? w.totalHours : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "var(--color-gold)" : "var(--color-text-primary)" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>
-                <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{w.active ? f2(w.grossPay) : "—"}</td>
-                <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{w.active ? f2(resolveWeekNet(w)) : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{w.active ? f2(w.grossPay * perCheckFactor) : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{w.active ? f2(resolveWeekNet(w) * perCheckFactor) : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center" }}>
                   {w.active && (
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>

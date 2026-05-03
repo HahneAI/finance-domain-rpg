@@ -483,20 +483,52 @@ export default function App() {
   // Uses isPayPeriodPast() rather than weekEnd so the trigger respects the user's
   // configured payPeriodEndDay (base: 12:01 AM day after; DHL: Mon 6:01 AM).
   const confirmTriggerWeek = useMemo(() => {
+    const userPaySchedule = config.userPaySchedule ?? "weekly";
+    const firstActiveIdx = config.firstActiveIdx ?? 0;
+    const isBiweekly = userPaySchedule === "biweekly" || userPaySchedule === "salary";
+    const isMonthlyPay = userPaySchedule === "monthly";
     const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
     const unconfirmedWeeks = pastWeeks.filter(w => !weekConfirmations[w.idx]);
     if (!unconfirmedWeeks.length) return null;
+    if (isBiweekly) {
+      const paycheckWeeks = unconfirmedWeeks.filter(w => ((w.idx - firstActiveIdx) % 2 + 2) % 2 === 0);
+      return paycheckWeeks.length ? paycheckWeeks[paycheckWeeks.length - 1] : null;
+    }
+    if (isMonthlyPay) {
+      const paycheckWeeks = unconfirmedWeeks.filter(w => {
+        const m = w.weekEnd.getMonth(), y = w.weekEnd.getFullYear();
+        return !allWeeks.some(w2 => w2.active && w2.idx > w.idx && w2.weekEnd.getMonth() === m && w2.weekEnd.getFullYear() === y);
+      });
+      return paycheckWeeks.length ? paycheckWeeks[paycheckWeeks.length - 1] : null;
+    }
     return unconfirmedWeeks[unconfirmedWeeks.length - 1]; // most recent unconfirmed
-  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast]);
+  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast, config.userPaySchedule, config.firstActiveIdx]);
 
   // Total count of all past active weeks lacking a confirmation record.
   // Used for the persistent badge in sidebar and mobile header.
   // Intentionally looks at ALL past weeks (not just the most recent) so skipped
   // weeks accumulate and the badge number keeps climbing until addressed.
   const unconfirmedCount = useMemo(() => {
+    const userPaySchedule = config.userPaySchedule ?? "weekly";
+    const firstActiveIdx = config.firstActiveIdx ?? 0;
+    const isBiweekly = userPaySchedule === "biweekly" || userPaySchedule === "salary";
+    const isMonthlyPay = userPaySchedule === "monthly";
     const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
+    if (isBiweekly) {
+      return pastWeeks.filter(w => {
+        const isPaycheckWeek = ((w.idx - firstActiveIdx) % 2 + 2) % 2 === 0;
+        return isPaycheckWeek && !weekConfirmations[w.idx];
+      }).length;
+    }
+    if (isMonthlyPay) {
+      return pastWeeks.filter(w => {
+        const m = w.weekEnd.getMonth(), y = w.weekEnd.getFullYear();
+        const isPaycheckWeek = !allWeeks.some(w2 => w2.active && w2.idx > w.idx && w2.weekEnd.getMonth() === m && w2.weekEnd.getFullYear() === y);
+        return isPaycheckWeek && !weekConfirmations[w.idx];
+      }).length;
+    }
     return pastWeeks.filter(w => !weekConfirmations[w.idx]).length;
-  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast]);
+  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast, config.userPaySchedule, config.firstActiveIdx]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);
@@ -1035,7 +1067,7 @@ export default function App() {
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
             <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-deduction)", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
-              ◷ {unconfirmedCount} {unconfirmedCount === 1 ? "week" : "weeks"} to confirm
+              ◷ {unconfirmedCount} {(config.userPaySchedule ?? "weekly") === "weekly" ? (unconfirmedCount === 1 ? "week" : "weeks") : (unconfirmedCount === 1 ? "pay period" : "pay periods")} to confirm
             </button>
           )}
           {isAdmin && tempLockDate && (
@@ -1236,7 +1268,7 @@ export default function App() {
               flexShrink: 0,
               position: "relative",
             }}
-            aria-label={unconfirmedCount > 0 ? `${unconfirmedCount} weeks to confirm` : "Notifications"}
+            aria-label={unconfirmedCount > 0 ? `${unconfirmedCount} ${(config.userPaySchedule ?? "weekly") === "weekly" ? "weeks" : "pay periods"} to confirm` : "Notifications"}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
@@ -1581,7 +1613,39 @@ export default function App() {
           isAdmin={isAdmin}
           pendingCount={unconfirmedCount}
           onConfirm={(confirmation, logEntry) => {
-            setWeekConfirmations(c => ({ ...c, [confirmTriggerWeek.idx]: confirmation }));
+            const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+            const confirmedAt = new Date().toISOString();
+            setWeekConfirmations(c => {
+              const next = { ...c, [confirmTriggerWeek.idx]: confirmation };
+              // Biweekly: auto-confirm the paired non-paycheck week (the one before) as clean
+              if ((config.userPaySchedule === "biweekly" || config.userPaySchedule === "salary") && confirmTriggerWeek.idx > 0) {
+                const priorIdx = confirmTriggerWeek.idx - 1;
+                if (!next[priorIdx]) {
+                  const prior = allWeeks.find(w => w.idx === priorIdx);
+                  if (prior?.active) {
+                    next[priorIdx] = {
+                      confirmedAt, autoConfirmed: true, eventId: null,
+                      dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, prior.workedDayNames?.includes(d) ? true : null])),
+                      scheduledDays: prior.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
+                    };
+                  }
+                }
+              }
+              // Monthly: auto-confirm all other weeks in the same month as clean
+              if (config.userPaySchedule === "monthly") {
+                const m = confirmTriggerWeek.weekEnd.getMonth(), y = confirmTriggerWeek.weekEnd.getFullYear();
+                for (const w of allWeeks) {
+                  if (w.active && w.idx !== confirmTriggerWeek.idx && w.weekEnd.getMonth() === m && w.weekEnd.getFullYear() === y && !next[w.idx]) {
+                    next[w.idx] = {
+                      confirmedAt, autoConfirmed: true, eventId: null,
+                      dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, w.workedDayNames?.includes(d) ? true : null])),
+                      scheduledDays: w.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
+                    };
+                  }
+                }
+              }
+              return next;
+            });
             if (logEntry) setLogs(p => [...p, logEntry]);
           }}
           onDismiss={() => setConfirmDismissed(true)}

@@ -291,3 +291,9 @@ code {
 .snap-scroll-row::-webkit-scrollbar {
   display: none;
 }
+
+/* ── Bottom sheet slide-up entrance ── */
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}

@@ -1542,10 +1542,12 @@ export default function App() {
       */}
       {confirmTriggerWeek && !confirmDismissed && (
         <WeekConfirmModal
+          key={confirmTriggerWeek.idx}
           week={confirmTriggerWeek}
           config={config}
           logs={logs}
           isAdmin={isAdmin}
+          pendingCount={unconfirmedCount}
           onConfirm={(confirmation, logEntry) => {
             setWeekConfirmations(c => ({ ...c, [confirmTriggerWeek.idx]: confirmation }));
             if (logEntry) setLogs(p => [...p, logEntry]);

@@ -86,7 +86,7 @@ function DayPicker({ scheduledDays, missedDays, onToggle }) {
   );
 }
 
-export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss, isAdmin = false }) {
+export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss, isAdmin = false, pendingCount = 1 }) {
   // ── Existing logs for this week ───────────────────────────────────────────
   // Pre-computed from props so the dayToggles initializer can reference them.
   const weekEndIso = toLocalIso(week.weekEnd);
@@ -513,14 +513,26 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
         background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px",
         width: "100%", maxWidth: "460px",
         overflow: "hidden", maxHeight: "90vh", display: "flex", flexDirection: "column",
+        animation: "weekCardIn 220ms ease-out",
       }}>
 
         {/* ── Header ── */}
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "5px" }}>
-                Week {week.idx} Check-In
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>
+                  Week {week.idx} Check-In
+                </div>
+                {pendingCount > 1 && (
+                  <span style={{
+                    fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
+                    color: "var(--color-bg-base)", background: "var(--color-deduction)",
+                    padding: "2px 7px", borderRadius: "3px", fontWeight: "bold",
+                  }}>
+                    {pendingCount} left
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
                 {weekStartDate} — {weekEndDate}

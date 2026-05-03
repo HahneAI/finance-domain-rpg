@@ -345,6 +345,18 @@ export function getStateConfig(userState) {
 //
 // Note: cfg.dhlNightShift is stored but NOT used here — weekend diff (diffRate)
 //   applies equally to all shifts. Night differential is tracked separately.
+
+// Returns the date within [weekStart, weekStart+6] that matches payPeriodEndDay.
+// weekStart is always Monday (JS getDay() === 1).
+// payPeriodEndDay convention: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat.
+// Formula: Mon=offset 0, Tue=1, ..., Sat=5, Sun=6 → (payPeriodEndDay - 1 + 7) % 7.
+export function getPayPeriodEndDate(weekStart, payPeriodEndDay) {
+  const offset = (payPeriodEndDay - 1 + 7) % 7;
+  const result = new Date(weekStart);
+  result.setDate(result.getDate() + offset);
+  return result;
+}
+
 export function buildYear(cfg) {
   const weeks = [], k401Start = cfg.k401StartDate ? new Date(cfg.k401StartDate) : null, taxedSet = new Set(cfg.taxedWeeks);
   const isEmployerDHL = cfg.employerPreset === "DHL";
@@ -449,8 +461,9 @@ export function buildYear(cfg) {
     const taxableGross = active ? Math.max(grossPay - benefitsDeduction - k401kEmployee, 0) : 0;
     const isTaxed = active && taxedSet.has(idx);
     if (!adminRotationTag) adminRotationTag = rotation;
+    const payPeriodEndDate = getPayPeriodEndDate(weekStart, cfg.payPeriodEndDay ?? 0);
     weeks.push({
-      idx, weekEnd, weekStart, rotation, isHighWeek, adminRotationTag,
+      idx, weekEnd, weekStart, payPeriodEndDate, rotation, isHighWeek, adminRotationTag,
       workedDayNames: worked.map(w => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][w.getDay()]),
       totalHours, regularHours, overtimeHours, weekendHours,
       grossPay: active ? grossPay : 0,

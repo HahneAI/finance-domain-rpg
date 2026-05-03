@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear } from "../lib/finance.js";
-import { FISCAL_YEAR_START } from "../constants/config.js";
+import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -50,6 +50,12 @@ export function HomePanel({
   fundedGoalSpend = 0,
   isAdmin = false,
 }) {
+  // Scale factor: weekly → per-paycheck (1 for weekly, 2 for biweekly/salary, ~4.33 for monthly).
+  // All card values shown to the user are scaled by this factor so the amount matches
+  // what lands in their bank account each paycheck cycle.
+  const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
+  const perCheckFactor = 52 / checksPerYear;
+
   const avgWeeklySpend = remainingSpend?.avgWeeklySpend ?? 0;
   const monthlyExpenses = avgWeeklySpend * (FISCAL_WEEKS_PER_YEAR / 12);
   const monthlyTakehome = (adjustedTakeHome ?? (weeklyIncome * FISCAL_WEEKS_PER_YEAR)) / 12;
@@ -142,20 +148,23 @@ export function HomePanel({
     const diff = nextWeekNet - weeklyIncome;
     const pct  = Math.round(Math.abs(diff / weeklyIncome) * 100);
     if (Math.abs(diff) < weeklyIncome * 0.03)
-      return { arrow: "flat", delta: null, label: "on avg weekly pace", variant: "blue" };
+      return { arrow: "flat", delta: null, label: "on avg pace", variant: "blue" };
     return {
       arrow:   diff > 0 ? "up" : "down",
       delta:   `${pct}%`,
-      label:   `vs avg (${diff > 0 ? "+" : ""}${fmt$(Math.round(diff))})`,
+      label:   `vs avg (${diff > 0 ? "+" : ""}${fmt$(Math.round(diff * perCheckFactor))})`,
       variant: diff > 0 ? "blue" : "purple",
     };
   })() : undefined;
 
+  const nextCheckTitle = checksPerYear === 52 ? "Next Week Takehome"
+    : checksPerYear === 26 ? "Next Paycheck"
+    : "Next Check";
   const tiles = [
     {
-      title: "Next Week Takehome",
-      value: nextWeekDisplay != null ? fmt$(nextWeekDisplay) : fmt$(weeklyIncome),
-      rawVal: nextWeekDisplay ?? weeklyIncome,
+      title: nextCheckTitle,
+      value: nextWeekDisplay != null ? fmt$(nextWeekDisplay * perCheckFactor) : fmt$(weeklyIncome * perCheckFactor),
+      rawVal: (nextWeekDisplay ?? weeklyIncome) * perCheckFactor,
       sub: nextWeekNet != null
         ? (nextWeekNet < weeklyIncome * 0.8 ? "est. · below avg · check log"
           : nextWeekNet < weeklyIncome * 0.95 ? "est. · slightly below avg"
@@ -352,7 +361,8 @@ export function HomePanel({
     const offset = Math.max(Math.ceil(offsetRaw), 0);
     const weekNum = Math.min(nowIdx + offset, FISCAL_WEEKS_PER_YEAR);
     const finishIdx = futureWeeks?.length ? Math.min(offset, futureWeeks.length - 1) : null;
-    const finishDate = finishIdx != null ? futureWeeks[finishIdx]?.weekEnd : null;
+    const finishWeek = finishIdx != null ? futureWeeks[finishIdx] : null;
+    const finishDate = finishWeek?.payPeriodEndDate ?? finishWeek?.weekEnd ?? null;
     const dateLabel = formatGoalFinishDate(finishDate);
     return dateLabel ? `By ${dateLabel}, week ${weekNum}` : `Week ${weekNum}`;
   };

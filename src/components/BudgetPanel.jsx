@@ -33,6 +33,10 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
   const checksPerYear = PAYCHECKS_PER_YEAR[userPaySchedule ?? "weekly"] ?? 52;
   const perCheckFactor = 52 / checksPerYear; // 1 for weekly, 2 for biweekly/salary
+  const isWeekly = checksPerYear === 52;
+  const checkUnit = isWeekly ? "wk" : "check";   // "/wk" vs "/check" suffix
+  const checkWord = isWeekly ? "Weekly" : "Per-Check"; // card label prefix
+  const thisCheckLabel = isWeekly ? "This Week" : "This Check";
 
   const currentPhaseIdx = useMemo(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0, [currentWeek]);
   const fiscalWeekLabel = formatFiscalWeekLabel(fiscalWeekInfo);
@@ -1073,7 +1077,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         status="green"
         rawVal={(prevWeekNet ?? weeklyIncome) * perCheckFactor}
       />
-      <Card label="Weekly Spend" val={f2(ts)} rawVal={ts} color="var(--color-deduction)"
+      <Card label={`${checkWord} Spend`} val={f2(ts)} rawVal={ts} color="var(--color-deduction)"
         insight={weeklyIncome > 0 ? (() => {
           const pct = Math.round(sp);
           if (sp < 50) return { arrow: "up",   delta: `${pct}% of income`, label: "· well-managed",  variant: "blue" };
@@ -1096,7 +1100,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             })() : undefined}
           />
         ) : (
-          <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
+          <Card label={`Left ${thisCheckLabel}`} val={f2(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
             insight={weeklyIncome > 0 ? (() => {
               const nextCheck = futureWeekNets?.[0] ?? null;
               const lastCheck = prevWeekNet ?? weeklyIncome;
@@ -1188,7 +1192,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             transition: `background 300ms ${EXPENSE_DRAG_EASE}, border-color 320ms ${EXPENSE_DRAG_EASE}`,
           }}
         >
-          <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot) + "/wk"}>{cat}</SH>
+          <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot) + `/${checkUnit}`}>{cat}</SH>
           {(() => {
             // Collect deleted expenses (zeroed in this view with non-zero history) for restore sheet
             const deletedInCat = cExp.filter(exp => {
@@ -1395,7 +1399,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   {!isPinnedFoodCard && pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isScheduledFuture ? "var(--color-text-disabled)" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
+                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isScheduledFuture ? "var(--color-text-disabled)" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/{checkUnit}</span></div>
                     <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{monthlyDisplay}</div>
                   </div>
                   <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
@@ -1476,8 +1480,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
-                    <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(monthlyFromPerPaycheck(effAmt, cpm))}/mo</div>
+                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : CATEGORY_COLORS[cat] }}>{f2(effAmt * perCheckFactor)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/{checkUnit}</span></div>
+                    <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(effAmt * 52 / 12)}/mo</div>
                   </div>
                   <SmBtn onClick={() => startEditLoan(exp)} c="var(--color-gold)">EDIT</SmBtn>
                   {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
@@ -1538,36 +1542,47 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       return <div>
         {/* Cashflow: incoming paycheck → payroll deductions → needs → loans → unallocated */}
         <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Incoming Paycheck</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(incomingWeekNet)}</div></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", textAlign: "right" }}>Running week<br />net pay</div></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Incoming Paycheck</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(incomingWeekNet * perCheckFactor)}</div></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", textAlign: "right" }}>{isWeekly ? <>Running week<br />net pay</> : <>Net pay<br />per check</>}</div></div>
         </div>
-        <div style={{ background: "rgba(239,68,68,0.10)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-deduction)", marginBottom: "4px" }}>Payroll Deductions</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Benefits + 401k — already factored into net pay</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-deduction)" }}>{f2(payrollDeductionsTotal)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((payrollDeductionsTotal / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
-        </div>
-        <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((checkingTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
-        </div>
-        {loans.length > 0 && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-gold)" }}>{f2(loansTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((loansTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
-        </div>}
-        <div style={{ background: wr >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wr >= 0 ? "var(--color-green)" : "var(--color-deduction)"}`, borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-deduction)", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Weekly unallocated cashflow snapshot</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>{f2(wr)}</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(wr * 52 / 12)}/mo</div></div></div>
-        </div>
+        {(() => {
+          // Per-paycheck breakdown — all values in paycheck terms
+          const incomePerCheck = incomingWeekNet * perCheckFactor;
+          const payrollPerCheck = payrollDeductionsTotal * perCheckFactor; // weekly → per-check
+          const loansPerCheck = loansTot * perCheckFactor;                 // weekly → per-check
+          // checkingTot is already per-paycheck (stored per-paycheck in expense history)
+          const wrPerCheck = incomePerCheck - payrollPerCheck - checkingTot - loansPerCheck;
+          const pct = (v) => incomePerCheck > 0 ? ((v / incomePerCheck) * 100).toFixed(1) : "0.0";
+          return <>
+            <div style={{ background: "rgba(239,68,68,0.10)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-deduction)", marginBottom: "4px" }}>Payroll Deductions</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Benefits + 401k — already factored into net pay</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-deduction)" }}>{f2(payrollPerCheck)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{pct(payrollPerCheck)}%</div></div></div>
+            </div>
+            <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{pct(checkingTot)}%</div></div></div>
+            </div>
+            {loans.length > 0 && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-gold)" }}>{f2(loansPerCheck)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{pct(loansPerCheck)}%</div></div></div>
+            </div>}
+            <div style={{ background: wrPerCheck >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)"}`, borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{isWeekly ? "Weekly unallocated cashflow snapshot" : "Per-check unallocated snapshot"}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>{f2(wrPerCheck)}</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(wrPerCheck * checksPerYear / 12)}/mo</div></div></div>
+            </div>
+          </>;
+        })()}
         <div style={{ height: "1px", background: "var(--color-bg-raised)", marginBottom: "20px" }} />
         {cats.map(cat => {
           const cT = regularExpenses.filter(e => e.category === cat).reduce((s, e) => s + yearlyExpenseCost(e) / 52, 0);
           const pct = (cT / weeklyIncome) * 100;
           return <div key={cat} style={{ marginBottom: "16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}><span style={{ fontSize: "11px", letterSpacing: "2px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</span><span>{f2(cT)}/wk avg · {pct.toFixed(1)}%</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}><span style={{ fontSize: "11px", letterSpacing: "2px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</span><span>{f2(cT * perCheckFactor)}/{checkUnit} avg · {pct.toFixed(1)}%</span></div>
             <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden" }}><div style={{ height: "100%", width: `${pct}%`, background: CATEGORY_COLORS[cat], borderRadius: "3px" }} /></div>
           </div>;
         })}
         <div style={{ height: "1px", background: "var(--color-bg-raised)", margin: "20px 0" }} />
         <SectionHeader>Annual Projection</SectionHeader>
         <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-          <thead><tr style={{ borderBottom: "1px solid #333", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Wk Avg</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
+          <thead><tr style={{ borderBottom: "1px solid #333", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>{isWeekly ? "Wk Avg" : "Per Check"}</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
           <tbody>{expenses.map(exp => {
             const annual = yearlyExpenseCost(exp);
-            const weeklyAvg = annual / 52;
+            const checkAvg = (annual / 52) * perCheckFactor;
             const isLoan = exp.type === "loan";
             return <tr key={exp.id} style={{ borderBottom: "1px solid #181818" }} onMouseEnter={e => e.currentTarget.style.background = "var(--color-bg-surface)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
               <td style={{ padding: "8px 4px" }}>
@@ -1575,14 +1590,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 {exp.label}
                 {isLoan && <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-gold)", padding: "1px 4px", borderRadius: "2px", marginLeft: "5px" }}>LOAN</span>}
               </td>
-              <td style={{ padding: "8px 4px", textAlign: "right", color: isLoan ? "var(--color-gold)" : CATEGORY_COLORS[exp.category] }}>{f2(weeklyAvg)}</td>
+              <td style={{ padding: "8px 4px", textAlign: "right", color: isLoan ? "var(--color-gold)" : CATEGORY_COLORS[exp.category] }}>{f2(checkAvg)}</td>
               <td style={{ padding: "8px 4px", textAlign: "right", color: "var(--color-text-secondary)" }}>{f(annual / 12)}</td>
               <td style={{ padding: "8px 4px", textAlign: "right", color: "var(--color-text-primary)" }}>{f(annual)}</td>
             </tr>;
           })}</tbody>
           <tfoot>
-            <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td style={{ padding: "10px 4px", color: "var(--color-gold)" }}>TRUE SPEND</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f2(tsWeeklyAvg)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f(tsAnnual / 12)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f(tsAnnual)}</td></tr>
-            <tr style={{ fontWeight: "bold" }}><td style={{ padding: "6px 4px", color: "var(--color-green)" }}>REMAINING</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(wrWeeklyAvg)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual / 12)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual)}</td></tr>
+            <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td style={{ padding: "10px 4px", color: "var(--color-gold)" }}>TRUE SPEND</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f2(tsWeeklyAvg * perCheckFactor)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f(tsAnnual / 12)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f(tsAnnual)}</td></tr>
+            <tr style={{ fontWeight: "bold" }}><td style={{ padding: "6px 4px", color: "var(--color-green)" }}>REMAINING</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(wrWeeklyAvg * perCheckFactor)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual / 12)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual)}</td></tr>
           </tfoot>
         </table>
       </div>;
@@ -1603,7 +1618,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Total Loan Balance" val={f(totalOwed)} rawVal={totalOwed} color="var(--color-gold)" />
-          <Card label="Weekly Committed" val={f2(weeklyCommitted)} rawVal={weeklyCommitted} color="var(--color-deduction)"
+          <Card label={`${checkWord} Committed`} val={f2(weeklyCommitted * perCheckFactor)} rawVal={weeklyCommitted * perCheckFactor} color="var(--color-deduction)"
             insight={weeklyIncome > 0 && weeklyCommitted > 0 ? (() => {
               const ratio = weeklyCommitted / weeklyIncome;
               const pct   = Math.round(ratio * 100);
@@ -1655,7 +1670,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   {exp.note[0] && <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{exp.note[0]}</div>}
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : inRunway ? "#7a8bbf" : "var(--color-gold)" }}>{f2(weeklyAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : inRunway ? "#7a8bbf" : "var(--color-gold)" }}>{f2(weeklyAmt * perCheckFactor)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/{checkUnit}</span></div>
                   <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(meta.totalAmount)} total</div>
                 </div>
               </div>
@@ -1692,12 +1707,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
               {/* Runway banner */}
               {inRunway && <div style={{ background: "#1a1a2d", border: "1px solid #7a8bbf44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "#7a8bbf" }}>
-                Setting aside {f2(weeklyAmt)}/wk — {weeksUntilFirst} check{weeksUntilFirst !== 1 ? "s" : ""} until first {f2(payAmt)}/{freqShort} payment on {meta.firstPaymentDate}
+                Setting aside {f2(weeklyAmt * perCheckFactor)}/{checkUnit} — {weeksUntilFirst} check{weeksUntilFirst !== 1 ? "s" : ""} until first {f2(payAmt)}/{freqShort} payment on {meta.firstPaymentDate}
               </div>}
 
               {/* Drop-off banner */}
               {!isPaidOff && !inRunway && dropsThisYear && <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "var(--color-green)" }}>
-                ✓ Drops off in {weeksUntilPayoff} weeks — weekly budget improves after payoff
+                ✓ Drops off in {weeksUntilPayoff} weeks — budget improves after payoff
               </div>}
 
               {/* Actions */}
@@ -1743,7 +1758,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             const freqLabel = { weekly: "week", biweekly: "2 weeks", monthly: "month" }[meta.paymentFrequency];
             return <div style={{ background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px", fontSize: "11px" }}>
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-                <span style={{ color: "var(--color-text-primary)" }}>Weekly cost: <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(weeklyAmt)}/wk</span></span>
+                <span style={{ color: "var(--color-text-primary)" }}>{isWeekly ? "Weekly cost" : "Cost per check"}: <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(weeklyAmt * perCheckFactor)}/{checkUnit}</span></span>
                 <span style={{ color: "var(--color-text-primary)" }}>{total} payments ({freqLabel})</span>
                 <span style={{ color: "var(--color-text-primary)" }}>Payoff: <span style={{ color: payoff <= fiscalYearEnd ? "var(--color-green)" : "var(--color-text-primary)" }}>{payoff}</span></span>
               </div>
@@ -1942,7 +1957,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     <div>
                       <div style={{ fontSize: "13px", color: "var(--color-text-primary)" }}>{exp.label}</div>
                       <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px", fontFamily: "var(--font-mono)" }}>
-                        {histAmt > 0 ? `${f2(histAmt)}/wk · ${f(monthlyFromPerPaycheck(histAmt, cpm))}/mo` : "—"}
+                        {histAmt > 0 ? `${f2(histAmt)}/${checkUnit} · ${f(monthlyFromPerPaycheck(histAmt, cpm))}/mo` : "—"}
                       </div>
                     </div>
                     {!isPending && (

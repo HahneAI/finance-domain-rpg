@@ -102,6 +102,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   useEffect(() => {
     if (sheetMode === "edit" && editId === null) setSheetMode("view");
   }, [editId, sheetMode]);
+  // Ensure modal-open class is cleaned up if component unmounts while sheet is open
+  useEffect(() => () => { document.body.classList.remove("modal-open"); }, []);
   const TOUCH_SCROLL_CANCEL_PX = 12;
   const TOUCH_EDGE_AUTOSCROLL_ZONE_PX = 92;
   const TOUCH_MAX_AUTOSCROLL_SPEED_PX = 18;
@@ -153,12 +155,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setSheetMode("view");
     setSheetDeleteConfirm(false);
     setEditId(null);
+    document.body.classList.add("modal-open");
   };
   const closeSheet = () => {
     setSheetExp(null);
     setSheetMode("view");
     setSheetDeleteConfirm(false);
     setEditId(null);
+    document.body.classList.remove("modal-open");
   };
 
   // Split loans from regular expenses for display purposes
@@ -521,13 +525,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     const amount = parseFloat(newExp.amount) || 0;
     const cycle = newExp.cycle ?? "every30days";
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    const expEffectiveFrom = `${TODAY_ISO.slice(0, 7)}-01`;
     setExpenses(prev => [...prev, {
       id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
       label: newExp.label,
       note: [newExp.note, newExp.note, newExp.note, newExp.note],
       billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO },
-      history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }]
+      history: [{ effectiveFrom: expEffectiveFrom, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }]
     }]);
     setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   };
@@ -1404,16 +1409,20 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     aria-label={`Edit ${exp.label}`}
                     style={{
                       background: "transparent",
-                      border: "1px solid var(--color-border-subtle)",
+                      border: "1px solid rgba(255,255,255,0.18)",
                       borderRadius: "8px",
                       width: "28px", height: "28px", minWidth: "28px",
                       padding: 0,
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       cursor: "pointer",
                       color: "var(--color-text-secondary)",
-                      fontSize: "13px",
                     }}
-                  >✏</button>}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11.5 2.5 L13.5 4.5 L5 13 L2 14 L3 11 Z"/>
+                      <path d="M10.5 3.5 L12.5 5.5"/>
+                    </svg>
+                  </button>}
                 </div>
               </div>
             </div>;
@@ -2035,9 +2044,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               <div style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)", fontFamily: "var(--font-display)", lineHeight: "1.2" }}>
                 {sheetExpLive.label}
               </div>
-              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "3px" }}>
-                {EXPENSE_CYCLE_OPTIONS.find(o => o.value === resolveExpenseCycle(sheetExpLive, ap))?.label ?? "Recurring"}
-              </div>
+              {(() => {
+                const note = Array.isArray(sheetExpLive.note) ? sheetExpLive.note[ap] : sheetExpLive.note;
+                return note ? (
+                  <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "3px", lineHeight: "1.5", fontStyle: "italic" }}>{note}</div>
+                ) : null;
+              })()}
             </div>
             <button onClick={closeSheet} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "2px", lineHeight: 1, flexShrink: 0 }}>✕</button>
           </div>
@@ -2059,40 +2071,55 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   </div>
                 </div>
               </div>
-              {/* Note / description */}
-              {(() => {
-                const note = Array.isArray(sheetExpLive.note) ? sheetExpLive.note[ap] : sheetExpLive.note;
-                return note ? (
-                  <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "20px", lineHeight: "1.65", fontStyle: "italic" }}>{note}</div>
-                ) : null;
-              })()}
               <div style={{ height: "1px", background: "var(--color-border-subtle)", marginBottom: "20px" }} />
               {/* Month activity bar */}
               <div style={{ marginBottom: "24px" }}>
                 <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "12px" }}>Active This Year</div>
                 <div style={{ display: "flex", gap: "3px" }}>
-                  {MONTH_SHORT.map((label, i) => {
+                  {(() => {
+                    // Determine the earliest month this expense was actually tracking.
+                    // Expenses created via the default add path were historically backdated
+                    // to FISCAL_YEAR_START ("2026-01-05") regardless of when the user added
+                    // them. We detect that case and fall back to billingMeta.effectiveFrom
+                    // (set to TODAY_ISO at creation) as the real visual start.
+                    const historyStart = sheetExpLive.history?.[0]?.effectiveFrom ?? null;
+                    const isBackdated = historyStart !== null && historyStart <= "2026-01-06";
+                    const visualStartMonth = isBackdated
+                      ? (sheetExpLive.billingMeta?.effectiveFrom?.slice(0, 7) ?? null)
+                      : (historyStart ? historyStart.slice(0, 7) : null);
+                    return MONTH_SHORT.map((label, i) => {
                     const monthNum = i + 1;
                     const key = `2026-${String(monthNum).padStart(2, "0")}`;
                     const phaseIdx = Math.floor(i / 3);
                     const amt = getEffectiveAmountForMonth(sheetExpLive, key, phaseIdx);
-                    const isActive = amt > 0;
+                    const isInRange = !visualStartMonth || key >= visualStartMonth;
+                    const isActive = isInRange && amt > 0;
                     const isCurrent = monthNum === parseInt(TODAY_ISO.slice(5, 7), 10);
                     return (
                       <div key={label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "5px" }}>
                         <div style={{
-                          width: "100%", height: "6px", borderRadius: "3px", boxSizing: "border-box",
-                          background: isActive ? (isCurrent ? "var(--color-green)" : "rgba(34,197,94,0.48)") : "var(--color-bg-raised)",
-                          border: isCurrent ? "1px solid var(--color-green)" : "1px solid transparent",
+                          width: "100%", height: "6px", borderRadius: "3px",
+                          background: isActive
+                            ? (isCurrent ? "var(--color-green)" : "rgba(34,197,94,0.48)")
+                            : "var(--color-bg-raised)",
+                          boxShadow: isCurrent
+                            ? (isActive
+                               ? "0 0 7px 2px rgba(34,197,94,0.55)"
+                               : "0 0 7px 2px rgba(0,200,150,0.4)")
+                            : "none",
+                          border: isCurrent && !isActive
+                            ? "1px solid rgba(0,200,150,0.45)"
+                            : "1px solid transparent",
                         }} />
                         <div style={{
                           fontSize: "7px",
-                          color: isActive ? (isCurrent ? "var(--color-green)" : "var(--color-text-secondary)") : "var(--color-text-disabled)",
+                          color: isCurrent ? "var(--color-green)" : (isActive ? "var(--color-text-secondary)" : "var(--color-text-disabled)"),
                           fontWeight: isCurrent ? "700" : "400",
                         }}>{label}</div>
                       </div>
                     );
-                  })}
+                  });
+                  })()}
                 </div>
               </div>
               <div style={{ height: "1px", background: "var(--color-border-subtle)", marginBottom: "20px" }} />

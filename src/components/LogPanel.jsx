@@ -366,7 +366,13 @@ export function LogPanel({
     <div style={{ gridColumn: "1 / -1" }}>
       <label style={lS}>Event Type</label>
       <select value={vals.type} onChange={e => set(v => ({ ...v, type: e.target.value, missedDays: [], shiftsLost: 0, weekendShifts: 0, hoursLost: 0 }))} style={iS}>
-        {Object.entries(EVENT_TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        {Object.entries(EVENT_TYPES)
+          .filter(([k]) => {
+            if (!hasBucket && (k === "missed_unapproved" || k === "pto_unapproved")) return false;
+            if (!hasPTO && (k === "pto" || k === "pto_unapproved")) return false;
+            return true;
+          })
+          .map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
       </select>
     </div>
 
@@ -409,9 +415,11 @@ export function LogPanel({
     {vals.type === "missed_unapproved" && (
       <div style={{ gridColumn: "1 / -1" }}>
         <DayPicker vals={vals} set={set} />
-        <div style={{ marginTop: "8px", padding: "8px 10px", background: "#1e1210", border: "1px solid #e8622a44", borderRadius: "4px", fontSize: "10px", color: "#e8622a", lineHeight: "1.6" }}>
-          ⚠ Unapproved — hits attendance bucket ({normalizeDays(vals.missedDays).length * config.shiftHours}h deducted this entry)
-        </div>
+        {hasBucket && (
+          <div style={{ marginTop: "8px", padding: "8px 10px", background: "#1e1210", border: "1px solid #e8622a44", borderRadius: "4px", fontSize: "10px", color: "#e8622a", lineHeight: "1.6" }}>
+            ⚠ Unapproved — hits attendance bucket ({normalizeDays(vals.missedDays).length * config.shiftHours}h deducted this entry)
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
           <div>
             <label style={lS}>Days / Shifts</label>
@@ -430,7 +438,7 @@ export function LogPanel({
             const expected = s * config.shiftHours;
             return expected > 0 && Math.abs(h - expected) > 0.01 ? (
               <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
-                ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h · bucket hit uses override amount
+                ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h{hasBucket ? " · bucket hit uses override amount" : ""}
               </div>
             ) : null;
           })()}
@@ -442,7 +450,7 @@ export function LogPanel({
       <div style={{ gridColumn: "1 / -1" }}>
         <DayPicker vals={vals} set={set} />
         <div style={{ marginTop: "8px", padding: "8px 10px", background: "#1e1510", border: "1px solid #c8922a44", borderRadius: "4px", fontSize: "10px", color: "#c8922a", lineHeight: "1.6" }}>
-          ⚠ PTO covers pay — but absence was unapproved. PTO hours consumed AND attendance bucket hit ({normalizeDays(vals.missedDays).length * config.shiftHours}h this entry).
+          ⚠ PTO covers pay — but absence was unapproved. PTO hours consumed{hasBucket ? ` AND attendance bucket hit (${normalizeDays(vals.missedDays).length * config.shiftHours}h this entry)` : ""}.
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
           <div>
@@ -451,7 +459,7 @@ export function LogPanel({
               style={{ ...iS, marginTop: "4px", opacity: 0.5 }} />
           </div>
           <div>
-            <label style={lS}>Hours (PTO + Bucket)</label>
+            <label style={lS}>Hours {hasBucket ? "(PTO + Bucket)" : "(PTO)"}</label>
             <input type="number" min="0" step="0.5" value={vals.hoursLost ?? 0}
               onChange={e => set(v => ({ ...v, hoursLost: e.target.value }))}
               style={{ ...iS, marginTop: "4px" }} />
@@ -606,7 +614,7 @@ export function LogPanel({
                 {editVals.type === "bonus" && <div>+${parseFloat(editVals.amount) || 0} · {parseInt(editVals.shiftsGained) || 0} shift(s) · {parseFloat(editVals.hoursGained) || 0}h gained</div>}
                 {editVals.type === "partial" && <div>{parseFloat(editVals.hoursLost) || 0}h partial shift</div>}
                 {editVals.type === "pto" && <div>{parseFloat(editVals.ptoHours) || 0}h PTO</div>}
-                {editVals.type === "pto_unapproved" && <div>{parseFloat(editVals.hoursLost) || 0}h PTO (unapproved) · bucket hit</div>}
+                {editVals.type === "pto_unapproved" && <div>{parseFloat(editVals.hoursLost) || 0}h PTO (unapproved){hasBucket ? " · bucket hit" : ""}</div>}
                 {editVals.type === "other_loss" && <div>-${parseFloat(editVals.amount) || 0} other loss</div>}
               </div>
             )}

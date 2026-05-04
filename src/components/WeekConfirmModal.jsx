@@ -186,6 +186,19 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
   const payPeriodStartDow = ((config.payPeriodEndDay ?? 0) + 1) % 7;
   const rotationDisplay = formatRotationDisplay(week, { isAdmin });
 
+  // Pay-schedule context — determines header copy, button labels, and date range display
+  const userPaySchedule = config?.userPaySchedule ?? "weekly";
+  const isBiweeklySchedule = userPaySchedule === "biweekly" || userPaySchedule === "salary";
+  const isMonthlySchedule = userPaySchedule === "monthly";
+  const isNonWeekly = isBiweeklySchedule || isMonthlySchedule;
+  // For biweekly: the pay period starts one week before the paycheck week
+  const periodStart = isBiweeklySchedule
+    ? new Date(week.weekStart.getTime() - 7 * 24 * 60 * 60 * 1000)
+    : isMonthlySchedule
+      ? new Date(week.weekEnd.getFullYear(), week.weekEnd.getMonth(), 1)
+      : week.weekStart;
+  const periodStartDate = fmtDate(periodStart);
+
   useEffect(() => {
     if (!requiresOtSelection && otDays.some(d => d !== null)) {
       setOtDays(Array(requiredOtCount).fill(null));
@@ -522,7 +535,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>
-                  Week {week.idx} Check-In
+                  {isBiweeklySchedule ? "Pay Period Check-In" : isMonthlySchedule ? "Monthly Check-In" : `Week ${week.idx} Check-In`}
                 </div>
                 {pendingCount > 1 && (
                   <span style={{
@@ -535,8 +548,17 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                 )}
               </div>
               <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
-                {weekStartDate} — {weekEndDate}
+                {isBiweeklySchedule
+                  ? `${periodStartDate} — ${weekEndDate}`
+                  : isMonthlySchedule
+                    ? week.weekEnd.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+                    : `${weekStartDate} — ${weekEndDate}`}
               </div>
+              {isNonWeekly && (
+                <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                  {isBiweeklySchedule ? "Biweekly · confirming paycheck week" : "Monthly · confirming final week of period"}
+                </div>
+              )}
             </div>
             <span style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-secondary)", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", padding: "4px 9px", borderRadius: "3px", textTransform: "uppercase", marginTop: "2px" }}>
               {rotationDisplay}
@@ -554,7 +576,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
           <>
             <div style={{ overflowY: "auto", flex: 1 }}>
               <div style={{ padding: "6px 20px 4px", fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
-                {isBaseUser ? `Mark days worked — ceiling: ${baseCeilingHours}h / ${baseCeilingShifts} shift${baseCeilingShifts !== 1 ? "s" : ""}` : "Mark your actual week — tap any day to update"}
+                {isBaseUser ? `Mark days worked — ceiling: ${baseCeilingHours}h / ${baseCeilingShifts} shift${baseCeilingShifts !== 1 ? "s" : ""}` : `Mark your actual ${isBiweeklySchedule ? "paycheck week" : isMonthlySchedule ? "final week of period" : "week"} — tap any day to update`}
               </div>
 
               {/* ── Previously Logged — shown when existing logs exist for this week ── */}
@@ -929,7 +951,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     cursor: otSelectionMissing ? "not-allowed" : "pointer",
                     opacity: otSelectionMissing ? 0.5 : 1,
                   }}>
-                    Confirm Clean
+                    {isBiweeklySchedule ? "Clean Period" : isMonthlySchedule ? "Clean Month" : "Confirm Clean"}
                   </button>
                   <button onClick={handleLogSwap} disabled={logSwapDisabled} style={{
                     background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
@@ -951,7 +973,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   fontWeight: "bold",
                   opacity: otSelectionMissing ? 0.5 : 1,
                 }}>
-                  {netShiftDelta !== 0 ? "Next →" : "Confirm Week"}
+                  {netShiftDelta !== 0 ? "Next →" : isBiweeklySchedule ? "Confirm Pay Period" : isMonthlySchedule ? "Confirm Month" : "Confirm Week"}
                 </button>
               )}
                 </div>
@@ -978,7 +1000,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                 color: netShiftDelta < 0 ? "var(--color-deduction)" : "var(--color-green)",
               }}>
                 {netShiftDelta < 0
-                  ? `${Math.abs(netShiftDelta)} fewer shift${Math.abs(netShiftDelta) !== 1 ? "s" : ""} than scheduled this week`
+                  ? `${Math.abs(netShiftDelta)} fewer shift${Math.abs(netShiftDelta) !== 1 ? "s" : ""} than scheduled ${isBiweeklySchedule ? "this pay period" : isMonthlySchedule ? "this month" : "this week"}`
                   : `${netShiftDelta} extra shift${netShiftDelta !== 1 ? "s" : ""} worked beyond schedule`
                 }
                 {missedScheduledDays.length > 0 && <div style={{ color: "var(--color-text-secondary)", marginTop: "3px", fontSize: "9px" }}>Missed: {missedScheduledDays.join(", ")}</div>}

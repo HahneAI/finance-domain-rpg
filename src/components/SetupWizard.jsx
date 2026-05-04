@@ -1843,7 +1843,13 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   function handleComplete() {
     const finalData = formData.employerPreset === "DHL"
       ? { ...formData, payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5 }
-      : formData;
+      : { ...formData };
+    // Commit display defaults: paycheckBuffer shows ?? 50 in the UI but formData can still hold
+    // null if the field was cleared or never touched. Normalize here so the saved config
+    // always carries the real value the user saw.
+    if (finalData.bufferEnabled !== false) {
+      finalData.paycheckBuffer = finalData.paycheckBuffer ?? 50;
+    }
     const allWeeks   = buildYear(finalData);
     const taxedWeeks = allWeeks
       .filter(w => w.idx >= (finalData.firstActiveIdx ?? 0))

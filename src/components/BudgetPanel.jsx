@@ -71,6 +71,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setAp(phaseIdx);
     setBulkEditOpen(false);
   };
+  // When a sheet-edit save completes (editId→null), return sheet to view mode
+  useEffect(() => {
+    if (sheetMode === "edit" && editId === null) setSheetMode("view");
+  }, [editId, sheetMode]);
+
   // Loan CRUD state
   const [editLoanId, setEditLoanId] = useState(null);
   const [editLoanVals, setEditLoanVals] = useState({});
@@ -93,6 +98,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [pendingExpenseTouchId, setPendingExpenseTouchId] = useState(null);
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const EXPENSE_TOUCH_HOLD_MS = 450;
+  // Expense detail bottom sheet
+  const [sheetExp, setSheetExp] = useState(null);
+  const [sheetMode, setSheetMode] = useState("view"); // "view" | "edit"
+  const [sheetDeleteConfirm, setSheetDeleteConfirm] = useState(false);
+  const lastTapRef = useRef({});
   const TOUCH_SCROLL_CANCEL_PX = 12;
   const TOUCH_EDGE_AUTOSCROLL_ZONE_PX = 92;
   const TOUCH_MAX_AUTOSCROLL_SPEED_PX = 18;
@@ -135,6 +145,22 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const key = `2026-${String(m + 1).padStart(2, "0")}`;
       return s + getEffectiveAmountForMonth(exp, key, Math.floor(m / 3)) * (52 / 12);
     }, 0);
+
+  // Live expense snapshot for the detail sheet — stays in sync as edits land
+  const sheetExpLive = sheetExp ? (expenses.find(e => e.id === sheetExp.id) ?? null) : null;
+
+  const openSheet = (exp) => {
+    setSheetExp(exp);
+    setSheetMode("view");
+    setSheetDeleteConfirm(false);
+    setEditId(null);
+  };
+  const closeSheet = () => {
+    setSheetExp(null);
+    setSheetMode("view");
+    setSheetDeleteConfirm(false);
+    setEditId(null);
+  };
 
   // Split loans from regular expenses for display purposes
   const loans = expenses.filter(e => e.type === "loan");
@@ -1226,7 +1252,6 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             const isRemovedThisPhase = effAmt === 0 && nextNonZeroIso === null && (exp.history?.length ?? 0) > 0;
             // Hide expenses permanently zeroed for this phase (deleted-forward or all-zero history)
             if (isRemovedThisPhase) return null;
-            const monthlyDisplay = `${f(monthlyFromPerPaycheck(effAmt, cpm))}/mo`;
             const isEditing = editId === exp.id;
             const isPinnedFoodCard = Boolean(exp.isFoodPrimary || exp.isFoodHighlighted);
             const isDragging = draggingExpenseId === exp.id;
@@ -1243,6 +1268,17 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               key={exp.id}
               data-expense-id={exp.id}
               draggable={!isPinnedFoodCard && !isEditing && isExpenseDropLane && !isCoarsePointer}
+              onClick={() => {
+                if (isPinnedFoodCard || expenseDragFinalizedRef.current) return;
+                const now = Date.now();
+                const last = lastTapRef.current[exp.id] ?? 0;
+                if (now - last < 350) {
+                  openSheet(exp);
+                  lastTapRef.current[exp.id] = 0;
+                } else {
+                  lastTapRef.current[exp.id] = now;
+                }
+              }}
               onDragStart={(e) => {
                 if (isPinnedFoodCard) {
                   e.preventDefault();
@@ -1325,116 +1361,62 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   pointerEvents: "none",
                 }}
               />
-              {isEditing ? <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <span style={{ fontSize: "12px" }}>{exp.label}</span>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                  <div>
-                    <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "2px" }}>Bill Amount ($)</div>
-                    <input type="number" min="0" step="0.01" value={editVals.amount ?? ""} onChange={e => setEditVals(v => ({ ...v, amount: e.target.value }))} style={{ ...iS, width: "100%" }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "2px" }}>Paid Every</div>
-                    <select value={editVals.cycle ?? "every30days"} onChange={e => setEditVals(v => ({ ...v, cycle: e.target.value }))} style={{ ...iS, width: "100%" }}>
-                      {EXPENSE_CYCLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
-                  Per-paycheck reserve: {f2(perPaycheckFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days", cpm))}
-                </div>
-                {activeMonth !== null ? (
-                  <>
-                    <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>Save scope:</div>
-                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", alignItems: "center" }}>
-                      <SmBtn onClick={() => saveThisMonth(exp.id)} c="var(--color-accent-primary)">MO. ONLY</SmBtn>
-                      <SmBtn onClick={() => saveFromMonthForward(exp.id)} c="var(--color-green)">FROM {activeMonthLabel} +</SmBtn>
-                      <SmBtn onClick={() => saveAllQuarters(exp.id)} c="var(--color-green)">ALL QTR</SmBtn>
-                      <SmBtn onClick={() => setEditId(null)}>✕</SmBtn>
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    <button onClick={() => saveAllQuarters(exp.id)} style={{ background: "var(--color-green)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", flex: 1 }}>SAVE</button>
-                    <button onClick={() => setEditId(null)} style={{ background: "var(--color-border-subtle)", color: "var(--color-text-secondary)", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px" }}>✕</button>
-                  </div>
-                )}
-              </div> : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                {/* Drag handle */}
                 {!isPinnedFoodCard && <button
                   type="button"
                   data-expense-drag-handle
                   aria-label={`Hold to drag ${exp.label}`}
                   onContextMenu={(e) => e.preventDefault()}
+                  onClick={(e) => e.stopPropagation()}
                   style={{
                     background: pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}22` : "transparent",
                     color: pendingExpenseTouchId === exp.id ? CATEGORY_COLORS[cat] : "var(--color-text-primary)",
                     border: `1px solid ${pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}66` : "var(--color-text-primary)"}`,
                     borderRadius: "8px",
-                    width: "26px",
-                    height: "26px",
-                    minWidth: "26px",
+                    width: "26px", height: "26px", minWidth: "26px",
                     padding: 0,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
                     fontSize: "11px",
-                    cursor: isEditing ? "default" : "grab",
+                    cursor: "grab",
                     touchAction: "none",
-                    userSelect: "none",
-                    WebkitUserSelect: "none",
-                    WebkitTouchCallout: "none",
+                    userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
                   }}
-                >
-                  ⋮⋮
-                </button>}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                    <div style={{ fontSize: "13px", color: isScheduledFuture ? "var(--color-text-secondary)" : undefined }}>{exp.label}</div>
-                    {isPinnedFoodCard && <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-gold)", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>FOOD</span>}
-                    {isScheduledFuture && (
-                      <span style={{ fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", padding: "1px 6px", borderRadius: "3px", whiteSpace: "nowrap" }}>
-                        STARTS {shortMonth(nextNonZeroIso).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
+                >⋮⋮</button>}
+                {/* Label */}
+                <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                  <div style={{
+                    fontSize: "13px",
+                    color: isScheduledFuture ? "var(--color-text-secondary)" : "var(--color-text-primary)",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  }}>{exp.label}</div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  {!isPinnedFoodCard && pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isScheduledFuture ? "var(--color-text-disabled)" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/{checkUnit}</span></div>
-                    <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{monthlyDisplay}</div>
+                {/* Per-check amount + edit icon */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                  <div style={{
+                    fontSize: "14px", fontWeight: "bold",
+                    color: isScheduledFuture ? "var(--color-text-disabled)" : CATEGORY_COLORS[cat],
+                    whiteSpace: "nowrap",
+                  }}>
+                    {f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)", fontWeight: "normal" }}>/{checkUnit}</span>
                   </div>
-                  <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
-                  {isScheduledFuture ? (
-                    /* Grayed card — direct actions, no extra confirm needed since state is already clear */
-                    <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
-                      {undoDelete?.expId === exp.id && (
-                        <SmBtn onClick={executeUndo} c="var(--color-accent-primary)" bg="rgba(0,200,150,0.08)">UNDO</SmBtn>
-                      )}
-                      <SmBtn
-                        onClick={() => {
-                          setExpenses(prev => prev.map(e => e.id !== exp.id ? e : clearMonthForward(e, nextNonZeroIso)));
-                          setUndoDelete(null);
-                        }}
-                        c="var(--color-deduction)" bg="#2d1a1a"
-                      >CLR {shortMonth(nextNonZeroIso).toUpperCase()}+</SmBtn>
-                    </div>
-                  ) : pendingDelete?.id === exp.id ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-end" }}>
-                      <div style={{ fontSize: "8px", color: "var(--color-deduction)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
-                        {activeMonth ? `Delete ${activeMonthLabel}?` : `Delete Q${ap + 1}?`}
-                      </div>
-                      <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        <SmBtn onClick={() => deleteMonthOnly(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">{activeMonth ? `${activeMonthLabel} ONLY` : "THIS MONTH"}</SmBtn>
-                        <SmBtn onClick={() => deleteQuarterOnly(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">Q{ap + 1} MONTHS</SmBtn>
-                        <SmBtn onClick={() => deleteMonthForward(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">+ ONWARD</SmBtn>
-                        <SmBtn onClick={() => setPendingDelete(null)}>✕</SmBtn>
-                      </div>
-                    </div>
-                  ) : (
-                    <SmBtn onClick={() => setPendingDelete({ id: exp.id })} c="var(--color-deduction)">✕</SmBtn>
-                  )}
+                  {!isPinnedFoodCard && <button
+                    onClick={(e) => { e.stopPropagation(); openSheet(exp); }}
+                    aria-label={`Edit ${exp.label}`}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid var(--color-border-subtle)",
+                      borderRadius: "8px",
+                      width: "28px", height: "28px", minWidth: "28px",
+                      padding: 0,
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      cursor: "pointer",
+                      color: "var(--color-text-secondary)",
+                      fontSize: "13px",
+                    }}
+                  >✏</button>}
                 </div>
-              </div>}
+              </div>
             </div>;
           })}
           {isExpenseDropLane && draggingExpenseId && expenseInsertLane === cat && <div
@@ -2016,6 +1998,166 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         </div>
       );
     })()}
+    {/* ── Expense Detail Bottom Sheet ── */}
+    <style>{`
+      @keyframes expSheetSlideUp {
+        from { transform: translateY(100%); opacity: 0; }
+        to   { transform: translateY(0);    opacity: 1; }
+      }
+    `}</style>
+    {sheetExpLive && (
+      <>
+        {/* Backdrop */}
+        <div onClick={closeSheet} style={{
+          position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.62)",
+          backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+          zIndex: 200,
+        }} />
+        {/* Sheet */}
+        <div style={{
+          position: "fixed", left: 0, right: 0, bottom: 0,
+          zIndex: 201,
+          background: "var(--color-bg-surface)",
+          borderRadius: "20px 20px 0 0",
+          border: "1px solid var(--color-border-subtle)",
+          borderBottom: "none",
+          maxHeight: "82vh",
+          display: "flex", flexDirection: "column",
+          animation: "expSheetSlideUp 320ms cubic-bezier(.22,.7,.2,1) both",
+        }}>
+          {/* Pull handle */}
+          <div style={{ display: "flex", justifyContent: "center", padding: "14px 0 6px", flexShrink: 0 }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--color-border-subtle)" }} />
+          </div>
+          {/* Header: title + close */}
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "2px 20px 0", flexShrink: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, paddingRight: "12px" }}>
+              <div style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)", fontFamily: "var(--font-display)", lineHeight: "1.2" }}>
+                {sheetExpLive.label}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "3px" }}>
+                {EXPENSE_CYCLE_OPTIONS.find(o => o.value === resolveExpenseCycle(sheetExpLive, ap))?.label ?? "Recurring"}
+              </div>
+            </div>
+            <button onClick={closeSheet} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "2px", lineHeight: 1, flexShrink: 0 }}>✕</button>
+          </div>
+          {/* Scrollable content */}
+          <div style={{ overflowY: "auto", flex: 1, padding: "18px 20px 40px" }}>
+            {sheetMode === "view" ? (<>
+              {/* Cost tiles */}
+              <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+                <div style={{ flex: 1, background: "var(--color-bg-raised)", borderRadius: "14px", padding: "14px 16px" }}>
+                  <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "6px" }}>Per Check</div>
+                  <div style={{ fontSize: "22px", fontWeight: 700, color: CATEGORY_COLORS[sheetExpLive.category] ?? "var(--color-green)", fontFamily: "var(--font-mono)" }}>
+                    {f2(displayEffective(sheetExpLive, ap))}
+                  </div>
+                </div>
+                <div style={{ flex: 1, background: "var(--color-bg-raised)", borderRadius: "14px", padding: "14px 16px" }}>
+                  <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "6px" }}>Monthly</div>
+                  <div style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>
+                    {f(monthlyFromPerPaycheck(displayEffective(sheetExpLive, ap), cpm))}
+                  </div>
+                </div>
+              </div>
+              {/* Note / description */}
+              {(() => {
+                const note = Array.isArray(sheetExpLive.note) ? sheetExpLive.note[ap] : sheetExpLive.note;
+                return note ? (
+                  <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "20px", lineHeight: "1.65", fontStyle: "italic" }}>{note}</div>
+                ) : null;
+              })()}
+              <div style={{ height: "1px", background: "var(--color-border-subtle)", marginBottom: "20px" }} />
+              {/* Month activity bar */}
+              <div style={{ marginBottom: "24px" }}>
+                <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "12px" }}>Active This Year</div>
+                <div style={{ display: "flex", gap: "3px" }}>
+                  {MONTH_SHORT.map((label, i) => {
+                    const monthNum = i + 1;
+                    const key = `2026-${String(monthNum).padStart(2, "0")}`;
+                    const phaseIdx = Math.floor(i / 3);
+                    const amt = getEffectiveAmountForMonth(sheetExpLive, key, phaseIdx);
+                    const isActive = amt > 0;
+                    const isCurrent = monthNum === parseInt(TODAY_ISO.slice(5, 7), 10);
+                    return (
+                      <div key={label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "5px" }}>
+                        <div style={{
+                          width: "100%", height: "6px", borderRadius: "3px", boxSizing: "border-box",
+                          background: isActive ? (isCurrent ? "var(--color-green)" : "rgba(34,197,94,0.48)") : "var(--color-bg-raised)",
+                          border: isCurrent ? "1px solid var(--color-green)" : "1px solid transparent",
+                        }} />
+                        <div style={{
+                          fontSize: "7px",
+                          color: isActive ? (isCurrent ? "var(--color-green)" : "var(--color-text-secondary)") : "var(--color-text-disabled)",
+                          fontWeight: isCurrent ? "700" : "400",
+                        }}>{label}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{ height: "1px", background: "var(--color-border-subtle)", marginBottom: "20px" }} />
+              {/* Actions */}
+              {sheetDeleteConfirm ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ fontSize: "10px", color: "var(--color-deduction)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
+                    {activeMonth ? `Delete ${activeMonthLabel}?` : `Delete Q${ap + 1}?`}
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {[
+                      { label: activeMonth ? `${activeMonthLabel} Only` : "This Month", action: () => { deleteMonthOnly(sheetExpLive.id); closeSheet(); } },
+                      { label: `Q${ap + 1} Months`, action: () => { deleteQuarterOnly(sheetExpLive.id); closeSheet(); } },
+                      { label: "From Here +", action: () => { deleteMonthForward(sheetExpLive.id); closeSheet(); } },
+                    ].map(({ label, action }) => (
+                      <button key={label} onClick={action} style={{ flex: 1, padding: "11px 8px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "12px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "80px" }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setSheetDeleteConfirm(false)} style={{ padding: "10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button onClick={() => { setSheetMode("edit"); startEditExp(sheetExpLive); }} style={{ flex: 1, padding: "13px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-primary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Edit</button>
+                  <button onClick={() => setSheetDeleteConfirm(true)} style={{ flex: 1, padding: "13px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "14px", color: "var(--color-deduction)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Delete</button>
+                </div>
+              )}
+            </>) : (
+              /* ── Edit mode ── */
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <div style={{ ...lS, marginBottom: "4px" }}>Bill Amount ($)</div>
+                    <input type="number" min="0" step="0.01" value={editVals.amount ?? ""} onChange={e => setEditVals(v => ({ ...v, amount: e.target.value }))} style={{ ...iS, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                  <div>
+                    <div style={{ ...lS, marginBottom: "4px" }}>Paid Every</div>
+                    <select value={editVals.cycle ?? "every30days"} onChange={e => setEditVals(v => ({ ...v, cycle: e.target.value }))} style={{ ...iS, width: "100%", boxSizing: "border-box" }}>
+                      {EXPENSE_CYCLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", background: "var(--color-bg-raised)", padding: "10px 14px", borderRadius: "10px" }}>
+                  Per-check reserve: <strong style={{ color: "var(--color-accent-primary)" }}>{f2(perPaycheckFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days", cpm))}</strong>
+                </div>
+                <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
+                {activeMonth !== null ? (<>
+                  <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase" }}>Save scope</div>
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    <button onClick={() => saveThisMonth(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>{activeMonthLabel} Only</button>
+                    <button onClick={() => saveFromMonthForward(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>{activeMonthLabel} +</button>
+                    <button onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>All Qtrs</button>
+                  </div>
+                </>) : (
+                  <button onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ padding: "13px", background: "var(--color-green)", border: "none", borderRadius: "14px", color: "#0a0a0a", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 700 }}>Save</button>
+                )}
+                <button onClick={() => { setSheetMode("view"); setEditId(null); }} style={{ padding: "11px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    )}
   </div>);
 }
 

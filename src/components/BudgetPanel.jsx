@@ -525,13 +525,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     const amount = parseFloat(newExp.amount) || 0;
     const cycle = newExp.cycle ?? "every30days";
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    const expEffectiveFrom = `${TODAY_ISO.slice(0, 7)}-01`;
     setExpenses(prev => [...prev, {
       id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
       label: newExp.label,
       note: [newExp.note, newExp.note, newExp.note, newExp.note],
       billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO },
-      history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }]
+      history: [{ effectiveFrom: expEffectiveFrom, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }]
     }]);
     setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   };
@@ -2075,12 +2076,24 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               <div style={{ marginBottom: "24px" }}>
                 <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "12px" }}>Active This Year</div>
                 <div style={{ display: "flex", gap: "3px" }}>
-                  {MONTH_SHORT.map((label, i) => {
+                  {(() => {
+                    // Determine the earliest month this expense was actually tracking.
+                    // Expenses created via the default add path were historically backdated
+                    // to FISCAL_YEAR_START ("2026-01-05") regardless of when the user added
+                    // them. We detect that case and fall back to billingMeta.effectiveFrom
+                    // (set to TODAY_ISO at creation) as the real visual start.
+                    const historyStart = sheetExpLive.history?.[0]?.effectiveFrom ?? null;
+                    const isBackdated = historyStart !== null && historyStart <= "2026-01-06";
+                    const visualStartMonth = isBackdated
+                      ? (sheetExpLive.billingMeta?.effectiveFrom?.slice(0, 7) ?? null)
+                      : (historyStart ? historyStart.slice(0, 7) : null);
+                    return MONTH_SHORT.map((label, i) => {
                     const monthNum = i + 1;
                     const key = `2026-${String(monthNum).padStart(2, "0")}`;
                     const phaseIdx = Math.floor(i / 3);
                     const amt = getEffectiveAmountForMonth(sheetExpLive, key, phaseIdx);
-                    const isActive = amt > 0;
+                    const isInRange = !visualStartMonth || key >= visualStartMonth;
+                    const isActive = isInRange && amt > 0;
                     const isCurrent = monthNum === parseInt(TODAY_ISO.slice(5, 7), 10);
                     return (
                       <div key={label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "5px" }}>
@@ -2105,7 +2118,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                         }}>{label}</div>
                       </div>
                     );
-                  })}
+                  });
+                  })()}
                 </div>
               </div>
               <div style={{ height: "1px", background: "var(--color-border-subtle)", marginBottom: "20px" }} />

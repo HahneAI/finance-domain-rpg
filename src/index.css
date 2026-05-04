@@ -253,6 +253,12 @@ code {
   to { background-position: 160% 50%; }
 }
 
+/* ── Pay-period confirm modal entrance — scale+slide from slightly below ── */
+@keyframes weekCardIn {
+  from { opacity: 0; transform: scale(0.97) translateY(10px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
 /* ── Log confirm pulse — brief radial green glow over hero cards on entry save ── */
 @keyframes logConfirmPulse {
   0%   { opacity: 0; }

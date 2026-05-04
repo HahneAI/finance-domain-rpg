@@ -71,11 +71,6 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setAp(phaseIdx);
     setBulkEditOpen(false);
   };
-  // When a sheet-edit save completes (editId→null), return sheet to view mode
-  useEffect(() => {
-    if (sheetMode === "edit" && editId === null) setSheetMode("view");
-  }, [editId, sheetMode]);
-
   // Loan CRUD state
   const [editLoanId, setEditLoanId] = useState(null);
   const [editLoanVals, setEditLoanVals] = useState({});
@@ -103,6 +98,10 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [sheetMode, setSheetMode] = useState("view"); // "view" | "edit"
   const [sheetDeleteConfirm, setSheetDeleteConfirm] = useState(false);
   const lastTapRef = useRef({});
+  // When a sheet-edit save completes (editId→null), return sheet to view mode
+  useEffect(() => {
+    if (sheetMode === "edit" && editId === null) setSheetMode("view");
+  }, [editId, sheetMode]);
   const TOUCH_SCROLL_CANCEL_PX = 12;
   const TOUCH_EDGE_AUTOSCROLL_ZONE_PX = 92;
   const TOUCH_MAX_AUTOSCROLL_SPEED_PX = 18;

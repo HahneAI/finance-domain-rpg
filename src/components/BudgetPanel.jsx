@@ -102,6 +102,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   useEffect(() => {
     if (sheetMode === "edit" && editId === null) setSheetMode("view");
   }, [editId, sheetMode]);
+  // Ensure modal-open class is cleaned up if component unmounts while sheet is open
+  useEffect(() => () => { document.body.classList.remove("modal-open"); }, []);
   const TOUCH_SCROLL_CANCEL_PX = 12;
   const TOUCH_EDGE_AUTOSCROLL_ZONE_PX = 92;
   const TOUCH_MAX_AUTOSCROLL_SPEED_PX = 18;
@@ -153,12 +155,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setSheetMode("view");
     setSheetDeleteConfirm(false);
     setEditId(null);
+    document.body.classList.add("modal-open");
   };
   const closeSheet = () => {
     setSheetExp(null);
     setSheetMode("view");
     setSheetDeleteConfirm(false);
     setEditId(null);
+    document.body.classList.remove("modal-open");
   };
 
   // Split loans from regular expenses for display purposes
@@ -1404,16 +1408,20 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     aria-label={`Edit ${exp.label}`}
                     style={{
                       background: "transparent",
-                      border: "1px solid var(--color-border-subtle)",
+                      border: "1px solid rgba(255,255,255,0.18)",
                       borderRadius: "8px",
                       width: "28px", height: "28px", minWidth: "28px",
                       padding: 0,
                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                       cursor: "pointer",
                       color: "var(--color-text-secondary)",
-                      fontSize: "13px",
                     }}
-                  >✏</button>}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11.5 2.5 L13.5 4.5 L5 13 L2 14 L3 11 Z"/>
+                      <path d="M10.5 3.5 L12.5 5.5"/>
+                    </svg>
+                  </button>}
                 </div>
               </div>
             </div>;
@@ -2035,9 +2043,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               <div style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)", fontFamily: "var(--font-display)", lineHeight: "1.2" }}>
                 {sheetExpLive.label}
               </div>
-              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "3px" }}>
-                {EXPENSE_CYCLE_OPTIONS.find(o => o.value === resolveExpenseCycle(sheetExpLive, ap))?.label ?? "Recurring"}
-              </div>
+              {(() => {
+                const note = Array.isArray(sheetExpLive.note) ? sheetExpLive.note[ap] : sheetExpLive.note;
+                return note ? (
+                  <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "3px", lineHeight: "1.5", fontStyle: "italic" }}>{note}</div>
+                ) : null;
+              })()}
             </div>
             <button onClick={closeSheet} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "2px", lineHeight: 1, flexShrink: 0 }}>✕</button>
           </div>
@@ -2059,13 +2070,6 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   </div>
                 </div>
               </div>
-              {/* Note / description */}
-              {(() => {
-                const note = Array.isArray(sheetExpLive.note) ? sheetExpLive.note[ap] : sheetExpLive.note;
-                return note ? (
-                  <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "20px", lineHeight: "1.65", fontStyle: "italic" }}>{note}</div>
-                ) : null;
-              })()}
               <div style={{ height: "1px", background: "var(--color-border-subtle)", marginBottom: "20px" }} />
               {/* Month activity bar */}
               <div style={{ marginBottom: "24px" }}>
@@ -2081,13 +2085,22 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     return (
                       <div key={label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "5px" }}>
                         <div style={{
-                          width: "100%", height: "6px", borderRadius: "3px", boxSizing: "border-box",
-                          background: isActive ? (isCurrent ? "var(--color-green)" : "rgba(34,197,94,0.48)") : "var(--color-bg-raised)",
-                          border: isCurrent ? "1px solid var(--color-green)" : "1px solid transparent",
+                          width: "100%", height: "6px", borderRadius: "3px",
+                          background: isActive
+                            ? (isCurrent ? "var(--color-green)" : "rgba(34,197,94,0.48)")
+                            : "var(--color-bg-raised)",
+                          boxShadow: isCurrent
+                            ? (isActive
+                               ? "0 0 7px 2px rgba(34,197,94,0.55)"
+                               : "0 0 7px 2px rgba(0,200,150,0.4)")
+                            : "none",
+                          border: isCurrent && !isActive
+                            ? "1px solid rgba(0,200,150,0.45)"
+                            : "1px solid transparent",
                         }} />
                         <div style={{
                           fontSize: "7px",
-                          color: isActive ? (isCurrent ? "var(--color-green)" : "var(--color-text-secondary)") : "var(--color-text-disabled)",
+                          color: isCurrent ? "var(--color-green)" : (isActive ? "var(--color-text-secondary)" : "var(--color-text-disabled)"),
                           fontWeight: isCurrent ? "700" : "400",
                         }}>{label}</div>
                       </div>

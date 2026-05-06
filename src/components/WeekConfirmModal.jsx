@@ -231,12 +231,28 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
   // ── Toggle handler: 3 states ──────────────────────────────────────────────
   const toggleDay = (day) => {
     const isScheduled = scheduledDays.includes(day);
+    const newVal = isScheduled ? !dayToggles[day] : (dayToggles[day] === null ? true : null);
     setDayToggles(t => ({
       ...t,
       // Scheduled: true (worked) ↔ false (missed)
       // Unscheduled: null (off) ↔ true (pickup)
-      [day]: isScheduled ? !t[day] : (t[day] === null ? true : null),
+      [day]: newVal,
     }));
+    // Auto-sync the OT/extension slot: picking up an unscheduled day fills the
+    // first empty slot so the user doesn't have to select the same day twice.
+    if (!isScheduled && requiresOtSelection) {
+      if (newVal === true) {
+        setOtDays(prev => {
+          const emptyIdx = prev.findIndex(d => d === null);
+          if (emptyIdx === -1) return prev;
+          const next = [...prev];
+          next[emptyIdx] = day;
+          return next;
+        });
+      } else {
+        setOtDays(prev => prev.map(d => d === day ? null : d));
+      }
+    }
   };
 
   // ── Layer 2 event form helpers ────────────────────────────────────────────

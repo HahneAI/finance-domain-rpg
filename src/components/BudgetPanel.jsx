@@ -743,7 +743,6 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   // "year"    → current month through December (active quarters only)
   const getRestoreMonthKeys = (scope) => {
     const fy = FISCAL_YEAR_START.slice(0, 4);
-    const todayMon = parseInt(TODAY_ISO.slice(5, 7), 10);
     if (scope === "month") {
       const key = activeMonth ?? `${fy}-${String(Q_MONTHS[ap][0]).padStart(2, "0")}`;
       return [key];
@@ -751,8 +750,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     if (scope === "quarter") {
       return Q_MONTHS[ap].map(m => `${fy}-${String(m).padStart(2, "0")}`);
     }
-    // "year": from the later of (today's month, start of active quarter) through December
-    const fromMon = Math.max(todayMon, Q_MONTHS[ap][0]);
+    // "year": mirror deleteMonthForward's start point (activeMonth or quarter start),
+    // then cover through December. Old code used Math.max(today, quarterStart) which
+    // left the quarter's opening month(s) still zeroed after restore.
+    const fromKey = activeMonth ?? `${fy}-${String(Q_MONTHS[ap][0]).padStart(2, "0")}`;
+    const fromMon = parseInt(fromKey.split("-")[1], 10);
     return Array.from({ length: 12 - fromMon + 1 }, (_, i) => `${fy}-${String(fromMon + i).padStart(2, "0")}`);
   };
 

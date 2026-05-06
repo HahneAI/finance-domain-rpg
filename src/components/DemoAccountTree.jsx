@@ -545,7 +545,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
           </div>
         </div>
 
-        {/* ── Admin action bar: Save / Revert / Exit ── */}
+        {/* ── Admin action bar: Exit (always first) · Save · Revert ── */}
         {isAdmin && (
           <div style={{
             padding: "8px 16px 0",
@@ -553,6 +553,34 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
             gap: "8px",
             alignItems: "center",
           }}>
+            {/* Exit is always the leftmost action — most important escape hatch */}
+            {onExit && (
+              <button
+                onClick={onExit}
+                style={{
+                  background: "var(--color-bg-raised)",
+                  border: "1px solid var(--color-border-subtle)",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  fontSize: "10px",
+                  letterSpacing: "1px",
+                  textTransform: "uppercase",
+                  color: "var(--color-text-primary)",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-sans)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  minHeight: "32px",
+                }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                My Account
+              </button>
+            )}
+
             <button
               onClick={handleSave}
               disabled={saveStatus === "saving" || !isDirty}
@@ -569,6 +597,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
                 cursor: isDirty && saveStatus !== "saving" ? "pointer" : "not-allowed",
                 transition: "background 0.15s, color 0.15s",
                 fontFamily: "var(--font-sans)",
+                minHeight: "32px",
               }}
             >
               {saveStatus === "saving" ? "Saving…"
@@ -591,30 +620,10 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
                   color: "var(--color-deduction)",
                   cursor: "pointer",
                   fontFamily: "var(--font-sans)",
+                  minHeight: "32px",
                 }}
               >
                 Revert
-              </button>
-            )}
-
-            {onExit && (
-              <button
-                onClick={onExit}
-                style={{
-                  background: "transparent",
-                  border: "1px solid var(--color-border-subtle)",
-                  borderRadius: "8px",
-                  padding: "6px 12px",
-                  fontSize: "10px",
-                  letterSpacing: "1px",
-                  textTransform: "uppercase",
-                  color: "var(--color-text-secondary)",
-                  cursor: "pointer",
-                  marginLeft: "auto",
-                  fontFamily: "var(--font-sans)",
-                }}
-              >
-                ← Exit Demo
               </button>
             )}
           </div>

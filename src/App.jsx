@@ -1176,11 +1176,21 @@ export default function App() {
               {/* Demo account editing — admin only */}
               <div style={{ padding: "0 20px 12px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
+                {adminDemoView !== null && (
+                  <div style={{ fontSize: "9px", color: "var(--color-warning)", letterSpacing: "1px", marginBottom: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                    Editing Demo {adminDemoView}
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: "6px" }}>
                   {[1, 2].map(n => (
                     <button
                       key={n}
                       onClick={() => setAdminDemoView(adminDemoView === n ? null : n)}
+                      title={adminDemoView === n ? "Click to exit demo edit mode" : `Edit Demo Account ${n}`}
                       style={{
                         flex: 1,
                         background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)",
@@ -1196,7 +1206,7 @@ export default function App() {
                         fontFamily: "var(--font-sans)",
                       }}
                     >
-                      Demo {n}
+                      {adminDemoView === n ? "← Exit" : `Demo ${n}`}
                     </button>
                   ))}
                 </div>
@@ -1535,11 +1545,21 @@ export default function App() {
             {/* Demo account editing — admin only */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
+              {adminDemoView !== null && (
+                <div style={{ fontSize: "9px", color: "var(--color-warning)", letterSpacing: "1px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                  Editing Demo {adminDemoView}
+                </div>
+              )}
               <div style={{ display: "flex", gap: "6px" }}>
                 {[1, 2].map(n => (
                   <button
                     key={n}
                     onClick={() => { setAdminDemoView(adminDemoView === n ? null : n); setDrawerOpen(false); }}
+                    title={adminDemoView === n ? "Click to exit demo edit mode" : `Edit Demo Account ${n}`}
                     style={{
                       flex: 1,
                       background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)",
@@ -1556,7 +1576,7 @@ export default function App() {
                       minHeight: "44px",
                     }}
                   >
-                    Demo {n}
+                    {adminDemoView === n ? "← Exit" : `Demo ${n}`}
                   </button>
                 ))}
               </div>

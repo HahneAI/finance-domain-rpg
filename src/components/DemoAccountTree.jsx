@@ -1,17 +1,23 @@
 /**
- * DemoAccountTree — shown when an investor's active account is Demo 1 or 2.
- * Loads real fixture data, runs the finance engine, and renders the full panel
- * suite in read-only mode. All setter props passed to panels are no-ops so no
- * state is mutated and no Supabase writes are triggered.
+ * DemoAccountTree — renders a full panel suite for a demo account.
+ *
+ * Non-admin (investor): loads Supabase-saved data, falls back to fixture.
+ *   All setters are no-ops → read-only. Displays "Demo · Read Only" badge.
+ *
+ * Admin (isAdmin=true): same Supabase load, but enables real setters across all
+ *   panels, shows a SetupWizard entry for config reconfiguration, and provides
+ *   Save / Revert controls. Changes only persist when the admin clicks Save.
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { DEMO_ACCOUNT_1 } from "../fixtures/demo-account-1.js";
 import { DEMO_ACCOUNT_2 } from "../fixtures/demo-account-2.js";
 import { SH } from "./ui.jsx";
+import { SetupWizard } from "./SetupWizard.jsx";
 import { HomePanel } from "./HomePanel.jsx";
 import { IncomePanel } from "./IncomePanel.jsx";
 import { BudgetPanel } from "./BudgetPanel.jsx";
 import { LogPanel } from "./LogPanel.jsx";
+import { loadDemoAccount, saveDemoAccount } from "../lib/db.js";
 import {
   buildYear,
   computeNet,
@@ -41,13 +47,99 @@ const DEMO_TABS = [
   { key: "log",    label: "Log"    },
 ];
 
-export function DemoAccountTree({ accountNumber = 1 }) {
+export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) {
   const fixture = FIXTURES[accountNumber] ?? DEMO_ACCOUNT_1;
-  const { config, expenses, goals, logs, meta } = fixture;
+
+  // ── Editable state — initialized from fixture, overwritten by Supabase load ─
+  const [demoConfig,   setDemoConfig]   = useState(fixture.config);
+  const [demoExpenses, setDemoExpenses] = useState(fixture.expenses);
+  const [demoGoals,    setDemoGoals]    = useState(fixture.goals);
+  const [demoLogs,     setDemoLogs]     = useState(fixture.logs);
+
+  // ── Admin-only state ─────────────────────────────────────────────────────────
+  const [wizardOpen,  setWizardOpen]  = useState(false);
+  const [saveStatus,  setSaveStatus]  = useState("idle"); // "idle"|"saving"|"saved"|"error"
+  const [isDirty,     setIsDirty]     = useState(false);
 
   const [activeTab, setActiveTab] = useState("home");
-
   const today = useMemo(() => toLocalIso(new Date()), []);
+
+  // ── Load from Supabase on mount ──────────────────────────────────────────────
+  // Both admins and investors see admin-edited data if a row exists.
+  useEffect(() => {
+    loadDemoAccount(accountNumber)
+      .then(data => {
+        if (!data) return;
+        if (data.config && Object.keys(data.config).length)
+          setDemoConfig(prev => ({ ...prev, ...data.config }));
+        if (Array.isArray(data.expenses) && data.expenses.length)
+          setDemoExpenses(data.expenses);
+        if (Array.isArray(data.goals) && data.goals.length)
+          setDemoGoals(data.goals);
+        if (Array.isArray(data.logs) && data.logs.length)
+          setDemoLogs(data.logs);
+      })
+      .catch(() => { /* silently fall back to fixture */ });
+  }, [accountNumber]);
+
+  // ── Dirty-marking setters (admin only; investors get NOOPs below) ────────────
+  const handleSetConfig = useCallback(patch => {
+    setDemoConfig(typeof patch === "function" ? patch : prev => ({ ...prev, ...patch }));
+    setIsDirty(true);
+    setSaveStatus("idle");
+  }, []);
+  const handleSetExpenses = useCallback(val => {
+    setDemoExpenses(val);
+    setIsDirty(true);
+    setSaveStatus("idle");
+  }, []);
+  const handleSetGoals = useCallback(val => {
+    setDemoGoals(val);
+    setIsDirty(true);
+    setSaveStatus("idle");
+  }, []);
+  const handleSetLogs = useCallback(val => {
+    setDemoLogs(val);
+    setIsDirty(true);
+    setSaveStatus("idle");
+  }, []);
+
+  // Resolve which setters panels receive based on admin flag
+  const setConfig   = isAdmin ? handleSetConfig   : NOOP;
+  const setExpenses = isAdmin ? handleSetExpenses : NOOP;
+  const setGoals    = isAdmin ? handleSetGoals    : NOOP;
+  const setLogs     = isAdmin ? handleSetLogs     : NOOP;
+
+  // Convenience aliases
+  const config   = demoConfig;
+  const expenses = demoExpenses;
+  const goals    = demoGoals;
+  const logs     = demoLogs;
+  const { meta } = fixture; // display name / role / location always from fixture
+
+  const isEmployerDHL = config.employerPreset === "DHL";
+
+  // ── Save to Supabase ─────────────────────────────────────────────────────────
+  async function handleSave() {
+    setSaveStatus("saving");
+    try {
+      await saveDemoAccount(accountNumber, { config, expenses, goals, logs, meta });
+      setIsDirty(false);
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2500);
+    } catch {
+      setSaveStatus("error");
+    }
+  }
+
+  function handleRevert() {
+    setDemoConfig(fixture.config);
+    setDemoExpenses(fixture.expenses);
+    setDemoGoals(fixture.goals);
+    setDemoLogs(fixture.logs);
+    setIsDirty(false);
+    setSaveStatus("idle");
+  }
 
   // ── Finance engine ──────────────────────────────────────────────────────────
   const allWeeks = useMemo(() => buildYear(config), [config]);
@@ -119,7 +211,7 @@ export function DemoAccountTree({ accountNumber = 1 }) {
     };
   }, [logs, config, allWeeks, futureWeeks, today]);
 
-  // ── Tax derived (mirrors App.jsx taxDerived memo, isAdmin: false) ──────────
+  // ── Tax derived (mirrors App.jsx taxDerived memo) ──────────────────────────
   const taxDerived = useMemo(() => {
     const activeWeeks = allWeeks.filter(w => w.active);
     const adjustedTaxableGrossByWeek = new Map(
@@ -151,7 +243,10 @@ export function DemoAccountTree({ accountNumber = 1 }) {
       (s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? stHigh : stLow), 0
     );
     const fG = fL - fWB, mG = mL - mWB, tG = fG + mG;
-    const tET = Math.max(tG, 0); // no targetOwedAtFiling reduction for demo (non-admin)
+    // Admin sees targetOwedAtFiling reduction; investors see the raw gap.
+    const tET = isAdmin
+      ? Math.max(tG - (config.targetOwedAtFiling ?? 0), 0)
+      : Math.max(tG, 0);
     const remainingTaxedChecks = activeWeeks.filter(
       w => toLocalIso(w.weekEnd) >= today && taxedSet.has(w.idx)
     ).length;
@@ -161,7 +256,7 @@ export function DemoAccountTree({ accountNumber = 1 }) {
       totalGap: tG, targetExtraTotal: tET, taxedWeekCount: remainingTaxedChecks,
       extraPerCheck: remainingTaxedChecks > 0 ? tET / remainingTaxedChecks : 0,
     };
-  }, [allWeeks, config, eventImpact.grossDeltaByWeek, today]);
+  }, [allWeeks, config, eventImpact.grossDeltaByWeek, today, isAdmin]);
 
   // ── Income projections ──────────────────────────────────────────────────────
   const projectedAnnualNet = useMemo(
@@ -174,7 +269,6 @@ export function DemoAccountTree({ accountNumber = 1 }) {
   const bufferPerWeek = config.bufferEnabled ? (config.paycheckBuffer ?? 50) : 0;
   const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
 
-  // Previous week's net (last completed week)
   const prevWeekNet = useMemo(() => {
     const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
     if (!pastWeeks.length) return weeklyIncome;
@@ -189,7 +283,6 @@ export function DemoAccountTree({ accountNumber = 1 }) {
     return baseNet + weekAdj;
   }, [allWeeks, today, config, taxDerived, bufferPerWeek, weeklyIncome, logs]);
 
-  // Per-week net lookup
   const weekNetLookup = useMemo(() => {
     const adjustments = eventImpact.weeklyNetAdjustments || {};
     const result = {};
@@ -253,7 +346,7 @@ export function DemoAccountTree({ accountNumber = 1 }) {
 
   const futureEventDeductions = eventImpact.futureEventDeductionsByWeek;
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Panel renderer ──────────────────────────────────────────────────────────
   const panel = (() => {
     switch (activeTab) {
       case "home":
@@ -265,7 +358,7 @@ export function DemoAccountTree({ accountNumber = 1 }) {
             adjustedTakeHome={logTotals.adjustedTakeHome}
             remainingSpend={remainingSpend}
             goals={goals}
-            setGoals={NOOP}
+            setGoals={setGoals}
             futureWeeks={futureWeeks}
             futureWeekNets={futureWeekNets}
             timelineWeekNets={futureWeekNetsRaw}
@@ -279,7 +372,7 @@ export function DemoAccountTree({ accountNumber = 1 }) {
             fiscalWeekInfo={currentWeekNumber}
             today={today}
             fundedGoalSpend={fundedGoalSpend}
-            isAdmin={false}
+            isAdmin={isAdmin}
           />
         );
       case "income":
@@ -287,7 +380,7 @@ export function DemoAccountTree({ accountNumber = 1 }) {
           <IncomePanel
             allWeeks={allWeeks}
             config={config}
-            setConfig={NOOP}
+            setConfig={setConfig}
             showExtra={true}
             setShowExtra={NOOP}
             taxDerived={taxDerived}
@@ -295,7 +388,7 @@ export function DemoAccountTree({ accountNumber = 1 }) {
             adjustedTakeHome={logTotals.adjustedTakeHome}
             projectedAnnualNet={projectedAnnualNet}
             currentWeek={currentWeek}
-            isAdmin={false}
+            isAdmin={isAdmin}
             today={today}
             weekNetLookup={weekNetLookup}
           />
@@ -304,7 +397,7 @@ export function DemoAccountTree({ accountNumber = 1 }) {
         return (
           <BudgetPanel
             expenses={expenses}
-            setExpenses={NOOP}
+            setExpenses={setExpenses}
             weeklyIncome={weeklyIncome}
             prevWeekNet={prevWeekNet}
             futureWeeks={futureWeeks}
@@ -316,18 +409,18 @@ export function DemoAccountTree({ accountNumber = 1 }) {
             fundedGoalSpend={fundedGoalSpend}
             config={config}
             bufferPerWeek={bufferPerWeek}
-            isAdmin={false}
+            isAdmin={isAdmin}
           />
         );
       case "log":
         return (
           <LogPanel
             logs={logs}
-            setLogs={NOOP}
+            setLogs={setLogs}
             config={config}
-            isEmployerDHL={false}
-            isAdmin={false}
-            setConfig={NOOP}
+            isEmployerDHL={isEmployerDHL}
+            isAdmin={isAdmin}
+            setConfig={setConfig}
             weekConfirmations={{}}
             projectedAnnualNet={projectedAnnualNet}
             baseWeeklyUnallocated={baseWeeklyUnallocated}
@@ -352,110 +445,243 @@ export function DemoAccountTree({ accountNumber = 1 }) {
     }
   })();
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: "0" }}>
-      {/* Demo identity header */}
-      <div style={{
-        padding: "14px 16px 0",
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
-        gap: "12px",
-      }}>
-        <div>
-          <SH color="var(--color-gold)">Demo Account {accountNumber}</SH>
-          <div style={{
-            fontSize: "12px",
-            color: "var(--color-text-secondary)",
-            fontFamily: "var(--font-sans)",
-            marginTop: "2px",
-          }}>
-            {meta.displayName} · {meta.role} · {meta.location}
+    <>
+      {/* SetupWizard for admin config reconfiguration — position:fixed covers full viewport */}
+      {isAdmin && wizardOpen && (
+        <SetupWizard
+          config={config}
+          onComplete={merged => {
+            handleSetConfig(merged);
+            setWizardOpen(false);
+          }}
+          onCancel={() => setWizardOpen(false)}
+          lifeEvent={null}
+        />
+      )}
+
+      <div style={{ padding: "0" }}>
+        {/* ── Demo identity header ── */}
+        <div style={{
+          padding: "14px 16px 0",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: "12px",
+        }}>
+          <div>
+            <SH color="var(--color-gold)">Demo Account {accountNumber}</SH>
+            <div style={{
+              fontSize: "12px",
+              color: "var(--color-text-secondary)",
+              fontFamily: "var(--font-sans)",
+              marginTop: "2px",
+            }}>
+              {meta.displayName} · {meta.role} · {meta.location}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0, marginTop: "2px" }}>
+            {isAdmin ? (
+              <>
+                {/* Edit mode badge */}
+                <div style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  background: "rgba(245,158,11,0.12)",
+                  border: "1px solid rgba(245,158,11,0.35)",
+                  borderRadius: "6px",
+                  padding: "4px 9px",
+                }}>
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                  <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-warning)", fontFamily: "var(--font-sans)" }}>
+                    Admin · Edit
+                  </span>
+                </div>
+                {/* Reconfigure button — opens SetupWizard */}
+                <button
+                  onClick={() => setWizardOpen(true)}
+                  style={{
+                    background: "rgba(0,200,150,0.10)",
+                    border: "1px solid rgba(0,200,150,0.28)",
+                    borderRadius: "6px",
+                    padding: "4px 9px",
+                    fontSize: "9px",
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    color: "var(--color-accent-primary)",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  Reconfigure
+                </button>
+              </>
+            ) : (
+              /* Investor: read-only badge */
+              <div style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                background: "rgba(0,200,150,0.10)",
+                border: "1px solid rgba(0,200,150,0.28)",
+                borderRadius: "6px",
+                padding: "4px 9px",
+              }}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontFamily: "var(--font-sans)" }}>
+                  Demo · Read Only
+                </span>
+              </div>
+            )}
           </div>
         </div>
-        {/* Read-only badge */}
-        <div style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "5px",
-          background: "rgba(0,200,150,0.10)",
-          border: "1px solid rgba(0,200,150,0.28)",
-          borderRadius: "6px",
-          padding: "4px 9px",
-          flexShrink: 0,
-          marginTop: "2px",
-        }}>
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-          <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-accent-primary)", fontFamily: "var(--font-sans)" }}>
-            Demo · Read Only
-          </span>
-        </div>
-      </div>
 
-      {/* Tab bar */}
-      <div style={{
-        display: "flex",
-        gap: "0",
-        padding: "10px 16px 0",
-        borderBottom: "1px solid var(--color-border-subtle)",
-        marginBottom: "0",
-      }}>
-        {DEMO_TABS.map(tab => {
-          const active = activeTab === tab.key;
-          return (
+        {/* ── Admin action bar: Save / Revert / Exit ── */}
+        {isAdmin && (
+          <div style={{
+            padding: "8px 16px 0",
+            display: "flex",
+            gap: "8px",
+            alignItems: "center",
+          }}>
             <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={handleSave}
+              disabled={saveStatus === "saving" || !isDirty}
               style={{
-                background: "transparent",
+                background: isDirty ? "var(--color-accent-primary)" : "var(--color-bg-raised)",
                 border: "none",
-                borderBottom: active ? "2px solid var(--color-accent-primary)" : "2px solid transparent",
-                color: active ? "var(--color-accent-primary)" : "var(--color-text-secondary)",
-                fontSize: "11px",
-                letterSpacing: "1.5px",
+                borderRadius: "8px",
+                padding: "6px 14px",
+                fontSize: "10px",
+                letterSpacing: "1px",
                 textTransform: "uppercase",
-                fontWeight: active ? "700" : "500",
-                padding: "8px 14px 10px",
-                cursor: "pointer",
-                transition: "color 0.15s, border-color 0.15s",
+                fontWeight: "bold",
+                color: isDirty ? "var(--color-bg-base)" : "var(--color-text-disabled)",
+                cursor: isDirty && saveStatus !== "saving" ? "pointer" : "not-allowed",
+                transition: "background 0.15s, color 0.15s",
                 fontFamily: "var(--font-sans)",
               }}
             >
-              {tab.label}
+              {saveStatus === "saving" ? "Saving…"
+                : saveStatus === "saved" ? "Saved ✓"
+                : saveStatus === "error" ? "Error ✗"
+                : "Save Demo"}
             </button>
-          );
-        })}
-        {currentWeekNumber && (
-          <div style={{
-            marginLeft: "auto",
-            display: "flex",
-            alignItems: "center",
-            paddingBottom: "2px",
-          }}>
-            <span style={{
-              fontSize: "9px",
-              letterSpacing: "1px",
-              textTransform: "uppercase",
-              padding: "2px 7px",
-              background: "rgba(0,200,150,0.12)",
-              color: "var(--color-green)",
-              border: "1px solid rgba(0,200,150,0.28)",
-              borderRadius: "3px",
-              fontFamily: "var(--font-sans)",
-            }}>
-              {currentWeekLabel}
-            </span>
+
+            {isDirty && (
+              <button
+                onClick={handleRevert}
+                style={{
+                  background: "transparent",
+                  border: "1px solid rgba(239,68,68,0.35)",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  fontSize: "10px",
+                  letterSpacing: "1px",
+                  textTransform: "uppercase",
+                  color: "var(--color-deduction)",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-sans)",
+                }}
+              >
+                Revert
+              </button>
+            )}
+
+            {onExit && (
+              <button
+                onClick={onExit}
+                style={{
+                  background: "transparent",
+                  border: "1px solid var(--color-border-subtle)",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  fontSize: "10px",
+                  letterSpacing: "1px",
+                  textTransform: "uppercase",
+                  color: "var(--color-text-secondary)",
+                  cursor: "pointer",
+                  marginLeft: "auto",
+                  fontFamily: "var(--font-sans)",
+                }}
+              >
+                ← Exit Demo
+              </button>
+            )}
           </div>
         )}
-      </div>
 
-      {/* Panel content */}
-      <div>
-        {panel}
+        {/* ── Tab bar ── */}
+        <div style={{
+          display: "flex",
+          gap: "0",
+          padding: "10px 16px 0",
+          borderBottom: "1px solid var(--color-border-subtle)",
+          marginBottom: "0",
+        }}>
+          {DEMO_TABS.map(tab => {
+            const active = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: active ? "2px solid var(--color-accent-primary)" : "2px solid transparent",
+                  color: active ? "var(--color-accent-primary)" : "var(--color-text-secondary)",
+                  fontSize: "11px",
+                  letterSpacing: "1.5px",
+                  textTransform: "uppercase",
+                  fontWeight: active ? "700" : "500",
+                  padding: "8px 14px 10px",
+                  cursor: "pointer",
+                  transition: "color 0.15s, border-color 0.15s",
+                  fontFamily: "var(--font-sans)",
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+          {currentWeekNumber && (
+            <div style={{
+              marginLeft: "auto",
+              display: "flex",
+              alignItems: "center",
+              paddingBottom: "2px",
+            }}>
+              <span style={{
+                fontSize: "9px",
+                letterSpacing: "1px",
+                textTransform: "uppercase",
+                padding: "2px 7px",
+                background: "rgba(0,200,150,0.12)",
+                color: "var(--color-green)",
+                border: "1px solid rgba(0,200,150,0.28)",
+                borderRadius: "3px",
+                fontFamily: "var(--font-sans)",
+              }}>
+                {currentWeekLabel}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Panel content ── */}
+        <div>
+          {panel}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -437,6 +437,47 @@ export async function createInvestorCode({ code, label, notes }) {
   return data;
 }
 
+// ── Demo Account Load / Save (migration 015_add_demo_accounts.sql) ──────────
+// SELECT: any authenticated user — investors see admin-edited demo data.
+// INSERT/UPDATE: enforced by RLS to is_admin = true only.
+
+/**
+ * Fetches a demo account row from Supabase.
+ * Returns null if no custom row exists (caller falls back to fixture).
+ */
+export async function loadDemoAccount(accountNumber) {
+  const { data, error } = await supabase
+    .from("demo_accounts")
+    .select("config, expenses, goals, logs, meta")
+    .eq("account_number", accountNumber)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data;
+}
+
+/**
+ * Upserts a demo account row. Only succeeds when the caller has is_admin = true
+ * (enforced by RLS in migration 015_add_demo_accounts.sql).
+ * Throws on error so the caller can surface feedback to the admin.
+ */
+export async function saveDemoAccount(accountNumber, { config, expenses, goals, logs, meta }) {
+  const { error } = await supabase
+    .from("demo_accounts")
+    .upsert(
+      {
+        account_number: accountNumber,
+        config:    config   ?? {},
+        expenses:  expenses ?? [],
+        goals:     goals    ?? [],
+        logs:      logs     ?? [],
+        meta:      meta     ?? {},
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "account_number" }
+    );
+  if (error) throw new Error(error.message);
+}
+
 /**
  * Called on every SIGNED_IN auth event. Does two things:
  *   1. Seeds a user_data row for OAuth users (email sign-up does this explicitly;

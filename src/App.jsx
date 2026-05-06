@@ -214,6 +214,9 @@ export default function App() {
     return stored && Date.parse(stored) > 0 ? stored : null;
   });
   const [adminDateDraft, setAdminDateDraft] = useState("");
+  // null = personal view; 1 or 2 = admin is editing that demo account.
+  // isAdmin-only: non-admin users never set this.
+  const [adminDemoView, setAdminDemoView] = useState(null);
   // Persisted to Supabase week_confirmations JSONB column.
   // Shape: { [weekIdx]: { confirmedAt, dayToggles, scheduledDays, missedScheduledDays,
   //                        pickupDays, netShiftDelta, eventId } }
@@ -260,9 +263,11 @@ export default function App() {
 
   // Direct jump: always lands as ["home", key] — used by sidebar/drawer/bottom-nav
   // so switching panels never nests indefinitely.
+  // Also exits any active admin demo view so the personal panel is shown.
   const navigateDirect = (key) => {
     setViewStack(key === "home" ? ["home"] : ["home", key]);
     setDrawerOpen(false);
+    setAdminDemoView(null);
     jumpToPanelTop();
   };
 
@@ -1168,6 +1173,34 @@ export default function App() {
                   </div>
                 )}
               </div>
+              {/* Demo account editing — admin only */}
+              <div style={{ padding: "0 20px 12px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {[1, 2].map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setAdminDemoView(adminDemoView === n ? null : n)}
+                      style={{
+                        flex: 1,
+                        background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)",
+                        border: adminDemoView === n ? "none" : "1px solid var(--color-border-subtle)",
+                        borderRadius: "6px",
+                        padding: "5px 0",
+                        fontSize: "10px",
+                        letterSpacing: "1px",
+                        textTransform: "uppercase",
+                        color: adminDemoView === n ? "var(--color-bg-base)" : "var(--color-text-secondary)",
+                        cursor: "pointer",
+                        fontWeight: adminDemoView === n ? "bold" : "normal",
+                        fontFamily: "var(--font-sans)",
+                      }}
+                    >
+                      Demo {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </nav>
@@ -1299,9 +1332,20 @@ export default function App() {
 
         {/* Panel content */}
         <div ref={mainContentCallbackRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
-          {config.isInvestor && activeInvestorAccount !== 3
-            ? <DemoAccountTree accountNumber={activeInvestorAccount} />
-            : activePanel
+          {isAdmin && adminDemoView !== null
+            ? <DemoAccountTree
+                key={adminDemoView}
+                accountNumber={adminDemoView}
+                isAdmin={true}
+                onExit={() => setAdminDemoView(null)}
+              />
+            : config.isInvestor && activeInvestorAccount !== 3
+              ? <DemoAccountTree
+                  key={activeInvestorAccount}
+                  accountNumber={activeInvestorAccount}
+                  isAdmin={false}
+                />
+              : activePanel
           }
         </div>
       </div>
@@ -1488,6 +1532,35 @@ export default function App() {
                 >Set</button>
               </div>
             )}
+            {/* Demo account editing — admin only */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
+              <div style={{ display: "flex", gap: "6px" }}>
+                {[1, 2].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => { setAdminDemoView(adminDemoView === n ? null : n); setDrawerOpen(false); }}
+                    style={{
+                      flex: 1,
+                      background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)",
+                      border: adminDemoView === n ? "none" : "1px solid var(--color-border-subtle)",
+                      borderRadius: "6px",
+                      padding: "7px 0",
+                      fontSize: "10px",
+                      letterSpacing: "1px",
+                      textTransform: "uppercase",
+                      color: adminDemoView === n ? "var(--color-bg-base)" : "var(--color-text-secondary)",
+                      cursor: "pointer",
+                      fontWeight: adminDemoView === n ? "bold" : "normal",
+                      fontFamily: "var(--font-sans)",
+                      minHeight: "44px",
+                    }}
+                  >
+                    Demo {n}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

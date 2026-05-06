@@ -395,7 +395,14 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
         shiftsLost: isDeficitNonDHL ? shiftGap : 0,
         weekendShifts: 0,
         hoursLost: isDeficitNonDHL ? hoursGap : 0,
-        amount: !isDeficitNonDHL ? baseHourDelta * (config.baseRate || 0) : 0,
+        amount: !isDeficitNonDHL ? (() => {
+          // Extra hours sit above the buildYear projection (baseCeilingHours already baked in).
+          // Apply OT rate to any of them that push past the OT threshold.
+          const threshold = config.otThreshold ?? Infinity;
+          const regH = Math.max(0, Math.min(baseHourDelta, threshold - baseCeilingHours));
+          const otH = baseHourDelta - regH;
+          return regH * (config.baseRate || 0) + otH * (config.baseRate || 0) * (config.otMultiplier || 1.5);
+        })() : 0,
         ptoHours: 0,
         note: isDeficitNonDHL
           ? `Under weekly ceiling — worked ${baseWorkedShifts} of ${baseCeilingShifts} max shift${baseCeilingShifts !== 1 ? "s" : ""}`
@@ -434,15 +441,25 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       shiftsLost: missedDaysForLog.length,
       weekendShifts: missedDaysForLog.filter(d => d === "Fri" || d === "Sat" || d === "Sun").length,
       hoursLost: missedDaysForLog.length * config.shiftHours,
-      // Surplus: estimate gross from pickup shifts. DHL weekend days (Sat/Sun) earn
-      // diffRate; all other days earn baseRate. User should verify the actual payout.
-      amount: !isDeficit ? pickupDays.reduce((sum, d) => {
-        const isWeekend = d === "Sat" || d === "Sun";
-        const rate = (config.employerPreset === "DHL" && isWeekend)
-          ? (config.diffRate ?? config.baseRate)
-          : config.baseRate;
-        return sum + (config.shiftHours || 0) * rate;
-      }, 0) : 0,
+      // Surplus: OT-adjusted gross for each pickup shift. Hours that push past
+      // cfg.otThreshold earn baseRate × otMultiplier; DHL weekend shifts also
+      // include the differential at the appropriate (regular or OT) rate.
+      amount: !isDeficit ? (() => {
+        const sh = config.shiftHours || 0;
+        const threshold = config.otThreshold ?? Infinity;
+        // Hours the buildYear projection already accounts for this week.
+        const alreadyH = (scheduledDays.length - missedScheduledDays.length + workedOtDays.length) * sh;
+        return pickupDays.reduce((sum, d, i) => {
+          const beforeThisShift = alreadyH + i * sh;
+          const regH = Math.max(0, Math.min(sh, threshold - beforeThisShift));
+          const otH = sh - regH;
+          const isWknd = d === "Sat" || d === "Sun";
+          const baseR = (config.employerPreset === "DHL" && isWknd)
+            ? (config.diffRate ?? config.baseRate ?? 0)
+            : (config.baseRate || 0);
+          return sum + regH * baseR + otH * baseR * (config.otMultiplier || 1.5);
+        }, 0);
+      })() : 0,
       ptoHours: 0,
       note: requiresOtSelection && workedOtDays.length > 0
         ? workedOtDays.map(d => `OT day: ${d}${["Sat", "Sun"].includes(d) ? " (weekend — diff applies)" : ""}`).join("; ")
@@ -1148,7 +1165,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   <input type="number" min="0" value={eventVals.amount ?? ""} onChange={e => setEventVals(v => ({ ...v, amount: e.target.value }))} style={{ ...iS, marginTop: "4px" }} />
                   {eventVals.type === "bonus" && pickupDays.length > 0 && (
                     <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
-                      Est. {pickupDays.length} pickup shift{pickupDays.length !== 1 ? "s" : ""} × {config.shiftHours}h × ${config.baseRate}/hr = ${(pickupDays.length * config.shiftHours * config.baseRate).toFixed(2)} gross (pre-tax)
+                      OT-adjusted pre-fill — hours past the {config.otThreshold ?? "N/A"}h threshold earn {config.otMultiplier ?? 1.5}×{config.employerPreset === "DHL" ? "; weekend diff included" : ""}. Edit if actual payout differs.
                     </div>
                   )}
                 </div>

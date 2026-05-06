@@ -672,6 +672,24 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setEditId(null);
   };
 
+  // THIS QTR ONLY — writes monthlyOverrides for the 3 months of the current quarter only.
+  const saveThisQuarterOnly = (expId) => {
+    const { cycle, amount } = _editParsed();
+    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    const qStartMonth = ap * 3 + 1; // Q1→1, Q2→4, Q3→7, Q4→10
+    setExpenses(prev => prev.map(e => {
+      if (e.id !== expId) return e;
+      const overrides = { ...(e.monthlyOverrides ?? {}) };
+      for (let m = qStartMonth; m < qStartMonth + 3; m++) {
+        const key = `2026-${String(m).padStart(2, "0")}`;
+        overrides[key] = { perPaycheck, amount, cycle };
+      }
+      const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
+      return { ...e, monthlyOverrides: overrides, billingMeta };
+    }));
+    setEditId(null);
+  };
+
   // ALL QTR — updates history from current quarter forward, ignoring drop-offs.
   const saveAllQuarters = (expId) => {
     const { cycle, amount } = _editParsed();
@@ -685,6 +703,26 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
       // Trim future-dated entries so this override is authoritative for all future weeks.
+      const pastEntries = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
+      const newHistory = daysDiff <= 3
+        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
+        : [...pastEntries, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
+      return { ...e, history: newHistory, billingMeta };
+    }));
+    setEditId(null);
+  };
+
+  // ALL 4 QTRS — overrides all four quarters in history (including past quarters).
+  const saveAllQuartersFull = (expId) => {
+    const { cycle, amount } = _editParsed();
+    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    setExpenses(prev => prev.map(e => {
+      if (e.id !== expId) return e;
+      const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
+      const latest = latestPastEntry(existing);
+      const newWeekly = [perPaycheck, perPaycheck, perPaycheck, perPaycheck];
+      const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
+      const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
       const pastEntries = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
       const newHistory = daysDiff <= 3
         ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
@@ -2032,7 +2070,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           borderRadius: "20px 20px 0 0",
           border: "1px solid var(--color-border-subtle)",
           borderBottom: "none",
-          maxHeight: "82vh",
+          minHeight: "67vh",
+          maxHeight: "88vh",
           display: "flex", flexDirection: "column",
           animation: "expSheetSlideUp 320ms cubic-bezier(.22,.7,.2,1) both",
         }}>
@@ -2133,9 +2172,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   </div>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                     {[
-                      { label: activeMonth ? `${activeMonthLabel} Only` : "This Month", action: () => { deleteMonthOnly(sheetExpLive.id); closeSheet(); } },
-                      { label: `Q${ap + 1} Months`, action: () => { deleteQuarterOnly(sheetExpLive.id); closeSheet(); } },
-                      { label: "From Here +", action: () => { deleteMonthForward(sheetExpLive.id); closeSheet(); } },
+                      ...(activeMonth !== null ? [
+                        { label: `${activeMonthLabel} Only`, action: () => { deleteMonthOnly(sheetExpLive.id); closeSheet(); } },
+                        { label: `${activeMonthLabel} +`,   action: () => { deleteMonthForward(sheetExpLive.id); closeSheet(); } },
+                        { label: `Q${ap + 1} Months`,       action: () => { deleteQuarterOnly(sheetExpLive.id); closeSheet(); } },
+                      ] : [
+                        { label: `Q${ap + 1} Only`, action: () => { deleteQuarterOnly(sheetExpLive.id); closeSheet(); } },
+                        { label: `Q${ap + 1} +`,    action: () => { deleteMonthForward(sheetExpLive.id); closeSheet(); } },
+                      ]),
                     ].map(({ label, action }) => (
                       <button key={label} onClick={action} style={{ flex: 1, padding: "11px 8px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "12px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "80px" }}>
                         {label}
@@ -2169,15 +2213,20 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   Per-check reserve: <strong style={{ color: "var(--color-accent-primary)" }}>{f2(perPaycheckFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days", cpm))}</strong>
                 </div>
                 <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
-                {activeMonth !== null ? (<>
-                  <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase" }}>Save scope</div>
+                <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase" }}>Save scope</div>
+                {activeMonth !== null ? (
                   <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                     <button onClick={() => saveThisMonth(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>{activeMonthLabel} Only</button>
                     <button onClick={() => saveFromMonthForward(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>{activeMonthLabel} +</button>
-                    <button onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>All Qtrs</button>
+                    <button onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "10px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>This Qtr</button>
+                    <button onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>All Qtrs</button>
                   </div>
-                </>) : (
-                  <button onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ padding: "13px", background: "var(--color-green)", border: "none", borderRadius: "14px", color: "#0a0a0a", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 700 }}>Save</button>
+                ) : (
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    <button onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>Q{ap + 1} Only</button>
+                    <button onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>Q{ap + 1} +</button>
+                    <button onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>All Qtrs</button>
+                  </div>
                 )}
                 <button onClick={() => { setSheetMode("view"); setEditId(null); }} style={{ padding: "11px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
               </div>

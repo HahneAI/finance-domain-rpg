@@ -217,6 +217,9 @@ export default function App() {
   // null = personal view; 1 or 2 = admin is editing that demo account.
   // isAdmin-only: non-admin users never set this.
   const [adminDemoView, setAdminDemoView] = useState(null);
+  // null = idle; { op, pending, ok, ts, err } = in-flight or result
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [configViewOpen, setConfigViewOpen] = useState(false);
   // Persisted to Supabase week_confirmations JSONB column.
   // Shape: { [weekIdx]: { confirmedAt, dayToggles, scheduledDays, missedScheduledDays,
   //                        pickupDays, netShiftDelta, eventId } }
@@ -379,6 +382,37 @@ export default function App() {
     pendingSaveRef.current = false;
     saveUserData({ config: newConfig, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
   }, [expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
+
+  const handleForcePush = useCallback(async () => {
+    clearTimeout(saveTimer.current);
+    pendingSaveRef.current = false;
+    setSyncStatus({ op: "push", pending: true });
+    try {
+      await saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
+      setSyncStatus({ op: "push", ok: true, ts: new Date() });
+    } catch {
+      setSyncStatus({ op: "push", ok: false });
+    }
+    setTimeout(() => setSyncStatus(null), 4000);
+  }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
+
+  const handleForcePull = useCallback(async () => {
+    setSyncStatus({ op: "pull", pending: true });
+    try {
+      const data = await loadUserData();
+      setConfig(data.config);
+      setShowExtra(data.showExtra);
+      setLogs(data.logs);
+      setExpenses(data.expenses);
+      setGoals(data.goals);
+      setWeekConfirmations(data.weekConfirmations ?? {});
+      setPtoGoal(data.ptoGoal);
+      setSyncStatus({ op: "pull", ok: true, ts: new Date() });
+    } catch {
+      setSyncStatus({ op: "pull", ok: false });
+    }
+    setTimeout(() => setSyncStatus(null), 4000);
+  }, [setConfig, setShowExtra, setLogs, setExpenses, setGoals, setWeekConfirmations, setPtoGoal]);
 
   const handleLocalSignOut = useCallback(async () => {
     await supabase.auth.signOut({ scope: "local" });
@@ -1173,6 +1207,52 @@ export default function App() {
                   </div>
                 )}
               </div>
+              {/* Force Sync */}
+              <div style={{ padding: "0 20px 10px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {["push", "pull"].map(op => (
+                    <button
+                      key={op}
+                      onClick={op === "push" ? handleForcePush : handleForcePull}
+                      disabled={!!syncStatus?.pending}
+                      style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "5px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer" }}
+                    >{op === "push" ? "Push ↑" : "Pull ↓"}</button>
+                  ))}
+                </div>
+                {syncStatus && (
+                  <div style={{ fontSize: "9px", marginTop: "5px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
+                    {syncStatus.pending
+                      ? (syncStatus.op === "push" ? "Pushing…" : "Pulling…")
+                      : syncStatus.ok
+                        ? `✓ ${syncStatus.op === "push" ? "Pushed" : "Pulled"} · ${syncStatus.ts.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+                        : `✗ ${syncStatus.op === "push" ? "Push" : "Pull"} failed`}
+                  </div>
+                )}
+              </div>
+
+              {/* Config Raw View */}
+              <div style={{ padding: "0 20px 10px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
+                  <button
+                    onClick={() => setConfigViewOpen(v => !v)}
+                    style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
+                  >{configViewOpen ? "Hide" : "View"}</button>
+                </div>
+                {configViewOpen && (
+                  <div style={{ position: "relative" }}>
+                    <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "180px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                      {JSON.stringify(config, null, 2)}
+                    </pre>
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
+                      style={{ marginTop: "5px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 0", cursor: "pointer" }}
+                    >Copy to Clipboard</button>
+                  </div>
+                )}
+              </div>
+
               {/* Demo account editing — admin only */}
               <div style={{ padding: "0 20px 12px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
@@ -1542,6 +1622,52 @@ export default function App() {
                 >Set</button>
               </div>
             )}
+            {/* Force Sync */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {["push", "pull"].map(op => (
+                  <button
+                    key={op}
+                    onClick={op === "push" ? handleForcePush : handleForcePull}
+                    disabled={!!syncStatus?.pending}
+                    style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer", minHeight: "44px" }}
+                  >{op === "push" ? "Push ↑" : "Pull ↓"}</button>
+                ))}
+              </div>
+              {syncStatus && (
+                <div style={{ fontSize: "10px", marginTop: "6px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
+                  {syncStatus.pending
+                    ? (syncStatus.op === "push" ? "Pushing…" : "Pulling…")
+                    : syncStatus.ok
+                      ? `✓ ${syncStatus.op === "push" ? "Pushed" : "Pulled"} · ${syncStatus.ts.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+                      : `✗ ${syncStatus.op === "push" ? "Push" : "Pull"} failed`}
+                </div>
+              )}
+            </div>
+
+            {/* Config Raw View */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
+                <button
+                  onClick={() => setConfigViewOpen(v => !v)}
+                  style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
+                >{configViewOpen ? "Hide" : "View"}</button>
+              </div>
+              {configViewOpen && (
+                <div>
+                  <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "220px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                    {JSON.stringify(config, null, 2)}
+                  </pre>
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
+                    style={{ marginTop: "8px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: "pointer", minHeight: "44px" }}
+                  >Copy to Clipboard</button>
+                </div>
+              )}
+            </div>
+
             {/* Demo account editing — admin only */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>

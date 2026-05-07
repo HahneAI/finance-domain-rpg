@@ -221,6 +221,8 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState(null);
   const [configViewOpen, setConfigViewOpen] = useState(false);
   const [toolSheetOpen, setToolSheetOpen] = useState(false);
+  const [sheetDragY, setSheetDragY] = useState(0);
+  const sheetDragStartY = useRef(null);
   const [rowViewOpen, setRowViewOpen] = useState(false);
   const [rowData, setRowData] = useState(null);
   const [rowFetching, setRowFetching] = useState(false);
@@ -246,6 +248,21 @@ export default function App() {
     setMainContentEl(el);
   }, []);
   const isScrollingDown = useScrollDirection(mainContentEl);
+
+  // Prevent body scroll and horizontal pan while the admin sheet is open
+  useEffect(() => {
+    if (toolSheetOpen) {
+      document.body.style.overflow = "hidden";
+      document.body.style.overscrollBehavior = "none";
+    } else {
+      document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
+    };
+  }, [toolSheetOpen]);
 
   const jumpToPanelTop = () => {
     const scrollToTop = () => {
@@ -1887,11 +1904,9 @@ export default function App() {
           left: "16px",
           right: "16px",
           zIndex: 20,
-          opacity: drawerOpen ? 0 : isScrollingDown ? 0.6 : 1,
-          transform: isScrollingDown ? "scale(0.6)" : "scale(1)",
-          transformOrigin: "center bottom",
-          pointerEvents: "none",
-          transition: "opacity 0.25s ease, transform 0.25s ease",
+          opacity: drawerOpen ? 0 : isScrollingDown ? 0.55 : 1,
+          pointerEvents: drawerOpen ? "none" : "auto",
+          transition: "opacity 0.25s ease",
         }}
       >
         <LiquidGlass
@@ -2048,7 +2063,8 @@ export default function App() {
               background: inspectorOpen ? "var(--color-warning)" : "rgba(245,158,11,0.18)",
               border: `1px solid ${inspectorOpen ? "var(--color-warning)" : "rgba(245,158,11,0.4)"}`,
               borderRadius: "20px",
-              padding: "6px 12px",
+              padding: "10px 16px",
+              minHeight: "44px",
               display: "flex",
               alignItems: "center",
               gap: "5px",
@@ -2075,10 +2091,12 @@ export default function App() {
           {/* Backdrop — also hides the nav pill beneath it */}
           {toolSheetOpen && (
             <div
-              onClick={() => setToolSheetOpen(false)}
+              onClick={() => { setToolSheetOpen(false); setSheetDragY(0); }}
               style={{
                 position: "fixed", inset: 0, zIndex: 24,
                 background: "rgba(3, 10, 7, 0.82)",
+                cursor: "pointer",
+                touchAction: "none",
               }}
             />
           )}
@@ -2092,8 +2110,8 @@ export default function App() {
               left: 0,
               right: 0,
               zIndex: 25,
-              transform: toolSheetOpen ? "translateY(0)" : "translateY(100%)",
-              transition: "transform 0.28s ease",
+              transform: toolSheetOpen ? `translateY(${sheetDragY}px)` : "translateY(100%)",
+              transition: sheetDragY > 0 ? "none" : "transform 0.28s ease",
               borderRadius: "20px 20px 0 0",
               background: "var(--color-bg-surface)",
               borderTop: "1px solid var(--color-border-accent)",
@@ -2101,11 +2119,28 @@ export default function App() {
               borderRight: "1px solid var(--color-border-subtle)",
               maxHeight: "82vh",
               overflowY: "auto",
+              overflowX: "hidden",
+              touchAction: "pan-y",
             }}
           >
-            {/* Handle bar */}
-            <div style={{ display: "flex", justifyContent: "center", paddingTop: "12px", paddingBottom: "2px" }}>
-              <div style={{ width: "40px", height: "4px", borderRadius: "2px", background: "rgba(0,200,150,0.3)" }} />
+            {/* Handle bar — full-width drag zone, min 44px tall */}
+            <div
+              style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "44px", cursor: "grab", touchAction: "none" }}
+              onTouchStart={e => { sheetDragStartY.current = e.touches[0].clientY; }}
+              onTouchMove={e => {
+                if (sheetDragStartY.current === null) return;
+                const dy = e.touches[0].clientY - sheetDragStartY.current;
+                if (dy > 0) setSheetDragY(dy);
+              }}
+              onTouchEnd={() => {
+                if (sheetDragY > 120) {
+                  setToolSheetOpen(false);
+                }
+                setSheetDragY(0);
+                sheetDragStartY.current = null;
+              }}
+            >
+              <div style={{ width: "40px", height: "4px", borderRadius: "2px", background: sheetDragY > 0 ? "rgba(0,200,150,0.6)" : "rgba(0,200,150,0.3)", transition: "background 0.15s ease" }} />
             </div>
 
             {/* Header */}
@@ -2119,8 +2154,8 @@ export default function App() {
                   </span>
                 </div>
                 <button
-                  onClick={() => setToolSheetOpen(false)}
-                  style={{ background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "50%", width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "14px", lineHeight: 1, flexShrink: 0 }}
+                  onClick={() => { setToolSheetOpen(false); setSheetDragY(0); }}
+                  style={{ background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "50%", width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "18px", lineHeight: 1, flexShrink: 0 }}
                   aria-label="Close admin tools"
                 >×</button>
               </div>

@@ -1885,17 +1885,29 @@ export default function App() {
 
             {/* Header */}
             <div style={{ padding: "8px 18px 12px", borderBottom: "1px solid var(--color-border-subtle)" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tempLockDate ? "10px" : "0" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                   <span style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", fontWeight: "bold" }}>
-                    Admin Tools{tempLockDate ? ` — ${new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                    Admin Tools
                   </span>
                 </div>
                 <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
                   {NAV_ITEMS.find(i => i.key === currentView)?.label ?? currentView}
                 </div>
               </div>
+              {/* Active lock date pill — prominent amber badge when a lock is set */}
+              {tempLockDate && (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "4px 8px 4px 10px", color: "var(--color-warning)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <span>Locked: {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                  <button
+                    onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                    style={{ background: "transparent", border: "none", color: "var(--color-warning)", fontSize: "13px", lineHeight: 1, cursor: "pointer", padding: "0 0 0 2px" }}
+                    aria-label="Clear lock date"
+                  >×</button>
+                </div>
+              )}
             </div>
 
             {/* Tools content */}

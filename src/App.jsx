@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
-import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR } from "./constants/config.js";
+import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
@@ -221,10 +221,14 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState(null);
   const [configViewOpen, setConfigViewOpen] = useState(false);
   const [toolSheetOpen, setToolSheetOpen] = useState(false);
+  const [sheetDragY, setSheetDragY] = useState(0);
+  const sheetDragStartY = useRef(null);
   const [rowViewOpen, setRowViewOpen] = useState(false);
   const [rowData, setRowData] = useState(null);
   const [rowFetching, setRowFetching] = useState(false);
   const [taxGridOpen, setTaxGridOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectedWeek, setInspectedWeek] = useState(null);
   // Persisted to Supabase week_confirmations JSONB column.
   // Shape: { [weekIdx]: { confirmedAt, dayToggles, scheduledDays, missedScheduledDays,
   //                        pickupDays, netShiftDelta, eventId } }
@@ -245,6 +249,21 @@ export default function App() {
     setMainContentEl(el);
   }, []);
   const isScrollingDown = useScrollDirection(mainContentEl);
+
+  // Prevent body scroll and horizontal pan while the admin sheet is open
+  useEffect(() => {
+    if (toolSheetOpen) {
+      document.body.style.overflow = "hidden";
+      document.body.style.overscrollBehavior = "none";
+    } else {
+      document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
+    };
+  }, [toolSheetOpen]);
 
   const jumpToPanelTop = () => {
     const scrollToTop = () => {
@@ -943,6 +962,7 @@ export default function App() {
         isAdmin={isAdmin}
         today={effectiveToday}
         weekNetLookup={weekNetLookup}
+        onWeekInspect={isAdmin ? setInspectedWeek : null}
       />}
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
@@ -961,6 +981,7 @@ export default function App() {
       />}
       {currentView === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
+        effectiveToday={effectiveToday}
         setConfig={setConfig} weekConfirmations={weekConfirmations}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
@@ -1021,6 +1042,7 @@ export default function App() {
             .mobile-header { display: flex !important; }
             .mobile-bottom-nav { display: flex !important; }
             .mobile-admin-sheet { display: flex !important; flex-direction: column !important; }
+            .admin-inspector { bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important; }
             /* On mobile the outer shell must have a definite height so the flex
                column inside can act as a scroll container. 100svh = "small viewport
                height" — excludes the address bar so layout doesn't jump when Chrome
@@ -1886,11 +1908,9 @@ export default function App() {
           left: "16px",
           right: "16px",
           zIndex: 20,
-          opacity: drawerOpen ? 0 : isScrollingDown ? 0.6 : 1,
-          transform: isScrollingDown ? "scale(0.6)" : "scale(1)",
-          transformOrigin: "center bottom",
-          pointerEvents: "none",
-          transition: "opacity 0.25s ease, transform 0.25s ease",
+          opacity: drawerOpen ? 0 : isScrollingDown ? 0.55 : 1,
+          pointerEvents: drawerOpen ? "none" : "auto",
+          transition: "opacity 0.25s ease",
         }}
       >
         <LiquidGlass
@@ -1991,16 +2011,215 @@ export default function App() {
         </LiquidGlass>
       </div>
 
+      {/* ── Live State Inspector ── */}
+      {isAdmin && (
+        <div
+          className="admin-inspector"
+          style={{
+            position: "fixed",
+            right: "16px",
+            bottom: "20px",
+            zIndex: 22,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: "6px",
+          }}
+        >
+          {/* Expanded card */}
+          {inspectorOpen && (
+            <div style={{
+              background: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border-accent)",
+              borderRadius: "12px",
+              padding: "12px 14px",
+              width: "220px",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+            }}>
+              <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", marginBottom: "10px", fontWeight: "bold" }}>Live State</div>
+              {[
+                ["Effective Today", effectiveToday, today !== effectiveToday ? `real: ${today}` : null],
+                ["Week", currentWeek ? `${currentWeek.idx}` : "—", currentWeekLabel],
+                ["Future Weeks", futureWeeks.length, null],
+                ["Unconfirmed", unconfirmedCount, null],
+                ["Extra / Check", taxDerived.extraPerCheck > 0 ? `$${taxDerived.extraPerCheck.toFixed(2)}` : "$0", null],
+                ["Tax Gap", `$${Math.round(taxDerived.totalGap).toLocaleString()}`, null],
+                ["Taxed Checks", taxDerived.taxedWeekCount, "remaining"],
+                ["Goal Spend", `$${Math.round(fundedGoalSpend).toLocaleString()}`, "funded"],
+                ["Buffer / Wk", `$${Math.round(bufferPerWeek).toLocaleString()}`, null],
+                ["Weekly Income", `$${Math.round(weeklyIncome).toLocaleString()}`, null],
+                ["Annual Net", `$${Math.round(projectedAnnualNet).toLocaleString()}`, null],
+              ].map(([label, val, sub]) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", flexShrink: 0 }}>{label}</span>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: label === "Effective Today" && today !== effectiveToday ? "var(--color-warning)" : "var(--color-text-primary)" }}>{val}</span>
+                    {sub && <div style={{ fontSize: "8px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>{sub}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Pill toggle button */}
+          <button
+            onClick={() => setInspectorOpen(v => !v)}
+            style={{
+              background: inspectorOpen ? "var(--color-warning)" : "rgba(245,158,11,0.18)",
+              border: `1px solid ${inspectorOpen ? "var(--color-warning)" : "rgba(245,158,11,0.4)"}`,
+              borderRadius: "20px",
+              padding: "10px 16px",
+              minHeight: "44px",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              cursor: "pointer",
+              color: inspectorOpen ? "var(--color-bg-base)" : "var(--color-warning)",
+              fontSize: "9px",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              fontWeight: "bold",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+            </svg>
+            {inspectorOpen ? "Close" : "Live"}
+          </button>
+        </div>
+      )}
+
+      {/* ── Week Inspector modal ── */}
+      {isAdmin && inspectedWeek && (() => {
+        const w = inspectedWeek;
+        const conf = weekConfirmations[w.idx] ?? null;
+        const wLookup = weekNetLookup[w.idx] ?? null;
+        const netVal = computeNet(w, config, taxDerived.extraPerCheck, showExtra);
+        const weekLogs = logs.filter(e => Number(e.weekIdx) === w.idx);
+        const fC = n => (n ?? 0).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const fN = n => n != null ? fC(n) : "—";
+        const Row = ({ label, val, mono = true, color }) => (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+            <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", flexShrink: 0, paddingRight: "12px" }}>{label}</span>
+            <span style={{ fontSize: "11px", fontFamily: mono ? "var(--font-mono)" : "inherit", color: color ?? "var(--color-text-primary)", textAlign: "right", wordBreak: "break-all" }}>{val}</span>
+          </div>
+        );
+        const SH = ({ children }) => (
+          <div style={{ fontSize: "8px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", marginTop: "16px", marginBottom: "6px", borderLeft: "2px solid var(--color-accent-primary)", paddingLeft: "6px" }}>{children}</div>
+        );
+        return (
+          <div
+            onClick={() => setInspectedWeek(null)}
+            style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(3,10,7,0.88)", overflowY: "auto", padding: "16px" }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", maxWidth: "480px", margin: "0 auto", padding: "16px 18px 24px" }}
+            >
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+                <div>
+                  <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", marginBottom: "4px" }}>Week Inspector</div>
+                  <div style={{ fontSize: "17px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
+                    Wk {w.idx} · {w.weekEnd instanceof Date ? w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : w.weekEnd}
+                  </div>
+                  <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "3px" }}>
+                    {w.weekStart instanceof Date ? w.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : w.weekStart}
+                    {" – "}
+                    {w.weekEnd instanceof Date ? w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : w.weekEnd}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setInspectedWeek(null)}
+                  style={{ background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "50%", width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "18px", flexShrink: 0 }}
+                >×</button>
+              </div>
+
+              {/* Badges */}
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "4px" }}>
+                {[
+                  [w.rotation, w.isHighWeek ? "var(--color-gold)" : "var(--color-text-secondary)"],
+                  [w.taxedBySchedule ? "Taxed" : "Exempt", w.taxedBySchedule ? "var(--color-green)" : "var(--color-text-disabled)"],
+                  [w.isHighWeek ? "High Week" : "Low Week", w.isHighWeek ? "var(--color-gold)" : "var(--color-text-disabled)"],
+                  [w.active ? "Active" : "Inactive", w.active ? "var(--color-green)" : "var(--color-text-disabled)"],
+                  ...(conf ? [["Confirmed", "var(--color-accent-primary)"]] : [["Unconfirmed", "var(--color-text-disabled)"]]),
+                ].map(([label, color]) => (
+                  <span key={label} style={{ fontSize: "8px", letterSpacing: "1px", textTransform: "uppercase", color, background: color + "18", border: `1px solid ${color}44`, borderRadius: "4px", padding: "2px 7px" }}>{label}</span>
+                ))}
+              </div>
+
+              {/* Schedule */}
+              <SH>Schedule</SH>
+              <Row label="Worked Days" val={(w.workedDayNames ?? []).join(", ") || "—"} />
+              <Row label="Total Hours" val={w.totalHours ?? "—"} />
+              <Row label="Regular Hours" val={w.regularHours ?? "—"} />
+              <Row label="Overtime Hours" val={w.overtimeHours > 0 ? w.overtimeHours : "—"} color={w.overtimeHours > 0 ? "var(--color-deduction)" : undefined} />
+              <Row label="Weekend Hours" val={w.weekendHours > 0 ? w.weekendHours : "—"} color={w.weekendHours > 0 ? "var(--color-gold)" : undefined} />
+
+              {/* Pay */}
+              <SH>Pay</SH>
+              <Row label="Gross Pay" val={fN(w.grossPay)} />
+              <Row label="Taxable Gross" val={fN(w.taxableGross)} />
+              <Row label="Benefits Deduction" val={fN(w.benefitsDeduction)} color="var(--color-deduction)" />
+              <Row label="401k (Employee)" val={fN(w.k401kEmployee)} color="var(--color-deduction)" />
+              <Row label="401k (Employer)" val={fN(w.k401kEmployer)} color="var(--color-green)" />
+              <Row label="computeNet (live)" val={fN(netVal)} color="var(--color-green)" />
+
+              {/* Net Lookup */}
+              {wLookup && <>
+                <SH>Net Lookup</SH>
+                <Row label="Base Net" val={fN(wLookup.baseNet)} />
+                <Row label="Event Adjustment" val={wLookup.adjustment !== 0 ? fC(wLookup.adjustment) : "none"} color={wLookup.adjustment > 0 ? "var(--color-green)" : wLookup.adjustment < 0 ? "var(--color-deduction)" : "var(--color-text-disabled)"} />
+                <Row label="Adjusted Net" val={fN(wLookup.adjustedNet)} color="var(--color-text-primary)" />
+                <Row label="Spendable" val={fN(wLookup.spendable)} />
+                <Row label="Adj Spendable" val={fN(wLookup.adjustedSpendable)} />
+              </>}
+
+              {/* Confirmation */}
+              <SH>Confirmation</SH>
+              {conf ? <>
+                <Row label="Confirmed At" val={new Date(conf.confirmedAt).toLocaleString()} mono={false} />
+                <Row label="Net Shift Delta" val={conf.netShiftDelta ?? 0} />
+                {conf.missedScheduledDays?.length > 0 && <Row label="Missed Days" val={conf.missedScheduledDays.join(", ")} color="var(--color-deduction)" />}
+                {conf.pickupDays?.length > 0 && <Row label="Pickup Days" val={conf.pickupDays.join(", ")} color="var(--color-green)" />}
+                {conf.autoConfirmed && <Row label="Auto-confirmed" val="yes" color="var(--color-text-disabled)" />}
+              </> : <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", padding: "6px 0" }}>Not confirmed</div>}
+
+              {/* Log Entries */}
+              <SH>Log Entries ({weekLogs.length})</SH>
+              {weekLogs.length === 0
+                ? <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", padding: "6px 0" }}>None</div>
+                : weekLogs.map(e => {
+                    const imp = calcEventImpact(e, config);
+                    const isB = e.type === "bonus";
+                    const ev = EVENT_TYPES[e.type] ?? { label: e.type, color: "var(--color-text-secondary)", icon: "?" };
+                    return (
+                      <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                        <span style={{ fontSize: "9px", color: ev.color }}>{ev.icon} {ev.label}</span>
+                        <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: isB ? "var(--color-green)" : "var(--color-deduction)" }}>
+                          {isB ? "+" : "-"}{fC(isB ? imp.netGained : imp.netLost)} net
+                        </span>
+                      </div>
+                    );
+                  })
+              }
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Admin Tools slide-up sheet ── */}
       {isAdmin && (
         <>
           {/* Backdrop — also hides the nav pill beneath it */}
           {toolSheetOpen && (
             <div
-              onClick={() => setToolSheetOpen(false)}
+              onClick={() => { setToolSheetOpen(false); setSheetDragY(0); }}
               style={{
                 position: "fixed", inset: 0, zIndex: 24,
                 background: "rgba(3, 10, 7, 0.82)",
+                cursor: "pointer",
+                touchAction: "none",
               }}
             />
           )}
@@ -2014,8 +2233,8 @@ export default function App() {
               left: 0,
               right: 0,
               zIndex: 25,
-              transform: toolSheetOpen ? "translateY(0)" : "translateY(100%)",
-              transition: "transform 0.28s ease",
+              transform: toolSheetOpen ? `translateY(${sheetDragY}px)` : "translateY(100%)",
+              transition: sheetDragY > 0 ? "none" : "transform 0.28s ease",
               borderRadius: "20px 20px 0 0",
               background: "var(--color-bg-surface)",
               borderTop: "1px solid var(--color-border-accent)",
@@ -2023,11 +2242,28 @@ export default function App() {
               borderRight: "1px solid var(--color-border-subtle)",
               maxHeight: "82vh",
               overflowY: "auto",
+              overflowX: "hidden",
+              touchAction: "pan-y",
             }}
           >
-            {/* Handle bar */}
-            <div style={{ display: "flex", justifyContent: "center", paddingTop: "12px", paddingBottom: "2px" }}>
-              <div style={{ width: "40px", height: "4px", borderRadius: "2px", background: "rgba(0,200,150,0.3)" }} />
+            {/* Handle bar — full-width drag zone, min 44px tall */}
+            <div
+              style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "44px", cursor: "grab", touchAction: "none" }}
+              onTouchStart={e => { sheetDragStartY.current = e.touches[0].clientY; }}
+              onTouchMove={e => {
+                if (sheetDragStartY.current === null) return;
+                const dy = e.touches[0].clientY - sheetDragStartY.current;
+                if (dy > 0) setSheetDragY(dy);
+              }}
+              onTouchEnd={() => {
+                if (sheetDragY > 120) {
+                  setToolSheetOpen(false);
+                }
+                setSheetDragY(0);
+                sheetDragStartY.current = null;
+              }}
+            >
+              <div style={{ width: "40px", height: "4px", borderRadius: "2px", background: sheetDragY > 0 ? "rgba(0,200,150,0.6)" : "rgba(0,200,150,0.3)", transition: "background 0.15s ease" }} />
             </div>
 
             {/* Header */}
@@ -2041,8 +2277,8 @@ export default function App() {
                   </span>
                 </div>
                 <button
-                  onClick={() => setToolSheetOpen(false)}
-                  style={{ background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "50%", width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "14px", lineHeight: 1, flexShrink: 0 }}
+                  onClick={() => { setToolSheetOpen(false); setSheetDragY(0); }}
+                  style={{ background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "50%", width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "18px", lineHeight: 1, flexShrink: 0 }}
                   aria-label="Close admin tools"
                 >×</button>
               </div>

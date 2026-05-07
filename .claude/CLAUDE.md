@@ -206,24 +206,29 @@ Files: kebab-case · Components: PascalCase · Utilities/hooks: camelCase · Dat
 ## Admin Diagnostic Toolkit
 
 **Gate:** `isAdmin` (from `user_data.is_admin`) unlocks all Phase 1 tools.
-`isOwner` (planned, `user_data.is_owner`) unlocks Phase 2 destructive tools — never grantable via UI.
+`isOwner` (`user_data.is_owner`, not yet built) unlocks Phase 2 destructive tools — never grantable via UI.
 
-**How to use in a session:** ask the user to open the Admin Tools sheet (Tools icon in mobile bottom nav, or hamburger → Admin Tools on desktop), run the relevant tool, and paste or describe the output here.
+**How to use in a session:** ask the user to open the Admin Tools sheet (Tools icon in mobile bottom nav), run the relevant tool, and paste or describe the output here.
 
-### Phase 1 — isAdmin (live ✓)
+### Phase 1 — isAdmin (all 7 live ✓)
 
 | Tool | How to invoke | What to ask for |
 |------|--------------|-----------------|
-| **Lock Date** | Tools sheet → Lock Date | Set a date to simulate a different `effectiveToday`. Ask: "set lock date to [date] and tell me what currentWeek, futureWeeks.length, and unconfirmedCount show." |
+| **Lock Date** | Tools sheet → Lock Date | Set a date to simulate a different `effectiveToday`. Ask: "set lock date to [date] and tell me what the Live Inspector shows for Effective Today, Week, and Future Weeks." |
 | **Force Sync** | Tools sheet → Sync | **Push ↑** flushes in-memory state to Supabase immediately (bypasses 800ms debounce). **Pull ↓** reloads from DB into memory. Use before/after a save-related bug. |
 | **Config Raw View** | Tools sheet → Config JSON → View ↓ | Paste the full JSON here to audit any config field. Copy button puts it on clipboard. |
 | **DB Row Viewer** | Tools sheet → DB Row → Fetch | Shows raw `user_data` row + `updated_at`. **Drift** badge lists any column where in-memory value ≠ DB value (`config`, `expenses`, `goals`, `logs`, `show_extra`, `week_confirmations`, `pto_goal`). Ask: "run Fetch and paste the drift line and updated_at." |
 | **Tax Weeks Grid** | Tools sheet → Tax Weeks → View ↓ | 52-cell grid. Teal = taxed/future · dark = untaxed/future · gray = past · gold border = current week · red dot = `pastWeekTaxStatusOverride`. Ask: "open Tax Weeks and describe any red dots or unexpected cell colors." |
+| **Live State Inspector** | Amber "Live" pill fixed bottom-right corner | Tap to expand a real-time card showing: `effectiveToday` (amber if lock-offset), week idx + label, futureWeeks.length, unconfirmedCount, extraPerCheck, totalGap, taxedWeekCount, fundedGoalSpend, bufferPerWeek, weeklyIncome, projectedAnnualNet. Ask: "open Live and paste all 11 values." |
+| **Week Inspector** | Tap any week row in Income panel | Full-screen modal. Shows every field on the week object: schedule (workedDayNames, hours, OT, weekend), pay (grossPay, taxableGross, deductions, 401k, live computeNet), net lookup (baseNet, adjustment, spendable), confirmation record, and all log entries touching this week with net impact. Ask: "tap week [N] and describe the Pay and Net Lookup sections." |
 
-### Phase 2 — isOwner (planned, not yet built)
+**Per-entry impact breakdown** (Log panel): tap the ▼ chevron on any log entry (admin-only) to expand an inline breakdown of that entry's exact impact — gross, net, 401k employee + match, PTO hours, bucket deduction, fiscal week idx, past/future classification.
+
+### Phase 2 — isOwner (not yet built — full spec in `docs/admin-toolkit-todo.md`)
 
 | Tool | Purpose | Risk |
 |------|---------|------|
+| **isOwner flag** | Migration + `db.js` + App state — prerequisite for everything below | — |
 | **Lock `firstActiveIdx`** | Makes this nuclear field read-only for isAdmin, editable only for isOwner | Repositions entire fiscal calendar retroactively |
 | **Tax Weeks Grid edit** | Tap a future cell to toggle `config.taxedWeeks` | Corrupts withholding math if misused |
 | **Bulk Week Confirmation Seeding** | Mark all weeks as worked / missed / reset all | Reset permanently deletes confirmation history |
@@ -235,5 +240,6 @@ Files: kebab-case · Components: PascalCase · Utilities/hooks: camelCase · Dat
 When filing a bug or building a feature that touches fiscal math, ask the user to run these and share:
 1. **Config dump** — Config JSON → Copy to Clipboard → paste here
 2. **Drift check** — DB Row → Fetch → report `updated_at` + any drift columns
-3. **Date context** — current `effectiveToday` (check Lock Date section; if no lock, it's real today)
+3. **Date context** — Live State Inspector → paste Effective Today + Week values
 4. **Tax grid** — Tax Weeks → View ↓ → screenshot or describe red dots + current week position
+5. **Week deep-dive** — tap the suspect week row in Income → describe Pay + Net Lookup + Log Entries sections

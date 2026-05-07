@@ -7,7 +7,7 @@ import { getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
-export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {} }) {
+export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {}, onWeekInspect = null }) {
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
@@ -380,7 +380,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
                   const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-secondary)";
                   const displayNet = resolveWeekNet(w) * perCheckFactor;
                   return (
-                    <div key={w.idx} style={{ marginBottom: "8px", opacity: isPastMonth ? 1 : (isPast ? 0.65 : 1) }}>
+                    <div key={w.idx} style={{ marginBottom: "8px", opacity: isPastMonth ? 1 : (isPast ? 0.65 : 1), cursor: onWeekInspect ? "pointer" : "default" }} onClick={onWeekInspect ? () => onWeekInspect(w) : undefined}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ fontSize: "11px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
                           {isBiweekly ? "Pay Period ending " : "Ends "}{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
@@ -440,9 +440,10 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
               return (
                 <tr
                   key={w.idx}
-                  style={{ borderBottom: "1px solid #161616", background: baseBg }}
+                  style={{ borderBottom: "1px solid #161616", background: baseBg, cursor: onWeekInspect ? "pointer" : "default" }}
                   onMouseEnter={e => { e.currentTarget.style.background = hoverBg; }}
                   onMouseLeave={e => { e.currentTarget.style.background = baseBg; }}
+                  onClick={onWeekInspect ? () => onWeekInspect(w) : undefined}
               >
                 <td style={{ padding: `${Math.round(7 * weeklyDensityScale)}px 4px`, color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
                   <span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
@@ -498,9 +499,10 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
             return (
               <tr
                 key={w.idx}
-                style={{ borderBottom: "1px solid #161616", background: baseBg }}
+                style={{ borderBottom: "1px solid #161616", background: baseBg, cursor: onWeekInspect ? "pointer" : "default" }}
                 onMouseEnter={e => { e.currentTarget.style.background = hoverBg; }}
                 onMouseLeave={e => { e.currentTarget.style.background = baseBg; }}
+                onClick={onWeekInspect ? () => onWeekInspect(w) : undefined}
               >
                 <td style={{ padding: "7px 4px", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>
                   <span>{w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>

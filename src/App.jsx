@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
-import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR } from "./constants/config.js";
+import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
@@ -228,6 +228,7 @@ export default function App() {
   const [rowFetching, setRowFetching] = useState(false);
   const [taxGridOpen, setTaxGridOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectedWeek, setInspectedWeek] = useState(null);
   // Persisted to Supabase week_confirmations JSONB column.
   // Shape: { [weekIdx]: { confirmedAt, dayToggles, scheduledDays, missedScheduledDays,
   //                        pickupDays, netShiftDelta, eventId } }
@@ -959,6 +960,7 @@ export default function App() {
         isAdmin={isAdmin}
         today={effectiveToday}
         weekNetLookup={weekNetLookup}
+        onWeekInspect={isAdmin ? setInspectedWeek : null}
       />}
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
@@ -2084,6 +2086,125 @@ export default function App() {
           </button>
         </div>
       )}
+
+      {/* ── Week Inspector modal ── */}
+      {isAdmin && inspectedWeek && (() => {
+        const w = inspectedWeek;
+        const conf = weekConfirmations[w.idx] ?? null;
+        const wLookup = weekNetLookup[w.idx] ?? null;
+        const netVal = computeNet(w, config, taxDerived.extraPerCheck, showExtra);
+        const weekLogs = logs.filter(e => Number(e.weekIdx) === w.idx);
+        const fC = n => (n ?? 0).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const fN = n => n != null ? fC(n) : "—";
+        const Row = ({ label, val, mono = true, color }) => (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+            <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", flexShrink: 0, paddingRight: "12px" }}>{label}</span>
+            <span style={{ fontSize: "11px", fontFamily: mono ? "var(--font-mono)" : "inherit", color: color ?? "var(--color-text-primary)", textAlign: "right", wordBreak: "break-all" }}>{val}</span>
+          </div>
+        );
+        const SH = ({ children }) => (
+          <div style={{ fontSize: "8px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-accent-primary)", marginTop: "16px", marginBottom: "6px", borderLeft: "2px solid var(--color-accent-primary)", paddingLeft: "6px" }}>{children}</div>
+        );
+        return (
+          <div
+            onClick={() => setInspectedWeek(null)}
+            style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(3,10,7,0.88)", overflowY: "auto", padding: "16px" }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", maxWidth: "480px", margin: "0 auto", padding: "16px 18px 24px" }}
+            >
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+                <div>
+                  <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", marginBottom: "4px" }}>Week Inspector</div>
+                  <div style={{ fontSize: "17px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
+                    Wk {w.idx} · {w.weekEnd instanceof Date ? w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : w.weekEnd}
+                  </div>
+                  <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "3px" }}>
+                    {w.weekStart instanceof Date ? w.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : w.weekStart}
+                    {" – "}
+                    {w.weekEnd instanceof Date ? w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : w.weekEnd}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setInspectedWeek(null)}
+                  style={{ background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "50%", width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "18px", flexShrink: 0 }}
+                >×</button>
+              </div>
+
+              {/* Badges */}
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "4px" }}>
+                {[
+                  [w.rotation, w.isHighWeek ? "var(--color-gold)" : "var(--color-text-secondary)"],
+                  [w.taxedBySchedule ? "Taxed" : "Exempt", w.taxedBySchedule ? "var(--color-green)" : "var(--color-text-disabled)"],
+                  [w.isHighWeek ? "High Week" : "Low Week", w.isHighWeek ? "var(--color-gold)" : "var(--color-text-disabled)"],
+                  [w.active ? "Active" : "Inactive", w.active ? "var(--color-green)" : "var(--color-text-disabled)"],
+                  ...(conf ? [["Confirmed", "var(--color-accent-primary)"]] : [["Unconfirmed", "var(--color-text-disabled)"]]),
+                ].map(([label, color]) => (
+                  <span key={label} style={{ fontSize: "8px", letterSpacing: "1px", textTransform: "uppercase", color, background: color + "18", border: `1px solid ${color}44`, borderRadius: "4px", padding: "2px 7px" }}>{label}</span>
+                ))}
+              </div>
+
+              {/* Schedule */}
+              <SH>Schedule</SH>
+              <Row label="Worked Days" val={(w.workedDayNames ?? []).join(", ") || "—"} />
+              <Row label="Total Hours" val={w.totalHours ?? "—"} />
+              <Row label="Regular Hours" val={w.regularHours ?? "—"} />
+              <Row label="Overtime Hours" val={w.overtimeHours > 0 ? w.overtimeHours : "—"} color={w.overtimeHours > 0 ? "var(--color-deduction)" : undefined} />
+              <Row label="Weekend Hours" val={w.weekendHours > 0 ? w.weekendHours : "—"} color={w.weekendHours > 0 ? "var(--color-gold)" : undefined} />
+
+              {/* Pay */}
+              <SH>Pay</SH>
+              <Row label="Gross Pay" val={fN(w.grossPay)} />
+              <Row label="Taxable Gross" val={fN(w.taxableGross)} />
+              <Row label="Benefits Deduction" val={fN(w.benefitsDeduction)} color="var(--color-deduction)" />
+              <Row label="401k (Employee)" val={fN(w.k401kEmployee)} color="var(--color-deduction)" />
+              <Row label="401k (Employer)" val={fN(w.k401kEmployer)} color="var(--color-green)" />
+              <Row label="computeNet (live)" val={fN(netVal)} color="var(--color-green)" />
+
+              {/* Net Lookup */}
+              {wLookup && <>
+                <SH>Net Lookup</SH>
+                <Row label="Base Net" val={fN(wLookup.baseNet)} />
+                <Row label="Event Adjustment" val={wLookup.adjustment !== 0 ? fC(wLookup.adjustment) : "none"} color={wLookup.adjustment > 0 ? "var(--color-green)" : wLookup.adjustment < 0 ? "var(--color-deduction)" : "var(--color-text-disabled)"} />
+                <Row label="Adjusted Net" val={fN(wLookup.adjustedNet)} color="var(--color-text-primary)" />
+                <Row label="Spendable" val={fN(wLookup.spendable)} />
+                <Row label="Adj Spendable" val={fN(wLookup.adjustedSpendable)} />
+              </>}
+
+              {/* Confirmation */}
+              <SH>Confirmation</SH>
+              {conf ? <>
+                <Row label="Confirmed At" val={new Date(conf.confirmedAt).toLocaleString()} mono={false} />
+                <Row label="Net Shift Delta" val={conf.netShiftDelta ?? 0} />
+                {conf.missedScheduledDays?.length > 0 && <Row label="Missed Days" val={conf.missedScheduledDays.join(", ")} color="var(--color-deduction)" />}
+                {conf.pickupDays?.length > 0 && <Row label="Pickup Days" val={conf.pickupDays.join(", ")} color="var(--color-green)" />}
+                {conf.autoConfirmed && <Row label="Auto-confirmed" val="yes" color="var(--color-text-disabled)" />}
+              </> : <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", padding: "6px 0" }}>Not confirmed</div>}
+
+              {/* Log Entries */}
+              <SH>Log Entries ({weekLogs.length})</SH>
+              {weekLogs.length === 0
+                ? <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", padding: "6px 0" }}>None</div>
+                : weekLogs.map(e => {
+                    const imp = calcEventImpact(e, config);
+                    const isB = e.type === "bonus";
+                    const ev = EVENT_TYPES[e.type] ?? { label: e.type, color: "var(--color-text-secondary)", icon: "?" };
+                    return (
+                      <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                        <span style={{ fontSize: "9px", color: ev.color }}>{ev.icon} {ev.label}</span>
+                        <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: isB ? "var(--color-green)" : "var(--color-deduction)" }}>
+                          {isB ? "+" : "-"}{fC(isB ? imp.netGained : imp.netLost)} net
+                        </span>
+                      </div>
+                    );
+                  })
+              }
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Admin Tools slide-up sheet ── */}
       {isAdmin && (

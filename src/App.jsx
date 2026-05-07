@@ -217,6 +217,10 @@ export default function App() {
   // null = personal view; 1 or 2 = admin is editing that demo account.
   // isAdmin-only: non-admin users never set this.
   const [adminDemoView, setAdminDemoView] = useState(null);
+  // null = idle; { op, pending, ok, ts, err } = in-flight or result
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [configViewOpen, setConfigViewOpen] = useState(false);
+  const [toolSheetOpen, setToolSheetOpen] = useState(false);
   // Persisted to Supabase week_confirmations JSONB column.
   // Shape: { [weekIdx]: { confirmedAt, dayToggles, scheduledDays, missedScheduledDays,
   //                        pickupDays, netShiftDelta, eventId } }
@@ -273,12 +277,11 @@ export default function App() {
 
   // ── Auth: check existing session on mount, subscribe to changes ──
   useEffect(() => {
-    // Resolve any existing session first (handles reload + PWA relaunch from localStorage).
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setAuthedUser(session?.user ?? null);
-      setAuthChecked(true);
-    });
-    // Subscribe to future sign-in / sign-out events.
+    // Rely solely on onAuthStateChange rather than calling getSession() first.
+    // getSession() resolves before Supabase has exchanged the OAuth code from the URL,
+    // so it can return null and then overwrite the SIGNED_IN user back to null — causing
+    // the Google login double-select bug. INITIAL_SESSION fires after any pending code
+    // exchange, so it's safe to use as the authChecked gate.
     return onAuthChange((event, user) => {
       if (event === "PASSWORD_RECOVERY") setPendingPasswordReset(true);
       else setPendingPasswordReset(false);
@@ -286,6 +289,9 @@ export default function App() {
       // Critical for Google OAuth users who have no row yet; safe no-op for email users.
       if (event === "SIGNED_IN" && user) syncUserProfile(user);
       setAuthedUser(user);
+      // INITIAL_SESSION fires once on startup (after OAuth code exchange if applicable).
+      // All other events also mark auth as checked so late-arriving events don't re-gate.
+      setAuthChecked(true);
     });
   }, []);
 
@@ -380,6 +386,37 @@ export default function App() {
     saveUserData({ config: newConfig, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
   }, [expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
 
+  const handleForcePush = useCallback(async () => {
+    clearTimeout(saveTimer.current);
+    pendingSaveRef.current = false;
+    setSyncStatus({ op: "push", pending: true });
+    try {
+      await saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
+      setSyncStatus({ op: "push", ok: true, ts: new Date() });
+    } catch {
+      setSyncStatus({ op: "push", ok: false });
+    }
+    setTimeout(() => setSyncStatus(null), 4000);
+  }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
+
+  const handleForcePull = useCallback(async () => {
+    setSyncStatus({ op: "pull", pending: true });
+    try {
+      const data = await loadUserData();
+      setConfig(data.config);
+      setShowExtra(data.showExtra);
+      setLogs(data.logs);
+      setExpenses(data.expenses);
+      setGoals(data.goals);
+      setWeekConfirmations(data.weekConfirmations ?? {});
+      setPtoGoal(data.ptoGoal);
+      setSyncStatus({ op: "pull", ok: true, ts: new Date() });
+    } catch {
+      setSyncStatus({ op: "pull", ok: false });
+    }
+    setTimeout(() => setSyncStatus(null), 4000);
+  }, [setConfig, setShowExtra, setLogs, setExpenses, setGoals, setWeekConfirmations, setPtoGoal]);
+
   const handleLocalSignOut = useCallback(async () => {
     await supabase.auth.signOut({ scope: "local" });
   }, []);
@@ -410,6 +447,19 @@ export default function App() {
     () => (isAdmin && tempLockDate) ? tempLockDate : today,
     [isAdmin, tempLockDate, today]
   );
+
+  const effectiveBottomNav = useMemo(() => {
+    if (!isAdmin) return BOTTOM_NAV;
+    return [...BOTTOM_NAV, {
+      key: "__tools__",
+      label: "Tools",
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/>
+        </svg>
+      ),
+    }];
+  }, [isAdmin]);
 
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config), [config]);
@@ -934,6 +984,7 @@ export default function App() {
             .sidebar { display: none !important; }
             .mobile-header { display: flex !important; }
             .mobile-bottom-nav { display: flex !important; }
+            .mobile-admin-sheet { display: flex !important; flex-direction: column !important; }
             /* On mobile the outer shell must have a definite height so the flex
                column inside can act as a scroll container. 100svh = "small viewport
                height" — excludes the address bar so layout doesn't jump when Chrome
@@ -968,6 +1019,7 @@ export default function App() {
           @media (min-width: 768px) {
             .mobile-header { display: none !important; }
             .mobile-bottom-nav { display: none !important; }
+            .mobile-admin-sheet { display: none !important; }
             /* DEBUG: overlay also hides on desktop so a half-open drawer doesn't
                ghost behind the sidebar if the user resizes the window. */
             .mobile-drawer-overlay { display: none !important; }
@@ -1173,6 +1225,52 @@ export default function App() {
                   </div>
                 )}
               </div>
+              {/* Force Sync */}
+              <div style={{ padding: "0 20px 10px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {["push", "pull"].map(op => (
+                    <button
+                      key={op}
+                      onClick={op === "push" ? handleForcePush : handleForcePull}
+                      disabled={!!syncStatus?.pending}
+                      style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "5px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer" }}
+                    >{op === "push" ? "Push ↑" : "Pull ↓"}</button>
+                  ))}
+                </div>
+                {syncStatus && (
+                  <div style={{ fontSize: "9px", marginTop: "5px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
+                    {syncStatus.pending
+                      ? (syncStatus.op === "push" ? "Pushing…" : "Pulling…")
+                      : syncStatus.ok
+                        ? `✓ ${syncStatus.op === "push" ? "Pushed" : "Pulled"} · ${syncStatus.ts.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+                        : `✗ ${syncStatus.op === "push" ? "Push" : "Pull"} failed`}
+                  </div>
+                )}
+              </div>
+
+              {/* Config Raw View */}
+              <div style={{ padding: "0 20px 10px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
+                  <button
+                    onClick={() => setConfigViewOpen(v => !v)}
+                    style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
+                  >{configViewOpen ? "Hide" : "View"}</button>
+                </div>
+                {configViewOpen && (
+                  <div style={{ position: "relative" }}>
+                    <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "180px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                      {JSON.stringify(config, null, 2)}
+                    </pre>
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
+                      style={{ marginTop: "5px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 0", cursor: "pointer" }}
+                    >Copy to Clipboard</button>
+                  </div>
+                )}
+              </div>
+
               {/* Demo account editing — admin only */}
               <div style={{ padding: "0 20px 12px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
@@ -1542,6 +1640,52 @@ export default function App() {
                 >Set</button>
               </div>
             )}
+            {/* Force Sync */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {["push", "pull"].map(op => (
+                  <button
+                    key={op}
+                    onClick={op === "push" ? handleForcePush : handleForcePull}
+                    disabled={!!syncStatus?.pending}
+                    style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer", minHeight: "44px" }}
+                  >{op === "push" ? "Push ↑" : "Pull ↓"}</button>
+                ))}
+              </div>
+              {syncStatus && (
+                <div style={{ fontSize: "10px", marginTop: "6px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
+                  {syncStatus.pending
+                    ? (syncStatus.op === "push" ? "Pushing…" : "Pulling…")
+                    : syncStatus.ok
+                      ? `✓ ${syncStatus.op === "push" ? "Pushed" : "Pulled"} · ${syncStatus.ts.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+                      : `✗ ${syncStatus.op === "push" ? "Push" : "Pull"} failed`}
+                </div>
+              )}
+            </div>
+
+            {/* Config Raw View */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
+                <button
+                  onClick={() => setConfigViewOpen(v => !v)}
+                  style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
+                >{configViewOpen ? "Hide" : "View"}</button>
+              </div>
+              {configViewOpen && (
+                <div>
+                  <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "220px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                    {JSON.stringify(config, null, 2)}
+                  </pre>
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
+                    style={{ marginTop: "8px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: "pointer", minHeight: "44px" }}
+                  >Copy to Clipboard</button>
+                </div>
+              )}
+            </div>
+
             {/* Demo account editing — admin only */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
@@ -1642,8 +1786,11 @@ export default function App() {
           {/* Sliding tab indicator — 2px teal bar that moves to the active tab.
               Contained within the pill via overflow:hidden on LiquidGlass. */}
           {(() => {
-            const activeIdx = Math.max(BOTTOM_NAV.findIndex(i => i.key === currentView), 0);
-            const pct = 100 / BOTTOM_NAV.length;
+            const toolsActive = toolSheetOpen && isAdmin;
+            const baseIdx = effectiveBottomNav.findIndex(i => i.key === currentView);
+            const toolsIdx = effectiveBottomNav.findIndex(i => i.key === "__tools__");
+            const activeIdx = toolsActive ? toolsIdx : Math.max(baseIdx, 0);
+            const pct = 100 / effectiveBottomNav.length;
             return (
               <div style={{
                 position: "absolute",
@@ -1651,24 +1798,35 @@ export default function App() {
                 left: `${activeIdx * pct}%`,
                 width: `${pct}%`,
                 height: "2px",
-                background: "var(--color-accent-primary)",
-                transition: "left 0.3s ease",
+                background: toolsActive ? "var(--color-warning)" : "var(--color-accent-primary)",
+                transition: "left 0.3s ease, background 0.2s ease",
                 borderRadius: "0 0 1px 1px",
               }} />
             );
           })()}
-          {BOTTOM_NAV.map(item => {
-            const active = currentView === item.key;
+          {effectiveBottomNav.map(item => {
+            const isToolsBtn = item.key === "__tools__";
+            const active = isToolsBtn ? toolSheetOpen : (currentView === item.key && !toolSheetOpen);
             return (
               <button
                 key={item.key}
-                onClick={() => navigateDirect(item.key)}
+                onClick={() => {
+                  if (isToolsBtn) {
+                    setToolSheetOpen(v => !v);
+                    setDrawerOpen(false);
+                  } else {
+                    setToolSheetOpen(false);
+                    navigateDirect(item.key);
+                  }
+                }}
                 style={{
                   flex: 1,
                   height: "100%",
                   background: "transparent",
                   border: "none",
-                  color: active ? "var(--color-accent-primary)" : "var(--color-text-disabled)",
+                  color: active
+                    ? (isToolsBtn ? "var(--color-warning)" : "var(--color-accent-primary)")
+                    : "var(--color-text-disabled)",
                   cursor: "pointer",
                   display: "flex",
                   flexDirection: "column",
@@ -1690,6 +1848,185 @@ export default function App() {
           })}
         </LiquidGlass>
       </div>
+
+      {/* ── Admin Tools slide-up sheet ── */}
+      {isAdmin && (
+        <>
+          {/* Backdrop — also hides the nav pill beneath it */}
+          {toolSheetOpen && (
+            <div
+              onClick={() => setToolSheetOpen(false)}
+              style={{
+                position: "fixed", inset: 0, zIndex: 24,
+                background: "rgba(3, 10, 7, 0.82)",
+              }}
+            />
+          )}
+          {/* Sheet */}
+          <div
+            className="mobile-admin-sheet"
+            style={{
+              display: "none",
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              zIndex: 25,
+              transform: toolSheetOpen ? "translateY(0)" : "translateY(100%)",
+              transition: "transform 0.28s ease",
+              borderRadius: "20px 20px 0 0",
+              background: "var(--color-bg-surface)",
+              borderTop: "1px solid var(--color-border-accent)",
+              borderLeft: "1px solid var(--color-border-subtle)",
+              borderRight: "1px solid var(--color-border-subtle)",
+              maxHeight: "82vh",
+              overflowY: "auto",
+            }}
+          >
+            {/* Handle bar */}
+            <div style={{ display: "flex", justifyContent: "center", paddingTop: "12px", paddingBottom: "2px" }}>
+              <div style={{ width: "40px", height: "4px", borderRadius: "2px", background: "rgba(0,200,150,0.3)" }} />
+            </div>
+
+            {/* Header */}
+            <div style={{ padding: "10px 20px 12px", borderBottom: "1px solid var(--color-border-subtle)" }}>
+              {/* Row 1: title + close */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <span style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", fontWeight: "bold" }}>
+                    Admin Tools
+                  </span>
+                </div>
+                <button
+                  onClick={() => setToolSheetOpen(false)}
+                  style={{ background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "50%", width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "14px", lineHeight: 1, flexShrink: 0 }}
+                  aria-label="Close admin tools"
+                >×</button>
+              </div>
+              {/* Row 2: current panel context + active lock pill */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+                  On: <span style={{ color: "var(--color-text-primary)" }}>{NAV_ITEMS.find(i => i.key === currentView)?.label ?? "Home"}</span>
+                </span>
+                {tempLockDate && (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "3px 7px 3px 8px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase" }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <span>Locked: {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                    <button
+                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                      style={{ background: "transparent", border: "none", color: "var(--color-warning)", fontSize: "12px", lineHeight: 1, cursor: "pointer", padding: "0", marginLeft: "1px" }}
+                      aria-label="Clear lock date"
+                    >×</button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Tool sections — each separated by a divider */}
+            <div style={{ padding: "0 20px" }}>
+
+              {/* ── Lock Date ── */}
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Lock Date</div>
+                {tempLockDate ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "13px", color: "var(--color-warning)", fontFamily: "var(--font-mono)", flex: 1 }}>{tempLockDate}</span>
+                    <button
+                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                      style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
+                    >Clear ×</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <input
+                      type="date"
+                      value={adminDateDraft}
+                      onChange={e => setAdminDateDraft(e.target.value)}
+                      style={{ width: "100%", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "16px", padding: "10px 12px", fontFamily: "var(--font-mono)", colorScheme: "dark", boxSizing: "border-box" }}
+                    />
+                    <button
+                      onClick={() => { if (adminDateDraft) setTempLockDate(adminDateDraft); }}
+                      disabled={!adminDateDraft}
+                      style={{ width: "100%", background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "8px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold", minHeight: "44px" }}
+                    >Set Lock Date</button>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Force Sync ── */}
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Sync</div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  {["push", "pull"].map(op => (
+                    <button
+                      key={op}
+                      onClick={op === "push" ? handleForcePush : handleForcePull}
+                      disabled={!!syncStatus?.pending}
+                      style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer", minHeight: "44px" }}
+                    >{op === "push" ? "Push ↑" : "Pull ↓"}</button>
+                  ))}
+                </div>
+                {syncStatus && (
+                  <div style={{ fontSize: "10px", marginTop: "8px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
+                    {syncStatus.pending
+                      ? (syncStatus.op === "push" ? "Pushing…" : "Pulling…")
+                      : syncStatus.ok
+                        ? `✓ ${syncStatus.op === "push" ? "Pushed" : "Pulled"} · ${syncStatus.ts.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+                        : `✗ ${syncStatus.op === "push" ? "Push" : "Pull"} failed`}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Config JSON ── */}
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: configViewOpen ? "10px" : "0" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
+                  <button
+                    onClick={() => setConfigViewOpen(v => !v)}
+                    style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
+                  >{configViewOpen ? "Hide ↑" : "View ↓"}</button>
+                </div>
+                {configViewOpen && (
+                  <div>
+                    <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                      {JSON.stringify(config, null, 2)}
+                    </pre>
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
+                      style={{ marginTop: "8px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: "pointer", minHeight: "44px" }}
+                    >Copy to Clipboard</button>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Demo Accounts ── */}
+              <div style={{ padding: "14px 0" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
+                  Demo Accounts
+                  {adminDemoView !== null && (
+                    <span style={{ color: "var(--color-warning)", marginLeft: "8px" }}>· Editing Demo {adminDemoView}</span>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  {[1, 2].map(n => (
+                    <button
+                      key={n}
+                      onClick={() => { setAdminDemoView(adminDemoView === n ? null : n); setToolSheetOpen(false); }}
+                      style={{ flex: 1, background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: adminDemoView === n ? "none" : "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: adminDemoView === n ? "var(--color-bg-base)" : "var(--color-text-secondary)", cursor: "pointer", fontWeight: adminDemoView === n ? "bold" : "normal", minHeight: "44px" }}
+                    >
+                      {adminDemoView === n ? "← Exit Demo" : `Demo ${n}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Bottom safe-area spacer */}
+              <div style={{ height: "calc(72px + env(safe-area-inset-bottom, 0px))" }} />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Weekly work confirmation modal ──
           Shows when: unconfirmed past week exists AND confirmDismissed is false.

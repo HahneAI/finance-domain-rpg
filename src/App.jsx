@@ -225,6 +225,7 @@ export default function App() {
   const [rowData, setRowData] = useState(null);
   const [rowFetching, setRowFetching] = useState(false);
   const [taxGridOpen, setTaxGridOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   // Persisted to Supabase week_confirmations JSONB column.
   // Shape: { [weekIdx]: { confirmedAt, dayToggles, scheduledDays, missedScheduledDays,
   //                        pickupDays, netShiftDelta, eventId } }
@@ -961,6 +962,7 @@ export default function App() {
       />}
       {currentView === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
+        effectiveToday={effectiveToday}
         setConfig={setConfig} weekConfirmations={weekConfirmations}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
@@ -1021,6 +1023,7 @@ export default function App() {
             .mobile-header { display: flex !important; }
             .mobile-bottom-nav { display: flex !important; }
             .mobile-admin-sheet { display: flex !important; flex-direction: column !important; }
+            .admin-inspector { bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important; }
             /* On mobile the outer shell must have a definite height so the flex
                column inside can act as a scroll container. 100svh = "small viewport
                height" — excludes the address bar so layout doesn't jump when Chrome
@@ -1990,6 +1993,83 @@ export default function App() {
           })}
         </LiquidGlass>
       </div>
+
+      {/* ── Live State Inspector ── */}
+      {isAdmin && (
+        <div
+          className="admin-inspector"
+          style={{
+            position: "fixed",
+            right: "16px",
+            bottom: "20px",
+            zIndex: 22,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: "6px",
+          }}
+        >
+          {/* Expanded card */}
+          {inspectorOpen && (
+            <div style={{
+              background: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border-accent)",
+              borderRadius: "12px",
+              padding: "12px 14px",
+              width: "220px",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+            }}>
+              <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", marginBottom: "10px", fontWeight: "bold" }}>Live State</div>
+              {[
+                ["Effective Today", effectiveToday, today !== effectiveToday ? `real: ${today}` : null],
+                ["Week", currentWeek ? `${currentWeek.idx}` : "—", currentWeekLabel],
+                ["Future Weeks", futureWeeks.length, null],
+                ["Unconfirmed", unconfirmedCount, null],
+                ["Extra / Check", taxDerived.extraPerCheck > 0 ? `$${taxDerived.extraPerCheck.toFixed(2)}` : "$0", null],
+                ["Tax Gap", `$${Math.round(taxDerived.totalGap).toLocaleString()}`, null],
+                ["Taxed Checks", taxDerived.taxedWeekCount, "remaining"],
+                ["Goal Spend", `$${Math.round(fundedGoalSpend).toLocaleString()}`, "funded"],
+                ["Buffer / Wk", `$${Math.round(bufferPerWeek).toLocaleString()}`, null],
+                ["Weekly Income", `$${Math.round(weeklyIncome).toLocaleString()}`, null],
+                ["Annual Net", `$${Math.round(projectedAnnualNet).toLocaleString()}`, null],
+              ].map(([label, val, sub]) => (
+                <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", flexShrink: 0 }}>{label}</span>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: label === "Effective Today" && today !== effectiveToday ? "var(--color-warning)" : "var(--color-text-primary)" }}>{val}</span>
+                    {sub && <div style={{ fontSize: "8px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>{sub}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Pill toggle button */}
+          <button
+            onClick={() => setInspectorOpen(v => !v)}
+            style={{
+              background: inspectorOpen ? "var(--color-warning)" : "rgba(245,158,11,0.18)",
+              border: `1px solid ${inspectorOpen ? "var(--color-warning)" : "rgba(245,158,11,0.4)"}`,
+              borderRadius: "20px",
+              padding: "6px 12px",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              cursor: "pointer",
+              color: inspectorOpen ? "var(--color-bg-base)" : "var(--color-warning)",
+              fontSize: "9px",
+              letterSpacing: "1.5px",
+              textTransform: "uppercase",
+              fontWeight: "bold",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+            </svg>
+            {inspectorOpen ? "Close" : "Live"}
+          </button>
+        </div>
+      )}
 
       {/* ── Admin Tools slide-up sheet ── */}
       {isAdmin && (

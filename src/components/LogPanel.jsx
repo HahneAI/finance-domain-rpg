@@ -32,7 +32,7 @@ const EMPTY_FORM = { label: "", hoursNeeded: "", targetDate: "", negativeBalance
 
 export function LogPanel({
   logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals,
-  fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isEmployerDHL = false, isAdmin = false, setConfig,
+  fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isEmployerDHL = false, isAdmin = false, effectiveToday = null, setConfig,
   logK401kLost = 0, logK401kMatchLost = 0, logK401kGained = 0, logK401kMatchGained = 0, logPTOHoursLost = 0,
   ptoGoal, setPtoGoal, weekConfirmations = {},
 }) {
@@ -50,6 +50,7 @@ export function LogPanel({
   const [histOpen, setHistOpen] = useState(false);
   const [addConfirming, setAddConfirming] = useState(false);
   const [editConfirming, setEditConfirming] = useState(false);
+  const [expandedImpact, setExpandedImpact] = useState(new Set());
   const [cancelWarning, setCancelWarning] = useState(false);
   const [pulseKey, setPulseKey] = useState(0);
 
@@ -665,7 +666,18 @@ export function LogPanel({
                 {entry.type === "bonus"             && `+${f(entry.amount)} bonus`}
                 {entry.type === "other_loss"        && `-${f(entry.amount)} other`}
               </div>
-              <div style={{ display: "flex", gap: "6px" }}>
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                {isAdmin && (
+                  <button
+                    onClick={() => setExpandedImpact(prev => {
+                      const next = new Set(prev);
+                      next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
+                      return next;
+                    })}
+                    style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", padding: "4px 6px", cursor: "pointer", fontSize: "12px", lineHeight: 1 }}
+                    title="Admin: impact breakdown"
+                  >{expandedImpact.has(entry.id) ? "▲" : "▼"}</button>
+                )}
                 <button onClick={() => startEdit(entry)} style={{ background: "transparent", border: "1px solid #444", color: "var(--color-text-primary)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>EDIT</button>
                 {cdel === entry.id
                   ? <>
@@ -676,6 +688,37 @@ export function LogPanel({
                 }
               </div>
             </div>
+            {isAdmin && expandedImpact.has(entry.id) && (() => {
+              const today = effectiveToday ?? toLocalIso(new Date());
+              const isFuture = entry.weekEnd ? entry.weekEnd >= today : null;
+              const rows = [
+                imp.grossLost   > 0 && ["Gross Lost",       `-${f(imp.grossLost)}`],
+                imp.grossGained > 0 && ["Gross Gained",     `+${f(imp.grossGained)}`],
+                imp.netLost     > 0 && ["Net Lost",         `-${f(imp.netLost)}`],
+                imp.netGained   > 0 && ["Net Gained",       `+${f(imp.netGained)}`],
+                imp.k401kLost   > 0 && ["401k Lost",        `-${f(imp.k401kLost)}`],
+                imp.k401kMatchLost > 0 && ["401k Match Lost", `-${f(imp.k401kMatchLost)}`],
+                imp.k401kGained > 0 && ["401k Gained",     `+${f(imp.k401kGained)}`],
+                imp.k401kMatchGained > 0 && ["401k Match Gained", `+${f(imp.k401kMatchGained)}`],
+                imp.hoursLostForPTO > 0 && ["PTO Hours Lost", `${imp.hoursLostForPTO}h`],
+                imp.bucketHoursDeducted > 0 && ["Bucket Deducted", `${imp.bucketHoursDeducted}h`],
+                entry.weekIdx != null && ["Fiscal Week", `Wk ${entry.weekIdx}`],
+                isFuture !== null && ["Timing", isFuture ? "Future" : "Past"],
+              ].filter(Boolean);
+              return (
+                <div style={{ marginTop: "8px", padding: "8px 10px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
+                  <div style={{ fontSize: "8px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", marginBottom: "6px" }}>Impact Breakdown</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 12px" }}>
+                    {rows.map(([label, val]) => (
+                      <div key={label} style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>{label}</span>
+                        <span style={{ fontSize: "9px", fontFamily: "var(--font-mono)", color: val.startsWith("-") ? "var(--color-deduction)" : val.startsWith("+") ? "var(--color-green)" : "var(--color-text-primary)" }}>{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </>
         )}
       </div>;

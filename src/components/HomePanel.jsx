@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear } from "../lib/finance.js";
-import { FISCAL_YEAR_START } from "../constants/config.js";
+import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -50,6 +50,12 @@ export function HomePanel({
   fundedGoalSpend = 0,
   isAdmin = false,
 }) {
+  // Scale factor: weekly → per-paycheck (1 for weekly, 2 for biweekly/salary, ~4.33 for monthly).
+  // All card values shown to the user are scaled by this factor so the amount matches
+  // what lands in their bank account each paycheck cycle.
+  const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
+  const perCheckFactor = 52 / checksPerYear;
+
   const avgWeeklySpend = remainingSpend?.avgWeeklySpend ?? 0;
   const monthlyExpenses = avgWeeklySpend * (FISCAL_WEEKS_PER_YEAR / 12);
   const monthlyTakehome = (adjustedTakeHome ?? (weeklyIncome * FISCAL_WEEKS_PER_YEAR)) / 12;
@@ -142,20 +148,23 @@ export function HomePanel({
     const diff = nextWeekNet - weeklyIncome;
     const pct  = Math.round(Math.abs(diff / weeklyIncome) * 100);
     if (Math.abs(diff) < weeklyIncome * 0.03)
-      return { arrow: "flat", delta: null, label: "on avg weekly pace", variant: "blue" };
+      return { arrow: "flat", delta: null, label: "on avg pace", variant: "blue" };
     return {
       arrow:   diff > 0 ? "up" : "down",
       delta:   `${pct}%`,
-      label:   `vs avg (${diff > 0 ? "+" : ""}${fmt$(Math.round(diff))})`,
+      label:   `vs avg (${diff > 0 ? "+" : ""}${fmt$(Math.round(diff * perCheckFactor))})`,
       variant: diff > 0 ? "blue" : "purple",
     };
   })() : undefined;
 
+  const nextCheckTitle = checksPerYear === 52 ? "Next Week Takehome"
+    : checksPerYear === 26 ? "Next Paycheck"
+    : "Next Check";
   const tiles = [
     {
-      title: "Next Week Takehome",
-      value: nextWeekDisplay != null ? fmt$(nextWeekDisplay) : fmt$(weeklyIncome),
-      rawVal: nextWeekDisplay ?? weeklyIncome,
+      title: nextCheckTitle,
+      value: nextWeekDisplay != null ? fmt$(nextWeekDisplay * perCheckFactor) : fmt$(weeklyIncome * perCheckFactor),
+      rawVal: (nextWeekDisplay ?? weeklyIncome) * perCheckFactor,
       sub: nextWeekNet != null
         ? (nextWeekNet < weeklyIncome * 0.8 ? "est. · below avg · check log"
           : nextWeekNet < weeklyIncome * 0.95 ? "est. · slightly below avg"
@@ -304,7 +313,10 @@ export function HomePanel({
 
   useEffect(() => {
     if (!currentWeek || !setGoals) return;
-    const needsUpdate = tl.filter((g) => g.eW !== null && !g.dueWeek);
+    const needsUpdate = tl.filter((g) => {
+      if (g.eW === null) return false;
+      return g.dueWeek !== currentWeek.idx + Math.ceil(g.eW);
+    });
     if (!needsUpdate.length) return;
     setGoals((prev) => prev.map((goal) => {
       const match = needsUpdate.find((g) => g.id === goal.id);
@@ -349,7 +361,8 @@ export function HomePanel({
     const offset = Math.max(Math.ceil(offsetRaw), 0);
     const weekNum = Math.min(nowIdx + offset, FISCAL_WEEKS_PER_YEAR);
     const finishIdx = futureWeeks?.length ? Math.min(offset, futureWeeks.length - 1) : null;
-    const finishDate = finishIdx != null ? futureWeeks[finishIdx]?.weekEnd : null;
+    const finishWeek = finishIdx != null ? futureWeeks[finishIdx] : null;
+    const finishDate = finishWeek?.payPeriodEndDate ?? finishWeek?.weekEnd ?? null;
     const dateLabel = formatGoalFinishDate(finishDate);
     return dateLabel ? `By ${dateLabel}, week ${weekNum}` : `Week ${weekNum}`;
   };
@@ -613,9 +626,9 @@ export function HomePanel({
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
                             <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                            <div style={{ fontSize: "10px", color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-red)") }}>{resolveGoalFinishLabel(g)}</div>
+                            <div style={{ fontSize: "10px", color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
                             {!Number.isFinite(g.eW) && <div style={{ fontSize: "9px", color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
-                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
+                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                           </div>
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
@@ -660,10 +673,10 @@ export function HomePanel({
                             <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
                               <>
-                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)" style={{ flex: 1 }}>DEL</SmBtn>
+                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>DEL</SmBtn>
                                 <SmBtn onClick={() => setDelGoalId(null)} style={{ flex: 1 }}>NO</SmBtn>
                               </>
-                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)" style={{ flex: 1 }}>✕</SmBtn>}
+                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>✕</SmBtn>}
                           </div>
                         </div>
                       </div>
@@ -735,9 +748,9 @@ export function HomePanel({
                           </div>
                           <div style={{ textAlign: "right", marginLeft: "12px" }}>
                             <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
-                            <div style={{ fontSize: "10px", color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-red)") }}>{resolveGoalFinishLabel(g)}</div>
+                            <div style={{ fontSize: "10px", color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
                             {!Number.isFinite(g.eW) && <div style={{ fontSize: "9px", color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
-                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-red)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
+                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
                           </div>
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
@@ -782,10 +795,10 @@ export function HomePanel({
                             <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
                               <>
-                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-red)" style={{ flex: 1 }}>DEL</SmBtn>
+                                <SmBtn onClick={() => deleteGoal(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>DEL</SmBtn>
                                 <SmBtn onClick={() => setDelGoalId(null)} style={{ flex: 1 }}>NO</SmBtn>
                               </>
-                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-red)" style={{ flex: 1 }}>✕</SmBtn>}
+                            ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>✕</SmBtn>}
                           </div>
                         </div>
                       </div>
@@ -1080,7 +1093,7 @@ export function HomePanel({
             <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div>
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-red)" }}>-{fmt$(fundedGoalSpend)}</div>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-deduction)" }}>-{fmt$(fundedGoalSpend)}</div>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Adj. projected savings</div>
@@ -1089,7 +1102,7 @@ export function HomePanel({
             <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
-              <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - totalActiveGoals >= 0 ? "var(--color-green)" : "var(--color-red)" }}>
+              <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - totalActiveGoals >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
                 {fmt$(annualSavings - totalActiveGoals)}
               </div>
             </div>

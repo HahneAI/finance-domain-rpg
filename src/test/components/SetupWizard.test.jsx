@@ -11,6 +11,7 @@ const BASE_CONFIG = {
   fedRateLow: 0.0784,
   userState: 'MO',
   startDate: '2026-03-01',
+  maxWeeklyHours: 40,
   attendanceBucketEnabled: false,
   paycheckBuffer: 50,
   bufferEnabled: true,
@@ -163,8 +164,8 @@ describe('SetupWizard — validation gates', () => {
     expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled()
   })
 
-  it('Step 2: non-DHL requires standardWeeklyHours and payPeriodEndDay', () => {
-    const config = { ...BASE_CONFIG, employerPreset: null, standardWeeklyHours: null, payPeriodEndDay: null }
+  it('Step 2: non-DHL requires maxWeeklyHours and payPeriodEndDay', () => {
+    const config = { ...BASE_CONFIG, employerPreset: null, maxWeeklyHours: null, payPeriodEndDay: null }
     renderWizard({ config })
     clickNext()
     clickNext()

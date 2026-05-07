@@ -545,7 +545,7 @@ describe('computeNet', () => {
     const week = weeks.find(w => w.active && !w.taxedBySchedule)
     const cfg = DHL_CONFIG
     const benefits = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly
-    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0)
+    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.perCheckAmount ?? r.weeklyAmount ?? 0), 0)
     const expected = week.grossPay - week.grossPay * cfg.ficaRate - benefits - week.k401kEmployee - other
     expect(computeNet(week, cfg)).toBeCloseTo(expected)
   })
@@ -555,7 +555,7 @@ describe('computeNet', () => {
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly + week.k401kEmployee
-    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0)
+    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.perCheckAmount ?? r.weeklyAmount ?? 0), 0)
     const fed = week.taxableGross * cfg.fedRateLow  // 4-Day = short = fedRateLow
     const st = week.taxableGross * cfg.stateRateLow
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded - other)
@@ -566,7 +566,7 @@ describe('computeNet', () => {
     const cfg = DHL_CONFIG
     const fica = week.grossPay * cfg.ficaRate
     const ded = cfg.healthPremium + cfg.dentalPremium + cfg.visionPremium + cfg.ltd + cfg.stdWeekly + cfg.lifePremium + cfg.hsaWeekly + cfg.fsaWeekly + week.k401kEmployee
-    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.weeklyAmount || 0), 0)
+    const other = (cfg.otherDeductions || []).reduce((s, r) => s + (r.perCheckAmount ?? r.weeklyAmount ?? 0), 0)
     const fed = week.taxableGross * cfg.fedRateHigh  // 6-Day = long = fedRateHigh
     const st = week.taxableGross * cfg.stateRateHigh
     expect(computeNet(week, cfg)).toBeCloseTo(week.grossPay - fed - st - fica - ded - other)
@@ -630,7 +630,7 @@ describe('computeNet', () => {
   it('subtracts otherDeductions after taxes', () => {
     const cfg = {
       ...DHL_CONFIG,
-      otherDeductions: [{ id: 'parking', weeklyAmount: 18 }],
+      otherDeductions: [{ id: 'parking', perCheckAmount: 18 }],
     }
     const week = buildYear(cfg).find(w => w.active && w.taxedBySchedule)
     const withOther = computeNet(week, cfg)
@@ -1071,6 +1071,72 @@ describe('computeGoalTimeline', () => {
     // Week 1 contributes $250 surplus, leaving $750 still unfunded:
     // fallback should be 750 / 250 = 3.0 weeks, not 750 / 500 = 1.5.
     expect(result[0].wN).toBeCloseTo(3, 1)
+  })
+
+  it('moves goal ETA later when expenses increase by $150/week', () => {
+    // Baseline: $400 net/week, $100/week expenses → $300/week surplus
+    const goals = [
+      { id: 'g1', target: 500, label: 'First' },
+      { id: 'g2', target: 1000, label: 'Second' },
+    ]
+    const futureWeeks = Array.from({ length: 26 }, (_, i) => ({
+      idx: i + 1,
+      weekEnd: new Date(2026, 0, (i + 1) * 7),
+    }))
+    const weeklyNets = Array(26).fill(400)
+    const baslineExpenses = [
+      { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [100, 100, 100, 100] }] },
+    ]
+    const higherExpenses = [
+      { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [250, 250, 250, 250] }] },
+    ]
+
+    const baseline = computeGoalTimeline(goals, futureWeeks, weeklyNets, baslineExpenses, 0, 0)
+    const higher = computeGoalTimeline(goals, futureWeeks, weeklyNets, higherExpenses, 0, 0)
+
+    // Both goals must complete within the year at baseline surplus
+    expect(baseline[0].eW).not.toBeNull()
+    expect(baseline[1].eW).not.toBeNull()
+
+    // With $150/week more expenses (surplus drops $100→$250 is actually more), verify direction:
+    // Higher expenses → less surplus → goal #2 finishes later (larger eW) or goes null
+    const g2BaseEW = baseline[1].eW
+    const g2HigherEW = higher[1].eW
+    if (g2HigherEW !== null) {
+      expect(g2HigherEW).toBeGreaterThan(g2BaseEW)
+    } else {
+      expect(g2HigherEW).toBeNull() // goal can't finish this year — also correct
+    }
+  })
+
+  it('moves goal ETA later when expenses increase by $300/week', () => {
+    const goals = [{ id: 'g1', target: 2000, label: 'Big Goal' }]
+    const futureWeeks = Array.from({ length: 26 }, (_, i) => ({
+      idx: i + 1,
+      weekEnd: new Date(2026, 0, (i + 1) * 7),
+    }))
+    const weeklyNets = Array(26).fill(500)
+    const lowExpenses = [
+      { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [50, 50, 50, 50] }] },
+    ]
+    const highExpenses = [
+      { category: 'Needs', history: [{ effectiveFrom: '2026-01-05', weekly: [350, 350, 350, 350] }] },
+    ]
+
+    const low = computeGoalTimeline(goals, futureWeeks, weeklyNets, lowExpenses, 0, 0)
+    const high = computeGoalTimeline(goals, futureWeeks, weeklyNets, highExpenses, 0, 0)
+
+    // Low expenses: $450/week surplus → goal funded in ~5 weeks
+    expect(low[0].eW).not.toBeNull()
+    expect(low[0].eW).toBeLessThan(6)
+
+    // +$300/week expenses → $150/week surplus → goal takes ~14 weeks
+    if (high[0].eW !== null) {
+      expect(high[0].eW).toBeGreaterThan(low[0].eW)
+      expect(high[0].eW).toBeGreaterThan(10)
+    } else {
+      expect(high[0].eW).toBeNull() // beyond 26 weeks is also valid
+    }
   })
 })
 

@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
-import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek } from "./lib/finance.js";
+import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR } from "./constants/config.js";
+import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount } from "./lib/db.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
@@ -13,6 +13,8 @@ import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
 import { SetupWizard } from "./components/SetupWizard.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
+import { InvestorRegister } from "./components/InvestorRegister.jsx";
+import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 
@@ -186,7 +188,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [showExtra, setShowExtra] = useState(true);
-  const [isDHL, setIsDHL] = useState(false);
+  const [isEmployerDHL, setIsEmployerDHL] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [ptoGoal, setPtoGoal] = useState(null);
   const [logs, setLogs] = useState(INITIAL_LOGS);
@@ -196,11 +198,25 @@ export default function App() {
   // "home" is always the base — never popped below depth 1.
   const [viewStack, setViewStack] = useState(["home"]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Investor pre-auth state — set when a valid code is entered on LoginScreen.
+  // Cleared on sign-out or when the user navigates back from InvestorRegister.
+  const [investorSession, setInvestorSession] = useState(null); // null | { code: string }
+  // Active investor account tab — 1 = Demo 1, 2 = Demo 2, 3 = personal account.
+  // Defaults to 1 so investors land on demo content on every login.
+  const [activeInvestorAccount, setActiveInvestorAccount] = useState(1);
+  // Incremented after investor account creation to force a second loadUserData
+  // call once all DB writes (investor_users + user_data) have settled.
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+  // Investor profile fetched from investor_users on login — null for non-investors.
+  const [investorProfile, setInvestorProfile] = useState(null);
   const [tempLockDate, setTempLockDate] = useState(() => {
     const stored = localStorage.getItem("admin_temp_lock_date");
     return stored && Date.parse(stored) > 0 ? stored : null;
   });
   const [adminDateDraft, setAdminDateDraft] = useState("");
+  // null = personal view; 1 or 2 = admin is editing that demo account.
+  // isAdmin-only: non-admin users never set this.
+  const [adminDemoView, setAdminDemoView] = useState(null);
   // Persisted to Supabase week_confirmations JSONB column.
   // Shape: { [weekIdx]: { confirmedAt, dayToggles, scheduledDays, missedScheduledDays,
   //                        pickupDays, netShiftDelta, eventId } }
@@ -247,9 +263,11 @@ export default function App() {
 
   // Direct jump: always lands as ["home", key] — used by sidebar/drawer/bottom-nav
   // so switching panels never nests indefinitely.
+  // Also exits any active admin demo view so the personal panel is shown.
   const navigateDirect = (key) => {
     setViewStack(key === "home" ? ["home"] : ["home", key]);
     setDrawerOpen(false);
+    setAdminDemoView(null);
     jumpToPanelTop();
   };
 
@@ -287,10 +305,17 @@ export default function App() {
         setExpenses(data.expenses);
         setGoals(data.goals);
         setWeekConfirmations(data.weekConfirmations ?? {});
-        setIsDHL(data.isDHL);
+        setIsEmployerDHL(data.isEmployerDHL);
         setIsAdmin(data.isAdmin);
         setPtoGoal(data.ptoGoal);
-        if (!data.config.setupComplete) setWizardEntry(false);
+        if (data.isInvestor) {
+          setInvestorProfile(data.investorProfile ?? null);
+          setActiveInvestorAccount(data.activeInvestorAccount ?? 1);
+        }
+        // Investors reach the wizard via account 3 selection — not on login.
+        // Guard against the race where onAuthStateChange fires before createInvestorAccount
+        // has finished writing investor config — investorSession still non-null at that point.
+        if (!data.config.setupComplete && !data.config.isInvestor && !investorSession) setWizardEntry(false);
         setLoading(false);
       })
       .catch((err) => {
@@ -298,7 +323,7 @@ export default function App() {
         setLoading(false);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authedUser?.id]);
+  }, [authedUser?.id, reloadTrigger]);
 
   // ── Debounced save to Supabase (800ms) ──
   const saveTimer = useRef(null);
@@ -389,6 +414,33 @@ export default function App() {
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config), [config]);
 
+  // ── Pay period past check ──
+  // Determines whether a week's pay period has closed, gating the confirmation modal
+  // and badge count. Uses payPeriodEndDate (the day within the fiscal week matching
+  // config.payPeriodEndDay) rather than weekEnd (always Monday) so the trigger fires
+  // on the correct day of the week.
+  //
+  // Base users: fires at 12:01 AM the day after payPeriodEndDay (pure date comparison).
+  // DHL: pays through Sunday but the overnight shift runs until Mon 6:00 AM, so the
+  //   trigger is gated to Monday 6:01 AM. Admin date-lock bypasses the hour gate so
+  //   manual testing works regardless of the wall-clock time.
+  const isPayPeriodPast = useCallback((week) => {
+    const isEmployerDHL = config.employerPreset === "DHL";
+    const payPeriodEndIso = toLocalIso(week.payPeriodEndDate);
+    if (isEmployerDHL) {
+      const triggerDate = new Date(week.payPeriodEndDate);
+      triggerDate.setDate(triggerDate.getDate() + 1); // Sunday → Monday
+      const triggerIso = toLocalIso(triggerDate);
+      if (effectiveToday < triggerIso) return false;
+      if (effectiveToday === triggerIso && !(isAdmin && tempLockDate)) {
+        return new Date().getHours() >= 6;
+      }
+      return true;
+    }
+    // Base user: any time after midnight following payPeriodEndDay.
+    return payPeriodEndIso < effectiveToday;
+  }, [config.employerPreset, effectiveToday, isAdmin, tempLockDate]);
+
   // ── Auto-confirm all past weeks on first load when no confirmations exist ──
   // Treats every historical week as fully worked (clean/net-zero). Over-assumption is fine:
   // income projections already assume full attendance from account creation.
@@ -397,7 +449,7 @@ export default function App() {
   useEffect(() => {
     if (loading) return;
     if (Object.keys(weekConfirmations).length > 0) return;
-    const pastActiveWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
+    const pastActiveWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
     if (!pastActiveWeeks.length) return;
     const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const confirmedAt = new Date().toISOString();
@@ -417,7 +469,7 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setWeekConfirmations(bulk);
-  }, [loading, weekConfirmations, allWeeks, effectiveToday]);
+  }, [loading, weekConfirmations, allWeeks, effectiveToday, isPayPeriodPast]);
 
   // ── Future active weeks: today onward, used for spend/goal simulation ──
   const futureWeeks = useMemo(() => {
@@ -432,31 +484,56 @@ export default function App() {
   const [confirmDismissed, setConfirmDismissed] = useState(false);
 
   // ── Week confirmation modal trigger ──
-  // Surfaces the most-recent UNCONFIRMED past week.
-  // The previous version grabbed the last past week and bailed if it was confirmed —
-  // meaning older unconfirmed weeks were silently skipped (the bug behind badge=3, modal=hidden).
-  // Fix: filter to unconfirmed weeks first, then take the most recent one.
-  //
-  // DOW gate removed from auto-trigger: with payPeriodEndDay=0 (default) the gate was
-  // a no-op anyway (0=Sun, todayDOW is always >= 0). Removing it simplifies reasoning.
-  // confirmForced (badge click) still kept to surface the modal on demand in case the
-  // user dismisses and wants to return to it without waiting for state to change.
+  // Surfaces the most-recent UNCONFIRMED week whose pay period has closed.
+  // Uses isPayPeriodPast() rather than weekEnd so the trigger respects the user's
+  // configured payPeriodEndDay (base: 12:01 AM day after; DHL: Mon 6:01 AM).
   const confirmTriggerWeek = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
-    // Find most recent week that has NOT been confirmed yet
+    const userPaySchedule = config.userPaySchedule ?? "weekly";
+    const firstActiveIdx = config.firstActiveIdx ?? 0;
+    const isBiweekly = userPaySchedule === "biweekly" || userPaySchedule === "salary";
+    const isMonthlyPay = userPaySchedule === "monthly";
+    const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
     const unconfirmedWeeks = pastWeeks.filter(w => !weekConfirmations[w.idx]);
     if (!unconfirmedWeeks.length) return null;
+    if (isBiweekly) {
+      const paycheckWeeks = unconfirmedWeeks.filter(w => ((w.idx - firstActiveIdx) % 2 + 2) % 2 === 0);
+      return paycheckWeeks.length ? paycheckWeeks[paycheckWeeks.length - 1] : null;
+    }
+    if (isMonthlyPay) {
+      const paycheckWeeks = unconfirmedWeeks.filter(w => {
+        const m = w.weekEnd.getMonth(), y = w.weekEnd.getFullYear();
+        return !allWeeks.some(w2 => w2.active && w2.idx > w.idx && w2.weekEnd.getMonth() === m && w2.weekEnd.getFullYear() === y);
+      });
+      return paycheckWeeks.length ? paycheckWeeks[paycheckWeeks.length - 1] : null;
+    }
     return unconfirmedWeeks[unconfirmedWeeks.length - 1]; // most recent unconfirmed
-  }, [allWeeks, effectiveToday, weekConfirmations]);
+  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast, config.userPaySchedule, config.firstActiveIdx]);
 
   // Total count of all past active weeks lacking a confirmation record.
   // Used for the persistent badge in sidebar and mobile header.
   // Intentionally looks at ALL past weeks (not just the most recent) so skipped
   // weeks accumulate and the badge number keeps climbing until addressed.
   const unconfirmedCount = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
+    const userPaySchedule = config.userPaySchedule ?? "weekly";
+    const firstActiveIdx = config.firstActiveIdx ?? 0;
+    const isBiweekly = userPaySchedule === "biweekly" || userPaySchedule === "salary";
+    const isMonthlyPay = userPaySchedule === "monthly";
+    const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
+    if (isBiweekly) {
+      return pastWeeks.filter(w => {
+        const isPaycheckWeek = ((w.idx - firstActiveIdx) % 2 + 2) % 2 === 0;
+        return isPaycheckWeek && !weekConfirmations[w.idx];
+      }).length;
+    }
+    if (isMonthlyPay) {
+      return pastWeeks.filter(w => {
+        const m = w.weekEnd.getMonth(), y = w.weekEnd.getFullYear();
+        const isPaycheckWeek = !allWeeks.some(w2 => w2.active && w2.idx > w.idx && w2.weekEnd.getMonth() === m && w2.weekEnd.getFullYear() === y);
+        return isPaycheckWeek && !weekConfirmations[w.idx];
+      }).length;
+    }
     return pastWeeks.filter(w => !weekConfirmations[w.idx]).length;
-  }, [allWeeks, effectiveToday, weekConfirmations]);
+  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast, config.userPaySchedule, config.firstActiveIdx]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);
@@ -535,23 +612,55 @@ export default function App() {
     const stHigh  = config.stateRateHigh ?? config.w2StateRate;
     const fWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? fedHigh : fedLow), 0);
     const mWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? stHigh : stLow), 0);
-    const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - (isAdmin ? (config.targetOwedAtFiling ?? 0) : 0), 0);
-    const remainingTaxedChecks = activeWeeks.filter(w => toLocalIso(w.weekEnd) >= effectiveToday && w.taxedBySchedule).length;
-    return { fedAGI: fAGI, fedLiability: fL, moLiability: mL, ficaTotal: ficaT, fedWithheldBase: fWB, moWithheldBase: mWB, fedGap: fG, moGap: mG, totalGap: tG, targetExtraTotal: tET, taxedWeekCount: remainingTaxedChecks, extraPerCheck: remainingTaxedChecks > 0 ? tET / remainingTaxedChecks : 0 };
-  }, [allWeeks, config, eventImpact.grossDeltaByWeek, effectiveToday, isAdmin]);
+    const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - config.targetOwedAtFiling, 0);
+    const remainingTaxedChecks = activeWeeks.filter(w => toLocalIso(w.weekEnd) >= today && w.taxedBySchedule).length;
+
+    // How much events have shifted total taxable gross (+ = bonus/pickup, - = missed shifts)
+    const eventGrossDelta = activeWeeks.reduce((s, w) => s + (eventImpact.grossDeltaByWeek[w.idx] || 0), 0);
+    // Baseline AGI with no events to show the event-driven tax shift
+    const baseAGI = Math.max(tt - eventGrossDelta - config.fedStdDeduction, 0);
+    const fedLiabilityBase = fedTax(baseAGI);
+    const moLiabilityBase = stateConfig ? stateTax(tt - eventGrossDelta, stateConfig) : (tt - eventGrossDelta) * (config.moFlatRate ?? 0.047);
+    const fedLiabilityEventDelta = fL - fedLiabilityBase;
+    const moLiabilityEventDelta  = mL - moLiabilityBase;
+
+    return {
+      fedAGI: fAGI, fedLiability: fL, moLiability: mL, ficaTotal: ficaT,
+      fedWithheldBase: fWB, moWithheldBase: mWB,
+      fedGap: fG, moGap: mG, totalGap: tG, targetExtraTotal: tET,
+      taxedWeekCount: remainingTaxedChecks,
+      extraPerCheck: remainingTaxedChecks > 0 ? tET / remainingTaxedChecks : 0,
+      // Event pipeline visibility fields
+      eventGrossDelta,
+      fedLiabilityEventDelta,
+      moLiabilityEventDelta,
+    };
+  }, [allWeeks, config, eventImpact.grossDeltaByWeek, today]);
 
   // ── Live projected net from income engine ──
   const projectedAnnualNet = useMemo(() =>
     allWeeks.filter(w => w.active).reduce((s, w) => s + computeNet(w, config, taxDerived.extraPerCheck, showExtra), 0)
     , [allWeeks, config, taxDerived, showExtra]);
 
+  // ─── Pay schedule factor ─────────────────────────────────────────────────────
+  // checksPerYear: how many paychecks the user receives per year (52 weekly,
+  // 26 biweekly/salary, 12 monthly). Used to scale per-paycheck amounts to the
+  // weekly basis that all internal math runs on, and to scale weekly amounts back
+  // to per-paycheck for display.
+  const checksPerYear = PAYCHECKS_PER_YEAR[config.userPaySchedule ?? "weekly"] ?? 52;
+
   // ─── Paycheck Buffer ─────────────────────────────────────────────────────────
-  // When enabled, paycheckBuffer ($/week) is excluded from all downstream spendable
-  // math: weeklyIncome, baseWeeklyUnallocated, adjustedWeeklyAvg, futureWeekNets,
-  // goal timelines, and budget panel calculations all use the buffer-adjusted value.
+  // paycheckBuffer is stored as $/check. Convert to $/week by multiplying by the
+  // paycheck frequency ratio (checksPerYear/52), so the weekly deduction is the
+  // correct time-averaged amount regardless of pay schedule:
+  //   weekly  → $50/check × 52/52 = $50/week
+  //   biweekly/salary → $50/check × 26/52 = $25/week
+  //   monthly → $50/check × 12/52 ≈ $11.54/week
   // projectedAnnualNet (above) is intentionally untouched — the Income panel uses
   // it to display real earned income, not the spendable portion.
-  const bufferPerWeek = (config.bufferEnabled ?? true) ? (config.paycheckBuffer ?? 50) : 0;
+  const bufferPerWeek = (config.bufferEnabled ?? true)
+    ? (config.paycheckBuffer ?? 50) * (checksPerYear / 52)
+    : 0;
   const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
 
   // ── Previous week's actual paycheck (what you'll receive this payday) ──
@@ -624,9 +733,9 @@ export default function App() {
 
   // ── Attendance bucket model — DHL preset only ──
   // computeBucketModel encodes DHL's specific tier system and overflow payout mechanic.
-  // Non-DHL users may have attendanceBucketEnabled=true but get no bucket model;
+  // Base user users may have attendanceBucketEnabled=true but get no bucket model;
   // their attendance tracking is handled separately without payout math.
-  const bucketModel = useMemo(() => isDHL ? computeBucketModel(logs, config) : null, [isDHL, logs, config]);
+  const bucketModel = useMemo(() => isEmployerDHL ? computeBucketModel(logs, config) : null, [isEmployerDHL, logs, config]);
 
   // ── Per-week targeted deductions for current/future-week events ──────────────────
   // Shape: { [weekIdx: number]: netLost (dollars) }
@@ -657,14 +766,50 @@ export default function App() {
     setWizardEntry(null);
   }
 
+  function handleSelectInvestorAccount(n) {
+    setActiveInvestorAccount(n);
+    setDrawerOpen(false);
+    saveInvestorActiveAccount(n); // fire-and-forget persistence
+    if (n === 3 && !config.setupComplete) {
+      setWizardEntry(false);
+    }
+  }
+
   // Checking localStorage for an existing session — avoid flash of login screen.
   if (!authChecked) {
     return <FullScreenLoadingState label="Checking session" />;
   }
 
+  // Investor code verified but no session yet — show registration form.
+  if (investorSession && !authedUser) {
+    return (
+      <InvestorRegister
+        onRegister={async formData => {
+          const { error, needsConfirmation } = await createInvestorAccount({
+            name:     formData.name,
+            email:    formData.email,
+            password: formData.password,
+            company:  formData.company,
+            city:     formData.city,
+            codeUsed: investorSession?.code ?? null,
+          });
+          if (!error && !needsConfirmation) {
+            // DB writes (investor_users + user_data) are now settled.
+            // Clear investorSession so the wizard guard re-arms for future non-investors,
+            // then force a second loadUserData call to pick up config.isInvestor = true.
+            setInvestorSession(null);
+            setReloadTrigger(n => n + 1);
+          }
+          return { error, needsConfirmation };
+        }}
+        onBack={() => setInvestorSession(null)}
+      />
+    );
+  }
+
   // No valid session — show login / create account screen.
   if (!authedUser) {
-    return <LoginScreen />;
+    return <LoginScreen onInvestorVerified={code => setInvestorSession({ code })} />;
   }
 
   // Supabase PASSWORD_RECOVERY event — user clicked a reset link, show set-new-password form.
@@ -724,10 +869,12 @@ export default function App() {
         today={effectiveToday}
         userPaySchedule={config.userPaySchedule ?? "weekly"}
         fundedGoalSpend={fundedGoalSpend}
+        config={config}
+        bufferPerWeek={bufferPerWeek}
         isAdmin={isAdmin}
       />}
       {currentView === "log" && <LogPanel
-        logs={logs} setLogs={setLogs} config={config} isDHL={isDHL} isAdmin={isAdmin}
+        logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
         setConfig={setConfig} weekConfirmations={weekConfirmations}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
@@ -911,7 +1058,7 @@ export default function App() {
             <button
               title="Sign out"
               onClick={async () => { await supabase.auth.signOut({ scope: "local" }); }}
-              style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", padding: "2px 0", marginTop: "1px", lineHeight: 1, display: "flex", alignItems: "center" }}
+              style={{ background: "transparent", border: "none", color: "var(--color-deduction)", cursor: "pointer", padding: "2px 0", marginTop: "1px", lineHeight: 1, display: "flex", alignItems: "center" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -924,8 +1071,8 @@ export default function App() {
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
-            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-red)", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
-              ◷ {unconfirmedCount} {unconfirmedCount === 1 ? "week" : "weeks"} to confirm
+            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-deduction)", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
+              ◷ {unconfirmedCount} {(config.userPaySchedule ?? "weekly") === "weekly" ? (unconfirmedCount === 1 ? "week" : "weeks") : (unconfirmedCount === 1 ? "pay period" : "pay periods")} to confirm
             </button>
           )}
           {isAdmin && tempLockDate && (
@@ -1007,7 +1154,7 @@ export default function App() {
                     <span style={{ fontSize: "11px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
                     <button
                       onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                      style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-red)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 8px", cursor: "pointer" }}
+                      style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 8px", cursor: "pointer" }}
                     >Clear</button>
                   </div>
                 ) : (
@@ -1025,6 +1172,44 @@ export default function App() {
                     >Set</button>
                   </div>
                 )}
+              </div>
+              {/* Demo account editing — admin only */}
+              <div style={{ padding: "0 20px 12px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
+                {adminDemoView !== null && (
+                  <div style={{ fontSize: "9px", color: "var(--color-warning)", letterSpacing: "1px", marginBottom: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                    Editing Demo {adminDemoView}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {[1, 2].map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setAdminDemoView(adminDemoView === n ? null : n)}
+                      title={adminDemoView === n ? "Click to exit demo edit mode" : `Edit Demo Account ${n}`}
+                      style={{
+                        flex: 1,
+                        background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)",
+                        border: adminDemoView === n ? "none" : "1px solid var(--color-border-subtle)",
+                        borderRadius: "6px",
+                        padding: "5px 0",
+                        fontSize: "10px",
+                        letterSpacing: "1px",
+                        textTransform: "uppercase",
+                        color: adminDemoView === n ? "var(--color-bg-base)" : "var(--color-text-secondary)",
+                        cursor: "pointer",
+                        fontWeight: adminDemoView === n ? "bold" : "normal",
+                        fontFamily: "var(--font-sans)",
+                      }}
+                    >
+                      {adminDemoView === n ? "← Exit" : `Demo ${n}`}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -1116,7 +1301,7 @@ export default function App() {
             style={{
               background: "transparent",
               border: "none",
-              color: unconfirmedCount > 0 ? "var(--color-red)" : "var(--color-text-primary)",
+              color: unconfirmedCount > 0 ? "var(--color-deduction)" : "var(--color-text-primary)",
               cursor: "pointer",
               width: "44px",
               height: "44px",
@@ -1126,7 +1311,7 @@ export default function App() {
               flexShrink: 0,
               position: "relative",
             }}
-            aria-label={unconfirmedCount > 0 ? `${unconfirmedCount} weeks to confirm` : "Notifications"}
+            aria-label={unconfirmedCount > 0 ? `${unconfirmedCount} ${(config.userPaySchedule ?? "weekly") === "weekly" ? "weeks" : "pay periods"} to confirm` : "Notifications"}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
@@ -1136,7 +1321,7 @@ export default function App() {
                 position: "absolute",
                 top: "6px",
                 right: "6px",
-                background: "var(--color-red)",
+                background: "var(--color-deduction)",
                 color: "var(--color-bg-base)",
                 borderRadius: "50%",
                 width: "16px",
@@ -1157,7 +1342,21 @@ export default function App() {
 
         {/* Panel content */}
         <div ref={mainContentCallbackRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
-          {activePanel}
+          {isAdmin && adminDemoView !== null
+            ? <DemoAccountTree
+                key={adminDemoView}
+                accountNumber={adminDemoView}
+                isAdmin={true}
+                onExit={() => setAdminDemoView(null)}
+              />
+            : config.isInvestor && activeInvestorAccount !== 3
+              ? <DemoAccountTree
+                  key={activeInvestorAccount}
+                  accountNumber={activeInvestorAccount}
+                  isAdmin={false}
+                />
+              : activePanel
+          }
         </div>
       </div>
 
@@ -1198,8 +1397,8 @@ export default function App() {
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <button
               title="Sign out"
-              onClick={async () => { await supabase.auth.signOut({ scope: "local" }); setDrawerOpen(false); }}
-              style={{ background: "transparent", border: "none", color: "var(--color-red)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
+              onClick={async () => { await supabase.auth.signOut({ scope: "local" }); setDrawerOpen(false); setInvestorSession(null); setActiveInvestorAccount(1); setInvestorProfile(null); }}
+              style={{ background: "transparent", border: "none", color: "var(--color-deduction)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -1266,6 +1465,50 @@ export default function App() {
           </div>
         </nav>
 
+        {/* ── Investor accounts pill ── */}
+        {config.isInvestor && (
+          <div style={{ padding: "12px 16px 0", borderTop: "1px solid #1e1e1e" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "8px", fontFamily: "var(--font-sans)" }}>
+              Accounts
+            </div>
+            <div style={{
+              display: "flex",
+              background: "rgba(0,200,150,0.10)",
+              border: "1px solid rgba(0,200,150,0.28)",
+              borderRadius: "12px",
+              overflow: "hidden",
+            }}>
+              {[{ n: 1, label: "1" }, { n: 2, label: "2" }, { n: 3, label: "3*" }].map(({ n, label }) => {
+                const active = activeInvestorAccount === n;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => handleSelectInvestorAccount(n)}
+                    style={{
+                      flex: 1,
+                      padding: "10px 0",
+                      minHeight: "44px",
+                      fontSize: "11px",
+                      fontWeight: active ? "700" : "500",
+                      letterSpacing: "1px",
+                      background: active ? "var(--color-accent-primary)" : "transparent",
+                      color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)",
+                      border: "none",
+                      borderRight: n < 3 ? "1px solid rgba(0,200,150,0.2)" : "none",
+                      cursor: "pointer",
+                      transition: "background 0.15s, color 0.15s",
+                      fontFamily: "var(--font-sans)",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ── Admin Tools (drawer) ── */}
         {isAdmin && (
           <div style={{ borderTop: "1px solid var(--color-border-subtle)", padding: "10px 18px 14px" }}>
@@ -1281,7 +1524,7 @@ export default function App() {
                 <span style={{ fontSize: "12px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
                 <button
                   onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                  style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-red)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: "pointer" }}
+                  style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: "pointer" }}
                 >Clear</button>
               </div>
             ) : (
@@ -1299,6 +1542,45 @@ export default function App() {
                 >Set</button>
               </div>
             )}
+            {/* Demo account editing — admin only */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
+              {adminDemoView !== null && (
+                <div style={{ fontSize: "9px", color: "var(--color-warning)", letterSpacing: "1px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                  Editing Demo {adminDemoView}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: "6px" }}>
+                {[1, 2].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => { setAdminDemoView(adminDemoView === n ? null : n); setDrawerOpen(false); }}
+                    title={adminDemoView === n ? "Click to exit demo edit mode" : `Edit Demo Account ${n}`}
+                    style={{
+                      flex: 1,
+                      background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)",
+                      border: adminDemoView === n ? "none" : "1px solid var(--color-border-subtle)",
+                      borderRadius: "6px",
+                      padding: "7px 0",
+                      fontSize: "10px",
+                      letterSpacing: "1px",
+                      textTransform: "uppercase",
+                      color: adminDemoView === n ? "var(--color-bg-base)" : "var(--color-text-secondary)",
+                      cursor: "pointer",
+                      fontWeight: adminDemoView === n ? "bold" : "normal",
+                      fontFamily: "var(--font-sans)",
+                      minHeight: "44px",
+                    }}
+                  >
+                    {adminDemoView === n ? "← Exit" : `Demo ${n}`}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1417,12 +1699,46 @@ export default function App() {
       */}
       {confirmTriggerWeek && !confirmDismissed && (
         <WeekConfirmModal
+          key={confirmTriggerWeek.idx}
           week={confirmTriggerWeek}
           config={config}
           logs={logs}
           isAdmin={isAdmin}
+          pendingCount={unconfirmedCount}
           onConfirm={(confirmation, logEntry) => {
-            setWeekConfirmations(c => ({ ...c, [confirmTriggerWeek.idx]: confirmation }));
+            const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+            const confirmedAt = new Date().toISOString();
+            setWeekConfirmations(c => {
+              const next = { ...c, [confirmTriggerWeek.idx]: confirmation };
+              // Biweekly: auto-confirm the paired non-paycheck week (the one before) as clean
+              if ((config.userPaySchedule === "biweekly" || config.userPaySchedule === "salary") && confirmTriggerWeek.idx > 0) {
+                const priorIdx = confirmTriggerWeek.idx - 1;
+                if (!next[priorIdx]) {
+                  const prior = allWeeks.find(w => w.idx === priorIdx);
+                  if (prior?.active) {
+                    next[priorIdx] = {
+                      confirmedAt, autoConfirmed: true, eventId: null,
+                      dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, prior.workedDayNames?.includes(d) ? true : null])),
+                      scheduledDays: prior.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
+                    };
+                  }
+                }
+              }
+              // Monthly: auto-confirm all other weeks in the same month as clean
+              if (config.userPaySchedule === "monthly") {
+                const m = confirmTriggerWeek.weekEnd.getMonth(), y = confirmTriggerWeek.weekEnd.getFullYear();
+                for (const w of allWeeks) {
+                  if (w.active && w.idx !== confirmTriggerWeek.idx && w.weekEnd.getMonth() === m && w.weekEnd.getFullYear() === y && !next[w.idx]) {
+                    next[w.idx] = {
+                      confirmedAt, autoConfirmed: true, eventId: null,
+                      dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, w.workedDayNames?.includes(d) ? true : null])),
+                      scheduledDays: w.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
+                    };
+                  }
+                }
+              }
+              return next;
+            });
             if (logEntry) setLogs(p => [...p, logEntry]);
           }}
           onDismiss={() => setConfirmDismissed(true)}
@@ -1433,8 +1749,15 @@ export default function App() {
         <SetupWizard
           config={config}
           onComplete={handleWizardComplete}
-          onCancel={wizardEntry !== false ? () => setWizardEntry(null) : undefined}
+          onCancel={
+            wizardEntry !== false
+              ? () => setWizardEntry(null)
+              : config.isInvestor
+                ? () => { setWizardEntry(null); setActiveInvestorAccount(1); }
+                : undefined
+          }
           lifeEvent={wizardEntry === false ? null : wizardEntry}
+          isInvestor={config.isInvestor}
         />
       )}
     </div>

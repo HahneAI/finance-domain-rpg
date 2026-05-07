@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START } from "../constants/config.js";
-import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend } from "../lib/finance.js";
+import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions } from "../lib/finance.js";
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -27,10 +27,16 @@ const EXPENSE_INSERT_MARKER_BG = "rgba(255,255,255,0.72)";
 const EXPENSE_INSERT_MARKER_BORDER = "rgba(255,255,255,0.14)";
 
 
-export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, isAdmin = false }) {
+export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
+  const checksPerYear = PAYCHECKS_PER_YEAR[userPaySchedule ?? "weekly"] ?? 52;
+  const perCheckFactor = 52 / checksPerYear; // 1 for weekly, 2 for biweekly/salary
+  const isWeekly = checksPerYear === 52;
+  const checkUnit = isWeekly ? "wk" : "check";   // "/wk" vs "/check" suffix
+  const checkWord = isWeekly ? "Weekly" : "Per-Check"; // card label prefix
+  const thisCheckLabel = isWeekly ? "This Week" : "This Check";
 
   const currentPhaseIdx = useMemo(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0, [currentWeek]);
   const fiscalWeekLabel = formatFiscalWeekLabel(fiscalWeekInfo);
@@ -43,6 +49,10 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   const [pendingDelete, setPendingDelete] = useState(null); // { id } | null
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [showCheckInfo, setShowCheckInfo] = useState(false);
+  const [undoDelete, setUndoDelete] = useState(null); // { expId, monthKey, prevValue } | null — clears after 8s
+  const [restoreSheetCat, setRestoreSheetCat] = useState(null); // "Needs" | "Lifestyle" | null
+  const [restorePendingExpId, setRestorePendingExpId] = useState(null); // expense id awaiting scope selection
   // Month-level period selector state
   const [activeMonth, setActiveMonth] = useState(null); // "2026-MM" | null — null = quarter mode
   // Keep the viewed phase in sync with the real current quarter so that
@@ -83,6 +93,17 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [pendingExpenseTouchId, setPendingExpenseTouchId] = useState(null);
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
   const EXPENSE_TOUCH_HOLD_MS = 450;
+  // Expense detail bottom sheet
+  const [sheetExp, setSheetExp] = useState(null);
+  const [sheetMode, setSheetMode] = useState("view"); // "view" | "edit"
+  const [sheetDeleteConfirm, setSheetDeleteConfirm] = useState(false);
+  const lastTapRef = useRef({});
+  // When a sheet-edit save completes (editId→null), return sheet to view mode
+  useEffect(() => {
+    if (sheetMode === "edit" && editId === null) setSheetMode("view");
+  }, [editId, sheetMode]);
+  // Ensure modal-open class is cleaned up if component unmounts while sheet is open
+  useEffect(() => () => { document.body.classList.remove("modal-open"); }, []);
   const TOUCH_SCROLL_CANCEL_PX = 12;
   const TOUCH_EDGE_AUTOSCROLL_ZONE_PX = 92;
   const TOUCH_MAX_AUTOSCROLL_SPEED_PX = 18;
@@ -126,6 +147,24 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       return s + getEffectiveAmountForMonth(exp, key, Math.floor(m / 3)) * (52 / 12);
     }, 0);
 
+  // Live expense snapshot for the detail sheet — stays in sync as edits land
+  const sheetExpLive = sheetExp ? (expenses.find(e => e.id === sheetExp.id) ?? null) : null;
+
+  const openSheet = (exp) => {
+    setSheetExp(exp);
+    setSheetMode("view");
+    setSheetDeleteConfirm(false);
+    setEditId(null);
+    document.body.classList.add("modal-open");
+  };
+  const closeSheet = () => {
+    setSheetExp(null);
+    setSheetMode("view");
+    setSheetDeleteConfirm(false);
+    setEditId(null);
+    document.body.classList.remove("modal-open");
+  };
+
   // Split loans from regular expenses for display purposes
   const loans = expenses.filter(e => e.type === "loan");
   const regularExpenses = expenses.filter(e => e.type !== "loan");
@@ -153,6 +192,68 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     return keys;
   }, [expenses]);
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
+
+  // When viewing a future quarter or month, surface the projected first-check surplus
+  // for that period instead of the current-week baseline.
+  const isViewingFuture = ap > currentPhaseIdx || (activeMonth !== null && activeMonth > currentMonthKey);
+  const targetMonthForFirstCheck = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
+  const firstCheckWeek = useMemo(() => {
+    if (!isViewingFuture || !futureWeeks?.length) return null;
+    return futureWeeks.find(w => toLocalIso(w.weekEnd).slice(0, 7) === targetMonthForFirstCheck) ?? null;
+  }, [isViewingFuture, futureWeeks, targetMonthForFirstCheck]);
+  const firstCheckIdx = firstCheckWeek ? futureWeeks.indexOf(firstCheckWeek) : -1;
+  const firstCheckNet = firstCheckIdx >= 0 ? (futureWeekNets?.[firstCheckIdx] ?? weeklyIncome) : weeklyIncome;
+  const firstCheckMonthKey = firstCheckWeek ? toLocalIso(firstCheckWeek.weekEnd).slice(0, 7) : targetMonthForFirstCheck;
+  const firstCheckPhase = firstCheckWeek ? getPhaseIndex(firstCheckWeek.weekEnd) : ap;
+  const firstCheckExpenses = useMemo(() => {
+    if (!firstCheckWeek) return avgWeeklySpend;
+    return expenses.reduce((s, e) => s + getEffectiveAmountForMonth(e, firstCheckMonthKey, firstCheckPhase), 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstCheckWeek, expenses, firstCheckMonthKey, firstCheckPhase]);
+  const leftFirstCheck = firstCheckNet - firstCheckExpenses;
+  const firstCheckMonthShort = MONTH_SHORT[parseInt(targetMonthForFirstCheck.slice(5, 7), 10) - 1];
+
+  // Paycheck breakdown data for the info modal
+  const infoRefWeek    = isViewingFuture && firstCheckWeek ? firstCheckWeek : currentWeek;
+  const infoMonthKey   = isViewingFuture && firstCheckWeek ? firstCheckMonthKey : currentMonthKey;
+  const infoPhase      = isViewingFuture && firstCheckWeek ? firstCheckPhase : currentPhaseIdx;
+  const infoLabel      = isViewingFuture && firstCheckWeek ? `First Check · ${firstCheckMonthShort}` : "This Week";
+  const checkBreakdown = useMemo(() => {
+    if (!infoRefWeek || !config) return null;
+    const gross = infoRefWeek.grossPay ?? 0;
+    const fica  = gross * (config.ficaRate ?? 0);
+    const payroll   = deriveWeeklyPayrollDeductions(infoRefWeek, config);
+    const benefits  = payroll.benefits;
+    const k401      = payroll.k401Employee;
+    let fedTax = 0, stateTax = 0;
+    if (infoRefWeek.taxedBySchedule) {
+      const fedRate = infoRefWeek.isHighWeek
+        ? (config.fedRateHigh ?? config.w2FedRate ?? 0)
+        : (config.fedRateLow  ?? config.w1FedRate ?? 0);
+      const stRate  = infoRefWeek.isHighWeek
+        ? (config.stateRateHigh ?? config.w2StateRate ?? 0)
+        : (config.stateRateLow  ?? config.w1StateRate ?? 0);
+      fedTax   = (infoRefWeek.taxableGross ?? 0) * fedRate;
+      stateTax = (infoRefWeek.taxableGross ?? 0) * stRate;
+    }
+    const checksPerYear  = PAYCHECKS_PER_YEAR[config.userPaySchedule ?? "weekly"] ?? 52;
+    const otherPostTax   = (config.otherDeductions ?? []).reduce((sum, row) => {
+      const amt = row?.weeklyAmount;
+      return sum + (typeof amt === "number" ? amt : 0);
+    }, 0) * (checksPerYear / 52);
+    const netPay    = gross - fica - fedTax - stateTax - benefits - k401 - otherPostTax;
+    const spendable = netPay - bufferPerWeek;
+    const needsSpend     = regularExpenses.filter(e => e.category === "Needs")
+      .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
+    const lifestyleSpend = regularExpenses.filter(e => e.category === "Lifestyle")
+      .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
+    const loansSpend     = loans
+      .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
+    const left = spendable - needsSpend - lifestyleSpend - loansSpend;
+    return { gross, fica, fedTax, stateTax, benefits, k401, otherPostTax, netPay, spendable, needsSpend, lifestyleSpend, loansSpend, left, otherDeductions: config.otherDeductions ?? [] };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [infoRefWeek, config, bufferPerWeek, expenses, infoMonthKey, infoPhase]);
+
   const sp = Math.min((ts / weeklyIncome) * 100, 100);
   const cats = [...new Set(regularExpenses.map(e => e.category))];
   const overviewCatOrder = ["Needs", "Lifestyle"];
@@ -424,13 +525,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     const amount = parseFloat(newExp.amount) || 0;
     const cycle = newExp.cycle ?? "every30days";
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    const expEffectiveFrom = `${TODAY_ISO.slice(0, 7)}-01`;
     setExpenses(prev => [...prev, {
       id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
       label: newExp.label,
       note: [newExp.note, newExp.note, newExp.note, newExp.note],
       billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO },
-      history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }]
+      history: [{ effectiveFrom: expEffectiveFrom, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }]
     }]);
     setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   };
@@ -559,9 +661,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : perPaycheck);
       const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
+      // Trim future-dated entries — they would otherwise take priority over this new entry
+      // for weeks past their effectiveFrom date, causing unexpected cost spikes.
+      const pastEntries = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
       const newHistory = daysDiff <= 3
-        ? existing.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
-        : [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
+        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
+        : [...pastEntries, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
       return { ...e, history: newHistory, billingMeta, monthlyOverrides: overrides };
     }));
     setEditId(null);
@@ -579,9 +684,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : perPaycheck);
       const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
+      // Trim future-dated entries so this override is authoritative for all future weeks.
+      const pastEntries = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
       const newHistory = daysDiff <= 3
-        ? existing.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
-        : [...existing, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
+        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
+        : [...pastEntries, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
       return { ...e, history: newHistory, billingMeta };
     }));
     setEditId(null);
@@ -589,13 +696,37 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
   const deleteMonthOnly = (expId) => {
     const monthKey = activeMonth ?? currentMonthKey;
+    const target = expenses.find(e => e.id === expId);
+    // Store previous override value so user can UNDO within 8s
+    const prevValue = target?.monthlyOverrides?.[monthKey] ?? null;
     setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonth(e, monthKey)));
+    setUndoDelete({ expId, monthKey, prevValue });
     setPendingDelete(null);
   };
 
   const deleteMonthForward = (expId) => {
-    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonthForward(e, activeMonth)));
+    // Always use clearMonthForward so monthlyOverrides are properly zeroed.
+    // In quarter mode activeMonth is null, so fall back to the first month of the active quarter.
+    const startKey = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
+    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonthForward(e, startKey)));
+    setUndoDelete(null);
     setPendingDelete(null);
+  };
+
+  const executeUndo = () => {
+    if (!undoDelete) return;
+    const { expId, monthKey, prevValue } = undoDelete;
+    setExpenses(prev => prev.map(e => {
+      if (e.id !== expId) return e;
+      const overrides = { ...(e.monthlyOverrides ?? {}) };
+      if (prevValue === null) {
+        delete overrides[monthKey];
+      } else {
+        overrides[monthKey] = prevValue;
+      }
+      return { ...e, monthlyOverrides: overrides };
+    }));
+    setUndoDelete(null);
   };
 
   const deleteQuarterOnly = (expId) => {
@@ -603,7 +734,41 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setPendingDelete(null);
   };
 
-  // deleteQuarterForward = existing deleteExp(id) — zeros active phase forward in history
+  // Quarter-to-month mapping used by restore scope helpers.
+  const Q_MONTHS = [[1,2,3],[4,5,6],[7,8,9],[10,11,12]];
+
+  // Returns month keys to clear overrides for based on restore scope:
+  // "month"   → just the active month (or first month of active quarter)
+  // "quarter" → all 3 months of the active quarter
+  // "year"    → current month through December (active quarters only)
+  const getRestoreMonthKeys = (scope) => {
+    const fy = FISCAL_YEAR_START.slice(0, 4);
+    if (scope === "month") {
+      const key = activeMonth ?? `${fy}-${String(Q_MONTHS[ap][0]).padStart(2, "0")}`;
+      return [key];
+    }
+    if (scope === "quarter") {
+      return Q_MONTHS[ap].map(m => `${fy}-${String(m).padStart(2, "0")}`);
+    }
+    // "year": mirror deleteMonthForward's start point (activeMonth or quarter start),
+    // then cover through December. Old code used Math.max(today, quarterStart) which
+    // left the quarter's opening month(s) still zeroed after restore.
+    const fromKey = activeMonth ?? `${fy}-${String(Q_MONTHS[ap][0]).padStart(2, "0")}`;
+    const fromMon = parseInt(fromKey.split("-")[1], 10);
+    return Array.from({ length: 12 - fromMon + 1 }, (_, i) => `${fy}-${String(fromMon + i).padStart(2, "0")}`);
+  };
+
+  const restoreExpense = (expId, scope) => {
+    const monthKeys = getRestoreMonthKeys(scope);
+    setExpenses(prev => prev.map(e => {
+      if (e.id !== expId) return e;
+      const overrides = { ...(e.monthlyOverrides ?? {}) };
+      for (const key of monthKeys) delete overrides[key];
+      return { ...e, monthlyOverrides: overrides };
+    }));
+    setRestorePendingExpId(null);
+    setRestoreSheetCat(null);
+  };
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
@@ -613,6 +778,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     mq.addEventListener?.("change", sync);
     return () => mq.removeEventListener?.("change", sync);
   }, []);
+  useEffect(() => {
+    if (!undoDelete) return;
+    const t = setTimeout(() => setUndoDelete(null), 8000);
+    return () => clearTimeout(t);
+  }, [undoDelete]);
   useEffect(() => () => {
     if (expenseTouchAutoScrollRef.current.rafId) cancelAnimationFrame(expenseTouchAutoScrollRef.current.rafId);
     if (expenseTouchOverlayExitTimerRef.current) clearTimeout(expenseTouchOverlayExitTimerRef.current);
@@ -932,8 +1102,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     )}
     {/* Summary cards */}
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
-      <Card label="This Week’s Check" val={f2(prevWeekNet ?? weeklyIncome)} sub="This Week’s Check" status="green" rawVal={prevWeekNet ?? weeklyIncome} />
-      <Card label="Weekly Spend" val={f2(ts)} rawVal={ts} color="var(--color-red)"
+      <Card
+        label={checksPerYear === 52 ? "This Week’s Check" : checksPerYear === 26 ? "This Paycheck" : "This Check"}
+        val={f2((prevWeekNet ?? weeklyIncome) * perCheckFactor)}
+        sub={checksPerYear === 52 ? "This Week’s Check" : checksPerYear === 26 ? "This Paycheck" : "This Check"}
+        status="green"
+        rawVal={(prevWeekNet ?? weeklyIncome) * perCheckFactor}
+      />
+      <Card label={`${checkWord} Spend`} val={f2(ts)} rawVal={ts} color="var(--color-deduction)"
         insight={weeklyIncome > 0 ? (() => {
           const pct = Math.round(sp);
           if (sp < 50) return { arrow: "up",   delta: `${pct}% of income`, label: "· well-managed",  variant: "blue" };
@@ -941,25 +1117,59 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           return              { arrow: "down",  delta: `${pct}% of income`, label: "· tighten spend", variant: "purple" };
         })() : undefined}
       />
-      <Card label="Left This Week" val={f2(leftThisWeek)} rawVal={leftThisWeek} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-red)"}
-        insight={weeklyIncome > 0 ? (() => {
-          const nextCheck = futureWeekNets?.[0] ?? null;
-          const lastCheck = prevWeekNet ?? weeklyIncome;
-          if (nextCheck != null) {
-            const diff = Math.round(nextCheck - lastCheck);
-            if (Math.abs(diff) >= 20) return { arrow: diff > 0 ? "up" : "down", delta: `${diff > 0 ? "+" : ""}${f(diff)}`, label: "next check vs last", variant: diff > 0 ? "blue" : "purple" };
-          }
-          const pct = Math.round((leftThisWeek / weeklyIncome) * 100);
-          if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: "of paycheck clear",    variant: "blue" };
-          if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: "of paycheck remaining", variant: "purple" };
-          return           { arrow: "flat",  delta: `${pct}%`, label: "of paycheck remaining", variant: "blue" };
-        })() : undefined}
-      />
+      <div style={{ position: "relative" }}>
+        {isViewingFuture && firstCheckWeek ? (
+          <Card
+            label={`First Check · ${firstCheckMonthShort}`}
+            val={f2(leftFirstCheck)}
+            rawVal={leftFirstCheck}
+            color={leftFirstCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
+            insight={weeklyIncome > 0 ? (() => {
+              const pct = Math.round((leftFirstCheck / firstCheckNet) * 100);
+              if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: `of ${firstCheckMonthShort} check clear`, variant: "blue" };
+              if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: `of ${firstCheckMonthShort} check left`,  variant: "purple" };
+              return           { arrow: "flat",  delta: `${pct}%`, label: `of ${firstCheckMonthShort} check left`,  variant: "blue" };
+            })() : undefined}
+          />
+        ) : (
+          <Card label={`Left ${thisCheckLabel}`} val={f2(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} color={leftThisWeek >= 0 ? "var(--color-green)" : "var(--color-deduction)"}
+            insight={weeklyIncome > 0 ? (() => {
+              const nextCheck = futureWeekNets?.[0] ?? null;
+              const lastCheck = prevWeekNet ?? weeklyIncome;
+              if (nextCheck != null) {
+                const diff = Math.round(nextCheck - lastCheck);
+                if (Math.abs(diff) >= 20) return { arrow: diff > 0 ? "up" : "down", delta: `${diff > 0 ? "+" : ""}${f(diff)}`, label: "next check vs last", variant: diff > 0 ? "blue" : "purple" };
+              }
+              const pct = Math.round((leftThisWeek / weeklyIncome) * 100);
+              if (pct >= 20) return { arrow: "up",   delta: `${pct}%`, label: "of paycheck clear",    variant: "blue" };
+              if (pct < 5)   return { arrow: "down",  delta: `${pct}%`, label: "of paycheck remaining", variant: "purple" };
+              return           { arrow: "flat",  delta: `${pct}%`, label: "of paycheck remaining", variant: "blue" };
+            })() : undefined}
+          />
+        )}
+        {checkBreakdown && (
+          <button
+            onClick={() => setShowCheckInfo(true)}
+            aria-label="Show paycheck breakdown"
+            style={{
+              display: "block", width: "100%", textAlign: "right",
+              background: "none", border: "none",
+              color: "var(--color-text-disabled)", fontSize: "9px",
+              letterSpacing: "1.5px", textTransform: "uppercase",
+              cursor: "pointer", padding: "5px 4px 0",
+              fontFamily: "var(--font-sans)",
+              transition: "color 150ms ease",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = "var(--color-accent-primary)"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "var(--color-text-disabled)"; }}
+          >breakdown ↗</button>
+        )}
+      </div>
     </div>
     {/* Spend bar */}
     <div style={{ marginBottom: "20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--color-text-primary)", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "var(--color-red)" : "var(--color-green)" }}>{sp.toFixed(1)}%</span></div>
-      <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden" }}><div style={{ height: "100%", borderRadius: "4px", width: `${sp}%`, background: sp > 90 ? "var(--color-red)" : sp > 70 ? "var(--color-gold)" : "var(--color-green)", transition: "width 0.3s" }} /></div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--color-text-primary)", marginBottom: "6px" }}><span>SPEND vs INCOME</span><span style={{ color: sp > 90 ? "var(--color-deduction)" : "var(--color-green)" }}>{sp.toFixed(1)}%</span></div>
+      <div style={{ height: "8px", background: "#1e1e1e", borderRadius: "4px", overflow: "hidden" }}><div style={{ height: "100%", borderRadius: "4px", width: `${sp}%`, background: sp > 90 ? "var(--color-deduction)" : sp > 70 ? "var(--color-gold)" : "var(--color-green)", transition: "width 0.3s" }} /></div>
     </div>
     {/* View tabs */}
     <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
@@ -1014,7 +1224,32 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             transition: `background 300ms ${EXPENSE_DRAG_EASE}, border-color 320ms ${EXPENSE_DRAG_EASE}`,
           }}
         >
-          <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot) + "/wk"}>{cat}</SH>
+          <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot) + `/${checkUnit}`}>{cat}</SH>
+          {(() => {
+            // Collect deleted expenses (zeroed in this view with non-zero history) for restore sheet
+            const deletedInCat = cExp.filter(exp => {
+              const amt = displayEffective(exp, ap);
+              if (amt !== 0) return false;
+              if (getNextNonZeroIso(exp, ap, TODAY_ISO) !== null) return false;
+              if (!(exp.history?.length)) return false;
+              // Only include if there's actually a non-zero historical amount somewhere
+              return (exp.history ?? []).some(entry => (entry.weekly ?? []).some(v => v > 0));
+            });
+            return deletedInCat.length > 0 ? (
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
+                <button
+                  onClick={() => { setRestoreSheetCat(cat); setRestorePendingExpId(null); }}
+                  style={{
+                    fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
+                    color: "var(--color-deduction)", background: "rgba(244,164,164,0.08)",
+                    border: "1px solid rgba(244,164,164,0.28)", borderRadius: "8px",
+                    padding: "5px 12px", cursor: "pointer", fontFamily: "var(--font-sans)",
+                    fontWeight: "500",
+                  }}
+                >Restore Deleted</button>
+              </div>
+            ) : null;
+          })()}
           {cExp.map(exp => {
             const effAmt = displayEffective(exp, ap);
             // Resolve timeline state for this expense in the active phase
@@ -1023,7 +1258,6 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             const isRemovedThisPhase = effAmt === 0 && nextNonZeroIso === null && (exp.history?.length ?? 0) > 0;
             // Hide expenses permanently zeroed for this phase (deleted-forward or all-zero history)
             if (isRemovedThisPhase) return null;
-            const monthlyDisplay = `${f(monthlyFromPerPaycheck(effAmt, cpm))}/mo`;
             const isEditing = editId === exp.id;
             const isPinnedFoodCard = Boolean(exp.isFoodPrimary || exp.isFoodHighlighted);
             const isDragging = draggingExpenseId === exp.id;
@@ -1040,6 +1274,17 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               key={exp.id}
               data-expense-id={exp.id}
               draggable={!isPinnedFoodCard && !isEditing && isExpenseDropLane && !isCoarsePointer}
+              onClick={() => {
+                if (isPinnedFoodCard || expenseDragFinalizedRef.current) return;
+                const now = Date.now();
+                const last = lastTapRef.current[exp.id] ?? 0;
+                if (now - last < 350) {
+                  openSheet(exp);
+                  lastTapRef.current[exp.id] = 0;
+                } else {
+                  lastTapRef.current[exp.id] = now;
+                }
+              }}
               onDragStart={(e) => {
                 if (isPinnedFoodCard) {
                   e.preventDefault();
@@ -1087,7 +1332,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 padding: "10px 12px",
                 marginBottom: "6px",
                 position: "relative",
-                opacity: isDragging ? 0.72 : isScheduledFuture ? 0.48 : 1,
+                opacity: isDragging ? 0.72 : isScheduledFuture ? 0.65 : 1,
                 cursor: isPinnedFoodCard
                   ? "default"
                   : isEditing ? "default" : (isExpenseDropLane ? (isDragging ? "grabbing" : "grab") : "default"),
@@ -1122,102 +1367,66 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   pointerEvents: "none",
                 }}
               />
-              {isEditing ? <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <span style={{ fontSize: "12px" }}>{exp.label}</span>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                  <div>
-                    <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "2px" }}>Bill Amount ($)</div>
-                    <input type="number" min="0" step="0.01" value={editVals.amount ?? ""} onChange={e => setEditVals(v => ({ ...v, amount: e.target.value }))} style={{ ...iS, width: "100%" }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "2px" }}>Paid Every</div>
-                    <select value={editVals.cycle ?? "every30days"} onChange={e => setEditVals(v => ({ ...v, cycle: e.target.value }))} style={{ ...iS, width: "100%" }}>
-                      {EXPENSE_CYCLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
-                  Per-paycheck reserve: {f2(perPaycheckFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days", cpm))}
-                </div>
-                {activeMonth !== null ? (
-                  <>
-                    <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>Save scope:</div>
-                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", alignItems: "center" }}>
-                      <SmBtn onClick={() => saveThisMonth(exp.id)} c="var(--color-accent-primary)">MO. ONLY</SmBtn>
-                      <SmBtn onClick={() => saveFromMonthForward(exp.id)} c="var(--color-green)">FROM {activeMonthLabel} +</SmBtn>
-                      <SmBtn onClick={() => saveAllQuarters(exp.id)} c="var(--color-green)">ALL QTR</SmBtn>
-                      <SmBtn onClick={() => setEditId(null)}>✕</SmBtn>
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    <button onClick={() => saveAllQuarters(exp.id)} style={{ background: "var(--color-green)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px", flex: 1 }}>SAVE</button>
-                    <button onClick={() => setEditId(null)} style={{ background: "var(--color-border-subtle)", color: "var(--color-text-secondary)", border: "none", borderRadius: "12px", padding: "8px 14px", cursor: "pointer", fontSize: "10px" }}>✕</button>
-                  </div>
-                )}
-              </div> : <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                {/* Drag handle */}
                 {!isPinnedFoodCard && <button
                   type="button"
                   data-expense-drag-handle
                   aria-label={`Hold to drag ${exp.label}`}
                   onContextMenu={(e) => e.preventDefault()}
+                  onClick={(e) => e.stopPropagation()}
                   style={{
                     background: pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}22` : "transparent",
                     color: pendingExpenseTouchId === exp.id ? CATEGORY_COLORS[cat] : "var(--color-text-primary)",
                     border: `1px solid ${pendingExpenseTouchId === exp.id ? `${CATEGORY_COLORS[cat]}66` : "var(--color-text-primary)"}`,
                     borderRadius: "8px",
-                    width: "26px",
-                    height: "26px",
-                    minWidth: "26px",
+                    width: "26px", height: "26px", minWidth: "26px",
                     padding: 0,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
                     fontSize: "11px",
-                    cursor: isEditing ? "default" : "grab",
+                    cursor: "grab",
                     touchAction: "none",
-                    userSelect: "none",
-                    WebkitUserSelect: "none",
-                    WebkitTouchCallout: "none",
+                    userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
                   }}
-                >
-                  ⋮⋮
-                </button>}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                    <div style={{ fontSize: "13px", color: isScheduledFuture ? "var(--color-text-secondary)" : undefined }}>{exp.label}</div>
-                    {isPinnedFoodCard && <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-gold)", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>FOOD</span>}
-                    {isScheduledFuture && (
-                      <span style={{ fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", padding: "1px 6px", borderRadius: "3px", whiteSpace: "nowrap" }}>
-                        STARTS {shortMonth(nextNonZeroIso).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
+                >⋮⋮</button>}
+                {/* Label */}
+                <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                  <div style={{
+                    fontSize: "13px",
+                    color: isScheduledFuture ? "var(--color-text-secondary)" : "var(--color-text-primary)",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  }}>{exp.label}</div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  {!isPinnedFoodCard && pendingExpenseTouchId === exp.id && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.8px", textTransform: "uppercase", whiteSpace: "nowrap" }}>hold…</div>}
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isScheduledFuture ? "var(--color-text-disabled)" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
-                    <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{monthlyDisplay}</div>
+                {/* Per-check amount + edit icon */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                  <div style={{
+                    fontSize: "14px", fontWeight: "bold",
+                    color: isScheduledFuture ? "var(--color-text-disabled)" : CATEGORY_COLORS[cat],
+                    whiteSpace: "nowrap",
+                  }}>
+                    {f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)", fontWeight: "normal" }}>/{checkUnit}</span>
                   </div>
-                  <SmBtn onClick={() => startEditExp(exp)}>EDIT</SmBtn>
-                  {pendingDelete?.id === exp.id ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-end" }}>
-                      <div style={{ fontSize: "8px", color: "var(--color-red)", letterSpacing: "0.5px", textTransform: "uppercase" }}>
-                        {activeMonth ? `Delete ${activeMonthLabel}?` : `Delete Q${ap + 1}?`}
-                      </div>
-                      <div style={{ display: "flex", gap: "3px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        <SmBtn onClick={() => deleteMonthOnly(exp.id)} c="var(--color-red)" bg="#2d1a1a">{activeMonth ? "MO. ONLY" : "TODAY'S MONTH"}</SmBtn>
-                        <SmBtn onClick={() => deleteQuarterOnly(exp.id)} c="var(--color-red)" bg="#2d1a1a">QTR ONLY</SmBtn>
-                        <SmBtn onClick={() => activeMonth ? deleteMonthForward(exp.id) : deleteExp(exp.id)} c="var(--color-red)" bg="#2d1a1a">+ ONWARD</SmBtn>
-                        <SmBtn onClick={() => setPendingDelete(null)}>✕</SmBtn>
-                      </div>
-                    </div>
-                  ) : (
-                    <SmBtn onClick={() => setPendingDelete({ id: exp.id })} c="var(--color-red)">✕</SmBtn>
-                  )}
+                  {!isPinnedFoodCard && <button
+                    onClick={(e) => { e.stopPropagation(); openSheet(exp); }}
+                    aria-label={`Edit ${exp.label}`}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid rgba(255,255,255,0.18)",
+                      borderRadius: "8px",
+                      width: "28px", height: "28px", minWidth: "28px",
+                      padding: 0,
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      cursor: "pointer",
+                      color: "var(--color-text-secondary)",
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11.5 2.5 L13.5 4.5 L5 13 L2 14 L3 11 Z"/>
+                      <path d="M10.5 3.5 L12.5 5.5"/>
+                    </svg>
+                  </button>}
                 </div>
-              </div>}
+              </div>
             </div>;
           })}
           {isExpenseDropLane && draggingExpenseId && expenseInsertLane === cat && <div
@@ -1264,14 +1473,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : CATEGORY_COLORS[cat] }}>{f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
-                    <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(monthlyFromPerPaycheck(effAmt, cpm))}/mo</div>
+                    <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : CATEGORY_COLORS[cat] }}>{f2(effAmt * perCheckFactor)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/{checkUnit}</span></div>
+                    <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(effAmt * 52 / 12)}/mo</div>
                   </div>
                   <SmBtn onClick={() => startEditLoan(exp)} c="var(--color-gold)">EDIT</SmBtn>
                   {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
-                    <SmBtn onClick={() => deleteLoan(exp.id)} c="var(--color-red)" bg="#2d1a1a">DEL</SmBtn>
+                    <SmBtn onClick={() => deleteLoan(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">DEL</SmBtn>
                     <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
-                  </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="var(--color-red)">✕</SmBtn>}
+                  </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="var(--color-deduction)">✕</SmBtn>}
                 </div>
               </div>}
             </div>;
@@ -1326,36 +1535,47 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       return <div>
         {/* Cashflow: incoming paycheck → payroll deductions → needs → loans → unallocated */}
         <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Incoming Paycheck</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(incomingWeekNet)}</div></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", textAlign: "right" }}>Running week<br />net pay</div></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "10px", letterSpacing: "2px", color: "#7eb8c9", textTransform: "uppercase", marginBottom: "4px" }}>Incoming Paycheck</div><div style={{ fontSize: "22px", fontWeight: "bold", color: "#7eb8c9" }}>{f2(incomingWeekNet * perCheckFactor)}</div></div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)", textAlign: "right" }}>{isWeekly ? <>Running week<br />net pay</> : <>Net pay<br />per check</>}</div></div>
         </div>
-        <div style={{ background: "rgba(239,68,68,0.10)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-red)", marginBottom: "4px" }}>Payroll Deductions</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Benefits + 401k — already factored into net pay</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-red)" }}>{f2(payrollDeductionsTotal)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((payrollDeductionsTotal / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
-        </div>
-        <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((checkingTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
-        </div>
-        {loans.length > 0 && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-gold)" }}>{f2(loansTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{incomingWeekNet > 0 ? ((loansTot / incomingWeekNet) * 100).toFixed(1) : "0.0"}%</div></div></div>
-        </div>}
-        <div style={{ background: wr >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wr >= 0 ? "var(--color-green)" : "var(--color-red)"}`, borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-red)", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Weekly unallocated cashflow snapshot</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wr >= 0 ? "var(--color-green)" : "var(--color-red)" }}>{f2(wr)}</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(wr * 52 / 12)}/mo</div></div></div>
-        </div>
+        {(() => {
+          // Per-paycheck breakdown — all values in paycheck terms
+          const incomePerCheck = incomingWeekNet * perCheckFactor;
+          const payrollPerCheck = payrollDeductionsTotal * perCheckFactor; // weekly → per-check
+          const loansPerCheck = loansTot * perCheckFactor;                 // weekly → per-check
+          // checkingTot is already per-paycheck (stored per-paycheck in expense history)
+          const wrPerCheck = incomePerCheck - payrollPerCheck - checkingTot - loansPerCheck;
+          const pct = (v) => incomePerCheck > 0 ? ((v / incomePerCheck) * 100).toFixed(1) : "0.0";
+          return <>
+            <div style={{ background: "rgba(239,68,68,0.10)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-deduction)", marginBottom: "4px" }}>Payroll Deductions</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>Benefits + 401k — already factored into net pay</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-deduction)" }}>{f2(payrollPerCheck)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{pct(payrollPerCheck)}%</div></div></div>
+            </div>
+            <div style={{ background: CATEGORY_BG["Needs"], border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"], marginBottom: "4px" }}>Checking Needs</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{checkingDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: CATEGORY_COLORS["Needs"] }}>{f2(checkingTot)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{pct(checkingTot)}%</div></div></div>
+            </div>
+            {loans.length > 0 && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "14px", marginBottom: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--color-gold)", marginBottom: "4px" }}>Loans</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{loansDesc}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-gold)" }}>{f2(loansPerCheck)}</div><div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{pct(loansPerCheck)}%</div></div></div>
+            </div>}
+            <div style={{ background: wrPerCheck >= 0 ? "#1a2d1e" : "#2d1a1a", border: `1px solid ${wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)"}`, borderRadius: "6px", padding: "14px", marginBottom: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ fontSize: "12px", fontWeight: "bold", color: wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)", marginBottom: "4px" }}>Unallocated / Savings</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{isWeekly ? "Weekly unallocated cashflow snapshot" : "Per-check unallocated snapshot"}</div></div><div style={{ textAlign: "right" }}><div style={{ fontSize: "16px", fontWeight: "bold", color: wrPerCheck >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>{f2(wrPerCheck)}</div><div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(wrPerCheck * checksPerYear / 12)}/mo</div></div></div>
+            </div>
+          </>;
+        })()}
         <div style={{ height: "1px", background: "var(--color-bg-raised)", marginBottom: "20px" }} />
         {cats.map(cat => {
           const cT = regularExpenses.filter(e => e.category === cat).reduce((s, e) => s + yearlyExpenseCost(e) / 52, 0);
           const pct = (cT / weeklyIncome) * 100;
           return <div key={cat} style={{ marginBottom: "16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}><span style={{ fontSize: "11px", letterSpacing: "2px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</span><span>{f2(cT)}/wk avg · {pct.toFixed(1)}%</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}><span style={{ fontSize: "11px", letterSpacing: "2px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</span><span>{f2(cT * perCheckFactor)}/{checkUnit} avg · {pct.toFixed(1)}%</span></div>
             <div style={{ height: "6px", background: "#1e1e1e", borderRadius: "3px", overflow: "hidden" }}><div style={{ height: "100%", width: `${pct}%`, background: CATEGORY_COLORS[cat], borderRadius: "3px" }} /></div>
           </div>;
         })}
         <div style={{ height: "1px", background: "var(--color-bg-raised)", margin: "20px 0" }} />
         <SectionHeader>Annual Projection</SectionHeader>
         <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-          <thead><tr style={{ borderBottom: "1px solid #333", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Wk Avg</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
+          <thead><tr style={{ borderBottom: "1px solid #333", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>{isWeekly ? "Wk Avg" : "Per Check"}</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
           <tbody>{expenses.map(exp => {
             const annual = yearlyExpenseCost(exp);
-            const weeklyAvg = annual / 52;
+            const checkAvg = (annual / 52) * perCheckFactor;
             const isLoan = exp.type === "loan";
             return <tr key={exp.id} style={{ borderBottom: "1px solid #181818" }} onMouseEnter={e => e.currentTarget.style.background = "var(--color-bg-surface)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
               <td style={{ padding: "8px 4px" }}>
@@ -1363,14 +1583,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 {exp.label}
                 {isLoan && <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-gold)", padding: "1px 4px", borderRadius: "2px", marginLeft: "5px" }}>LOAN</span>}
               </td>
-              <td style={{ padding: "8px 4px", textAlign: "right", color: isLoan ? "var(--color-gold)" : CATEGORY_COLORS[exp.category] }}>{f2(weeklyAvg)}</td>
+              <td style={{ padding: "8px 4px", textAlign: "right", color: isLoan ? "var(--color-gold)" : CATEGORY_COLORS[exp.category] }}>{f2(checkAvg)}</td>
               <td style={{ padding: "8px 4px", textAlign: "right", color: "var(--color-text-secondary)" }}>{f(annual / 12)}</td>
               <td style={{ padding: "8px 4px", textAlign: "right", color: "var(--color-text-primary)" }}>{f(annual)}</td>
             </tr>;
           })}</tbody>
           <tfoot>
-            <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td style={{ padding: "10px 4px", color: "var(--color-gold)" }}>TRUE SPEND</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-red)" }}>{f2(tsWeeklyAvg)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-red)" }}>{f(tsAnnual / 12)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-red)" }}>{f(tsAnnual)}</td></tr>
-            <tr style={{ fontWeight: "bold" }}><td style={{ padding: "6px 4px", color: "var(--color-green)" }}>REMAINING</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(wrWeeklyAvg)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual / 12)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual)}</td></tr>
+            <tr style={{ borderTop: "2px solid #333", fontWeight: "bold" }}><td style={{ padding: "10px 4px", color: "var(--color-gold)" }}>TRUE SPEND</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f2(tsWeeklyAvg * perCheckFactor)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f(tsAnnual / 12)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-deduction)" }}>{f(tsAnnual)}</td></tr>
+            <tr style={{ fontWeight: "bold" }}><td style={{ padding: "6px 4px", color: "var(--color-green)" }}>REMAINING</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(wrWeeklyAvg * perCheckFactor)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual / 12)}</td><td style={{ padding: "6px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(wrAnnual)}</td></tr>
           </tfoot>
         </table>
       </div>;
@@ -1391,7 +1611,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Total Loan Balance" val={f(totalOwed)} rawVal={totalOwed} color="var(--color-gold)" />
-          <Card label="Weekly Committed" val={f2(weeklyCommitted)} rawVal={weeklyCommitted} color="var(--color-red)"
+          <Card label={`${checkWord} Committed`} val={f2(weeklyCommitted * perCheckFactor)} rawVal={weeklyCommitted * perCheckFactor} color="var(--color-deduction)"
             insight={weeklyIncome > 0 && weeklyCommitted > 0 ? (() => {
               const ratio = weeklyCommitted / weeklyIncome;
               const pct   = Math.round(ratio * 100);
@@ -1443,7 +1663,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   {exp.note[0] && <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{exp.note[0]}</div>}
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : inRunway ? "#7a8bbf" : "var(--color-gold)" }}>{f2(weeklyAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/wk</span></div>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : inRunway ? "#7a8bbf" : "var(--color-gold)" }}>{f2(weeklyAmt * perCheckFactor)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/{checkUnit}</span></div>
                   <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(meta.totalAmount)} total</div>
                 </div>
               </div>
@@ -1480,21 +1700,21 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
               {/* Runway banner */}
               {inRunway && <div style={{ background: "#1a1a2d", border: "1px solid #7a8bbf44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "#7a8bbf" }}>
-                Setting aside {f2(weeklyAmt)}/wk — {weeksUntilFirst} check{weeksUntilFirst !== 1 ? "s" : ""} until first {f2(payAmt)}/{freqShort} payment on {meta.firstPaymentDate}
+                Setting aside {f2(weeklyAmt * perCheckFactor)}/{checkUnit} — {weeksUntilFirst} check{weeksUntilFirst !== 1 ? "s" : ""} until first {f2(payAmt)}/{freqShort} payment on {meta.firstPaymentDate}
               </div>}
 
               {/* Drop-off banner */}
               {!isPaidOff && !inRunway && dropsThisYear && <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "var(--color-green)" }}>
-                ✓ Drops off in {weeksUntilPayoff} weeks — weekly budget improves after payoff
+                ✓ Drops off in {weeksUntilPayoff} weeks — budget improves after payoff
               </div>}
 
               {/* Actions */}
               <div style={{ display: "flex", gap: "6px", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
                 <SmBtn onClick={() => startEditLoan(exp)} c="var(--color-gold)">EDIT</SmBtn>
                 {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
-                  <SmBtn onClick={() => deleteLoan(exp.id)} c="var(--color-red)" bg="#2d1a1a">DEL</SmBtn>
+                  <SmBtn onClick={() => deleteLoan(exp.id)} c="var(--color-deduction)" bg="#2d1a1a">DEL</SmBtn>
                   <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
-                </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="var(--color-red)">✕</SmBtn>}
+                </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="var(--color-deduction)">✕</SmBtn>}
               </div>
             </div>}
           </div>;
@@ -1531,7 +1751,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             const freqLabel = { weekly: "week", biweekly: "2 weeks", monthly: "month" }[meta.paymentFrequency];
             return <div style={{ background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px", fontSize: "11px" }}>
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-                <span style={{ color: "var(--color-text-primary)" }}>Weekly cost: <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(weeklyAmt)}/wk</span></span>
+                <span style={{ color: "var(--color-text-primary)" }}>{isWeekly ? "Weekly cost" : "Cost per check"}: <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(weeklyAmt * perCheckFactor)}/{checkUnit}</span></span>
                 <span style={{ color: "var(--color-text-primary)" }}>{total} payments ({freqLabel})</span>
                 <span style={{ color: "var(--color-text-primary)" }}>Payoff: <span style={{ color: payoff <= fiscalYearEnd ? "var(--color-green)" : "var(--color-text-primary)" }}>{payoff}</span></span>
               </div>
@@ -1572,6 +1792,400 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     >
       {touchDragOverlay.label}
     </div>}
+
+    {/* Paycheck breakdown info modal */}
+    {showCheckInfo && checkBreakdown && (
+      <div
+        onClick={() => setShowCheckInfo(false)}
+        style={{
+          position: "fixed", inset: 0, zIndex: 60,
+          background: "rgba(0,0,0,0.82)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "16px",
+        }}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            background: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border-subtle)",
+            borderRadius: "16px",
+            maxWidth: "400px", width: "100%",
+            padding: "24px 20px",
+            maxHeight: "90vh", overflowY: "auto",
+            boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "2px" }}>{infoLabel}</div>
+                <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--color-accent-primary)", fontFamily: "var(--font-sans)" }}>Breakdown</div>
+              </div>
+              {config?.taxExemptOptIn && infoRefWeek && (
+                <span style={{
+                  fontSize: "9px", padding: "2px 7px", borderRadius: "12px", letterSpacing: "0.5px",
+                  background: infoRefWeek.taxedBySchedule ? "#1e1e3a" : "#1e4a30",
+                  color: infoRefWeek.taxedBySchedule ? "#7a8bbf" : "var(--color-green)",
+                  border: "1px solid " + (infoRefWeek.taxedBySchedule ? "#7a8bbf" : "var(--color-green)"),
+                }}>
+                  {infoRefWeek.taxedBySchedule ? "TAXED" : "EXEMPT"}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => setShowCheckInfo(false)}
+              style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1, flexShrink: 0 }}
+            >×</button>
+          </div>
+
+          {/* ── Subtraction math formula ── */}
+
+          {/* Gross — the starting number, no operator */}
+          <MathRow op=" " label="Gross Pay" val={f2(checkBreakdown.gross)} valColor="var(--color-text-primary)" large />
+          <MathDivider />
+
+          {/* Deductions block */}
+          <MathRow op="−" label="Total Tax Withholding" val={f2(checkBreakdown.fica + checkBreakdown.fedTax + checkBreakdown.stateTax)} note="FICA · fed · state" />
+          <MathRow op="−" label="Benefits / Insurance" val={f2(checkBreakdown.benefits)} />
+          <MathRow op="−" label="401(k) Contribution" val={f2(checkBreakdown.k401)} />
+          {checkBreakdown.otherDeductions.map((row, i) => {
+            const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
+            return <MathRow key={i} op="−" label={row.label ?? `Other Deduction ${i + 1}`} val={f2((row.weeklyAmount ?? 0) * (checksPerYear / 52))} />;
+          })}
+          <MathDivider thick />
+
+          {/* Net Pay result */}
+          <MathRow op="=" label="Net Pay" val={f2(checkBreakdown.netPay)} valColor="var(--color-green)" large />
+
+          {/* Buffer block */}
+          {bufferPerWeek > 0 && <>
+            <MathDivider />
+            <MathRow op="−" label="Paycheck Buffer" val={f2(bufferPerWeek)} valColor="var(--color-warning)" note="reserved savings" />
+            <MathDivider thick />
+            <MathRow op="=" label="Spendable" val={f2(checkBreakdown.spendable)} valColor="var(--color-text-primary)" large />
+          </>}
+
+          {/* Expenses block */}
+          <MathDivider />
+          {checkBreakdown.needsSpend > 0 && <MathRow op="−" label="Needs" val={f2(checkBreakdown.needsSpend)} />}
+          {checkBreakdown.lifestyleSpend > 0 && <MathRow op="−" label="Lifestyle" val={f2(checkBreakdown.lifestyleSpend)} />}
+          {checkBreakdown.loansSpend > 0 && <MathRow op="−" label="Loans" val={f2(checkBreakdown.loansSpend)} />}
+          <MathDivider thick />
+          <MathRow op="=" label="Left" val={f2(checkBreakdown.left)} valColor={checkBreakdown.left >= 0 ? "var(--color-green)" : "var(--color-deduction)"} large />
+
+          <div style={{ marginTop: "20px", textAlign: "center" }}>
+            <button
+              onClick={() => setShowCheckInfo(false)}
+              style={{
+                background: "var(--color-bg-raised)", color: "var(--color-text-secondary)",
+                border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
+                padding: "8px 20px", fontSize: "10px", letterSpacing: "2px",
+                textTransform: "uppercase", cursor: "pointer", fontFamily: "var(--font-sans)",
+              }}
+            >Close</button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Restore Deleted Expenses bottom sheet ── */}
+    {restoreSheetCat && (() => {
+      const fy = FISCAL_YEAR_START.slice(0, 4);
+      const sheetExps = regularExpenses.filter(exp => {
+        if (exp.category !== restoreSheetCat) return false;
+        const amt = displayEffective(exp, ap);
+        if (amt !== 0) return false;
+        if (getNextNonZeroIso(exp, ap, TODAY_ISO) !== null) return false;
+        if (!(exp.history?.length)) return false;
+        return (exp.history ?? []).some(entry => (entry.weekly ?? []).some(v => v > 0));
+      });
+      return (
+        <div
+          onClick={() => { setRestoreSheetCat(null); setRestorePendingExpId(null); }}
+          style={{
+            position: "fixed", inset: 0, zIndex: 70,
+            background: "rgba(0,0,0,0.55)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: "absolute", bottom: 0, left: 0, right: 0,
+              background: "var(--color-bg-surface)",
+              borderTop: "1px solid var(--color-border-subtle)",
+              borderRadius: "16px 16px 0 0",
+              padding: "20px 16px calc(20px + var(--safe-area-bottom))",
+              maxHeight: "70vh", overflowY: "auto",
+              animation: "slideUpSheet 0.28s cubic-bezier(.2,.7,.2,1) both",
+              willChange: "transform",
+            }}
+          >
+            {/* Handle bar */}
+            <div style={{ width: "36px", height: "4px", borderRadius: "99px", background: "var(--color-border-subtle)", margin: "0 auto 16px" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+              <div>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "2px" }}>
+                  {restoreSheetCat} · {activeMonth ? activeMonthLabel : `Q${ap + 1}`}
+                </div>
+                <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--color-text-primary)" }}>Restore Deleted</div>
+              </div>
+              <button onClick={() => { setRestoreSheetCat(null); setRestorePendingExpId(null); }}
+                style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1 }}>×</button>
+            </div>
+
+            {sheetExps.length === 0 && (
+              <div style={{ textAlign: "center", padding: "24px 0", fontSize: "12px", color: "var(--color-text-disabled)" }}>
+                No deleted expenses for this period
+              </div>
+            )}
+
+            {sheetExps.map(exp => {
+              // Get the historical per-check amount for the active quarter
+              const histAmt = getEffectiveAmount(exp, Q_REP_DATES[ap], ap)
+                || Math.max(...(exp.history ?? []).map(h => h.weekly?.[ap] ?? 0));
+              const isPending = restorePendingExpId === exp.id;
+              return (
+                <div key={exp.id} style={{
+                  borderBottom: "1px solid var(--color-border-subtle)",
+                  padding: "12px 0",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: "13px", color: "var(--color-text-primary)" }}>{exp.label}</div>
+                      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px", fontFamily: "var(--font-mono)" }}>
+                        {histAmt > 0 ? `${f2(histAmt)}/${checkUnit} · ${f(monthlyFromPerPaycheck(histAmt, cpm))}/mo` : "—"}
+                      </div>
+                    </div>
+                    {!isPending && (
+                      <button
+                        onClick={() => setRestorePendingExpId(exp.id)}
+                        style={{
+                          fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                          color: "var(--color-accent-primary)", background: "rgba(0,200,150,0.08)",
+                          border: "1px solid rgba(0,200,150,0.24)", borderRadius: "8px",
+                          padding: "5px 12px", cursor: "pointer", fontFamily: "var(--font-sans)", flexShrink: 0,
+                        }}
+                      >Restore</button>
+                    )}
+                  </div>
+
+                  {/* Scope picker — shown inline after RESTORE is tapped */}
+                  {isPending && (
+                    <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+                        Restore from…
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                        {activeMonth && (
+                          <button onClick={() => restoreExpense(exp.id, "month")}
+                            style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                            {activeMonthLabel} only
+                          </button>
+                        )}
+                        <button onClick={() => restoreExpense(exp.id, "quarter")}
+                          style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                          Q{ap + 1} months
+                        </button>
+                        <button onClick={() => restoreExpense(exp.id, "year")}
+                          style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-accent-primary)", background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.24)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                          Rest of year
+                        </button>
+                        <button onClick={() => setRestorePendingExpId(null)}
+                          style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", background: "transparent", border: "none", padding: "6px 4px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    })()}
+    {/* ── Expense Detail Bottom Sheet ── */}
+    <style>{`
+      @keyframes expSheetSlideUp {
+        from { transform: translateY(100%); opacity: 0; }
+        to   { transform: translateY(0);    opacity: 1; }
+      }
+    `}</style>
+    {sheetExpLive && (
+      <>
+        {/* Backdrop */}
+        <div onClick={closeSheet} style={{
+          position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.62)",
+          backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+          zIndex: 200,
+        }} />
+        {/* Sheet */}
+        <div style={{
+          position: "fixed", left: 0, right: 0, bottom: 0,
+          zIndex: 201,
+          background: "var(--color-bg-surface)",
+          borderRadius: "20px 20px 0 0",
+          border: "1px solid var(--color-border-subtle)",
+          borderBottom: "none",
+          maxHeight: "82vh",
+          display: "flex", flexDirection: "column",
+          animation: "expSheetSlideUp 320ms cubic-bezier(.22,.7,.2,1) both",
+        }}>
+          {/* Pull handle */}
+          <div style={{ display: "flex", justifyContent: "center", padding: "14px 0 6px", flexShrink: 0 }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--color-border-subtle)" }} />
+          </div>
+          {/* Header: title + close */}
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "2px 20px 0", flexShrink: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, paddingRight: "12px" }}>
+              <div style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)", fontFamily: "var(--font-display)", lineHeight: "1.2" }}>
+                {sheetExpLive.label}
+              </div>
+              {(() => {
+                const note = Array.isArray(sheetExpLive.note) ? sheetExpLive.note[ap] : sheetExpLive.note;
+                return note ? (
+                  <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "3px", lineHeight: "1.5", fontStyle: "italic" }}>{note}</div>
+                ) : null;
+              })()}
+            </div>
+            <button onClick={closeSheet} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "2px", lineHeight: 1, flexShrink: 0 }}>✕</button>
+          </div>
+          {/* Scrollable content */}
+          <div style={{ overflowY: "auto", flex: 1, padding: "18px 20px 40px" }}>
+            {sheetMode === "view" ? (<>
+              {/* Cost tiles */}
+              <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+                <div style={{ flex: 1, background: "var(--color-bg-raised)", borderRadius: "14px", padding: "14px 16px" }}>
+                  <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "6px" }}>Per Check</div>
+                  <div style={{ fontSize: "22px", fontWeight: 700, color: CATEGORY_COLORS[sheetExpLive.category] ?? "var(--color-green)", fontFamily: "var(--font-mono)" }}>
+                    {f2(displayEffective(sheetExpLive, ap))}
+                  </div>
+                </div>
+                <div style={{ flex: 1, background: "var(--color-bg-raised)", borderRadius: "14px", padding: "14px 16px" }}>
+                  <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "6px" }}>Monthly</div>
+                  <div style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>
+                    {f(monthlyFromPerPaycheck(displayEffective(sheetExpLive, ap), cpm))}
+                  </div>
+                </div>
+              </div>
+              <div style={{ height: "1px", background: "var(--color-border-subtle)", marginBottom: "20px" }} />
+              {/* Month activity bar */}
+              <div style={{ marginBottom: "24px" }}>
+                <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "12px" }}>Active This Year</div>
+                <div style={{ display: "flex", gap: "3px" }}>
+                  {(() => {
+                    // Determine the earliest month this expense was actually tracking.
+                    // Expenses created via the default add path were historically backdated
+                    // to FISCAL_YEAR_START ("2026-01-05") regardless of when the user added
+                    // them. We detect that case and fall back to billingMeta.effectiveFrom
+                    // (set to TODAY_ISO at creation) as the real visual start.
+                    const historyStart = sheetExpLive.history?.[0]?.effectiveFrom ?? null;
+                    const isBackdated = historyStart !== null && historyStart <= "2026-01-06";
+                    const visualStartMonth = isBackdated
+                      ? (sheetExpLive.billingMeta?.effectiveFrom?.slice(0, 7) ?? null)
+                      : (historyStart ? historyStart.slice(0, 7) : null);
+                    return MONTH_SHORT.map((label, i) => {
+                    const monthNum = i + 1;
+                    const key = `2026-${String(monthNum).padStart(2, "0")}`;
+                    const phaseIdx = Math.floor(i / 3);
+                    const amt = getEffectiveAmountForMonth(sheetExpLive, key, phaseIdx);
+                    const isInRange = !visualStartMonth || key >= visualStartMonth;
+                    const isActive = isInRange && amt > 0;
+                    const isCurrent = monthNum === parseInt(TODAY_ISO.slice(5, 7), 10);
+                    return (
+                      <div key={label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "5px" }}>
+                        <div style={{
+                          width: "100%", height: "6px", borderRadius: "3px",
+                          background: isActive
+                            ? (isCurrent ? "var(--color-green)" : "rgba(34,197,94,0.48)")
+                            : "var(--color-bg-raised)",
+                          boxShadow: isCurrent
+                            ? (isActive
+                               ? "0 0 7px 2px rgba(34,197,94,0.55)"
+                               : "0 0 7px 2px rgba(0,200,150,0.4)")
+                            : "none",
+                          border: isCurrent && !isActive
+                            ? "1px solid rgba(0,200,150,0.45)"
+                            : "1px solid transparent",
+                        }} />
+                        <div style={{
+                          fontSize: "7px",
+                          color: isCurrent ? "var(--color-green)" : (isActive ? "var(--color-text-secondary)" : "var(--color-text-disabled)"),
+                          fontWeight: isCurrent ? "700" : "400",
+                        }}>{label}</div>
+                      </div>
+                    );
+                  });
+                  })()}
+                </div>
+              </div>
+              <div style={{ height: "1px", background: "var(--color-border-subtle)", marginBottom: "20px" }} />
+              {/* Actions */}
+              {sheetDeleteConfirm ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ fontSize: "10px", color: "var(--color-deduction)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
+                    {activeMonth ? `Delete ${activeMonthLabel}?` : `Delete Q${ap + 1}?`}
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {[
+                      { label: activeMonth ? `${activeMonthLabel} Only` : "This Month", action: () => { deleteMonthOnly(sheetExpLive.id); closeSheet(); } },
+                      { label: `Q${ap + 1} Months`, action: () => { deleteQuarterOnly(sheetExpLive.id); closeSheet(); } },
+                      { label: "From Here +", action: () => { deleteMonthForward(sheetExpLive.id); closeSheet(); } },
+                    ].map(({ label, action }) => (
+                      <button key={label} onClick={action} style={{ flex: 1, padding: "11px 8px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "12px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "80px" }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setSheetDeleteConfirm(false)} style={{ padding: "10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button onClick={() => { setSheetMode("edit"); startEditExp(sheetExpLive); }} style={{ flex: 1, padding: "13px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-primary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Edit</button>
+                  <button onClick={() => setSheetDeleteConfirm(true)} style={{ flex: 1, padding: "13px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "14px", color: "var(--color-deduction)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Delete</button>
+                </div>
+              )}
+            </>) : (
+              /* ── Edit mode ── */
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <div style={{ ...lS, marginBottom: "4px" }}>Bill Amount ($)</div>
+                    <input type="number" min="0" step="0.01" value={editVals.amount ?? ""} onChange={e => setEditVals(v => ({ ...v, amount: e.target.value }))} style={{ ...iS, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                  <div>
+                    <div style={{ ...lS, marginBottom: "4px" }}>Paid Every</div>
+                    <select value={editVals.cycle ?? "every30days"} onChange={e => setEditVals(v => ({ ...v, cycle: e.target.value }))} style={{ ...iS, width: "100%", boxSizing: "border-box" }}>
+                      {EXPENSE_CYCLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", background: "var(--color-bg-raised)", padding: "10px 14px", borderRadius: "10px" }}>
+                  Per-check reserve: <strong style={{ color: "var(--color-accent-primary)" }}>{f2(perPaycheckFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days", cpm))}</strong>
+                </div>
+                <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
+                {activeMonth !== null ? (<>
+                  <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase" }}>Save scope</div>
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    <button onClick={() => saveThisMonth(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>{activeMonthLabel} Only</button>
+                    <button onClick={() => saveFromMonthForward(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>{activeMonthLabel} +</button>
+                    <button onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>All Qtrs</button>
+                  </div>
+                </>) : (
+                  <button onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ padding: "13px", background: "var(--color-green)", border: "none", borderRadius: "14px", color: "#0a0a0a", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 700 }}>Save</button>
+                )}
+                <button onClick={() => { setSheetMode("view"); setEditId(null); }} style={{ padding: "11px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    )}
   </div>);
 }
 
@@ -1603,4 +2217,32 @@ function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
       <button onClick={onCancel} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
     </div>
   </div>;
+}
+
+// op: " " (no operator, indent), "−" (subtraction), "=" (result)
+// Deduction rows (op="−") use --color-deduction for the value; results use valColor.
+function MathRow({ op, label, val, valColor, note, large }) {
+  const isDeduction = op === "−";
+  const isResult    = op === "=";
+  const computedValColor = valColor ?? (isDeduction ? "var(--color-deduction)" : "var(--color-text-primary)");
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 0, padding: large ? "7px 0" : "4px 0" }}>
+      <span style={{
+        fontSize: large ? "15px" : "13px", fontWeight: "700",
+        color: isDeduction ? "var(--color-deduction)" : isResult ? "var(--color-text-disabled)" : "transparent",
+        fontFamily: "var(--font-mono)", width: "18px", flexShrink: 0, userSelect: "none",
+      }}>{op}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ fontSize: large ? "13px" : "11px", color: "var(--color-text-secondary)", fontFamily: "var(--font-sans)", letterSpacing: "0.2px" }}>{label}</span>
+        {note && <span style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginLeft: "6px", letterSpacing: "0.3px" }}>{note}</span>}
+      </div>
+      <span style={{ fontSize: large ? "19px" : "14px", fontWeight: large ? "700" : "500", color: computedValColor, fontFamily: "var(--font-mono)", letterSpacing: "-0.5px", paddingLeft: "8px" }}>{val}</span>
+    </div>
+  );
+}
+
+function MathDivider({ thick }) {
+  return (
+    <div style={{ height: thick ? "1px" : "0.5px", background: thick ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.06)", margin: thick ? "8px 0" : "3px 0" }} />
+  );
 }

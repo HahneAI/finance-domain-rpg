@@ -18,8 +18,9 @@
   --color-green:       #22c55e;
   --color-green-muted: #168246;
 
-  --color-red:         #ef4444;
+  --color-red:         #ef4444;  /* SPLIT TEST — darker red; kept for reference, not used in UI (use --color-deduction instead) */
   --color-red-muted:   #8a2323;
+  --color-deduction:   #f4a4a4;  /* active red — hsl(0°,52%,80%), same hue as --color-red at higher lightness; all UI red now routes through this token */
   --color-warning:     #f59e0b;
 
   --color-text-primary:   #e6f4ef;
@@ -222,6 +223,11 @@ code {
   to   { opacity: 1; transform: translateY(0);   }
 }
 
+@keyframes weekCardIn {
+  from { opacity: 0; transform: scale(0.97) translateY(10px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
 /* ── Goal celebration animations (BudgetPanel) ── */
 @keyframes goalFundedGlow {
   0%   { box-shadow: 0 0 0 0 rgba(109,191,138,0); border-color: rgba(109,191,138,0.2); }
@@ -245,6 +251,12 @@ code {
 @keyframes goalFillFlow {
   from { background-position: 0% 50%; }
   to { background-position: 160% 50%; }
+}
+
+/* ── Pay-period confirm modal entrance — scale+slide from slightly below ── */
+@keyframes weekCardIn {
+  from { opacity: 0; transform: scale(0.97) translateY(10px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
 }
 
 /* ── Log confirm pulse — brief radial green glow over hero cards on entry save ── */
@@ -289,4 +301,10 @@ code {
 /* ── ScrollSnapRow — hide webkit scrollbar on horizontal snap containers ── */
 .snap-scroll-row::-webkit-scrollbar {
   display: none;
+}
+
+/* ── Bottom sheet slide-up entrance ── */
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
 }

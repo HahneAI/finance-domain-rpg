@@ -67,3 +67,19 @@ export function onAuthChange(callback) {
   });
   return () => subscription.unsubscribe();
 }
+
+/**
+ * Validates an investor access code against the investor_codes table.
+ * Comparison is case-insensitive. Returns true if the code exists and
+ * is_active = true, false otherwise (including on network error).
+ */
+export async function validateInvestorCode(code) {
+  const { data, error } = await supabase
+    .from("investor_codes")
+    .select("id")
+    .eq("code", code.trim().toLowerCase())
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) return false;
+  return data !== null;
+}

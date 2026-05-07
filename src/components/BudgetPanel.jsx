@@ -2113,7 +2113,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             })}
             </div>{/* end scrollable content */}
           </div>{/* end sheet panel */}
-        </div>{/* end backdrop */}
+        </div>
       );
     })()}
     {/* ── Expense Detail Bottom Sheet ── */}

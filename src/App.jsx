@@ -982,6 +982,7 @@ export default function App() {
             .sidebar { display: none !important; }
             .mobile-header { display: flex !important; }
             .mobile-bottom-nav { display: flex !important; }
+            .mobile-admin-sheet { display: flex !important; flex-direction: column !important; }
             /* On mobile the outer shell must have a definite height so the flex
                column inside can act as a scroll container. 100svh = "small viewport
                height" — excludes the address bar so layout doesn't jump when Chrome
@@ -1016,6 +1017,7 @@ export default function App() {
           @media (min-width: 768px) {
             .mobile-header { display: none !important; }
             .mobile-bottom-nav { display: none !important; }
+            .mobile-admin-sheet { display: none !important; }
             /* DEBUG: overlay also hides on desktop so a half-open drawer doesn't
                ghost behind the sidebar if the user resizes the window. */
             .mobile-drawer-overlay { display: none !important; }
@@ -1860,7 +1862,7 @@ export default function App() {
           )}
           {/* Sheet */}
           <div
-            className="mobile-bottom-nav"
+            className="mobile-admin-sheet"
             style={{
               display: "none",
               position: "fixed",

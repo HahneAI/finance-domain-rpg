@@ -221,6 +221,10 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState(null);
   const [configViewOpen, setConfigViewOpen] = useState(false);
   const [toolSheetOpen, setToolSheetOpen] = useState(false);
+  const [rowViewOpen, setRowViewOpen] = useState(false);
+  const [rowData, setRowData] = useState(null);
+  const [rowFetching, setRowFetching] = useState(false);
+  const [taxGridOpen, setTaxGridOpen] = useState(false);
   // Persisted to Supabase week_confirmations JSONB column.
   // Shape: { [weekIdx]: { confirmedAt, dayToggles, scheduledDays, missedScheduledDays,
   //                        pickupDays, netShiftDelta, eventId } }
@@ -415,6 +419,22 @@ export default function App() {
     setTimeout(() => setSyncStatus(null), 4000);
   }, [setConfig, setShowExtra, setLogs, setExpenses, setGoals, setWeekConfirmations, setPtoGoal]);
 
+  const handleFetchRow = useCallback(async () => {
+    setRowFetching(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from("user_data")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+      setRowData(error ? { __error: error.message } : data);
+    } catch (e) {
+      setRowData({ __error: e.message });
+    }
+    setRowFetching(false);
+  }, []);
+
   const handleLocalSignOut = useCallback(async () => {
     await supabase.auth.signOut({ scope: "local" });
   }, []);
@@ -458,6 +478,22 @@ export default function App() {
       ),
     }];
   }, [isAdmin]);
+
+  // Diff between in-memory state and what the last fetched DB row contains.
+  // Returns array of column names where values diverge.
+  const rowDiff = useMemo(() => {
+    if (!rowData || rowData.__error) return [];
+    const pairs = [
+      ["config", JSON.stringify(config), JSON.stringify(rowData.config)],
+      ["expenses", JSON.stringify(expenses), JSON.stringify(rowData.expenses)],
+      ["goals", JSON.stringify(goals), JSON.stringify(rowData.goals)],
+      ["logs", JSON.stringify(logs), JSON.stringify(rowData.logs)],
+      ["show_extra", String(showExtra), String(rowData.show_extra)],
+      ["week_confirmations", JSON.stringify(weekConfirmations), JSON.stringify(rowData.week_confirmations)],
+      ["pto_goal", String(ptoGoal ?? ""), String(rowData.pto_goal ?? "")],
+    ];
+    return pairs.filter(([, a, b]) => a !== b).map(([col]) => col);
+  }, [rowData, config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
 
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config), [config]);
@@ -1269,6 +1305,59 @@ export default function App() {
                 )}
               </div>
 
+              {/* Supabase Row Viewer */}
+              <div style={{ padding: "0 20px 10px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)" }}>{rowDiff.length} drift</span>}
+                    <button onClick={handleFetchRow} disabled={rowFetching} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</button>
+                    {rowData && <button onClick={() => setRowViewOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide" : "View"}</button>}
+                  </div>
+                </div>
+                {rowData && rowViewOpen && (
+                  <div>
+                    {rowData.__error
+                      ? <div style={{ fontSize: "9px", color: "var(--color-red)" }}>{rowData.__error}</div>
+                      : <>
+                          {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
+                          {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
+                          <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "160px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                            {JSON.stringify(rowData, null, 2)}
+                          </pre>
+                        </>
+                    }
+                  </div>
+                )}
+              </div>
+
+              {/* Tax Weeks Grid */}
+              <div style={{ padding: "0 20px 10px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
+                  <button onClick={() => setTaxGridOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide" : "View"}</button>
+                </div>
+                {taxGridOpen && (() => {
+                  const overrides = config.pastWeekTaxStatusOverrides ?? {};
+                  return (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "2px" }}>
+                      {allWeeks.filter(w => w.active).map(w => {
+                        const wIso = toLocalIso(w.weekEnd);
+                        const isPast = wIso < effectiveToday;
+                        const isCurrent = w.idx === currentWeek?.idx;
+                        const hasOverride = overrides[w.idx] !== undefined;
+                        const bg = isPast ? "var(--color-bg-raised)" : w.taxedBySchedule ? "rgba(0,200,150,0.25)" : "var(--color-bg-base)";
+                        return (
+                          <div key={w.idx} title={`Wk ${w.idx}${w.taxedBySchedule ? " · taxed" : ""}${isPast ? " · past" : ""}${hasOverride ? " · override" : ""}`} style={{ position: "relative", width: "14px", height: "14px", borderRadius: "2px", background: bg, border: isCurrent ? "1.5px solid #c8a84b" : "1px solid var(--color-border-subtle)", flexShrink: 0 }}>
+                            {hasOverride && <div style={{ position: "absolute", top: "1px", right: "1px", width: "4px", height: "4px", borderRadius: "50%", background: "var(--color-red)" }} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
               {/* Demo account editing — admin only */}
               <div style={{ padding: "0 20px 12px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
@@ -1684,6 +1773,59 @@ export default function App() {
               )}
             </div>
 
+            {/* Supabase Row Viewer */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)" }}>{rowDiff.length} drift</span>}
+                  <button onClick={handleFetchRow} disabled={rowFetching} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</button>
+                  {rowData && <button onClick={() => setRowViewOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide" : "View"}</button>}
+                </div>
+              </div>
+              {rowData && rowViewOpen && (
+                <div>
+                  {rowData.__error
+                    ? <div style={{ fontSize: "10px", color: "var(--color-red)" }}>{rowData.__error}</div>
+                    : <>
+                        {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
+                        {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
+                        <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                          {JSON.stringify(rowData, null, 2)}
+                        </pre>
+                      </>
+                  }
+                </div>
+              )}
+            </div>
+
+            {/* Tax Weeks Grid */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
+                <button onClick={() => setTaxGridOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide" : "View"}</button>
+              </div>
+              {taxGridOpen && (() => {
+                const overrides = config.pastWeekTaxStatusOverrides ?? {};
+                return (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "3px" }}>
+                    {allWeeks.filter(w => w.active).map(w => {
+                      const wIso = toLocalIso(w.weekEnd);
+                      const isPast = wIso < effectiveToday;
+                      const isCurrent = w.idx === currentWeek?.idx;
+                      const hasOverride = overrides[w.idx] !== undefined;
+                      const bg = isPast ? "var(--color-bg-raised)" : w.taxedBySchedule ? "rgba(0,200,150,0.25)" : "var(--color-bg-base)";
+                      return (
+                        <div key={w.idx} title={`Wk ${w.idx}${w.taxedBySchedule ? " · taxed" : ""}${isPast ? " · past" : ""}${hasOverride ? " · override" : ""}`} style={{ position: "relative", width: "18px", height: "18px", borderRadius: "3px", background: bg, border: isCurrent ? "2px solid #c8a84b" : "1px solid var(--color-border-subtle)", flexShrink: 0 }}>
+                          {hasOverride && <div style={{ position: "absolute", top: "2px", right: "2px", width: "5px", height: "5px", borderRadius: "50%", background: "var(--color-red)" }} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
             {/* Demo account editing — admin only */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
@@ -1996,6 +2138,79 @@ export default function App() {
                     >Copy to Clipboard</button>
                   </div>
                 )}
+              </div>
+
+              {/* ── DB Row Viewer ── */}
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: rowData && rowViewOpen ? "10px" : "0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
+                    {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)", letterSpacing: "1px" }}>{rowDiff.length} drift</span>}
+                  </div>
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                    <button onClick={handleFetchRow} disabled={rowFetching} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</button>
+                    {rowData && <button onClick={() => setRowViewOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide ↑" : "View ↓"}</button>}
+                  </div>
+                </div>
+                {rowData && rowViewOpen && (
+                  rowData.__error
+                    ? <div style={{ fontSize: "10px", color: "var(--color-red)" }}>{rowData.__error}</div>
+                    : <>
+                        <div style={{ display: "flex", gap: "12px", marginBottom: "8px", flexWrap: "wrap" }}>
+                          {rowData.updated_at && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</span>}
+                          {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)" }}>Drift: {rowDiff.join(", ")}</span>}
+                        </div>
+                        <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                          {JSON.stringify(rowData, null, 2)}
+                        </pre>
+                      </>
+                )}
+              </div>
+
+              {/* ── Tax Weeks Grid ── */}
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: taxGridOpen ? "10px" : "0" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
+                  <button onClick={() => setTaxGridOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide ↑" : "View ↓"}</button>
+                </div>
+                {taxGridOpen && (() => {
+                  const overrides = config.pastWeekTaxStatusOverrides ?? {};
+                  const activeWeeks = allWeeks.filter(w => w.active);
+                  return (
+                    <>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "3px", marginBottom: "10px" }}>
+                        {activeWeeks.map(w => {
+                          const wIso = toLocalIso(w.weekEnd);
+                          const isPast = wIso < effectiveToday;
+                          const isCurrent = w.idx === currentWeek?.idx;
+                          const hasOverride = overrides[w.idx] !== undefined;
+                          const bg = isPast ? "var(--color-bg-raised)" : w.taxedBySchedule ? "rgba(0,200,150,0.25)" : "var(--color-bg-base)";
+                          return (
+                            <div key={w.idx} title={`Wk ${w.idx}${w.taxedBySchedule ? " · taxed" : ""}${isPast ? " · past" : ""}${hasOverride ? " · override" : ""}`} style={{ position: "relative", width: "20px", height: "20px", borderRadius: "3px", background: bg, border: isCurrent ? "2px solid #c8a84b" : "1px solid var(--color-border-subtle)", flexShrink: 0 }}>
+                              {hasOverride && <div style={{ position: "absolute", top: "2px", right: "2px", width: "5px", height: "5px", borderRadius: "50%", background: "var(--color-red)" }} />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                        {[
+                          { bg: "rgba(0,200,150,0.25)", label: "Taxed / future" },
+                          { bg: "var(--color-bg-base)", label: "Untaxed / future" },
+                          { bg: "var(--color-bg-raised)", label: "Past" },
+                        ].map(({ bg, label }) => (
+                          <div key={label} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                            <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: bg, border: "1px solid var(--color-border-subtle)", flexShrink: 0 }} />
+                            <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>{label}</span>
+                          </div>
+                        ))}
+                        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                          <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: "var(--color-bg-base)", border: "2px solid #c8a84b", flexShrink: 0 }} />
+                          <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>Current wk</span>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* ── Demo Accounts ── */}

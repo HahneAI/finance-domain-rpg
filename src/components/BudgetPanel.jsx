@@ -92,6 +92,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const expenseDragFinalizedRef = useRef(false);
   const [pendingExpenseTouchId, setPendingExpenseTouchId] = useState(null);
   const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+  // Bottom sheet drag-to-dismiss refs
+  const restoreSheetElRef = useRef(null);
+  const restoreSheetDragStartYRef = useRef(null);
+  const expSheetElRef = useRef(null);
+  const expSheetDragStartYRef = useRef(null);
   const EXPENSE_TOUCH_HOLD_MS = 450;
   // Expense detail bottom sheet
   const [sheetExp, setSheetExp] = useState(null);
@@ -163,6 +168,57 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setSheetDeleteConfirm(false);
     setEditId(null);
     document.body.classList.remove("modal-open");
+  };
+  const closeRestoreSheet = () => {
+    setRestoreSheetCat(null);
+    setRestorePendingExpId(null);
+    document.body.classList.remove("modal-open");
+  };
+
+  // Drag-to-dismiss: restore sheet handle
+  const onRestoreHandleTouchStart = (e) => {
+    restoreSheetDragStartYRef.current = e.touches[0].clientY;
+  };
+  const onRestoreHandleTouchMove = (e) => {
+    if (restoreSheetDragStartYRef.current === null || !restoreSheetElRef.current) return;
+    const dy = Math.max(0, e.touches[0].clientY - restoreSheetDragStartYRef.current);
+    restoreSheetElRef.current.style.transform = `translateY(${dy}px)`;
+  };
+  const onRestoreHandleTouchEnd = (e) => {
+    if (restoreSheetDragStartYRef.current === null) return;
+    const dy = e.changedTouches[0].clientY - restoreSheetDragStartYRef.current;
+    if (dy > 80) {
+      closeRestoreSheet();
+    } else if (restoreSheetElRef.current) {
+      const el = restoreSheetElRef.current;
+      el.style.transition = "transform 0.25s cubic-bezier(.2,.7,.2,1)";
+      el.style.transform = "translateY(0)";
+      setTimeout(() => { if (el) el.style.transition = ""; }, 260);
+    }
+    restoreSheetDragStartYRef.current = null;
+  };
+
+  // Drag-to-dismiss: expense detail sheet handle
+  const onExpHandleTouchStart = (e) => {
+    expSheetDragStartYRef.current = e.touches[0].clientY;
+  };
+  const onExpHandleTouchMove = (e) => {
+    if (expSheetDragStartYRef.current === null || !expSheetElRef.current) return;
+    const dy = Math.max(0, e.touches[0].clientY - expSheetDragStartYRef.current);
+    expSheetElRef.current.style.transform = `translateY(${dy}px)`;
+  };
+  const onExpHandleTouchEnd = (e) => {
+    if (expSheetDragStartYRef.current === null) return;
+    const dy = e.changedTouches[0].clientY - expSheetDragStartYRef.current;
+    if (dy > 80) {
+      closeSheet();
+    } else if (expSheetElRef.current) {
+      const el = expSheetElRef.current;
+      el.style.transition = "transform 0.25s cubic-bezier(.2,.7,.2,1)";
+      el.style.transform = "translateY(0)";
+      setTimeout(() => { if (el) el.style.transition = ""; }, 260);
+    }
+    expSheetDragStartYRef.current = null;
   };
 
   // Split loans from regular expenses for display purposes
@@ -806,6 +862,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     }));
     setRestorePendingExpId(null);
     setRestoreSheetCat(null);
+    document.body.classList.remove("modal-open");
   };
 
   useEffect(() => {
@@ -1276,7 +1333,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             return deletedInCat.length > 0 ? (
               <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
                 <button
-                  onClick={() => { setRestoreSheetCat(cat); setRestorePendingExpId(null); }}
+                  onClick={() => { setRestoreSheetCat(cat); setRestorePendingExpId(null); document.body.classList.add("modal-open"); }}
                   style={{
                     fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
                     color: "var(--color-deduction)", background: "rgba(244,164,164,0.08)",
@@ -1941,39 +1998,51 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       });
       return (
         <div
-          onClick={() => { setRestoreSheetCat(null); setRestorePendingExpId(null); }}
+          onClick={closeRestoreSheet}
           style={{
-            position: "fixed", inset: 0, zIndex: 70,
+            position: "fixed", inset: 0, zIndex: 200,
             background: "rgba(0,0,0,0.55)",
             backdropFilter: "blur(6px)",
             WebkitBackdropFilter: "blur(6px)",
           }}
         >
           <div
+            ref={restoreSheetElRef}
             onClick={e => e.stopPropagation()}
             style={{
               position: "absolute", bottom: 0, left: 0, right: 0,
               background: "var(--color-bg-surface)",
               borderTop: "1px solid var(--color-border-subtle)",
-              borderRadius: "16px 16px 0 0",
-              padding: "20px 16px calc(20px + var(--safe-area-bottom))",
-              maxHeight: "70vh", overflowY: "auto",
+              borderRadius: "20px 20px 0 0",
+              minHeight: "67vh",
+              maxHeight: "88vh",
+              display: "flex", flexDirection: "column",
               animation: "slideUpSheet 0.28s cubic-bezier(.2,.7,.2,1) both",
               willChange: "transform",
             }}
           >
-            {/* Handle bar */}
-            <div style={{ width: "36px", height: "4px", borderRadius: "99px", background: "var(--color-border-subtle)", margin: "0 auto 16px" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+            {/* Grabbable handle bar */}
+            <div
+              onTouchStart={onRestoreHandleTouchStart}
+              onTouchMove={onRestoreHandleTouchMove}
+              onTouchEnd={onRestoreHandleTouchEnd}
+              style={{ display: "flex", justifyContent: "center", padding: "14px 0 6px", flexShrink: 0, cursor: "grab", touchAction: "none" }}
+            >
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--color-border-subtle)" }} />
+            </div>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "2px 20px 14px", flexShrink: 0 }}>
               <div>
                 <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "2px" }}>
                   {restoreSheetCat} · {activeMonth ? activeMonthLabel : `Q${ap + 1}`}
                 </div>
                 <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--color-text-primary)" }}>Restore Deleted</div>
               </div>
-              <button onClick={() => { setRestoreSheetCat(null); setRestorePendingExpId(null); }}
+              <button onClick={closeRestoreSheet}
                 style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1 }}>×</button>
             </div>
+            {/* Scrollable content */}
+            <div style={{ overflowY: "auto", flex: 1, padding: "0 20px calc(20px + var(--safe-area-bottom))" }}>
 
             {sheetExps.length === 0 && (
               <div style={{ textAlign: "center", padding: "24px 0", fontSize: "12px", color: "var(--color-text-disabled)" }}>
@@ -2042,7 +2111,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 </div>
               );
             })}
-          </div>
+            </div>{/* end scrollable content */}
+          </div>{/* end sheet panel */}
         </div>
       );
     })()}
@@ -2063,7 +2133,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           zIndex: 200,
         }} />
         {/* Sheet */}
-        <div style={{
+        <div ref={expSheetElRef} style={{
           position: "fixed", left: 0, right: 0, bottom: 0,
           zIndex: 201,
           background: "var(--color-bg-surface)",
@@ -2075,8 +2145,13 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           display: "flex", flexDirection: "column",
           animation: "expSheetSlideUp 320ms cubic-bezier(.22,.7,.2,1) both",
         }}>
-          {/* Pull handle */}
-          <div style={{ display: "flex", justifyContent: "center", padding: "14px 0 6px", flexShrink: 0 }}>
+          {/* Pull handle — grabbable touch target */}
+          <div
+            onTouchStart={onExpHandleTouchStart}
+            onTouchMove={onExpHandleTouchMove}
+            onTouchEnd={onExpHandleTouchEnd}
+            style={{ display: "flex", justifyContent: "center", padding: "14px 0 6px", flexShrink: 0, cursor: "grab", touchAction: "none" }}
+          >
             <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--color-border-subtle)" }} />
           </div>
           {/* Header: title + close */}

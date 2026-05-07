@@ -2110,11 +2110,11 @@ export default function App() {
         return (
           <div
             onClick={() => setInspectedWeek(null)}
-            style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(3,10,7,0.88)", overflowY: "auto", padding: "16px" }}
+            style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(3,10,7,0.88)", overflow: "hidden", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px 40px", touchAction: "none" }}
           >
             <div
               onClick={e => e.stopPropagation()}
-              style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", maxWidth: "480px", margin: "0 auto", padding: "16px 18px 24px" }}
+              style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "16px", width: "100%", maxWidth: "480px", overflowY: "auto", maxHeight: "calc(100vh - 80px)", WebkitOverflowScrolling: "touch", touchAction: "pan-y", padding: "20px 18px 32px" }}
             >
               {/* Header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
@@ -2131,7 +2131,8 @@ export default function App() {
                 </div>
                 <button
                   onClick={() => setInspectedWeek(null)}
-                  style={{ background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "50%", width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "18px", flexShrink: 0 }}
+                  style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.45)", borderRadius: "50%", width: "52px", height: "52px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-red)", fontSize: "24px", lineHeight: 1, flexShrink: 0 }}
+                  aria-label="Close week inspector"
                 >×</button>
               </div>
 

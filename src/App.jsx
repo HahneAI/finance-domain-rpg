@@ -1848,13 +1848,13 @@ export default function App() {
       {/* ── Admin Tools slide-up sheet ── */}
       {isAdmin && (
         <>
-          {/* Backdrop */}
+          {/* Backdrop — also hides the nav pill beneath it */}
           {toolSheetOpen && (
             <div
               onClick={() => setToolSheetOpen(false)}
               style={{
                 position: "fixed", inset: 0, zIndex: 24,
-                background: "rgba(5, 16, 12, 0.7)",
+                background: "rgba(3, 10, 7, 0.82)",
               }}
             />
           )}
@@ -1872,88 +1872,99 @@ export default function App() {
               transition: "transform 0.28s ease",
               borderRadius: "20px 20px 0 0",
               background: "var(--color-bg-surface)",
-              border: "1px solid var(--color-border-subtle)",
-              borderBottom: "none",
-              maxHeight: "80vh",
+              borderTop: "1px solid var(--color-border-accent)",
+              borderLeft: "1px solid var(--color-border-subtle)",
+              borderRight: "1px solid var(--color-border-subtle)",
+              maxHeight: "82vh",
               overflowY: "auto",
             }}
           >
             {/* Handle bar */}
-            <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
-              <div style={{ width: "36px", height: "4px", borderRadius: "2px", background: "var(--color-border-subtle)" }} />
+            <div style={{ display: "flex", justifyContent: "center", paddingTop: "12px", paddingBottom: "2px" }}>
+              <div style={{ width: "40px", height: "4px", borderRadius: "2px", background: "rgba(0,200,150,0.3)" }} />
             </div>
 
             {/* Header */}
-            <div style={{ padding: "8px 18px 12px", borderBottom: "1px solid var(--color-border-subtle)" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tempLockDate ? "10px" : "0" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  <span style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", fontWeight: "bold" }}>
+            <div style={{ padding: "10px 20px 12px", borderBottom: "1px solid var(--color-border-subtle)" }}>
+              {/* Row 1: title + close */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <span style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", fontWeight: "bold" }}>
                     Admin Tools
                   </span>
                 </div>
-                <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
-                  {NAV_ITEMS.find(i => i.key === currentView)?.label ?? currentView}
-                </div>
+                <button
+                  onClick={() => setToolSheetOpen(false)}
+                  style={{ background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "50%", width: "28px", height: "28px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "14px", lineHeight: 1, flexShrink: 0 }}
+                  aria-label="Close admin tools"
+                >×</button>
               </div>
-              {/* Active lock date pill — prominent amber badge when a lock is set */}
-              {tempLockDate && (
-                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "4px 8px 4px 10px", color: "var(--color-warning)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  <span>Locked: {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                  <button
-                    onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                    style={{ background: "transparent", border: "none", color: "var(--color-warning)", fontSize: "13px", lineHeight: 1, cursor: "pointer", padding: "0 0 0 2px" }}
-                    aria-label="Clear lock date"
-                  >×</button>
-                </div>
-              )}
+              {/* Row 2: current panel context + active lock pill */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+                  On: <span style={{ color: "var(--color-text-primary)" }}>{NAV_ITEMS.find(i => i.key === currentView)?.label ?? "Home"}</span>
+                </span>
+                {tempLockDate && (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "3px 7px 3px 8px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase" }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <span>Locked: {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                    <button
+                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                      style={{ background: "transparent", border: "none", color: "var(--color-warning)", fontSize: "12px", lineHeight: 1, cursor: "pointer", padding: "0", marginLeft: "1px" }}
+                      aria-label="Clear lock date"
+                    >×</button>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Tools content */}
-            <div style={{ padding: "12px 18px 16px" }}>
+            {/* Tool sections — each separated by a divider */}
+            <div style={{ padding: "0 20px" }}>
 
-              {/* Lock Date */}
-              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Lock Date</div>
-              {tempLockDate ? (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "12px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
-                  <button
-                    onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                    style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: "pointer" }}
-                  >Clear</button>
-                </div>
-              ) : (
-                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                  <input
-                    type="date"
-                    value={adminDateDraft}
-                    onChange={e => setAdminDateDraft(e.target.value)}
-                    style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "16px", padding: "6px 8px", fontFamily: "var(--font-mono)", colorScheme: "dark" }}
-                  />
-                  <button
-                    onClick={() => { if (adminDateDraft) setTempLockDate(adminDateDraft); }}
-                    disabled={!adminDateDraft}
-                    style={{ background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "6px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 12px", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold", whiteSpace: "nowrap" }}
-                  >Set</button>
-                </div>
-              )}
+              {/* ── Lock Date ── */}
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Lock Date</div>
+                {tempLockDate ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "13px", color: "var(--color-warning)", fontFamily: "var(--font-mono)", flex: 1 }}>{tempLockDate}</span>
+                    <button
+                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
+                      style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
+                    >Clear ×</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <input
+                      type="date"
+                      value={adminDateDraft}
+                      onChange={e => setAdminDateDraft(e.target.value)}
+                      style={{ width: "100%", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "16px", padding: "10px 12px", fontFamily: "var(--font-mono)", colorScheme: "dark", boxSizing: "border-box" }}
+                    />
+                    <button
+                      onClick={() => { if (adminDateDraft) setTempLockDate(adminDateDraft); }}
+                      disabled={!adminDateDraft}
+                      style={{ width: "100%", background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "8px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold", minHeight: "44px" }}
+                    >Set Lock Date</button>
+                  </div>
+                )}
+              </div>
 
-              {/* Force Sync */}
-              <div style={{ marginTop: "14px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
+              {/* ── Force Sync ── */}
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Sync</div>
                 <div style={{ display: "flex", gap: "8px" }}>
                   {["push", "pull"].map(op => (
                     <button
                       key={op}
                       onClick={op === "push" ? handleForcePush : handleForcePull}
                       disabled={!!syncStatus?.pending}
-                      style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer", minHeight: "44px" }}
+                      style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer", minHeight: "44px" }}
                     >{op === "push" ? "Push ↑" : "Pull ↓"}</button>
                   ))}
                 </div>
                 {syncStatus && (
-                  <div style={{ fontSize: "10px", marginTop: "6px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
+                  <div style={{ fontSize: "10px", marginTop: "8px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
                     {syncStatus.pending
                       ? (syncStatus.op === "push" ? "Pushing…" : "Pulling…")
                       : syncStatus.ok
@@ -1963,52 +1974,51 @@ export default function App() {
                 )}
               </div>
 
-              {/* Config Raw View */}
-              <div style={{ marginTop: "14px" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+              {/* ── Config JSON ── */}
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: configViewOpen ? "10px" : "0" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
                   <button
                     onClick={() => setConfigViewOpen(v => !v)}
                     style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
-                  >{configViewOpen ? "Hide" : "View"}</button>
+                  >{configViewOpen ? "Hide ↑" : "View ↓"}</button>
                 </div>
                 {configViewOpen && (
                   <div>
-                    <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "220px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                    <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                       {JSON.stringify(config, null, 2)}
                     </pre>
                     <button
                       onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
-                      style={{ marginTop: "8px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: "pointer", minHeight: "44px" }}
+                      style={{ marginTop: "8px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: "pointer", minHeight: "44px" }}
                     >Copy to Clipboard</button>
                   </div>
                 )}
               </div>
 
-              {/* Demo Accounts */}
-              <div style={{ marginTop: "14px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
-                {adminDemoView !== null && (
-                  <div style={{ fontSize: "9px", color: "var(--color-warning)", letterSpacing: "1px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    Editing Demo {adminDemoView}
-                  </div>
-                )}
-                <div style={{ display: "flex", gap: "6px" }}>
+              {/* ── Demo Accounts ── */}
+              <div style={{ padding: "14px 0" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
+                  Demo Accounts
+                  {adminDemoView !== null && (
+                    <span style={{ color: "var(--color-warning)", marginLeft: "8px" }}>· Editing Demo {adminDemoView}</span>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
                   {[1, 2].map(n => (
                     <button
                       key={n}
                       onClick={() => { setAdminDemoView(adminDemoView === n ? null : n); setToolSheetOpen(false); }}
-                      style={{ flex: 1, background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: adminDemoView === n ? "none" : "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "7px 0", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: adminDemoView === n ? "var(--color-bg-base)" : "var(--color-text-secondary)", cursor: "pointer", fontWeight: adminDemoView === n ? "bold" : "normal", fontFamily: "var(--font-sans)", minHeight: "44px" }}
+                      style={{ flex: 1, background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: adminDemoView === n ? "none" : "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: adminDemoView === n ? "var(--color-bg-base)" : "var(--color-text-secondary)", cursor: "pointer", fontWeight: adminDemoView === n ? "bold" : "normal", minHeight: "44px" }}
                     >
-                      {adminDemoView === n ? "← Exit" : `Demo ${n}`}
+                      {adminDemoView === n ? "← Exit Demo" : `Demo ${n}`}
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Bottom safe-area spacer */}
-              <div style={{ height: "calc(70px + env(safe-area-inset-bottom, 0px))" }} />
+              <div style={{ height: "calc(72px + env(safe-area-inset-bottom, 0px))" }} />
             </div>
           </div>
         </>

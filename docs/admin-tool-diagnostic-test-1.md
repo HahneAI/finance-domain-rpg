@@ -127,8 +127,51 @@ The Budget Health 109% ratio is the direct driver. Monthly expenses ($4,598) exc
 
 ---
 
-## Step 4 — Week Inspector *(pending)*
+## Step 4 — Week Inspector (Wk 19 · May 11–18)
 
-**Tool:** Income panel → tap Week 18 row
+**Tool:** Income panel → tap Week 19 row
 
-**Looking for:** Pay section (gross, deductions, net), Net Lookup — to verify per-week income math matches $969 average
+**Values:**
+
+| Field | Value |
+|-------|-------|
+| Type | 4-day · LOW WEEK · TAXED · ACTIVE · UNCONFIRMED |
+| Worked Days | Mon, Thu, Fri, Tue |
+| Total Hours | 60 |
+| Regular Hours | 40 |
+| Overtime Hours | 20 |
+| Weekend Hours | 6 |
+| Gross Pay | $1,496.25 |
+| Taxable Gross | $1,479.29 |
+| Benefits Deduction | $2.00 (LTD) |
+| 401k Employee | $14.96 |
+| 401k Employer | $14.96 |
+| ComputeNet (Live) | $1,133.83 |
+| Spendable | $1,083.83 (after $50 buffer) |
+| Log Entries | None |
+
+**Inferences:**
+
+**Income math is correct** — user confirmed. The per-week calculation is working as expected.
+
+**Week 19 gross ($1,496) vs Live Inspector average ($969):** This week has 60 hours including 20 OT, which is a high-output week. The $969 weekly average reflects the blend across a full year including lighter weeks and untaxed weeks where net is higher.
+
+**Flag — 401k Employer match showing $14.96 despite `k401MatchRate: 0`:** The employer contribution equals the employee contribution exactly (100% match), which contradicts the config. This is either a display bug in the Week Inspector or the match rate field is being misread. Does not appear to affect the net pay calculation (employer match doesn't reduce take-home), but worth verifying whether it's inflating any annual net projections.
+
+**Both `customWeeklyHoursLong` and `customWeeklyHoursShort` are 60:** Even "low" weeks are configured as 60-hour weeks. This means the income floor is higher than a standard 3-day/36-hour DHL week, which is favorable — but the budget deficit exists even with this elevated income floor.
+
+---
+
+## Conclusion
+
+**The math is working correctly.** Both symptoms — -$4,769 net worth trend and ~5-month goal timeline — are entirely explained by the expense profile, not a calculation error.
+
+**Primary driver:** Kids expense at $500/wk is 47% of total spend and the single item pushing Budget Health past 100%.
+
+**Secondary pressure:** $3,690 tax gap (tax-exempt election + deferred liability) contributing to the annual trend calculation.
+
+**Future pressure incoming:** Housing doubles in July (+$433/mo), car loan activates May 29. Without expense reduction, the trend worsens in H2.
+
+**Goal timeline is a downstream symptom:** $65/wk surplus across 5 goals totaling $7,700 cannot fund any goal on an aggressive schedule.
+
+**One open bug to investigate:** 401k employer match displaying $14.96 when `k401MatchRate: 0`.

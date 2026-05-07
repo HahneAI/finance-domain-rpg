@@ -273,12 +273,11 @@ export default function App() {
 
   // ── Auth: check existing session on mount, subscribe to changes ──
   useEffect(() => {
-    // Resolve any existing session first (handles reload + PWA relaunch from localStorage).
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setAuthedUser(session?.user ?? null);
-      setAuthChecked(true);
-    });
-    // Subscribe to future sign-in / sign-out events.
+    // Rely solely on onAuthStateChange rather than calling getSession() first.
+    // getSession() resolves before Supabase has exchanged the OAuth code from the URL,
+    // so it can return null and then overwrite the SIGNED_IN user back to null — causing
+    // the Google login double-select bug. INITIAL_SESSION fires after any pending code
+    // exchange, so it's safe to use as the authChecked gate.
     return onAuthChange((event, user) => {
       if (event === "PASSWORD_RECOVERY") setPendingPasswordReset(true);
       else setPendingPasswordReset(false);
@@ -286,6 +285,9 @@ export default function App() {
       // Critical for Google OAuth users who have no row yet; safe no-op for email users.
       if (event === "SIGNED_IN" && user) syncUserProfile(user);
       setAuthedUser(user);
+      // INITIAL_SESSION fires once on startup (after OAuth code exchange if applicable).
+      // All other events also mark auth as checked so late-arriving events don't re-gate.
+      setAuthChecked(true);
     });
   }, []);
 

@@ -174,4 +174,4 @@ The Budget Health 109% ratio is the direct driver. Monthly expenses ($4,598) exc
 
 **Goal timeline is a downstream symptom:** $65/wk surplus across 5 goals totaling $7,700 cannot fund any goal on an aggressive schedule.
 
-**One open bug to investigate:** 401k employer match displaying $14.96 when `k401MatchRate: 0`.
+**One open bug to investigate:** Week Inspector displays `401K (EMPLOYER): $14.96` — identical to the employee contribution. The employee rate (`k401Rate: 0.01` = 1%) is correct and the $14.96 employee deduction is accurate. The employer match rate is `k401MatchRate: 0`, which should produce a $0 employer line. The Week Inspector is either misreading `k401MatchRate` or defaulting to a 1:1 match when the rate is 0. Since employer contributions do not reduce take-home pay, this does not affect net pay or spendable — but if the employer match value is being included anywhere in annual net projections or net worth calculations, it would overstate income by ~$775/yr ($14.96 × 52).

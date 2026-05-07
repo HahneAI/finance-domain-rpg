@@ -1,19 +1,82 @@
 # Admin Toolkit — Feature Backlog
 
-All features are `isAdmin`-gated minimum. Items marked `[OWNER]` require the separate
-`isOwner` flag and are off-limits to regular admin accounts. See the final section for
-the `isOwner` implementation spec.
+Two phases. Phase 1 is everything available to any `isAdmin` account. Phase 2 is
+everything restricted to `isOwner` — the separate owner flag that can only be granted
+via a database migration, never through the app UI.
+
+Within each phase, items run from quickest to build → deepest sprint.
 
 ---
 
-## Tier 1 — High Value (build next)
+# Phase 1 — isAdmin Tools
 
-### 1. Live State Inspector `[ADMIN]`
-Collapsible floating overlay (bottom corner button) showing all key derived values in real
-time. Everything you currently need devtools to see.
+---
+
+### 1. Force Supabase Sync
+**Effort: Quick win**
+
+Two buttons in the Admin Tools section that bypass the 800ms debounce. When testing
+across devices on mobile you have no certainty a save actually landed. This fixes that.
+
+- **Push now** — triggers `saveUserData` immediately, shows success/error toast + timestamp
+- **Pull now** — re-runs `loadUserData`, merges fresh data into state, shows what changed
+- Both show a spinner while in flight
+
+---
+
+### 2. Config Raw View + Copy
+**Effort: Quick win**
+
+Dumps the live `config` object as formatted JSON into a scrollable code block with a
+copy-to-clipboard button. Read-only. No write path — that's owner territory.
+
+- One button to expand/collapse the view
+- Copy button puts the JSON on the clipboard
+- Useful for sharing your config state when debugging or handing off to a developer
+
+---
+
+### 3. Supabase Row Viewer
+**Effort: Quick win**
+
+Shows the raw `user_data` row exactly as it sits in the database. Catches drift between
+in-memory state and what was actually persisted — the source of subtle bugs after a failed
+save or a mid-session migration.
+
+- **Fetch** button re-queries `supabase.from("user_data").select("*")` for the current user
+- Displays full JSON response in a scrollable block
+- Shows `updated_at` timestamp
+- Highlights any columns whose in-memory value doesn't match the DB row (diff view)
+- Read-only
+
+---
+
+### 4. Tax Weeks Grid — Read Only
+**Effort: Medium**
+
+Compact 52-cell visual grid of the full fiscal year showing each week's tax status at a
+glance. Much faster than scrolling the Tax Plan list to orient yourself.
+
+**Cell states:**
+- Teal fill — taxed, future
+- Dark fill — untaxed, future
+- Gray — past (taxed or not)
+- Gold border — current week
+- Red dot — has a `pastWeekTaxStatusOverride`
+
+Cells are display-only for `isAdmin`. Edit capability is owner-only (Phase 2).
+
+---
+
+### 5. Live State Inspector
+**Effort: Medium**
+
+Floating pill button fixed to the bottom corner of the screen, always visible when
+`isAdmin`. Tapping it expands into an overlay card showing every key derived value
+in real time — everything you'd normally need devtools to see.
 
 **Surfaces:**
-- `effectiveToday` / real `today` (both, so lock offset is visible)
+- `effectiveToday` and real `today` side by side (so lock offset is obvious)
 - `currentWeek.idx` + week label
 - `futureWeeks.length`
 - `taxDerived.extraPerCheck`, `taxDerived.totalGap`, `taxDerived.taxedWeekCount`
@@ -22,256 +85,178 @@ time. Everything you currently need devtools to see.
 - `bufferPerWeek`, `weeklyIncome`
 - `projectedAnnualNet`
 
-**UX:** Floating pill button → expands to a dark overlay card. Stays on top of all panels.
-Values update live as state changes.
+Values update live as state changes. Overlay stays on top of all panels.
 
 ---
 
-### 2. Week Inspector `[ADMIN]`
-Tap any week row in the Income timeline → admin gets a modal showing every property on that
-week object. The fiscal week engine is the deepest part of the app — this surfaces everything
-without a single console command.
+### 6. Per-Entry Event Impact Breakdown
+**Effort: Medium**
+
+The Log panel today shows totals only. This adds an expand chevron to each individual
+log entry (admin-only) that reveals exactly what that one entry contributes to the math.
+Inline, no modal.
+
+**Shows per entry:**
+- Net lost / gained
+- 401k impact (lost, match lost, gained, match gained)
+- PTO hours lost
+- Bucket hours affected
+- Which fiscal weeks it touches
+- Whether it's classified as past or future relative to `effectiveToday`
+
+`calcEventImpact` is already imported in LogPanel — this is purely a display add.
+
+---
+
+### 7. Week Inspector
+**Effort: Deeper sprint**
+
+Long-press (or admin-mode tap) on any week row in the Income timeline opens a full-screen
+modal showing every property on that week object. The fiscal week engine is the most
+complex part of the app — this surfaces it completely on mobile without a single console
+command.
 
 **Shows per week:**
 - `idx`, `weekStart`, `weekEnd`
 - `grossPay`, `taxableGross`, `isHighWeek`, `taxedBySchedule`
 - `workedDayNames`, `scheduledDays`
-- `computeNet` result (live, with current config)
-- Confirmation record (if any): `confirmedAt`, `dayToggles`, `netShiftDelta`
-- Event log entries touching this week (list with type + net impact)
+- `computeNet` result (live with current config)
+- Confirmation record if any: `confirmedAt`, `dayToggles`, `netShiftDelta`
+- All event log entries touching this week with type + net impact each
 - `weekNetLookup` entry: `spendable`, `adjustedSpendable`, `adjustment`
 
-**UX:** Long-press or admin-mode tap target on any week row. Full-screen modal, scrollable.
+Requires a callback from App.jsx → IncomePanel + a modal rendered at App level.
 
 ---
 
-### 3. Config Snapshot / Restore `[OWNER]`
-Save the full account state (config + logs + expenses + goals) as a named local snapshot.
-Restore any time. Like `git stash` for the account — set a known-good baseline, run
-destructive tests, snap back without touching Supabase.
+# Phase 2 — isOwner Tools
 
-**Why OWNER:** Restore overwrites live Supabase data. A bad snapshot containing a corrupt
-`firstActiveIdx` or malformed `taxedWeeks` would permanently break the fiscal calendar with
-no undo. Regular admins can VIEW saved snapshots but not restore them.
-
-**Behavior:**
-- Up to 5 named snapshots stored in `localStorage`
-- Save: prompts for a name (e.g. "pre-raise test", "clean baseline") — available to `isAdmin`
-- Restore: `isOwner` only — confirms before overwriting live state
-- Delete: swipe or trash button per snapshot
-- Snapshots are local-only, never pushed to Supabase
+The `isOwner` flag must be implemented before any tool in this phase is built.
+See the implementation spec at the bottom of this file.
 
 ---
 
-### 4. Config Raw View + Copy/Paste `[OWNER]`
-One button dumps the live `config` object as formatted JSON to a scrollable code block.
-Copy to clipboard. Paste field imports a modified JSON back — no wizard, no field-by-field
-editing, direct config manipulation for scenario testing.
+### 1. isOwner Flag — Foundation
+**Effort: Quick win (prerequisite for everything below)**
 
-**Why OWNER:** Completely bypasses all validation. A developer could paste any value for
-`firstActiveIdx` and shatter the fiscal calendar with a single save. Read-only view (copy
-only) is safe for `isAdmin`. Write/apply is `isOwner` only.
+New `is_owner` column in Supabase. Seeded by migration with a hardcoded user ID.
+Cannot be granted through the app — only via direct DB/migration access.
 
-**Behavior:**
-- View + copy mode: available to `isAdmin`
-- Edit/apply mode: `isOwner` only — textarea pre-filled with current config JSON, parse + apply on save
-- Validates JSON before applying (catches syntax errors, shows line number)
-- Does not auto-save to Supabase — requires explicit "Save to DB" confirmation
+Full spec in the **isOwner Implementation** section at the bottom.
 
 ---
 
-## Tier 2 — Medium Value
+### 2. Lock firstActiveIdx Behind isOwner
+**Effort: Quick win (one gate change)**
 
-### 5. Force Supabase Sync `[ADMIN]`
-Manual "Push now" / "Pull now" buttons that bypass the 800ms debounce. Certainty that a
-save landed before switching devices on mobile. Current debounce means you're guessing.
+`firstActiveIdx` is the nuclear field — setting it wrong repositions the entire fiscal
+calendar retroactively. Currently editable by any `isAdmin` in the Tax Plan editor.
 
-**Behavior:**
-- Push: triggers `saveUserData` immediately, shows success/error toast
-- Pull: re-runs `loadUserData`, merges fresh data into state, shows what changed
-- Both show a spinner + timestamp of last successful sync
+Change: make that specific field in ProfilePanel render as read-only for `isAdmin`,
+editable only when `isOwner`. One conditional on the input element.
 
 ---
 
-### 6. Per-Entry Event Impact Breakdown `[ADMIN]`
-The Log Effect Summary shows totals. Admin tap on any log entry shows the exact delta that
-entry contributes — isolate a single entry's math without console work.
+### 3. Tax Weeks Grid — Edit Toggle
+**Effort: Quick win (builds on Phase 1 #4)**
 
-**Shows per entry:**
-- Net lost / gained
-- 401k impact (lost / match lost / gained / match gained)
-- PTO hours lost
-- Bucket hours affected
-- Which fiscal weeks it touches
-- Whether it's treated as past or future (relative to `effectiveToday`)
-
-**UX:** Expand chevron on each log entry row, admin-only. Inline, no modal.
+Once the read-only grid exists (Phase 1 #4), add `onClick` to future week cells for
+`isOwner` only. Tapping a cell toggles it in `config.taxedWeeks` and triggers a config
+save. Admins see the same grid but cells don't respond to tap.
 
 ---
 
-### 7. Bulk Week Confirmation Seeding `[OWNER]`
-In the Admin Tools section: quick-seed all past weeks to a preset confirmation pattern.
-Speeds up testing the week confirmation flow from scratch.
+### 4. Bulk Week Confirmation Seeding
+**Effort: Medium**
 
-**Why OWNER:** "Reset all" wipes the entire `weekConfirmations` object from Supabase. This
-destroys all confirmation history and cannot be reversed without a snapshot restore. The
-"mark all worked" preset is lower risk but still makes a broad permanent write — owner only.
+Three preset buttons in the Admin Tools section that bulk-write `weekConfirmations` to
+Supabase. Each requires a confirmation dialog.
 
-**Presets:**
-- "Mark all as fully worked" — all scheduled days confirmed, no misses
-- "Mark all as missed" — all days toggled off
-- "Reset all" — wipe all `weekConfirmations`, return to unconfirmed state
+- **Mark all as fully worked** — all scheduled days confirmed, no misses
+- **Mark all as missed** — all days toggled off
+- **Reset all** — wipes `weekConfirmations` entirely, returns to unconfirmed state
 
-**UX:** Three buttons with confirm dialogs. Destructive action warning on reset.
+"Reset all" permanently deletes history and cannot be reversed without a snapshot restore.
 
 ---
 
-### 8. Remaining Tax Weeks Grid `[ADMIN read / OWNER edit]`
-Compact 52-cell visual grid of the fiscal year showing each week's tax status at a glance.
-Faster orientation than the Tax Plan list view.
+### 5. Config Raw JSON Apply
+**Effort: Medium (builds on Phase 1 #2)**
 
-**Cell states:**
-- Teal fill = taxed, future
-- Dark fill = untaxed, future
-- Gray = past (taxed or not)
-- Gold border = current week
-- Red dot = has a `pastWeekTaxStatusOverride`
+Extends the Config Raw View (Phase 1 #2) with a write path for `isOwner`. A textarea
+pre-filled with the current config JSON becomes editable. On save: validates JSON,
+shows any syntax errors with line numbers, then applies and optionally persists to Supabase.
 
-**UX:** Read-only view for `isAdmin`. `isOwner` gets inline toggle on future weeks (writes
-to `config.taxedWeeks`). Replaces needing to scroll the Tax Plan list to find a specific week.
+- Validate before apply (catches bad JSON, missing required fields)
+- Apply to in-memory state immediately
+- Separate "Save to DB" confirmation to persist
+- Does not bypass the `firstActiveIdx` guard — that field is still owner-gated even here
 
 ---
 
-## Tier 3 — Lower Priority
+### 6. Config Snapshot / Restore
+**Effort: Deeper sprint**
 
-### 9. Past/Future Week Override `[ADMIN]`
-Force any specific week to be treated as past or future regardless of `effectiveToday`.
-Edge-case testing for the confirmation modal trigger and event log cascade path-splitting.
+Full save/restore system for the complete account state: config + logs + expenses + goals.
+Like `git stash` for the account. Set a known-good baseline before any destructive test,
+restore in one tap.
 
-**Behavior:** Per-week toggle stored in a session-only override map (not persisted).
-Cleared when `effectiveToday` changes or page reloads.
-
----
-
-### 10. Supabase Row Viewer `[ADMIN]`
-Show the raw `user_data` row exactly as it sits in the database. Catches drift between
-in-memory state and what was actually persisted — the real source of subtle bugs after
-a failed save or mid-session migration.
-
-**Shows:**
-- Raw Supabase response JSON for all columns
-- `updated_at` timestamp
-- Diff view: in-memory state vs. DB row (highlights fields that haven't been saved yet)
-
-**UX:** Read-only. Refresh button to re-fetch without reloading the app.
+- Up to 5 named snapshots in `localStorage`
+- **Save** (isAdmin can save) — prompts for a name, stores full state snapshot
+- **Restore** (isOwner only) — confirms before overwriting live in-memory state and Supabase
+- **Delete** — trash button per snapshot, no confirmation needed
+- Snapshots never auto-push to Supabase — restore is the only Supabase write path
+- Restoring a snapshot containing a corrupt `firstActiveIdx` still goes through the owner gate
 
 ---
 
-## Security Audit Findings
+## isOwner Implementation Spec
 
-**Audited:** All current admin features + all 10 planned toolkit items.
-
-### Cross-user data risk: NONE
-Every write path flows through `saveUserData()` in `src/lib/db.js`, which always resolves
-the current user's ID from `getCurrentUserId()` and aborts if unauthenticated. The Supabase
-upsert uses `onConflict: "user_id"` — there is no code path that accepts a target user ID
-as a parameter or writes to any row other than the logged-in user's own row.
-
-A developer with `isAdmin` can only ever affect their own account, not any other user's.
-
-**One structural caveat:** Supabase RLS is currently disabled (migration 001). Security relies
-entirely on client-side userId scoping. This is acceptable for a single-owner app but becomes
-a risk if the platform ever opens to multiple users. Adding RLS is a separate backlog item.
-
-### Fields that are permanently destructive if set wrong
-
-| Field | Location | Risk | Assigned to |
-|-------|----------|------|-------------|
-| `firstActiveIdx` | Tax Plan editor | **Nuclear.** Repositions the entire fiscal calendar. All weeks before the new index become inactive — no taxes, no 401k, no gross pay counted. DHL rotation flips. Cannot be meaningfully undone without a migration. | `[OWNER]` only |
-| `taxedWeeks` | Tax Plan editor / Tax Weeks Grid | Corrupted or cleared array breaks all withholding math. Manually reversible via UI toggles but tedious. | Grid edit → `[OWNER]` |
-| `pastWeekTaxStatusOverrides` | Tax Plan editor | Per-week retroactive overrides. Wrong values silently shift past withholding amounts. Recoverable by re-toggling. | Tax Plan stays `[ADMIN]` |
-| `fedStdDeduction` | Tax Plan editor | Setting to 0 inflates federal tax liability by thousands. Recoverable. | Tax Plan stays `[ADMIN]` |
-| `moFlatRate` | Tax Plan editor | Setting to 0 erases all state withholding. Setting high overstates it. Recoverable. | Tax Plan stays `[ADMIN]` |
-| `targetOwedAtFiling` | Tax Plan editor | Math-layer gated on `isAdmin` already. Extreme values (negative, 999999) break `extraPerCheck`. Recoverable. | Tax Plan stays `[ADMIN]` |
-| Config Snapshot Restore | Planned #3 | Can restore a snapshot containing any of the above bad values in a single tap. | `[OWNER]` only |
-| Config Raw JSON Apply | Planned #4 | Bypasses all field-level validation. Same blast radius as the above combined. | `[OWNER]` only |
-| Bulk Confirmation Reset | Planned #7 | Wipes `weekConfirmations` from Supabase permanently. | `[OWNER]` only |
-
----
-
-## New Todo: Create `isOwner` Flag
-
-Separate flag from `isAdmin`. Owner = full control. Admin = elevated visibility +
-non-destructive tooling only. An admin cannot self-promote to owner through any app UI.
-
-### Implementation spec
-
-**1. Supabase migration**
+**Migration** — new file `database/migrations/016_add_is_owner.sql`:
 ```sql
 ALTER TABLE user_data ADD COLUMN IF NOT EXISTS is_owner BOOLEAN NOT NULL DEFAULT false;
 UPDATE user_data SET is_owner = true
 WHERE user_id = 'db07a039-a917-4f32-ac66-58007485d9ec';
 ```
-Seed is hardcoded by user ID — same pattern as `is_admin` in `003_add_flags.sql`.
-Owner status can ONLY be granted via a migration, never through the app UI.
+Same pattern as `is_admin` in `003_add_flags.sql`. Hardcoded by user ID.
 
-**2. `db.js` — load + save**
-- Add `is_owner` to the SELECT in `loadUserData()`
-- Return `isOwner: data.is_owner ?? false` from the load
-- Do NOT include `is_owner` in the upsert payload in `saveUserData()` — it must never
-  be writable through the app, only through direct DB/migration access
+**`db.js` — load:**
+- Add `is_owner` to the SELECT columns in `loadUserData()`
+- Return `isOwner: data.is_owner ?? false` in the return object
 
-**3. `App.jsx` — state**
+**`db.js` — save:**
+- Do NOT include `is_owner` in the `saveUserData()` upsert payload
+- It must never be writable through the app — only via migration
+
+**`App.jsx` — state:**
 ```jsx
 const [isOwner, setIsOwner] = useState(false);
-// In loadUserData().then():
+// in loadUserData().then():
 setIsOwner(data.isOwner);
 ```
-Pass `isOwner` as a prop to ProfilePanel (Tax Plan) and use inline in App.jsx admin sections.
+Pass `isOwner` as a prop wherever needed (ProfilePanel for Tax Plan gate, Admin Tools sections).
 
-**4. Gate the spicy tools**
-Replace `isAdmin` with `isOwner` on:
-- `firstActiveIdx` field in Tax Plan editor (ProfilePanel.jsx ~line 1350)
-- Config Snapshot Restore action (planned #3)
-- Config Raw JSON apply/save action (planned #4)
-- Bulk Week Confirmation Seeding (planned #7)
-- Tax Weeks Grid edit toggle (planned #8)
-
-`isAdmin` retains access to all read-only and session-only tools.
-
-**5. Admin Tools UI label**
-When `isOwner` is true, show "Owner" instead of "Admin" in the Admin Tools section header
-so the distinction is visible at a glance on the device.
+**Admin Tools UI:**
+When `isOwner` is true, show "Owner" instead of "Admin" in the Admin Tools section header.
 
 ---
 
-## Access Matrix
+## Security Audit Summary
 
-| Tool | isAdmin | isOwner |
-|------|---------|---------|
-| Temp Lock Date | ✓ | ✓ |
-| Live State Inspector | ✓ | ✓ |
-| Week Inspector | ✓ | ✓ |
-| Per-Entry Event Impact | ✓ | ✓ |
-| Force Supabase Sync | ✓ | ✓ |
-| Past/Future Week Override | ✓ | ✓ |
-| Supabase Row Viewer (read) | ✓ | ✓ |
-| Config Raw View + Copy | ✓ | ✓ |
-| Tax Plan Editor (most fields) | ✓ | ✓ |
-| Tax Weeks Grid (read) | ✓ | ✓ |
-| Config Snapshot Save | ✓ | ✓ |
-| Tax Weeks Grid (edit) | — | ✓ |
-| `firstActiveIdx` edit | — | ✓ |
-| Config Raw JSON Apply | — | ✓ |
-| Config Snapshot Restore | — | ✓ |
-| Bulk Week Confirmation Seeding | — | ✓ |
+**Cross-user risk: NONE.** Every write flows through `saveUserData()` which always
+resolves `getCurrentUserId()` and upserts only to that row. A developer with `isAdmin`
+can only affect their own account, never another user's.
 
----
+**Structural caveat:** Supabase RLS is currently disabled. Client-side user ID scoping
+is the only enforcement. Acceptable for a single-owner app; becomes a risk at multi-user
+scale. Track as a separate backlog item.
 
-## Implementation Notes
+**Permanently destructive fields (require isOwner):**
 
-- Build State Inspector (#1) + Week Inspector (#2) together as a combined "Admin Debug Panel"
-- Config Snapshot (#3 save) is the safety net that should exist before any serious scenario testing
-- `isOwner` migration must be written before any `[OWNER]` tools are built — gate exists before feature
-- No RLS is the one systemic risk that sits outside this flag system — track separately
-
+| Field | Risk |
+|-------|------|
+| `firstActiveIdx` | Repositions the entire fiscal calendar. Cannot be undone without a migration. |
+| `taxedWeeks` (bulk edit) | Corrupted array breaks all withholding math. |
+| `weekConfirmations` (reset) | Wipes confirmation history permanently. |
+| Config Raw JSON Apply | Bypasses all field validation — same blast radius as the above combined. |
+| Config Snapshot Restore | Can restore any of the above bad values in a single tap. |

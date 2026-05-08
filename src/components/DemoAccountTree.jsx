@@ -47,7 +47,7 @@ const DEMO_TABS = [
   { key: "log",    label: "Log"    },
 ];
 
-export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) {
+export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, activeTabOverride }) {
   const fixture = FIXTURES[accountNumber] ?? DEMO_ACCOUNT_1;
 
   // ── Editable state — initialized from fixture, overwritten by Supabase load ─
@@ -61,7 +61,10 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
   const [saveStatus,  setSaveStatus]  = useState("idle"); // "idle"|"saving"|"saved"|"error"
   const [isDirty,     setIsDirty]     = useState(false);
 
-  const [activeTab, setActiveTab] = useState("home");
+  // Admin uses internal tab state; investor tab is driven by activeTabOverride from App.jsx bottom nav.
+  const VALID_TABS = new Set(["home", "income", "budget", "log"]);
+  const [internalTab, setInternalTab] = useState("home");
+  const activeTab = isAdmin ? internalTab : (VALID_TABS.has(activeTabOverride) ? activeTabOverride : "home");
   const today = useMemo(() => toLocalIso(new Date()), []);
 
   // ── Load from Supabase on mount ──────────────────────────────────────────────
@@ -629,8 +632,8 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
           </div>
         )}
 
-        {/* ── Tab bar ── */}
-        <div style={{
+        {/* ── Tab bar — admin only; investor navigation is driven by the bottom nav ── */}
+        {isAdmin && <div style={{
           display: "flex",
           gap: "0",
           padding: "10px 16px 0",
@@ -642,7 +645,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
             return (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => setInternalTab(tab.key)}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -684,7 +687,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
               </span>
             </div>
           )}
-        </div>
+        </div>}
 
         {/* ── Panel content ── */}
         <div>

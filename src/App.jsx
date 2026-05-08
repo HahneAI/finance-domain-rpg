@@ -1563,6 +1563,8 @@ export default function App() {
                   key={activeInvestorAccount}
                   accountNumber={activeInvestorAccount}
                   isAdmin={false}
+                  activeTabOverride={currentView}
+                  onNavigate={navigate}
                 />
               : activePanel
           }

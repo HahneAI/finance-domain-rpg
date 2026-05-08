@@ -17,6 +17,7 @@ import { HomePanel } from "./HomePanel.jsx";
 import { IncomePanel } from "./IncomePanel.jsx";
 import { BudgetPanel } from "./BudgetPanel.jsx";
 import { LogPanel } from "./LogPanel.jsx";
+import { ProfilePanel } from "./ProfilePanel.jsx";
 import { loadDemoAccount, saveDemoAccount } from "../lib/db.js";
 import {
   buildYear,
@@ -47,7 +48,7 @@ const DEMO_TABS = [
   { key: "log",    label: "Log"    },
 ];
 
-export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) {
+export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, activeTabOverride, onNavigate }) {
   const fixture = FIXTURES[accountNumber] ?? DEMO_ACCOUNT_1;
 
   // ── Editable state — initialized from fixture, overwritten by Supabase load ─
@@ -61,7 +62,12 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
   const [saveStatus,  setSaveStatus]  = useState("idle"); // "idle"|"saving"|"saved"|"error"
   const [isDirty,     setIsDirty]     = useState(false);
 
-  const [activeTab, setActiveTab] = useState("home");
+  // Admin uses internal tab state; investor tab is driven by activeTabOverride from App.jsx bottom nav.
+  const VALID_TABS = new Set(["home", "income", "budget", "log", "profile"]);
+  const [internalTab, setInternalTab] = useState("home");
+  const activeTab = isAdmin ? internalTab : (VALID_TABS.has(activeTabOverride) ? activeTabOverride : "home");
+  // Admin navigates internally; investors use the App.jsx navigate so the bottom nav stays in sync.
+  const handleNavigate = isAdmin ? setInternalTab : (onNavigate ?? NOOP);
   const today = useMemo(() => toLocalIso(new Date()), []);
 
   // ── Load from Supabase on mount ──────────────────────────────────────────────
@@ -352,7 +358,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
       case "home":
         return (
           <HomePanel
-            navigate={setActiveTab}
+            navigate={handleNavigate}
             onLocalSignOut={NOOP}
             weeklyIncome={weeklyIncome}
             adjustedTakeHome={logTotals.adjustedTakeHome}
@@ -438,6 +444,23 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
             goals={goals}
             fundedGoalSpend={fundedGoalSpend}
             bucketModel={null}
+          />
+        );
+      case "profile":
+        return (
+          <ProfilePanel
+            authedUser={null}
+            config={config}
+            setConfig={NOOP}
+            saveConfigNow={NOOP}
+            onLocalSignOut={NOOP}
+            allWeeks={allWeeks}
+            taxDerived={taxDerived}
+            showExtra={true}
+            setShowExtra={NOOP}
+            isAdmin={false}
+            today={today}
+            weekConfirmations={{}}
           />
         );
       default:
@@ -629,8 +652,8 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
           </div>
         )}
 
-        {/* ── Tab bar ── */}
-        <div style={{
+        {/* ── Tab bar — admin only; investor navigation is driven by the bottom nav ── */}
+        {isAdmin && <div style={{
           display: "flex",
           gap: "0",
           padding: "10px 16px 0",
@@ -642,7 +665,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
             return (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => setInternalTab(tab.key)}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -684,7 +707,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit }) 
               </span>
             </div>
           )}
-        </div>
+        </div>}
 
         {/* ── Panel content ── */}
         <div>

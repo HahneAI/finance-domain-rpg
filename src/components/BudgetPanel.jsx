@@ -276,7 +276,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const infoRefWeek    = isViewingFuture && firstCheckWeek ? firstCheckWeek : currentWeek;
   const infoMonthKey   = isViewingFuture && firstCheckWeek ? firstCheckMonthKey : currentMonthKey;
   const infoPhase      = isViewingFuture && firstCheckWeek ? firstCheckPhase : currentPhaseIdx;
-  const infoLabel      = isViewingFuture && firstCheckWeek ? `First Check · ${firstCheckMonthShort}` : (isWeekly ? "This Week" : "This Paycheck");
+  const infoLabel      = isViewingFuture && firstCheckWeek ? `First Check · ${firstCheckMonthShort}` : (isWeekly ? "This Week" : checksPerYear === 12 ? "This Month" : "This Paycheck");
   const checkBreakdown = useMemo(() => {
     if (!infoRefWeek || !config) return null;
     const gross = infoRefWeek.grossPay ?? 0;

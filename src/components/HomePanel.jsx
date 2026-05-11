@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear } from "../lib/finance.js";
 import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
+import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { MetricCard, SmBtn, iS, lS, ScrollSnapRow } from "./ui.jsx";
@@ -85,10 +85,13 @@ export function HomePanel({
     : null;
   const weekNumber = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : null;
   const weeksLeftCount = weekNumber != null ? Math.max(FISCAL_WEEKS_PER_YEAR - weekNumber, 0) : null;
+  const periodLabel = weekNumber != null
+    ? formatPayPeriodLabel({ num: weekNumber, total: FISCAL_WEEKS_PER_YEAR }, checksPerYear)
+    : null;
   const subtitle = weekdayName && dayOrdinal
     ? `Another beautiful day, ${weekdayName} the ${dayOrdinal}. You are working on your ${topGoal} goal`
-    : weekNumber != null && currentWeek
-      ? `Week ${weekNumber}, ${weeksLeftCount} left · ${formatRotationDisplay(currentWeek, { isAdmin })}`
+    : periodLabel != null && currentWeek
+      ? `${periodLabel} · ${formatRotationDisplay(currentWeek, { isAdmin })}`
       : "2026 Dashboard";
 
   // ── Pulse insight signals ───────────────────────────────────────────────
@@ -184,7 +187,7 @@ export function HomePanel({
       title: "Net Worth Trend",
       value: fmt$(annualSavings),
       rawVal: annualSavings,
-      sub: weekNumber != null ? `projected annual savings · Wk ${weekNumber}` : "projected annual savings",
+      sub: weekNumber != null ? `projected annual savings · ${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(weekNumber, checksPerYear)}` : "projected annual savings",
       status: annualSavings > 5000 ? "green" : annualSavings >= 0 ? "gold" : "red",
       span: 2,
       onClick: () => navigate("income"),
@@ -336,7 +339,7 @@ export function HomePanel({
     )));
   }, [tl, setGoals]);
 
-  const fiscalWeekLabel = formatFiscalWeekLabel(fiscalWeekInfo);
+  const fiscalWeekLabel = formatPayPeriodLabel(fiscalWeekInfo, checksPerYear);
   const nowIdx = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : 1;
   const weeksLeft = futureWeeks?.length ?? Math.max(FISCAL_WEEKS_PER_YEAR - nowIdx, 0);
   const totalActiveGoals = activeGoals.reduce((s, g) => s + (Number(g.target) || 0), 0);
@@ -365,7 +368,9 @@ export function HomePanel({
     const finishWeek = finishIdx != null ? futureWeeks[finishIdx] : null;
     const finishDate = finishWeek?.payPeriodEndDate ?? finishWeek?.weekEnd ?? null;
     const dateLabel = formatGoalFinishDate(finishDate);
-    return dateLabel ? `By ${dateLabel}, week ${weekNum}` : `Week ${weekNum}`;
+    const checkNum = weekNumToPaycheckNum(weekNum, checksPerYear);
+    const pUnit = payPeriodUnit(checksPerYear, 'full').toLowerCase();
+    return dateLabel ? `By ${dateLabel}, ${pUnit} ${checkNum}` : `${payPeriodUnit(checksPerYear, 'full')} ${checkNum}`;
   };
   const resolveGoalFinishLabel = (goal) => {
     const primary = Number.isFinite(goal.eW) ? buildGoalFinishLabel(goal.eW) : null;
@@ -549,7 +554,11 @@ export function HomePanel({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <MetricCard label={leftThisCheckLabel} val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} />
           <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="gold" />
-          <MetricCard label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} status={lastGoalEW <= weeksLeft ? "green" : "red"} />
+          <MetricCard
+            label={`${payPeriodUnit(checksPerYear, 'fullPlural')} to Complete All`}
+            val={`~${Math.ceil(lastGoalEW / (FISCAL_WEEKS_PER_YEAR / checksPerYear))} ${payPeriodUnit(checksPerYear, 'abbrev').toLowerCase()}s`}
+            status={lastGoalEW <= weeksLeft ? "green" : "red"}
+          />
           <MetricCard
             label="Goals"
             val={`${completedGoals.length}/${goals.length}`}
@@ -629,7 +638,7 @@ export function HomePanel({
                             <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
                             <div style={{ fontSize: "10px", color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
                             {!Number.isFinite(g.eW) && <div style={{ fontSize: "9px", color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
-                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
+                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
                           </div>
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
@@ -656,12 +665,19 @@ export function HomePanel({
                             </span>
                           ))}
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>{payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(nowIdx, checksPerYear)}</span><span>{payPeriodUnit(checksPerYear, 'abbrev')} {checksPerYear}</span></div>
                         <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
                           {isAdmin && (
                             <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
-                              <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
-                              {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
+                              {(() => {
+                                const pN = checksPerYear === 52 ? g.wN : g.wN / (FISCAL_WEEKS_PER_YEAR / checksPerYear);
+                                const rate = pN > 0 ? g.target / pN : 0;
+                                const pUnit = payPeriodUnit(checksPerYear, 'lower');
+                                return <>
+                                  <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(rate)}/{pUnit} projected</span>
+                                  {" · "}{Number.isFinite(pN) ? pN.toFixed(1) : "0.0"} {pUnit}s to fund
+                                </>;
+                              })()}
                             </div>
                           )}
                           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -751,7 +767,7 @@ export function HomePanel({
                             <div style={{ fontSize: "18px", fontWeight: "bold", color: GOAL_SYSTEM_COLOR }}>{fmt$(g.target)}</div>
                             <div style={{ fontSize: "10px", color: !Number.isFinite(g.eW) ? "var(--color-warning)" : (g.eW <= weeksLeft ? "var(--color-green)" : "var(--color-deduction)") }}>{resolveGoalFinishLabel(g)}</div>
                             {!Number.isFinite(g.eW) && <div style={{ fontSize: "9px", color: "var(--color-warning)", background: "rgba(245,158,11,0.12)", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px", display: "inline-block" }}>NEXT YR EST</div>}
-                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · Wk {g.dueWeek}</div>}
+                            {g.dueWeek && nowIdx > g.dueWeek && <div style={{ fontSize: "9px", color: "var(--color-deduction)", background: "#2d1a1a", padding: "2px 6px", borderRadius: "12px", marginTop: "3px", letterSpacing: "1px" }}>PAST DUE · {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(g.dueWeek), checksPerYear)}</div>}
                           </div>
                         </div>
                         <div style={{ height: `${Math.round(16 * goalTimelineScale)}px`, borderRadius: "6px", border: "1px solid #232323", background: "#111", position: "relative", overflow: "hidden", marginBottom: "8px", opacity: isNextYear ? 0.35 : 1 }}>
@@ -778,12 +794,19 @@ export function HomePanel({
                             </span>
                           ))}
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>Wk {nowIdx}</span><span>Wk 52</span></div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-disabled)", marginBottom: "10px" }}><span>{payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(nowIdx, checksPerYear)}</span><span>{payPeriodUnit(checksPerYear, 'abbrev')} {checksPerYear}</span></div>
                         <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
                           {isAdmin && (
                             <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
-                              <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(g.wN > 0 ? g.target / g.wN : 0)}/wk projected</span>
-                              {" · "}{Number.isFinite(g.wN) ? g.wN.toFixed(1) : "0.0"} weeks to fund
+                              {(() => {
+                                const pN = checksPerYear === 52 ? g.wN : g.wN / (FISCAL_WEEKS_PER_YEAR / checksPerYear);
+                                const rate = pN > 0 ? g.target / pN : 0;
+                                const pUnit = payPeriodUnit(checksPerYear, 'lower');
+                                return <>
+                                  <span style={{ color: GOAL_SYSTEM_COLOR }}>{f2(rate)}/{pUnit} projected</span>
+                                  {" · "}{Number.isFinite(pN) ? pN.toFixed(1) : "0.0"} {pUnit}s to fund
+                                </>;
+                              })()}
                             </div>
                           )}
                           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -1088,8 +1111,8 @@ export function HomePanel({
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Weeks remaining</div>
-              <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "var(--font-display)" }}>{weeksLeft}</div>
+              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{payPeriodUnit(checksPerYear, 'fullPlural')} remaining</div>
+              <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "var(--font-display)" }}>{weeksToChecksRemaining(weeksLeft, checksPerYear)}</div>
             </div>
             <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

@@ -96,6 +96,7 @@ export function HomePanel({
   // no meaningful signal exists so InsightRow simply doesn't render.
   // Rule: signal-blue = directional trend; signal-purple = warning / AI moment.
 
+  const leftThisCheckLabel = checksPerYear === 52 ? "Left This Week" : "Left This Check";
   const pulseLeftThisWeek = (() => {
     if (!weeklyIncome) return undefined;
     // Prefer forward-looking delta when next week projection is available
@@ -105,8 +106,8 @@ export function HomePanel({
       if (Math.abs(diff) >= 20) {
         return {
           arrow: diff > 0 ? "up" : "down",
-          delta: `${diff > 0 ? "+" : ""}${fmt$(diff)}`,
-          label: "next week vs this",
+          delta: `${diff > 0 ? "+" : ""}${fmt$(Math.round(diff * perCheckFactor))}`,
+          label: checksPerYear === 52 ? "next week vs this" : "next check vs last",
           variant: diff > 0 ? "blue" : "purple",
         };
       }
@@ -546,7 +547,7 @@ export function HomePanel({
         )}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
-          <MetricCard label="Left This Week" val={fmt$(leftThisWeek)} rawVal={leftThisWeek} status={leftThisWeek >= 0 ? "green" : "red"} />
+          <MetricCard label={leftThisCheckLabel} val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} />
           <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="gold" />
           <MetricCard label="Weeks to Complete All" val={`~${Math.ceil(lastGoalEW)} wks`} status={lastGoalEW <= weeksLeft ? "green" : "red"} />
           <MetricCard

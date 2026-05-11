@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions } from "../lib/finance.js";
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
-import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
+import { formatFiscalWeekLabel, formatPayPeriodLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
@@ -41,7 +41,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const thisCheckLabel = isWeekly ? "This Week" : "This Check";
 
   const currentPhaseIdx = useMemo(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0, [currentWeek]);
-  const fiscalWeekLabel = formatFiscalWeekLabel(fiscalWeekInfo);
+  const fiscalWeekLabel = formatPayPeriodLabel(fiscalWeekInfo, checksPerYear);
   const [ap, setAp] = useState(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0);
   const [view, setView] = useState("overview");
   // Expense CRUD state

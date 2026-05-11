@@ -1373,7 +1373,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               data-expense-id={exp.id}
               draggable={!isPinnedFoodCard && !isEditing && isExpenseDropLane && !isCoarsePointer}
               onClick={() => {
-                if (isPinnedFoodCard || expenseDragFinalizedRef.current) return;
+                if (expenseDragFinalizedRef.current) return;
                 const now = Date.now();
                 const last = lastTapRef.current[exp.id] ?? 0;
                 if (now - last < 350) {
@@ -1504,7 +1504,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   }}>
                     {f2(effAmt * perCheckFactor)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)", fontWeight: "normal" }}>/{checkUnit}</span>
                   </div>
-                  {!isPinnedFoodCard && <button
+                  {<button
                     onClick={(e) => { e.stopPropagation(); openSheet(exp); }}
                     aria-label={`Edit ${exp.label}`}
                     style={{

@@ -1278,7 +1278,15 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     {view === "overview" && <div>
       {overviewCats.map(cat => {
         const cExp = regularExpenses.filter(e => e.category === cat);
-        const laneCardsExcludingDragged = cExp.filter(item => item.id !== draggingExpenseId);
+        // Pin food to bottom of Needs (above loans); all other Needs expenses stay draggable
+        const draggableInCat = cat === "Needs"
+          ? cExp.filter(e => !e.isFoodPrimary && !e.isFoodHighlighted)
+          : cExp;
+        const pinnedFoodInCat = cat === "Needs"
+          ? cExp.filter(e => e.isFoodPrimary || e.isFoodHighlighted)
+          : [];
+        const displayCExp = [...draggableInCat, ...pinnedFoodInCat];
+        const laneCardsExcludingDragged = draggableInCat.filter(item => item.id !== draggingExpenseId);
         const loanItems = cat === "Needs" ? loans : [];
         const cTot = cExp.reduce((s, e) => s + displayEffective(e, ap), 0)
                    + loanItems.reduce((s, e) => s + displayEffective(e, ap), 0);
@@ -1348,7 +1356,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               </div>
             ) : null;
           })()}
-          {cExp.map(exp => {
+          {displayCExp.map(exp => {
             const effAmt = displayEffective(exp, ap);
             // Resolve timeline state for this expense in the active phase
             const nextNonZeroIso = effAmt === 0 ? getNextNonZeroIso(exp, ap, TODAY_ISO) : null;

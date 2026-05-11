@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate } from "../lib/finance.js";
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
-import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
+import { formatFiscalWeekLabel, formatPayPeriodLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
@@ -41,7 +41,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const thisCheckLabel = isWeekly ? "This Week" : "This Check";
 
   const currentPhaseIdx = useMemo(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0, [currentWeek]);
-  const fiscalWeekLabel = formatFiscalWeekLabel(fiscalWeekInfo);
+  const fiscalWeekLabel = formatPayPeriodLabel(fiscalWeekInfo, checksPerYear);
   const [ap, setAp] = useState(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0);
   const [view, setView] = useState("overview");
   // Expense CRUD state
@@ -276,7 +276,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const infoRefWeek    = isViewingFuture && firstCheckWeek ? firstCheckWeek : currentWeek;
   const infoMonthKey   = isViewingFuture && firstCheckWeek ? firstCheckMonthKey : currentMonthKey;
   const infoPhase      = isViewingFuture && firstCheckWeek ? firstCheckPhase : currentPhaseIdx;
-  const infoLabel      = isViewingFuture && firstCheckWeek ? `First Check · ${firstCheckMonthShort}` : "This Week";
+  const infoLabel      = isViewingFuture && firstCheckWeek ? `First Check · ${firstCheckMonthShort}` : (isWeekly ? "This Week" : checksPerYear === 12 ? "This Month" : "This Paycheck");
   const checkBreakdown = useMemo(() => {
     if (!infoRefWeek || !config) return null;
     const gross = infoRefWeek.grossPay ?? 0;
@@ -295,11 +295,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       fedTax   = (infoRefWeek.taxableGross ?? 0) * fedRate;
       stateTax = (infoRefWeek.taxableGross ?? 0) * stRate;
     }
-    const checksPerYear  = PAYCHECKS_PER_YEAR[config.userPaySchedule ?? "weekly"] ?? 52;
+    // All values below are per-week. Multiply by perCheckFactor at return so the
+    // modal always shows per-paycheck amounts regardless of pay schedule.
     const otherPostTax   = (config.otherDeductions ?? []).reduce((sum, row) => {
       const amt = row?.weeklyAmount;
       return sum + (typeof amt === "number" ? amt : 0);
-    }, 0) * (checksPerYear / 52);
+    }, 0);
     const netPay    = gross - fica - fedTax - stateTax - benefits - k401 - otherPostTax;
     const spendable = netPay - bufferPerWeek;
     const needsSpend     = regularExpenses.filter(e => e.category === "Needs")
@@ -309,7 +310,15 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     const loansSpend     = loans
       .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
     const left = spendable - needsSpend - lifestyleSpend - loansSpend;
-    return { gross, fica, fedTax, stateTax, benefits, k401, otherPostTax, netPay, spendable, needsSpend, lifestyleSpend, loansSpend, left, otherDeductions: config.otherDeductions ?? [] };
+    const pcf = perCheckFactor;
+    return {
+      gross: gross * pcf, fica: fica * pcf, fedTax: fedTax * pcf, stateTax: stateTax * pcf,
+      benefits: benefits * pcf, k401: k401 * pcf, otherPostTax: otherPostTax * pcf,
+      netPay: netPay * pcf, spendable: spendable * pcf,
+      needsSpend: needsSpend * pcf, lifestyleSpend: lifestyleSpend * pcf, loansSpend: loansSpend * pcf,
+      left: left * pcf,
+      otherDeductions: config.otherDeductions ?? [],
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [infoRefWeek, config, bufferPerWeek, expenses, infoMonthKey, infoPhase]);
 
@@ -1252,14 +1261,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             style={{
               display: "block", width: "100%", textAlign: "right",
               background: "none", border: "none",
-              color: "var(--color-text-disabled)", fontSize: "9px",
+              color: "var(--color-text-secondary)", fontSize: "10px",
               letterSpacing: "1.5px", textTransform: "uppercase",
               cursor: "pointer", padding: "5px 4px 0",
               fontFamily: "var(--font-sans)",
               transition: "color 150ms ease",
             }}
             onMouseEnter={e => { e.currentTarget.style.color = "var(--color-accent-primary)"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = "var(--color-text-disabled)"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "var(--color-text-secondary)"; }}
           >breakdown ↗</button>
         )}
       </div>
@@ -1713,7 +1722,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       return <div>
         {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
-          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })} · ends {toLocalIso(currentWeek.weekEnd)}</div>
+          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })} · ends {fmtFullDate(currentWeek.weekEnd)}</div>
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Total Loan Balance" val={f(totalOwed)} rawVal={totalOwed} color="var(--color-gold)" />
@@ -1956,10 +1965,9 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           <MathRow op="−" label="Total Tax Withholding" val={f2(checkBreakdown.fica + checkBreakdown.fedTax + checkBreakdown.stateTax)} note="FICA · fed · state" />
           <MathRow op="−" label="Benefits / Insurance" val={f2(checkBreakdown.benefits)} />
           <MathRow op="−" label="401(k) Contribution" val={f2(checkBreakdown.k401)} />
-          {checkBreakdown.otherDeductions.map((row, i) => {
-            const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
-            return <MathRow key={i} op="−" label={row.label ?? `Other Deduction ${i + 1}`} val={f2((row.weeklyAmount ?? 0) * (checksPerYear / 52))} />;
-          })}
+          {checkBreakdown.otherDeductions.map((row, i) => (
+            <MathRow key={i} op="−" label={row.label ?? `Other Deduction ${i + 1}`} val={f2((row.weeklyAmount ?? 0) * perCheckFactor)} />
+          ))}
           <MathDivider thick />
 
           {/* Net Pay result */}
@@ -1968,7 +1976,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           {/* Buffer block */}
           {bufferPerWeek > 0 && <>
             <MathDivider />
-            <MathRow op="−" label="Paycheck Buffer" val={f2(bufferPerWeek)} valColor="var(--color-warning)" note="reserved savings" />
+            <MathRow op="−" label="Paycheck Buffer" val={f2(bufferPerWeek * perCheckFactor)} valColor="var(--color-warning)" note="reserved savings" />
             <MathDivider thick />
             <MathRow op="=" label="Spendable" val={f2(checkBreakdown.spendable)} valColor="var(--color-text-primary)" large />
           </>}

@@ -11,6 +11,33 @@ function toLocalIso(date) {
 }
 export { toLocalIso };
 
+const _MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function _ordinal(d) {
+  const v = d % 100;
+  return d + ((v >= 11 && v <= 13) ? "th" : (["th","st","nd","rd"][d % 10] ?? "th"));
+}
+
+// Formats an ISO date string or Date object as "June 17th, 2027".
+export function fmtFullDate(dateOrIso) {
+  if (!dateOrIso) return "";
+  let y, m, d;
+  if (typeof dateOrIso === "string") {
+    [y, m, d] = dateOrIso.split("-").map(Number);
+  } else {
+    y = dateOrIso.getFullYear(); m = dateOrIso.getMonth() + 1; d = dateOrIso.getDate();
+  }
+  return `${_MONTH_FULL[m - 1]} ${_ordinal(d)}, ${y}`;
+}
+
+// Formats a loan ISO date string. Year is omitted when the date falls within the
+// current fiscal year (isoStr <= fiscalYearEnd).
+export function fmtLoanDate(isoStr, fiscalYearEnd) {
+  if (!isoStr) return "";
+  const [y, m, d] = isoStr.split("-").map(Number);
+  const showYear = !fiscalYearEnd || isoStr > fiscalYearEnd;
+  return `${_MONTH_FULL[m - 1]} ${_ordinal(d)}${showYear ? `, ${y}` : ""}`;
+}
+
 const _FY_YEAR = parseInt(FISCAL_YEAR_START.split('-')[0]);
 const _MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 

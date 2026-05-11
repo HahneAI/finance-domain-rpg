@@ -1204,7 +1204,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         status="green"
         rawVal={(prevWeekNet ?? weeklyIncome) * perCheckFactor}
       />
-      <Card label={`${checkWord} Spend`} val={f2(ts)} rawVal={ts} color="var(--color-deduction)"
+      <Card label={`${checkWord} Spend`} val={f2(ts * perCheckFactor)} rawVal={ts * perCheckFactor} color="var(--color-deduction)"
         insight={weeklyIncome > 0 ? (() => {
           const pct = Math.round(sp);
           if (sp < 50) return { arrow: "up",   delta: `${pct}% of income`, label: "· well-managed",  variant: "blue" };
@@ -1319,7 +1319,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             transition: `background 300ms ${EXPENSE_DRAG_EASE}, border-color 320ms ${EXPENSE_DRAG_EASE}`,
           }}
         >
-          <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot) + `/${checkUnit}`}>{cat}</SH>
+          <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot * perCheckFactor) + `/${checkUnit}`}>{cat}</SH>
           {(() => {
             // Collect deleted expenses (zeroed in this view with non-zero history) for restore sheet
             const deletedInCat = cExp.filter(exp => {
@@ -1499,7 +1499,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     color: isScheduledFuture ? "var(--color-text-disabled)" : CATEGORY_COLORS[cat],
                     whiteSpace: "nowrap",
                   }}>
-                    {f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)", fontWeight: "normal" }}>/{checkUnit}</span>
+                    {f2(effAmt * perCheckFactor)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)", fontWeight: "normal" }}>/{checkUnit}</span>
                   </div>
                   {!isPinnedFoodCard && <button
                     onClick={(e) => { e.stopPropagation(); openSheet(exp); }}

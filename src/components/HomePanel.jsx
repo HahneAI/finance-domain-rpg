@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear } from "../lib/finance.js";
+import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, fmtFullDate } from "../lib/finance.js";
 import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
@@ -542,7 +542,7 @@ export function HomePanel({
         {currentWeek && (
           <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
-            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })} · ends {safeDate(currentWeek.weekEnd)?.toLocaleDateString("en-US")}</div>
+            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })} · ends {fmtFullDate(safeDate(currentWeek.weekEnd))}</div>
           </div>
         )}
 

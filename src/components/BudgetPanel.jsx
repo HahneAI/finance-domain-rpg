@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions } from "../lib/finance.js";
+import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate } from "../lib/finance.js";
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -1568,11 +1568,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     <span style={{ fontSize: "9px", background: "rgba(0,200,150,0.10)", color: "var(--color-gold)", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>LOAN</span>
                     {inRunway && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "1px 5px", borderRadius: "2px", letterSpacing: "1px" }}>SAVING</span>}
                     {isPaidOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>✓ PAID OFF</span>}
-                    {!isPaidOff && !inRunway && dropsOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>drops off {payoffDate}</span>}
+                    {!isPaidOff && !inRunway && dropsOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>drops off {fmtLoanDate(payoffDate, fiscalYearEnd)}</span>}
                   </div>
                   {meta && <div style={{ fontSize: "10px", color: "var(--color-text-primary)", marginTop: "2px" }}>
                     {inRunway
-                      ? `saving toward ${meta.firstPaymentDate} · ${f(meta.paymentAmount ?? 0)}/${freqLabel} due`
+                      ? `saving toward ${fmtLoanDate(meta.firstPaymentDate, fiscalYearEnd)} · ${f(meta.paymentAmount ?? 0)}/${freqLabel} due`
                       : `${loanPaymentsRemaining(meta)} payments left · ${f(meta.paymentAmount ?? meta.paymentPerCheck ?? 0)}/${freqLabel} · ${f(meta.totalAmount)} total`
                     }
                   </div>}
@@ -1792,11 +1792,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(90px,1fr))", gap: "8px", fontSize: "11px", marginBottom: "10px" }}>
                 <div style={{ background: "var(--color-bg-surface)", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
                   <div style={{ color: "var(--color-text-primary)", fontSize: "9px", marginBottom: "2px" }}>{inRunway ? "FIRST PAYMENT" : "PAYMENTS LEFT"}</div>
-                  <div style={{ color: inRunway ? "#7a8bbf" : isPaidOff ? "var(--color-green)" : "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{inRunway ? meta.firstPaymentDate : paymentsLeft}</div>
+                  <div style={{ color: inRunway ? "#7a8bbf" : isPaidOff ? "var(--color-green)" : "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{inRunway ? fmtLoanDate(meta.firstPaymentDate, fiscalYearEnd) : paymentsLeft}</div>
                 </div>
                 <div style={{ background: "var(--color-bg-surface)", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
                   <div style={{ color: "var(--color-text-primary)", fontSize: "9px", marginBottom: "2px" }}>PAYOFF DATE</div>
-                  <div style={{ color: dropsThisYear ? "var(--color-green)" : "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{payoffDate}</div>
+                  <div style={{ color: dropsThisYear ? "var(--color-green)" : "var(--color-text-primary)", fontWeight: "bold", fontSize: "10px" }}>{fmtLoanDate(payoffDate, fiscalYearEnd)}</div>
                 </div>
                 <div style={{ background: "var(--color-bg-surface)", borderRadius: "4px", padding: "8px", textAlign: "center" }}>
                   <div style={{ color: "var(--color-text-primary)", fontSize: "9px", marginBottom: "2px" }}>TERM PAYMENT</div>
@@ -1806,7 +1806,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
               {/* Runway banner */}
               {inRunway && <div style={{ background: "#1a1a2d", border: "1px solid #7a8bbf44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "#7a8bbf" }}>
-                Setting aside {f2(weeklyAmt * perCheckFactor)}/{checkUnit} — {weeksUntilFirst} check{weeksUntilFirst !== 1 ? "s" : ""} until first {f2(payAmt)}/{freqShort} payment on {meta.firstPaymentDate}
+                Setting aside {f2(weeklyAmt * perCheckFactor)}/{checkUnit} — {weeksUntilFirst} check{weeksUntilFirst !== 1 ? "s" : ""} until first {f2(payAmt)}/{freqShort} payment on {fmtLoanDate(meta.firstPaymentDate, fiscalYearEnd)}
               </div>}
 
               {/* Drop-off banner */}

@@ -494,7 +494,9 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
         : `${config.customWeeklyHours} hrs / week (custom)`)
     : config.scheduleIsVariable
       ? "Variable hours"
-      : `${config.standardWeeklyHours || 40} hrs / week`;
+      : config.maxWeeklyHours != null
+        ? `${config.maxWeeklyHours} hrs / week (max ceiling)`
+        : `${config.standardWeeklyHours || 40} hrs / week`;
   const [editing, setEditing] = useState(false);
   const [payDraft, setPayDraft] = useState(null);
   const [error, setError] = useState(null);

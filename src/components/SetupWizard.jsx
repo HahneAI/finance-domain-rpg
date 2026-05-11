@@ -650,6 +650,7 @@ function Step2({ formData, onChange, attempted }) {
           </div>
         </Field>
       ) : (
+        <>
         <Field label="Max Weekly Hours" error={attempted && !((formData.maxWeeklyHours ?? 0) > 0 && (formData.maxWeeklyHours ?? 0) <= 168) ? "Enter hours between 1 and 168" : null}>
           <input
             style={{ ...iS, ...errBorder(attempted && !((formData.maxWeeklyHours ?? 0) > 0 && (formData.maxWeeklyHours ?? 0) <= 168)) }}
@@ -661,9 +662,53 @@ function Step2({ formData, onChange, attempted }) {
           <div style={{
             marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)",
           }}>
-            Income projects from this ceiling; weekly check-in tracks actual hours worked.
+            Every week of your forecast will be calculated at this number. You'll confirm what you actually worked each week.
           </div>
         </Field>
+
+        {/* ── Hours ceiling acknowledgment callout ── */}
+        {isBaseUser && (formData.maxWeeklyHours ?? 0) > 0 && (
+          <div style={{
+            padding: "16px",
+            background: "rgba(0,200,150,0.05)",
+            border: `1px solid ${formData.hoursUnderstood ? "rgba(0,200,150,0.35)" : "rgba(245,158,11,0.4)"}`,
+            borderRadius: "10px",
+          }}>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", marginBottom: "12px" }}>
+              Before you continue
+            </div>
+            <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: "1.7", marginBottom: "14px" }}>
+              <div style={{ marginBottom: "10px" }}>
+                <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>1. Your whole year is built from this number.</span>
+                {" "}The app treats {formData.maxWeeklyHours}h as your expected weekly pay — every paycheck, every goal timeline, every budget health calculation starts here.
+              </div>
+              <div style={{ marginBottom: "10px" }}>
+                <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>2. Each week you'll confirm what you actually worked.</span>
+                {" "}A check-in will ask how many days you put in. If you came in short, that difference gets logged so your real income stays on track.
+              </div>
+              <div style={{ marginBottom: "10px" }}>
+                <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>3. Overtime is not guaranteed income.</span>
+                {" "}If your budget or goals depend on max-hour paychecks, you could come up short in lighter weeks. Set this to the hours you can reliably count on — you can always log extra when overtime actually happens.
+              </div>
+              <div>
+                <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>4. You can change this any time.</span>
+                {" "}Head to Account → Schedule to adjust your ceiling as your situation changes.
+              </div>
+            </div>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={Boolean(formData.hoursUnderstood)}
+                onChange={e => onChange({ hoursUnderstood: e.target.checked })}
+                style={{ marginTop: "3px", accentColor: "var(--color-gold)", width: "16px", height: "16px", flexShrink: 0 }}
+              />
+              <span style={{ fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
+                I understand — my income projections, budget, and goals are all built from this ceiling. I'll log my actual hours each week so my real earnings stay accurate.
+              </span>
+            </label>
+          </div>
+        )}
+        </>
       )}
 
       {/* ── Pay period end day ── */}
@@ -1728,6 +1773,7 @@ const STEP_DEFS = [
       if ((d.firstActiveIdx ?? 0) < 0 || (d.firstActiveIdx ?? 0) >= FISCAL_WEEKS_PER_YEAR) return false;
       if (d.employerPreset === "DHL") return true;
       if (!((d.maxWeeklyHours ?? 0) > 0) || (d.maxWeeklyHours ?? 0) > 168) return false;
+      if (!d.hoursUnderstood) return false;
       return Number.isInteger(d.payPeriodEndDay) && d.payPeriodEndDay >= 0 && d.payPeriodEndDay <= 6;
     },
     component: Step2,

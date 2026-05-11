@@ -725,9 +725,17 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     <div style={{ color: "var(--color-green)", fontSize: "9px", letterSpacing: "1px" }}>Full ceiling reached — confirming clean</div>
                   )}
                   {baseHourDelta !== 0 && (
-                    <div style={{ color: baseHourDelta > 0 ? "var(--color-green)" : "var(--color-deduction)", fontWeight: "bold", fontSize: "9px", letterSpacing: "1px" }}>
-                      {baseHourDelta > 0 ? `+${baseHourDelta}h over ceiling` : `${baseHourDelta}h under ceiling`} — review on next screen
-                    </div>
+                    <>
+                      <div style={{ color: baseHourDelta > 0 ? "var(--color-green)" : "var(--color-deduction)", fontWeight: "bold", fontSize: "9px", letterSpacing: "1px" }}>
+                        {baseHourDelta > 0 ? `+${baseHourDelta}h over ceiling` : `${baseHourDelta}h under ceiling`} — review on next screen
+                      </div>
+                      <div style={{ color: "var(--color-text-secondary)", fontSize: "9px", marginTop: "5px", lineHeight: "1.5" }}>
+                        {baseHourDelta < 0
+                          ? `Your income was projected at ${baseCeilingHours}h. Logging the difference keeps your actual earnings accurate — it won't affect future weeks.`
+                          : `You worked past your ${baseCeilingHours}h ceiling. The next screen will let you log the extra pay.`
+                        }
+                      </div>
+                    </>
                   )}
                 </div>
               ) : (missedScheduledDays.length > 0 || pickupDays.length > 0) && (

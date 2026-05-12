@@ -1721,14 +1721,19 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const debtFreeVal = (() => {
         if (!debtFreeDate) return "—";
         if (weeksToDebtFree <= 3) return `${weeksToDebtFree} wk${weeksToDebtFree !== 1 ? "s" : ""}`;
-        // Convert weeks to nearest-0.5-month display.
-        // At tie points (weeks%4===1 like 5,9,13...) round down (5→1mo, 9→2mo).
-        // At tie points (weeks%4===3 like 7,11,19...) round up (7→2mo, 19→5mo).
+        // Weeks → nearest-0.5-month. Ties: weeks%4===1 rounds down (5→1mo), weeks%4===3 rounds up (7→2mo).
         const halfMonths = weeksToDebtFree / 4 * 2;
         const roundedHalf = weeksToDebtFree % 4 === 1 ? Math.floor(halfMonths)
                           : weeksToDebtFree % 4 === 3 ? Math.ceil(halfMonths)
                           : halfMonths;
-        return `${roundedHalf / 2} mo`;
+        const months = roundedHalf / 2;
+        // Months → nearest-0.5-year once ≥12 months. 6-month buckets floor down:
+        // 12–17→1yr, 18–23→1.5yr, 24–29→2yr, etc.
+        if (months >= 12) {
+          const years = Math.floor(months / 6) / 2;
+          return `${years} yr`;
+        }
+        return `${months} mo`;
       })();
 
       return <div>

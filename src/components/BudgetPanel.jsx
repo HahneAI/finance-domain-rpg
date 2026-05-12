@@ -1718,6 +1718,18 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const allPayoffDates = loans.map(e => e.loanMeta ? computeLoanPayoffDate(e.loanMeta) : null).filter(Boolean);
       const debtFreeDate = allPayoffDates.length ? allPayoffDates.reduce((a, b) => a > b ? a : b) : null;
       const weeksToDebtFree = debtFreeDate ? Math.max(Math.ceil((new Date(debtFreeDate) - new Date(TODAY_ISO)) / (7 * 24 * 60 * 60 * 1000)), 0) : 0;
+      const debtFreeVal = (() => {
+        if (!debtFreeDate) return "—";
+        if (weeksToDebtFree <= 3) return `${weeksToDebtFree} wk${weeksToDebtFree !== 1 ? "s" : ""}`;
+        // Convert weeks to nearest-0.5-month display.
+        // At tie points (weeks%4===1 like 5,9,13...) round down (5→1mo, 9→2mo).
+        // At tie points (weeks%4===3 like 7,11,19...) round up (7→2mo, 19→5mo).
+        const halfMonths = weeksToDebtFree / 4 * 2;
+        const roundedHalf = weeksToDebtFree % 4 === 1 ? Math.floor(halfMonths)
+                          : weeksToDebtFree % 4 === 3 ? Math.ceil(halfMonths)
+                          : halfMonths;
+        return `${roundedHalf / 2} mo`;
+      })();
 
       return <div>
         {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
@@ -1735,7 +1747,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               return              { arrow: "down",  delta: `${pct}% of income`, label: "· high debt load",   variant: "purple" };
             })() : undefined}
           />
-          <Card label="Debt-Free In" val={debtFreeDate ? `${weeksToDebtFree} wks` : "—"} color={debtFreeDate && debtFreeDate <= fiscalYearEnd ? "var(--color-green)" : "var(--color-gold)"}
+          <Card label="Debt-Free In" val={debtFreeVal} color={debtFreeDate && debtFreeDate <= fiscalYearEnd ? "var(--color-green)" : "var(--color-gold)"}
             insight={debtFreeDate ? (debtFreeDate <= fiscalYearEnd
               ? { arrow: "up",   delta: null, label: "clears within 2026", variant: "blue" }
               : { arrow: "flat",  delta: null, label: "extends past 2026",  variant: "blue" }

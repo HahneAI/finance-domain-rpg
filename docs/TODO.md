@@ -1,5 +1,204 @@
 # TODO — Authority Finance
 
+## 15. Life Events Feature
+
+*Life events are moments that fundamentally change a user's financial picture. The app should
+meet users there — not just re-run the setup wizard, but offer purpose-built flows that understand
+the emotional and practical weight of what just happened.*
+
+**Existing infrastructure:** `SetupWizard` already accepts a `lifeEvent` prop (`"lost_job"` |
+`"changed_jobs"` | `"commission_job"`). `App.jsx` has a `lifeEventMenu` dropdown that routes into
+the wizard. These are the trigger points we extend — not replace.
+
+---
+
+### A. Entry Point & Life Event Menu
+
+- [ ] **Upgrade the life event menu UI** — the current drawer/mobile dropdown is a plain list; give
+  it weight that matches the gravity of these moments.
+  - [ ] Replace inline dropdown with a bottom sheet modal (mobile) / centered card modal (desktop)
+  - [ ] Two primary tiles: **"Pay Structure Changed"** and **"Lost My Job"** — large, distinct,
+    icon-forward; not a text list
+  - [ ] Each tile shows a one-line description of what the flow covers
+  - [ ] Add a third tile: **"Quick Rate Update"** — for a raise or rate change with no structural
+    change (just new `baseRate` + optional new start week; no wizard needed, single modal)
+  - [ ] Preserve existing `wizardEntry` / `setWizardEntry` wiring in App.jsx — route each tile to
+    the appropriate flow
+
+---
+
+### B. Pay Structure Change → Structure Overwrite Wizard
+
+*Triggered by "Pay Structure Changed" tile. Covers promotion to salary, new employer, hourly→salary
+switch, commission add-on. Reuses SetupWizard steps but skips goals/expenses/logs — those carry
+forward untouched.*
+
+- [ ] **Define "structure overwrite" life event type** — add `"structure_change"` to `LIFE_EVENTS`
+  in SetupWizard.jsx; route it through steps 0 (brief re-entry screen), 1 (Pay Structure),
+  2 (Schedule), 3 (Deductions — skippable), 4 (Tax Rates), 7 (Wrap Up)
+- [ ] **Pre-fill from current config** — all wizard fields should open with existing values so the
+  user only edits what actually changed (rate, pay period, employer, etc.)
+- [ ] **Change-date anchor** — Step 2 start date becomes the "effective date" of the change;
+  `firstActiveIdx` is set from this date; weeks before it keep the old income math in history
+- [ ] **Change summary screen** — before `onComplete`, show a diff of key fields that changed
+  (old rate → new rate, old schedule → new schedule, old employer → new); require explicit confirm
+- [ ] **Employer preset change handling** — if user switches from base to DHL (or vice versa),
+  apply full preset defaults and show a callout explaining what was auto-set
+- [ ] **Preserve all history** — goals, expenses, logs, week confirmations before the change date
+  are never touched; only forward-looking finance math recalculates
+
+---
+
+### C. Job Loss Mode
+
+*Triggered by "Lost My Job" tile. Enters a dedicated mode that transforms the app's forward
+projections to reflect $0 earned income and surfaces tools to manage the gap.*
+
+#### C1. Job Loss Mode State & Entry/Exit
+
+- [ ] **`jobLossMode` config flag** — boolean stored in config/Supabase; when true, alters how
+  `buildYear` and `computeNet` handle future weeks (earned income = $0 from `jobLossDate` forward)
+- [ ] **Job loss date** — stored as `config.jobLossDate`; weeks on/after this index get $0 gross
+  from employment; unemployment income (if configured) replaces it as a separate income line
+- [ ] **"Back to work" exit flow** — prominent button in Job Loss Dashboard; triggers the
+  Structure Overwrite Wizard pre-loaded with previous pay config as a starting point; clears
+  `jobLossMode` and `jobLossDate` on completion
+- [ ] **App shell indicator** — subtle persistent banner or status pill when `jobLossMode` is
+  active so the user always knows projections are in loss mode; dismissible but re-shows on reload
+
+#### C2. Unemployment Benefits
+
+- [ ] **Unemployment section in Job Loss Dashboard** — collapsible card
+  - [ ] "Did you file for unemployment?" Y/N gate
+  - [ ] If yes: weekly benefit amount (manual entry), benefit duration in weeks, waiting week
+    toggle (first week unpaid in most states)
+  - [ ] Wire benefit amount into forward week net calculations as a non-taxed income line
+    (unemployment is federally taxable but withholding is optional — flag this with a note)
+  - [ ] Benefit expiration: show a "benefits run out on [date]" warning when duration is set
+  - [ ] Future: state-specific benefit estimator — pre-fill estimated weekly benefit based on
+    `config.userState` + prior `baseRate` using each state's benefit formula
+
+#### C3. Expense Triage
+
+*Every loaded expense gets an individual stance: keep it, pause it, or cancel it. Paused expenses
+leave the record intact but drop out of projections until reactivated.*
+
+- [ ] **Per-expense triage status** — add `jobLossStatus: "active" | "paused" | "cancelled"` to
+  each expense object; default `"active"`; persisted to Supabase
+- [ ] **Triage UI** — dedicated sheet in Job Loss Dashboard listing all expenses with:
+  - [ ] Expense name, category icon, monthly amount
+  - [ ] Next due-date countdown ("due in 12 days") derived from expense billing day or history
+  - [ ] Three-state toggle: Active / Paused / Cancelled per expense
+  - [ ] Auto-priority badge: **Essential** (Rent, Utilities, Food, Insurance) vs. **Flexible**
+    (Subscriptions, Entertainment) based on existing expense category
+  - [ ] "Pause all Flexible" bulk action button
+- [ ] **Projection impact** — paused and cancelled expenses are excluded from `computeNet` forward
+  weeks while `jobLossMode` is active; reactivate on "Back to work"
+- [ ] **"Auto-reactivate on income resume"** toggle per expense — resets `jobLossStatus` to
+  `"active"` when the user exits Job Loss Mode via the Back to Work flow
+
+#### C4. Runway Calculator
+
+*The single most important number during job loss: how long can you survive.*
+
+- [ ] **Runway metric** — headline card in Job Loss Dashboard: **"X days of runway"** computed as:
+  `(bufferBalance + projectedUnemploymentTotal) / weeklyEssentialBurn × 7`
+- [ ] **Weekly burn rate** — sum of all `"active"` essential expenses per week; updates live as
+  user pauses/cancels expenses in triage
+- [ ] **Runway cliff date** — calendar date when runway reaches zero at current burn rate; shown
+  as "Runway ends: [Month Day]" in amber/red depending on proximity
+- [ ] **Savings input** — if buffer balance doesn't capture full savings, allow a one-time
+  "additional savings" override field for the runway calculation only (not persisted to main config)
+- [ ] **Scenario toggle** — "With unemployment" vs. "Without unemployment" runway comparison;
+  shows both numbers side by side when benefits are configured
+
+#### C5. Bill Deadline Countdowns
+
+- [ ] **Due-date countdown tiles** — for any expense with a known billing day, surface a
+  countdown tile: "Rent due in 8 days — $1,200"
+- [ ] **30 / 14 / 7-day alert tiers** — tile border/status color shifts gold at 14 days, red at 7
+- [ ] **"Needs coverage" flag** — if due date falls before projected unemployment first payment,
+  mark as needing immediate coverage; surfaces at top of triage list
+
+#### C6. Re-employment Tracker (basic)
+
+- [ ] **Target income goal** — pre-filled from `config.baseRate × maxWeeklyHours × 52`;
+  user can adjust; shown as "target annual" and "target weekly net" using current tax config
+- [ ] **Expected return-to-work date** — date input; when set, projects income resuming from that
+  week in the Income panel's forward timeline
+- [ ] **Application log** — simple list stored in Supabase:
+  - [ ] Fields: company, role title, date applied, status (Applied / Screening / Interview /
+    Offer / Rejected / Withdrawn)
+  - [ ] Add / edit / delete entries inline
+  - [ ] Status badge colors: gray (Applied), gold (Screening/Interview), green (Offer), red
+    (Rejected)
+  - [ ] Count summary: "X active, Y offers" shown in dashboard header
+
+---
+
+### D. Quick Rate Update (non-structural raise)
+
+*For when the pay structure stays the same but the rate changed — shouldn't require a full wizard.*
+
+- [ ] **Rate update modal** — single screen: new base rate input + effective date + optional note
+- [ ] **Effective-date handling** — same `firstActiveIdx` logic as structure overwrite, applied
+  only to `baseRate`; all other config fields unchanged
+- [ ] **Confirmation diff** — shows old rate → new rate + estimated weekly net delta before saving
+
+---
+
+### E. Future — AI Job Hunt Assistant *(Phase 3)*
+
+*Claude API integration. Contextual to the user's actual financial data — not generic career advice.*
+
+- [ ] **Job Hunt Chat panel** — dedicated sub-view in Job Loss Dashboard; chat interface powered
+  by Claude API with a system prompt that includes: current role title, prior income, runway days,
+  target income, state/region, and application log summary
+- [ ] **Contextual prompt modes:**
+  - [ ] "Help me with my resume" — structured resume review with suggestions tied to target roles
+  - [ ] "Write a cover letter for [role]" — drafts from stored job title, experience summary, and
+    target application details
+  - [ ] "Prep me for [company] interview" — role-specific Q&A based on company + job title
+  - [ ] "Salary negotiation coaching" — uses prior income + target income + runway as context
+  - [ ] "How long can I be selective?" — runway-aware guidance on how long to hold out for the
+    right offer vs. needing to take something quickly
+- [ ] **Financial context injection** — every chat session receives a condensed financial snapshot
+  (runway, burn rate, target net, current week) so advice is grounded in real numbers
+- [ ] **Prompt caching** — use Anthropic SDK prompt caching on the financial context block to
+  reduce token cost across a conversation session
+
+---
+
+### F. Future — Job Board API Integrations *(Phase 4)*
+
+- [ ] **Job search integration** — in-app job listing browser; sources TBD (Indeed/LinkedIn/
+  ZipRecruiter APIs or aggregator); pre-seeded search from stored job title + `config.userState`
+- [ ] **Salary filter by target** — filter listings by salary range anchored to target income goal
+- [ ] **One-click application tracking** — "Save to tracker" button on any listing → auto-creates
+  an entry in the Re-employment Tracker (C6) with company, role, and date pre-filled
+- [ ] **Application assistant** — for saved listings, "Draft application" launches the AI
+  assistant (E) pre-loaded with the specific job description for cover letter / prep mode
+- [ ] **Profile store for auto-fill** — stored work history summary, skills list, and resume text
+  (user-entered) used to pre-fill application fields and feed the AI assistant context
+
+---
+
+### G. Future — Expanded Life Event Types *(Phase 3+)*
+
+- [ ] **Medical / disability leave** — partial income mode: STD/LTD benefit amount + duration;
+  expense triage carries over from Job Loss Mode infrastructure; leave end date projects income
+  resuming
+- [ ] **Promotion / raise (in-place)** — alias for Quick Rate Update (D) with a celebratory
+  entry point; optionally prompts review of 401k contribution rate
+- [ ] **Marriage / filing status change** — triggers filing status update (Single → MFJ), prompts
+  review of standard deduction and combined income picture; out of scope for solo-income v1
+- [ ] **New dependent** — prompts childcare expense add, dependent care FSA consideration, and
+  filing status review (HOH path)
+- [ ] **Side hustle / gig income** — add a secondary income stream with its own rate and schedule;
+  quarterly estimated tax calculation for self-employment income (SE tax + federal/state)
+
+---
+
 ## 0. Base user Foundation — Priority Sprint
 
 *Source: base user-wizard-audit.md full audit, 2026-04-28. All 12 items are blockers or

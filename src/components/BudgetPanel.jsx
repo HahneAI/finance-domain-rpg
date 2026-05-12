@@ -1718,23 +1718,18 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const allPayoffDates = loans.map(e => e.loanMeta ? computeLoanPayoffDate(e.loanMeta) : null).filter(Boolean);
       const debtFreeDate = allPayoffDates.length ? allPayoffDates.reduce((a, b) => a > b ? a : b) : null;
       const weeksToDebtFree = debtFreeDate ? Math.max(Math.ceil((new Date(debtFreeDate) - new Date(TODAY_ISO)) / (7 * 24 * 60 * 60 * 1000)), 0) : 0;
-      const debtFreeVal = (() => {
-        if (!debtFreeDate) return "—";
-        if (weeksToDebtFree <= 3) return `${weeksToDebtFree} wk${weeksToDebtFree !== 1 ? "s" : ""}`;
-        // Weeks → nearest-0.5-month. Ties: weeks%4===1 rounds down (5→1mo), weeks%4===3 rounds up (7→2mo).
-        const halfMonths = weeksToDebtFree / 4 * 2;
-        const roundedHalf = weeksToDebtFree % 4 === 1 ? Math.floor(halfMonths)
-                          : weeksToDebtFree % 4 === 3 ? Math.ceil(halfMonths)
+      // Shared duration formatter: ≤3 wks → "X wks", 4+ wks → nearest-0.5 mo, 12+ mo → nearest-0.5 yr
+      const fmtWeeksDuration = w => {
+        if (w <= 3) return `${w} wk${w !== 1 ? "s" : ""}`;
+        const halfMonths = w / 4 * 2;
+        const roundedHalf = w % 4 === 1 ? Math.floor(halfMonths)   // 5,9,13... round down at tie
+                          : w % 4 === 3 ? Math.ceil(halfMonths)    // 7,11,19... round up at tie
                           : halfMonths;
         const months = roundedHalf / 2;
-        // Months → nearest-0.5-year once ≥12 months. 6-month buckets floor down:
-        // 12–17→1yr, 18–23→1.5yr, 24–29→2yr, etc.
-        if (months >= 12) {
-          const years = Math.floor(months / 6) / 2;
-          return `${years} yr`;
-        }
+        if (months >= 12) return `${Math.floor(months / 6) / 2} yr`;
         return `${months} mo`;
-      })();
+      };
+      const debtFreeVal = debtFreeDate ? fmtWeeksDuration(weeksToDebtFree) : "—";
 
       return <div>
         {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
@@ -1804,7 +1799,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               <div style={{ marginBottom: "8px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "var(--color-text-primary)", marginBottom: "4px" }}>
                   {inRunway
-                    ? <span>saving toward first payment · {weeksUntilFirst} week{weeksUntilFirst !== 1 ? "s" : ""} away</span>
+                    ? <span>saving toward first payment · {fmtWeeksDuration(weeksUntilFirst)} away</span>
                     : <span>{paymentsMade} of {paymentsTotal} payments made</span>
                   }
                   <span>{inRunway ? "pre-save" : `${progressPct.toFixed(0)}%`}</span>
@@ -1837,7 +1832,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
               {/* Drop-off banner */}
               {!isPaidOff && !inRunway && dropsThisYear && <div style={{ background: "#1a2d1e", border: "1px solid #6dbf8a44", borderRadius: "4px", padding: "7px 10px", marginBottom: "10px", fontSize: "10px", color: "var(--color-green)" }}>
-                ✓ Drops off in {weeksUntilPayoff} weeks — budget improves after payoff
+                ✓ Drops off in {fmtWeeksDuration(weeksUntilPayoff)} — budget improves after payoff
               </div>}
 
               {/* Actions */}

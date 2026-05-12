@@ -66,15 +66,15 @@ direct enablers for a shippable base user user experience.*
 
 ### Deferred / Low Priority
 
-- [ ] **"No OT" exempt path** — No "exempt / not applicable" option for salaried-exempt workers.
+- [x] **"No OT" exempt path** — No "exempt / not applicable" option for salaried-exempt workers.
   Add a "No OT" toggle that sets `otThreshold: null`; update engine to skip OT math when null.
   Workaround: set threshold to 168.
 
-- [ ] **`shiftHours` label UX** — "Shift Length (hrs)" in Step 1 doesn't explain it's used for
+- [x] **`shiftHours` label UX** — "Shift Length (hrs)" in Step 1 doesn't explain it's used for
   event logging, not income calculation. Add one helper line:
   *"Used for shift counting in event logging — income uses total weekly hours set in the next step."*
 
-- [ ] **Welcome copy pass** — Step 0 doesn't hint at what to have ready (paystub, OT policy,
+- [x] **Welcome copy pass** — Step 0 doesn't hint at what to have ready (paystub, OT policy,
   PTO details). Add a brief "have these handy" line for base users before the first step.
 
 - [ ] **`taxExemptOptIn` wire-up** — Stored in config but nothing reads it in `App.jsx` or

@@ -3,7 +3,7 @@ import { MONTH_FULL, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet, toLocalIso } from "../lib/finance.js";
 import { deriveRollingIncomeWeeks, progressiveScale } from "../lib/rollingTimeline.js";
-import { getFiscalWeekNumber } from "../lib/fiscalWeek.js";
+import { getFiscalWeekNumber, weekNumToPaycheckNum, payPeriodUnit } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
@@ -310,11 +310,11 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
     </div>
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "28px" }}>
       <Card label="Gross (Year)" val={f(yG)} rawVal={yG}
-        sub={currentWeek ? `Wk ${getFiscalWeekNumber(currentWeek.idx)} projection` : undefined}
+        sub={currentWeek ? `${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(getFiscalWeekNumber(currentWeek.idx), checksPerYear)} projection` : undefined}
         insight={yG > 0 && yN > 0 ? { arrow: "flat", delta: `${Math.round((yN / yG) * 100)}%`, label: "kept after tax", variant: "blue" } : undefined}
       />
       <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)"
-        sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : currentWeek ? `Wk ${getFiscalWeekNumber(currentWeek.idx)} · on pace` : undefined}
+        sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : currentWeek ? `${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(getFiscalWeekNumber(currentWeek.idx), checksPerYear)} · on pace` : undefined}
         insight={missedEventDayNetLost > 0 && projectedAnnualNet > 0 ? { arrow: "down", delta: `-${Math.round((missedEventDayNetLost / projectedAnnualNet) * 100)}%`, label: "of net to missed events", variant: "purple" } : undefined}
       />
     </div>

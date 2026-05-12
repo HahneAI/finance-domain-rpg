@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate } from "../lib/finance.js";
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
-import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
+import { formatFiscalWeekLabel, formatPayPeriodLabel } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
@@ -33,13 +33,15 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
   const checksPerYear = PAYCHECKS_PER_YEAR[userPaySchedule ?? "weekly"] ?? 52;
   const perCheckFactor = 52 / checksPerYear; // 1 for weekly, 2 for biweekly/salary
+  const MIN_FOOD_WEEKLY = 75; // $75/week floor on the mandatory food expense
+  const minFoodPerCheck = MIN_FOOD_WEEKLY * perCheckFactor; // $75 weekly · $150 biweekly
   const isWeekly = checksPerYear === 52;
   const checkUnit = isWeekly ? "wk" : "check";   // "/wk" vs "/check" suffix
   const checkWord = isWeekly ? "Weekly" : "Per-Check"; // card label prefix
   const thisCheckLabel = isWeekly ? "This Week" : "This Check";
 
   const currentPhaseIdx = useMemo(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0, [currentWeek]);
-  const fiscalWeekLabel = formatFiscalWeekLabel(fiscalWeekInfo);
+  const fiscalWeekLabel = formatPayPeriodLabel(fiscalWeekInfo, checksPerYear);
   const [ap, setAp] = useState(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0);
   const [view, setView] = useState("overview");
   // Expense CRUD state
@@ -154,6 +156,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
   // Live expense snapshot for the detail sheet — stays in sync as edits land
   const sheetExpLive = sheetExp ? (expenses.find(e => e.id === sheetExp.id) ?? null) : null;
+  const isFoodSheet = Boolean(sheetExpLive?.isFoodPrimary || sheetExpLive?.isFoodHighlighted);
 
   const openSheet = (exp) => {
     setSheetExp(exp);
@@ -273,7 +276,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const infoRefWeek    = isViewingFuture && firstCheckWeek ? firstCheckWeek : currentWeek;
   const infoMonthKey   = isViewingFuture && firstCheckWeek ? firstCheckMonthKey : currentMonthKey;
   const infoPhase      = isViewingFuture && firstCheckWeek ? firstCheckPhase : currentPhaseIdx;
-  const infoLabel      = isViewingFuture && firstCheckWeek ? `First Check · ${firstCheckMonthShort}` : "This Week";
+  const infoLabel      = isViewingFuture && firstCheckWeek ? `First Check · ${firstCheckMonthShort}` : (isWeekly ? "This Week" : checksPerYear === 12 ? "This Month" : "This Paycheck");
   const checkBreakdown = useMemo(() => {
     if (!infoRefWeek || !config) return null;
     const gross = infoRefWeek.grossPay ?? 0;
@@ -292,11 +295,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       fedTax   = (infoRefWeek.taxableGross ?? 0) * fedRate;
       stateTax = (infoRefWeek.taxableGross ?? 0) * stRate;
     }
-    const checksPerYear  = PAYCHECKS_PER_YEAR[config.userPaySchedule ?? "weekly"] ?? 52;
+    // All values below are per-week. Multiply by perCheckFactor at return so the
+    // modal always shows per-paycheck amounts regardless of pay schedule.
     const otherPostTax   = (config.otherDeductions ?? []).reduce((sum, row) => {
       const amt = row?.weeklyAmount;
       return sum + (typeof amt === "number" ? amt : 0);
-    }, 0) * (checksPerYear / 52);
+    }, 0);
     const netPay    = gross - fica - fedTax - stateTax - benefits - k401 - otherPostTax;
     const spendable = netPay - bufferPerWeek;
     const needsSpend     = regularExpenses.filter(e => e.category === "Needs")
@@ -306,7 +310,15 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     const loansSpend     = loans
       .reduce((s, e) => s + getEffectiveAmountForMonth(e, infoMonthKey, infoPhase), 0);
     const left = spendable - needsSpend - lifestyleSpend - loansSpend;
-    return { gross, fica, fedTax, stateTax, benefits, k401, otherPostTax, netPay, spendable, needsSpend, lifestyleSpend, loansSpend, left, otherDeductions: config.otherDeductions ?? [] };
+    const pcf = perCheckFactor;
+    return {
+      gross: gross * pcf, fica: fica * pcf, fedTax: fedTax * pcf, stateTax: stateTax * pcf,
+      benefits: benefits * pcf, k401: k401 * pcf, otherPostTax: otherPostTax * pcf,
+      netPay: netPay * pcf, spendable: spendable * pcf,
+      needsSpend: needsSpend * pcf, lifestyleSpend: lifestyleSpend * pcf, loansSpend: loansSpend * pcf,
+      left: left * pcf,
+      otherDeductions: config.otherDeductions ?? [],
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [infoRefWeek, config, bufferPerWeek, expenses, infoMonthKey, infoPhase]);
 
@@ -1204,7 +1216,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         status="green"
         rawVal={(prevWeekNet ?? weeklyIncome) * perCheckFactor}
       />
-      <Card label={`${checkWord} Spend`} val={f2(ts)} rawVal={ts} color="var(--color-deduction)"
+      <Card label={`${checkWord} Spend`} val={f2(ts * perCheckFactor)} rawVal={ts * perCheckFactor} color="var(--color-deduction)"
         insight={weeklyIncome > 0 ? (() => {
           const pct = Math.round(sp);
           if (sp < 50) return { arrow: "up",   delta: `${pct}% of income`, label: "· well-managed",  variant: "blue" };
@@ -1249,14 +1261,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             style={{
               display: "block", width: "100%", textAlign: "right",
               background: "none", border: "none",
-              color: "var(--color-text-disabled)", fontSize: "9px",
+              color: "var(--color-text-secondary)", fontSize: "10px",
               letterSpacing: "1.5px", textTransform: "uppercase",
               cursor: "pointer", padding: "5px 4px 0",
               fontFamily: "var(--font-sans)",
               transition: "color 150ms ease",
             }}
             onMouseEnter={e => { e.currentTarget.style.color = "var(--color-accent-primary)"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = "var(--color-text-disabled)"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "var(--color-text-secondary)"; }}
           >breakdown ↗</button>
         )}
       </div>
@@ -1275,7 +1287,15 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     {view === "overview" && <div>
       {overviewCats.map(cat => {
         const cExp = regularExpenses.filter(e => e.category === cat);
-        const laneCardsExcludingDragged = cExp.filter(item => item.id !== draggingExpenseId);
+        // Pin food to bottom of Needs (above loans); all other Needs expenses stay draggable
+        const draggableInCat = cat === "Needs"
+          ? cExp.filter(e => !e.isFoodPrimary && !e.isFoodHighlighted)
+          : cExp;
+        const pinnedFoodInCat = cat === "Needs"
+          ? cExp.filter(e => e.isFoodPrimary || e.isFoodHighlighted)
+          : [];
+        const displayCExp = [...draggableInCat, ...pinnedFoodInCat];
+        const laneCardsExcludingDragged = draggableInCat.filter(item => item.id !== draggingExpenseId);
         const loanItems = cat === "Needs" ? loans : [];
         const cTot = cExp.reduce((s, e) => s + displayEffective(e, ap), 0)
                    + loanItems.reduce((s, e) => s + displayEffective(e, ap), 0);
@@ -1319,7 +1339,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             transition: `background 300ms ${EXPENSE_DRAG_EASE}, border-color 320ms ${EXPENSE_DRAG_EASE}`,
           }}
         >
-          <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot) + `/${checkUnit}`}>{cat}</SH>
+          <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot * perCheckFactor) + `/${checkUnit}`}>{cat}</SH>
           {(() => {
             // Collect deleted expenses (zeroed in this view with non-zero history) for restore sheet
             const deletedInCat = cExp.filter(exp => {
@@ -1345,7 +1365,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               </div>
             ) : null;
           })()}
-          {cExp.map(exp => {
+          {displayCExp.map(exp => {
             const effAmt = displayEffective(exp, ap);
             // Resolve timeline state for this expense in the active phase
             const nextNonZeroIso = effAmt === 0 ? getNextNonZeroIso(exp, ap, TODAY_ISO) : null;
@@ -1370,7 +1390,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               data-expense-id={exp.id}
               draggable={!isPinnedFoodCard && !isEditing && isExpenseDropLane && !isCoarsePointer}
               onClick={() => {
-                if (isPinnedFoodCard || expenseDragFinalizedRef.current) return;
+                if (expenseDragFinalizedRef.current) return;
                 const now = Date.now();
                 const last = lastTapRef.current[exp.id] ?? 0;
                 if (now - last < 350) {
@@ -1499,9 +1519,9 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     color: isScheduledFuture ? "var(--color-text-disabled)" : CATEGORY_COLORS[cat],
                     whiteSpace: "nowrap",
                   }}>
-                    {f2(effAmt)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)", fontWeight: "normal" }}>/{checkUnit}</span>
+                    {f2(effAmt * perCheckFactor)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)", fontWeight: "normal" }}>/{checkUnit}</span>
                   </div>
-                  {!isPinnedFoodCard && <button
+                  {<button
                     onClick={(e) => { e.stopPropagation(); openSheet(exp); }}
                     aria-label={`Edit ${exp.label}`}
                     style={{
@@ -1945,10 +1965,9 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           <MathRow op="−" label="Total Tax Withholding" val={f2(checkBreakdown.fica + checkBreakdown.fedTax + checkBreakdown.stateTax)} note="FICA · fed · state" />
           <MathRow op="−" label="Benefits / Insurance" val={f2(checkBreakdown.benefits)} />
           <MathRow op="−" label="401(k) Contribution" val={f2(checkBreakdown.k401)} />
-          {checkBreakdown.otherDeductions.map((row, i) => {
-            const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
-            return <MathRow key={i} op="−" label={row.label ?? `Other Deduction ${i + 1}`} val={f2((row.weeklyAmount ?? 0) * (checksPerYear / 52))} />;
-          })}
+          {checkBreakdown.otherDeductions.map((row, i) => (
+            <MathRow key={i} op="−" label={row.label ?? `Other Deduction ${i + 1}`} val={f2((row.weeklyAmount ?? 0) * perCheckFactor)} />
+          ))}
           <MathDivider thick />
 
           {/* Net Pay result */}
@@ -1957,7 +1976,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           {/* Buffer block */}
           {bufferPerWeek > 0 && <>
             <MathDivider />
-            <MathRow op="−" label="Paycheck Buffer" val={f2(bufferPerWeek)} valColor="var(--color-warning)" note="reserved savings" />
+            <MathRow op="−" label="Paycheck Buffer" val={f2(bufferPerWeek * perCheckFactor)} valColor="var(--color-warning)" note="reserved savings" />
             <MathDivider thick />
             <MathRow op="=" label="Spendable" val={f2(checkBreakdown.spendable)} valColor="var(--color-text-primary)" large />
           </>}
@@ -2266,16 +2285,21 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               ) : (
                 <div style={{ display: "flex", gap: "10px" }}>
                   <button onClick={() => { setSheetMode("edit"); startEditExp(sheetExpLive); }} style={{ flex: 1, padding: "13px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-primary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Edit</button>
-                  <button onClick={() => setSheetDeleteConfirm(true)} style={{ flex: 1, padding: "13px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "14px", color: "var(--color-deduction)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Delete</button>
+                  {!isFoodSheet && <button onClick={() => setSheetDeleteConfirm(true)} style={{ flex: 1, padding: "13px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "14px", color: "var(--color-deduction)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Delete</button>}
                 </div>
               )}
             </>) : (
               /* ── Edit mode ── */
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {(() => {
+                  const editReserve = perPaycheckFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days", cpm);
+                  const belowFloor = isFoodSheet && editReserve < minFoodPerCheck;
+                  const saveBtnDisabledStyle = belowFloor ? { opacity: 0.35, cursor: "not-allowed", pointerEvents: "none" } : {};
+                  return (<>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <div>
-                    <div style={{ ...lS, marginBottom: "4px" }}>Bill Amount ($)</div>
-                    <input type="number" min="0" step="0.01" value={editVals.amount ?? ""} onChange={e => setEditVals(v => ({ ...v, amount: e.target.value }))} style={{ ...iS, width: "100%", boxSizing: "border-box" }} />
+                    <div style={{ ...lS, marginBottom: "4px", color: belowFloor ? "var(--color-red)" : undefined }}>Bill Amount ($)</div>
+                    <input type="number" min="0" step="0.01" value={editVals.amount ?? ""} onChange={e => setEditVals(v => ({ ...v, amount: e.target.value }))} style={{ ...iS, width: "100%", boxSizing: "border-box", borderColor: belowFloor ? "var(--color-red)" : undefined }} />
                   </div>
                   <div>
                     <div style={{ ...lS, marginBottom: "4px" }}>Paid Every</div>
@@ -2284,26 +2308,29 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     </select>
                   </div>
                 </div>
-                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", background: "var(--color-bg-raised)", padding: "10px 14px", borderRadius: "10px" }}>
-                  Per-check reserve: <strong style={{ color: "var(--color-accent-primary)" }}>{f2(perPaycheckFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days", cpm))}</strong>
+                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", background: belowFloor ? "rgba(239,68,68,0.07)" : "var(--color-bg-raised)", border: `1px solid ${belowFloor ? "rgba(239,68,68,0.3)" : "transparent"}`, padding: "10px 14px", borderRadius: "10px" }}>
+                  Per-check reserve: <strong style={{ color: belowFloor ? "var(--color-red)" : "var(--color-accent-primary)" }}>{f2(editReserve)}</strong>
+                  {isFoodSheet && <span style={{ marginLeft: "10px", fontSize: "10px", color: belowFloor ? "var(--color-red)" : "var(--color-text-disabled)" }}>{belowFloor ? `↑ min ${f2(minFoodPerCheck)}/${checkUnit}` : `· min ${f2(minFoodPerCheck)}/${checkUnit}`}</span>}
                 </div>
                 <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
                 <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase" }}>Save scope</div>
                 {activeMonth !== null ? (
                   <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    <button onClick={() => saveThisMonth(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>{activeMonthLabel} Only</button>
-                    <button onClick={() => saveFromMonthForward(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>{activeMonthLabel} +</button>
-                    <button onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "10px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>This Qtr</button>
-                    <button onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>All Qtrs</button>
+                    <button disabled={belowFloor} onClick={() => saveThisMonth(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>{activeMonthLabel} Only</button>
+                    <button disabled={belowFloor} onClick={() => saveFromMonthForward(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>{activeMonthLabel} +</button>
+                    <button disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "10px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>This Qtr</button>
+                    <button disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>All Qtrs</button>
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    <button onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>Q{ap + 1} Only</button>
-                    <button onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>Q{ap + 1} +</button>
-                    <button onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px" }}>All Qtrs</button>
+                    <button disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>Q{ap + 1} Only</button>
+                    <button disabled={belowFloor} onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>Q{ap + 1} +</button>
+                    <button disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>All Qtrs</button>
                   </div>
                 )}
                 <button onClick={() => { setSheetMode("view"); setEditId(null); }} style={{ padding: "11px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+                  </>);
+                })()}
               </div>
             )}
           </div>

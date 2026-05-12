@@ -1,8 +1,8 @@
 /* eslint-disable react-hooks/static-components */
 import { useState } from "react";
-import { EVENT_TYPES } from "../constants/config.js";
+import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { calcEventImpact, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
-import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber } from "../lib/fiscalWeek.js";
+import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit } from "../lib/fiscalWeek.js";
 import { Card, iS, lS, SmBtn, PanelHero, SectionHeader } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 
@@ -57,7 +57,8 @@ export function LogPanel({
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const f0 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fiscalWeekLabel = formatFiscalWeekLabel(fiscalWeekInfo);
+  const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
+  const fiscalWeekLabel = formatPayPeriodLabel(fiscalWeekInfo, checksPerYear);
   const now = new Date();
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
@@ -340,16 +341,19 @@ export function LogPanel({
           const endFmt   = w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
           return (
             <option key={endStr} value={endStr}>
-              Wk {getFiscalWeekNumber(w.idx) ?? "—"} · {startFmt} – {endFmt} ({formatRotationDisplay(w, { isAdmin })})
+              {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(w.idx), checksPerYear) ?? "—"} · {startFmt} – {endFmt} ({formatRotationDisplay(w, { isAdmin })})
             </option>
           );
         })}
       </select>
       {vals.weekEnd && (() => {
         const inlineWeekNumber = getFiscalWeekNumber(Number(vals.weekIdx));
-        const inlineWeekLabel = inlineWeekNumber != null
-          ? `week ${inlineWeekNumber}, ${Math.max(FISCAL_WEEKS_PER_YEAR - inlineWeekNumber, 0)} left`
-          : "week —";
+        const inlineCheckNumber = weekNumToPaycheckNum(inlineWeekNumber, checksPerYear);
+        const inlineChecksLeft = inlineWeekNumber != null ? weeksToChecksRemaining(Math.max(FISCAL_WEEKS_PER_YEAR - inlineWeekNumber, 0), checksPerYear) : null;
+        const pUnit = payPeriodUnit(checksPerYear, 'lower');
+        const inlineWeekLabel = inlineCheckNumber != null
+          ? `${pUnit} ${inlineCheckNumber}, ${inlineChecksLeft} left`
+          : `${pUnit} —`;
         return (
           <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
             {formatRotationDisplay(vals.weekRotation, { isAdmin })} · {inlineWeekLabel}
@@ -702,7 +706,7 @@ export function LogPanel({
                 imp.k401kMatchGained > 0 && ["401k Match Gained", `+${f(imp.k401kMatchGained)}`],
                 imp.hoursLostForPTO > 0 && ["PTO Hours Lost", `${imp.hoursLostForPTO}h`],
                 imp.bucketHoursDeducted > 0 && ["Bucket Deducted", `${imp.bucketHoursDeducted}h`],
-                entry.weekIdx != null && ["Fiscal Week", `Wk ${entry.weekIdx}`],
+                entry.weekIdx != null && ["Fiscal Week", `${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(getFiscalWeekNumber(Number(entry.weekIdx)), checksPerYear)}`],
                 isFuture !== null && ["Timing", isFuture ? "Future" : "Past"],
               ].filter(Boolean);
               return (
@@ -870,7 +874,11 @@ export function LogPanel({
         </div>
       ) : (
         <div style={{ fontSize: "11px", color: "#7a8bbf" }}>
-          <strong style={{ color: "var(--color-text-primary)" }}>{weeksUntil401k} week{weeksUntil401k !== 1 ? "s" : ""}</strong> until enrollment ({fmtDate(raw401StartIso)})
+          {(() => {
+            const periodsUntil = weeksToChecksRemaining(weeksUntil401k, checksPerYear);
+            const pUnit = payPeriodUnit(checksPerYear, 'lower');
+            return <><strong style={{ color: "var(--color-text-primary)" }}>{periodsUntil} {pUnit}{periodsUntil !== 1 ? "s" : ""}</strong> until enrollment ({fmtDate(raw401StartIso)})</>;
+          })()}
           <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
             Projected totals below assume contributions begin on this date.
           </div>

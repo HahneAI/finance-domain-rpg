@@ -555,9 +555,13 @@ export function HomePanel({
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
             <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
               {formatRotationDisplay(currentWeek, { isAdmin })}
-              {checksPerYear !== 52 && !(currentWeek?.isPayWeek ?? true) && nextPayWeek
-                ? ` · next paycheck ${fmtLoanDate(toLocalIso(nextPayWeek.payPeriodEndDate), fiscalYearEnd)}${daysUntilPaycheck != null && daysUntilPaycheck > 0 ? ` (${daysUntilPaycheck}d)` : ""}`
-                : ` · ends ${fmtFullDate(safeDate(currentWeek.payPeriodEndDate))}`
+              {nextPayWeek && daysUntilPaycheck === 0
+                ? ` · pay day · ${fmtLoanDate(toLocalIso(nextPayWeek.payPeriodEndDate), fiscalYearEnd)}`
+                : nextPayWeek && currentWeek?.isPayWeek
+                  ? ` · paycheck in ${daysUntilPaycheck}d · ${fmtLoanDate(toLocalIso(nextPayWeek.payPeriodEndDate), fiscalYearEnd)}`
+                  : nextPayWeek
+                    ? ` · next paycheck ${fmtLoanDate(toLocalIso(nextPayWeek.payPeriodEndDate), fiscalYearEnd)} (${daysUntilPaycheck}d)`
+                    : ` · ends ${fmtFullDate(safeDate(currentWeek.payPeriodEndDate))}`
               }
             </div>
           </div>

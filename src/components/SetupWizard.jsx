@@ -601,6 +601,16 @@ function dateToWeekIdx(dateStr) {
 function Step2({ formData, onChange, attempted }) {
   const isEmployerDHL = formData.employerPreset === "DHL";
   const isBaseUser = !isEmployerDHL;
+  const isBiweekly = isBaseUser && (formData.userPaySchedule === "biweekly" || formData.userPaySchedule === "salary");
+  const biweeklyParityVisible = isBiweekly && Number.isInteger(formData.payPeriodEndDay);
+  const todayWeekIdx = (() => {
+    const t = new Date();
+    const iso = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    return dateToWeekIdx(iso);
+  })();
+  const payDayName = Number.isInteger(formData.payPeriodEndDay) ? DAY_LABELS[formData.payPeriodEndDay] : "";
+  const parityThisWeek = todayWeekIdx % 2;
+  const parityNextWeek = (todayWeekIdx + 1) % 2;
 
   function handleDateChange(dateStr) {
     if (!dateStr) return;
@@ -719,7 +729,7 @@ function Step2({ formData, onChange, attempted }) {
               <Pill
                 key={i} label={d}
                 active={formData.payPeriodEndDay === i}
-                onClick={() => onChange({ payPeriodEndDay: i })}
+                onClick={() => onChange({ payPeriodEndDay: i, biweeklyPayWeekParity: null })}
               />
             ))}
           </div>
@@ -728,6 +738,27 @@ function Step2({ formData, onChange, attempted }) {
             lineHeight: "1.5",
           }}>
             Weekly confirmation prompt fires on this day.
+          </div>
+        </Field>
+      )}
+
+      {/* ── Biweekly pay week alignment ── */}
+      {biweeklyParityVisible && (
+        <Field label="Pay Week Timing" error={attempted && formData.biweeklyPayWeekParity == null ? "Select your pay week" : null}>
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "8px", lineHeight: "1.5" }}>
+            Is this {payDayName} one of your paycheck {payDayName}s?
+          </div>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+            <Pill
+              label={`Yes, this ${payDayName}`}
+              active={formData.biweeklyPayWeekParity === parityThisWeek}
+              onClick={() => onChange({ biweeklyPayWeekParity: parityThisWeek })}
+            />
+            <Pill
+              label={`No, next ${payDayName}`}
+              active={formData.biweeklyPayWeekParity === parityNextWeek}
+              onClick={() => onChange({ biweeklyPayWeekParity: parityNextWeek })}
+            />
           </div>
         </Field>
       )}
@@ -1774,7 +1805,9 @@ const STEP_DEFS = [
       if (d.employerPreset === "DHL") return true;
       if (!((d.maxWeeklyHours ?? 0) > 0) || (d.maxWeeklyHours ?? 0) > 168) return false;
       if (!d.hoursUnderstood) return false;
-      return Number.isInteger(d.payPeriodEndDay) && d.payPeriodEndDay >= 0 && d.payPeriodEndDay <= 6;
+      if (!Number.isInteger(d.payPeriodEndDay) || d.payPeriodEndDay < 0 || d.payPeriodEndDay > 6) return false;
+      if ((d.userPaySchedule === "biweekly" || d.userPaySchedule === "salary") && d.biweeklyPayWeekParity == null) return false;
+      return true;
     },
     component: Step2,
   },

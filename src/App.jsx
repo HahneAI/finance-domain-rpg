@@ -589,56 +589,21 @@ export default function App() {
   const [confirmDismissed, setConfirmDismissed] = useState(false);
 
   // ── Week confirmation modal trigger ──
-  // Surfaces the most-recent UNCONFIRMED week whose pay period has closed.
-  // Uses isPayPeriodPast() rather than weekEnd so the trigger respects the user's
-  // configured payPeriodEndDay (base: 12:01 AM day after; DHL: Mon 6:01 AM).
+  // Surfaces the most-recent UNCONFIRMED pay week whose pay period has closed.
+  // isPayWeek is set in buildYear: all active weeks for weekly, every-other for
+  // biweekly/salary (driven by biweeklyPayWeekParity), last-of-month for monthly.
   const confirmTriggerWeek = useMemo(() => {
-    const userPaySchedule = config.userPaySchedule ?? "weekly";
-    const firstActiveIdx = config.firstActiveIdx ?? 0;
-    const isBiweekly = userPaySchedule === "biweekly" || userPaySchedule === "salary";
-    const isMonthlyPay = userPaySchedule === "monthly";
     const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
-    const unconfirmedWeeks = pastWeeks.filter(w => !weekConfirmations[w.idx]);
-    if (!unconfirmedWeeks.length) return null;
-    if (isBiweekly) {
-      const paycheckWeeks = unconfirmedWeeks.filter(w => ((w.idx - firstActiveIdx) % 2 + 2) % 2 === 0);
-      return paycheckWeeks.length ? paycheckWeeks[paycheckWeeks.length - 1] : null;
-    }
-    if (isMonthlyPay) {
-      const paycheckWeeks = unconfirmedWeeks.filter(w => {
-        const m = w.weekEnd.getMonth(), y = w.weekEnd.getFullYear();
-        return !allWeeks.some(w2 => w2.active && w2.idx > w.idx && w2.weekEnd.getMonth() === m && w2.weekEnd.getFullYear() === y);
-      });
-      return paycheckWeeks.length ? paycheckWeeks[paycheckWeeks.length - 1] : null;
-    }
-    return unconfirmedWeeks[unconfirmedWeeks.length - 1]; // most recent unconfirmed
-  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast, config.userPaySchedule, config.firstActiveIdx]);
+    const unconfirmedPayWeeks = pastWeeks.filter(w => w.isPayWeek && !weekConfirmations[w.idx]);
+    return unconfirmedPayWeeks.length ? unconfirmedPayWeeks[unconfirmedPayWeeks.length - 1] : null;
+  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast]);
 
-  // Total count of all past active weeks lacking a confirmation record.
-  // Used for the persistent badge in sidebar and mobile header.
-  // Intentionally looks at ALL past weeks (not just the most recent) so skipped
-  // weeks accumulate and the badge number keeps climbing until addressed.
+  // Total count of all past pay weeks lacking a confirmation record.
+  // Badge accumulates across all skipped pay weeks until they are addressed.
   const unconfirmedCount = useMemo(() => {
-    const userPaySchedule = config.userPaySchedule ?? "weekly";
-    const firstActiveIdx = config.firstActiveIdx ?? 0;
-    const isBiweekly = userPaySchedule === "biweekly" || userPaySchedule === "salary";
-    const isMonthlyPay = userPaySchedule === "monthly";
     const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
-    if (isBiweekly) {
-      return pastWeeks.filter(w => {
-        const isPaycheckWeek = ((w.idx - firstActiveIdx) % 2 + 2) % 2 === 0;
-        return isPaycheckWeek && !weekConfirmations[w.idx];
-      }).length;
-    }
-    if (isMonthlyPay) {
-      return pastWeeks.filter(w => {
-        const m = w.weekEnd.getMonth(), y = w.weekEnd.getFullYear();
-        const isPaycheckWeek = !allWeeks.some(w2 => w2.active && w2.idx > w.idx && w2.weekEnd.getMonth() === m && w2.weekEnd.getFullYear() === y);
-        return isPaycheckWeek && !weekConfirmations[w.idx];
-      }).length;
-    }
-    return pastWeeks.filter(w => !weekConfirmations[w.idx]).length;
-  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast, config.userPaySchedule, config.firstActiveIdx]);
+    return pastWeeks.filter(w => w.isPayWeek && !weekConfirmations[w.idx]).length;
+  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);

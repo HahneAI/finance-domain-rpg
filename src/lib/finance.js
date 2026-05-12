@@ -1140,9 +1140,10 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
     const weekendHoursRemaining = Math.max(normalWeekendHours - wkndHoursLostFromDays - wkndHoursLostFallback, 0);
     const actualWkndH = Math.min(actualHours, weekendHoursRemaining);
     const actualNonWkndH = Math.max(actualHours - actualWkndH, 0);
-    const actualRegWkndH = Math.max(0, Math.min(actualWkndH, cfg.otThreshold - actualNonWkndH));
+    const effectiveOtThreshold = cfg.otThreshold ?? Infinity;
+    const actualRegWkndH = Math.max(0, Math.min(actualWkndH, effectiveOtThreshold - actualNonWkndH));
     const actualOTWkndH  = actualWkndH - actualRegWkndH;
-    const actualReg = Math.min(actualHours, cfg.otThreshold), actualOT = Math.max(actualHours - cfg.otThreshold, 0);
+    const actualReg = Math.min(actualHours, effectiveOtThreshold), actualOT = Math.max(actualHours - effectiveOtThreshold, 0);
     const actualGross = actualReg      * (cfg.baseRate + nightDiffPerHour)
                       + actualRegWkndH * cfg.diffRate
                       + actualOT       * (cfg.baseRate + nightDiffPerHour) * cfg.otMultiplier
@@ -1150,13 +1151,15 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
     grossLost = Math.max(baseGross - actualGross, 0); hoursLostForPTO = (event.shiftsLost || 0) * cfg.shiftHours;
   } else if (event.type === "pto") {
     const ptoH = event.ptoHours || 0, normalH = normalShifts * cfg.shiftHours;
-    const normalOT = Math.max(normalH - cfg.otThreshold, 0), actualOT = Math.max(normalH - ptoH - cfg.otThreshold, 0);
+    const _ot = cfg.otThreshold ?? Infinity;
+    const normalOT = Math.max(normalH - _ot, 0), actualOT = Math.max(normalH - ptoH - _ot, 0);
     // PTO pays at baseRate; night diff applies to hours worked only — both deltas included
     grossLost = ptoH * nightDiffPerHour + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
   } else if (event.type === "pto_unapproved") {
     // PTO covers paycheck but absence was unapproved: same gross impact as pto + bucket deducted below
     const ptoH = event.hoursLost || 0, normalH = normalShifts * cfg.shiftHours;
-    const normalOT = Math.max(normalH - cfg.otThreshold, 0), actualOT = Math.max(normalH - ptoH - cfg.otThreshold, 0);
+    const _ot = cfg.otThreshold ?? Infinity;
+    const normalOT = Math.max(normalH - _ot, 0), actualOT = Math.max(normalH - ptoH - _ot, 0);
     grossLost = ptoH * nightDiffPerHour + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
   } else if (event.type === "missed_unapproved") {
     // Hours missed × (base rate + night diff); bucket hit tracked separately

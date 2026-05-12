@@ -502,54 +502,28 @@ export function HomePanel({
           No active goals yet. Add your first goal below to unlock timeline forecasting.
         </div>
       )}
-      <div style={{ marginBottom: "28px", textAlign: "center", padding: "6px 0" }}>
-        <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "12px" }}>
+      <div id="home-goals-section" style={{ marginBottom: "28px", textAlign: "center", padding: "6px 0" }}>
+        <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "14px" }}>
           Authority Finance
         </div>
         <div style={{
-          fontSize: "32px",
+          fontSize: "52px",
           fontWeight: 800,
           fontFamily: "var(--font-display)",
           color: "var(--color-accent-primary)",
-          letterSpacing: "-1px",
+          letterSpacing: "-1.8px",
           lineHeight: 1,
-          marginBottom: "14px",
+          marginBottom: "16px",
         }}>
-          Financial Health
+          Goals
         </div>
-        <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto 14px", borderRadius: "1px", opacity: 0.45 }} />
+        <div style={{ width: "40px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto 16px", borderRadius: "1px", opacity: 0.55 }} />
         <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
-          {subtitle}
+          {activeGoals.length > 0 ? `${activeGoals.length} active · track your targets` : "Start your first goal"}
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-        {tiles.map((tile, i) => (
-          <MetricCard
-            key={tile.title}
-            label={tile.title}
-            val={tile.value}
-            rawVal={tile.rawVal ?? undefined}
-            sub={tile.sub}
-            status={tile.status}
-            span={tile.span}
-            size="30px"
-            centered
-            onClick={tile.onClick}
-            entranceIndex={i}
-            insight={tile.insight}
-          />
-        ))}
-      </div>
-
-      <div id="home-goals-section" style={{ marginTop: "28px" }}>
-        <div style={{ marginBottom: "24px", textAlign: "center" }}>
-          <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, var(--color-accent-primary), transparent)", marginBottom: "20px", opacity: 0.35 }} />
-          <div style={{ fontSize: "24px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.5px", lineHeight: 1, marginBottom: "6px" }}>Goals</div>
-          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
-            {activeGoals.length > 0 ? `${activeGoals.length} active · track your targets` : "Start your first goal"}
-          </div>
-        </div>
+      <div>
         {currentWeek && (
           <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
@@ -1115,32 +1089,70 @@ export function HomePanel({
           </div>
         )}
 
-        <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />
-          <div style={{ marginBottom: "16px" }}>
-            <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "4px" }}>Fiscal Year 2026</div>
-            <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px" }}>Year-End Outlook</div>
+      </div>
+
+      <div style={{ marginTop: "28px", marginBottom: "28px", textAlign: "center", padding: "6px 0" }}>
+        <div style={{
+          fontSize: "32px",
+          fontWeight: 800,
+          fontFamily: "var(--font-display)",
+          color: "var(--color-accent-primary)",
+          letterSpacing: "-1px",
+          lineHeight: 1,
+          marginBottom: "14px",
+        }}>
+          Financial Health
+        </div>
+        <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto 14px", borderRadius: "1px", opacity: 0.45 }} />
+        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
+          {subtitle}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        {tiles.map((tile, i) => (
+          <MetricCard
+            key={tile.title}
+            label={tile.title}
+            val={tile.value}
+            rawVal={tile.rawVal ?? undefined}
+            sub={tile.sub}
+            status={tile.status}
+            span={tile.span}
+            size="30px"
+            centered
+            onClick={tile.onClick}
+            entranceIndex={i}
+            insight={tile.insight}
+          />
+        ))}
+      </div>
+
+      <div style={{ marginTop: "28px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />
+        <div style={{ marginBottom: "16px" }}>
+          <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "4px" }}>Fiscal Year 2026</div>
+          <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px" }}>Year-End Outlook</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{payPeriodUnit(checksPerYear, 'fullPlural')} remaining</div>
+            <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "var(--font-display)" }}>{weeksToChecksRemaining(weeksLeft, checksPerYear)}</div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{payPeriodUnit(checksPerYear, 'fullPlural')} remaining</div>
-              <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "var(--font-display)" }}>{weeksToChecksRemaining(weeksLeft, checksPerYear)}</div>
-            </div>
-            <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div>
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-deduction)" }}>-{fmt$(fundedGoalSpend)}</div>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Adj. projected savings</div>
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-green)" }}>{fmt$(annualSavings)}</div>
-            </div>
-            <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
-              <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - totalActiveGoals >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
-                {fmt$(annualSavings - totalActiveGoals)}
-              </div>
+          <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Funded goals (absorbed)</div>
+            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-deduction)" }}>-{fmt$(fundedGoalSpend)}</div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Adj. projected savings</div>
+            <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-green)" }}>{fmt$(annualSavings)}</div>
+          </div>
+          <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
+            <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - totalActiveGoals >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
+              {fmt$(annualSavings - totalActiveGoals)}
             </div>
           </div>
         </div>

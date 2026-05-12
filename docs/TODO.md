@@ -9,58 +9,58 @@ direct enablers for a shippable base user user experience.*
 
 ### [CC] Implementation Work
 
-- [ ] **`maxWeeklyHours` engine redesign** — Replace the broken `standardWeeklyHours` /
+- [x] **`maxWeeklyHours` engine redesign** — Replace the broken `standardWeeklyHours` /
   `longWeeklyHours` short-long pair with a single ceiling field for base users.
-  - [ ] Add `maxWeeklyHours` (required) to Step 2 UI for base user path
-  - [ ] Replace `cfg.standardWeeklyHours` / `cfg.longWeeklyHours` in `buildYear` base user branch (finance.js lines 507, 1068) with `cfg.maxWeeklyHours`
-  - [ ] Update `estimateWeeklyGross` base user path (line 1311) to use `maxWeeklyHours * baseRate`
-  - [ ] Remove `scheduleIsVariable` from base user engine branch; retire the two-paystub path in Step 4 for base user (one paystub, one rate set)
-  - [ ] Add `maxWeeklyHours: null` to `DEFAULT_CONFIG`
-  - [ ] WeekConfirmModal base user: open 7-day selector (no preset rotation); compare checked days × `shiftHours` against `maxWeeklyHours` ceiling; adjust projection down if under ceiling
+  - [x] Add `maxWeeklyHours` (required) to Step 2 UI for base user path
+  - [x] Replace `cfg.standardWeeklyHours` / `cfg.longWeeklyHours` in `buildYear` base user branch (finance.js lines 507, 1068) with `cfg.maxWeeklyHours`
+  - [x] Update `estimateWeeklyGross` base user path (line 1311) to use `maxWeeklyHours * baseRate`
+  - [x] Remove `scheduleIsVariable` from base user engine branch; retire the two-paystub path in Step 4 for base user (one paystub, one rate set)
+  - [x] Add `maxWeeklyHours: null` to `DEFAULT_CONFIG`
+  - [x] WeekConfirmModal base user: open 7-day selector (no preset rotation); compare checked days × `shiftHours` against `maxWeeklyHours` ceiling; adjust projection down if under ceiling
 
-- [ ] **Step 2 start-date clamp** — `firstActiveIdx` not bounded to fiscal year produces zero
+- [x] **Step 2 start-date clamp** — `firstActiveIdx` not bounded to fiscal year produces zero
   active weeks and `weeklyIncome = −$50` on fresh base user accounts.
-  - [ ] Clamp `firstActiveIdx` to `max(0, min(dateToWeekIdx(date), FISCAL_WEEKS_PER_YEAR - 1))` in Step 2 validation or on wizard completion
-  - [ ] Add an error state / helper text when the entered date falls outside the current fiscal year
+  - [x] Clamp `firstActiveIdx` to `max(0, min(dateToWeekIdx(date), FISCAL_WEEKS_PER_YEAR - 1))` in Step 2 validation or on wizard completion
+  - [x] Add an error state / helper text when the entered date falls outside the current fiscal year
 
-- [ ] **PTO for base user** — No PTO question exists anywhere in the wizard for base users.
-  - [ ] Add PTO subsection to Step 3 (Deductions): Y/N gate → accrual method (per hour / per pay period / lump sum) → accrual rate → current balance → cap
-  - [ ] Migrate `PTO_RATE = 19.65` from module-level constant in `config.js` to a per-user config field (`ptoRate`); update all call sites in `finance.js` and `LogPanel`
-  - [ ] Gate BenefitsPanel PTO section visibility on `config.ptoEnabled` (base user) instead of `isEmployerDHL`
+- [x] **PTO for base user** — No PTO question exists anywhere in the wizard for base users.
+  - [x] Add PTO subsection to Step 3 (Deductions): Y/N gate → accrual method (per hour / per pay period / lump sum) → accrual rate → current balance → cap
+  - [x] Migrate `PTO_RATE = 19.65` from module-level constant in `config.js` to a per-user config field (`ptoRate`); update all call sites in `finance.js` and `LogPanel`
+  - [x] Gate BenefitsPanel PTO section visibility on `config.ptoEnabled` (base user) instead of `isEmployerDHL`
 
-- [ ] **Attendance tracker build-out** — Base user users who answer "Yes" to attendance tracking
+- [x] **Attendance tracker build-out** — Base user users who answer "Yes" to attendance tracking
   have no config fields; `computeBucketModel` is already gated to DHL-only.
-  - [ ] In Step 3, expand below "Yes" pill: `attendanceWarnThreshold`, `attendanceTerminateThreshold`, `attendanceCurrentBalance`, optional `attendanceIncrement` (default 1)
-  - [ ] Wire into a simple threshold-status display (current balance vs warn/terminate thresholds) in the relevant panel — no payout math, no tier bonuses
-  - [ ] Unit label ("points", "hours", "occurrences") is cosmetic and user-supplied
+  - [x] In Step 3, expand below "Yes" pill: `attendanceWarnThreshold`, `attendanceTerminateThreshold`, `attendanceCurrentBalance`, optional `attendanceIncrement` (default 1)
+  - [x] Wire into a simple threshold-status display (current balance vs warn/terminate thresholds) in the relevant panel — no payout math, no tier bonuses
+  - [x] Unit label ("points", "hours", "occurrences") is cosmetic and user-supplied
 
-- [ ] **Night differential for base user** — `nightDiffRate` is gated behind `isDHL && dhlNightShift`
+- [x] **Night differential for base user** — `nightDiffRate` is gated behind `isDHL && dhlNightShift`
   in `finance.js`; no wizard field exists for base user workers with a night differential.
-  - [ ] Add night diff field to Step 1 for base user (conditional on a "Do you receive a night differential?" toggle)
-  - [ ] Remove `isEmployerDHL` gate from night differential in `finance.js` engine; key off `cfg.nightDiffEnabled` or a non-null `cfg.nightDiffRate` instead
+  - [x] Add night diff field to Step 1 for base user (conditional on a "Do you receive a night differential?" toggle)
+  - [x] Remove `isEmployerDHL` gate from night differential in `finance.js` engine; key off `cfg.nightDiffEnabled` or a non-null `cfg.nightDiffRate` instead
 
-- [ ] **PROGRESSIVE state estimate accuracy** — `handleEstimate()` falls back to a hardcoded 5%
+- [x] **PROGRESSIVE state estimate accuracy** — `handleEstimate()` falls back to a hardcoded 5%
   for any state with progressive brackets (CA, OR, NY, MN, NJ, etc.).
-  - [ ] Add a bracket midpoint lookup per state to `stateTaxTable.js` (a `midpointRate` field on PROGRESSIVE entries)
-  - [ ] Use `stateConfig.midpointRate ?? 0.05` in `handleEstimate()` so high-rate states start closer to reality
+  - [x] Add a bracket midpoint lookup per state to `stateTaxTable.js` (a `midpointRate` field on PROGRESSIVE entries)
+  - [x] Use `stateConfig.midpointRate ?? 0.05` in `handleEstimate()` so high-rate states start closer to reality
 
-- [ ] **Filing status / standard deduction** — `fedStdDeduction: 15000` is hardcoded; no MFJ
+- [x] **Filing status / standard deduction** — `fedStdDeduction: 15000` is hardcoded; no MFJ
   path exists. MFJ users' tax picture is understated by ~$15k deduction.
-  - [ ] Add filing status question (Single / MFJ / HOH) to Step 4 or Step 5 onboarding
-  - [ ] Derive `fedStdDeduction` from filing status: Single → $15,000 · MFJ → $30,000 · HOH → $22,500 (2025 values)
-  - [ ] Update Tax Picture summary in Step 4 and Sharpen Rates panel to reflect the correct deduction
+  - [x] Add filing status question (Single / MFJ / HOH) to Step 4 or Step 5 onboarding
+  - [x] Derive `fedStdDeduction` from filing status: Single → $15,000 · MFJ → $30,000 · HOH → $22,500 (2025 values)
+  - [x] Update Tax Picture summary in Step 4 and Sharpen Rates panel to reflect the correct deduction
 
 ---
 
 ### [CODEX] Rename
 
-- [ ] **`otherDeductions[].weeklyAmount` → `perCheckAmount`** — field stores a per-paycheck
+- [x] **`otherDeductions[].weeklyAmount` → `perCheckAmount`** — field stores a per-paycheck
   value but is misnamed; math is correct, naming misleads future developers.
-  - [ ] Rename in `DEFAULT_CONFIG` comment (`config.js` line 65)
-  - [ ] Rename in `SetupWizard.jsx` (lines 801, 876, 877, 1380)
-  - [ ] Rename in `finance.js` (line 174)
-  - [ ] Rename in `finance.test.js` (lines 548, 558, 569, 633)
-  - [ ] Add backward-compat shim in `db.js`: read `row.weeklyAmount ?? row.perCheckAmount` so existing saved data survives the migration
+  - [x] Rename in `DEFAULT_CONFIG` comment (`config.js` line 65)
+  - [x] Rename in `SetupWizard.jsx` (lines 801, 876, 877, 1380)
+  - [x] Rename in `finance.js` (line 174)
+  - [x] Rename in `finance.test.js` (lines 548, 558, 569, 633)
+  - [x] Add backward-compat shim in `db.js`: read `row.weeklyAmount ?? row.perCheckAmount` so existing saved data survives the migration
 
 ---
 

@@ -142,6 +142,9 @@ export const DEFAULT_CONFIG = {
   payPeriodEndDay: 0,          // day-of-week pay period closes: 0=Sun, 1=Mon, ..., 6=Sat
   userPaySchedule: "weekly",   // how often the user receives a paycheck: "weekly" | "biweekly" | "monthly" | "salary"
   annualSalary: null,          // salary workers only: gross annual pay; baseRate is auto-derived (annualSalary / 2080)
+  // 0 or 1: idx%2 value of a known pay week for biweekly/salary users.
+  // null = auto-derive from firstActiveIdx (treats first active week as a pay week).
+  biweeklyPayWeekParity: null,
 };
 
 export const FISCAL_YEAR_START = "2026-01-05"; // week 0 end date — first Monday of the fiscal year

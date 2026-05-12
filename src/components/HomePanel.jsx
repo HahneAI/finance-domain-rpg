@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, fmtFullDate } from "../lib/finance.js";
+import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, fmtFullDate, fmtLoanDate, toLocalIso } from "../lib/finance.js";
 import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit } from "../lib/fiscalWeek.js";
+import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { MetricCard, SmBtn, iS, lS, ScrollSnapRow } from "./ui.jsx";
@@ -55,6 +55,12 @@ export function HomePanel({
   // what lands in their bank account each paycheck cycle.
   const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
   const perCheckFactor = 52 / checksPerYear;
+  const fiscalYearEnd = futureWeeks?.length ? toLocalIso(futureWeeks[futureWeeks.length - 1].weekEnd) : null;
+  const todayIso = today ?? toLocalIso(new Date());
+  const nextPayWeek = getNextPayWeek(futureWeeks, todayIso, checksPerYear);
+  const daysUntilPaycheck = nextPayWeek
+    ? Math.round((nextPayWeek.payPeriodEndDate.getTime() - new Date(todayIso + "T00:00:00").getTime()) / DAY_MS)
+    : null;
 
   const avgWeeklySpend = remainingSpend?.avgWeeklySpend ?? 0;
   const monthlyExpenses = avgWeeklySpend * (FISCAL_WEEKS_PER_YEAR / 12);
@@ -547,7 +553,13 @@ export function HomePanel({
         {currentWeek && (
           <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
-            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })} · ends {fmtFullDate(safeDate(currentWeek.weekEnd))}</div>
+            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
+              {formatRotationDisplay(currentWeek, { isAdmin })}
+              {checksPerYear !== 52 && !(currentWeek?.isPayWeek ?? true) && nextPayWeek
+                ? ` · next paycheck ${fmtLoanDate(toLocalIso(nextPayWeek.payPeriodEndDate), fiscalYearEnd)}${daysUntilPaycheck != null && daysUntilPaycheck > 0 ? ` (${daysUntilPaycheck}d)` : ""}`
+                : ` · ends ${fmtFullDate(safeDate(currentWeek.payPeriodEndDate))}`
+              }
+            </div>
           </div>
         )}
 

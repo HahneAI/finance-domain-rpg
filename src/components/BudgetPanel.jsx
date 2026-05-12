@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
-import { formatFiscalWeekLabel, formatPayPeriodLabel } from "../lib/fiscalWeek.js";
+import { formatFiscalWeekLabel, formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
@@ -42,6 +42,10 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
 
   const currentPhaseIdx = useMemo(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0, [currentWeek]);
   const fiscalWeekLabel = formatPayPeriodLabel(fiscalWeekInfo, checksPerYear);
+  const nextPayWeek = useMemo(() => getNextPayWeek(futureWeeks, TODAY_ISO, checksPerYear), [futureWeeks, TODAY_ISO, checksPerYear]);
+  const daysUntilPaycheck = nextPayWeek
+    ? Math.round((nextPayWeek.payPeriodEndDate.getTime() - new Date(TODAY_ISO + "T00:00:00").getTime()) / (24 * 60 * 60 * 1000))
+    : null;
   const [ap, setAp] = useState(() => currentWeek ? getPhaseIndex(currentWeek.weekEnd) : 0);
   const [view, setView] = useState("overview");
   // Expense CRUD state
@@ -1734,7 +1738,13 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       return <div>
         {currentWeek && <div style={{ background: "rgba(0,200,150,0.09)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-green)" }}>{fiscalWeekLabel}</div>
-          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })} · ends {fmtFullDate(currentWeek.weekEnd)}</div>
+          <div style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>
+            {formatRotationDisplay(currentWeek, { isAdmin })}
+            {checksPerYear !== 52 && !(currentWeek?.isPayWeek ?? true) && nextPayWeek
+              ? ` · next paycheck ${fmtLoanDate(toLocalIso(nextPayWeek.payPeriodEndDate), fiscalYearEnd)}${daysUntilPaycheck != null && daysUntilPaycheck > 0 ? ` (${daysUntilPaycheck}d)` : ""}`
+              : ` · ends ${fmtFullDate(currentWeek.payPeriodEndDate)}`
+            }
+          </div>
         </div>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <Card label="Total Loan Balance" val={f(totalOwed)} rawVal={totalOwed} color="var(--color-gold)" />

@@ -388,6 +388,12 @@ export function buildYear(cfg) {
   const weeks = [], k401Start = cfg.k401StartDate ? new Date(cfg.k401StartDate) : null, taxedSet = new Set(cfg.taxedWeeks);
   const isEmployerDHL = cfg.employerPreset === "DHL";
   const benefitsStart = parseIsoDate(cfg.benefitsStartDate);
+  // Biweekly/salary: parity determines which idx%2 value marks a pay week.
+  // Falls back to firstActiveIdx%2 when the user hasn't answered the wizard question.
+  const isBiweeklyOrSalary = cfg.userPaySchedule === "biweekly" || cfg.userPaySchedule === "salary";
+  const biweeklyParity = isBiweeklyOrSalary
+    ? (cfg.biweeklyPayWeekParity ?? ((cfg.firstActiveIdx ?? 0) % 2))
+    : null;
   // Derive loop bounds from FISCAL_YEAR_START so the range stays in sync with the
   // constant rather than being duplicated as a hardcoded literal.
   const [fyY, fyM, fyD] = FISCAL_YEAR_START.split('-').map(Number);
@@ -489,8 +495,9 @@ export function buildYear(cfg) {
     const isTaxed = active && taxedSet.has(idx);
     if (!adminRotationTag) adminRotationTag = rotation;
     const payPeriodEndDate = getPayPeriodEndDate(weekStart, cfg.payPeriodEndDay ?? 0);
+    const isPayWeek = active && (!isBiweeklyOrSalary || (idx % 2 === biweeklyParity));
     weeks.push({
-      idx, weekEnd, weekStart, payPeriodEndDate, rotation, isHighWeek, adminRotationTag,
+      idx, weekEnd, weekStart, payPeriodEndDate, isPayWeek, rotation, isHighWeek, adminRotationTag,
       workedDayNames: worked.map(w => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][w.getDay()]),
       totalHours, regularHours, overtimeHours, weekendHours,
       grossPay: active ? grossPay : 0,
@@ -511,6 +518,14 @@ export function buildYear(cfg) {
       requiredOtShifts,
     });
     d.setDate(d.getDate() + 7); idx++;
+  }
+  // Monthly: the pay week is the last active week whose weekEnd falls in each calendar month.
+  if (cfg.userPaySchedule === "monthly") {
+    for (let i = 0; i < weeks.length; i++) {
+      if (!weeks[i].active) { weeks[i].isPayWeek = false; continue; }
+      const m = weeks[i].weekEnd.getMonth(), y = weeks[i].weekEnd.getFullYear();
+      weeks[i].isPayWeek = !weeks.some(w => w.active && w.idx > weeks[i].idx && w.weekEnd.getMonth() === m && w.weekEnd.getFullYear() === y);
+    }
   }
   return weeks;
 }

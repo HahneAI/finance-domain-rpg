@@ -597,7 +597,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     const amount = parseFloat(newExp.amount) || 0;
     const cycle = newExp.cycle ?? "every30days";
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    const expEffectiveFrom = `${TODAY_ISO.slice(0, 7)}-01`;
+    const expEffectiveFrom = QUARTER_FIRST_MONTHS[ap] + "-01";
     setExpenses(prev => [...prev, {
       id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
@@ -662,13 +662,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     const cycle = newExp.cycle ?? "every30days";
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
     const weekly = [0, 1, 2, 3].map(q => q < ap ? 0 : perPaycheck);
+    const qStartIso = QUARTER_FIRST_MONTHS[ap] + "-01";
     setExpenses(prev => [...prev, {
       id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
       label: newExp.label,
       note: [newExp.note, newExp.note, newExp.note, newExp.note],
-      billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO },
-      history: [{ effectiveFrom: TODAY_ISO, weekly }],
+      billingMeta: { amount, cycle, effectiveFrom: qStartIso },
+      history: [{ effectiveFrom: qStartIso, weekly }],
     }]);
     _closeAddForm();
   };
@@ -766,6 +767,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const saveAllQuarters = (expId) => {
     const { cycle, amount } = _editParsed();
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    const qStartIso = QUARTER_FIRST_MONTHS[ap] + "-01";
     setExpenses(prev => prev.map(e => {
       if (e.id !== expId) return e;
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
@@ -777,8 +779,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       // Trim future-dated entries so this override is authoritative for all future weeks.
       const pastEntries = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
       const newHistory = daysDiff <= 3
-        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
-        : [...pastEntries, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
+        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: qStartIso, weekly: newWeekly } : en)
+        : [...pastEntries, { effectiveFrom: qStartIso, weekly: newWeekly }];
       return { ...e, history: newHistory, billingMeta };
     }));
     setEditId(null);
@@ -788,6 +790,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const saveAllQuartersFull = (expId) => {
     const { cycle, amount } = _editParsed();
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
+    const qStartIso = QUARTER_FIRST_MONTHS[ap] + "-01";
     setExpenses(prev => prev.map(e => {
       if (e.id !== expId) return e;
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
@@ -797,8 +800,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
       const pastEntries = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
       const newHistory = daysDiff <= 3
-        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: TODAY_ISO, weekly: newWeekly } : en)
-        : [...pastEntries, { effectiveFrom: TODAY_ISO, weekly: newWeekly }];
+        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: qStartIso, weekly: newWeekly } : en)
+        : [...pastEntries, { effectiveFrom: qStartIso, weekly: newWeekly }];
       return { ...e, history: newHistory, billingMeta };
     }));
     setEditId(null);

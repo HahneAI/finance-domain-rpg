@@ -1,0 +1,183 @@
+import { useEffect } from "react";
+
+/**
+ * LifeEventMenu — modal launcher for the Life Events flow (TODO §15.A).
+ *
+ * Replaces the inline dropdown that lived in the desktop sidebar and mobile
+ * drawer. Three icon-forward tiles route to the appropriate flow:
+ *  - Pay Structure Changed → SetupWizard re-entry (currently `changed_jobs`;
+ *    will become `structure_change` when §15.B lands)
+ *  - Lost My Job          → SetupWizard re-entry (`lost_job`)
+ *  - Quick Rate Update    → dedicated single modal (§15.D — not built yet,
+ *    so this tile is disabled with a "Coming soon" badge for now)
+ */
+export function LifeEventMenu({ open, onClose, onSelect }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const tiles = [
+    {
+      id: "structure_change",
+      title: "Pay Structure Changed",
+      desc: "New employer, salary, raise, or commission added.",
+      route: "changed_jobs",
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M16 3h5v5" /><path d="M8 21H3v-5" />
+          <path d="M21 3l-7 7" /><path d="M3 21l7-7" />
+        </svg>
+      ),
+    },
+    {
+      id: "lost_job",
+      title: "Lost My Job",
+      desc: "Switch to Job Loss Mode and manage your runway.",
+      route: "lost_job",
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 13.5V8a2 2 0 0 0-2-2h-5l-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h7" />
+          <path d="M16 19h6" />
+        </svg>
+      ),
+    },
+    {
+      id: "rate_update",
+      title: "Quick Rate Update",
+      desc: "Just changed your hourly rate? No structure change.",
+      route: null,
+      comingSoon: true,
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2v20" />
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        </svg>
+      ),
+    },
+  ];
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 70,
+        background: "rgba(0,0,0,0.78)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "16px",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border-subtle)",
+          borderRadius: "14px",
+          width: "100%", maxWidth: "440px",
+          maxHeight: "90vh", display: "flex", flexDirection: "column",
+          animation: "weekCardIn 220ms ease-out",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "5px" }}>
+                Life Events
+              </div>
+              <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
+                What changed?
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                background: "var(--color-bg-raised)",
+                border: "1px solid var(--color-border-subtle)",
+                borderRadius: "8px",
+                color: "var(--color-text-secondary)",
+                width: "32px", height: "32px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6L6 18" /><path d="M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "10px", overflowY: "auto" }}>
+          {tiles.map((t) => {
+            const disabled = t.comingSoon;
+            return (
+              <button
+                key={t.id}
+                onClick={() => {
+                  if (disabled) return;
+                  onSelect(t.route);
+                  onClose();
+                }}
+                disabled={disabled}
+                style={{
+                  display: "flex", alignItems: "flex-start", gap: "14px",
+                  padding: "16px",
+                  minHeight: "76px",
+                  background: "var(--color-bg-raised)",
+                  border: "1px solid var(--color-border-subtle)",
+                  borderRadius: "12px",
+                  textAlign: "left",
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  opacity: disabled ? 0.55 : 1,
+                  transition: "transform 120ms ease, border-color 150ms ease, background 150ms ease",
+                  color: "var(--color-text-primary)",
+                  width: "100%",
+                }}
+                onMouseDown={(e) => { if (!disabled) e.currentTarget.style.transform = "scale(0.97)"; }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+              >
+                <div style={{
+                  flexShrink: 0,
+                  width: "40px", height: "40px",
+                  borderRadius: "10px",
+                  background: "rgba(0,200,150,0.10)",
+                  border: "1px solid var(--color-border-accent)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "var(--color-accent-primary)",
+                }}>
+                  {t.icon}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+                      {t.title}
+                    </span>
+                    {t.comingSoon && (
+                      <span style={{
+                        fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
+                        color: "var(--color-bg-base)", background: "var(--color-warning)",
+                        padding: "2px 6px", borderRadius: "3px", fontWeight: "bold",
+                      }}>
+                        Coming Soon
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: "12px", lineHeight: 1.4, color: "var(--color-text-secondary)" }}>
+                    {t.desc}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}

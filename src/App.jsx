@@ -17,6 +17,7 @@ import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
+import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -1174,43 +1175,19 @@ export default function App() {
           {/* ── Life Events (re-entry wizard) ── */}
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
             <button
-              onClick={() => setLifeEventMenu(p => !p)}
+              onClick={() => setLifeEventMenu(true)}
               style={{
                 display: "block", width: "100%", textAlign: "left",
                 padding: "14px 20px", fontSize: "11px",
                 letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
-                color: lifeEventMenu ? "var(--color-gold)" : "var(--color-text-primary)",
-                borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
+                color: "var(--color-text-primary)",
+                borderLeft: "3px solid transparent",
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
             >
               Life Events
             </button>
-            {lifeEventMenu && (
-              <div>
-                {[
-                  { value: "lost_job",      label: "Lost my job" },
-                  { value: "changed_jobs",  label: "Changed jobs" },
-                  { value: "commission_job", label: "Commission job" },
-                ].map(ev => (
-                  <button
-                    key={ev.value}
-                    onClick={() => { setWizardEntry(ev.value); setLifeEventMenu(false); }}
-                    style={{
-                      display: "block", width: "100%", textAlign: "left",
-                      padding: "10px 24px", fontSize: "10px",
-                      letterSpacing: "1.5px", textTransform: "uppercase",
-                      background: "transparent", color: "var(--color-text-primary)",
-                      border: "none", borderLeft: "3px solid transparent",
-                      cursor: "pointer", transition: "color 0.15s",
-                    }}
-                  >
-                    {ev.label}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* ── Admin Tools ── */}
@@ -1601,43 +1578,19 @@ export default function App() {
           {/* ── Life Events (re-entry wizard) ── */}
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
             <button
-              onClick={() => setLifeEventMenu(p => !p)}
+              onClick={() => { setLifeEventMenu(true); setDrawerOpen(false); }}
               style={{
                 display: "block", width: "100%", textAlign: "left",
                 padding: "14px 20px", fontSize: "11px",
                 letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
-                color: lifeEventMenu ? "var(--color-gold)" : "var(--color-text-primary)",
-                borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
+                color: "var(--color-text-primary)",
+                borderLeft: "3px solid transparent",
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
             >
               Life Events
             </button>
-            {lifeEventMenu && (
-              <div>
-                {[
-                  { value: "lost_job",      label: "Lost my job" },
-                  { value: "changed_jobs",  label: "Changed jobs" },
-                  { value: "commission_job", label: "Commission job" },
-                ].map(ev => (
-                  <button
-                    key={ev.value}
-                    onClick={() => { setWizardEntry(ev.value); setLifeEventMenu(false); setDrawerOpen(false); }}
-                    style={{
-                      display: "block", width: "100%", textAlign: "left",
-                      padding: "10px 24px", fontSize: "10px",
-                      letterSpacing: "1.5px", textTransform: "uppercase",
-                      background: "transparent", color: "var(--color-text-primary)",
-                      border: "none", borderLeft: "3px solid transparent",
-                      cursor: "pointer", transition: "color 0.15s",
-                    }}
-                  >
-                    {ev.label}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </nav>
 
@@ -2500,6 +2453,12 @@ export default function App() {
           onDismiss={() => setConfirmDismissed(true)}
         />
       )}
+      {/* ── Life Events menu (entry point modal — TODO §15.A) ── */}
+      <LifeEventMenu
+        open={lifeEventMenu}
+        onClose={() => setLifeEventMenu(false)}
+        onSelect={(route) => setWizardEntry(route)}
+      />
       {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}
       {wizardEntry !== null && (
         <SetupWizard

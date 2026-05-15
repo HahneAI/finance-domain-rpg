@@ -35,13 +35,18 @@ export const fromMonthlyCost = (monthly, cycle) => {
   return monthly;
 };
 
-export const perPaycheckFromCycle = (amount, cycle, cpm) =>
-  roundToQuarter(toMonthlyCost(amount, cycle) / cpm);
+// Converts a bill amount to a per-week reserve (weekly[q] storage unit).
+// Always divides by 4 (weeks/month) regardless of pay schedule so the stored
+// value is consistent: display * perCheckFactor = per-paycheck amount.
+// For weekly users perCheckFactor=1, so weekly = per-paycheck — no change.
+// For biweekly users perCheckFactor=2, so stored 175/wk × 2 = $350/check.
+export const perPaycheckFromCycle = (amount, cycle, _cpm) =>
+  roundToQuarter(toMonthlyCost(amount, cycle) / 4);
 
-export const cycleAmountFromPerPaycheck = (perPaycheck, cycle, cpm) =>
-  fromMonthlyCost(roundToQuarter(perPaycheck * cpm), cycle);
+export const cycleAmountFromPerPaycheck = (perWeek, cycle, _cpm) =>
+  fromMonthlyCost(roundToQuarter(perWeek * 4), cycle);
 
-export const monthlyFromPerPaycheck = (perPaycheck, cpm) => roundToQuarter(perPaycheck * cpm);
+export const monthlyFromPerPaycheck = (perWeek, _cpm) => roundToQuarter(perWeek * 4);
 
 /**
  * Builds the weekly[4] array for a new history entry.

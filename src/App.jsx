@@ -20,6 +20,7 @@ import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
 import { JobLossEntry } from "./components/JobLossEntry.jsx";
 import { ExpenseTriage } from "./components/ExpenseTriage.jsx";
+import { JobLossDashboard } from "./components/JobLossDashboard.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -1628,6 +1629,14 @@ export default function App() {
             </div>
             );
           })()}
+          {/* ── Job Loss Dashboard (TODO §15.C4) ── */}
+          {config.jobLossMode && (
+            <JobLossDashboard
+              config={config}
+              expenses={expenses}
+              effectiveToday={effectiveToday}
+            />
+          )}
           {isAdmin && adminDemoView !== null
             ? <DemoAccountTree
                 key={adminDemoView}

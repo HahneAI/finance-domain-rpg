@@ -497,6 +497,22 @@ export function buildYear(cfg) {
       worked = [];
     }
 
+    // Unemployment benefits (§15.C2): paid weekly during the eligibility
+    // window. Treated as non-taxed income — added to net by computeNet.
+    let unemploymentIncome = 0;
+    if (
+      inJobLoss
+      && cfg.unemploymentEnabled === true
+      && (cfg.unemploymentWeekly ?? 0) > 0
+      && (cfg.unemploymentDurationWeeks ?? 0) > 0
+    ) {
+      const weeksSinceLoss = Math.floor((weekEnd - jobLossStart) / (7 * 86400000));
+      const offset = cfg.unemploymentWaitingWeek ? 1 : 0;
+      if (weeksSinceLoss >= offset && weeksSinceLoss < offset + cfg.unemploymentDurationWeeks) {
+        unemploymentIncome = cfg.unemploymentWeekly;
+      }
+    }
+
     const active = idx >= cfg.firstActiveIdx && !inJobLoss;
     const benefitsActive = !benefitsStart || weekEnd >= benefitsStart;
     const benefitsDeduction = benefitsActive ? weeklyBenefitDeductions(cfg) : 0;
@@ -533,6 +549,7 @@ export function buildYear(cfg) {
       },
       rotationLabel: rotationLabel || rotation,
       requiredOtShifts,
+      unemploymentIncome,
     });
     d.setDate(d.getDate() + 7); idx++;
   }
@@ -548,12 +565,17 @@ export function buildYear(cfg) {
 }
 
 export function computeNet(w, cfg, extraPerCheck, showExtra) {
-  if (!w.active) return 0;
+  // Unemployment benefits (§15.C2) are non-taxed at the engine layer — withholding
+  // is optional and out of scope for v1. Surfaces on every week regardless of
+  // active state so the user sees benefit income even though the job-loss week
+  // isn't "active" in the employment sense.
+  const unemployment = w.unemploymentIncome ?? 0;
+  if (!w.active) return unemployment;
   const fica = w.grossPay * cfg.ficaRate;
   const payrollDeductions = deriveWeeklyPayrollDeductions(w, cfg);
   const ded = payrollDeductions.total;
   const otherPostTax = otherPostTaxDeductions(cfg);
-  if (!w.taxedBySchedule) return (w.grossPay - fica - ded) - otherPostTax;
+  if (!w.taxedBySchedule) return (w.grossPay - fica - ded) - otherPostTax + unemployment;
   // Use generalized rate fields; fall back to legacy w1/w2 fields for pre-wizard rows.
   const fedLow  = cfg.fedRateLow   ?? cfg.w1FedRate;
   const fedHigh = cfg.fedRateHigh  ?? cfg.w2FedRate;
@@ -561,7 +583,7 @@ export function computeNet(w, cfg, extraPerCheck, showExtra) {
   const stHigh  = cfg.stateRateHigh ?? cfg.w2StateRate;
   const fed = w.taxableGross * (w.isHighWeek ? fedHigh : fedLow) + (showExtra ? extraPerCheck : 0);
   const st = w.taxableGross * (w.isHighWeek ? stHigh : stLow);
-  return (w.grossPay - fed - st - fica - ded) - otherPostTax;
+  return (w.grossPay - fed - st - fica - ded) - otherPostTax + unemployment;
 }
 
 export function projectedGross(isWeek2, cfg) {

@@ -1498,8 +1498,22 @@ export default function App() {
 
         {/* Panel content */}
         <div ref={mainContentCallbackRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
-          {/* ── Job Loss Mode banner (TODO §15.C1) ── */}
-          {config.jobLossMode && !jobLossBannerDismissed && (
+          {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
+          {config.jobLossMode && !jobLossBannerDismissed && (() => {
+            // Compute benefits-end date when duration is set, so the banner can
+            // show a "runs out on" cliff warning. Waiting week shifts the start.
+            let benefitsEndDate = null;
+            if (config.unemploymentEnabled
+                && config.jobLossDate
+                && (config.unemploymentDurationWeeks ?? 0) > 0) {
+              const start = new Date(config.jobLossDate + "T00:00:00");
+              const offsetDays = (config.unemploymentWaitingWeek ? 1 : 0) * 7
+                               + (config.unemploymentDurationWeeks * 7);
+              const end = new Date(start);
+              end.setDate(end.getDate() + offsetDays - 1);
+              benefitsEndDate = end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            }
+            return (
             <div style={{
               background: "rgba(245,158,11,0.10)",
               border: "1px solid rgba(245,158,11,0.32)",
@@ -1523,12 +1537,29 @@ export default function App() {
                     {config.jobLossDate ?? "—"}
                   </span>{" "}
                   forward.
+                  {benefitsEndDate && (
+                    <>
+                      {" "}Unemployment runs out on{" "}
+                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-warning)" }}>
+                        {benefitsEndDate}
+                      </span>
+                      .
+                    </>
+                  )}
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button
                   onClick={() => {
-                    setConfig(prev => ({ ...prev, jobLossMode: false, jobLossDate: null }));
+                    setConfig(prev => ({
+                      ...prev,
+                      jobLossMode: false,
+                      jobLossDate: null,
+                      unemploymentEnabled: null,
+                      unemploymentWeekly: null,
+                      unemploymentDurationWeeks: null,
+                      unemploymentWaitingWeek: false,
+                    }));
                     setWizardEntry("structure_change");
                   }}
                   style={{
@@ -1561,7 +1592,8 @@ export default function App() {
                 </button>
               </div>
             </div>
-          )}
+            );
+          })()}
           {isAdmin && adminDemoView !== null
             ? <DemoAccountTree
                 key={adminDemoView}

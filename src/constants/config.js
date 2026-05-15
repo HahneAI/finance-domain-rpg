@@ -104,6 +104,13 @@ export const DEFAULT_CONFIG = {
   jobLossMode: false,
   jobLossDate: null,           // "YYYY-MM-DD" — first week where projections drop to $0 earned
 
+  // Unemployment benefits (TODO §15.C2) — captured in the Job Loss entry flow.
+  // null = unanswered (pre-entry); true/false once the user has set them.
+  unemploymentEnabled: null,
+  unemploymentWeekly: null,    // $ paid per benefit week
+  unemploymentDurationWeeks: null, // number of payable weeks granted
+  unemploymentWaitingWeek: false,  // true = first benefit week is unpaid (most states)
+
   // ── Tax rates — generalized (wizard-derived) ─────────────────
   // These replace the old w1/w2 naming which was DHL-specific.
   // fedRateLow/stateRateLow = shorter/consistent paycheck rate

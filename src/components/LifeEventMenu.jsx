@@ -26,7 +26,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
       id: "structure_change",
       title: "Pay Structure Changed",
       desc: "New employer, salary, raise, or commission added.",
-      route: "changed_jobs",
+      route: "structure_change",
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M16 3h5v5" /><path d="M8 21H3v-5" />

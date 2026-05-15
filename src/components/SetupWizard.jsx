@@ -14,7 +14,7 @@
 // Steps 5, 6, 8, 15 removed from STEP_DEFS — content folded into adjacent steps.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { buildYear, dhlEmployerMatchRate } from "../lib/finance.js";
 import { iS, lS } from "./ui.jsx";
 import { FISCAL_YEAR_START, DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
@@ -28,9 +28,10 @@ const BUFFER_MAX = 200;
 // STEP 0 — Welcome (first-run) / Life Event Select (re-entry)
 // ─────────────────────────────────────────────────────────────────────────────
 const LIFE_EVENTS = [
-  { value: "lost_job",      label: "Lost my job",            sub: "Updates pay structure, schedule, deductions, and tax rates" },
-  { value: "changed_jobs",  label: "Changed jobs",           sub: "Full re-setup — FICA and tax strategy pre-filled from current config" },
-  { value: "commission_job", label: "Got a commission job",  sub: "Adds commission income to your pay structure" },
+  { value: "structure_change", label: "Pay structure changed",  sub: "New rate, schedule, employer, or commission — rate-up wizard" },
+  { value: "lost_job",         label: "Lost my job",            sub: "Updates pay structure, schedule, deductions, and tax rates" },
+  { value: "changed_jobs",     label: "Changed jobs",           sub: "Full re-setup — FICA and tax strategy pre-filled from current config" },
+  { value: "commission_job",   label: "Got a commission job",   sub: "Adds commission income to your pay structure" },
 ];
 
 function Step0({ lifeEvent, onLifeEventChange, formData, isInvestor = false }) {
@@ -63,7 +64,36 @@ function Step0({ lifeEvent, onLifeEventChange, formData, isInvestor = false }) {
     );
   }
 
-  // ── Re-entry ───────────────────────────────────────────────────────────────
+  // ── Re-entry: structure_change shows a brief overview, not the picker ─────
+  if (lifeEvent === "structure_change") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+        <p style={{
+          fontSize: "14px", lineHeight: "1.6",
+          color: "var(--color-text-primary)", margin: 0, fontWeight: 600,
+        }}>
+          Update your pay structure.
+        </p>
+        <p style={{
+          fontSize: "13px", lineHeight: "1.6",
+          color: "var(--color-text-secondary)", margin: 0,
+        }}>
+          The next steps are pre-filled with your current settings — only edit what actually
+          changed (rate, schedule, employer, deductions, or tax setup). Goals, expenses, logs,
+          and historical week confirmations stay put.
+        </p>
+        <p style={{
+          fontSize: "12px", lineHeight: "1.6",
+          color: "var(--color-text-disabled)", margin: 0,
+        }}>
+          On the Schedule step, set the start date to the day your new pay structure takes
+          effect. Forward-looking projections recalculate from that week onward.
+        </p>
+      </div>
+    );
+  }
+
+  // ── Re-entry: other life events show the picker ───────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       <p style={{
@@ -72,7 +102,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, isInvestor = false }) {
       }}>
         What changed? Only the affected steps will be updated — everything else stays as-is.
       </p>
-      {LIFE_EVENTS.map(ev => {
+      {LIFE_EVENTS.filter(ev => ev.value !== "structure_change").map(ev => {
         const active = lifeEvent === ev.value;
         return (
           <button
@@ -161,7 +191,7 @@ function errBorder(show) {
 const OT_THRESHOLDS = [40, 48];
 const OT_MULTIPLIERS = [1.5, 2];
 
-function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false }) {
+function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, originalConfig }) {
   // Gate: has the user answered "Do you work for DHL?" yet?
   // Investor accounts skip the gate entirely — always treated as base user.
   const [gateTouched, setGateTouched] = useState(
@@ -234,6 +264,26 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false })
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
+      {/* ── Employer preset switch callout (TODO §15.B) ── */}
+      {lifeEvent === "structure_change"
+        && originalConfig
+        && originalConfig.employerPreset !== formData.employerPreset && (
+        <div style={{
+          background: "rgba(0,200,150,0.08)",
+          border: "1px solid var(--color-border-accent)",
+          borderRadius: "10px",
+          padding: "10px 12px",
+          fontSize: "12px", color: "var(--color-text-primary)", lineHeight: 1.5,
+        }}>
+          <strong style={{ color: "var(--color-gold)" }}>
+            Switched to {formData.employerPreset === "DHL" ? "DHL" : "Base"} preset.
+          </strong>{" "}
+          {formData.employerPreset === "DHL"
+            ? "Rotation, attendance buckets, weekend differential, and OT threshold were auto-applied. Review the steps that follow."
+            : "DHL-specific defaults were cleared. Set your weekly hour ceiling and OT rules in the next steps."}
+        </div>
+      )}
 
       {/* ── Employer Preset Gate (hidden for investor accounts) ── */}
       {!isInvestor && (
@@ -1618,7 +1668,102 @@ function TaxExemptPreview() {
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP WRAPUP — Paycheck Buffer + Tax Exempt Gate (combined, non-blocking)
 // ─────────────────────────────────────────────────────────────────────────────
-function StepWrapUp({ formData, onChange }) {
+// Format helpers for the structure_change diff table
+function fmtDiffValue(field, val) {
+  if (val == null || val === "") return "—";
+  if (field === "employerPreset") return val === "DHL" ? "DHL" : "Base";
+  if (field === "userPaySchedule") {
+    return ({ weekly: "Weekly", biweekly: "Biweekly", salary: "Salary", monthly: "Monthly" })[val] ?? String(val);
+  }
+  if (field === "filingStatus") {
+    return ({ single: "Single", mfj: "MFJ", hoh: "HOH" })[val] ?? String(val);
+  }
+  if (field === "startDate") return val;
+  if (field === "baseRate" || field === "diffRate" || field === "nightDiffRate") return `$${Number(val).toFixed(2)}/hr`;
+  if (field === "annualSalary") return `$${Number(val).toLocaleString()}`;
+  if (field === "fedRateLow" || field === "stateRateLow" || field === "k401Rate") return `${(Number(val) * 100).toFixed(1)}%`;
+  if (field === "maxWeeklyHours" || field === "shiftHours" || field === "otThreshold") return `${Number(val)} hr`;
+  if (field === "userState") return String(val).toUpperCase();
+  return String(val);
+}
+
+const DIFF_FIELDS = [
+  { key: "employerPreset",   label: "Employer" },
+  { key: "userPaySchedule",  label: "Pay schedule" },
+  { key: "baseRate",         label: "Base rate" },
+  { key: "annualSalary",     label: "Annual salary" },
+  { key: "startDate",        label: "Effective date" },
+  { key: "maxWeeklyHours",   label: "Max weekly hours" },
+  { key: "shiftHours",       label: "Shift length" },
+  { key: "otThreshold",      label: "OT threshold" },
+  { key: "diffRate",         label: "Weekend diff" },
+  { key: "nightDiffRate",    label: "Night diff" },
+  { key: "userState",        label: "Tax state" },
+  { key: "filingStatus",     label: "Filing status" },
+  { key: "fedRateLow",       label: "Federal rate" },
+  { key: "stateRateLow",     label: "State rate" },
+  { key: "k401Rate",         label: "401(k) rate" },
+];
+
+function StructureChangeDiff({ originalConfig, formData }) {
+  const rows = DIFF_FIELDS
+    .map(f => {
+      const before = originalConfig?.[f.key] ?? null;
+      const after  = formData?.[f.key] ?? null;
+      const changed =
+        (before == null && after == null) ? false :
+        (before == null || after == null) ? true :
+        String(before) !== String(after);
+      return { ...f, before, after, changed };
+    })
+    .filter(r => r.changed);
+
+  return (
+    <div>
+      <label style={lS}>What's Changing</label>
+      <div style={{
+        marginTop: "10px",
+        background: "var(--color-bg-raised)",
+        border: "1px solid var(--color-border-subtle)",
+        borderRadius: "12px",
+        padding: rows.length === 0 ? "14px" : "6px 14px",
+      }}>
+        {rows.length === 0 ? (
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+            No changes detected yet. Step back through the wizard and edit any field that
+            actually changed — Wrap Up will list the diff here.
+          </div>
+        ) : (
+          rows.map(r => (
+            <div key={r.key} style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "8px 0",
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+              fontSize: "12px",
+            }}>
+              <span style={{ color: "var(--color-text-secondary)" }}>{r.label}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "6px", fontFamily: "var(--font-mono)" }}>
+                <span style={{ color: "var(--color-text-disabled)", textDecoration: "line-through" }}>
+                  {fmtDiffValue(r.key, r.before)}
+                </span>
+                <span style={{ color: "var(--color-text-disabled)" }}>→</span>
+                <span style={{ color: "var(--color-gold)", fontWeight: 600 }}>
+                  {fmtDiffValue(r.key, r.after)}
+                </span>
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+      <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
+        Tap Finish to apply. Goals, expenses, logs, and prior week confirmations are not touched —
+        only forward-looking projections recalculate.
+      </div>
+    </div>
+  );
+}
+
+function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
   const gross = estimateWeeklyGross(formData);
   const fica     = gross * (formData.ficaRate || 0.0765);
   const k401k    = gross * (formData.k401Rate || 0);
@@ -1668,6 +1813,11 @@ function StepWrapUp({ formData, onChange }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "22px" }}>
+
+      {/* ── Structure-change diff (TODO §15.B) — shown only on the structure_change flow ── */}
+      {lifeEvent === "structure_change" && (
+        <StructureChangeDiff originalConfig={originalConfig} formData={formData} />
+      )}
 
       {/* ── Live net estimate ── */}
       <div>
@@ -1770,10 +1920,12 @@ function StepWrapUp({ formData, onChange }) {
 // isValid(formData, lifeEvent) → bool — gates Next; stubs return true until implemented
 //
 // Life event routing:
-//   null (first-run)   → all steps 0–8
-//   "lost_job"         → steps 0–4; steps 5–7 preserved in config but skipped; step 8 skipped
-//   "changed_jobs"     → all steps 0–8
-//   "commission_job"   → steps 0–5 only; steps 6–8 skipped
+//   null (first-run)    → all steps 0–8
+//   "lost_job"          → steps 0–4; steps 5–7 preserved in config but skipped; step 8 skipped
+//   "changed_jobs"      → all steps 0–8
+//   "commission_job"    → steps 0–5 only; steps 6–8 skipped
+//   "structure_change"  → steps 0–4 + Wrap Up (7); pre-filled from current config; the Wrap Up
+//                          step gains a "What's Changing" diff section in this mode
 // ─────────────────────────────────────────────────────────────────────────────
 const STEP_DEFS = [
   {
@@ -1837,7 +1989,7 @@ const STEP_DEFS = [
   },
   {
     id: 7, title: "Wrap Up",
-    showIf: (_, ev) => ev === null || ev === "changed_jobs",
+    showIf: (_, ev) => ev === null || ev === "changed_jobs" || ev === "structure_change",
     isValid: () => true,
     component: StepWrapUp,
   },
@@ -1888,6 +2040,11 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   );
   const [lifeEvent, setLifeEvent] = useState(initialLifeEvent);
   const [attempted, setAttempted] = useState(false);
+
+  // Snapshot of config at wizard open, used by structure_change to render a
+  // "what's changing" diff in Wrap Up. Frozen by the ref so edits to formData
+  // don't pollute the comparison baseline.
+  const originalConfigRef = useRef(config);
 
   const activeSteps = STEP_DEFS.filter(s => s.showIf(formData, lifeEvent));
   const current     = activeSteps[stepIdx];
@@ -2002,6 +2159,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
                 onLifeEventChange={setLifeEvent}
                 attempted={attempted}
                 isInvestor={isInvestor}
+                originalConfig={originalConfigRef.current}
               />
             : <StepStub title={current?.title} sprint={current?.sprint} />
           }
@@ -2073,7 +2231,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
               transition: "background 0.2s ease, color 0.2s ease",
             }}
           >
-            {isLast ? "Finish" : "Next →"}
+            {isLast ? (lifeEvent === "structure_change" ? "Confirm Changes" : "Finish") : "Next →"}
           </button>
         </div>
 

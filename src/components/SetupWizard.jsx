@@ -34,10 +34,11 @@ const LIFE_EVENTS = [
   { value: "commission_job",   label: "Got a commission job",   sub: "Adds commission income to your pay structure" },
 ];
 
-function Step0({ lifeEvent, onLifeEventChange, formData, isInvestor = false }) {
+function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = false }) {
   // ── First-run ──────────────────────────────────────────────────────────────
   if (lifeEvent === null) {
     const firstName = isInvestor ? (formData?.investorName ?? "").split(" ")[0] : "";
+    const startedUnemployed = formData?.startedUnemployed;
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
         {isInvestor && firstName && (
@@ -48,6 +49,29 @@ function Step0({ lifeEvent, onLifeEventChange, formData, isInvestor = false }) {
             Welcome, {firstName}.
           </p>
         )}
+
+        {/* ── First question: employment status (TODO §15.H seed) ── */}
+        <div>
+          <label style={lS}>Are you currently unemployed?</label>
+          <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+            {[{ v: true, label: "Yes" }, { v: false, label: "No" }].map(opt => (
+              <Pill
+                key={opt.label}
+                label={opt.label}
+                active={startedUnemployed === opt.v}
+                onClick={() => onChange({ startedUnemployed: opt.v })}
+              />
+            ))}
+          </div>
+          <p style={{
+            marginTop: "8px", fontSize: "12px", lineHeight: "1.5",
+            color: "var(--color-text-disabled)", marginBottom: 0,
+          }}>
+            Either answer continues to pay setup for now — we're seeding a future onboarding
+            path that lands jobless users straight in the Job Loss Dashboard.
+          </p>
+        </div>
+
         <p style={{
           fontSize: "14px", lineHeight: "1.6",
           color: "var(--color-text-secondary)", margin: 0,
@@ -1931,7 +1955,9 @@ const STEP_DEFS = [
   {
     id: 0, title: "Welcome",
     showIf: () => true,
-    isValid: () => true,
+    // First-run: require an answer to the §15.H employment-status seed.
+    // Re-entry life events have no Step 0 question, so always valid.
+    isValid: (d, ev) => ev !== null || d.startedUnemployed === true || d.startedUnemployed === false,
     component: Step0,
   },
   {

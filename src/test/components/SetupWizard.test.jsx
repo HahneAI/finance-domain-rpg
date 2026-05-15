@@ -6,6 +6,7 @@ import { DEFAULT_CONFIG } from '../../constants/config.js'
 const BASE_CONFIG = {
   ...DEFAULT_CONFIG,
   setupComplete: false,
+  startedUnemployed: false, // satisfies Step 0 first-run gate (§15.H seed)
   baseRate: 21.15,
   shiftHours: 12,
   fedRateLow: 0.0784,

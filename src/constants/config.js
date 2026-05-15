@@ -7,6 +7,11 @@ export const PAYCHECKS_PER_YEAR = { weekly: 52, biweekly: 26, monthly: 12, salar
 export const DEFAULT_CONFIG = {
   // ── Wizard gate fields ──────────────────────────────────────
   setupComplete: false,        // true once setup wizard completes; gates first-run flow
+  // First-run Step 0 question (TODO §15.H — seed). null = unanswered;
+  // true = user is unemployed at signup; false = currently working.
+  // For now both answers route through the standard pay-structure steps;
+  // the full branched onboarding path is parked in TODO §15.H.
+  startedUnemployed: null,
   taxExemptOptIn: false,       // true once user accepts tax exempt disclaimer (Step 8)
   bufferEnabled: true,         // when true, paycheckBuffer is excluded from all spendable math
   paycheckBuffer: 50,          // $/week excluded per check (bufferEnabled must be true); max $200

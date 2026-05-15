@@ -237,9 +237,16 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const incomingWeekNet = futureWeekNets?.[0] ?? prevWeekNet ?? weeklyIncome;
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const wr = weeklyIncome - ts;
+  // §15.C3: drop paused/cancelled expenses from forward projections while
+  // Job Loss Mode is active. Display lists still show every expense — only
+  // the projected weekly-spend figure is filtered.
+  const projectableExpenses = useMemo(() => {
+    if (!config?.jobLossMode) return expenses;
+    return expenses.filter(exp => (exp.jobLossStatus ?? "active") === "active");
+  }, [expenses, config?.jobLossMode]);
   const avgWeeklySpend = useMemo(
-    () => computeRemainingSpend(expenses, futureWeeks ?? []).avgWeeklySpend ?? 0,
-    [expenses, futureWeeks],
+    () => computeRemainingSpend(projectableExpenses, futureWeeks ?? []).avgWeeklySpend ?? 0,
+    [projectableExpenses, futureWeeks],
   );
   // Set of month keys that have at least one non-loan expense with a monthlyOverride entry.
   // Used by MonthQuarterSelector to render the monthly change indicator dots on pills.

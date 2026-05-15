@@ -5,11 +5,14 @@ import { useEffect } from "react";
  *
  * Replaces the inline dropdown that lived in the desktop sidebar and mobile
  * drawer. Three icon-forward tiles route to the appropriate flow:
- *  - Pay Structure Changed → SetupWizard re-entry (currently `changed_jobs`;
- *    will become `structure_change` when §15.B lands)
- *  - Lost My Job          → SetupWizard re-entry (`lost_job`)
+ *  - Pay Structure Changed → SetupWizard re-entry (`structure_change`, §15.B)
+ *  - Lost My Job          → JobLossEntry modal (§15.C1)
  *  - Quick Rate Update    → dedicated single modal (§15.D — not built yet,
  *    so this tile is disabled with a "Coming soon" badge for now)
+ *
+ * `onSelect(route)` is called with either a SetupWizard life-event string or
+ * the sentinel `"job_loss"`, which the parent interprets as "open the
+ * JobLossEntry modal" rather than the wizard.
  */
 export function LifeEventMenu({ open, onClose, onSelect }) {
   useEffect(() => {
@@ -26,7 +29,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
       id: "structure_change",
       title: "Pay Structure Changed",
       desc: "New employer, salary, raise, or commission added.",
-      route: "changed_jobs",
+      route: "structure_change",
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M16 3h5v5" /><path d="M8 21H3v-5" />
@@ -38,7 +41,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
       id: "lost_job",
       title: "Lost My Job",
       desc: "Switch to Job Loss Mode and manage your runway.",
-      route: "lost_job",
+      route: "job_loss",
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 13.5V8a2 2 0 0 0-2-2h-5l-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h7" />

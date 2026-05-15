@@ -260,6 +260,40 @@ a true branched onboarding so jobless users land in a usable app from day one.*
 
 ---
 
+### I. Admin Toolkit updates for §15 work
+
+*Most §15 fields land in the `config` JSON column or on the expense rows, so the existing
+admin tools surface them automatically (Config Raw View dumps the whole config; DB Row
+Viewer shows the expenses array). A few targeted upgrades make the new state legible
+without forcing the reviewer to grep through JSON.*
+
+- [ ] **Live State Inspector — Job Loss Mode pill**
+  - [ ] Amber pill in the bottom-right Live card when `config.jobLossMode === true`
+  - [ ] Add three values: `jobLossDate`, `unemploymentWeekly`, `unemploymentRemainingWeeks`
+    (computed: durationWeeks − weeks elapsed since jobLossDate − waiting-week offset)
+- [ ] **Week Inspector — unemployment income row**
+  - [ ] When `w.unemploymentIncome > 0`, show a "Unemployment" line in the Pay section
+    alongside Gross / Taxable / Net so reviewers can see the non-taxed line directly
+  - [ ] When `inJobLoss && w.unemploymentIncome === 0`, surface a small grey note:
+    "Job Loss Mode — outside benefit window" (catches waiting-week and post-expiration weeks)
+- [ ] **DB Row Viewer — expense triage summary**
+  - [ ] One-liner above the expenses dump: "Triage: X active · Y paused · Z cancelled"
+    (count derived from `jobLossStatus`, missing = active)
+  - [ ] Flag any expense where `autoReactivateOnIncome === false` so the reviewer knows it
+    will stay paused on Back to Work
+- [ ] **Config Raw View — Life Events header**
+  - [ ] Add a short header above the JSON dump listing only the §15-relevant fields with
+    values: `startedUnemployed`, `jobLossMode`, `jobLossDate`, `unemploymentEnabled`,
+    `unemploymentWeekly`, `unemploymentDurationWeeks`, `unemploymentWaitingWeek`
+  - [ ] Lets a reviewer assess Job Loss state in one read without scrolling the full config
+- [ ] **CLAUDE.md update**
+  - [ ] Append the new field surface to the "Diagnostic request templates" section so
+    future sessions know to ask for Job Loss state when the complaint is runway-related
+  - [ ] Document the per-week `unemploymentIncome` annotation on the buildYear output so
+    consumers know the engine emits a non-taxed income line
+
+---
+
 ## 0. Base user Foundation — Priority Sprint
 
 *Source: base user-wizard-audit.md full audit, 2026-04-28. All 12 items are blockers or

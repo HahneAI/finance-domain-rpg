@@ -19,6 +19,7 @@ import { ProfilePanel } from "./components/ProfilePanel.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
 import { JobLossEntry } from "./components/JobLossEntry.jsx";
+import { ExpenseTriage } from "./components/ExpenseTriage.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -240,6 +241,7 @@ export default function App() {
   const [wizardEntry, setWizardEntry] = useState(null);
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
   const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
+  const [expenseTriageOpen, setExpenseTriageOpen] = useState(false);
   // Session-only dismissal so the banner re-appears on every page load,
   // matching the §15.C1 spec ("dismissible but re-shows on reload").
   const [jobLossBannerDismissed, setJobLossBannerDismissed] = useState(false);
@@ -787,8 +789,17 @@ export default function App() {
     [futureWeeks, weekNetLookup, futureWeekNetsRaw]
   );
 
+  // ── Job Loss Mode expense triage (TODO §15.C3) ──
+  // Paused/cancelled expenses drop out of forward projections while jobLossMode
+  // is active. Missing jobLossStatus is treated as "active" so existing rows
+  // need no migration.
+  const projectableExpenses = useMemo(() => {
+    if (!config.jobLossMode) return expenses;
+    return expenses.filter(exp => (exp.jobLossStatus ?? "active") === "active");
+  }, [expenses, config.jobLossMode]);
+
   // ── Week-by-week remaining spend using history-aware amounts ──
-  const remainingSpend = useMemo(() => computeRemainingSpend(expenses, futureWeeks), [expenses, futureWeeks]);
+  const remainingSpend = useMemo(() => computeRemainingSpend(projectableExpenses, futureWeeks), [projectableExpenses, futureWeeks]);
   const fundedGoalSpend = useMemo(() => getFundedGoalSpend(goals, effectiveToday), [goals, effectiveToday]);
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
@@ -1548,9 +1559,32 @@ export default function App() {
                   )}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: "8px" }}>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => setExpenseTriageOpen(true)}
+                  style={{
+                    background: "transparent",
+                    color: "var(--color-warning)",
+                    border: "1px solid rgba(245,158,11,0.4)",
+                    borderRadius: "10px",
+                    padding: "6px 12px",
+                    fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                    fontWeight: 700, cursor: "pointer",
+                  }}
+                >
+                  Triage Expenses
+                </button>
                 <button
                   onClick={() => {
+                    // Auto-reactivate flagged expenses on exit (§15.C3).
+                    setExpenses(prev => prev.map(exp => {
+                      const status = exp.jobLossStatus ?? "active";
+                      const auto = exp.autoReactivateOnIncome ?? true;
+                      if (status !== "active" && auto) {
+                        return { ...exp, jobLossStatus: "active" };
+                      }
+                      return exp;
+                    }));
                     setConfig(prev => ({
                       ...prev,
                       jobLossMode: false,
@@ -2568,6 +2602,13 @@ export default function App() {
         open={jobLossEntryOpen}
         onClose={() => setJobLossEntryOpen(false)}
         onActivate={(patch) => setConfig(prev => ({ ...prev, ...patch }))}
+      />
+      {/* ── Expense triage (TODO §15.C3) ── */}
+      <ExpenseTriage
+        open={expenseTriageOpen}
+        onClose={() => setExpenseTriageOpen(false)}
+        expenses={expenses}
+        setExpenses={setExpenses}
       />
       {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}
       {wizardEntry !== null && (

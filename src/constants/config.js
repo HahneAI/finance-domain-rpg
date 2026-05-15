@@ -96,6 +96,14 @@ export const DEFAULT_CONFIG = {
   startDate: null,             // "YYYY-MM-DD" job start — used to derive firstActiveIdx; null = not yet set
   firstActiveIdx: 7,
 
+  // ── Job Loss Mode (TODO §15.C) ───────────────────────────────
+  // When jobLossMode is true, buildYear zeros out earned income for every
+  // week on/after jobLossDate. Toggled on by the "Lost My Job" entry flow
+  // and cleared by the "Back to Work" exit (which routes into the
+  // structure_change wizard).
+  jobLossMode: false,
+  jobLossDate: null,           // "YYYY-MM-DD" — first week where projections drop to $0 earned
+
   // ── Tax rates — generalized (wizard-derived) ─────────────────
   // These replace the old w1/w2 naming which was DHL-specific.
   // fedRateLow/stateRateLow = shorter/consistent paycheck rate

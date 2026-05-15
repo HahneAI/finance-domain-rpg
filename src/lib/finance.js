@@ -388,6 +388,10 @@ export function buildYear(cfg) {
   const weeks = [], k401Start = cfg.k401StartDate ? new Date(cfg.k401StartDate) : null, taxedSet = new Set(cfg.taxedWeeks);
   const isEmployerDHL = cfg.employerPreset === "DHL";
   const benefitsStart = parseIsoDate(cfg.benefitsStartDate);
+  // Job Loss Mode (TODO §15.C): when active, weeks on/after jobLossDate have
+  // earned income forced to $0. Benefits/401k naturally fall to $0 too because
+  // grossPay drives them. Historical weeks before jobLossDate are untouched.
+  const jobLossStart = cfg.jobLossMode ? parseIsoDate(cfg.jobLossDate) : null;
   // Biweekly/salary: parity determines which idx%2 value marks a pay week.
   // Falls back to firstActiveIdx%2 when the user hasn't answered the wizard question.
   const isBiweeklyOrSalary = cfg.userPaySchedule === "biweekly" || cfg.userPaySchedule === "salary";
@@ -480,7 +484,20 @@ export function buildYear(cfg) {
              + overtimeHours * (cfg.baseRate + nightDiffHr) * cfg.otMultiplier
              + otWkndH       * cfg.diffRate * cfg.otMultiplier;
 
-    const active = idx >= cfg.firstActiveIdx;
+    // Job Loss Mode boundary: collapse earned-income inputs to zero from the
+    // loss date forward so all downstream math (taxable gross, 401k, benefits
+    // deduction, net) cascades naturally.
+    const inJobLoss = jobLossStart && weekEnd >= jobLossStart;
+    if (inJobLoss) {
+      totalHours = 0;
+      regularHours = 0;
+      overtimeHours = 0;
+      weekendHours = 0;
+      grossPay = 0;
+      worked = [];
+    }
+
+    const active = idx >= cfg.firstActiveIdx && !inJobLoss;
     const benefitsActive = !benefitsStart || weekEnd >= benefitsStart;
     const benefitsDeduction = benefitsActive ? weeklyBenefitDeductions(cfg) : 0;
     const k401ActivationDate = k401Start ?? benefitsStart;

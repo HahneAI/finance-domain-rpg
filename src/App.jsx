@@ -18,6 +18,7 @@ import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
+import { JobLossEntry } from "./components/JobLossEntry.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -238,6 +239,10 @@ export default function App() {
   // wizardEntry: null=closed, false=first-run, string=re-entry life event
   const [wizardEntry, setWizardEntry] = useState(null);
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
+  const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
+  // Session-only dismissal so the banner re-appears on every page load,
+  // matching the §15.C1 spec ("dismissible but re-shows on reload").
+  const [jobLossBannerDismissed, setJobLossBannerDismissed] = useState(false);
 
   const currentView = viewStack[viewStack.length - 1];
   const mainContentRef = useRef(null);
@@ -1493,6 +1498,70 @@ export default function App() {
 
         {/* Panel content */}
         <div ref={mainContentCallbackRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
+          {/* ── Job Loss Mode banner (TODO §15.C1) ── */}
+          {config.jobLossMode && !jobLossBannerDismissed && (
+            <div style={{
+              background: "rgba(245,158,11,0.10)",
+              border: "1px solid rgba(245,158,11,0.32)",
+              borderRadius: "12px",
+              padding: "10px 14px",
+              marginBottom: "14px",
+              display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap",
+            }}>
+              <div style={{
+                width: "8px", height: "8px", borderRadius: "50%",
+                background: "var(--color-warning)", flexShrink: 0,
+                boxShadow: "0 0 8px rgba(245,158,11,0.6)",
+              }} />
+              <div style={{ flex: 1, minWidth: "180px" }}>
+                <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", fontWeight: 700 }}>
+                  Job Loss Mode
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                  Projections show $0 earned income from{" "}
+                  <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>
+                    {config.jobLossDate ?? "—"}
+                  </span>{" "}
+                  forward.
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  onClick={() => {
+                    setConfig(prev => ({ ...prev, jobLossMode: false, jobLossDate: null }));
+                    setWizardEntry("structure_change");
+                  }}
+                  style={{
+                    background: "var(--color-warning)",
+                    color: "var(--color-bg-base)",
+                    border: "none", borderRadius: "10px",
+                    padding: "6px 12px",
+                    fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                    fontWeight: 700, cursor: "pointer",
+                  }}
+                >
+                  Back to Work
+                </button>
+                <button
+                  onClick={() => setJobLossBannerDismissed(true)}
+                  aria-label="Dismiss banner"
+                  style={{
+                    background: "transparent",
+                    color: "var(--color-text-secondary)",
+                    border: "1px solid var(--color-border-subtle)",
+                    borderRadius: "10px",
+                    width: "28px", height: "28px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer",
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6L6 18" /><path d="M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
           {isAdmin && adminDemoView !== null
             ? <DemoAccountTree
                 key={adminDemoView}
@@ -2457,7 +2526,16 @@ export default function App() {
       <LifeEventMenu
         open={lifeEventMenu}
         onClose={() => setLifeEventMenu(false)}
-        onSelect={(route) => setWizardEntry(route)}
+        onSelect={(route) => {
+          if (route === "job_loss") setJobLossEntryOpen(true);
+          else setWizardEntry(route);
+        }}
+      />
+      {/* ── Job Loss Mode entry (TODO §15.C1) ── */}
+      <JobLossEntry
+        open={jobLossEntryOpen}
+        onClose={() => setJobLossEntryOpen(false)}
+        onActivate={(patch) => setConfig(prev => ({ ...prev, ...patch }))}
       />
       {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}
       {wizardEntry !== null && (

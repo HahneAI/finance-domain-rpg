@@ -391,7 +391,10 @@ export function buildYear(cfg) {
   // Job Loss Mode (TODO §15.C): when active, weeks on/after jobLossDate have
   // earned income forced to $0. Benefits/401k naturally fall to $0 too because
   // grossPay drives them. Historical weeks before jobLossDate are untouched.
+  // §15.C6: returnToWorkDate, when set, ends Job Loss Mode at that boundary —
+  // weeks on/after returnToWorkDate resume normal earned-income math.
   const jobLossStart = cfg.jobLossMode ? parseIsoDate(cfg.jobLossDate) : null;
+  const returnToWork = cfg.jobLossMode ? parseIsoDate(cfg.returnToWorkDate) : null;
   // Biweekly/salary: parity determines which idx%2 value marks a pay week.
   // Falls back to firstActiveIdx%2 when the user hasn't answered the wizard question.
   const isBiweeklyOrSalary = cfg.userPaySchedule === "biweekly" || cfg.userPaySchedule === "salary";
@@ -486,8 +489,11 @@ export function buildYear(cfg) {
 
     // Job Loss Mode boundary: collapse earned-income inputs to zero from the
     // loss date forward so all downstream math (taxable gross, 401k, benefits
-    // deduction, net) cascades naturally.
-    const inJobLoss = jobLossStart && weekEnd >= jobLossStart;
+    // deduction, net) cascades naturally. Closes at returnToWorkDate (§15.C6)
+    // so projected income resumes from that week onward.
+    const inJobLoss = jobLossStart
+      && weekEnd >= jobLossStart
+      && (!returnToWork || weekEnd < returnToWork);
     if (inJobLoss) {
       totalHours = 0;
       regularHours = 0;

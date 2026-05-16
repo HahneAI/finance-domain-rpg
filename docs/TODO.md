@@ -294,6 +294,87 @@ without forcing the reviewer to grep through JSON.*
 
 ---
 
+### J. Visual Testing Checklist — foundation phase (§15.A–C5 + H seed)
+
+*Manual smoke pass covering everything shipped on the
+`claude/startup-foundation-phase-one-A6957` branch. Run through before
+merging or before declaring the foundation phase done. Mark items as
+they pass; failures become bugs to file.*
+
+#### Entry points
+- [ ] Open the **Life Events** trigger from the desktop sidebar — modal opens with three
+  tiles: Pay Structure Changed, Lost My Job, Quick Rate Update (Coming Soon, disabled)
+- [ ] Same modal opens from the mobile drawer's Life Events button
+- [ ] Backdrop click and Escape both close the modal
+
+#### Setup wizard seed (§15.H)
+- [ ] Fresh first-run wizard: Step 0 shows **"Are you currently unemployed?"** Y/N pills
+  above the welcome copy
+- [ ] Next is disabled until you tap Yes or No; both answers continue to the DHL question
+  (no flow change)
+- [ ] Re-entry flows (Pay Structure Changed, etc.) skip the Y/N question entirely
+
+#### Pay Structure Changed wizard (§15.B)
+- [ ] Tile opens the wizard in `structure_change` mode — Step 0 shows the brief overview,
+  not the picker
+- [ ] All wizard fields pre-fill from your existing config
+- [ ] Toggling DHL ↔ Base in Step 1 surfaces an accent callout explaining preset defaults
+- [ ] Wrap Up shows the **"What's Changing"** diff card listing each changed field as
+  `before → after` (or empty-state copy if nothing changed)
+- [ ] Final button reads **"Confirm Changes"** instead of "Finish"
+- [ ] Goals, expenses, and logs are unchanged after completion
+
+#### Job Loss entry (§15.C1 + C2)
+- [ ] Lost My Job tile opens the **JobLossEntry** modal (not the wizard)
+- [ ] Date picker defaults to today
+- [ ] Y/N "Are you getting unemployment benefits?" required to enable Activate
+- [ ] Choosing Yes reveals weekly amount, duration weeks, waiting-week toggle
+- [ ] Activate flips the engine — projected weekly income drops to $0 from the date
+  forward (verify in Income panel)
+
+#### Job Loss banner
+- [ ] Amber banner appears at top of every panel when in Job Loss Mode
+- [ ] Reads "Projections show $0 earned income from [date] forward"
+- [ ] When duration is set, appends "Unemployment runs out on [date]"
+- [ ] **Triage Expenses** button opens the triage sheet
+- [ ] **Back to Work** clears all job-loss + unemployment fields and launches the
+  structure_change wizard
+- [ ] Dismiss `×` hides the banner; reload brings it back
+
+#### Job Loss Dashboard runway tile (§15.C4)
+- [ ] Renders below the banner, only when in Job Loss Mode
+- [ ] Three headline numbers: Runway days, Runway ends date, Weekly burn
+- [ ] Runway/cliff color: red ≤ 30 days, amber ≤ 90, green otherwise
+- [ ] "Current savings" input updates runway live; entering a value isn't persisted on reload
+- [ ] Scenario toggle (With/Without unemployment) shows a side-by-side comparison strip —
+  only visible when benefits are configured
+- [ ] Footer line shows "N benefit weeks remaining · $X projected total"
+
+#### Expense Triage sheet (§15.C3 + C5)
+- [ ] Lists every expense, Essential rows above Flexible (Lifestyle = Flexible amber pill)
+- [ ] Three-state Active / Paused / Cancelled toggle per row
+- [ ] Pausing a row immediately drops weekly burn on the dashboard tile and weekly spend
+  in BudgetPanel
+- [ ] "Pause all Flexible (N)" button visible only when ≥1 active Lifestyle row exists
+- [ ] "Auto-reactivate when I'm back to work" checkbox appears only on non-active rows
+- [ ] Bills due before first unemployment payment land at the very top with red
+  **Needs Coverage** badge
+
+#### Bill countdown tiles (§15.C5)
+- [ ] Upcoming Bills section in dashboard lists active expenses due within 35 days,
+  sorted by days-until
+- [ ] Tile color: red ≤ 7 days, gold ≤ 14, neutral past that
+- [ ] Needs Coverage badge appears on tiles for bills due before first unemployment payment
+- [ ] Pausing/cancelling an expense in triage removes its tile
+
+#### Back to Work exit
+- [ ] Back to Work resets the banner, runway tile, and triage filtering
+- [ ] Expenses with auto-reactivate=true (default) flip back to Active automatically
+- [ ] Expenses where you unchecked auto-reactivate stay Paused/Cancelled
+- [ ] Lands in the structure_change wizard pre-filled with prior pay config
+
+---
+
 ## 0. Base user Foundation — Priority Sprint
 
 *Source: base user-wizard-audit.md full audit, 2026-04-28. All 12 items are blockers or

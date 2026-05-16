@@ -116,6 +116,16 @@ export const DEFAULT_CONFIG = {
   unemploymentDurationWeeks: null, // number of payable weeks granted
   unemploymentWaitingWeek: false,  // true = first benefit week is unpaid (most states)
 
+  // Re-employment tracker (TODO §15.C6) — null defaults; the dashboard
+  // pre-fills targetIncomeAnnual from baseRate × maxWeeklyHours × 52 when
+  // unset. returnToWorkDate, when set, ends Job Loss Mode in buildYear at
+  // that week boundary so forward projections resume earned income.
+  // jobApplications stores the application log inline on config — no schema
+  // migration needed; each entry: { id, company, role, dateApplied, status }.
+  targetIncomeAnnual: null,
+  returnToWorkDate: null,
+  jobApplications: [],
+
   // ── Tax rates — generalized (wizard-derived) ─────────────────
   // These replace the old w1/w2 naming which was DHL-specific.
   // fedRateLow/stateRateLow = shorter/consistent paycheck rate

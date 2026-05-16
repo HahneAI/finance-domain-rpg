@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { getEffectiveAmount, getPhaseIndex } from "../lib/finance.js";
 import { getNextDueDate } from "../lib/expense.js";
+import { ReemploymentTracker } from "./ReemploymentTracker.jsx";
 
 // First unemployment payment date — null when no benefits are configured.
 // Treats the user's "weekly" payout as landing at the end of each benefit
@@ -36,7 +37,7 @@ function firstUnemploymentPaymentDate(cfg) {
  * excluded from the burn. Unemployment math respects waiting-week offset
  * and remaining duration.
  */
-export function JobLossDashboard({ config, expenses, effectiveToday }) {
+export function JobLossDashboard({ config, setConfig, expenses, effectiveToday }) {
   const [savingsDraft, setSavingsDraft]   = useState("");
   const [includeBenefits, setIncludeBenefits] = useState(true);
 
@@ -373,6 +374,11 @@ export function JobLossDashboard({ config, expenses, effectiveToday }) {
             Tiers: red ≤ 7 days · gold ≤ 14 days. "Needs Coverage" means the bill is due before your first unemployment payment lands — pull from savings.
           </div>
         </div>
+      )}
+
+      {/* ── Re-employment tracker (TODO §15.C6) ── */}
+      {setConfig && (
+        <ReemploymentTracker config={config} setConfig={setConfig} />
       )}
     </div>
   );

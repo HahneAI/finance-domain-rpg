@@ -1594,6 +1594,10 @@ export default function App() {
                       unemploymentWeekly: null,
                       unemploymentDurationWeeks: null,
                       unemploymentWaitingWeek: false,
+                      // §15.C6: projected return date is moot once they're actually
+                      // re-employed via the wizard. Job application log stays as
+                      // user history.
+                      returnToWorkDate: null,
                     }));
                     setWizardEntry("structure_change");
                   }}
@@ -1629,10 +1633,11 @@ export default function App() {
             </div>
             );
           })()}
-          {/* ── Job Loss Dashboard (TODO §15.C4) ── */}
+          {/* ── Job Loss Dashboard (TODO §15.C4 + C6) ── */}
           {config.jobLossMode && (
             <JobLossDashboard
               config={config}
+              setConfig={setConfig}
               expenses={expenses}
               effectiveToday={effectiveToday}
             />

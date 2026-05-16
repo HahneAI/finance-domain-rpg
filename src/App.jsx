@@ -2612,12 +2612,14 @@ export default function App() {
         onClose={() => setJobLossEntryOpen(false)}
         onActivate={(patch) => setConfig(prev => ({ ...prev, ...patch }))}
       />
-      {/* ── Expense triage (TODO §15.C3) ── */}
+      {/* ── Expense triage (TODO §15.C3 + C5 needs-coverage sort) ── */}
       <ExpenseTriage
         open={expenseTriageOpen}
         onClose={() => setExpenseTriageOpen(false)}
         expenses={expenses}
         setExpenses={setExpenses}
+        config={config}
+        effectiveToday={effectiveToday}
       />
       {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}
       {wizardEntry !== null && (

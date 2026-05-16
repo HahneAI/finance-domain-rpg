@@ -1,5 +1,17 @@
 import { useEffect, useMemo } from "react";
 import { CATEGORY_COLORS } from "../constants/config.js";
+import { getNextDueDate } from "../lib/expense.js";
+
+function firstUnemploymentPaymentDate(cfg) {
+  if (!cfg?.unemploymentEnabled) return null;
+  if ((cfg.unemploymentWeekly ?? 0) <= 0) return null;
+  if (!cfg.jobLossDate) return null;
+  const start = new Date(cfg.jobLossDate + "T12:00:00");
+  const offsetDays = cfg.unemploymentWaitingWeek ? 14 : 7;
+  const d = new Date(start);
+  d.setDate(d.getDate() + offsetDays);
+  return d;
+}
 
 /**
  * ExpenseTriage — modal sheet launched from the Job Loss banner.
@@ -26,7 +38,7 @@ function isFlexibleCategory(cat) {
   return cat === "Lifestyle";
 }
 
-export function ExpenseTriage({ open, onClose, expenses, setExpenses }) {
+export function ExpenseTriage({ open, onClose, expenses, setExpenses, config, effectiveToday }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -34,16 +46,38 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // §15.C5: bills due before the first unemployment payment land at the very
+  // top with a "Needs Coverage" flag so the user can't miss them.
+  const needsCoverageIds = useMemo(() => {
+    const ids = new Set();
+    if (!config?.jobLossMode) return ids;
+    const firstPaymentDate = firstUnemploymentPaymentDate(config);
+    if (!firstPaymentDate) return ids;
+    const todayDate = effectiveToday
+      ? new Date(effectiveToday + "T12:00:00")
+      : new Date();
+    (expenses ?? []).forEach(exp => {
+      const status = exp.jobLossStatus ?? "active";
+      if (status !== "active") return;
+      const due = getNextDueDate(exp, todayDate);
+      if (due && due < firstPaymentDate) ids.add(exp.id);
+    });
+    return ids;
+  }, [expenses, config, effectiveToday]);
+
   const sortedExpenses = useMemo(() => {
     if (!expenses) return [];
-    // Group Essential first so the user lands on the priority items.
+    // Sort order: needs-coverage first, then Essential, then Flexible, label tie-break.
     return [...expenses].sort((a, b) => {
+      const aCov = needsCoverageIds.has(a.id);
+      const bCov = needsCoverageIds.has(b.id);
+      if (aCov !== bCov) return aCov ? -1 : 1;
       const aEss = !isFlexibleCategory(a.category);
       const bEss = !isFlexibleCategory(b.category);
       if (aEss !== bEss) return aEss ? -1 : 1;
       return (a.label ?? "").localeCompare(b.label ?? "");
     });
-  }, [expenses]);
+  }, [expenses, needsCoverageIds]);
 
   if (!open) return null;
 
@@ -175,7 +209,7 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses }) {
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "3px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px", flexWrap: "wrap" }}>
                         <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>
                           {exp.label ?? "Untitled"}
                         </span>
@@ -187,6 +221,15 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses }) {
                         }}>
                           {flexible ? "Flexible" : "Essential"}
                         </span>
+                        {needsCoverageIds.has(exp.id) && (
+                          <span style={{
+                            fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
+                            color: "var(--color-bg-base)", background: "var(--color-deduction)",
+                            padding: "2px 6px", borderRadius: "3px", fontWeight: "bold",
+                          }}>
+                            Needs Coverage
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
                         {exp.category ?? "—"}{monthly != null ? ` · $${Number(monthly).toLocaleString()}/mo` : ""}

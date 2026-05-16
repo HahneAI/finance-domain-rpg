@@ -1,5 +1,21 @@
 import { useMemo, useState } from "react";
 import { getEffectiveAmount, getPhaseIndex } from "../lib/finance.js";
+import { getNextDueDate } from "../lib/expense.js";
+
+// First unemployment payment date — null when no benefits are configured.
+// Treats the user's "weekly" payout as landing at the end of each benefit
+// week from jobLossDate forward. With waiting-week on, that's day 14; off,
+// day 7. The §15.C5 "needs coverage" flag fires for any bill due before this.
+function firstUnemploymentPaymentDate(cfg) {
+  if (!cfg?.unemploymentEnabled) return null;
+  if ((cfg.unemploymentWeekly ?? 0) <= 0) return null;
+  if (!cfg.jobLossDate) return null;
+  const start = new Date(cfg.jobLossDate + "T12:00:00");
+  const offsetDays = cfg.unemploymentWaitingWeek ? 14 : 7;
+  const d = new Date(start);
+  d.setDate(d.getDate() + offsetDays);
+  return d;
+}
 
 /**
  * JobLossDashboard — runway-focused tile rendered inline in main-content
@@ -23,6 +39,34 @@ import { getEffectiveAmount, getPhaseIndex } from "../lib/finance.js";
 export function JobLossDashboard({ config, expenses, effectiveToday }) {
   const [savingsDraft, setSavingsDraft]   = useState("");
   const [includeBenefits, setIncludeBenefits] = useState(true);
+
+  const upcomingBills = useMemo(() => {
+    if (!config?.jobLossMode) return [];
+    const todayDate = new Date(effectiveToday + "T12:00:00");
+    const firstPaymentDate = firstUnemploymentPaymentDate(config);
+    const msPerDay = 86400000;
+    const horizonDays = 35; // 30-day alert tier + a bit of headroom
+
+    return (expenses ?? [])
+      .filter(exp => (exp.jobLossStatus ?? "active") === "active")
+      .map(exp => {
+        const nextDue = getNextDueDate(exp, todayDate);
+        if (!nextDue) return null;
+        const days = Math.ceil((nextDue - todayDate) / msPerDay);
+        if (days > horizonDays) return null;
+        const needsCoverage = firstPaymentDate ? nextDue < firstPaymentDate : false;
+        return {
+          id: exp.id,
+          label: exp.label ?? "Untitled",
+          amount: exp.billingMeta?.amount ?? 0,
+          dueDate: nextDue,
+          daysUntil: Math.max(0, days),
+          needsCoverage,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+  }, [config, expenses, effectiveToday]);
 
   const dash = useMemo(() => {
     if (!config?.jobLossMode || !config?.jobLossDate) return null;
@@ -251,6 +295,82 @@ export function JobLossDashboard({ config, expenses, effectiveToday }) {
           </div>
           <div style={{ marginTop: "8px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
             {dash.benefitsRemainingWeeks} benefit weeks remaining · ${Math.round(dash.projectedUnemploymentTotal).toLocaleString()} projected total
+          </div>
+        </div>
+      )}
+
+      {/* ── Upcoming bill countdowns (TODO §15.C5) ── */}
+      {upcomingBills.length > 0 && (
+        <div style={{ marginTop: "16px" }}>
+          <label style={labelStyle}>Upcoming Bills</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
+            {upcomingBills.map(bill => {
+              // Tier colors per §15.C5 spec: red ≤ 7, gold ≤ 14, green/default beyond.
+              const tier = bill.daysUntil <= 7  ? "red"
+                         : bill.daysUntil <= 14 ? "gold"
+                         : bill.daysUntil <= 30 ? "muted"
+                         : "muted";
+              const tierColor = tier === "red"  ? "var(--color-deduction)"
+                              : tier === "gold" ? "var(--color-warning)"
+                              : "var(--color-border-subtle)";
+              const tierBg = tier === "red"  ? "rgba(239,68,68,0.06)"
+                           : tier === "gold" ? "rgba(245,158,11,0.06)"
+                           : "var(--color-bg-raised)";
+              return (
+                <div
+                  key={bill.id}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "12px",
+                    padding: "10px 12px",
+                    background: tierBg,
+                    border: `1px solid ${tierColor}`,
+                    borderRadius: "10px",
+                  }}
+                >
+                  <div style={{
+                    flex: "0 0 auto",
+                    minWidth: "52px",
+                    textAlign: "center",
+                    color: tier === "muted" ? "var(--color-text-secondary)" : tierColor,
+                  }}>
+                    <div style={{ fontSize: "20px", fontWeight: 700, fontFamily: "var(--font-mono)", lineHeight: 1 }}>
+                      {bill.daysUntil}
+                    </div>
+                    <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", marginTop: "2px" }}>
+                      {bill.daysUntil === 1 ? "day" : "days"}
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+                        {bill.label}
+                      </span>
+                      {bill.needsCoverage && (
+                        <span style={{
+                          fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
+                          color: "var(--color-bg-base)", background: "var(--color-deduction)",
+                          padding: "2px 6px", borderRadius: "3px", fontWeight: "bold",
+                        }}>
+                          Needs Coverage
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                      Due {bill.dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </div>
+                  </div>
+                  <div style={{
+                    fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 600,
+                    color: "var(--color-text-primary)",
+                  }}>
+                    ${Math.round(bill.amount).toLocaleString()}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: "8px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
+            Tiers: red ≤ 7 days · gold ≤ 14 days. "Needs Coverage" means the bill is due before your first unemployment payment lands — pull from savings.
           </div>
         </div>
       )}

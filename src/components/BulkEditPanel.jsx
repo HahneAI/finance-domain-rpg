@@ -25,6 +25,9 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
   const [showAddForm, setShowAddForm] = useState(false);
   const [addDraft, setAddDraft] = useState({ label: "", amount: "", cycle: "every30days", category: "Needs" });
 
+  // perPaycheckFromCycle stores weekly amounts; multiply by perCheckFactor to show per-check.
+  const perCheckFactor = 4 / cpm;
+
   // ── Month label for hint text ─────────────────────────────────────────────
   const monthLabel = (() => {
     const m = parseInt(selectedMonthIso.slice(5, 7), 10);
@@ -167,8 +170,8 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                   const displayAmt   = getDisplayAmount(exp);
                   const isInactive   = displayAmt === 0 && !isEdited && !isDeleted;
                   const draftPerPaycheck = isExpanded
-                    ? perPaycheckFromCycle(parseFloat(draftVals.amount) || 0, draftVals.cycle, cpm)
-                    : displayAmt;
+                    ? perPaycheckFromCycle(parseFloat(draftVals.amount) || 0, draftVals.cycle, cpm) * perCheckFactor
+                    : displayAmt * perCheckFactor;
 
                   return (
                     <div
@@ -211,7 +214,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                             {isInactive && <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1px" }}>INACTIVE</span>}
                           </div>
                           <div style={{ fontSize: "11px", color: isDeleted ? "var(--color-deduction)" : isEdited ? "var(--color-accent-primary)" : "var(--color-text-secondary)", marginTop: "2px" }}>
-                            {f2(displayAmt)}/wk
+                            {f2(displayAmt * perCheckFactor)}/check
                           </div>
                         </div>
 
@@ -410,7 +413,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
                         <span style={{ marginLeft: "6px", fontSize: "9px", color: "var(--color-accent-primary)", letterSpacing: "1px" }}>NEW</span>
                       </div>
                       <div style={{ fontSize: "11px", color: "var(--color-accent-primary)", marginTop: "2px" }}>
-                        {f2(perPaycheckFromCycle(parseFloat(a.amount) || 0, a.cycle, cpm))}/wk
+                        {f2(perPaycheckFromCycle(parseFloat(a.amount) || 0, a.cycle, cpm) * perCheckFactor)}/check
                       </div>
                     </div>
                     <SmBtn
@@ -495,7 +498,7 @@ export function BulkEditPanel({ phaseIdx, selectedMonthIso, expenses, cpm, onSav
               </div>
               {parseFloat(addDraft.amount) > 0 && (
                 <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>
-                  Per-paycheck reserve: <span style={{ color: "var(--color-accent-primary)" }}>{f2(perPaycheckFromCycle(parseFloat(addDraft.amount) || 0, addDraft.cycle, cpm))}</span>
+                  Per-paycheck reserve: <span style={{ color: "var(--color-accent-primary)" }}>{f2(perPaycheckFromCycle(parseFloat(addDraft.amount) || 0, addDraft.cycle, cpm) * perCheckFactor)}</span>
                 </div>
               )}
               <div style={{ display: "flex", gap: "6px" }}>

@@ -17,6 +17,10 @@ import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
+import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
+import { JobLossEntry } from "./components/JobLossEntry.jsx";
+import { ExpenseTriage } from "./components/ExpenseTriage.jsx";
+import { JobLossDashboard } from "./components/JobLossDashboard.jsx";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -237,6 +241,11 @@ export default function App() {
   // wizardEntry: null=closed, false=first-run, string=re-entry life event
   const [wizardEntry, setWizardEntry] = useState(null);
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
+  const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
+  const [expenseTriageOpen, setExpenseTriageOpen] = useState(false);
+  // Session-only dismissal so the banner re-appears on every page load,
+  // matching the §15.C1 spec ("dismissible but re-shows on reload").
+  const [jobLossBannerDismissed, setJobLossBannerDismissed] = useState(false);
 
   const currentView = viewStack[viewStack.length - 1];
   const mainContentRef = useRef(null);
@@ -781,8 +790,17 @@ export default function App() {
     [futureWeeks, weekNetLookup, futureWeekNetsRaw]
   );
 
+  // ── Job Loss Mode expense triage (TODO §15.C3) ──
+  // Paused/cancelled expenses drop out of forward projections while jobLossMode
+  // is active. Missing jobLossStatus is treated as "active" so existing rows
+  // need no migration.
+  const projectableExpenses = useMemo(() => {
+    if (!config.jobLossMode) return expenses;
+    return expenses.filter(exp => (exp.jobLossStatus ?? "active") === "active");
+  }, [expenses, config.jobLossMode]);
+
   // ── Week-by-week remaining spend using history-aware amounts ──
-  const remainingSpend = useMemo(() => computeRemainingSpend(expenses, futureWeeks), [expenses, futureWeeks]);
+  const remainingSpend = useMemo(() => computeRemainingSpend(projectableExpenses, futureWeeks), [projectableExpenses, futureWeeks]);
   const fundedGoalSpend = useMemo(() => getFundedGoalSpend(goals, effectiveToday), [goals, effectiveToday]);
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
@@ -1174,43 +1192,19 @@ export default function App() {
           {/* ── Life Events (re-entry wizard) ── */}
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
             <button
-              onClick={() => setLifeEventMenu(p => !p)}
+              onClick={() => setLifeEventMenu(true)}
               style={{
                 display: "block", width: "100%", textAlign: "left",
                 padding: "14px 20px", fontSize: "11px",
                 letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
-                color: lifeEventMenu ? "var(--color-gold)" : "var(--color-text-primary)",
-                borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
+                color: "var(--color-text-primary)",
+                borderLeft: "3px solid transparent",
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
             >
               Life Events
             </button>
-            {lifeEventMenu && (
-              <div>
-                {[
-                  { value: "lost_job",      label: "Lost my job" },
-                  { value: "changed_jobs",  label: "Changed jobs" },
-                  { value: "commission_job", label: "Commission job" },
-                ].map(ev => (
-                  <button
-                    key={ev.value}
-                    onClick={() => { setWizardEntry(ev.value); setLifeEventMenu(false); }}
-                    style={{
-                      display: "block", width: "100%", textAlign: "left",
-                      padding: "10px 24px", fontSize: "10px",
-                      letterSpacing: "1.5px", textTransform: "uppercase",
-                      background: "transparent", color: "var(--color-text-primary)",
-                      border: "none", borderLeft: "3px solid transparent",
-                      cursor: "pointer", transition: "color 0.15s",
-                    }}
-                  >
-                    {ev.label}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* ── Admin Tools ── */}
@@ -1516,6 +1510,138 @@ export default function App() {
 
         {/* Panel content */}
         <div ref={mainContentCallbackRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
+          {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
+          {config.jobLossMode && !jobLossBannerDismissed && (() => {
+            // Compute benefits-end date when duration is set, so the banner can
+            // show a "runs out on" cliff warning. Waiting week shifts the start.
+            let benefitsEndDate = null;
+            if (config.unemploymentEnabled
+                && config.jobLossDate
+                && (config.unemploymentDurationWeeks ?? 0) > 0) {
+              const start = new Date(config.jobLossDate + "T00:00:00");
+              const offsetDays = (config.unemploymentWaitingWeek ? 1 : 0) * 7
+                               + (config.unemploymentDurationWeeks * 7);
+              const end = new Date(start);
+              end.setDate(end.getDate() + offsetDays - 1);
+              benefitsEndDate = end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            }
+            return (
+            <div style={{
+              background: "rgba(245,158,11,0.10)",
+              border: "1px solid rgba(245,158,11,0.32)",
+              borderRadius: "12px",
+              padding: "10px 14px",
+              marginBottom: "14px",
+              display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap",
+            }}>
+              <div style={{
+                width: "8px", height: "8px", borderRadius: "50%",
+                background: "var(--color-warning)", flexShrink: 0,
+                boxShadow: "0 0 8px rgba(245,158,11,0.6)",
+              }} />
+              <div style={{ flex: 1, minWidth: "180px" }}>
+                <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", fontWeight: 700 }}>
+                  Job Loss Mode
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                  Projections show $0 earned income from{" "}
+                  <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>
+                    {config.jobLossDate ?? "—"}
+                  </span>{" "}
+                  forward.
+                  {benefitsEndDate && (
+                    <>
+                      {" "}Unemployment runs out on{" "}
+                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-warning)" }}>
+                        {benefitsEndDate}
+                      </span>
+                      .
+                    </>
+                  )}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => setExpenseTriageOpen(true)}
+                  style={{
+                    background: "transparent",
+                    color: "var(--color-warning)",
+                    border: "1px solid rgba(245,158,11,0.4)",
+                    borderRadius: "10px",
+                    padding: "6px 12px",
+                    fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                    fontWeight: 700, cursor: "pointer",
+                  }}
+                >
+                  Triage Expenses
+                </button>
+                <button
+                  onClick={() => {
+                    // Auto-reactivate flagged expenses on exit (§15.C3).
+                    setExpenses(prev => prev.map(exp => {
+                      const status = exp.jobLossStatus ?? "active";
+                      const auto = exp.autoReactivateOnIncome ?? true;
+                      if (status !== "active" && auto) {
+                        return { ...exp, jobLossStatus: "active" };
+                      }
+                      return exp;
+                    }));
+                    setConfig(prev => ({
+                      ...prev,
+                      jobLossMode: false,
+                      jobLossDate: null,
+                      unemploymentEnabled: null,
+                      unemploymentWeekly: null,
+                      unemploymentDurationWeeks: null,
+                      unemploymentWaitingWeek: false,
+                      // §15.C6: projected return date is moot once they're actually
+                      // re-employed via the wizard. Job application log stays as
+                      // user history.
+                      returnToWorkDate: null,
+                    }));
+                    setWizardEntry("structure_change");
+                  }}
+                  style={{
+                    background: "var(--color-warning)",
+                    color: "var(--color-bg-base)",
+                    border: "none", borderRadius: "10px",
+                    padding: "6px 12px",
+                    fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                    fontWeight: 700, cursor: "pointer",
+                  }}
+                >
+                  Back to Work
+                </button>
+                <button
+                  onClick={() => setJobLossBannerDismissed(true)}
+                  aria-label="Dismiss banner"
+                  style={{
+                    background: "transparent",
+                    color: "var(--color-text-secondary)",
+                    border: "1px solid var(--color-border-subtle)",
+                    borderRadius: "10px",
+                    width: "28px", height: "28px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer",
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6L6 18" /><path d="M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            );
+          })()}
+          {/* ── Job Loss Dashboard (TODO §15.C4 + C6) ── */}
+          {config.jobLossMode && (
+            <JobLossDashboard
+              config={config}
+              setConfig={setConfig}
+              expenses={expenses}
+              effectiveToday={effectiveToday}
+            />
+          )}
           {isAdmin && adminDemoView !== null
             ? <DemoAccountTree
                 key={adminDemoView}
@@ -1601,43 +1727,19 @@ export default function App() {
           {/* ── Life Events (re-entry wizard) ── */}
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
             <button
-              onClick={() => setLifeEventMenu(p => !p)}
+              onClick={() => { setLifeEventMenu(true); setDrawerOpen(false); }}
               style={{
                 display: "block", width: "100%", textAlign: "left",
                 padding: "14px 20px", fontSize: "11px",
                 letterSpacing: "2px", textTransform: "uppercase",
                 background: "transparent",
-                color: lifeEventMenu ? "var(--color-gold)" : "var(--color-text-primary)",
-                borderLeft: lifeEventMenu ? "3px solid #c8a84b" : "3px solid transparent",
+                color: "var(--color-text-primary)",
+                borderLeft: "3px solid transparent",
                 border: "none", cursor: "pointer", transition: "all 0.15s",
               }}
             >
               Life Events
             </button>
-            {lifeEventMenu && (
-              <div>
-                {[
-                  { value: "lost_job",      label: "Lost my job" },
-                  { value: "changed_jobs",  label: "Changed jobs" },
-                  { value: "commission_job", label: "Commission job" },
-                ].map(ev => (
-                  <button
-                    key={ev.value}
-                    onClick={() => { setWizardEntry(ev.value); setLifeEventMenu(false); setDrawerOpen(false); }}
-                    style={{
-                      display: "block", width: "100%", textAlign: "left",
-                      padding: "10px 24px", fontSize: "10px",
-                      letterSpacing: "1.5px", textTransform: "uppercase",
-                      background: "transparent", color: "var(--color-text-primary)",
-                      border: "none", borderLeft: "3px solid transparent",
-                      cursor: "pointer", transition: "color 0.15s",
-                    }}
-                  >
-                    {ev.label}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </nav>
 
@@ -2500,6 +2602,30 @@ export default function App() {
           onDismiss={() => setConfirmDismissed(true)}
         />
       )}
+      {/* ── Life Events menu (entry point modal — TODO §15.A) ── */}
+      <LifeEventMenu
+        open={lifeEventMenu}
+        onClose={() => setLifeEventMenu(false)}
+        onSelect={(route) => {
+          if (route === "job_loss") setJobLossEntryOpen(true);
+          else setWizardEntry(route);
+        }}
+      />
+      {/* ── Job Loss Mode entry (TODO §15.C1) ── */}
+      <JobLossEntry
+        open={jobLossEntryOpen}
+        onClose={() => setJobLossEntryOpen(false)}
+        onActivate={(patch) => setConfig(prev => ({ ...prev, ...patch }))}
+      />
+      {/* ── Expense triage (TODO §15.C3 + C5 needs-coverage sort) ── */}
+      <ExpenseTriage
+        open={expenseTriageOpen}
+        onClose={() => setExpenseTriageOpen(false)}
+        expenses={expenses}
+        setExpenses={setExpenses}
+        config={config}
+        effectiveToday={effectiveToday}
+      />
       {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}
       {wizardEntry !== null && (
         <SetupWizard

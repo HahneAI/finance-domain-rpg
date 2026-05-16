@@ -15,6 +15,28 @@ export const CHECKS_PER_MONTH = { weekly: 4, biweekly: 2, monthly: 1, salary: 2 
 export const normalizeCycle = (cycle) =>
   EXPENSE_CYCLE_OPTIONS.find(o => o.value === cycle) ? cycle : "every30days";
 
+// Returns the next calendar date this expense is due, or null if the expense
+// has no billingMeta amount / no anchor date. Used by §15.C5 countdown tiles.
+//
+// Cycle math: from billingMeta.effectiveFrom (anchor), advance by `cycleDays`
+// until we land on or after `todayDate`. If today === anchor, that IS the
+// next due day. We never return a date in the past.
+export function getNextDueDate(expense, todayDate) {
+  const meta = expense?.billingMeta;
+  if (!meta || !meta.effectiveFrom || (meta.amount ?? 0) <= 0) return null;
+  const cycle = EXPENSE_CYCLE_OPTIONS.find(o => o.value === normalizeCycle(meta.cycle));
+  if (!cycle) return null;
+  const anchor = new Date(meta.effectiveFrom + "T12:00:00");
+  if (Number.isNaN(anchor.getTime())) return null;
+  const today = todayDate instanceof Date ? todayDate : new Date(todayDate);
+  const msPerDay = 86400000;
+  if (today <= anchor) return anchor;
+  const cyclesElapsed = Math.ceil((today - anchor) / (cycle.days * msPerDay));
+  const next = new Date(anchor);
+  next.setDate(next.getDate() + cyclesElapsed * cycle.days);
+  return next;
+}
+
 export const roundToQuarter = (n) => Math.round(n * 4) / 4;
 
 export const toMonthlyCost = (amount, cycle) => {
@@ -35,13 +57,18 @@ export const fromMonthlyCost = (monthly, cycle) => {
   return monthly;
 };
 
-export const perPaycheckFromCycle = (amount, cycle, cpm) =>
-  roundToQuarter(toMonthlyCost(amount, cycle) / cpm);
+// Converts a bill amount to a per-week reserve (weekly[q] storage unit).
+// Always divides by 4 (weeks/month) regardless of pay schedule so the stored
+// value is consistent: display * perCheckFactor = per-paycheck amount.
+// For weekly users perCheckFactor=1, so weekly = per-paycheck — no change.
+// For biweekly users perCheckFactor=2, so stored 175/wk × 2 = $350/check.
+export const perPaycheckFromCycle = (amount, cycle, _cpm) =>
+  roundToQuarter(toMonthlyCost(amount, cycle) / 4);
 
-export const cycleAmountFromPerPaycheck = (perPaycheck, cycle, cpm) =>
-  fromMonthlyCost(roundToQuarter(perPaycheck * cpm), cycle);
+export const cycleAmountFromPerPaycheck = (perWeek, cycle, _cpm) =>
+  fromMonthlyCost(roundToQuarter(perWeek * 4), cycle);
 
-export const monthlyFromPerPaycheck = (perPaycheck, cpm) => roundToQuarter(perPaycheck * cpm);
+export const monthlyFromPerPaycheck = (perWeek, _cpm) => roundToQuarter(perWeek * 4);
 
 /**
  * Builds the weekly[4] array for a new history entry.

@@ -7,6 +7,11 @@ export const PAYCHECKS_PER_YEAR = { weekly: 52, biweekly: 26, monthly: 12, salar
 export const DEFAULT_CONFIG = {
   // ── Wizard gate fields ──────────────────────────────────────
   setupComplete: false,        // true once setup wizard completes; gates first-run flow
+  // First-run Step 0 question (TODO §15.H — seed). null = unanswered;
+  // true = user is unemployed at signup; false = currently working.
+  // For now both answers route through the standard pay-structure steps;
+  // the full branched onboarding path is parked in TODO §15.H.
+  startedUnemployed: null,
   taxExemptOptIn: false,       // true once user accepts tax exempt disclaimer (Step 8)
   bufferEnabled: true,         // when true, paycheckBuffer is excluded from all spendable math
   paycheckBuffer: 50,          // $/week excluded per check (bufferEnabled must be true); max $200
@@ -95,6 +100,31 @@ export const DEFAULT_CONFIG = {
   // ── Schedule ─────────────────────────────────────────────────
   startDate: null,             // "YYYY-MM-DD" job start — used to derive firstActiveIdx; null = not yet set
   firstActiveIdx: 7,
+
+  // ── Job Loss Mode (TODO §15.C) ───────────────────────────────
+  // When jobLossMode is true, buildYear zeros out earned income for every
+  // week on/after jobLossDate. Toggled on by the "Lost My Job" entry flow
+  // and cleared by the "Back to Work" exit (which routes into the
+  // structure_change wizard).
+  jobLossMode: false,
+  jobLossDate: null,           // "YYYY-MM-DD" — first week where projections drop to $0 earned
+
+  // Unemployment benefits (TODO §15.C2) — captured in the Job Loss entry flow.
+  // null = unanswered (pre-entry); true/false once the user has set them.
+  unemploymentEnabled: null,
+  unemploymentWeekly: null,    // $ paid per benefit week
+  unemploymentDurationWeeks: null, // number of payable weeks granted
+  unemploymentWaitingWeek: false,  // true = first benefit week is unpaid (most states)
+
+  // Re-employment tracker (TODO §15.C6) — null defaults; the dashboard
+  // pre-fills targetIncomeAnnual from baseRate × maxWeeklyHours × 52 when
+  // unset. returnToWorkDate, when set, ends Job Loss Mode in buildYear at
+  // that week boundary so forward projections resume earned income.
+  // jobApplications stores the application log inline on config — no schema
+  // migration needed; each entry: { id, company, role, dateApplied, status }.
+  targetIncomeAnnual: null,
+  returnToWorkDate: null,
+  jobApplications: [],
 
   // ── Tax rates — generalized (wizard-derived) ─────────────────
   // These replace the old w1/w2 naming which was DHL-specific.

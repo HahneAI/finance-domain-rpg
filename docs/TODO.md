@@ -199,6 +199,182 @@ leave the record intact but drop out of projections until reactivated.*
 
 ---
 
+### H. Jobless Onboarding Path *(seeded 2026-05-15)*
+
+*A new first-run wizard question — "Are you currently unemployed?" — was planted in Step 0.
+Today both Yes and No route through the standard pay-structure steps (DHL question next),
+and the answer is stored on `config.startedUnemployed`. The plan below builds that seed into
+a true branched onboarding so jobless users land in a usable app from day one.*
+
+#### H1. Branched Step 0 routing
+
+- [ ] **Persist `startedUnemployed` to Supabase** — currently lives in the JSON `config`
+  column via the standard merge path, but is not wired into `loadUserData` / `saveUserData`
+  explicitly; confirm it round-trips on reload and add an explicit projection if it doesn't
+- [ ] **Wizard routing** — when `startedUnemployed === true`:
+  - [ ] Skip Step 1 (Pay Structure), Step 2 (Schedule), Step 3 (Deductions), Step 4 (Tax Rates)
+  - [ ] Route directly into a new "Jobless Setup" mini-flow (H2)
+- [ ] **Re-entry guard** — `startedUnemployed === true` users who later run Life Events get
+  full access to the structure_change wizard; that's how they first fill in pay-structure
+  fields when they exit Job Loss Mode (see H4)
+
+#### H2. Jobless Setup mini-flow
+
+*Reuses the §15.C2 question set so the modal and the wizard branch ask the same things.*
+
+- [ ] **Step 0a — Confirm unemployment benefits Y/N** — same UI as the JobLossEntry modal
+- [ ] **Step 0b — If Yes** — weekly amount, duration in weeks, waiting-week toggle
+- [ ] **Step 0c — Stand-in `jobLossDate`** — default to today; allow override (e.g. user
+  signed up a few weeks after losing the job)
+- [ ] **Step 0d — Optional prior pay context** — prior employer name + prior base rate,
+  used as the default Target Income in the §15.C6 re-employment tracker
+- [ ] **Step 0e — Wrap Up** — confirm and finish
+
+#### H3. Wizard completion path for jobless users
+
+- [ ] **`onComplete` payload** — sets `jobLossMode: true`, `jobLossDate`, and all four
+  unemployment fields; marks `setupComplete: true`
+- [ ] **Land on Job Loss Dashboard** — first paint after wizard close goes to the Job
+  Loss Dashboard view (§15.C4) rather than the standard home; the dashboard is the home
+  for as long as `jobLossMode` is true
+- [ ] **Skip default Food expense seeding** — adding the $400/mo Food default during
+  jobless onboarding muddies the runway picture; defer expense seeding to the user's
+  first triage pass (§15.C3)
+
+#### H4. "Back to Work" exit for users who started jobless
+
+- [ ] **First-time pay-structure wizard** — Back to Work for users who started jobless runs
+  the FULL pay-structure wizard (steps 1–4 + Wrap Up) since they never filled it in
+- [ ] **Diff view degrades gracefully** — the §15.B structure_change "What's Changing"
+  diff renders an empty-state message when there's no prior config to compare against
+- [ ] **Clear `startedUnemployed` on success** — once they're employed, the flag is reset
+  so future Life Events flows behave normally
+
+#### H5. App shell signals
+
+- [ ] **Banner copy** — when `jobLossMode && startedUnemployed`, the Job Loss banner reads
+  "Started in Job Loss Mode — no prior pay history" instead of the date-anchored phrasing,
+  so the entry context is unambiguous on reload
+- [ ] **"Set up essential expenses" prompt** — first-paint Job Loss Dashboard tile that
+  routes the user into the triage list (§15.C3) so they can populate it before they need it
+
+---
+
+### I. Admin Toolkit updates for §15 work
+
+*Most §15 fields land in the `config` JSON column or on the expense rows, so the existing
+admin tools surface them automatically (Config Raw View dumps the whole config; DB Row
+Viewer shows the expenses array). A few targeted upgrades make the new state legible
+without forcing the reviewer to grep through JSON.*
+
+- [ ] **Live State Inspector — Job Loss Mode pill**
+  - [ ] Amber pill in the bottom-right Live card when `config.jobLossMode === true`
+  - [ ] Add three values: `jobLossDate`, `unemploymentWeekly`, `unemploymentRemainingWeeks`
+    (computed: durationWeeks − weeks elapsed since jobLossDate − waiting-week offset)
+- [ ] **Week Inspector — unemployment income row**
+  - [ ] When `w.unemploymentIncome > 0`, show a "Unemployment" line in the Pay section
+    alongside Gross / Taxable / Net so reviewers can see the non-taxed line directly
+  - [ ] When `inJobLoss && w.unemploymentIncome === 0`, surface a small grey note:
+    "Job Loss Mode — outside benefit window" (catches waiting-week and post-expiration weeks)
+- [ ] **DB Row Viewer — expense triage summary**
+  - [ ] One-liner above the expenses dump: "Triage: X active · Y paused · Z cancelled"
+    (count derived from `jobLossStatus`, missing = active)
+  - [ ] Flag any expense where `autoReactivateOnIncome === false` so the reviewer knows it
+    will stay paused on Back to Work
+- [ ] **Config Raw View — Life Events header**
+  - [ ] Add a short header above the JSON dump listing only the §15-relevant fields with
+    values: `startedUnemployed`, `jobLossMode`, `jobLossDate`, `unemploymentEnabled`,
+    `unemploymentWeekly`, `unemploymentDurationWeeks`, `unemploymentWaitingWeek`
+  - [ ] Lets a reviewer assess Job Loss state in one read without scrolling the full config
+- [ ] **CLAUDE.md update**
+  - [ ] Append the new field surface to the "Diagnostic request templates" section so
+    future sessions know to ask for Job Loss state when the complaint is runway-related
+  - [ ] Document the per-week `unemploymentIncome` annotation on the buildYear output so
+    consumers know the engine emits a non-taxed income line
+
+---
+
+### J. Visual Testing Checklist — foundation phase (§15.A–C5 + H seed)
+
+*Manual smoke pass covering everything shipped on the
+`claude/startup-foundation-phase-one-A6957` branch. Run through before
+merging or before declaring the foundation phase done. Mark items as
+they pass; failures become bugs to file.*
+
+#### Entry points
+- [ ] Open the **Life Events** trigger from the desktop sidebar — modal opens with three
+  tiles: Pay Structure Changed, Lost My Job, Quick Rate Update (Coming Soon, disabled)
+- [ ] Same modal opens from the mobile drawer's Life Events button
+- [ ] Backdrop click and Escape both close the modal
+
+#### Setup wizard seed (§15.H)
+- [ ] Fresh first-run wizard: Step 0 shows **"Are you currently unemployed?"** Y/N pills
+  above the welcome copy
+- [ ] Next is disabled until you tap Yes or No; both answers continue to the DHL question
+  (no flow change)
+- [ ] Re-entry flows (Pay Structure Changed, etc.) skip the Y/N question entirely
+
+#### Pay Structure Changed wizard (§15.B)
+- [ ] Tile opens the wizard in `structure_change` mode — Step 0 shows the brief overview,
+  not the picker
+- [ ] All wizard fields pre-fill from your existing config
+- [ ] Toggling DHL ↔ Base in Step 1 surfaces an accent callout explaining preset defaults
+- [ ] Wrap Up shows the **"What's Changing"** diff card listing each changed field as
+  `before → after` (or empty-state copy if nothing changed)
+- [ ] Final button reads **"Confirm Changes"** instead of "Finish"
+- [ ] Goals, expenses, and logs are unchanged after completion
+
+#### Job Loss entry (§15.C1 + C2)
+- [ ] Lost My Job tile opens the **JobLossEntry** modal (not the wizard)
+- [ ] Date picker defaults to today
+- [ ] Y/N "Are you getting unemployment benefits?" required to enable Activate
+- [ ] Choosing Yes reveals weekly amount, duration weeks, waiting-week toggle
+- [ ] Activate flips the engine — projected weekly income drops to $0 from the date
+  forward (verify in Income panel)
+
+#### Job Loss banner
+- [ ] Amber banner appears at top of every panel when in Job Loss Mode
+- [ ] Reads "Projections show $0 earned income from [date] forward"
+- [ ] When duration is set, appends "Unemployment runs out on [date]"
+- [ ] **Triage Expenses** button opens the triage sheet
+- [ ] **Back to Work** clears all job-loss + unemployment fields and launches the
+  structure_change wizard
+- [ ] Dismiss `×` hides the banner; reload brings it back
+
+#### Job Loss Dashboard runway tile (§15.C4)
+- [ ] Renders below the banner, only when in Job Loss Mode
+- [ ] Three headline numbers: Runway days, Runway ends date, Weekly burn
+- [ ] Runway/cliff color: red ≤ 30 days, amber ≤ 90, green otherwise
+- [ ] "Current savings" input updates runway live; entering a value isn't persisted on reload
+- [ ] Scenario toggle (With/Without unemployment) shows a side-by-side comparison strip —
+  only visible when benefits are configured
+- [ ] Footer line shows "N benefit weeks remaining · $X projected total"
+
+#### Expense Triage sheet (§15.C3 + C5)
+- [ ] Lists every expense, Essential rows above Flexible (Lifestyle = Flexible amber pill)
+- [ ] Three-state Active / Paused / Cancelled toggle per row
+- [ ] Pausing a row immediately drops weekly burn on the dashboard tile and weekly spend
+  in BudgetPanel
+- [ ] "Pause all Flexible (N)" button visible only when ≥1 active Lifestyle row exists
+- [ ] "Auto-reactivate when I'm back to work" checkbox appears only on non-active rows
+- [ ] Bills due before first unemployment payment land at the very top with red
+  **Needs Coverage** badge
+
+#### Bill countdown tiles (§15.C5)
+- [ ] Upcoming Bills section in dashboard lists active expenses due within 35 days,
+  sorted by days-until
+- [ ] Tile color: red ≤ 7 days, gold ≤ 14, neutral past that
+- [ ] Needs Coverage badge appears on tiles for bills due before first unemployment payment
+- [ ] Pausing/cancelling an expense in triage removes its tile
+
+#### Back to Work exit
+- [ ] Back to Work resets the banner, runway tile, and triage filtering
+- [ ] Expenses with auto-reactivate=true (default) flip back to Active automatically
+- [ ] Expenses where you unchecked auto-reactivate stay Paused/Cancelled
+- [ ] Lands in the structure_change wizard pre-filled with prior pay config
+
+---
+
 ## 0. Base user Foundation — Priority Sprint
 
 *Source: base user-wizard-audit.md full audit, 2026-04-28. All 12 items are blockers or

@@ -237,9 +237,16 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const incomingWeekNet = futureWeekNets?.[0] ?? prevWeekNet ?? weeklyIncome;
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const wr = weeklyIncome - ts;
+  // §15.C3: drop paused/cancelled expenses from forward projections while
+  // Job Loss Mode is active. Display lists still show every expense — only
+  // the projected weekly-spend figure is filtered.
+  const projectableExpenses = useMemo(() => {
+    if (!config?.jobLossMode) return expenses;
+    return expenses.filter(exp => (exp.jobLossStatus ?? "active") === "active");
+  }, [expenses, config?.jobLossMode]);
   const avgWeeklySpend = useMemo(
-    () => computeRemainingSpend(expenses, futureWeeks ?? []).avgWeeklySpend ?? 0,
-    [expenses, futureWeeks],
+    () => computeRemainingSpend(projectableExpenses, futureWeeks ?? []).avgWeeklySpend ?? 0,
+    [projectableExpenses, futureWeeks],
   );
   // Set of month keys that have at least one non-loan expense with a monthlyOverride entry.
   // Used by MonthQuarterSelector to render the monthly change indicator dots on pills.
@@ -1620,7 +1627,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           <div><label style={lS}>Paid Every</label><select value={newExp.cycle} onChange={e => setNewExp(v => ({ ...v, cycle: e.target.value }))} style={iS}>{EXPENSE_CYCLE_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></div>
           <div style={{ gridColumn: "1/-1" }}><label style={lS}>Note (optional)</label><input type="text" value={newExp.note} onChange={e => setNewExp(v => ({ ...v, note: e.target.value }))} style={iS} placeholder="Short description" /></div>
           <div style={{ gridColumn: "1/-1", fontSize: "10px", color: "var(--color-text-secondary)" }}>
-            This sets aside {f2(perPaycheckFromCycle(parseFloat(newExp.amount) || 0, newExp.cycle, cpm))} from each paycheck.
+            This sets aside {f2(perPaycheckFromCycle(parseFloat(newExp.amount) || 0, newExp.cycle, cpm) * perCheckFactor)} from each paycheck.
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
@@ -2221,7 +2228,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 <div style={{ flex: 1, background: "var(--color-bg-raised)", borderRadius: "14px", padding: "14px 16px" }}>
                   <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "6px" }}>Per Check</div>
                   <div style={{ fontSize: "22px", fontWeight: 700, color: CATEGORY_COLORS[sheetExpLive.category] ?? "var(--color-green)", fontFamily: "var(--font-mono)" }}>
-                    {f2(displayEffective(sheetExpLive, ap))}
+                    {f2(displayEffective(sheetExpLive, ap) * perCheckFactor)}
                   </div>
                 </div>
                 <div style={{ flex: 1, background: "var(--color-bg-raised)", borderRadius: "14px", padding: "14px 16px" }}>
@@ -2317,7 +2324,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               /* ── Edit mode ── */
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {(() => {
-                  const editReserve = perPaycheckFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days", cpm);
+                  const editReserve = perPaycheckFromCycle(parseFloat(editVals.amount) || 0, editVals.cycle ?? "every30days", cpm) * perCheckFactor;
                   const belowFloor = isFoodSheet && editReserve < minFoodPerCheck;
                   const saveBtnDisabledStyle = belowFloor ? { opacity: 0.35, cursor: "not-allowed", pointerEvents: "none" } : {};
                   return (<>

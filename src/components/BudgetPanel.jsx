@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
@@ -2047,7 +2048,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         if (!(exp.history?.length)) return false;
         return (exp.history ?? []).some(entry => (entry.weekly ?? []).some(v => v > 0));
       });
-      return (
+      // Portaled to document.body so position:fixed resolves against the viewport
+      // and not the scrolling .main-content ancestor — iOS Safari hit-tests a
+      // fixed element nested in an overflow:auto container at an offset equal to
+      // that container's scrollTop, which made the sheet's buttons unresponsive.
+      return createPortal(
         <div
           onClick={closeRestoreSheet}
           style={{
@@ -2164,7 +2169,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             })}
             </div>{/* end scrollable content */}
           </div>{/* end sheet panel */}
-        </div>
+        </div>,
+        document.body
       );
     })()}
     {/* ── Expense Detail Bottom Sheet ── */}
@@ -2174,7 +2180,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         to   { transform: translateY(0);    opacity: 1; }
       }
     `}</style>
-    {sheetExpLive && (
+    {/* Portaled to document.body so position:fixed resolves against the viewport
+        rather than the scrolling .main-content ancestor. On iOS Safari a fixed
+        element nested in an overflow:auto container is hit-tested at an offset
+        equal to that container's scrollTop, which left the sheet's buttons
+        (including ✕) unresponsive depending on how far the list was scrolled. */}
+    {sheetExpLive && createPortal(
       <>
         {/* Backdrop */}
         <div onClick={closeSheet} style={{
@@ -2367,7 +2378,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             )}
           </div>
         </div>
-      </>
+      </>,
+      document.body
     )}
   </div>);
 }

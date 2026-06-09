@@ -45,7 +45,25 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // Take control on the next load instead of waiting for every tab to close,
+        // and drop stale precaches so a new deploy doesn't keep serving the old bundle.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        // Always revalidate the app shell against the network so a fresh deploy's
+        // index.html (and the new hashed bundle it references) loads on next visit.
+        navigateFallback: 'index.html',
         runtimeCaching: [
+          {
+            // App navigations: network-first so new builds win, falling back to cache offline.
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'app-shell',
+              networkTimeoutSeconds: 5,
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\//,
             handler: 'NetworkFirst',

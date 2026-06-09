@@ -734,6 +734,26 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
   - [x] Base completion timing on per-week surplus progression, not annualized fallback-first behavior.
   - [x] Show goal-finish context with both projected horizon and near-term weekly surplus deltas.
 
+---
+
+## 16. Portal Audit — Fixed Overlays Inside the Scroll Container (iOS Safari)
+
+*On mobile, `.main-content` is the scroll container (`overflow-y: auto`). iOS Safari hit-tests
+a `position: fixed` element nested inside an `overflow: auto/scroll` ancestor at an offset equal
+to that container's `scrollTop` — the overlay paints pinned to the viewport but taps land at the
+scrolled-away document position. Buttons (incl. ✕) then need repeated taps or go dead, varying
+with scroll position. Fixed so far: expense bottom sheets + restore sheet + drag overlay
+(`BudgetPanel.jsx`), all three Income modals (`IncomePanel.jsx`). App-root modals (Tools sheet,
+admin modal) are unaffected because they render outside `.main-content`.*
+
+- [ ] **Sweep all panels for un-portaled fixed overlays** — grep each panel component
+  (`HomePanel`, `ProfilePanel`, `LogPanel`, `BenefitsPanel`, `WeekConfirmModal`, and any others)
+  for `position: "fixed"` modals/sheets/overlays rendered *inside* the panel's JSX tree.
+  **Fix pattern (for consistency):** `import { createPortal } from "react-dom"` and wrap the
+  overlay block as `createPortal(<…overlay…/>, document.body)` so `position: fixed` resolves
+  against the viewport. Keep all styles/markup identical — only the DOM parent changes. Verify
+  on real iOS Safari that the ✕/action buttons respond on the first tap regardless of scroll.
+
 ## Completed
 
 ### Completed Section Summaries

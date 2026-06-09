@@ -23,14 +23,10 @@ Portaled all 3 `IncomePanel.jsx` fixed-position modals to `document.body`
 (`showWeekDetail` z1000, `showSharpener` z200, `showEventLossInfo` z210). Same
 root cause / same fix as item 1.
 
-## 3. "Touch targets need 2–3 taps / bad targets" (browser only) — TWO SUSPECTS
-- a) Any remaining fixed-in-scroll overlay inherits the offset hit-test → feels
-  like dead/mis-registering taps. Sweep for `position:"fixed"` inside panels
-  (HomePanel, ProfilePanel, LogPanel, BenefitsPanel) and portal them.
-- b) Expense cards open the sheet via a **350ms double-tap** (`lastTapRef`,
-  BudgetPanel ~line 1407). A single tap does nothing → reads as "needed two
-  taps." Confirm this is intended vs. should be single-tap on the row.
-  **Starting point:** grep panels for `position: "fixed"`; review double-tap UX.
+## 3. "Touch targets need 2–3 taps / bad targets" (browser only) — COVERED ELSEWHERE
+The 2–3 tap symptom is the same fixed-in-scroll hit-test offset → tracked as a
+general sweep in `docs/TODO.md` §16 (portal audit). The double-tap to open an
+expense card is intentional (confirmed by user), so it's not a bug.
 
 ## 4. Admin: Tools sheet — scroll hits background, touch "lost"; Tax Weeks button opened Demo accounts
 - a) **Scroll lock is ineffective.** `App.jsx:264` sets

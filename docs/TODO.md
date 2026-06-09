@@ -53,9 +53,13 @@ simplified but the original intent and constraints are preserved.*
   weekly approval (and to project take-home on charts when no custom schedule is set) — leave that
   behavior intact; this task is **text/naming only**.
 
-- [ ] **Purge grey text** — Replace dark-grey text across the app (especially the Account panel)
+- [x] **Purge grey text** — Replace dark-grey text across the app (especially the Account panel)
   with the standard white/primary text color used elsewhere. General text and labels should not be
   grey — purge grey text coloring.
+  - [x] Scoped to the Account/Profile panel (per decision): promoted standalone secondary/disabled
+    body text + the dim label style (`lS`→`lSp`) to white primary; preserved active/inactive toggle
+    state ternaries. Other panels' `--color-text-secondary` label hierarchy left intact — revisit if
+    a broader app-wide purge is wanted.
 
 - [ ] **Verify change email + password** — Make sure users can actually change their email and
   their password. (§8 marks these done — confirm they work end-to-end and fix if not.)

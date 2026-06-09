@@ -27,10 +27,12 @@ simplified but the original intent and constraints are preserved.*
   - [x] Header is a chevron toggle; rows + loans collapse while the header and per-paycheck
     total stay visible. State remembered per session (sessionStorage), defaults to all collapsed.
 
-- [ ] **Budget — slim down loan cards** — Loan cards shown in the Needs category are too verbose.
+- [x] **Budget — slim down loan cards** — Loan cards shown in the Needs category are too verbose.
   Remove the bottom-left text block (payments remaining, monthly payment amount, total left —
   including both redundant per-month labels). Leave only the **per-paycheck amount** on the
   budget/expenses view; full detail stays on the dedicated Loans tab.
+  - [x] Removed the bottom-left detail line and the right-side `/mo` figure from the overview
+    loan card; kept name, LOAN/status badges, per-paycheck amount, and EDIT/delete. Loans tab unchanged.
 
 - [ ] **Net worth health — financial breakthrough tips** — New feature: when net worth is below
   **10% of projected annual income**, surface a "financial breakthrough tips" feature that gently

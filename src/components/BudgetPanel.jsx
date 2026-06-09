@@ -1697,8 +1697,6 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             const dropsOff = payoffDate && payoffDate <= fiscalYearEnd;
             const isPaidOff = payoffDate && payoffDate <= TODAY_ISO;
             const inRunway = meta && !isPaidOff && TODAY_ISO < meta.firstPaymentDate;
-            const freq = meta ? (meta.paymentFrequency ?? meta.payFrequency ?? "weekly") : "weekly";
-            const freqLabel = { weekly: "week", biweekly: "2 wks", monthly: "month" }[freq] ?? freq;
             return <div key={exp.id} style={{ background: CATEGORY_BG[cat], border: "1px solid #1e1e1e", borderRadius: "6px", padding: "10px 12px", marginBottom: "6px" }}>
               {editLoanId === exp.id ? <LoanEditForm vals={editLoanVals} setVals={setEditLoanVals} onSave={() => saveEditLoan(exp.id)} onCancel={() => setEditLoanId(null)} iS={iS} lS={lS} /> :
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1710,17 +1708,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     {isPaidOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>✓ PAID OFF</span>}
                     {!isPaidOff && !inRunway && dropsOff && <span style={{ fontSize: "9px", color: "var(--color-green)" }}>drops off {fmtLoanDate(payoffDate, fiscalYearEnd)}</span>}
                   </div>
-                  {meta && <div style={{ fontSize: "10px", color: "var(--color-text-primary)", marginTop: "2px" }}>
-                    {inRunway
-                      ? `saving toward ${fmtLoanDate(meta.firstPaymentDate, fiscalYearEnd)} · ${f(meta.paymentAmount ?? 0)}/${freqLabel} due`
-                      : `${loanPaymentsRemaining(meta)} payments left · ${f(meta.paymentAmount ?? meta.paymentPerCheck ?? 0)}/${freqLabel} · ${f(meta.totalAmount)} total`
-                    }
-                  </div>}
+                  {/* Payments-left / monthly / total detail lives on the Loans tab — overview stays slim */}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: "14px", fontWeight: "bold", color: isPaidOff ? "var(--color-text-primary)" : CATEGORY_COLORS[cat] }}>{f2(effAmt * perCheckFactor)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>/{checkUnit}</span></div>
-                    <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{f(effAmt * 52 / 12)}/mo</div>
                   </div>
                   <SmBtn onClick={() => startEditLoan(exp)} c="var(--color-gold)">EDIT</SmBtn>
                   {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>

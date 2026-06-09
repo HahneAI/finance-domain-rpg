@@ -597,6 +597,16 @@ export function LogPanel({
       const ak   = has401k && entry.weekEnd && new Date(entry.weekEnd) >= new Date(config.k401StartDate);
       const isEditing = editId === entry.id;
       const missedArr = normalizeDays(entry.missedDays);
+      // Per-type detail string — relocated from the card face into the impact breakdown dropdown.
+      const detailText =
+          entry.type === "missed_unpaid"     ? `${entry.shiftsLost} shift(s) · ${entry.weekendShifts} wknd · ${entry.shiftsLost * config.shiftHours}h`
+        : entry.type === "missed_unapproved" ? `${entry.hoursLost}h unapproved`
+        : entry.type === "pto"               ? `${entry.ptoHours}h PTO @ $${config.baseRate}`
+        : entry.type === "pto_unapproved"    ? `${entry.hoursLost}h PTO (unapproved) @ $${config.baseRate}`
+        : entry.type === "partial"           ? `${entry.hoursLost}h partial`
+        : entry.type === "bonus"             ? `+${f(entry.amount)} bonus`
+        : entry.type === "other_loss"        ? `-${f(entry.amount)} other`
+        : "";
 
       return <div key={entry.id} style={{ background: "var(--color-bg-surface)", border: `1px solid ${isEditing ? ev.color : ev.color + "33"}`, borderRadius: "8px", padding: "16px", marginBottom: "10px" }}>
 
@@ -640,36 +650,27 @@ export function LogPanel({
         ) : (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", flexWrap: "wrap" }}>
                   <span style={{ fontSize: "12px", background: ev.color + "22", color: ev.color, padding: "2px 8px", borderRadius: "12px" }}>{ev.icon} {ev.label}</span>
-                  <span style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>{formatRotationDisplay(entry.weekRotation, { isAdmin })}</span>
                   {hasBucket && isUA && <span style={{ fontSize: "9px", background: "#e8622a22", color: "#e8622a", padding: "2px 6px", borderRadius: "12px", fontWeight: "bold" }}>⚠ BUCKET HIT</span>}
                   {ak   && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "12px" }}>401k</span>}
                 </div>
-                <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "2px" }}>Week ending {entry.weekEnd || "—"}</div>
-                {missedArr.length > 0 && <div style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>Missed: {missedArr.join(", ")}</div>}
-                {entry.note && <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "2px" }}>{entry.note}</div>}
+                {/* Title + note carry the story; the week is secondary context. */}
+                {entry.note
+                  ? <>
+                      <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-text-primary)", marginBottom: "2px" }}>{entry.note}</div>
+                      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Week ending {entry.weekEnd || "—"}</div>
+                    </>
+                  : <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-text-primary)" }}>Week ending {entry.weekEnd || "—"}</div>
+                }
               </div>
+              {/* One number only: net impact vs the year's projection. The rest lives in the breakdown. */}
               <div style={{ textAlign: "right", marginLeft: "16px" }}>
-                <div style={{ fontSize: "18px", fontWeight: "bold", color: isB ? "var(--color-green)" : "var(--color-deduction)" }}>{isB ? "+" : "-"}{f(isB ? imp.grossGained : imp.grossLost)}</div>
-                <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>gross · proj {f(imp.baseGross)}</div>
-                <div style={{ fontSize: "13px", color: isB ? "var(--color-green)" : "var(--color-deduction)", marginTop: "2px" }}>{isB ? "+" : "-"}{f(isB ? imp.netGained : imp.netLost)} net</div>
-                {ak && imp.k401kLost > 0 && <div style={{ fontSize: "10px", color: "#7a8bbf", marginTop: "2px" }}>-{f(imp.k401kLost)} 401k</div>}
-                {hasPTO && imp.hoursLostForPTO > 0 && <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "2px" }}>-{(imp.hoursLostForPTO / 20).toFixed(2)} PTO accrual</div>}
-                {hasBucket && isUA && <div style={{ fontSize: "10px", color: "#e8622a", marginTop: "2px" }}>-{imp.bucketHoursDeducted}h bucket</div>}
+                <div style={{ fontSize: "20px", fontWeight: "bold", color: isB ? "var(--color-green)" : "var(--color-deduction)" }}>{isB ? "+" : "-"}{f(isB ? imp.netGained : imp.netLost)}</div>
               </div>
             </div>
-            <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>
-                {entry.type === "missed_unpaid"     && `${entry.shiftsLost} shift(s) · ${entry.weekendShifts} wknd · ${entry.shiftsLost * config.shiftHours}h`}
-                {entry.type === "missed_unapproved" && `${entry.hoursLost}h unapproved`}
-                {entry.type === "pto"               && `${entry.ptoHours}h PTO @ $${config.baseRate}`}
-                {entry.type === "pto_unapproved"    && `${entry.hoursLost}h PTO (unapproved) @ $${config.baseRate}`}
-                {entry.type === "partial"           && `${entry.hoursLost}h partial`}
-                {entry.type === "bonus"             && `+${f(entry.amount)} bonus`}
-                {entry.type === "other_loss"        && `-${f(entry.amount)} other`}
-              </div>
+            <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px", display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
               <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                 {isAdmin && (
                   <button
@@ -696,6 +697,9 @@ export function LogPanel({
               const today = effectiveToday ?? toLocalIso(new Date());
               const isFuture = entry.weekEnd ? entry.weekEnd >= today : null;
               const rows = [
+                detailText && ["Detail", detailText],
+                missedArr.length > 0 && ["Missed Days", missedArr.join(", ")],
+                imp.baseGross > 0 && ["Projected Gross", f(imp.baseGross)],
                 imp.grossLost   > 0 && ["Gross Lost",       `-${f(imp.grossLost)}`],
                 imp.grossGained > 0 && ["Gross Gained",     `+${f(imp.grossGained)}`],
                 imp.netLost     > 0 && ["Net Lost",         `-${f(imp.netLost)}`],

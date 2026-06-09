@@ -39,7 +39,7 @@ simplified but the original intent and constraints are preserved.*
   flags the downward trend — reassuring that it's okay to live this way but noting it's never good
   for mental health long-term. Brainstorm the right way to integrate/surface it.
 
-- [ ] **Log panel — declutter event cards** — Event cards read like a word dump. Raise **title +
+- [x] **Log panel — declutter event cards** — Event cards read like a word dump. Raise **title +
   notes** higher in the text hierarchy; for lost-money events show only a single **minus amount**
   (money lost vs. the year's projection) plus the **event type** and **notes** (if any). Move every
   other number into the existing per-event impact-breakdown dropdown. Goal: fast, subconscious

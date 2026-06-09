@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
@@ -86,11 +87,15 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const [draggingExpenseId, setDraggingExpenseId] = useState(null);
   const [dragPreviewExpenseCategory, setDragPreviewExpenseCategory] = useState(null);
   const [expenseInsertLane, setExpenseInsertLane] = useState(null);
-  const [expenseInsertIndex, setExpenseInsertIndex] = useState(null);
+  // Drop target tracked as the id of the card to insert *before* (null = end of
+  // lane), not a numeric index — robust to hidden/pinned cards and cross-lane
+  // moves, and keeps the placement marker and the actual drop in lock-step.
+  const [expenseInsertBeforeId, setExpenseInsertBeforeId] = useState(null);
   const [touchDragOverlay, setTouchDragOverlay] = useState({ visible: false, x: 0, y: 0, label: "", sourceCategory: "Needs" });
   const expenseTouchDraggingRef = useRef(false);
   const expenseTouchHoverLaneRef = useRef(null);
-  const expenseInsertRef = useRef({ lane: null, index: null });
+  const expenseInsertRef = useRef({ lane: null, beforeId: null });
+  const expenseTouchLastPointRef = useRef(null);
   const expenseTouchHoldTimerRef = useRef(null);
   const expenseTouchHoldMetaRef = useRef(null);
   const expenseTouchAutoScrollRef = useRef({ rafId: null, direction: 0, speed: 0 });
@@ -941,13 +946,24 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     if (expenseTouchAutoScrollRef.current.rafId) cancelAnimationFrame(expenseTouchAutoScrollRef.current.rafId);
     expenseTouchAutoScrollRef.current = { rafId: null, direction: 0, speed: 0 };
   };
+  // On mobile the scroll container is .main-content (overflow-y:auto), not the
+  // window — window.scrollBy is a no-op there, which is why dragging to the screen
+  // edge never scrolled. Scroll the actual container and fall back to the window.
+  const getExpenseScrollContainer = () =>
+    (typeof document !== "undefined" ? document.querySelector(".main-content") : null);
   const runTouchAutoScroll = () => {
     const { direction, speed } = expenseTouchAutoScrollRef.current;
     if (!direction || speed <= 0) {
       stopTouchAutoScroll();
       return;
     }
-    window.scrollBy(0, direction * speed);
+    const sc = getExpenseScrollContainer();
+    if (sc) sc.scrollTop += direction * speed;
+    else window.scrollBy(0, direction * speed);
+    // Content slid under a stationary finger — recompute the drop target so the
+    // marker keeps tracking while auto-scrolling without further touchmove events.
+    const last = expenseTouchLastPointRef.current;
+    if (last) updateDropTargetFromPoint(last.x, last.y);
     expenseTouchAutoScrollRef.current.rafId = requestAnimationFrame(runTouchAutoScroll);
   };
   const startTouchAutoScroll = (direction, speed) => {
@@ -957,49 +973,45 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       expenseTouchAutoScrollRef.current.rafId = requestAnimationFrame(runTouchAutoScroll);
     }
   };
-  const reorderExpenseByInsert = (draggedId, lane, laneInsertIndex = null) => {
+  // Insert the dragged expense immediately before `beforeId` (an existing card in
+  // the target lane), or at the end of the target lane when beforeId is null.
+  // Operating on expense ids — not positional indices — keeps the drop aligned
+  // with the marker regardless of pinned (food) cards, hidden cards, or loans
+  // interleaved in the array.
+  const reorderExpenseByInsert = (draggedId, lane, beforeId = null) => {
     setExpenses(prev => {
-      const regular = prev.filter(e => e.type !== "loan");
-      const dragged = regular.find(e => e.id === draggedId);
+      const dragged = prev.find(e => e.id === draggedId);
       if (!dragged) return prev;
-
       const targetLane = lane ?? dragged.category;
-      const regularWithoutDragged = regular.filter(e => e.id !== draggedId);
+      const without = prev.filter(e => e.id !== draggedId);
       const draggedNext = { ...dragged, category: targetLane };
-      const laneItems = regularWithoutDragged.filter(e => e.category === targetLane);
-      const normalizedLaneIndex = laneInsertIndex == null
-        ? laneItems.length
-        : Math.max(0, Math.min(laneInsertIndex, laneItems.length));
-      let seenInLane = 0;
-      let insertIndex = regularWithoutDragged.length;
-      for (let idx = 0; idx < regularWithoutDragged.length; idx += 1) {
-        const item = regularWithoutDragged[idx];
-        if (item.category !== targetLane) continue;
-        if (seenInLane === normalizedLaneIndex) {
-          insertIndex = idx;
-          break;
-        }
-        seenInLane += 1;
+
+      let insertAt;
+      if (beforeId != null && beforeId !== draggedId) {
+        insertAt = without.findIndex(e => e.id === beforeId);
+      } else {
+        insertAt = -1;
       }
-      if (normalizedLaneIndex === laneItems.length) {
-        const laneLastIndex = regularWithoutDragged.reduce((lastIdx, exp, idx) =>
-          exp.category === targetLane ? idx : lastIdx, -1);
-        insertIndex = laneLastIndex + 1;
+      if (insertAt === -1) {
+        // Append after the last non-loan item of the target lane.
+        let laneLast = -1;
+        without.forEach((e, idx) => {
+          if (e.type !== "loan" && e.category === targetLane) laneLast = idx;
+        });
+        insertAt = laneLast + 1;
       }
 
-      const reorderedRegular = [...regularWithoutDragged];
-      reorderedRegular.splice(insertIndex, 0, draggedNext);
-
-      let regularIdx = 0;
-      return prev.map(exp => exp.type === "loan" ? exp : reorderedRegular[regularIdx++]);
+      const result = [...without];
+      result.splice(insertAt, 0, draggedNext);
+      return result;
     });
   };
   const finalizeExpenseDrag = () => {
     if (!draggingExpenseId || expenseDragFinalizedRef.current) return false;
-    const { lane, index } = expenseInsertRef.current;
+    const { lane, beforeId } = expenseInsertRef.current;
     if (!lane) return false;
     expenseDragFinalizedRef.current = true;
-    reorderExpenseByInsert(draggingExpenseId, lane, index);
+    reorderExpenseByInsert(draggingExpenseId, lane, beforeId);
     return true;
   };
   const cleanupExpenseDragState = () => {
@@ -1011,9 +1023,10 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setPendingExpenseTouchId(null);
     expenseTouchDraggingRef.current = false;
     expenseTouchHoverLaneRef.current = null;
-    expenseInsertRef.current = { lane: null, index: null };
+    expenseTouchLastPointRef.current = null;
+    expenseInsertRef.current = { lane: null, beforeId: null };
     setExpenseInsertLane(null);
-    setExpenseInsertIndex(null);
+    setExpenseInsertBeforeId(null);
     stopTouchAutoScroll();
     hideTouchDragOverlay();
     setDraggingExpenseId(null);
@@ -1024,23 +1037,47 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     finalizeExpenseDrag();
     cleanupExpenseDragState();
   };
-  const getLaneInsertIndexFromY = (lane, clientY) => {
+  // Returns the id of the draggable card whose top half the pointer is over —
+  // i.e. the card the dragged item should land *before*. Returns null when the
+  // pointer is past the last draggable card (drop at end of lane). Pinned (food)
+  // cards and the dragged card itself are excluded so they never become targets.
+  const getLaneInsertBeforeIdFromY = (lane, clientY) => {
     if (!lane || typeof document === "undefined") return null;
     const laneEl = document.querySelector(`[data-expense-lane="${lane}"]`);
     if (!laneEl) return null;
     const laneCards = Array.from(laneEl.querySelectorAll("[data-expense-id]"))
-      .filter((card) => card.getAttribute("data-expense-id") !== draggingExpenseId);
-    if (!laneCards.length) return 0;
+      .filter((card) =>
+        card.getAttribute("data-expense-id") !== draggingExpenseId
+        && card.getAttribute("data-expense-pinned") !== "true");
     for (let idx = 0; idx < laneCards.length; idx += 1) {
       const rect = laneCards[idx].getBoundingClientRect();
-      if (clientY < rect.top + (rect.height / 2)) return idx;
+      if (clientY < rect.top + (rect.height / 2)) {
+        return laneCards[idx].getAttribute("data-expense-id");
+      }
     }
-    return laneCards.length;
+    return null;
   };
-  const setExpenseInsertTarget = (lane, index) => {
-    expenseInsertRef.current = { lane, index };
+  const setExpenseInsertTarget = (lane, beforeId) => {
+    expenseInsertRef.current = { lane, beforeId };
     setExpenseInsertLane(lane);
-    setExpenseInsertIndex(index);
+    setExpenseInsertBeforeId(beforeId);
+  };
+  // Resolve the hovered lane + drop target from a viewport point and update
+  // preview state. Shared by touchmove and the auto-scroll loop.
+  const updateDropTargetFromPoint = (clientX, clientY) => {
+    if (typeof document === "undefined") return;
+    const hovered = document.elementFromPoint(clientX, clientY);
+    const laneEl = hovered?.closest?.("[data-expense-lane]");
+    const lane = laneEl?.getAttribute("data-expense-lane");
+    if (lane === "Needs" || lane === "Lifestyle") {
+      expenseTouchHoverLaneRef.current = lane;
+      setDragPreviewExpenseCategory(lane);
+      setExpenseInsertTarget(lane, getLaneInsertBeforeIdFromY(lane, clientY));
+    } else {
+      expenseTouchHoverLaneRef.current = null;
+      resetExpensePreviewToOrigin();
+      setExpenseInsertTarget(null, null);
+    }
   };
   const onExpenseDragStart = (exp, evt) => {
     if (expenseTouchHoldTimerRef.current) {
@@ -1052,10 +1089,15 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setDraggingExpenseId(exp.id);
     expenseDragFinalizedRef.current = false;
     setDragPreviewExpenseCategory(exp.category);
-    const originLaneItems = regularExpenses.filter(e => e.category === exp.category);
-    const originLaneIndex = originLaneItems.findIndex(e => e.id === exp.id);
-    const normalizedOriginIndex = originLaneIndex === -1 ? originLaneItems.length : originLaneIndex;
-    setExpenseInsertTarget(exp.category, normalizedOriginIndex);
+    // Seed the marker at the dragged item's current spot: before the next
+    // draggable sibling in its lane, or at the end when it's already last.
+    const laneDraggables = regularExpenses.filter(e =>
+      e.category === exp.category && !e.isFoodPrimary && !e.isFoodHighlighted);
+    const originPos = laneDraggables.findIndex(e => e.id === exp.id);
+    const originBeforeId = originPos >= 0 && originPos + 1 < laneDraggables.length
+      ? laneDraggables[originPos + 1].id
+      : null;
+    setExpenseInsertTarget(exp.category, originBeforeId);
     if (evt?.dataTransfer) {
       try {
         evt.dataTransfer.setData("text/plain", exp.id);
@@ -1117,6 +1159,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     if (!point) return;
     e.preventDefault();
     updateTouchDragOverlayPosition(point);
+    expenseTouchLastPointRef.current = { x: point.clientX, y: point.clientY };
     const edgeTop = TOUCH_EDGE_AUTOSCROLL_ZONE_PX;
     const edgeBottom = window.innerHeight - TOUCH_EDGE_AUTOSCROLL_ZONE_PX;
     if (point.clientY < edgeTop) {
@@ -1128,19 +1171,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     } else {
       stopTouchAutoScroll();
     }
-    const hovered = document.elementFromPoint(point.clientX, point.clientY);
-    const laneEl = hovered?.closest?.("[data-expense-lane]");
-    const lane = laneEl?.getAttribute("data-expense-lane");
-    if (lane === "Needs" || lane === "Lifestyle") {
-      expenseTouchHoverLaneRef.current = lane;
-      setDragPreviewExpenseCategory(lane);
-      const insertIndex = getLaneInsertIndexFromY(lane, point.clientY);
-      setExpenseInsertTarget(lane, insertIndex);
-    } else {
-      expenseTouchHoverLaneRef.current = null;
-      resetExpensePreviewToOrigin();
-      setExpenseInsertTarget(null, null);
-    }
+    updateDropTargetFromPoint(point.clientX, point.clientY);
   };
   const onExpenseTouchEnd = () => {
     if (expenseTouchHoldTimerRef.current) {
@@ -1153,8 +1184,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     }
     const lane = expenseTouchHoverLaneRef.current ?? dragPreviewExpenseCategory;
     if (lane) {
-      const insertIndex = expenseInsertRef.current.lane === lane ? expenseInsertRef.current.index : null;
-      setExpenseInsertTarget(lane, insertIndex);
+      const beforeId = expenseInsertRef.current.lane === lane ? expenseInsertRef.current.beforeId : null;
+      setExpenseInsertTarget(lane, beforeId);
     } else {
       setExpenseInsertTarget(null, null);
     }
@@ -1309,7 +1340,6 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           ? cExp.filter(e => e.isFoodPrimary || e.isFoodHighlighted)
           : [];
         const displayCExp = [...draggableInCat, ...pinnedFoodInCat];
-        const laneCardsExcludingDragged = draggableInCat.filter(item => item.id !== draggingExpenseId);
         const loanItems = cat === "Needs" ? loans : [];
         const cTot = cExp.reduce((s, e) => s + displayEffective(e, ap), 0)
                    + loanItems.reduce((s, e) => s + displayEffective(e, ap), 0);
@@ -1323,16 +1353,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             if (!isExpenseDropLane) return;
             e.preventDefault();
             setDragPreviewExpenseCategory(cat);
-            const insertIndex = getLaneInsertIndexFromY(cat, e.clientY);
-            setExpenseInsertTarget(cat, insertIndex);
+            setExpenseInsertTarget(cat, getLaneInsertBeforeIdFromY(cat, e.clientY));
           }}
           onDrop={(e) => {
             if (!isExpenseDropLane) return;
             e.preventDefault();
             e.stopPropagation();
             if (!draggingExpenseId) return;
-            const insertIndex = getLaneInsertIndexFromY(cat, e.clientY);
-            setExpenseInsertTarget(cat, insertIndex);
+            setExpenseInsertTarget(cat, getLaneInsertBeforeIdFromY(cat, e.clientY));
           }}
           onDragLeave={(e) => {
             if (!isExpenseDropLane) return;
@@ -1393,15 +1421,15 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             const previewCategory = dragPreviewExpenseCategory ?? exp.category;
             const lanePreviewingMove = isDragging && previewCategory !== exp.category;
             const previewTint = lanePreviewingMove ? EXPENSE_DRAG_PREVIEW_TINT[previewCategory] : null;
-            const cardInsertIndex = laneCardsExcludingDragged.findIndex(item => item.id === exp.id);
             const showInsertLineBefore = isExpenseDropLane
               && !isPinnedFoodCard
               && draggingExpenseId
               && expenseInsertLane === cat
-              && expenseInsertIndex === cardInsertIndex;
+              && expenseInsertBeforeId === exp.id;
             return <div
               key={exp.id}
               data-expense-id={exp.id}
+              data-expense-pinned={isPinnedFoodCard ? "true" : undefined}
               draggable={!isPinnedFoodCard && !isEditing && isExpenseDropLane && !isCoarsePointer}
               onClick={() => {
                 if (expenseDragFinalizedRef.current) return;
@@ -1433,16 +1461,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 e.preventDefault();
                 e.stopPropagation();
                 setDragPreviewExpenseCategory(cat);
-                const insertIndex = getLaneInsertIndexFromY(cat, e.clientY);
-                setExpenseInsertTarget(cat, insertIndex);
+                setExpenseInsertTarget(cat, getLaneInsertBeforeIdFromY(cat, e.clientY));
               }}
               onDrop={(e) => {
                 if (!isExpenseDropLane) return;
                 e.preventDefault();
                 e.stopPropagation();
                 if (!draggingExpenseId) return;
-                const insertIndex = getLaneInsertIndexFromY(cat, e.clientY);
-                setExpenseInsertTarget(cat, insertIndex);
+                setExpenseInsertTarget(cat, getLaneInsertBeforeIdFromY(cat, e.clientY));
               }}
               onDragLeave={(e) => {
                 if (e.currentTarget.contains(e.relatedTarget)) return;
@@ -1566,8 +1592,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               margin: "2px 4px 8px",
               background: EXPENSE_INSERT_MARKER_BG,
               boxShadow: `0 0 0 1px ${EXPENSE_INSERT_MARKER_BORDER}`,
-              opacity: expenseInsertIndex === laneCardsExcludingDragged.length ? 0.72 : 0,
-              transform: expenseInsertIndex === laneCardsExcludingDragged.length ? "scaleX(1)" : "scaleX(0.9)",
+              opacity: expenseInsertBeforeId === null ? 0.72 : 0,
+              transform: expenseInsertBeforeId === null ? "scaleX(1)" : "scaleX(0.9)",
               transformOrigin: "center",
               transition: `opacity 180ms ${EXPENSE_DRAG_EASE}, transform 220ms ${EXPENSE_DRAG_EASE}`,
               pointerEvents: "none",
@@ -1911,7 +1937,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         </div> : <button onClick={() => setAddingLoan(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</button>}
       </div>;
     })()}
-    {touchDragOverlay.label && <div
+    {touchDragOverlay.label && createPortal(<div
       aria-hidden="true"
       style={{
         position: "fixed",
@@ -1938,7 +1964,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       }}
     >
       {touchDragOverlay.label}
-    </div>}
+    </div>, document.body)}
 
     {/* Paycheck breakdown info modal */}
     {showCheckInfo && checkBreakdown && (
@@ -2047,7 +2073,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         if (!(exp.history?.length)) return false;
         return (exp.history ?? []).some(entry => (entry.weekly ?? []).some(v => v > 0));
       });
-      return (
+      // Portaled to document.body so position:fixed resolves against the viewport
+      // and not the scrolling .main-content ancestor — iOS Safari hit-tests a
+      // fixed element nested in an overflow:auto container at an offset equal to
+      // that container's scrollTop, which made the sheet's buttons unresponsive.
+      return createPortal(
         <div
           onClick={closeRestoreSheet}
           style={{
@@ -2164,7 +2194,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             })}
             </div>{/* end scrollable content */}
           </div>{/* end sheet panel */}
-        </div>
+        </div>,
+        document.body
       );
     })()}
     {/* ── Expense Detail Bottom Sheet ── */}
@@ -2174,7 +2205,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         to   { transform: translateY(0);    opacity: 1; }
       }
     `}</style>
-    {sheetExpLive && (
+    {/* Portaled to document.body so position:fixed resolves against the viewport
+        rather than the scrolling .main-content ancestor. On iOS Safari a fixed
+        element nested in an overflow:auto container is hit-tested at an offset
+        equal to that container's scrollTop, which left the sheet's buttons
+        (including ✕) unresponsive depending on how far the list was scrolled. */}
+    {sheetExpLive && createPortal(
       <>
         {/* Backdrop */}
         <div onClick={closeSheet} style={{
@@ -2367,7 +2403,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             )}
           </div>
         </div>
-      </>
+      </>,
+      document.body
     )}
   </div>);
 }

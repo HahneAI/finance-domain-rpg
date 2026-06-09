@@ -27,6 +27,52 @@ const EXPENSE_DRAG_EASE = "cubic-bezier(.22,.7,.2,1)";
 const EXPENSE_INSERT_MARKER_BG = "rgba(255,255,255,0.72)";
 const EXPENSE_INSERT_MARKER_BORDER = "rgba(255,255,255,0.14)";
 
+// Shared timing so the category fold-out animation and the auto-scroll stay in lockstep.
+const CAT_ANIM_MS = 360;
+
+// Nearest scrollable ancestor (the mobile scroller is .main-content); null → use window.
+function getScrollParent(el) {
+  let node = el?.parentElement;
+  while (node) {
+    const oy = getComputedStyle(node).overflowY;
+    if ((oy === "auto" || oy === "scroll") && node.scrollHeight > node.clientHeight) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+// Eased scroll (easeInOutQuad) over CAT_ANIM_MS so it matches the expand animation.
+function animateScrollTo(scroller, to, duration = CAT_ANIM_MS) {
+  const isWin = !scroller;
+  const startTop = isWin ? window.scrollY : scroller.scrollTop;
+  const change = to - startTop;
+  if (Math.abs(change) < 2) return;
+  const t0 = performance.now();
+  const ease = (t) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / duration);
+    const top = startTop + change * ease(t);
+    if (isWin) window.scrollTo(0, top); else scroller.scrollTop = top;
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// Scroll an expanded category's header to "almost the top" of its scroll container.
+function scrollCategoryHeaderNearTop(cat) {
+  requestAnimationFrame(() => {
+    const el = document.querySelector(`[data-cat-header="${cat}"]`);
+    if (!el) return;
+    const scroller = getScrollParent(el);
+    const offset = 72; // leave a little breathing room above the header — not pinned to the very top
+    const rect = el.getBoundingClientRect();
+    const target = scroller
+      ? scroller.scrollTop + (rect.top - scroller.getBoundingClientRect().top) - offset
+      : window.scrollY + rect.top - offset;
+    animateScrollTo(scroller, Math.max(0, target));
+  });
+}
+
 
 export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
@@ -86,12 +132,17 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       return raw ? new Set(JSON.parse(raw)) : new Set();
     } catch { return new Set(); }
   });
-  const toggleCat = (cat) => setExpandedCats(prev => {
-    const next = new Set(prev);
-    next.has(cat) ? next.delete(cat) : next.add(cat);
-    try { sessionStorage.setItem("budgetExpandedCats", JSON.stringify([...next])); } catch { /* ignore */ }
-    return next;
-  });
+  const toggleCat = (cat) => {
+    const willExpand = !expandedCats.has(cat);
+    setExpandedCats(prev => {
+      const next = new Set(prev);
+      if (willExpand) next.add(cat); else next.delete(cat);
+      try { sessionStorage.setItem("budgetExpandedCats", JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+    // On expand, glide the category header up to near the top in time with the fold-out.
+    if (willExpand) scrollCategoryHeaderNearTop(cat);
+  };
   // Loan CRUD state
   const [editLoanId, setEditLoanId] = useState(null);
   const [editLoanVals, setEditLoanVals] = useState({});
@@ -1390,15 +1441,38 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             transition: `background 300ms ${EXPENSE_DRAG_EASE}, border-color 320ms ${EXPENSE_DRAG_EASE}`,
           }}
         >
-          <div onClick={() => toggleCat(cat)} role="button" aria-expanded={isCatExpanded} style={{ cursor: "pointer", userSelect: "none" }}>
-            <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
-                <span>{f2(cTot * perCheckFactor) + `/${checkUnit}`}</span>
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCatExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease", opacity: 0.7 }}><path d="M4 6 L8 10 L12 6" /></svg>
-              </span>
-            }>{cat}</SH>
+          <div
+            data-cat-header={cat}
+            onClick={() => toggleCat(cat)}
+            role="button"
+            aria-expanded={isCatExpanded}
+            style={{
+              cursor: "pointer",
+              userSelect: "none",
+              display: "flex",
+              alignItems: "center",
+              // Collapsed: a larger card-like block. Expanded: shrinks to the bare section header.
+              padding: isCatExpanded ? "0px 0px" : "18px 18px 4px",
+              minHeight: isCatExpanded ? "0px" : "64px",
+              background: isCatExpanded ? "transparent" : (CAT_GRADIENT[cat] ?? CATEGORY_BG[cat]),
+              border: `1px solid ${isCatExpanded ? "transparent" : `${CATEGORY_COLORS[cat]}40`}`,
+              borderRadius: isCatExpanded ? "0px" : "12px",
+              marginBottom: isCatExpanded ? "0px" : "4px",
+              transition: `padding ${CAT_ANIM_MS}ms ${EXPENSE_DRAG_EASE}, min-height ${CAT_ANIM_MS}ms ${EXPENSE_DRAG_EASE}, background ${CAT_ANIM_MS}ms ease, border-color ${CAT_ANIM_MS}ms ease, border-radius ${CAT_ANIM_MS}ms ease`,
+            }}
+          >
+            <div style={{ width: "100%" }}>
+              <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+                  <span>{f2(cTot * perCheckFactor) + `/${checkUnit}`}</span>
+                  <svg width={isCatExpanded ? "12" : "15"} height={isCatExpanded ? "12" : "15"} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCatExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: `transform ${CAT_ANIM_MS}ms ${EXPENSE_DRAG_EASE}`, opacity: 0.8 }}><path d="M4 6 L8 10 L12 6" /></svg>
+                </span>
+              }>{cat}</SH>
+            </div>
           </div>
-          {isCatExpanded && <>
+          {/* Fold-out: grid-rows 0fr→1fr animates the real content height in time with the auto-scroll */}
+          <div style={{ display: "grid", gridTemplateRows: isCatExpanded ? "1fr" : "0fr", opacity: isCatExpanded ? 1 : 0, transition: `grid-template-rows ${CAT_ANIM_MS}ms ${EXPENSE_DRAG_EASE}, opacity ${CAT_ANIM_MS}ms ease` }}>
+          <div style={{ minHeight: 0, overflow: "hidden" }}>
           {(() => {
             // Collect deleted expenses (zeroed in this view with non-zero history) for restore sheet
             const deletedInCat = cExp.filter(exp => {
@@ -1657,7 +1731,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               </div>}
             </div>;
           })}
-          </>}
+          </div>
+          </div>
         </div>;
       })}
 

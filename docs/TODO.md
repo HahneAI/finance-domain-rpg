@@ -21,9 +21,11 @@ simplified but the original intent and constraints are preserved.*
   The iOS flow already exists on our website (user will provide it); reuse that and place the
   button somewhere clean.
 
-- [ ] **Budget — collapsible category sections** — Keep the existing Lifestyle / Needs category
+- [x] **Budget — collapsible category sections** — Keep the existing Lifestyle / Needs category
   UI unchanged, but add a dropdown / collapse toggle to each colored category header so each
   expense category section can expand and collapse.
+  - [x] Header is a chevron toggle; rows + loans collapse while the header and per-paycheck
+    total stay visible. State remembered per session (sessionStorage), defaults to all collapsed.
 
 - [ ] **Budget — slim down loan cards** — Loan cards shown in the Needs category are too verbose.
   Remove the bottom-left text block (payments remaining, monthly payment amount, total left —

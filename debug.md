@@ -29,13 +29,14 @@ general sweep in `docs/TODO.md` §16 (portal audit). The double-tap to open an
 expense card is intentional (confirmed by user), so it's not a bug.
 
 ## 4. Admin: Tools sheet — scroll hits background, touch "lost"; Tax Weeks button opened Demo accounts
-- a) **Scroll lock is ineffective.** `App.jsx:264` sets
-  `document.body.style.overflow = "hidden"` when `toolSheetOpen`, but the mobile
-  scroller is `.main-content`, not `body` — so the dashboard behind the sheet
-  still scrolls and the sheet feels like it "loses touch." **Starting point:**
-  lock `.main-content` (overflow hidden, or position:fixed body technique) while
-  `toolSheetOpen` / any sheet open.
-- b) **"Tax plan view" launched demo accounts.** The tool is the "Tax Weeks"
+- a) **Scroll lock is ineffective.** — FIXED. The `toolSheetOpen` effect now
+  locks `.main-content` (the real mobile scroll container, via `mainContentRef`)
+  in addition to `<body>`, so the dashboard no longer scrolls behind the sheet.
+  The sheet keeps its own `overflow-y:auto` so it still scrolls.
+- b) **"Tax plan view" launched demo accounts.** — RE-VERIFY after 4a. The tools
+  sheet renders at App root (not inside `.main-content`), so the offset hit-test
+  didn't apply; if this was a mis-tap caused by the dashboard scrolling under the
+  finger, the 4a lock may resolve it. If it persists, The tool is the "Tax Weeks"
   grid (App.jsx ~2478). Two hypotheses: (i) the same offset hit-test caused the
   tap to land on the adjacent "Demo {n}" buttons (App.jsx ~2536, which call
   `setAdminDemoView`); or (ii) a real wiring bug. Resolve 4a first — if the lock

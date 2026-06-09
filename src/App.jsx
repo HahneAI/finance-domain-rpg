@@ -259,19 +259,24 @@ export default function App() {
   }, []);
   const isScrollingDown = useScrollDirection(mainContentEl);
 
-  // Prevent body scroll and horizontal pan while the admin sheet is open
+  // Prevent background scroll while the admin sheet is open. On mobile the scroll
+  // container is .main-content (overflow-y:auto) — not <body> — so locking only the
+  // body did nothing and scroll leaked to the dashboard behind the sheet. Lock the
+  // actual container too; the sheet keeps its own overflow so it still scrolls.
   useEffect(() => {
-    if (toolSheetOpen) {
+    const sc = mainContentRef.current;
+    const lock = () => {
       document.body.style.overflow = "hidden";
       document.body.style.overscrollBehavior = "none";
-    } else {
-      document.body.style.overflow = "";
-      document.body.style.overscrollBehavior = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.overscrollBehavior = "";
+      if (sc) { sc.style.overflow = "hidden"; sc.style.overscrollBehavior = "none"; }
     };
+    const unlock = () => {
+      document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
+      if (sc) { sc.style.overflow = ""; sc.style.overscrollBehavior = ""; }
+    };
+    if (toolSheetOpen) lock(); else unlock();
+    return unlock;
   }, [toolSheetOpen]);
 
   const jumpToPanelTop = () => {

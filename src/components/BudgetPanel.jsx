@@ -133,10 +133,13 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   // First calendar month of each quarter — used as the representative month in quarter mode.
   const QUARTER_FIRST_MONTHS = ["2026-01", "2026-04", "2026-07", "2026-10"];
   const MONTH_SHORT = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   // Month key for today — used to highlight the current month pill.
   const currentMonthKey = TODAY_ISO.slice(0, 7);
   // Short label for the active month (e.g. "MAY"), null in quarter mode.
   const activeMonthLabel = activeMonth ? MONTH_SHORT[parseInt(activeMonth.slice(5, 7), 10) - 1] : null;
+  // Full label for the active month (e.g. "May"), null in quarter mode — used on the primary "month onward" save.
+  const activeMonthFull = activeMonth ? MONTH_FULL[parseInt(activeMonth.slice(5, 7), 10) - 1] : null;
   // In month mode, resolve amounts for the selected month; in quarter mode, use the
   // first month of the active quarter so the quarter view stays month-consistent.
   const displayMonthKey = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
@@ -1660,10 +1663,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           {activeMonth !== null ? (
             <>
               <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px", width: "100%" }}>Save scope:</div>
-              <SmBtn onClick={addExpThisMonth} c={newExp.label ? "var(--color-accent-primary)" : "var(--color-text-disabled)"}>MO. ONLY</SmBtn>
-              <SmBtn onClick={addExpFromMonthForward} c={newExp.label ? "var(--color-green)" : "var(--color-text-disabled)"}>FROM {activeMonthLabel} +</SmBtn>
-              <SmBtn onClick={addExpAllQuarters} c={newExp.label ? "var(--color-green)" : "var(--color-text-disabled)"}>ALL QTR</SmBtn>
-              <SmBtn onClick={_closeAddForm}>✕</SmBtn>
+              {/* Primary: this-month-onward gets its own full-width row, label spells out the viewed month */}
+              <button onClick={addExpFromMonthForward} disabled={!newExp.label} style={{ width: "100%", background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "14px", minHeight: "48px", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>{activeMonthFull}+ Onward</button>
+              {/* Secondary row: month-only, quarter-only, and exit */}
+              <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                <SmBtn onClick={addExpThisMonth} c={newExp.label ? "var(--color-accent-primary)" : "var(--color-text-disabled)"} style={{ flex: 1 }}>MO. ONLY</SmBtn>
+                <SmBtn onClick={addExpAllQuarters} c={newExp.label ? "var(--color-green)" : "var(--color-text-disabled)"} style={{ flex: 1 }}>ALL QTR</SmBtn>
+                <SmBtn onClick={_closeAddForm} style={{ flex: 1 }}>✕</SmBtn>
+              </div>
             </>
           ) : (
             <>

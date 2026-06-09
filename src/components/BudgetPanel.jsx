@@ -78,6 +78,20 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setAp(phaseIdx);
     setBulkEditOpen(false);
   };
+  // Expand/collapse per expense category — remembered for the session (sessionStorage),
+  // defaults to all categories collapsed. A category is expanded only if its name is in the set.
+  const [expandedCats, setExpandedCats] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("budgetExpandedCats");
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch { return new Set(); }
+  });
+  const toggleCat = (cat) => setExpandedCats(prev => {
+    const next = new Set(prev);
+    next.has(cat) ? next.delete(cat) : next.add(cat);
+    try { sessionStorage.setItem("budgetExpandedCats", JSON.stringify([...next])); } catch { /* ignore */ }
+    return next;
+  });
   // Loan CRUD state
   const [editLoanId, setEditLoanId] = useState(null);
   const [editLoanVals, setEditLoanVals] = useState({});
@@ -1338,6 +1352,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         const cTot = cExp.reduce((s, e) => s + displayEffective(e, ap), 0)
                    + loanItems.reduce((s, e) => s + displayEffective(e, ap), 0);
         const isExpenseDropLane = cat === "Needs" || cat === "Lifestyle";
+        const isCatExpanded = expandedCats.has(cat);
         return <div
           key={cat}
           draggable={false}
@@ -1375,7 +1390,15 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             transition: `background 300ms ${EXPENSE_DRAG_EASE}, border-color 320ms ${EXPENSE_DRAG_EASE}`,
           }}
         >
-          <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot * perCheckFactor) + `/${checkUnit}`}>{cat}</SH>
+          <div onClick={() => toggleCat(cat)} role="button" aria-expanded={isCatExpanded} style={{ cursor: "pointer", userSelect: "none" }}>
+            <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+                <span>{f2(cTot * perCheckFactor) + `/${checkUnit}`}</span>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCatExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms ease", opacity: 0.7 }}><path d="M4 6 L8 10 L12 6" /></svg>
+              </span>
+            }>{cat}</SH>
+          </div>
+          {isCatExpanded && <>
           {(() => {
             // Collect deleted expenses (zeroed in this view with non-zero history) for restore sheet
             const deletedInCat = cExp.filter(exp => {
@@ -1634,6 +1657,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               </div>}
             </div>;
           })}
+          </>}
         </div>;
       })}
 

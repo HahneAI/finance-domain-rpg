@@ -259,20 +259,38 @@ export default function App() {
   }, []);
   const isScrollingDown = useScrollDirection(mainContentEl);
 
-  // Prevent body scroll and horizontal pan while the admin sheet is open
+  // Prevent background scroll while the admin sheet is open. On mobile the scroll
+  // container is .main-content (overflow-y:auto) — not <body> — so locking only the
+  // body did nothing and scroll leaked to the dashboard behind the sheet. Lock the
+  // actual container too; the sheet keeps its own overflow so it still scrolls.
   useEffect(() => {
-    if (toolSheetOpen) {
+    const sc = mainContentRef.current;
+    const lock = () => {
       document.body.style.overflow = "hidden";
       document.body.style.overscrollBehavior = "none";
-    } else {
-      document.body.style.overflow = "";
-      document.body.style.overscrollBehavior = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.overscrollBehavior = "";
+      if (sc) { sc.style.overflow = "hidden"; sc.style.overscrollBehavior = "none"; }
     };
+    const unlock = () => {
+      document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
+      if (sc) { sc.style.overflow = ""; sc.style.overscrollBehavior = ""; }
+    };
+    if (toolSheetOpen) lock(); else unlock();
+    return unlock;
   }, [toolSheetOpen]);
+
+  // ≥44px tap target for the admin Tools sheet "View/Hide/Fetch" toggle links.
+  // They were ~10px tall (padding:0) and sit directly above the Demo Account
+  // buttons, so a missed tap launched the demo view (debug.md §4b). Negative
+  // margins absorb the extra padding into the surrounding 20px gutter so the
+  // header rows stay visually compact while the touch area meets the minimum.
+  const sheetToggleBtnStyle = {
+    background: "transparent", border: "none", color: "var(--color-accent-primary)",
+    fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
+    padding: "12px 10px", margin: "-10px -10px -10px 0",
+    minWidth: "44px", minHeight: "44px",
+    display: "inline-flex", alignItems: "center", justifyContent: "flex-end",
+  };
 
   const jumpToPanelTop = () => {
     const scrollToTop = () => {
@@ -2432,7 +2450,7 @@ export default function App() {
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
                   <button
                     onClick={() => setConfigViewOpen(v => !v)}
-                    style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
+                    style={sheetToggleBtnStyle}
                   >{configViewOpen ? "Hide ↑" : "View ↓"}</button>
                 </div>
                 {configViewOpen && (
@@ -2456,8 +2474,8 @@ export default function App() {
                     {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)", letterSpacing: "1px" }}>{rowDiff.length} drift</span>}
                   </div>
                   <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                    <button onClick={handleFetchRow} disabled={rowFetching} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</button>
-                    {rowData && <button onClick={() => setRowViewOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide ↑" : "View ↓"}</button>}
+                    <button onClick={handleFetchRow} disabled={rowFetching} style={{ ...sheetToggleBtnStyle, cursor: rowFetching ? "not-allowed" : "pointer" }}>{rowFetching ? "…" : "Fetch"}</button>
+                    {rowData && <button onClick={() => setRowViewOpen(v => !v)} style={{ ...sheetToggleBtnStyle, color: "var(--color-text-secondary)" }}>{rowViewOpen ? "Hide ↑" : "View ↓"}</button>}
                   </div>
                 </div>
                 {rowData && rowViewOpen && (
@@ -2479,7 +2497,7 @@ export default function App() {
               <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: taxGridOpen ? "10px" : "0" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
-                  <button onClick={() => setTaxGridOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide ↑" : "View ↓"}</button>
+                  <button onClick={() => setTaxGridOpen(v => !v)} style={sheetToggleBtnStyle}>{taxGridOpen ? "Hide ↑" : "View ↓"}</button>
                 </div>
                 {taxGridOpen && (() => {
                   const overrides = config.pastWeekTaxStatusOverrides ?? {};

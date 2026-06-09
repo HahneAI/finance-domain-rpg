@@ -5,13 +5,16 @@
 *Active priority. Each item below is condensed from a raw brain dump — direction is
 simplified but the original intent and constraints are preserved.*
 
-- [ ] **Budget — restructure expense save buttons** — When adding a new expense there are three
+- [x] **Budget — restructure expense save buttons** — When adding a new expense there are three
   save buttons crammed into one horizontal row. Promote the "this month onward" save (the
   year-forward bill save) to its own **full-width primary button on its own row**. Its label
   should spell out the *currently viewed* month + "onward" (e.g. viewing September → "September+
   Onward"), reactive to whichever month is selected, not the current month. Put the remaining two
   saves — **month only** and **quarter only** — plus the **exit/cancel** button in a secondary
   horizontal row beneath the primary button.
+  - [x] Applied to the add-expense form, the edit-expense bottom sheet, and the quarter-view
+    branch (anchors month-scoped saves to the current month when no month pill is selected,
+    fixing the ADD/CANCEL-only edge case on first land).
 
 - [ ] **Mobile PWA install tutorial** — Add a hamburger-menu option shown **only in the mobile
   browser** (not the installed PWA) that opens a tutorial teaching users how to install the PWA.

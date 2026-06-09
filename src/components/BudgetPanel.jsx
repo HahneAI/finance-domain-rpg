@@ -27,6 +27,52 @@ const EXPENSE_DRAG_EASE = "cubic-bezier(.22,.7,.2,1)";
 const EXPENSE_INSERT_MARKER_BG = "rgba(255,255,255,0.72)";
 const EXPENSE_INSERT_MARKER_BORDER = "rgba(255,255,255,0.14)";
 
+// Shared timing so the category fold-out animation and the auto-scroll stay in lockstep.
+const CAT_ANIM_MS = 360;
+
+// Nearest scrollable ancestor (the mobile scroller is .main-content); null → use window.
+function getScrollParent(el) {
+  let node = el?.parentElement;
+  while (node) {
+    const oy = getComputedStyle(node).overflowY;
+    if ((oy === "auto" || oy === "scroll") && node.scrollHeight > node.clientHeight) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+// Eased scroll (easeInOutQuad) over CAT_ANIM_MS so it matches the expand animation.
+function animateScrollTo(scroller, to, duration = CAT_ANIM_MS) {
+  const isWin = !scroller;
+  const startTop = isWin ? window.scrollY : scroller.scrollTop;
+  const change = to - startTop;
+  if (Math.abs(change) < 2) return;
+  const t0 = performance.now();
+  const ease = (t) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / duration);
+    const top = startTop + change * ease(t);
+    if (isWin) window.scrollTo(0, top); else scroller.scrollTop = top;
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// Scroll an expanded category's header to "almost the top" of its scroll container.
+function scrollCategoryHeaderNearTop(cat) {
+  requestAnimationFrame(() => {
+    const el = document.querySelector(`[data-cat-header="${cat}"]`);
+    if (!el) return;
+    const scroller = getScrollParent(el);
+    const offset = 72; // leave a little breathing room above the header — not pinned to the very top
+    const rect = el.getBoundingClientRect();
+    const target = scroller
+      ? scroller.scrollTop + (rect.top - scroller.getBoundingClientRect().top) - offset
+      : window.scrollY + rect.top - offset;
+    animateScrollTo(scroller, Math.max(0, target));
+  });
+}
+
 
 export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false }) {
   // TODAY_ISO from App — reactive, advances at midnight automatically
@@ -77,6 +123,25 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setActiveMonth(null);
     setAp(phaseIdx);
     setBulkEditOpen(false);
+  };
+  // Expand/collapse per expense category — remembered for the session (sessionStorage),
+  // defaults to all categories collapsed. A category is expanded only if its name is in the set.
+  const [expandedCats, setExpandedCats] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("budgetExpandedCats");
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch { return new Set(); }
+  });
+  const toggleCat = (cat) => {
+    const willExpand = !expandedCats.has(cat);
+    setExpandedCats(prev => {
+      const next = new Set(prev);
+      if (willExpand) next.add(cat); else next.delete(cat);
+      try { sessionStorage.setItem("budgetExpandedCats", JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+    // On expand, glide the category header up to near the top in time with the fold-out.
+    if (willExpand) scrollCategoryHeaderNearTop(cat);
   };
   // Loan CRUD state
   const [editLoanId, setEditLoanId] = useState(null);
@@ -133,10 +198,18 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   // First calendar month of each quarter — used as the representative month in quarter mode.
   const QUARTER_FIRST_MONTHS = ["2026-01", "2026-04", "2026-07", "2026-10"];
   const MONTH_SHORT = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+  const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   // Month key for today — used to highlight the current month pill.
   const currentMonthKey = TODAY_ISO.slice(0, 7);
   // Short label for the active month (e.g. "MAY"), null in quarter mode.
   const activeMonthLabel = activeMonth ? MONTH_SHORT[parseInt(activeMonth.slice(5, 7), 10) - 1] : null;
+  // Full label for the active month (e.g. "May"), null in quarter mode — used on the primary "month onward" save.
+  const activeMonthFull = activeMonth ? MONTH_FULL[parseInt(activeMonth.slice(5, 7), 10) - 1] : null;
+  // Anchor month for save-scope buttons: the selected month, or the current month when viewing a whole quarter.
+  // Lets the month-scoped add/save layout work even before a specific month pill is tapped.
+  const anchorMonthKey = activeMonth ?? currentMonthKey;
+  const anchorMonthLabel = MONTH_SHORT[parseInt(anchorMonthKey.slice(5, 7), 10) - 1];
+  const anchorMonthFull = MONTH_FULL[parseInt(anchorMonthKey.slice(5, 7), 10) - 1];
   // In month mode, resolve amounts for the selected month; in quarter mode, use the
   // first month of the active quarter so the quarter view stays month-consistent.
   const displayMonthKey = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
@@ -605,29 +678,14 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setBulkEditOpen(false);
   };
 
-  const addExp = () => {
-    const amount = parseFloat(newExp.amount) || 0;
-    const cycle = newExp.cycle ?? "every30days";
-    const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    const expEffectiveFrom = QUARTER_FIRST_MONTHS[ap] + "-01";
-    setExpenses(prev => [...prev, {
-      id: `exp_${crypto.randomUUID()}`,
-      category: newExp.category,
-      label: newExp.label,
-      note: [newExp.note, newExp.note, newExp.note, newExp.note],
-      billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO },
-      history: [{ effectiveFrom: expEffectiveFrom, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }]
-    }]);
-    setAddingExp(false); setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
-  };
-
   const _closeAddForm = () => {
     setAddingExp(false);
     setNewExp({ label: "", category: "Needs", amount: "", cycle: "every30days", note: "" });
   };
 
   const addExpThisMonth = () => {
-    if (!newExp.label || !activeMonth) return;
+    if (!newExp.label) return;
+    const anchor = activeMonth ?? currentMonthKey; // fall back to current month in quarter view
     const amount = parseFloat(newExp.amount) || 0;
     const cycle = newExp.cycle ?? "every30days";
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
@@ -638,23 +696,24 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       note: [newExp.note, newExp.note, newExp.note, newExp.note],
       billingMeta: { amount, cycle, effectiveFrom: TODAY_ISO },
       history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [0, 0, 0, 0] }],
-      monthlyOverrides: { [activeMonth]: { perPaycheck, amount, cycle } },
+      monthlyOverrides: { [anchor]: { perPaycheck, amount, cycle } },
     }]);
     _closeAddForm();
   };
 
   const addExpFromMonthForward = () => {
-    if (!newExp.label || !activeMonth) return;
+    if (!newExp.label) return;
+    const anchor = activeMonth ?? currentMonthKey; // fall back to current month in quarter view
     const amount = parseFloat(newExp.amount) || 0;
     const cycle = newExp.cycle ?? "every30days";
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    const [year, startMon] = activeMonth.split("-").map(Number);
+    const [year, startMon] = anchor.split("-").map(Number);
     const overrides = {};
     for (let m = startMon; m <= 12; m++) {
       const key = `${year}-${String(m).padStart(2, "0")}`;
       overrides[key] = { perPaycheck, amount, cycle };
     }
-    const effectiveFrom = `${activeMonth}-01`;
+    const effectiveFrom = `${anchor}-01`;
     const weekly = [0, 1, 2, 3].map(q => q < ap ? 0 : perPaycheck);
     setExpenses(prev => [...prev, {
       id: `exp_${crypto.randomUUID()}`,
@@ -1344,6 +1403,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         const cTot = cExp.reduce((s, e) => s + displayEffective(e, ap), 0)
                    + loanItems.reduce((s, e) => s + displayEffective(e, ap), 0);
         const isExpenseDropLane = cat === "Needs" || cat === "Lifestyle";
+        const isCatExpanded = expandedCats.has(cat);
         return <div
           key={cat}
           draggable={false}
@@ -1381,7 +1441,38 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             transition: `background 300ms ${EXPENSE_DRAG_EASE}, border-color 320ms ${EXPENSE_DRAG_EASE}`,
           }}
         >
-          <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={f2(cTot * perCheckFactor) + `/${checkUnit}`}>{cat}</SH>
+          <div
+            data-cat-header={cat}
+            onClick={() => toggleCat(cat)}
+            role="button"
+            aria-expanded={isCatExpanded}
+            style={{
+              cursor: "pointer",
+              userSelect: "none",
+              display: "flex",
+              alignItems: "center",
+              // Collapsed: a larger card-like block. Expanded: shrinks to the bare section header.
+              padding: isCatExpanded ? "0px 0px" : "18px 18px 4px",
+              minHeight: isCatExpanded ? "0px" : "64px",
+              background: isCatExpanded ? "transparent" : (CAT_GRADIENT[cat] ?? CATEGORY_BG[cat]),
+              border: `1px solid ${isCatExpanded ? "transparent" : `${CATEGORY_COLORS[cat]}40`}`,
+              borderRadius: isCatExpanded ? "0px" : "12px",
+              marginBottom: isCatExpanded ? "0px" : "4px",
+              transition: `padding ${CAT_ANIM_MS}ms ${EXPENSE_DRAG_EASE}, min-height ${CAT_ANIM_MS}ms ${EXPENSE_DRAG_EASE}, background ${CAT_ANIM_MS}ms ease, border-color ${CAT_ANIM_MS}ms ease, border-radius ${CAT_ANIM_MS}ms ease`,
+            }}
+          >
+            <div style={{ width: "100%" }}>
+              <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
+                  <span>{f2(cTot * perCheckFactor) + `/${checkUnit}`}</span>
+                  <svg width={isCatExpanded ? "12" : "15"} height={isCatExpanded ? "12" : "15"} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCatExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: `transform ${CAT_ANIM_MS}ms ${EXPENSE_DRAG_EASE}`, opacity: 0.8 }}><path d="M4 6 L8 10 L12 6" /></svg>
+                </span>
+              }>{cat}</SH>
+            </div>
+          </div>
+          {/* Fold-out: grid-rows 0fr→1fr animates the real content height in time with the auto-scroll */}
+          <div style={{ display: "grid", gridTemplateRows: isCatExpanded ? "1fr" : "0fr", opacity: isCatExpanded ? 1 : 0, transition: `grid-template-rows ${CAT_ANIM_MS}ms ${EXPENSE_DRAG_EASE}, opacity ${CAT_ANIM_MS}ms ease` }}>
+          <div style={{ minHeight: 0, overflow: "hidden" }}>
           {(() => {
             // Collect deleted expenses (zeroed in this view with non-zero history) for restore sheet
             const deletedInCat = cExp.filter(exp => {
@@ -1640,6 +1731,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               </div>}
             </div>;
           })}
+          </div>
+          </div>
         </div>;
       })}
 
@@ -1657,20 +1750,16 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-          {activeMonth !== null ? (
-            <>
-              <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px", width: "100%" }}>Save scope:</div>
-              <SmBtn onClick={addExpThisMonth} c={newExp.label ? "var(--color-accent-primary)" : "var(--color-text-disabled)"}>MO. ONLY</SmBtn>
-              <SmBtn onClick={addExpFromMonthForward} c={newExp.label ? "var(--color-green)" : "var(--color-text-disabled)"}>FROM {activeMonthLabel} +</SmBtn>
-              <SmBtn onClick={addExpAllQuarters} c={newExp.label ? "var(--color-green)" : "var(--color-text-disabled)"}>ALL QTR</SmBtn>
-              <SmBtn onClick={_closeAddForm}>✕</SmBtn>
-            </>
-          ) : (
-            <>
-              <button onClick={addExp} disabled={!newExp.label} style={{ background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>ADD</button>
-              <button onClick={_closeAddForm} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</button>
-            </>
-          )}
+          <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px", width: "100%" }}>Save scope:</div>
+          {/* Primary: this-month-onward gets its own full-width row, label spells out the viewed month
+              (falls back to the current month when viewing a whole quarter) */}
+          <button onClick={addExpFromMonthForward} disabled={!newExp.label} style={{ width: "100%", background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "14px", minHeight: "48px", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>{anchorMonthFull}+ Onward</button>
+          {/* Secondary row: month-only, all-quarters, and exit */}
+          <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+            <SmBtn onClick={addExpThisMonth} c={newExp.label ? "var(--color-accent-primary)" : "var(--color-text-disabled)"} style={{ flex: 1 }}>{anchorMonthLabel} ONLY</SmBtn>
+            <SmBtn onClick={addExpAllQuarters} c={newExp.label ? "var(--color-green)" : "var(--color-text-disabled)"} style={{ flex: 1 }}>ALL QTR</SmBtn>
+            <SmBtn onClick={_closeAddForm} style={{ flex: 1 }}>✕</SmBtn>
+          </div>
         </div>
       </div> : <button onClick={() => setAddingExp(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
     </div>}
@@ -2382,19 +2471,24 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 </div>
                 <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
                 <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "1px", textTransform: "uppercase" }}>Save scope</div>
+                {/* Primary: the onward save gets its own full-width row; the rest sit in a secondary row */}
                 {activeMonth !== null ? (
-                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    <button disabled={belowFloor} onClick={() => saveThisMonth(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>{activeMonthLabel} Only</button>
-                    <button disabled={belowFloor} onClick={() => saveFromMonthForward(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>{activeMonthLabel} +</button>
-                    <button disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "10px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>This Qtr</button>
-                    <button disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>All Qtrs</button>
-                  </div>
+                  <>
+                    <button disabled={belowFloor} onClick={() => saveFromMonthForward(sheetExpLive.id)} style={{ width: "100%", padding: "14px", minHeight: "48px", background: "var(--color-green)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold", ...saveBtnDisabledStyle }}>{activeMonthFull}+ Onward</button>
+                    <div style={{ display: "flex", gap: "6px", width: "100%" }}>
+                      <button disabled={belowFloor} onClick={() => saveThisMonth(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>{activeMonthLabel} Only</button>
+                      <button disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "10px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>This Qtr</button>
+                      <button disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>All Qtrs</button>
+                    </div>
+                  </>
                 ) : (
-                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    <button disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>Q{ap + 1} Only</button>
-                    <button disabled={belowFloor} onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>Q{ap + 1} +</button>
-                    <button disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "70px", ...saveBtnDisabledStyle }}>All Qtrs</button>
-                  </div>
+                  <>
+                    <button disabled={belowFloor} onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ width: "100%", padding: "14px", minHeight: "48px", background: "var(--color-green)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold", ...saveBtnDisabledStyle }}>Q{ap + 1}+ Onward</button>
+                    <div style={{ display: "flex", gap: "6px", width: "100%" }}>
+                      <button disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>Q{ap + 1} Only</button>
+                      <button disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>All Qtrs</button>
+                    </div>
+                  </>
                 )}
                 <button onClick={() => { setSheetMode("view"); setEditId(null); }} style={{ padding: "11px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
                   </>);

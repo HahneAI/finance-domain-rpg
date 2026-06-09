@@ -1,5 +1,65 @@
 # TODO — Authority Finance
 
+## 16. Priority Sprint — UX Polish & Cleanup (brain dump 2026-06-07)
+
+*Active priority. Each item below is condensed from a raw brain dump — direction is
+simplified but the original intent and constraints are preserved.*
+
+- [x] **Budget — restructure expense save buttons** — When adding a new expense there are three
+  save buttons crammed into one horizontal row. Promote the "this month onward" save (the
+  year-forward bill save) to its own **full-width primary button on its own row**. Its label
+  should spell out the *currently viewed* month + "onward" (e.g. viewing September → "September+
+  Onward"), reactive to whichever month is selected, not the current month. Put the remaining two
+  saves — **month only** and **quarter only** — plus the **exit/cancel** button in a secondary
+  horizontal row beneath the primary button.
+  - [x] Applied to the add-expense form, the edit-expense bottom sheet, and the quarter-view
+    branch (anchors month-scoped saves to the current month when no month pill is selected,
+    fixing the ADD/CANCEL-only edge case on first land).
+
+- [ ] **Mobile PWA install tutorial** — Add a hamburger-menu option shown **only in the mobile
+  browser** (not the installed PWA) that opens a tutorial teaching users how to install the PWA.
+  The iOS flow already exists on our website (user will provide it); reuse that and place the
+  button somewhere clean.
+
+- [x] **Budget — collapsible category sections** — Keep the existing Lifestyle / Needs category
+  UI unchanged, but add a dropdown / collapse toggle to each colored category header so each
+  expense category section can expand and collapse.
+  - [x] Header is a chevron toggle; rows + loans collapse while the header and per-paycheck
+    total stay visible. State remembered per session (sessionStorage), defaults to all collapsed.
+
+- [ ] **Budget — slim down loan cards** — Loan cards shown in the Needs category are too verbose.
+  Remove the bottom-left text block (payments remaining, monthly payment amount, total left —
+  including both redundant per-month labels). Leave only the **per-paycheck amount** on the
+  budget/expenses view; full detail stays on the dedicated Loans tab.
+
+- [ ] **Net worth health — financial breakthrough tips** — New feature: when net worth is below
+  **10% of projected annual income**, surface a "financial breakthrough tips" feature that gently
+  flags the downward trend — reassuring that it's okay to live this way but noting it's never good
+  for mental health long-term. Brainstorm the right way to integrate/surface it.
+
+- [ ] **Log panel — declutter event cards** — Event cards read like a word dump. Raise **title +
+  notes** higher in the text hierarchy; for lost-money events show only a single **minus amount**
+  (money lost vs. the year's projection) plus the **event type** and **notes** (if any). Move every
+  other number into the existing per-event impact-breakdown dropdown. Goal: fast, subconscious
+  glance-ability — understand an event without reading the fine print.
+
+- [ ] **DHL short/long week naming correction** — Fix all references: a short week is officially
+  **3 days**, and the following long week in rotation is **4 days** (currently mislabeled as 4 and
+  5–6). Remove the parenthetical day-count from short/long week naming everywhere. Any text that
+  helps a DHL user know which week they're logging days into should just say "short week" / "long
+  week." Note: the custom-schedule feature still uses short/long week logic to pre-select days for
+  weekly approval (and to project take-home on charts when no custom schedule is set) — leave that
+  behavior intact; this task is **text/naming only**.
+
+- [ ] **Purge grey text** — Replace dark-grey text across the app (especially the Account panel)
+  with the standard white/primary text color used elsewhere. General text and labels should not be
+  grey — purge grey text coloring.
+
+- [ ] **Verify change email + password** — Make sure users can actually change their email and
+  their password. (§8 marks these done — confirm they work end-to-end and fix if not.)
+
+---
+
 ## 15. Life Events Feature
 
 *Life events are moments that fundamentally change a user's financial picture. The app should
@@ -733,6 +793,26 @@ This section tracks incremental migration from the old "Dark Wealth" gold-based 
   - [x] Add a helper bridge that exposes weekly surplus snapshots for both Breakdown and Goals views.
   - [x] Base completion timing on per-week surplus progression, not annualized fallback-first behavior.
   - [x] Show goal-finish context with both projected horizon and near-term weekly surplus deltas.
+
+---
+
+## 16. Portal Audit — Fixed Overlays Inside the Scroll Container (iOS Safari)
+
+*On mobile, `.main-content` is the scroll container (`overflow-y: auto`). iOS Safari hit-tests
+a `position: fixed` element nested inside an `overflow: auto/scroll` ancestor at an offset equal
+to that container's `scrollTop` — the overlay paints pinned to the viewport but taps land at the
+scrolled-away document position. Buttons (incl. ✕) then need repeated taps or go dead, varying
+with scroll position. Fixed so far: expense bottom sheets + restore sheet + drag overlay
+(`BudgetPanel.jsx`), all three Income modals (`IncomePanel.jsx`). App-root modals (Tools sheet,
+admin modal) are unaffected because they render outside `.main-content`.*
+
+- [ ] **Sweep all panels for un-portaled fixed overlays** — grep each panel component
+  (`HomePanel`, `ProfilePanel`, `LogPanel`, `BenefitsPanel`, `WeekConfirmModal`, and any others)
+  for `position: "fixed"` modals/sheets/overlays rendered *inside* the panel's JSX tree.
+  **Fix pattern (for consistency):** `import { createPortal } from "react-dom"` and wrap the
+  overlay block as `createPortal(<…overlay…/>, document.body)` so `position: fixed` resolves
+  against the viewport. Keep all styles/markup identical — only the DOM parent changes. Verify
+  on real iOS Safari that the ✕/action buttons respond on the first tap regardless of scroll.
 
 ## Completed
 

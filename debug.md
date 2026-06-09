@@ -18,14 +18,10 @@ Portaled the expense detail sheet + restore sheet + drag overlay to
 `document.body`. Also fixed drag auto-scroll (`window.scrollBy` → `.main-content`)
 and drop placement (index → insert-before-id). Commits on this branch.
 
-## 2. Income panel "Full Detail" weekly breakdown — ✕ not working — LIKELY SAME CAUSE, NOT FIXED
-`src/components/IncomePanel.jsx` renders 3 fixed-position modals inside the panel
-(inside `.main-content`):
-- `showWeekDetail` — line ~481, `position:fixed zIndex:1000` (the full-detail one)
-- `showSharpener` — line ~115, zIndex 200
-- `showEventLossInfo` — line ~218, zIndex 210
-Same shape as the expense sheet bug. **Starting point:** portal these three to
-`document.body` (mirror the BudgetPanel fix). No other IncomePanel change expected.
+## 2. Income panel "Full Detail" weekly breakdown — ✕ not working — FIXED
+Portaled all 3 `IncomePanel.jsx` fixed-position modals to `document.body`
+(`showWeekDetail` z1000, `showSharpener` z200, `showEventLossInfo` z210). Same
+root cause / same fix as item 1.
 
 ## 3. "Touch targets need 2–3 taps / bad targets" (browser only) — TWO SUSPECTS
 - a) Any remaining fixed-in-scroll overlay inherits the offset hit-test → feels

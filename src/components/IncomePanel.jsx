@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { MONTH_FULL, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { STATE_TAX_TABLE } from "../constants/stateTaxTable.js";
 import { computeNet, toLocalIso } from "../lib/finance.js";
@@ -110,7 +111,10 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
   return (<div>
 
     {/* ── Sharpen Rates modal ─────────────────────────────────────────────────── */}
-    {showSharpener && (
+    {/* Portaled to document.body: a position:fixed modal nested in the scrolling
+        .main-content container is hit-tested at a scrollTop offset by iOS Safari,
+        which left its buttons (Cancel/Confirm/✕) needing multiple taps or dead. */}
+    {showSharpener && createPortal(
       <div style={{
         position: "fixed", inset: 0, zIndex: 200,
         background: "rgba(0,0,0,0.75)",
@@ -209,11 +213,12 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     )}
 
     {/* ── Missed event day take-home modal ───────────────────────────────────── */}
-    {showEventLossInfo && (
+    {showEventLossInfo && createPortal(
       <div style={{
         position: "fixed", inset: 0, zIndex: 210,
         background: "rgba(0,0,0,0.75)",
@@ -261,7 +266,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     )}
 
     {/* ── Estimated rates banner ──────────────────────────────────────────────── */}
@@ -478,7 +484,9 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
     </div>
 
     {/* FULL-DETAIL WEEKLY MODAL */}
-    {showWeekDetail && <div onClick={() => setShowWeekDetail(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 1000, overflowY: "auto", padding: "16px" }}>
+    {/* Portaled to document.body so position:fixed resolves against the viewport,
+        not the scrolling .main-content ancestor (iOS Safari offset hit-test). */}
+    {showWeekDetail && createPortal(<div onClick={() => setShowWeekDetail(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 1000, overflowY: "auto", padding: "16px" }}>
       <div onClick={e => e.stopPropagation()} style={{ background: "var(--color-bg-surface)", borderRadius: "8px", maxWidth: "860px", margin: "0 auto", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
           <span style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase" }}>{isBiweekly ? "Pay Period Breakdown" : isMonthlyPay ? "Monthly Breakdown" : "Weekly Breakdown"} — Active Window Detail</span>
@@ -531,6 +539,6 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
           })}</tbody>
         </table></div>
       </div>
-    </div>}
+    </div>, document.body)}
   </div>);
 }

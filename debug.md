@@ -33,10 +33,14 @@ expense card is intentional (confirmed by user), so it's not a bug.
   locks `.main-content` (the real mobile scroll container, via `mainContentRef`)
   in addition to `<body>`, so the dashboard no longer scrolls behind the sheet.
   The sheet keeps its own `overflow-y:auto` so it still scrolls.
-- b) **"Tax plan view" launched demo accounts.** — RE-VERIFY after 4a. The tools
-  sheet renders at App root (not inside `.main-content`), so the offset hit-test
-  didn't apply; if this was a mis-tap caused by the dashboard scrolling under the
-  finger, the 4a lock may resolve it. If it persists, The tool is the "Tax Weeks"
+- b) **"Tax plan view" launched demo accounts.** — ADDRESSED. Not a wiring bug:
+  the Tax Weeks "View ↓" handler only toggles `taxGridOpen`; the Demo buttons
+  (directly below it) call `setAdminDemoView`. Root cause was a mis-tap — the
+  toggle links in the Tools sheet were ~10px-tall `padding:0` targets (well under
+  44px) sitting right above the Demo buttons. Gave the Tools-sheet toggle links
+  (Tax Weeks / Config / DB Row Fetch + View) a shared ≥44px tap target
+  (`sheetToggleBtnStyle`). Combined with the 4a scroll-lock, stray taps onto Demo
+  should be resolved. Re-verify on device. The tool is the "Tax Weeks"
   grid (App.jsx ~2478). Two hypotheses: (i) the same offset hit-test caused the
   tap to land on the adjacent "Demo {n}" buttons (App.jsx ~2536, which call
   `setAdminDemoView`); or (ii) a real wiring bug. Resolve 4a first — if the lock

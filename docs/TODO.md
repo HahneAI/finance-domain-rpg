@@ -32,10 +32,18 @@ simplified but the original intent and constraints are preserved.*
   including both redundant per-month labels). Leave only the **per-paycheck amount** on the
   budget/expenses view; full detail stays on the dedicated Loans tab.
 
-- [ ] **Net worth health — financial breakthrough tips** — New feature: when net worth is below
+- [x] **Net worth health — financial breakthrough tips** — New feature: when net worth is below
   **10% of projected annual income**, surface a "financial breakthrough tips" feature that gently
   flags the downward trend — reassuring that it's okay to live this way but noting it's never good
   for mental health long-term. Brainstorm the right way to integrate/surface it.
+  - [x] "Net worth" maps to the existing Home **Net Worth Trend** value (projected annual savings
+    flow = `avgWeeklySurplus*52 − fundedGoalSpend`); the app stores no accumulated balance, so the
+    trigger is **savings rate < 10%** (`netWorthHealthStatus` in `finance.js`). Suppressed in Job
+    Loss Mode (it has its own runway UI).
+  - [x] Surfaced as a **quiet, collapsed-by-default** "Financial Breakthrough" affordance beneath
+    the Net Worth Trend tile (`NetWorthHealthTips.jsx`); calm teal cue (not alarm-colored), opt-in
+    expand, mental-health-aware curated tips rotated by fiscal week.
+  - [x] `aiTip` prop reserved as a forward slot for a future Claude-API personalized insight.
 
 - [ ] **Log panel — declutter event cards** — Event cards read like a word dump. Raise **title +
   notes** higher in the text hierarchy; for lost-money events show only a single **minus amount**

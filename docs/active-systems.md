@@ -416,3 +416,35 @@ Mobile checklist: 390px / 375px — no horizontal bleed on app shell. `scroll-sn
 **5c. Reorder Modal** — bottom sheet on mobile / centered on desktop. Contains a horizontal `ScrollSnapRow` of mini-cards (`min(40vw, 140px)` × 80px). Two interaction modes: drag-and-drop on desktop (`pointer: fine`), tap-to-select + ← → arrow buttons on touch (`pointer: coarse`). Uses existing `moveGoal()` — no new data shape. Modal chrome: `position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.82); align-items: flex-end`.
 
 **What does NOT change:** label, target $, timeline fill bar, month markers, finish-week label, EDIT form, DONE/delete buttons, `computeGoalTimeline`, `deriveRollingTimelineMonths`.
+
+---
+
+## 15. Net Worth Health — Financial Breakthrough Tips (2026-06-10)
+
+**Concept:** A gentle, opt-in nudge when a user's projected savings cushion is thin. Tone is the
+whole point: validate that living close to the line is okay and common, then offer small,
+no-pressure steps — never shame, never condescend.
+
+**"Net worth" definition:** The app stores no accumulated balance. "Net worth" maps to the Home
+**Net Worth Trend** tile value = projected annual savings flow (`avgWeeklySurplus*52 −
+fundedGoalSpend`). So the literal "net worth < 10% of projected annual income" becomes a
+**savings rate < 10%** check.
+
+**Trigger** — `netWorthHealthStatus(annualSavings, annualIncome)` in `src/lib/finance.js`:
+- `annualIncome = weeklyIncome * 52` (buffer-excluded projected annual net, matching the existing
+  `pulseNetWorth` signal).
+- Returns `{ rate, belowThreshold }`; `belowThreshold` when `rate < NET_WORTH_HEALTH_THRESHOLD (0.10)`.
+- Safe (`belowThreshold: false`) when income ≤ 0 or inputs non-finite.
+- **Suppressed in Job Loss Mode** — that flow owns its own runway/triage UI.
+
+**Component — `NetWorthHealthTips`** (`src/components/NetWorthHealthTips.jsx`):
+- Rendered by `HomePanel` directly beneath the tiles grid, only when `showBreakthroughTips`.
+- Collapsed by default: calm **teal** cue (not alarm red/amber), "Financial Breakthrough" eyebrow,
+  44px+ tap target, tap to expand.
+- Expanded: reassuring intro → 3 curated tips (rotated deterministically by fiscal week via
+  `seed`) → mental-health acknowledgment + "ideas, not rules" footer.
+- `aiTip` prop is a forward slot for a future Claude-API personalized insight (Phase 3); renders a
+  "Personalized" card above the curated tips when provided.
+
+**Tests:** `src/test/lib/netWorthHealth.test.js` covers boundary (exactly 10%), below, negative
+savings, zero/negative income, and non-finite inputs.

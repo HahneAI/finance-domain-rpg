@@ -1239,3 +1239,19 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
     k401kMatchGained: affectsK401 ? grossGained * (cfg.employerPreset === "DHL" ? dhlEmployerMatchRate(cfg.k401Rate) : cfg.k401MatchRate) : 0
   };
 }
+
+// ── Net worth health ──────────────────────────────────────────────────────
+// "Net worth" in this app is the projected annual savings flow shown on the
+// Home "Net Worth Trend" tile (avgWeeklySurplus*52 - fundedGoalSpend), since no
+// accumulated balance is stored. We flag a thin cushion when that flow falls
+// below 10% of projected annual take-home — i.e. a savings rate under 10%.
+// Pure + side-effect free so it can back both the UI gate and unit tests.
+export const NET_WORTH_HEALTH_THRESHOLD = 0.10;
+
+export function netWorthHealthStatus(annualSavings, annualIncome) {
+  if (!Number.isFinite(annualSavings) || !Number.isFinite(annualIncome) || annualIncome <= 0) {
+    return { rate: null, belowThreshold: false };
+  }
+  const rate = annualSavings / annualIncome;
+  return { rate, belowThreshold: rate < NET_WORTH_HEALTH_THRESHOLD };
+}

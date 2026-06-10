@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, fmtFullDate, fmtLoanDate, toLocalIso } from "../lib/finance.js";
+import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, fmtFullDate, fmtLoanDate, toLocalIso, netWorthHealthStatus } from "../lib/finance.js";
+import { NetWorthHealthTips } from "./NetWorthHealthTips.jsx";
 import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
@@ -71,6 +72,10 @@ export function HomePanel({
   const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
   const annualSavings = avgWeeklySurplus * 52 - fundedGoalSpend;
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
+  // Net worth health: thin-cushion nudge when projected savings rate < 10%.
+  // Suppressed in Job Loss Mode, which has its own dedicated runway UI.
+  const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * 52);
+  const showBreakthroughTips = netWorthHealth.belowThreshold && !config?.jobLossMode;
   const nextWeekNet = futureWeekNets?.[0] ?? null;
   const fallbackSource = nextWeekNet != null ? null : (prevWeekNet != null ? "prev" : "avg");
   const fallbackNet = fallbackSource === "prev" ? prevWeekNet : weeklyIncome;
@@ -1127,6 +1132,10 @@ export function HomePanel({
           />
         ))}
       </div>
+
+      {showBreakthroughTips && (
+        <NetWorthHealthTips seed={weekNumber ?? 0} />
+      )}
 
       <div style={{ marginTop: "28px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />

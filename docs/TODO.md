@@ -71,6 +71,34 @@ simplified but the original intent and constraints are preserved.*
 - [ ] **Verify change email + password** — Make sure users can actually change their email and
   their password. (§8 marks these done — confirm they work end-to-end and fix if not.)
 
+- [ ] **Goals — "Reset Timeline" button (restart all active goals on next paycheck)** — Add a
+  **Reset Timeline** button to the Goals component section on the main dashboard (HomePanel goals
+  tile / area). On tap it opens a small confirmation **pop-up modal** with short explanatory copy,
+  then (on confirm) restarts the chronological funding order of **all active goals** so they begin
+  on the **very next week's paycheck** — i.e. re-anchors every goal's timeline start to the next
+  pay date and re-sequences them from there.
+  - **Why it exists (context to surface briefly in the pop-up copy):** a low-friction "reset" for
+    the edge case where life happens — the user had to pull all their money for an emergency, or
+    they dipped on discipline and spent it — and their saved-up progress / timelines no longer
+    reflect reality. Rather than hand-editing every goal, one tap restarts all active goal
+    timelines from next pay. Keep the tone reassuring (it's okay, this happens), not punitive.
+  - **Pop-up copy (short):** explain in ~1–2 sentences that this restarts every active goal's
+    timeline to begin on the next paycheck, plus the one-line "for emergencies / if you spent the
+    money" reassurance. Confirm / Cancel actions.
+  - **Account sync — must get this right:** the new start anchor has to honor the user's actual
+    **pay frequency** and **pay dates** (weekly / biweekly / monthly / salary), not a hardcoded
+    "next week." Compute "next paycheck" from the same pay-period machinery the rest of the app
+    uses (`getNextPayWeek` / `isPayWeek` / `payPeriodEndDate` in `fiscalWeek.js` + `buildYear`,
+    keyed off `config.userPaySchedule`). The reset must **persist to the user's account** (write
+    through to Supabase via the normal config/goals save path, not just in-memory) so it survives
+    reload and Force Sync, and so `computeGoalTimeline` recomputes every active goal from the new
+    anchor. Verify against weekly (Anthony) and at least one non-weekly schedule.
+  - **Scope notes / open questions for implementation:** decide where the new anchor is stored
+    (per-goal `startWeekIdx`/`startDate`, or a single global "timeline epoch" the goal timeline
+    derives from); confirm whether "active goals" excludes completed goals (likely yes); make sure
+    funded-but-incomplete goals reset cleanly without losing the goal definition (target, due date,
+    label) — only the **timeline start** moves.
+
 ---
 
 ## 15. Life Events Feature

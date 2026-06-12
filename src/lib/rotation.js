@@ -8,34 +8,22 @@ const ROTATION_FALLBACKS = {
   Standard: "Standard",
 };
 
-const ADMIN_ROTATION_TAGS = {
-  "Long Week": "6-Day",
-  "Short Week": "4-Day",
-  "6-Day": "6-Day",
-  "4-Day": "4-Day",
-  "Week 2": "6-Day",
-  "Week 1": "4-Day",
-  Standard: "Standard",
-};
-
 function extractRotationParts(rotationSource) {
-  if (!rotationSource) return { rotation: null, label: null, adminTag: null };
+  if (!rotationSource) return { rotation: null, label: null };
   if (typeof rotationSource === "string") {
-    return { rotation: rotationSource, label: null, adminTag: null };
+    return { rotation: rotationSource, label: null };
   }
   const rotation = rotationSource.rotation ?? rotationSource.weekRotation ?? null;
   return {
     rotation,
     label: rotationSource.rotationLabel ?? null,
-    adminTag: rotationSource.adminRotationTag ?? null,
   };
 }
 
-export function formatRotationDisplay(rotationSource, { isAdmin } = {}) {
-  const { rotation, label, adminTag } = extractRotationParts(rotationSource);
-  const base = label || ROTATION_FALLBACKS[rotation] || rotation || "--";
-  if (!isAdmin) return base;
-  const adminLabel = ADMIN_ROTATION_TAGS[adminTag] || ADMIN_ROTATION_TAGS[rotation] || adminTag || rotation;
-  if (!adminLabel || adminLabel === base) return base;
-  return `${base} (${adminLabel})`;
+// Always renders the plain "Short Week" / "Long Week" name. The old admin-only
+// "(4-Day)" / "(6-Day)" day-count suffix was a mislabeled day count and is gone.
+// Second arg is accepted (and ignored) so existing `{ isAdmin }` call sites keep working.
+export function formatRotationDisplay(rotationSource) {
+  const { rotation, label } = extractRotationParts(rotationSource);
+  return label || ROTATION_FALLBACKS[rotation] || rotation || "--";
 }

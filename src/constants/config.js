@@ -210,7 +210,7 @@ export const DHL_PRESET = {
     // Short week — 3 required shifts
     short: {
       days: [1, 4, 5],            // Mon, Thu, Fri
-      label: "Short Week (Mon / Thu / Fri core + OT)",
+      label: "Short Week",
       displayName: "Short Week",
       baseHours: 36,              // 3 × 12h core hours; OT adds the 4th shift
       weekendShifts: 1,           // Fri overnight earns diff only from Sat 12:00a–6:00a (½ shift)
@@ -219,7 +219,7 @@ export const DHL_PRESET = {
     // Long week — 4 required shifts
     long: {
       days: [2, 3, 6, 0],        // Tue, Wed, Sat, Sun
-      label: "Long Week (Tue / Wed / Sat / Sun core + OT)",
+      label: "Long Week",
       displayName: "Long Week",
       baseHours: 48,              // 4 × 12h core hours; OT adds the 5th shift
       weekendShifts: 2,           // Sat + Sun earn diffRate (Fri not worked in long rotation)

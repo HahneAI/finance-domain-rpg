@@ -710,17 +710,15 @@ export function LogPanel({
             </div>
             <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px", display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
               <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                {isAdmin && (
-                  <button
-                    onClick={() => setExpandedImpact(prev => {
-                      const next = new Set(prev);
-                      next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
-                      return next;
-                    })}
-                    style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", padding: "4px 6px", cursor: "pointer", fontSize: "12px", lineHeight: 1 }}
-                    title="Admin: impact breakdown"
-                  >{expandedImpact.has(entry.id) ? "▲" : "▼"}</button>
-                )}
+                <button
+                  onClick={() => setExpandedImpact(prev => {
+                    const next = new Set(prev);
+                    next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
+                    return next;
+                  })}
+                  style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", padding: "4px 6px", cursor: "pointer", fontSize: "12px", lineHeight: 1 }}
+                  title="Impact breakdown"
+                >{expandedImpact.has(entry.id) ? "▲" : "▼"}</button>
                 <button onClick={() => startEdit(entry)} style={{ background: "transparent", border: "1px solid #444", color: "var(--color-text-primary)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>EDIT</button>
                 {cdel === entry.id
                   ? <>
@@ -731,6 +729,36 @@ export function LogPanel({
                 }
               </div>
             </div>
+            {/* Base-user friendly breakdown — event type + the key money figures, no admin internals. */}
+            {!isAdmin && expandedImpact.has(entry.id) && (() => {
+              const rows = [
+                detailText && ["Detail", detailText],
+                missedArr.length > 0 && ["Days", missedArr.join(", ")],
+                imp.baseGross > 0 && ["Normal gross", f(imp.baseGross)],
+                imp.grossLost   > 0 && ["Gross lost",   `-${f(imp.grossLost)}`],
+                imp.grossGained > 0 && ["Gross gained", `+${f(imp.grossGained)}`],
+                (imp.netLost > 0 || imp.netGained > 0) && ["Take-home impact", net >= 0 ? `+${f(net)}` : `-${f(Math.abs(net))}`],
+                (imp.k401kLost + imp.k401kMatchLost) > 0 && ["401k lost", `-${f(imp.k401kLost + imp.k401kMatchLost)}`],
+                (imp.k401kGained + imp.k401kMatchGained) > 0 && ["401k added", `+${f(imp.k401kGained + imp.k401kMatchGained)}`],
+                imp.hoursLostForPTO > 0 && ["PTO accrual lost", `${imp.hoursLostForPTO}h`],
+                imp.bucketHoursDeducted > 0 && ["Attendance bucket", `${imp.bucketHoursDeducted}h`],
+              ].filter(Boolean);
+              return (
+                <div style={{ marginTop: "8px", padding: "10px 12px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                    <span style={{ fontSize: "11px", background: ev.color + "22", color: ev.color, padding: "2px 8px", borderRadius: "12px" }}>{ev.icon} {ev.label}</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "5px" }}>
+                    {rows.map(([label, val]) => (
+                      <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{label}</span>
+                        <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: val.startsWith("-") ? "var(--color-deduction)" : val.startsWith("+") ? "var(--color-green)" : "var(--color-text-primary)" }}>{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             {isAdmin && expandedImpact.has(entry.id) && (() => {
               const today = effectiveToday ?? toLocalIso(new Date());
               const isFuture = entry.weekEnd ? entry.weekEnd >= today : null;

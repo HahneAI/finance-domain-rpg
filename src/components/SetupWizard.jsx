@@ -716,12 +716,12 @@ function Step2({ formData, onChange, attempted }) {
         <Field label="Which week are you currently on?">
           <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
             <Pill
-              label="Short Week (4 working days)"
+              label="Short Week"
               active={formData.startingWeekIsLong === false}
               onClick={() => onChange({ startingWeekIsLong: false })}
             />
             <Pill
-              label="Long Week (5 working days)"
+              label="Long Week"
               active={formData.startingWeekIsLong === true}
               onClick={() => onChange({ startingWeekIsLong: true })}
             />

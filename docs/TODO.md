@@ -45,13 +45,20 @@ simplified but the original intent and constraints are preserved.*
   other number into the existing per-event impact-breakdown dropdown. Goal: fast, subconscious
   glance-ability — understand an event without reading the fine print.
 
-- [ ] **DHL short/long week naming correction** — Fix all references: a short week is officially
+- [x] **DHL short/long week naming correction** — Fix all references: a short week is officially
   **3 days**, and the following long week in rotation is **4 days** (currently mislabeled as 4 and
   5–6). Remove the parenthetical day-count from short/long week naming everywhere. Any text that
   helps a DHL user know which week they're logging days into should just say "short week" / "long
   week." Note: the custom-schedule feature still uses short/long week logic to pre-select days for
   weekly approval (and to project take-home on charts when no custom schedule is set) — leave that
   behavior intact; this task is **text/naming only**.
+  - [x] Removed day-count parentheticals: SetupWizard "Which week are you on?" pills
+    ("Short Week (4 working days)"/"Long Week (5 working days)" → "Short Week"/"Long Week"); the
+    admin `(4-Day)`/`(6-Day)` suffix in `formatRotationDisplay` (renders plain Short/Long Week for
+    everyone now); and the descriptive day-name suffix in `DHL_PRESET.rotation.{short,long}.label`
+    ("Short Week (Mon / Thu / Fri core + OT)" → "Short Week"). Internal rotation keys (`6-Day`/
+    `4-Day`/`Week 1`/`Week 2`), `days` arrays, hours, and custom-schedule day pre-selection logic
+    left intact. Code comments documenting actual core+OT mechanics left as-is (not user-facing).
 
 - [x] **Purge grey text** — Replace dark-grey text across the app (especially the Account panel)
   with the standard white/primary text color used elsewhere. General text and labels should not be

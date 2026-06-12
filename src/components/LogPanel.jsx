@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { calcEventImpact, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
-import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit } from "../lib/fiscalWeek.js";
+import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getPayPeriodBounds } from "../lib/fiscalWeek.js";
 import { Card, iS, lS, SmBtn, PanelHero, SectionHeader } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 
@@ -40,7 +40,7 @@ export function LogPanel({
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
     shiftsLost: 0, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0,
     shiftsGained: 0, hoursGained: 0,
-    missedDays: [], note: ""
+    missedDays: [], note: "", extraDay: false
   };
   const [adding, setAdding] = useState(false);
   const [nEv, setNEv] = useState(blank);
@@ -266,6 +266,7 @@ export function LogPanel({
       amount: parseFloat(nEv.amount) || 0,
       shiftsGained: parseInt(nEv.shiftsGained) || 0,
       hoursGained: parseFloat(nEv.hoursGained) || 0,
+      extraDay: !!nEv.extraDay,
     }]);
     setAdding(false); setNEv(blank); setAddConfirming(false);
     setPulseKey(k => k + 1);
@@ -288,6 +289,7 @@ export function LogPanel({
       amount: parseFloat(editVals.amount) || 0,
       shiftsGained: parseInt(editVals.shiftsGained) || 0,
       hoursGained: parseFloat(editVals.hoursGained) || 0,
+      extraDay: !!editVals.extraDay,
     }));
     setEditId(null); setEditConfirming(false);
     setPulseKey(k => k + 1);
@@ -514,6 +516,27 @@ export function LogPanel({
       </div>
     )}
 
+    {(vals.type === "pto" || vals.type === "pto_unapproved") && (
+      <div style={{ gridColumn: "1 / -1" }}>
+        <label style={lS}>Extra day outside your schedule?</label>
+        <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+          <button type="button" onClick={() => set(v => ({ ...v, extraDay: true }))}
+            style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: vals.extraDay ? "rgba(34,197,94,0.13)" : "var(--color-bg-raised)", color: vals.extraDay ? "var(--color-green)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: vals.extraDay ? "bold" : "normal" }}>
+            Yes — extra pay
+          </button>
+          <button type="button" onClick={() => set(v => ({ ...v, extraDay: false }))}
+            style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !vals.extraDay ? "rgba(122,139,191,0.16)" : "var(--color-bg-raised)", color: !vals.extraDay ? "#7a8bbf" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: !vals.extraDay ? "bold" : "normal" }}>
+            No — paid day off
+          </button>
+        </div>
+        <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "6px", lineHeight: 1.5 }}>
+          {vals.extraDay
+            ? "Counts as money gained — paid on top of your normal scheduled projection."
+            : "No change to your projection — a normally scheduled day covered by PTO."}
+        </div>
+      </div>
+    )}
+
     <div style={{ gridColumn: "1 / -1" }}>
       <label style={lS}>Note</label>
       <input type="text" placeholder="Optional" value={vals.note} onChange={e => set(v => ({ ...v, note: e.target.value }))} style={iS} />
@@ -557,7 +580,7 @@ export function LogPanel({
           })()}
           {nEv.type === "bonus" && <div>+${parseFloat(nEv.amount) || 0} · {parseInt(nEv.shiftsGained) || 0} shift(s) · {parseFloat(nEv.hoursGained) || 0}h gained</div>}
           {nEv.type === "partial" && <div>{parseFloat(nEv.hoursLost) || 0}h partial shift</div>}
-          {nEv.type === "pto" && <div>{parseFloat(nEv.ptoHours) || 0}h PTO</div>}
+          {nEv.type === "pto" && <div>{parseFloat(nEv.ptoHours) || 0}h PTO{nEv.extraDay ? " · extra day (gained)" : " · paid day off (no change)"}</div>}
           {nEv.type === "other_loss" && <div>-${parseFloat(nEv.amount) || 0} other loss</div>}
         </div>
       )}
@@ -601,12 +624,30 @@ export function LogPanel({
       const detailText =
           entry.type === "missed_unpaid"     ? `${entry.shiftsLost} shift(s) · ${entry.weekendShifts} wknd · ${entry.shiftsLost * config.shiftHours}h`
         : entry.type === "missed_unapproved" ? `${entry.hoursLost}h unapproved`
-        : entry.type === "pto"               ? `${entry.ptoHours}h PTO @ $${config.baseRate}`
-        : entry.type === "pto_unapproved"    ? `${entry.hoursLost}h PTO (unapproved) @ $${config.baseRate}`
+        : entry.type === "pto"               ? `${entry.ptoHours}h PTO @ $${config.baseRate}${entry.extraDay ? " · extra day" : ""}`
+        : entry.type === "pto_unapproved"    ? `${entry.hoursLost}h PTO (unapproved) @ $${config.baseRate}${entry.extraDay ? " · extra day" : ""}`
         : entry.type === "partial"           ? `${entry.hoursLost}h partial`
         : entry.type === "bonus"             ? `+${f(entry.amount)} bonus`
         : entry.type === "other_loss"        ? `-${f(entry.amount)} other`
         : "";
+
+      // Card title reflects the financial direction, not the raw event type:
+      //   bonus or an "extra day" PTO → money gained · other PTO → neutral "PTO" · everything else → money missed.
+      const isPtoType = entry.type === "pto" || entry.type === "pto_unapproved";
+      const isExtraPto = isPtoType && entry.extraDay;
+      const isGain = isB || isExtraPto;
+      const cardTitle = isGain ? "Gained Money" : (isPtoType ? "PTO" : "Missed Money");
+      const titleColor = isGain ? "var(--color-green)" : (isPtoType ? "#7a8bbf" : "var(--color-deduction)");
+      // Net effect on the year's projection (signed).
+      const net = (imp.netGained || 0) - (imp.netLost || 0);
+      const netSign = net > 0.005 ? "+" : net < -0.005 ? "-" : "";
+      const netColor = net > 0.005 ? "var(--color-green)" : net < -0.005 ? "var(--color-deduction)" : "var(--color-text-secondary)";
+      // Pay-period span the event was logged for — schedule-aware (weekly/biweekly/monthly).
+      const pp = (entry.weekIdx !== "" && entry.weekIdx != null) ? getPayPeriodBounds(entry.weekIdx, allWeeks) : null;
+      const ppOpts = { month: "short", day: "numeric" };
+      const payPeriodText = pp
+        ? `Pay period ${pp.start.toLocaleDateString("en-US", ppOpts)} – ${pp.end.toLocaleDateString("en-US", ppOpts)}`
+        : (entry.weekEnd ? `Week ending ${entry.weekEnd}` : "—");
 
       return <div key={entry.id} style={{ background: "var(--color-bg-surface)", border: `1px solid ${isEditing ? ev.color : ev.color + "33"}`, borderRadius: "8px", padding: "16px", marginBottom: "10px" }}>
 
@@ -628,8 +669,8 @@ export function LogPanel({
                 })()}
                 {editVals.type === "bonus" && <div>+${parseFloat(editVals.amount) || 0} · {parseInt(editVals.shiftsGained) || 0} shift(s) · {parseFloat(editVals.hoursGained) || 0}h gained</div>}
                 {editVals.type === "partial" && <div>{parseFloat(editVals.hoursLost) || 0}h partial shift</div>}
-                {editVals.type === "pto" && <div>{parseFloat(editVals.ptoHours) || 0}h PTO</div>}
-                {editVals.type === "pto_unapproved" && <div>{parseFloat(editVals.hoursLost) || 0}h PTO (unapproved){hasBucket ? " · bucket hit" : ""}</div>}
+                {editVals.type === "pto" && <div>{parseFloat(editVals.ptoHours) || 0}h PTO{editVals.extraDay ? " · extra day (gained)" : " · paid day off (no change)"}</div>}
+                {editVals.type === "pto_unapproved" && <div>{parseFloat(editVals.hoursLost) || 0}h PTO (unapproved){editVals.extraDay ? " · extra day (gained)" : ""}{hasBucket ? " · bucket hit" : ""}</div>}
                 {editVals.type === "other_loss" && <div>-${parseFloat(editVals.amount) || 0} other loss</div>}
               </div>
             )}
@@ -651,38 +692,33 @@ export function LogPanel({
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "12px", background: ev.color + "22", color: ev.color, padding: "2px 8px", borderRadius: "12px" }}>{ev.icon} {ev.label}</span>
-                  {hasBucket && isUA && <span style={{ fontSize: "9px", background: "#e8622a22", color: "#e8622a", padding: "2px 6px", borderRadius: "12px", fontWeight: "bold" }}>⚠ BUCKET HIT</span>}
-                  {ak   && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "12px" }}>401k</span>}
-                </div>
-                {/* Title + note carry the story; the week is secondary context. */}
-                {entry.note
-                  ? <>
-                      <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-text-primary)", marginBottom: "2px" }}>{entry.note}</div>
-                      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Week ending {entry.weekEnd || "—"}</div>
-                    </>
-                  : <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-text-primary)" }}>Week ending {entry.weekEnd || "—"}</div>
-                }
+                {/* Title = financial direction (Gained Money / Missed Money / PTO); note + pay period give context. */}
+                <div style={{ fontSize: "18px", fontWeight: "bold", color: titleColor, letterSpacing: "0.2px", marginBottom: "3px" }}>{cardTitle}</div>
+                {entry.note && <div style={{ fontSize: "12px", color: "var(--color-text-primary)", marginBottom: "2px" }}>{entry.note}</div>}
+                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>{payPeriodText}</div>
+                {(hasBucket && isUA) || ak ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "6px", flexWrap: "wrap" }}>
+                    {hasBucket && isUA && <span style={{ fontSize: "9px", background: "#e8622a22", color: "#e8622a", padding: "2px 6px", borderRadius: "12px", fontWeight: "bold" }}>⚠ BUCKET HIT</span>}
+                    {ak && <span style={{ fontSize: "9px", background: "#7a8bbf22", color: "#7a8bbf", padding: "2px 6px", borderRadius: "12px" }}>401k</span>}
+                  </div>
+                ) : null}
               </div>
               {/* One number only: net impact vs the year's projection. The rest lives in the breakdown. */}
               <div style={{ textAlign: "right", marginLeft: "16px" }}>
-                <div style={{ fontSize: "20px", fontWeight: "bold", color: isB ? "var(--color-green)" : "var(--color-deduction)" }}>{isB ? "+" : "-"}{f(isB ? imp.netGained : imp.netLost)}</div>
+                <div style={{ fontSize: "20px", fontWeight: "bold", color: netColor }}>{netSign}{f(Math.abs(net))}</div>
               </div>
             </div>
             <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px", display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
               <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                {isAdmin && (
-                  <button
-                    onClick={() => setExpandedImpact(prev => {
-                      const next = new Set(prev);
-                      next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
-                      return next;
-                    })}
-                    style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", padding: "4px 6px", cursor: "pointer", fontSize: "12px", lineHeight: 1 }}
-                    title="Admin: impact breakdown"
-                  >{expandedImpact.has(entry.id) ? "▲" : "▼"}</button>
-                )}
+                <button
+                  onClick={() => setExpandedImpact(prev => {
+                    const next = new Set(prev);
+                    next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
+                    return next;
+                  })}
+                  style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", padding: "4px 6px", cursor: "pointer", fontSize: "12px", lineHeight: 1 }}
+                  title="Impact breakdown"
+                >{expandedImpact.has(entry.id) ? "▲" : "▼"}</button>
                 <button onClick={() => startEdit(entry)} style={{ background: "transparent", border: "1px solid #444", color: "var(--color-text-primary)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>EDIT</button>
                 {cdel === entry.id
                   ? <>
@@ -693,6 +729,36 @@ export function LogPanel({
                 }
               </div>
             </div>
+            {/* Base-user friendly breakdown — event type + the key money figures, no admin internals. */}
+            {!isAdmin && expandedImpact.has(entry.id) && (() => {
+              const rows = [
+                detailText && ["Detail", detailText],
+                missedArr.length > 0 && ["Days", missedArr.join(", ")],
+                imp.baseGross > 0 && ["Normal gross", f(imp.baseGross)],
+                imp.grossLost   > 0 && ["Gross lost",   `-${f(imp.grossLost)}`],
+                imp.grossGained > 0 && ["Gross gained", `+${f(imp.grossGained)}`],
+                (imp.netLost > 0 || imp.netGained > 0) && ["Take-home impact", net >= 0 ? `+${f(net)}` : `-${f(Math.abs(net))}`],
+                (imp.k401kLost + imp.k401kMatchLost) > 0 && ["401k lost", `-${f(imp.k401kLost + imp.k401kMatchLost)}`],
+                (imp.k401kGained + imp.k401kMatchGained) > 0 && ["401k added", `+${f(imp.k401kGained + imp.k401kMatchGained)}`],
+                imp.hoursLostForPTO > 0 && ["PTO accrual lost", `${imp.hoursLostForPTO}h`],
+                imp.bucketHoursDeducted > 0 && ["Attendance bucket", `${imp.bucketHoursDeducted}h`],
+              ].filter(Boolean);
+              return (
+                <div style={{ marginTop: "8px", padding: "10px 12px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+                    <span style={{ fontSize: "11px", background: ev.color + "22", color: ev.color, padding: "2px 8px", borderRadius: "12px" }}>{ev.icon} {ev.label}</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "5px" }}>
+                    {rows.map(([label, val]) => (
+                      <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span style={{ fontSize: "10px", color: "var(--color-text-secondary)" }}>{label}</span>
+                        <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: val.startsWith("-") ? "var(--color-deduction)" : val.startsWith("+") ? "var(--color-green)" : "var(--color-text-primary)" }}>{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             {isAdmin && expandedImpact.has(entry.id) && (() => {
               const today = effectiveToday ?? toLocalIso(new Date());
               const isFuture = entry.weekEnd ? entry.weekEnd >= today : null;

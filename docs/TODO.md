@@ -34,18 +34,9 @@ simplified but the original intent and constraints are preserved.*
   - [x] Removed the bottom-left detail line and the right-side `/mo` figure from the overview
     loan card; kept name, LOAN/status badges, per-paycheck amount, and EDIT/delete. Loans tab unchanged.
 
-- [x] **Net worth health — financial breakthrough tips** — New feature: when net worth is below
-  **10% of projected annual income**, surface a "financial breakthrough tips" feature that gently
-  flags the downward trend — reassuring that it's okay to live this way but noting it's never good
-  for mental health long-term. Brainstorm the right way to integrate/surface it.
-  - [x] "Net worth" maps to the existing Home **Net Worth Trend** value (projected annual savings
-    flow = `avgWeeklySurplus*52 − fundedGoalSpend`); the app stores no accumulated balance, so the
-    trigger is **savings rate < 10%** (`netWorthHealthStatus` in `finance.js`). Suppressed in Job
-    Loss Mode (it has its own runway UI).
-  - [x] Surfaced as a **quiet, collapsed-by-default** "Financial Breakthrough" affordance beneath
-    the Net Worth Trend tile (`NetWorthHealthTips.jsx`); calm teal cue (not alarm-colored), opt-in
-    expand, mental-health-aware curated tips rotated by fiscal week.
-  - [x] `aiTip` prop reserved as a forward slot for a future Claude-API personalized insight.
+- [ ] **Proofread and audit the text for the financial alert feature** — Revisit the Net Worth
+  Health "Financial Breakthrough" tips copy (`NetWorthHealthTips.jsx`) and tune up the wording and
+  messaging.
 
 - [x] **Log panel — declutter event cards** — Event cards read like a word dump. Raise **title +
   notes** higher in the text hierarchy; for lost-money events show only a single **minus amount**
@@ -53,13 +44,20 @@ simplified but the original intent and constraints are preserved.*
   other number into the existing per-event impact-breakdown dropdown. Goal: fast, subconscious
   glance-ability — understand an event without reading the fine print.
 
-- [ ] **DHL short/long week naming correction** — Fix all references: a short week is officially
+- [x] **DHL short/long week naming correction** — Fix all references: a short week is officially
   **3 days**, and the following long week in rotation is **4 days** (currently mislabeled as 4 and
   5–6). Remove the parenthetical day-count from short/long week naming everywhere. Any text that
   helps a DHL user know which week they're logging days into should just say "short week" / "long
   week." Note: the custom-schedule feature still uses short/long week logic to pre-select days for
   weekly approval (and to project take-home on charts when no custom schedule is set) — leave that
   behavior intact; this task is **text/naming only**.
+  - [x] Removed day-count parentheticals: SetupWizard "Which week are you on?" pills
+    ("Short Week (4 working days)"/"Long Week (5 working days)" → "Short Week"/"Long Week"); the
+    admin `(4-Day)`/`(6-Day)` suffix in `formatRotationDisplay` (renders plain Short/Long Week for
+    everyone now); and the descriptive day-name suffix in `DHL_PRESET.rotation.{short,long}.label`
+    ("Short Week (Mon / Thu / Fri core + OT)" → "Short Week"). Internal rotation keys (`6-Day`/
+    `4-Day`/`Week 1`/`Week 2`), `days` arrays, hours, and custom-schedule day pre-selection logic
+    left intact. Code comments documenting actual core+OT mechanics left as-is (not user-facing).
 
 - [x] **Purge grey text** — Replace dark-grey text across the app (especially the Account panel)
   with the standard white/primary text color used elsewhere. General text and labels should not be
@@ -71,6 +69,34 @@ simplified but the original intent and constraints are preserved.*
 
 - [ ] **Verify change email + password** — Make sure users can actually change their email and
   their password. (§8 marks these done — confirm they work end-to-end and fix if not.)
+
+- [ ] **Goals — "Reset Timeline" button (restart all active goals on next paycheck)** — Add a
+  **Reset Timeline** button to the Goals component section on the main dashboard (HomePanel goals
+  tile / area). On tap it opens a small confirmation **pop-up modal** with short explanatory copy,
+  then (on confirm) restarts the chronological funding order of **all active goals** so they begin
+  on the **very next week's paycheck** — i.e. re-anchors every goal's timeline start to the next
+  pay date and re-sequences them from there.
+  - **Why it exists (context to surface briefly in the pop-up copy):** a low-friction "reset" for
+    the edge case where life happens — the user had to pull all their money for an emergency, or
+    they dipped on discipline and spent it — and their saved-up progress / timelines no longer
+    reflect reality. Rather than hand-editing every goal, one tap restarts all active goal
+    timelines from next pay. Keep the tone reassuring (it's okay, this happens), not punitive.
+  - **Pop-up copy (short):** explain in ~1–2 sentences that this restarts every active goal's
+    timeline to begin on the next paycheck, plus the one-line "for emergencies / if you spent the
+    money" reassurance. Confirm / Cancel actions.
+  - **Account sync — must get this right:** the new start anchor has to honor the user's actual
+    **pay frequency** and **pay dates** (weekly / biweekly / monthly / salary), not a hardcoded
+    "next week." Compute "next paycheck" from the same pay-period machinery the rest of the app
+    uses (`getNextPayWeek` / `isPayWeek` / `payPeriodEndDate` in `fiscalWeek.js` + `buildYear`,
+    keyed off `config.userPaySchedule`). The reset must **persist to the user's account** (write
+    through to Supabase via the normal config/goals save path, not just in-memory) so it survives
+    reload and Force Sync, and so `computeGoalTimeline` recomputes every active goal from the new
+    anchor. Verify against weekly (Anthony) and at least one non-weekly schedule.
+  - **Scope notes / open questions for implementation:** decide where the new anchor is stored
+    (per-goal `startWeekIdx`/`startDate`, or a single global "timeline epoch" the goal timeline
+    derives from); confirm whether "active goals" excludes completed goals (likely yes); make sure
+    funded-but-incomplete goals reset cleanly without losing the goal definition (target, due date,
+    label) — only the **timeline start** moves.
 
 ---
 

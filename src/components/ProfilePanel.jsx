@@ -6,6 +6,9 @@ import { iS, lS, Card, PanelHero, SH } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { InvestorAdminPanel } from "./InvestorAdminPanel.jsx";
 
+// Account panel uses white (primary) labels instead of the shared dim label color.
+const lSp = { ...lS, color: "var(--color-text-primary)" };
+
 const BENEFIT_LABELS = {
   health: "Health / Medical",
   dental: "Dental",
@@ -48,7 +51,7 @@ function BackBar({ onBack, title }) {
 function DetailRow({ label, value, valueColor, last }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 16px", borderBottom: last ? "none" : "1px solid #1e1e1e" }}>
-      <span style={{ fontSize: "13px", color: "var(--color-text-secondary)" }}>{label}</span>
+      <span style={{ fontSize: "13px", color: "var(--color-text-primary)" }}>{label}</span>
       <span style={{ fontSize: "13px", fontWeight: "600", color: valueColor || "var(--color-text-primary)", textAlign: "right", maxWidth: "55%" }}>{value}</span>
     </div>
   );
@@ -224,10 +227,10 @@ function AccountDetail({ authedUser, config, onBack }) {
 
       <DetailCard>
         <div style={{ padding: "13px 16px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "10px" }}>Connected Accounts</div>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "10px" }}>Connected Accounts</div>
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {authedUser?.identities?.some(id => id.provider === "email") && (
-              <span style={{ fontSize: "11px", padding: "3px 10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "20px", color: "var(--color-text-secondary)" }}>
+              <span style={{ fontSize: "11px", padding: "3px 10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "20px", color: "var(--color-text-primary)" }}>
                 Email / Password
               </span>
             )}
@@ -263,19 +266,19 @@ function AccountDetail({ authedUser, config, onBack }) {
           </button>
         ) : (
           <form onSubmit={handleChangeEmail} style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", fontWeight: "600" }}>Change Email</div>
+            <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", fontWeight: "600" }}>Change Email</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={lS}>New Email</label>
+              <label style={lSp}>New Email</label>
               <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required autoComplete="email" style={{ ...iS, borderRadius: "8px" }} />
             </div>
-            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+            <div style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>
               Supabase will send a confirmation email to the new address.
             </div>
             {emailStatus.error && (
               <div style={{ fontSize: "11px", color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{emailStatus.error}</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button type="button" onClick={() => { setShowEmailForm(false); setEmailStatus({ error: null, success: null, loading: false }); setNewEmail(authedUser?.email ?? ""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button type="button" onClick={() => { setShowEmailForm(false); setEmailStatus({ error: null, success: null, loading: false }); setNewEmail(authedUser?.email ?? ""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
               <button type="submit" disabled={emailStatus.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: emailStatus.loading ? "default" : "pointer" }}>{emailStatus.loading ? "..." : "Save"}</button>
             </div>
           </form>
@@ -298,17 +301,17 @@ function AccountDetail({ authedUser, config, onBack }) {
           </button>
         ) : (
           <form onSubmit={handleChangePw} style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", fontWeight: "600" }}>Change Password</div>
+            <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", fontWeight: "600" }}>Change Password</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={lS}>Current Password</label>
+              <label style={lSp}>Current Password</label>
               <input type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} placeholder="Required to verify" required autoComplete="current-password" style={{ ...iS, borderRadius: "8px" }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={lS}>New Password</label>
+              <label style={lSp}>New Password</label>
               <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="At least 8 characters" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={lS}>Confirm New Password</label>
+              <label style={lSp}>Confirm New Password</label>
               <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
             </div>
             {pwError && (
@@ -318,7 +321,7 @@ function AccountDetail({ authedUser, config, onBack }) {
               <div style={{ fontSize: "11px", color: "var(--color-green)" }}>Password updated.</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button type="button" onClick={() => { setShowPwForm(false); setPwError(null); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button type="button" onClick={() => { setShowPwForm(false); setPwError(null); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
               <button type="submit" disabled={pwLoading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: pwLoading ? "default" : "pointer" }}>{pwLoading ? "..." : "Save"}</button>
             </div>
           </form>
@@ -332,7 +335,7 @@ function AccountDetail({ authedUser, config, onBack }) {
           style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", textAlign: "left", cursor: globalSignoutState.loading ? "default" : "pointer" }}
         >
           <div style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500", marginBottom: "4px" }}>Sign Out All Devices</div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+          <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
             Ends active sessions on every device for this account.
           </div>
         </button>
@@ -349,7 +352,7 @@ function AccountDetail({ authedUser, config, onBack }) {
           style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", textAlign: "left", cursor: "pointer" }}
         >
           <div style={{ fontSize: "14px", color: "var(--color-deduction)", fontWeight: "600", marginBottom: "4px" }}>Delete Account</div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+          <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
             This permanently deletes your account and dashboard data.
           </div>
         </button>
@@ -359,18 +362,18 @@ function AccountDetail({ authedUser, config, onBack }) {
         <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div style={{ width: "100%", maxWidth: "430px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
             <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-deduction)" }}>Delete Account</div>
-            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.55" }}>
+            <div style={{ fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.55" }}>
               This action is irreversible. Your account, profile, and stored dashboard data will be permanently deleted.
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={lS}>Type DELETE to confirm</label>
+              <label style={lSp}>Type DELETE to confirm</label>
               <input type="text" value={deleteText} onChange={e => setDeleteText(e.target.value)} placeholder="DELETE" style={{ ...iS, borderRadius: "8px" }} />
             </div>
             {deleteState.error && (
               <div style={{ fontSize: "11px", color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{deleteState.error}</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => setShowDeleteDialog(false)} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button onClick={() => setShowDeleteDialog(false)} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
               <button onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</button>
             </div>
           </div>
@@ -427,7 +430,7 @@ function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
           <DetailRow label="Job Start" value={fmt(config.startDate)} last={isBaseUser} />
         ) : (
           <div style={{ padding: "13px 16px", borderTop: "1px solid #1e1e1e" }}>
-            <label style={lS}>Job Start Date</label>
+            <label style={lSp}>Job Start Date</label>
             <input
               type="date"
               value={startDate}
@@ -439,7 +442,7 @@ function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
         {/* DHL Team — always editable for DHL users */}
         {isEmployerDHL && (
           <div style={{ padding: "13px 16px", borderTop: "1px solid #1e1e1e" }}>
-            <label style={lS}>DHL Team</label>
+            <label style={lSp}>DHL Team</label>
             <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
               {["A", "B"].map(t => (
                 <button
@@ -458,7 +461,7 @@ function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
               ))}
             </div>
             {teamDirty && (
-              <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "6px" }}>
+              <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "6px" }}>
                 Rotation will update — save to apply.
               </div>
             )}
@@ -642,7 +645,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
       <BackBar onBack={onBack} title="Pay Structure" />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", paddingLeft: "4px" }}>
-        <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Base Pay & Differentials</div>
+        <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>Base Pay & Differentials</div>
         {!editing && (
           <button
             onClick={startEditing}
@@ -684,7 +687,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
           <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
               <div style={{ gridColumn: "span 2" }}>
-                <label style={lS}>Pay Schedule</label>
+                <label style={lSp}>Pay Schedule</label>
                 <select
                   value={payDraft.userPaySchedule}
                   onChange={e => handleDraftChange("userPaySchedule", e.target.value)}
@@ -698,7 +701,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
 
               {payDraft.userPaySchedule === "salary" && (
                 <div style={{ gridColumn: "span 2" }}>
-                  <label style={lS}>Annual Salary ($)</label>
+                  <label style={lSp}>Annual Salary ($)</label>
                   <input
                     type="number"
                     step="100"
@@ -707,14 +710,14 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                     onChange={e => handleDraftChange("annualSalary", e.target.value)}
                     style={iS}
                   />
-                  <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>
+                  <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "4px" }}>
                     Hourly base pay auto-derives from salary ÷ 2080.
                   </div>
                 </div>
               )}
 
               <div>
-                <label style={lS}>Base Hourly Rate ($)</label>
+                <label style={lSp}>Base Hourly Rate ($)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -727,7 +730,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
               </div>
 
               <div>
-                <label style={lS}>Shift Length (hrs)</label>
+                <label style={lSp}>Shift Length (hrs)</label>
                 <input
                   type="number"
                   step="0.25"
@@ -736,7 +739,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                   onChange={e => handleDraftChange("shiftHours", e.target.value)}
                   style={iS}
                 />
-                <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>
+                <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "4px" }}>
                   Update this if you move to 10-hour shifts.
                 </div>
               </div>
@@ -745,7 +748,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                 <SH color="var(--color-gold)" right={null}>Schedule Override</SH>
                 {isEmployerDHL ? (
                   <>
-                    <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
+                    <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "8px" }}>
                       {`${config.dhlTeam ?? "B"}-Team · Long/Short alternating (DHL preset rotation)`}
                     </div>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -778,9 +781,9 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                     </div>
                     {payDraft.customScheduleEnabled && (
                       <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                        <label style={lS}>Hours per week</label>
+                        <label style={lSp}>Hours per week</label>
                         <div>
-                          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>Long week</div>
+                          <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "4px" }}>Long week</div>
                           <input
                             type="number"
                             step="1"
@@ -795,11 +798,11 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                             const sh = parseFloat(payDraft.shiftHours) || config.shiftHours || 12;
                             if (!Number.isFinite(h) || h <= 0) return null;
                             const ot = Math.max(0, Math.round((h - DHL_PRESET.rotation.long.baseHours) / sh));
-                            return <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-disabled)" }}>OT pickups required: {ot}</div>;
+                            return <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-primary)" }}>OT pickups required: {ot}</div>;
                           })()}
                         </div>
                         <div>
-                          <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>Short week</div>
+                          <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "4px" }}>Short week</div>
                           <input
                             type="number"
                             step="1"
@@ -814,10 +817,10 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                             const sh = parseFloat(payDraft.shiftHours) || config.shiftHours || 12;
                             if (!Number.isFinite(h) || h <= 0) return null;
                             const ot = Math.max(0, Math.round((h - DHL_PRESET.rotation.short.baseHours) / sh));
-                            return <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-disabled)" }}>OT pickups required: {ot}</div>;
+                            return <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-primary)" }}>OT pickups required: {ot}</div>;
                           })()}
                         </div>
-                        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+                        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
                           Projections use long/short targets by week type. DHL rotation still shows scheduled days in weekly confirmation.
                         </div>
                       </div>
@@ -855,7 +858,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                     </div>
                     {payDraft.customScheduleEnabled && (
                       <div style={{ marginTop: "10px" }}>
-                        <label style={lS}>Hours per week</label>
+                        <label style={lSp}>Hours per week</label>
                         <input
                           type="number"
                           step="1"
@@ -865,7 +868,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                           onChange={e => handleDraftChange("customWeeklyHours", e.target.value)}
                           style={{ ...iS, marginTop: "4px" }}
                         />
-                        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+                        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
                           Used for all income projections and goal timelines. Enter your typical hours per week.
                         </div>
                       </div>
@@ -875,7 +878,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
               </div>
 
               <div>
-                <label style={lS}>Weekend Differential ($/hr)</label>
+                <label style={lSp}>Weekend Differential ($/hr)</label>
                 <input
                   type="number"
                   step="0.25"
@@ -888,7 +891,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
 
               {isEmployerDHL && (
                 <div>
-                  <label style={lS}>Night Differential ($/hr)</label>
+                  <label style={lSp}>Night Differential ($/hr)</label>
                   <input
                     type="number"
                     step="0.25"
@@ -905,13 +908,13 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                       onChange={e => handleDraftChange("dhlNightShift", e.target.checked)}
                       style={{ width: "16px", height: "16px", cursor: "pointer" }}
                     />
-                    <span style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Night shift applies</span>
+                    <span style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>Night shift applies</span>
                   </div>
                 </div>
               )}
 
               <div>
-                <label style={lS}>OT Threshold (hrs/wk)</label>
+                <label style={lSp}>OT Threshold (hrs/wk)</label>
                 <input
                   type="number"
                   step="1"
@@ -923,7 +926,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
               </div>
 
               <div>
-                <label style={lS}>OT Multiplier</label>
+                <label style={lSp}>OT Multiplier</label>
                 <input
                   type="number"
                   step="0.05"
@@ -936,7 +939,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
 
               {!config.scheduleIsVariable && (
                 <div>
-                  <label style={lS}>Standard Weekly Hours</label>
+                  <label style={lSp}>Standard Weekly Hours</label>
                   <input
                     type="number"
                     step="1"
@@ -964,7 +967,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
               </button>
               <button
                 onClick={cancelEditing}
-                style={{ flex: 1, padding: "10px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "10px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", cursor: "pointer" }}
+                style={{ flex: 1, padding: "10px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "10px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: "pointer" }}
               >
                 Cancel
               </button>
@@ -973,7 +976,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
         </DetailCard>
       )}
 
-      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
         Saving recalculates every paycheck, projection, and budget automatically.
       </div>
     </>
@@ -1039,7 +1042,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
 
       {/* 401k section */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-        <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", paddingLeft: "4px" }}>401k</div>
+        <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", paddingLeft: "4px" }}>401k</div>
         {!editing && (
           <button onClick={() => setEditing(true)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</button>
         )}
@@ -1067,7 +1070,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
       ) : (
         <DetailCard>
           <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>
               Payroll-Deduction Benefits ({BENEFIT_OPTIONS.length})
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
@@ -1092,28 +1095,28 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
               ))}
             </div>
             {isEmployerDHL && (
-              <div style={{ padding: "8px 10px", background: "rgba(0,200,150,0.06)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "6px", fontSize: "10px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+              <div style={{ padding: "8px 10px", background: "rgba(0,200,150,0.06)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "6px", fontSize: "10px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
                 <span style={{ color: "var(--color-accent-primary)", fontWeight: "bold" }}>PTO accrual</span> and <span style={{ color: "var(--color-accent-primary)", fontWeight: "bold" }}>attendance bucket</span> are automatically enabled for all DHL employees — no enrollment needed.
               </div>
             )}
             <div>
-              <label style={lS}>Benefits Start Date</label>
+              <label style={lSp}>Benefits Start Date</label>
               <input type="date" value={benefitsStartDate} onChange={e => setBenefitsStartDate(e.target.value)} style={iS} />
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
               {selectedBenefits.has("k401") && <>
                 <div>
-                  <label style={lS}>Employee % (decimal)</label>
+                  <label style={lSp}>Employee % (decimal)</label>
                   <input type="number" step="0.01" min="0" max="1" value={k401Rate} onChange={e => setK401Rate(e.target.value)} style={iS} />
                 </div>
                 {isBaseUser && (
                   <div>
-                    <label style={lS}>Match % (decimal)</label>
+                    <label style={lSp}>Match % (decimal)</label>
                     <input type="number" step="0.01" min="0" max="1" value={k401Match} onChange={e => setK401Match(e.target.value)} style={iS} />
                   </div>
                 )}
                 <div>
-                  <label style={lS}>Start Date</label>
+                  <label style={lSp}>Start Date</label>
                   <input type="date" value={k401Start} onChange={e => setK401Start(e.target.value)} style={iS} />
                 </div>
               </>}
@@ -1122,7 +1125,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                 {BENEFIT_OPTIONS.filter(b => b.type === "weekly" && selectedBenefits.has(b.id)).map((benefit) => (
                   <div key={benefit.id}>
-                    <label style={lS}>{benefit.label} ($ / week)</label>
+                    <label style={lSp}>{benefit.label} ($ / week)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -1137,7 +1140,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
               </div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => setEditing(false)} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button onClick={() => setEditing(false)} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
               <button onClick={handleSave} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</button>
             </div>
           </div>
@@ -1145,7 +1148,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
       )}
 
       {/* Benefits enrollment (read-only) */}
-      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px", paddingLeft: "4px", marginTop: "20px" }}>Benefits Enrollment</div>
+      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px", marginTop: "20px" }}>Benefits Enrollment</div>
       <DetailCard>
         {config.benefitsStartDate && (
           <DetailRow label="Benefits Start" value={fmt(config.benefitsStartDate)} />
@@ -1171,7 +1174,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
                 </>
               )}
             </div>
-            {isEmployerDHL && <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "6px" }}>✦ Auto-enabled for DHL employees</div>}
+            {isEmployerDHL && <div style={{ fontSize: "9px", color: "var(--color-text-primary)", marginTop: "6px" }}>✦ Auto-enabled for DHL employees</div>}
           </div>
         )}
       </DetailCard>
@@ -1209,12 +1212,12 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack }) {
           </button>
         ) : (
           <div style={{ padding: "13px 16px", borderBottom: "1px solid #1e1e1e" }}>
-            <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", marginBottom: "10px" }}>Paycheck Buffer</div>
+            <div style={{ fontSize: "13px", color: "var(--color-text-primary)", marginBottom: "10px" }}>Paycheck Buffer</div>
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
               <button onClick={() => setBufferEnabled(true)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: bufferEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: bufferEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>On</button>
               <button onClick={() => setBufferEnabled(false)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !bufferEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: !bufferEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Off</button>
             </div>
-            <label style={lS}>Buffer Amount ($ / check)</label>
+            <label style={lSp}>Buffer Amount ($ / check)</label>
             <input
               type="number"
               min="0"
@@ -1226,7 +1229,7 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack }) {
               disabled={!bufferEnabled}
             />
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => { setEditingBuffer(false); setBufferEnabled(config.bufferEnabled ?? true); setPaycheckBuffer(config.paycheckBuffer ?? 50); }} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button onClick={() => { setEditingBuffer(false); setBufferEnabled(config.bufferEnabled ?? true); setPaycheckBuffer(config.paycheckBuffer ?? 50); }} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
               <button onClick={handleSaveBuffer} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</button>
             </div>
           </div>
@@ -1238,7 +1241,7 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack }) {
           last
         />
       </DetailCard>
-      <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
+      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
         Buffer and tax settings can also be updated from setup flows and Life Events.
       </div>
     </>
@@ -1329,7 +1332,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
 
       {/* Extra withholding quick-toggle */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", padding: "10px 14px", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
-        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", flex: 1 }}>Apply extra withholding <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerPaycheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
+        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", flex: 1 }}>Apply extra withholding <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerPaycheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
         <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)", color: showExtra ? "var(--color-gold)" : "var(--color-text-primary)", border: "1px solid " + (showExtra ? "var(--color-gold)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</button>
       </div>
 
@@ -1346,7 +1349,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
           ) : (
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={() => { const nc = { ...config, fedStdDeduction: parseFloat(taxDraft.fedStdDeduction) || 0, moFlatRate: parseFloat(taxDraft.moFlatRate) || 0, targetOwedAtFiling: parseFloat(taxDraft.targetOwedAtFiling) || 0, firstActiveIdx: parseInt(taxDraft.firstActiveIdx) || 0 }; setConfig(nc); onSaveConfig?.(nc); setTaxDraft(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</button>
-              <button onClick={() => setTaxDraft(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <button onClick={() => setTaxDraft(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
             </div>
           )}
         </div>
@@ -1357,10 +1360,10 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-            <div><label style={lS}>Federal Std Deduction ($)</label><input type="number" step="100" value={taxDraft.fedStdDeduction} onChange={e => setTaxDraft(v => ({ ...v, fedStdDeduction: e.target.value }))} style={iS} /></div>
-            {!config.userState && <div><label style={lS}>State Rate (fallback)</label><input type="number" step="0.001" value={taxDraft.moFlatRate} onChange={e => setTaxDraft(v => ({ ...v, moFlatRate: e.target.value }))} style={iS} /></div>}
-            <div><label style={lS}>Target Owed at Filing ($)</label><input type="number" step="100" value={taxDraft.targetOwedAtFiling} onChange={e => setTaxDraft(v => ({ ...v, targetOwedAtFiling: e.target.value }))} style={iS} /></div>
-            <div><label style={lS}>First Active Week Index</label><input type="number" step="1" value={taxDraft.firstActiveIdx} onChange={e => setTaxDraft(v => ({ ...v, firstActiveIdx: e.target.value }))} style={iS} /></div>
+            <div><label style={lSp}>Federal Std Deduction ($)</label><input type="number" step="100" value={taxDraft.fedStdDeduction} onChange={e => setTaxDraft(v => ({ ...v, fedStdDeduction: e.target.value }))} style={iS} /></div>
+            {!config.userState && <div><label style={lSp}>State Rate (fallback)</label><input type="number" step="0.001" value={taxDraft.moFlatRate} onChange={e => setTaxDraft(v => ({ ...v, moFlatRate: e.target.value }))} style={iS} /></div>}
+            <div><label style={lSp}>Target Owed at Filing ($)</label><input type="number" step="100" value={taxDraft.targetOwedAtFiling} onChange={e => setTaxDraft(v => ({ ...v, targetOwedAtFiling: e.target.value }))} style={iS} /></div>
+            <div><label style={lSp}>First Active Week Index</label><input type="number" step="1" value={taxDraft.firstActiveIdx} onChange={e => setTaxDraft(v => ({ ...v, firstActiveIdx: e.target.value }))} style={iS} /></div>
           </div>
         )}
       </div>
@@ -1381,27 +1384,27 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
 
         {/* Event log pipeline indicator — always shown so user can confirm events are wired in */}
         <div style={{ marginTop: "14px", padding: "10px 12px", background: "var(--color-bg-base)", borderRadius: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "2px" }}>Log Event Impact (live)</div>
+          <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "2px" }}>Log Event Impact (live)</div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
-            <span style={{ color: "var(--color-text-secondary)" }}>Gross adjustment from events</span>
+            <span style={{ color: "var(--color-text-primary)" }}>Gross adjustment from events</span>
             <span style={{ fontWeight: "bold", color: eventGrossDelta === 0 ? "var(--color-text-disabled)" : eventGrossDelta > 0 ? "var(--color-green)" : "var(--color-red)", fontVariantNumeric: "tabular-nums" }}>
               {eventGrossDelta === 0 ? "—" : (eventGrossDelta > 0 ? "+" : "") + f2(eventGrossDelta)}
             </span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
-            <span style={{ color: "var(--color-text-secondary)" }}>Fed liability shift from events</span>
+            <span style={{ color: "var(--color-text-primary)" }}>Fed liability shift from events</span>
             <span style={{ fontWeight: "bold", color: fedLiabilityEventDelta === 0 ? "var(--color-text-disabled)" : fedLiabilityEventDelta > 0 ? "var(--color-red)" : "var(--color-green)", fontVariantNumeric: "tabular-nums" }}>
               {fedLiabilityEventDelta === 0 ? "—" : (fedLiabilityEventDelta > 0 ? "+" : "") + f2(fedLiabilityEventDelta)}
             </span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
-            <span style={{ color: "var(--color-text-secondary)" }}>State liability shift from events</span>
+            <span style={{ color: "var(--color-text-primary)" }}>State liability shift from events</span>
             <span style={{ fontWeight: "bold", color: moLiabilityEventDelta === 0 ? "var(--color-text-disabled)" : moLiabilityEventDelta > 0 ? "var(--color-red)" : "var(--color-green)", fontVariantNumeric: "tabular-nums" }}>
               {moLiabilityEventDelta === 0 ? "—" : (moLiabilityEventDelta > 0 ? "+" : "") + f2(moLiabilityEventDelta)}
             </span>
           </div>
           {eventGrossDelta === 0 && (
-            <div style={{ fontSize: "10px", color: "var(--color-text-disabled)", marginTop: "2px" }}>No logged events affecting gross yet — will update as you confirm weeks.</div>
+            <div style={{ fontSize: "10px", color: "var(--color-text-primary)", marginTop: "2px" }}>No logged events affecting gross yet — will update as you confirm weeks.</div>
           )}
         </div>
       </div>
@@ -1420,7 +1423,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", gap: "8px" }}>
           <div>
             <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text-primary)" }}>Check History — Tax Status</div>
-            <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+            <div style={{ fontSize: "10px", color: "var(--color-text-primary)", marginTop: "2px" }}>
               Overrides only affect extra withholding math · {sortedCheckWeeks.length} check{sortedCheckWeeks.length !== 1 ? "s" : ""} recorded
             </div>
           </div>
@@ -1437,7 +1440,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
           background: "var(--color-bg-base)",
         }}>
           {sortedCheckWeeks.length === 0 ? (
-            <div style={{ padding: "24px 16px", textAlign: "center", fontSize: "11px", color: "var(--color-text-disabled)" }}>
+            <div style={{ padding: "24px 16px", textAlign: "center", fontSize: "11px", color: "var(--color-text-primary)" }}>
               No checks recorded yet — weeks slide in here as they pass.
             </div>
           ) : sortedCheckWeeks.map((w, i) => {
@@ -1457,7 +1460,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: "10px", color: "var(--color-text-disabled)", fontFamily: "var(--font-mono)" }}>
+                    <span style={{ fontSize: "10px", color: "var(--color-text-primary)", fontFamily: "var(--font-mono)" }}>
                       #{checkNum}
                     </span>
                     <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-text-primary)" }}>
@@ -1474,7 +1477,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>
+                  <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>
                     {rotLabel} · {f2(w.grossPay)}
                   </div>
                 </div>
@@ -1506,11 +1509,11 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
           return <div key={w.idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: isPast ? "var(--color-bg-base)" : "var(--color-bg-surface)", border: `1px solid ${isPast ? "var(--color-border-subtle)" : taxed ? "#7a8bbf22" : "rgba(76,175,125,0.13)"}`, borderRadius: "6px", marginBottom: "6px", opacity: isPast ? 0.5 : 1 }}>
             <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
               <div>
-                <div style={{ fontSize: "12px", fontWeight: "bold", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{isPast && <span style={{ marginLeft: "6px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-disabled)", fontWeight: "normal" }}>received</span>}</div>
-                <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>{formatRotationDisplay(w, { isAdmin })} · {w.totalHours}h · idx {w.idx}{w.has401k ? " · 401k✓" : ""}</div>
+                <div style={{ fontSize: "12px", fontWeight: "bold", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>Ends {w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{isPast && <span style={{ marginLeft: "6px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-primary)", fontWeight: "normal" }}>received</span>}</div>
+                <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{formatRotationDisplay(w, { isAdmin })} · {w.totalHours}h · idx {w.idx}{w.has401k ? " · 401k✓" : ""}</div>
               </div>
               <div>
-                <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>{f2(w.grossPay)} gross</div>
+                <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>{f2(w.grossPay)} gross</div>
                 <div style={{ fontSize: "11px", color: isPast ? "var(--color-text-disabled)" : taxed ? "var(--color-text-primary)" : "var(--color-green)" }}>{f2(gN(w))} net</div>
               </div>
             </div>
@@ -1552,7 +1555,7 @@ function ListRow({ label, summary, onPress, last }) {
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500" }}>{label}</div>
-        {summary && <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</div>}
+        {summary && <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</div>}
       </div>
       <span style={{ fontSize: "18px", color: "var(--color-text-primary)", marginLeft: "12px", lineHeight: 1 }}>›</span>
     </button>
@@ -1617,7 +1620,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
       <PanelHero eyebrow="Authority Finance">Account</PanelHero>
 
       {/* Work & Pay group */}
-      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px", paddingLeft: "4px" }}>Work & Pay</div>
+      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Work & Pay</div>
       <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", overflow: "hidden", marginBottom: "20px" }}>
         <ListRow
           label="Employment"
@@ -1638,7 +1641,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
       </div>
 
       {/* App group */}
-      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px", paddingLeft: "4px" }}>App</div>
+      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>App</div>
       <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", overflow: "hidden", marginBottom: "20px" }}>
         <ListRow
           label="Account"
@@ -1684,7 +1687,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div style={{ width: "100%", maxWidth: "420px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>Sign Out</div>
-            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.55" }}>
+            <div style={{ fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.55" }}>
               Sign out from this device now?
             </div>
             {localSignOutState.error && (
@@ -1693,7 +1696,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
               </div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => setShowLocalSignOutConfirm(false)} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: localSignOutState.loading ? "default" : "pointer" }}>Cancel</button>
+              <button onClick={() => setShowLocalSignOutConfirm(false)} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: localSignOutState.loading ? "default" : "pointer" }}>Cancel</button>
               <button onClick={confirmLocalSignOut} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: localSignOutState.loading ? "default" : "pointer" }}>{localSignOutState.loading ? "..." : "Confirm"}</button>
             </div>
           </div>

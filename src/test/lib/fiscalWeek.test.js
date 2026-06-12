@@ -5,6 +5,7 @@ import {
   getFiscalWeekNumber,
   getFiscalWeekInfo,
   formatFiscalWeekLabel,
+  getPayPeriodBounds,
 } from '../../lib/fiscalWeek.js'
 
 const makeWeek = (idx, dateIso, active = true) => ({
@@ -69,5 +70,44 @@ describe('formatFiscalWeekLabel', () => {
 
   it('returns an em dash placeholder when info missing', () => {
     expect(formatFiscalWeekLabel(null)).toBe('\u2014')
+  })
+})
+
+describe('getPayPeriodBounds', () => {
+  // Build consecutive Mon→Sun weeks with payPeriodEndDate = weekEnd.
+  const makePeriodWeek = (idx, startIso, endIso, isPayWeek, active = true) => ({
+    idx, active, isPayWeek,
+    weekStart: new Date(`${startIso}T12:00:00Z`),
+    weekEnd: new Date(`${endIso}T12:00:00Z`),
+    payPeriodEndDate: new Date(`${endIso}T12:00:00Z`),
+  })
+
+  it('weekly: each week is its own pay period', () => {
+    const weeks = [
+      makePeriodWeek(0, '2026-05-04', '2026-05-10', true),
+      makePeriodWeek(1, '2026-05-11', '2026-05-17', true),
+    ]
+    const { start, end } = getPayPeriodBounds(1, weeks)
+    expect(start.toISOString().slice(0, 10)).toBe('2026-05-11')
+    expect(end.toISOString().slice(0, 10)).toBe('2026-05-17')
+  })
+
+  it('biweekly: period spans the two weeks ending on the pay week', () => {
+    // idx 1 and 3 are pay weeks (period ends); idx 0,2 are first halves.
+    const weeks = [
+      makePeriodWeek(0, '2026-05-04', '2026-05-10', false),
+      makePeriodWeek(1, '2026-05-11', '2026-05-17', true),
+      makePeriodWeek(2, '2026-05-18', '2026-05-24', false),
+      makePeriodWeek(3, '2026-05-25', '2026-05-31', true),
+    ]
+    // An event logged in the first-half week (idx 2) resolves to the full period.
+    const { start, end } = getPayPeriodBounds(2, weeks)
+    expect(start.toISOString().slice(0, 10)).toBe('2026-05-18')
+    expect(end.toISOString().slice(0, 10)).toBe('2026-05-31')
+  })
+
+  it('returns null when the week is not found', () => {
+    expect(getPayPeriodBounds(99, [makePeriodWeek(0, '2026-05-04', '2026-05-10', true)])).toBeNull()
+    expect(getPayPeriodBounds(0, [])).toBeNull()
   })
 })

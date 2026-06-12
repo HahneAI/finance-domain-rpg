@@ -27,17 +27,27 @@ simplified but the original intent and constraints are preserved.*
   - [x] Header is a chevron toggle; rows + loans collapse while the header and per-paycheck
     total stay visible. State remembered per session (sessionStorage), defaults to all collapsed.
 
-- [ ] **Budget — slim down loan cards** — Loan cards shown in the Needs category are too verbose.
+- [x] **Budget — slim down loan cards** — Loan cards shown in the Needs category are too verbose.
   Remove the bottom-left text block (payments remaining, monthly payment amount, total left —
   including both redundant per-month labels). Leave only the **per-paycheck amount** on the
   budget/expenses view; full detail stays on the dedicated Loans tab.
+  - [x] Removed the bottom-left detail line and the right-side `/mo` figure from the overview
+    loan card; kept name, LOAN/status badges, per-paycheck amount, and EDIT/delete. Loans tab unchanged.
 
-- [ ] **Net worth health — financial breakthrough tips** — New feature: when net worth is below
+- [x] **Net worth health — financial breakthrough tips** — New feature: when net worth is below
   **10% of projected annual income**, surface a "financial breakthrough tips" feature that gently
   flags the downward trend — reassuring that it's okay to live this way but noting it's never good
   for mental health long-term. Brainstorm the right way to integrate/surface it.
+  - [x] "Net worth" maps to the existing Home **Net Worth Trend** value (projected annual savings
+    flow = `avgWeeklySurplus*52 − fundedGoalSpend`); the app stores no accumulated balance, so the
+    trigger is **savings rate < 10%** (`netWorthHealthStatus` in `finance.js`). Suppressed in Job
+    Loss Mode (it has its own runway UI).
+  - [x] Surfaced as a **quiet, collapsed-by-default** "Financial Breakthrough" affordance beneath
+    the Net Worth Trend tile (`NetWorthHealthTips.jsx`); calm teal cue (not alarm-colored), opt-in
+    expand, mental-health-aware curated tips rotated by fiscal week.
+  - [x] `aiTip` prop reserved as a forward slot for a future Claude-API personalized insight.
 
-- [ ] **Log panel — declutter event cards** — Event cards read like a word dump. Raise **title +
+- [x] **Log panel — declutter event cards** — Event cards read like a word dump. Raise **title +
   notes** higher in the text hierarchy; for lost-money events show only a single **minus amount**
   (money lost vs. the year's projection) plus the **event type** and **notes** (if any). Move every
   other number into the existing per-event impact-breakdown dropdown. Goal: fast, subconscious
@@ -51,9 +61,13 @@ simplified but the original intent and constraints are preserved.*
   weekly approval (and to project take-home on charts when no custom schedule is set) — leave that
   behavior intact; this task is **text/naming only**.
 
-- [ ] **Purge grey text** — Replace dark-grey text across the app (especially the Account panel)
+- [x] **Purge grey text** — Replace dark-grey text across the app (especially the Account panel)
   with the standard white/primary text color used elsewhere. General text and labels should not be
   grey — purge grey text coloring.
+  - [x] Scoped to the Account/Profile panel (per decision): promoted standalone secondary/disabled
+    body text + the dim label style (`lS`→`lSp`) to white primary; preserved active/inactive toggle
+    state ternaries. Other panels' `--color-text-secondary` label hierarchy left intact — revisit if
+    a broader app-wide purge is wanted.
 
 - [ ] **Verify change email + password** — Make sure users can actually change their email and
   their password. (§8 marks these done — confirm they work end-to-end and fix if not.)

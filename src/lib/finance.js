@@ -1195,17 +1195,29 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
                       + actualOTWkndH  * cfg.diffRate * cfg.otMultiplier;
     grossLost = Math.max(baseGross - actualGross, 0); hoursLostForPTO = (event.shiftsLost || 0) * cfg.shiftHours;
   } else if (event.type === "pto") {
-    const ptoH = event.ptoHours || 0, normalH = normalShifts * cfg.shiftHours;
-    const _ot = cfg.otThreshold ?? Infinity;
-    const normalOT = Math.max(normalH - _ot, 0), actualOT = Math.max(normalH - ptoH - _ot, 0);
-    // PTO pays at baseRate; night diff applies to hours worked only — both deltas included
-    grossLost = ptoH * nightDiffPerHour + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
+    const ptoH = event.ptoHours || 0;
+    if (event.extraDay) {
+      // Extra PTO day outside the normal schedule → additional pay beyond the
+      // projection, earned at the flat base rate (no schedule hours replaced).
+      grossGained = ptoH * cfg.baseRate;
+    } else {
+      const normalH = normalShifts * cfg.shiftHours;
+      const _ot = cfg.otThreshold ?? Infinity;
+      const normalOT = Math.max(normalH - _ot, 0), actualOT = Math.max(normalH - ptoH - _ot, 0);
+      // PTO pays at baseRate; night diff applies to hours worked only — both deltas included
+      grossLost = ptoH * nightDiffPerHour + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
+    }
   } else if (event.type === "pto_unapproved") {
     // PTO covers paycheck but absence was unapproved: same gross impact as pto + bucket deducted below
-    const ptoH = event.hoursLost || 0, normalH = normalShifts * cfg.shiftHours;
-    const _ot = cfg.otThreshold ?? Infinity;
-    const normalOT = Math.max(normalH - _ot, 0), actualOT = Math.max(normalH - ptoH - _ot, 0);
-    grossLost = ptoH * nightDiffPerHour + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
+    const ptoH = event.hoursLost || 0;
+    if (event.extraDay) {
+      grossGained = ptoH * cfg.baseRate;
+    } else {
+      const normalH = normalShifts * cfg.shiftHours;
+      const _ot = cfg.otThreshold ?? Infinity;
+      const normalOT = Math.max(normalH - _ot, 0), actualOT = Math.max(normalH - ptoH - _ot, 0);
+      grossLost = ptoH * nightDiffPerHour + (normalOT - actualOT) * cfg.baseRate * (cfg.otMultiplier - 1);
+    }
   } else if (event.type === "missed_unapproved") {
     // Hours missed × (base rate + night diff); bucket hit tracked separately
     grossLost = (event.hoursLost || 0) * (cfg.baseRate + nightDiffPerHour); hoursLostForPTO = event.hoursLost || 0;
@@ -1238,4 +1250,20 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
     k401kGained: affectsK401 ? grossGained * cfg.k401Rate : 0,
     k401kMatchGained: affectsK401 ? grossGained * (cfg.employerPreset === "DHL" ? dhlEmployerMatchRate(cfg.k401Rate) : cfg.k401MatchRate) : 0
   };
+}
+
+// ── Net worth health ──────────────────────────────────────────────────────
+// "Net worth" in this app is the projected annual savings flow shown on the
+// Home "Net Worth Trend" tile (avgWeeklySurplus*52 - fundedGoalSpend), since no
+// accumulated balance is stored. We flag a thin cushion when that flow falls
+// below 10% of projected annual take-home — i.e. a savings rate under 10%.
+// Pure + side-effect free so it can back both the UI gate and unit tests.
+export const NET_WORTH_HEALTH_THRESHOLD = 0.10;
+
+export function netWorthHealthStatus(annualSavings, annualIncome) {
+  if (!Number.isFinite(annualSavings) || !Number.isFinite(annualIncome) || annualIncome <= 0) {
+    return { rate: null, belowThreshold: false };
+  }
+  const rate = annualSavings / annualIncome;
+  return { rate, belowThreshold: rate < NET_WORTH_HEALTH_THRESHOLD };
 }

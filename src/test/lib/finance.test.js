@@ -1491,6 +1491,14 @@ describe('calcEventImpact', () => {
       const event = makeEvent({ type: 'pto', weekRotation: '6-Day', weekEnd: '2026-02-02', ptoHours: 12 })
       expect(calcEventImpact(event, cfg).bucketHoursDeducted).toBe(0)
     })
+
+    it('extraDay PTO is a gain of ptoHours × baseRate (no grossLost)', () => {
+      const event = makeEvent({ type: 'pto', weekRotation: '6-Day', weekEnd: '2026-02-02', ptoHours: 12, extraDay: true })
+      const imp = calcEventImpact(event, cfg)
+      expect(imp.grossGained).toBeCloseTo(12 * cfg.baseRate)
+      expect(imp.grossLost).toBe(0)
+      expect(imp.netGained).toBeGreaterThan(0)
+    })
   })
 
   describe('pto_unapproved', () => {
@@ -1502,6 +1510,14 @@ describe('calcEventImpact', () => {
     it('sets bucketHoursDeducted = hoursLost (unapproved bucket hit)', () => {
       const event = makeEvent({ type: 'pto_unapproved', weekRotation: '6-Day', weekEnd: '2026-02-02', hoursLost: 12 })
       expect(calcEventImpact(event, cfg).bucketHoursDeducted).toBe(12)
+    })
+
+    it('extraDay still gains pay but keeps the bucket hit', () => {
+      const event = makeEvent({ type: 'pto_unapproved', weekRotation: '6-Day', weekEnd: '2026-02-02', hoursLost: 12, extraDay: true })
+      const imp = calcEventImpact(event, cfg)
+      expect(imp.grossGained).toBeCloseTo(12 * cfg.baseRate)
+      expect(imp.grossLost).toBe(0)
+      expect(imp.bucketHoursDeducted).toBe(12)
     })
 
     it('hoursLostForPTO is 0 (PTO-covered hours do not reduce accrual)', () => {

@@ -73,6 +73,31 @@ export function formatFiscalWeekLabel(weekInfo) {
   return formatPayPeriodLabel(weekInfo, 52);
 }
 
+// Returns the start/end Date of the pay PERIOD that the given week belongs to.
+// A pay period ends on an `isPayWeek` week (set by buildYear per pay schedule):
+//   weekly   → every week is its own period
+//   biweekly → two weeks ending on the pay week
+//   monthly  → all active weeks in the calendar month
+// We walk the active weeks: the period ends on the first pay week at/after the
+// target week, and starts the week after the previous pay week. Using the
+// isPayWeek flags keeps this correct for every schedule and parity.
+export function getPayPeriodBounds(weekIdx, allWeeks) {
+  if (!Array.isArray(allWeeks) || allWeeks.length === 0) return null;
+  const sorted = allWeeks.filter(w => w.active).sort((a, b) => a.idx - b.idx);
+  if (sorted.length === 0) return null;
+  const target = sorted.find(w => w.idx === Number(weekIdx));
+  if (!target) return null;
+  const endW = sorted.find(w => w.idx >= target.idx && w.isPayWeek) ?? sorted[sorted.length - 1];
+  const prevPayIdx = sorted
+    .filter(w => w.idx < endW.idx && w.isPayWeek)
+    .reduce((mx, w) => Math.max(mx, w.idx), -1);
+  const group = sorted.filter(w => w.idx > prevPayIdx && w.idx <= endW.idx);
+  const period = group.length > 0 ? group : [target];
+  const start = period.reduce((a, w) => (w.weekStart < a ? w.weekStart : a), period[0].weekStart);
+  const end = endW.payPeriodEndDate ?? endW.weekEnd;
+  return { start, end };
+}
+
 // Returns the next (or current) week where isPayWeek===true, starting from todayIso.
 // Weekly users (checksPerYear===52) return null — every week is a pay week, no indicator needed.
 // For biweekly/salary: driven by w.isPayWeek from buildYear.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, fmtFullDate, fmtLoanDate, toLocalIso, netWorthHealthStatus } from "../lib/finance.js";
 import { NetWorthHealthTips } from "./NetWorthHealthTips.jsx";
 import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
@@ -36,6 +37,7 @@ export function HomePanel({
   remainingSpend,
   goals = [],
   setGoals,
+  setConfig,
   futureWeeks = [],
   timelineWeekNets = [],
   expenses = [],
@@ -225,6 +227,7 @@ export function HomePanel({
   const [celebrating, setCelebrating] = useState(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [showReorderModal, setShowReorderModal] = useState(false);
+  const [showResetTimeline, setShowResetTimeline] = useState(false);
   const [draggingReorderId, setDraggingReorderId] = useState(null);
   const [dragOverReorderId, setDragOverReorderId] = useState(null);
   const [enterAnims, setEnterAnims] = useState({});
@@ -246,6 +249,7 @@ export function HomePanel({
     logNetLost,
     logNetGained ?? 0,
     futureEventDeductions ?? {},
+    config?.goalTimelineEpochIdx ?? null,
   );
 
   // Stable timeline anchor: start of previous calendar month.
@@ -419,6 +423,17 @@ export function HomePanel({
     setDelGoalId(null);
   };
   const toggleComplete = (id) => setGoals?.((prev) => prev.map((g) => (g.id === id ? { ...g, completed: !g.completed } : g)));
+  // Re-anchor the active-goal funding sequence to the user's next paycheck. Weekly
+  // users have no isPayWeek flags (getNextPayWeek → null), so fall back to the next
+  // future week. Persists to config so computeGoalTimeline recomputes from the new
+  // anchor and the change survives reload / Force Sync.
+  const resetGoalTimeline = () => {
+    const epochIdx = nextPayWeek?.idx ?? futureWeeks?.[0]?.idx ?? null;
+    setConfig?.((prev) => ({ ...prev, goalTimelineEpochIdx: epochIdx }));
+    // Drop stale projected due weeks on active goals so they recompute from the anchor.
+    setGoals?.((prev) => prev.map((g) => (g.completed ? g : { ...g, dueWeek: undefined })));
+    setShowResetTimeline(false);
+  };
   const handleMarkDone = (id) => {
     setCelebrating(id);
     setTimeout(() => {
@@ -564,7 +579,28 @@ export function HomePanel({
         <div style={{ marginBottom: "16px", padding: "12px 0", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0", padding: "0 12px" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>Active Goals</div>
-            <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{tl.length}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              {tl.length > 0 && setConfig && (
+                <button
+                  onClick={() => setShowResetTimeline(true)}
+                  style={{
+                    fontSize: "9px",
+                    letterSpacing: "1px",
+                    textTransform: "uppercase",
+                    color: "var(--color-text-secondary)",
+                    background: "var(--color-bg-raised)",
+                    border: "1px solid var(--color-border-subtle)",
+                    borderRadius: "12px",
+                    padding: "4px 10px",
+                    cursor: "pointer",
+                    minHeight: "28px",
+                  }}
+                >
+                  Reset Timeline
+                </button>
+              )}
+              <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{tl.length}</div>
+            </div>
           </div>
           {!tl.length && <div style={{ border: "1px dashed #333", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase", margin: "0 12px" }}>No active goals yet</div>}
           {isMobile ? (
@@ -1060,6 +1096,91 @@ export function HomePanel({
               </button>
             </div>
           </div>
+        )}
+
+        {showResetTimeline && createPortal(
+          <div
+            onClick={() => setShowResetTimeline(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 400,
+              background: "rgba(0,0,0,0.86)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "24px 16px",
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: "400px",
+                background: "var(--color-bg-surface)",
+                border: "1px solid var(--color-border-subtle)",
+                borderRadius: "20px",
+                padding: "22px 20px 20px",
+                boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+              }}
+            >
+              <div style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-gold)", marginBottom: "12px" }}>
+                Reset Goal Timeline
+              </div>
+              <div style={{ fontSize: "13px", lineHeight: 1.5, color: "var(--color-text-primary)", marginBottom: "8px" }}>
+                This restarts every active goal's timeline so funding begins on your{" "}
+                {(() => {
+                  const anchor = nextPayWeek ?? futureWeeks?.[0] ?? null;
+                  const d = formatGoalFinishDate(anchor?.payPeriodEndDate ?? anchor?.weekEnd);
+                  return d ? <>next paycheck (<strong>{d}</strong>)</> : "next paycheck";
+                })()}.
+              </div>
+              <div style={{ fontSize: "12px", lineHeight: 1.5, color: "var(--color-text-secondary)", marginBottom: "20px" }}>
+                It's okay — this happens. If you had to pull your savings for an emergency or spent
+                what you set aside, this re-anchors your goals to reality. Targets, due dates, and
+                labels stay; only the timeline start moves.
+              </div>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  onClick={() => setShowResetTimeline(false)}
+                  style={{
+                    flex: 1,
+                    background: "var(--color-bg-raised)",
+                    border: "1px solid var(--color-border-subtle)",
+                    borderRadius: "12px",
+                    color: "var(--color-text-secondary)",
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    padding: "11px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={resetGoalTimeline}
+                  style={{
+                    flex: 1,
+                    background: "var(--color-gold)",
+                    border: "none",
+                    borderRadius: "12px",
+                    color: "var(--color-bg-base)",
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    letterSpacing: "1.5px",
+                    textTransform: "uppercase",
+                    padding: "11px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Reset Timeline
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
         )}
 
         {addingGoal ? (

@@ -70,12 +70,19 @@ simplified but the original intent and constraints are preserved.*
 - [ ] **Verify change email + password** — Make sure users can actually change their email and
   their password. (§8 marks these done — confirm they work end-to-end and fix if not.)
 
-- [ ] **Goals — "Reset Timeline" button (restart all active goals on next paycheck)** — Add a
+- [x] **Goals — "Reset Timeline" button (restart all active goals on next paycheck)** — Add a
   **Reset Timeline** button to the Goals component section on the main dashboard (HomePanel goals
   tile / area). On tap it opens a small confirmation **pop-up modal** with short explanatory copy,
   then (on confirm) restarts the chronological funding order of **all active goals** so they begin
   on the **very next week's paycheck** — i.e. re-anchors every goal's timeline start to the next
   pay date and re-sequences them from there.
+  - [x] Added a global `config.goalTimelineEpochIdx` anchor (fiscal week idx). `computeGoalTimeline`
+    takes it as an 8th arg and skips funding for weeks before the epoch, so the whole active-goal
+    sequence begins at that week. Reset writes `getNextPayWeek().idx` (next future week for weekly
+    users, who have no pay-week flags) and clears stale `dueWeek` on active goals. Confirmation
+    modal is portaled to `document.body` (§16 portal pattern). Persists via the standard config
+    save path → survives reload / Force Sync; honors weekly + biweekly/monthly pay cadence.
+    Completed goals untouched; only the timeline start moves.
   - **Why it exists (context to surface briefly in the pop-up copy):** a low-friction "reset" for
     the edge case where life happens — the user had to pull all their money for an emergency, or
     they dipped on discipline and spent it — and their saved-up progress / timelines no longer

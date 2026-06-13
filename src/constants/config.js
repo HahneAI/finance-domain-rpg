@@ -175,6 +175,12 @@ export const DEFAULT_CONFIG = {
   // 0 or 1: idx%2 value of a known pay week for biweekly/salary users.
   // null = auto-derive from firstActiveIdx (treats first active week as a pay week).
   biweeklyPayWeekParity: null,
+
+  // ── Goals ────────────────────────────────────────────────────
+  // Fiscal week idx where the active-goal funding sequence begins. Set by the
+  // "Reset Timeline" action to the user's next paycheck. null = fund from the
+  // first future week (default). Honored by computeGoalTimeline.
+  goalTimelineEpochIdx: null,
 };
 
 export const FISCAL_YEAR_START = "2026-01-05"; // week 0 end date — first Monday of the fiscal year

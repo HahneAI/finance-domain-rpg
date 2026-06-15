@@ -853,13 +853,24 @@ with scroll position. Fixed so far: expense bottom sheets + restore sheet + drag
 (`BudgetPanel.jsx`), all three Income modals (`IncomePanel.jsx`). App-root modals (Tools sheet,
 admin modal) are unaffected because they render outside `.main-content`.*
 
-- [ ] **Sweep all panels for un-portaled fixed overlays** — grep each panel component
+- [x] **Sweep all panels for un-portaled fixed overlays** — grep each panel component
   (`HomePanel`, `ProfilePanel`, `LogPanel`, `BenefitsPanel`, `WeekConfirmModal`, and any others)
   for `position: "fixed"` modals/sheets/overlays rendered *inside* the panel's JSX tree.
   **Fix pattern (for consistency):** `import { createPortal } from "react-dom"` and wrap the
   overlay block as `createPortal(<…overlay…/>, document.body)` so `position: fixed` resolves
   against the viewport. Keep all styles/markup identical — only the DOM parent changes. Verify
   on real iOS Safari that the ✕/action buttons respond on the first tap regardless of scroll.
+  - [x] Swept all five panels rendered inside `.main-content` (the activePanel set:
+    HomePanel, IncomePanel, BudgetPanel, LogPanel, ProfilePanel). Portaled the remaining
+    in-tree fixed overlays: `BudgetPanel` paycheck-breakdown info modal (`showCheckInfo` — the
+    one missed in the first BudgetPanel pass), `HomePanel` reorder modal (`showReorderModal`;
+    the new Reset Timeline modal was already portaled), and both `ProfilePanel` dialogs
+    (delete-account + local sign-out). `LogPanel` and `BenefitsPanel` have no fixed overlays
+    (BenefitsPanel's 401k/PTO sections are ported into LogPanel; the standalone file isn't
+    mounted). `WeekConfirmModal`, `LifeEventMenu`, `JobLossEntry`, `ExpenseTriage`, and
+    `SetupWizard` render at app root *after* `.main-content` closes, so they're unaffected —
+    same reason the Tools/admin sheets are exempt. Markup/styles unchanged; only the DOM
+    parent moved. `npm run build` clean; test suite shows no new failures.
 
 ## Completed
 

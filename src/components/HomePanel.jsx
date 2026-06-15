@@ -861,7 +861,11 @@ export function HomePanel({
             </>
           )}
         </div>
-        {showReorderModal && (
+        {/* Portaled to document.body so position:fixed resolves against the viewport,
+            not the scrolling .main-content ancestor — iOS Safari hit-tests a fixed
+            element nested in an overflow:auto container at a scrollTop offset, which
+            made the modal's controls need repeated taps. */}
+        {showReorderModal && createPortal(
           <div
             onClick={closeReorderModal}
             style={{
@@ -1095,7 +1099,8 @@ export function HomePanel({
                 Done
               </button>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
 
         {showResetTimeline && createPortal(

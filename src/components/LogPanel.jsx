@@ -546,6 +546,11 @@ export function LogPanel({
   return (<div>
     <PanelHero eyebrow="Activity & Projections">Event Log</PanelHero>
 
+    {/* Subtitle — nudges the daily logging habit */}
+    <div style={{ textAlign: "center", fontSize: "14px", color: "var(--color-text-secondary)", marginTop: "-14px", marginBottom: "24px", lineHeight: 1.4 }}>
+      Did you make extra or lose any money today?
+    </div>
+
     {/* Current week indicator */}
     {currentWeek && <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "10px 14px", marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Current fiscal week</div>
@@ -557,9 +562,9 @@ export function LogPanel({
     </div>}
 
     {/* Log header + add button */}
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-      <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-text-secondary)", textTransform: "uppercase" }}>Event Log ({logs.length})</div>
-      <button onClick={() => { setAdding(true); setEditId(null); }} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "4px", padding: "6px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>+ LOG EVENT</button>
+    <div style={{ marginBottom: "12px" }}>
+      <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "10px" }}>Event Log ({logs.length})</div>
+      <button onClick={() => { setAdding(true); setEditId(null); }} style={{ width: "100%", background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "14px", fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>+ LOG EVENT</button>
     </div>
 
     {/* Add form */}

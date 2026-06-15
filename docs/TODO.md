@@ -59,13 +59,20 @@ simplified but the original intent and constraints are preserved.*
     `4-Day`/`Week 1`/`Week 2`), `days` arrays, hours, and custom-schedule day pre-selection logic
     left intact. Code comments documenting actual core+OT mechanics left as-is (not user-facing).
 
-- [x] **Purge grey text** — Replace dark-grey text across the app (especially the Account panel)
+- [ ] **Purge grey text** — Replace dark-grey text across the app (especially the Account panel)
   with the standard white/primary text color used elsewhere. General text and labels should not be
   grey — purge grey text coloring.
   - [x] Scoped to the Account/Profile panel (per decision): promoted standalone secondary/disabled
     body text + the dim label style (`lS`→`lSp`) to white primary; preserved active/inactive toggle
     state ternaries. Other panels' `--color-text-secondary` label hierarchy left intact — revisit if
     a broader app-wide purge is wanted.
+  - [x] Broader purge (round 2): promoted the barely-visible eyebrow text in every panel header to
+    white primary — `PanelHero` eyebrow in `ui.jsx` (Budget, Account, Event Log) plus the inline
+    headers in `IncomePanel` ("Income Overview") and `HomePanel` ("Authority Finance" + "Fiscal
+    Year 2026"). Setup wizard fully purged: all standalone `--color-text-secondary` /
+    `--color-text-disabled` body, helper, summary, and header text → primary; dim labels migrated
+    from `lS`→`lSp` (new local style). Preserved the three state-dependent ternaries (inactive Pill
+    text, BenefitCard "Off" badge, disabled Next button).
 
 - [ ] **Verify change email + password** — Make sure users can actually change their email and
   their password. (§8 marks these done — confirm they work end-to-end and fix if not.)

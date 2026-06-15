@@ -263,7 +263,7 @@ export function SH({ children, color, textColor, right }) { const c = color || "
 export function PanelHero({ eyebrow, children }) {
   return (
     <div style={{ marginBottom: "28px", textAlign: "center" }}>
-      <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "12px" }}>{eyebrow}</div>
+      <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "12px" }}>{eyebrow}</div>
       <div style={{ fontSize: "32px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-accent-primary)", letterSpacing: "-1px", lineHeight: 1, marginBottom: "14px" }}>{children}</div>
       <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto", borderRadius: "1px", opacity: 0.45 }} />
     </div>

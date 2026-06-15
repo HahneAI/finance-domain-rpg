@@ -937,6 +937,7 @@ export default function App() {
         remainingSpend={remainingSpend}
         goals={goals}
         setGoals={setGoals}
+        setConfig={setConfig}
         futureWeeks={futureWeeks}
         futureWeekNets={futureWeekNets}
         timelineWeekNets={futureWeekNetsRaw}

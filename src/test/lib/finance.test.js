@@ -1046,6 +1046,22 @@ describe('computeGoalTimeline', () => {
     }
   })
 
+  it('honors timelineEpochIdx — surplus before the epoch does not fund goals', () => {
+    const goals = [{ id: 'g1', target: 400, label: 'Reset me' }]
+    const futureWeeks = Array.from({ length: 8 }, (_, i) => ({
+      idx: i + 1,
+      weekEnd: new Date(2026, 3, (i + 1) * 7),
+    }))
+    const weeklyNets = Array(8).fill(200)
+    // No epoch: $200/wk funds the $400 goal by ~week 2.
+    const baseline = computeGoalTimeline(goals, futureWeeks, weeklyNets, [], 0, 0, {})
+    // Epoch at idx 4: weeks 1-3 contribute nothing, so funding starts at offset 3.
+    const reset = computeGoalTimeline(goals, futureWeeks, weeklyNets, [], 0, 0, {}, 4)
+    expect(baseline[0].sW).toBe(0)
+    expect(reset[0].sW).toBe(3)
+    expect(reset[0].eW).toBeGreaterThan(baseline[0].eW)
+  })
+
   it('does not double-count future event deductions when nets stay raw', () => {
     const goals = [{ id: 'g1', target: 500, label: 'Catch-up' }]
     const futureWeeks = [

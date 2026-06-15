@@ -2048,7 +2048,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     </div>, document.body)}
 
     {/* Paycheck breakdown info modal */}
-    {showCheckInfo && checkBreakdown && (
+    {/* Portaled to document.body so position:fixed resolves against the viewport
+        rather than the scrolling .main-content ancestor — iOS Safari hit-tests a
+        fixed element nested in an overflow:auto container at a scrollTop offset,
+        which left the ✕/Close buttons needing repeated taps. */}
+    {showCheckInfo && checkBreakdown && createPortal(
       <div
         onClick={() => setShowCheckInfo(false)}
         style={{
@@ -2140,7 +2144,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             >Close</button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body,
     )}
 
     {/* ── Restore Deleted Expenses bottom sheet ── */}

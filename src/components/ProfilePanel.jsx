@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
@@ -358,7 +359,10 @@ function AccountDetail({ authedUser, config, onBack }) {
         </button>
       </DetailCard>
 
-      {showDeleteDialog && (
+      {/* Portaled to document.body so position:fixed resolves against the viewport,
+          not the scrolling .main-content ancestor — iOS Safari hit-tests a fixed
+          element nested in an overflow:auto container at a scrollTop offset. */}
+      {showDeleteDialog && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div style={{ width: "100%", maxWidth: "430px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
             <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-deduction)" }}>Delete Account</div>
@@ -377,7 +381,8 @@ function AccountDetail({ authedUser, config, onBack }) {
               <button onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
@@ -1683,7 +1688,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         Sign Out (This Device)
       </button>
 
-      {showLocalSignOutConfirm && (
+      {/* Portaled to document.body so position:fixed resolves against the viewport,
+          not the scrolling .main-content ancestor (iOS Safari scrollTop hit-test bug). */}
+      {showLocalSignOutConfirm && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div style={{ width: "100%", maxWidth: "420px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>Sign Out</div>
@@ -1700,7 +1707,8 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
               <button onClick={confirmLocalSignOut} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: localSignOutState.loading ? "default" : "pointer" }}>{localSignOutState.loading ? "..." : "Confirm"}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
     </div>

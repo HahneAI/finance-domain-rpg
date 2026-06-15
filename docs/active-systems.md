@@ -68,6 +68,8 @@ monthly     = perPaycheck × 4   (PAYCHECKS_PER_MONTH, not calendar days)
 
 **Goal bar positioning:** `computeGoalTimeline()` runs week-by-week surplus sequencing — each loop week: `weeklyNets[weekOffset] - futureEventDeductions - effectiveNonTransferSpend - smearedPastLoss + smearedGain`. Goals funded in list order. Start week `sW` and duration `wN` map to month position proportionally, including mid-month stops.
 
+**Reset Timeline (re-anchor funding):** `computeGoalTimeline()` takes an optional `timelineEpochIdx` (8th arg) read from `config.goalTimelineEpochIdx`. When set, weeks with `week.idx < timelineEpochIdx` contribute no surplus toward goals — the whole funding sequence begins at that fiscal week. The **Reset Timeline** button in `HomePanel.jsx` (Active Goals header) opens a confirmation modal and, on confirm, writes the next paycheck's week idx (`getNextPayWeek().idx`, falling back to the next future week for weekly users) to `config.goalTimelineEpochIdx` and clears `dueWeek` on active goals. Persists via the normal config save path so it survives reload / Force Sync. `null` = default (fund from the first future week).
+
 **Known gap:** `wN` fallback for unfunded goals uses `remaining / avgNet` approximation — can diverge from true week-by-week surplus under volatile checks (partial-year extrapolation).
 
 ---

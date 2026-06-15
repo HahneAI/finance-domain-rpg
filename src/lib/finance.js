@@ -915,7 +915,7 @@ export function isFutureWeek(weekEndIso, todayIso) {
   return weekEndIso > todayIso;
 }
 
-export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expenses, logNetLost, logNetGained, futureEventDeductions = {}) {
+export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expenses, logNetLost, logNetGained, futureEventDeductions = {}, timelineEpochIdx = null) {
   if (!futureWeeks.length || !activeGoals.length)
     return activeGoals.map(g => ({ ...g, sW: 0, eW: 0, wN: 0 }));
   const n = futureWeeks.length;
@@ -925,7 +925,12 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
   const remaining = activeGoals.map(g => g.target);
   const startWeek = activeGoals.map(() => null);
   const endWeek = activeGoals.map(() => null);
+  // ── Timeline epoch: when set (via the "Reset Timeline" action), no surplus funds
+  // goals until the simulation reaches this fiscal week idx. Re-anchors the whole
+  // funding sequence to the user's next paycheck. Null = fund from the first future week.
+  const hasEpoch = Number.isFinite(timelineEpochIdx);
   let totalSurplus = 0;
+  let eligibleWeeks = 0;
   let weekOffset = 0;
   for (const week of futureWeeks) {
     const pi = getPhaseIndex(week.weekEnd);
@@ -936,20 +941,24 @@ export function computeGoalTimeline(activeGoals, futureWeeks, weeklyNets, expens
     // ── Targeted deduction: current/future-week events hit their specific week ──
     const weekDeduction = futureEventDeductions[week.idx] ?? 0;
     let surplus = (weeklyNets[weekOffset] ?? 0) - weekDeduction - spend - perWeekLost + perWeekGain;
-    totalSurplus += surplus;
-    if (surplus > 0) {
-      for (let i = 0; i < activeGoals.length; i++) {
-        if (remaining[i] <= 0 || surplus <= 0) continue;
-        if (startWeek[i] === null) startWeek[i] = weekOffset;
-        const fund = Math.min(surplus, remaining[i]);
-        remaining[i] -= fund;
-        surplus -= fund;
-        if (remaining[i] <= 0) endWeek[i] = weekOffset + fund / (fund + surplus + 0.0001);
+    const beforeEpoch = hasEpoch && Number.isFinite(week.idx) && week.idx < timelineEpochIdx;
+    if (!beforeEpoch) {
+      totalSurplus += surplus;
+      eligibleWeeks++;
+      if (surplus > 0) {
+        for (let i = 0; i < activeGoals.length; i++) {
+          if (remaining[i] <= 0 || surplus <= 0) continue;
+          if (startWeek[i] === null) startWeek[i] = weekOffset;
+          const fund = Math.min(surplus, remaining[i]);
+          remaining[i] -= fund;
+          surplus -= fund;
+          if (remaining[i] <= 0) endWeek[i] = weekOffset + fund / (fund + surplus + 0.0001);
+        }
       }
     }
     weekOffset++;
   }
-  const avgSurplus = totalSurplus / n;
+  const avgSurplus = totalSurplus / Math.max(eligibleWeeks, 1);
   return activeGoals.map((g, i) => {
     const sw = startWeek[i] ?? 0, ew = endWeek[i] ?? null;
     const wN = ew !== null ? ew - sw : remaining[i] / Math.max(avgSurplus - 0.01, 0.01);

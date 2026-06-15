@@ -77,12 +77,19 @@ simplified but the original intent and constraints are preserved.*
 - [ ] **Verify change email + password** — Make sure users can actually change their email and
   their password. (§8 marks these done — confirm they work end-to-end and fix if not.)
 
-- [ ] **Goals — "Reset Timeline" button (restart all active goals on next paycheck)** — Add a
+- [x] **Goals — "Reset Timeline" button (restart all active goals on next paycheck)** — Add a
   **Reset Timeline** button to the Goals component section on the main dashboard (HomePanel goals
   tile / area). On tap it opens a small confirmation **pop-up modal** with short explanatory copy,
   then (on confirm) restarts the chronological funding order of **all active goals** so they begin
   on the **very next week's paycheck** — i.e. re-anchors every goal's timeline start to the next
   pay date and re-sequences them from there.
+  - [x] Added a global `config.goalTimelineEpochIdx` anchor (fiscal week idx). `computeGoalTimeline`
+    takes it as an 8th arg and skips funding for weeks before the epoch, so the whole active-goal
+    sequence begins at that week. Reset writes `getNextPayWeek().idx` (next future week for weekly
+    users, who have no pay-week flags) and clears stale `dueWeek` on active goals. Confirmation
+    modal is portaled to `document.body` (§16 portal pattern). Persists via the standard config
+    save path → survives reload / Force Sync; honors weekly + biweekly/monthly pay cadence.
+    Completed goals untouched; only the timeline start moves.
   - **Why it exists (context to surface briefly in the pop-up copy):** a low-friction "reset" for
     the edge case where life happens — the user had to pull all their money for an emergency, or
     they dipped on discipline and spent it — and their saved-up progress / timelines no longer
@@ -853,13 +860,24 @@ with scroll position. Fixed so far: expense bottom sheets + restore sheet + drag
 (`BudgetPanel.jsx`), all three Income modals (`IncomePanel.jsx`). App-root modals (Tools sheet,
 admin modal) are unaffected because they render outside `.main-content`.*
 
-- [ ] **Sweep all panels for un-portaled fixed overlays** — grep each panel component
+- [x] **Sweep all panels for un-portaled fixed overlays** — grep each panel component
   (`HomePanel`, `ProfilePanel`, `LogPanel`, `BenefitsPanel`, `WeekConfirmModal`, and any others)
   for `position: "fixed"` modals/sheets/overlays rendered *inside* the panel's JSX tree.
   **Fix pattern (for consistency):** `import { createPortal } from "react-dom"` and wrap the
   overlay block as `createPortal(<…overlay…/>, document.body)` so `position: fixed` resolves
   against the viewport. Keep all styles/markup identical — only the DOM parent changes. Verify
   on real iOS Safari that the ✕/action buttons respond on the first tap regardless of scroll.
+  - [x] Swept all five panels rendered inside `.main-content` (the activePanel set:
+    HomePanel, IncomePanel, BudgetPanel, LogPanel, ProfilePanel). Portaled the remaining
+    in-tree fixed overlays: `BudgetPanel` paycheck-breakdown info modal (`showCheckInfo` — the
+    one missed in the first BudgetPanel pass), `HomePanel` reorder modal (`showReorderModal`;
+    the new Reset Timeline modal was already portaled), and both `ProfilePanel` dialogs
+    (delete-account + local sign-out). `LogPanel` and `BenefitsPanel` have no fixed overlays
+    (BenefitsPanel's 401k/PTO sections are ported into LogPanel; the standalone file isn't
+    mounted). `WeekConfirmModal`, `LifeEventMenu`, `JobLossEntry`, `ExpenseTriage`, and
+    `SetupWizard` render at app root *after* `.main-content` closes, so they're unaffected —
+    same reason the Tools/admin sheets are exempt. Markup/styles unchanged; only the DOM
+    parent moved. `npm run build` clean; test suite shows no new failures.
 
 ## Completed
 

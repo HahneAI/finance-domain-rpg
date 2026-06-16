@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
-import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
+import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatFiscalWeekLabel, formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
@@ -851,15 +851,11 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const saveAllQuarters = (expId) => {
     const { cycle, amount } = _editParsed();
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    const startKey = QUARTER_FIRST_MONTHS[ap] > currentMonthKey ? QUARTER_FIRST_MONTHS[ap] : currentMonthKey;
-    const [year, startMon] = startKey.split("-").map(Number);
+    const startKey = onwardStartMonthKey(QUARTER_FIRST_MONTHS[ap], currentMonthKey);
     const effectiveFrom = `${startKey}-01`;
     setExpenses(prev => prev.map(e => {
       if (e.id !== expId) return e;
-      const overrides = { ...(e.monthlyOverrides ?? {}) };
-      for (let m = startMon; m <= 12; m++) {
-        overrides[`${year}-${String(m).padStart(2, "0")}`] = { perPaycheck, amount, cycle };
-      }
+      const { monthlyOverrides } = applyQuarterForward(e, startKey, perPaycheck, amount, cycle);
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
       const baseWeekly = latestPastEntry(existing).weekly ?? [0, 0, 0, 0];
       const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : perPaycheck);
@@ -868,7 +864,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       // the window start so the new entry is the single authority going forward.
       const baseline = existing.filter(en => en.effectiveFrom < effectiveFrom);
       const newHistory = [...baseline, { effectiveFrom, weekly: newWeekly }];
-      return { ...e, history: newHistory, billingMeta, monthlyOverrides: overrides };
+      return { ...e, history: newHistory, billingMeta, monthlyOverrides };
     }));
     setEditId(null);
   };
@@ -880,19 +876,16 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const saveAllQuartersFull = (expId) => {
     const { cycle, amount } = _editParsed();
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    const fy = FISCAL_YEAR_START.slice(0, 4);
+    const fy = Number(FISCAL_YEAR_START.slice(0, 4));
     setExpenses(prev => prev.map(e => {
       if (e.id !== expId) return e;
-      const overrides = { ...(e.monthlyOverrides ?? {}) };
-      for (let m = 1; m <= 12; m++) {
-        overrides[`${fy}-${String(m).padStart(2, "0")}`] = { perPaycheck, amount, cycle };
-      }
+      const { monthlyOverrides } = applyAllQuarters(e, perPaycheck, amount, cycle, fy);
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
       const newWeekly = [perPaycheck, perPaycheck, perPaycheck, perPaycheck];
       const baseline = existing.filter(en => en.effectiveFrom < FISCAL_YEAR_START);
       const newHistory = [...baseline, { effectiveFrom: FISCAL_YEAR_START, weekly: newWeekly }];
       const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
-      return { ...e, history: newHistory, billingMeta, monthlyOverrides: overrides };
+      return { ...e, history: newHistory, billingMeta, monthlyOverrides };
     }));
     setEditId(null);
   };

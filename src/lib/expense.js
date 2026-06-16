@@ -155,6 +155,41 @@ export function applyMonthEditForward(expense, monthKey, perPaycheck, amount, cy
   return { ...expense, monthlyOverrides: overrides };
 }
 
+// ─── Quarter-scoped override helpers ─────────────────────────────────────────
+// These power the "Q[n]+ Onward" and "All Qtrs" save buttons. Unlike
+// applyMonthEditForward, they OVERWRITE any finer overrides already in range
+// (Decision 1): the user picked a broad scope, so in-range customizations are
+// intentionally flattened.
+
+// Resolves the first month an "onward" quarter save should write. The window
+// starts at the viewed quarter's first month, but never rewrites elapsed months:
+// for the current (or a past) quarter it clamps forward to the current month
+// (Decision 2 — "onward" = today forward). Both args are "YYYY-MM" keys.
+export function onwardStartMonthKey(quarterFirstMonthKey, currentMonthKey) {
+  return quarterFirstMonthKey > currentMonthKey ? quarterFirstMonthKey : currentMonthKey;
+}
+
+// Q[n]+ ONWARD: write an override for every month from startMonthKey ("YYYY-MM")
+// through December, overwriting anything already in range.
+export function applyQuarterForward(expense, startMonthKey, perPaycheck, amount, cycle) {
+  const [year, startMon] = startMonthKey.split("-").map(Number);
+  const overrides = { ...(expense.monthlyOverrides ?? {}) };
+  for (let m = startMon; m <= 12; m++) {
+    overrides[`${year}-${String(m).padStart(2, "0")}`] = { perPaycheck, amount, cycle };
+  }
+  return { ...expense, monthlyOverrides: overrides };
+}
+
+// ALL QTRS: write an override for every month of the fiscal year, including
+// already-elapsed months — this button's explicit "whole year" scope.
+export function applyAllQuarters(expense, perPaycheck, amount, cycle, fiscalYear = 2026) {
+  const overrides = { ...(expense.monthlyOverrides ?? {}) };
+  for (let m = 1; m <= 12; m++) {
+    overrides[`${fiscalYear}-${String(m).padStart(2, "0")}`] = { perPaycheck, amount, cycle };
+  }
+  return { ...expense, monthlyOverrides: overrides };
+}
+
 // Zero a single month (soft-delete for that month only).
 export function clearMonth(expense, monthKey, editedAt = new Date().toISOString()) {
   return {

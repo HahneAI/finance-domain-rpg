@@ -143,25 +143,39 @@ currentMonthKey)`. This also resolves Bug 1's display-anchor contribution.
 
 ---
 
-## 🔧 Implementation plan (pending user's go-ahead)
+## 🔧 Implementation plan
 
 Build order, all under the locked decisions above:
 
-1. **Make quarter-scoped saves authoritative.** `saveAllQuarters` and
-   `saveAllQuartersFull` write `monthlyOverrides` across their exact scope
+1. ✅ **Make quarter-scoped saves authoritative.** `saveAllQuarters` and
+   `saveAllQuartersFull` now write `monthlyOverrides` across their exact scope
    (current-month → Dec for the onward case per Decision 2; all 12 for All Qtrs),
-   overwriting in range (Decision 1), and keep `history` in sync for the baseline.
-   Remove the back-dated/duplicate `effectiveFrom` write.
-2. **Fix the current-quarter display/add anchor** (Bug 2) so June-onward adds and
-   edits read off the current month, not April.
-3. **Reconcile history-only readers** (`currentEffective`/`quarterEffective` and the
-   restore-sheet `getEffectiveAmount` call) so they agree with the override-aware
-   resolver.
-4. **Tests** (`src/test/`): each save scope writes the precise month set; broad save
-   overwrites an in-range override; new add in current quarter is non-zero; a
-   save→reload round-trip is stable. Update snapshots if `DEFAULT_CONFIG` shifts.
-5. **Doc cleanup:** retire `lastEditedAt` or wire it intentionally (it is currently
-   written inconsistently and read nowhere) — decide during implementation; not
-   blocking.
+   overwriting in range (Decision 1), and keep one `history` baseline entry. The
+   back-dated/duplicate `effectiveFrom` write is gone. Override construction is
+   extracted to pure helpers in `src/lib/expense.js` (`onwardStartMonthKey`,
+   `applyQuarterForward`, `applyAllQuarters`) alongside the month-level helpers.
+2. ✅ **Fix the current-quarter display/add anchor** (Bug 2). `displayMonthKey` now
+   anchors the current quarter to the current month (`ap === currentPhaseIdx
+   ? currentMonthKey : QUARTER_FIRST_MONTHS[ap]`), so June-onward adds/edits no
+   longer read $0 off elapsed April. All display totals flow through
+   `displayEffective`, so the headline `ts` and cards are fixed too.
+3. ✅ **Reconcile history-only readers.** The restore sheet now resolves via
+   `getEffectiveAmountForMonth` at the displayed month; the debug-trace readers
+   (`currentEffective`/`quarterEffective`) were re-pointed at the override-aware
+   resolver so console output matches the panel. The now-unused `getEffectiveAmount`
+   import was dropped from `BudgetPanel`.
+4. ✅ **Tests** (`src/test/lib/expense.test.js`): each save scope writes the precise
+   month set; broad save overwrites an in-range override; elapsed months are
+   preserved; a brand-new expense is non-zero after All Qtrs; a save→reload
+   (JSON round-trip) is stable. 16 new cases, all green; full suite unchanged
+   apart from the pre-existing unrelated failures.
+5. 🔶 **`lastEditedAt` — left vestigial (deliberate).** Under Option A, resolution is
+   purely override-presence; no timestamp tie-break is needed, so the new quarter
+   helpers intentionally do **not** stamp `lastEditedAt`. The field is still written
+   by the month-level helpers and read nowhere — a candidate for a later cleanup
+   pass, not blocking this fix.
 
-> **Status:** information layer locked. Awaiting user's signal to begin implementation.
+> **Status:** steps 1–4 implemented, committed, and pushed to
+> `claude/expense-editing-current-timeline-qitm8h`. Step 5 is a non-blocking
+> follow-up. Remaining: live-data verification on Anthony's account (Gas edit +
+> fresh-account add) before closing out.

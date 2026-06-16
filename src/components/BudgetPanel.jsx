@@ -834,46 +834,59 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     setEditId(null);
   };
 
-  // ALL QTR — updates history from current quarter forward, ignoring drop-offs.
+  // Q[n]+ ONWARD — authoritative per Option A.
+  // Writes monthlyOverrides for the window start → Dec, overwriting any finer
+  // overrides already in range (Decision 1). The window starts at the viewed
+  // quarter's first month, but never rewrites elapsed months: for the current (or
+  // a past) quarter it clamps to the current month (Decision 2 — "onward" = today
+  // forward). A single cascaded history entry at the window start is kept as the
+  // baseline for earlier months; no back-dating into elapsed months, no duplicate
+  // effectiveFrom.
   const saveAllQuarters = (expId) => {
     const { cycle, amount } = _editParsed();
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    const qStartIso = QUARTER_FIRST_MONTHS[ap] + "-01";
+    const startKey = QUARTER_FIRST_MONTHS[ap] > currentMonthKey ? QUARTER_FIRST_MONTHS[ap] : currentMonthKey;
+    const [year, startMon] = startKey.split("-").map(Number);
+    const effectiveFrom = `${startKey}-01`;
     setExpenses(prev => prev.map(e => {
       if (e.id !== expId) return e;
+      const overrides = { ...(e.monthlyOverrides ?? {}) };
+      for (let m = startMon; m <= 12; m++) {
+        overrides[`${year}-${String(m).padStart(2, "0")}`] = { perPaycheck, amount, cycle };
+      }
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
-      const latest = latestPastEntry(existing);
-      const baseWeekly = latest.weekly ?? [0, 0, 0, 0];
+      const baseWeekly = latestPastEntry(existing).weekly ?? [0, 0, 0, 0];
       const newWeekly = [0, 1, 2, 3].map(q => q < ap ? (baseWeekly[q] ?? 0) : perPaycheck);
       const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
-      const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
-      // Trim future-dated entries so this override is authoritative for all future weeks.
-      const pastEntries = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
-      const newHistory = daysDiff <= 3
-        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: qStartIso, weekly: newWeekly } : en)
-        : [...pastEntries, { effectiveFrom: qStartIso, weekly: newWeekly }];
-      return { ...e, history: newHistory, billingMeta };
+      // Keep strictly-earlier entries as the baseline; replace anything dated on/after
+      // the window start so the new entry is the single authority going forward.
+      const baseline = existing.filter(en => en.effectiveFrom < effectiveFrom);
+      const newHistory = [...baseline, { effectiveFrom, weekly: newWeekly }];
+      return { ...e, history: newHistory, billingMeta, monthlyOverrides: overrides };
     }));
     setEditId(null);
   };
 
-  // ALL 4 QTRS — overrides all four quarters in history (including past quarters).
+  // ALL QTRS — authoritative full-year set. Intentionally covers every month
+  // (including elapsed ones): this button's explicit purpose is "apply to the
+  // whole year." Writes monthlyOverrides Jan→Dec and collapses history to one
+  // full-year baseline entry.
   const saveAllQuartersFull = (expId) => {
     const { cycle, amount } = _editParsed();
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    const qStartIso = QUARTER_FIRST_MONTHS[ap] + "-01";
+    const fy = FISCAL_YEAR_START.slice(0, 4);
     setExpenses(prev => prev.map(e => {
       if (e.id !== expId) return e;
+      const overrides = { ...(e.monthlyOverrides ?? {}) };
+      for (let m = 1; m <= 12; m++) {
+        overrides[`${fy}-${String(m).padStart(2, "0")}`] = { perPaycheck, amount, cycle };
+      }
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
-      const latest = latestPastEntry(existing);
       const newWeekly = [perPaycheck, perPaycheck, perPaycheck, perPaycheck];
+      const baseline = existing.filter(en => en.effectiveFrom < FISCAL_YEAR_START);
+      const newHistory = [...baseline, { effectiveFrom: FISCAL_YEAR_START, weekly: newWeekly }];
       const billingMeta = { ...(e.billingMeta ?? {}), amount, cycle, effectiveFrom: TODAY_ISO };
-      const daysDiff = (new Date(TODAY_ISO) - new Date(latest.effectiveFrom)) / (1000 * 60 * 60 * 24);
-      const pastEntries = existing.filter(en => en.effectiveFrom <= TODAY_ISO);
-      const newHistory = daysDiff <= 3
-        ? pastEntries.map(en => en.effectiveFrom === latest.effectiveFrom ? { effectiveFrom: qStartIso, weekly: newWeekly } : en)
-        : [...pastEntries, { effectiveFrom: qStartIso, weekly: newWeekly }];
-      return { ...e, history: newHistory, billingMeta };
+      return { ...e, history: newHistory, billingMeta, monthlyOverrides: overrides };
     }));
     setEditId(null);
   };

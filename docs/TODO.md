@@ -76,6 +76,20 @@ simplified but the original intent and constraints are preserved.*
 
 - [ ] **Verify change email + password** — Make sure users can actually change their email and
   their password. (§8 marks these done — confirm they work end-to-end and fix if not.)
+  - [x] Code-level audit: both flows are implemented in `ProfilePanel.jsx`. Change-password
+    now re-verifies the current password via `signInWithPassword` before `updateUser` (the
+    gate §8 flagged as missing is present). Change-email validates + calls
+    `updateUser({ email })` and relies on Supabase's confirmation flow.
+  - [x] Bug found + fixed: the Change Password card rendered for **Google-only accounts** that
+    have no password, so the re-auth always failed with a misleading "Current password is
+    incorrect." Gated the card on `hasEmailIdentity` (an `identities` entry with
+    `provider === "email"`). Added `src/test/components/ProfilePanel.test.jsx` covering
+    email-only (shown), Google-only (hidden), both-linked (shown), and missing-identities (hidden).
+  - [ ] **Still pending (needs live Supabase + real inboxes):** end-to-end round-trip —
+    change email and confirm via the link (honoring "Secure email change" dual-confirm + a
+    whitelisted redirect URL); change password then sign out and confirm old password is
+    rejected / new password works; wrong-current-password path. Cannot be exercised from the
+    remote dev environment.
 
 - [x] **Goals — "Reset Timeline" button (restart all active goals on next paycheck)** — Add a
   **Reset Timeline** button to the Goals component section on the main dashboard (HomePanel goals

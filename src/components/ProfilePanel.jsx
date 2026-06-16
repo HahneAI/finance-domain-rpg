@@ -69,7 +69,7 @@ function DetailCard({ children, style }) {
 
 // ── Sub-views ───────────────────────────────────────────────────────────────
 
-function AccountDetail({ authedUser, config, onBack }) {
+export function AccountDetail({ authedUser, config, onBack }) {
   const setupColor  = config.setupComplete ? "var(--color-green)"           : "var(--color-gold)";
   const setupBg     = config.setupComplete ? "rgba(76,175,125,0.12)"        : "rgba(0,200,150,0.08)";
   const setupBorder = config.setupComplete ? "rgba(76,175,125,0.3)"         : "rgba(0,200,150,0.22)";
@@ -95,6 +95,11 @@ function AccountDetail({ authedUser, config, onBack }) {
 
   const [linkState, setLinkState] = useState({ loading: false, error: null });
   const hasGoogleLinked = authedUser?.identities?.some(id => id.provider === "google") ?? false;
+  // Change-password requires re-verifying the current password via signInWithPassword,
+  // which only works for accounts that have an email/password identity. Google-only
+  // users have no password, so the form is hidden for them (the re-auth would always
+  // fail with a misleading "Current password is incorrect").
+  const hasEmailIdentity = authedUser?.identities?.some(id => id.provider === "email") ?? false;
   const displayName = authedUser?.user_metadata?.full_name ?? null;
 
   async function handleChangeEmail(e) {
@@ -291,6 +296,7 @@ function AccountDetail({ authedUser, config, onBack }) {
         )}
       </DetailCard>
 
+      {hasEmailIdentity && (
       <DetailCard>
         {!showPwForm ? (
           <button
@@ -328,6 +334,7 @@ function AccountDetail({ authedUser, config, onBack }) {
           </form>
         )}
       </DetailCard>
+      )}
 
       <DetailCard>
         <button

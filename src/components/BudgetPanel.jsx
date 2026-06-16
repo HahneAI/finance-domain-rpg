@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { getEffectiveAmount, getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
+import { getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
 import { formatFiscalWeekLabel, formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -193,8 +193,9 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   // Using a date within each quarter means getEffectiveAmount picks the correct history entry —
   // loans that pay off mid-year will return $0 for quarters after the payoff date.
   const Q_REP_DATES = [new Date("2026-02-15"), new Date("2026-05-15"), new Date("2026-08-15"), new Date("2026-11-15")];
+  // Representative month key per quarter (mid-quarter) — override-aware analog of Q_REP_DATES.
+  const Q_REP_MONTH_KEYS = ["2026-02", "2026-05", "2026-08", "2026-11"];
   const WEEKS_PER_Q = [13, 13, 13, 13]; // 52 weeks total
-  const currentEffective = (exp, phaseIdx) => getEffectiveAmount(exp, new Date(), phaseIdx);
   // First calendar month of each quarter — used as the representative month in quarter mode.
   const QUARTER_FIRST_MONTHS = ["2026-01", "2026-04", "2026-07", "2026-10"];
   const MONTH_SHORT = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
@@ -211,9 +212,15 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   const anchorMonthLabel = MONTH_SHORT[parseInt(anchorMonthKey.slice(5, 7), 10) - 1];
   const anchorMonthFull = MONTH_FULL[parseInt(anchorMonthKey.slice(5, 7), 10) - 1];
   // In month mode, resolve amounts for the selected month; in quarter mode, use the
-  // first month of the active quarter so the quarter view stays month-consistent.
-  const displayMonthKey = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
+  // first month of the active quarter — except the current quarter, which anchors to
+  // the current month so already-elapsed months in the quarter don't read as $0 (Bug 2).
+  const displayMonthKey = activeMonth ?? (ap === currentPhaseIdx ? currentMonthKey : QUARTER_FIRST_MONTHS[ap]);
   const displayEffective = (exp, phaseIdx) => getEffectiveAmountForMonth(exp, displayMonthKey, phaseIdx);
+  // Override-aware analogs of the old history-only readers (used by the debug traces below):
+  // currentEffective resolves at the current month; quarterEffective at each quarter's
+  // representative month. Both honor monthlyOverrides via getEffectiveAmountForMonth.
+  const currentEffective = (exp, phaseIdx) => getEffectiveAmountForMonth(exp, currentMonthKey, phaseIdx);
+  const quarterEffective = (exp, phaseIdx) => getEffectiveAmountForMonth(exp, Q_REP_MONTH_KEYS[phaseIdx], phaseIdx);
 
   // Returns the ISO "YYYY-MM" key of the next future month where the effective amount
   // is non-zero, respecting monthlyOverrides. Returns null if all remaining months are zero.
@@ -227,7 +234,6 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   };
   const shortMonth = (iso) =>
     ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(iso.split("-")[1], 10) - 1];
-  const quarterEffective = (exp, phaseIdx) => getEffectiveAmount(exp, Q_REP_DATES[phaseIdx], phaseIdx);
   // Sum across all 12 months so monthlyOverrides are reflected in the breakdown table.
   // 52/12 weeks per month keeps the annual total at exactly 52 weeks.
   const yearlyExpenseCost = (exp) =>
@@ -2226,8 +2232,9 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             )}
 
             {sheetExps.map(exp => {
-              // Get the historical per-check amount for the active quarter
-              const histAmt = getEffectiveAmount(exp, Q_REP_DATES[ap], ap)
+              // Get the per-check amount for the viewed period — override-aware, anchored to
+              // the same month the rest of the panel displays (current month for this quarter).
+              const histAmt = getEffectiveAmountForMonth(exp, displayMonthKey, ap)
                 || Math.max(...(exp.history ?? []).map(h => h.weekly?.[ap] ?? 0));
               const isPending = restorePendingExpId === exp.id;
               return (

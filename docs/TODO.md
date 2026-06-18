@@ -121,6 +121,135 @@ simplified but the original intent and constraints are preserved.*
 
 ---
 
+## 17. Monetization — Stripe Subscriptions + 2-Week Free Trial
+
+*New workstream. Authority Finance is currently free with no billing layer (`CLAUDE.md`: "No
+backend server… no Stripe — yet"). This section adds a paid subscription gated behind a 14-day
+free trial. The app stays a Vite/React frontend; all Stripe secret-key work lives in Vercel
+serverless functions under `api/` (same pattern as `api/delete-account.js`: verify the caller
+with their Supabase Bearer token, then act with the service-role client). Subscription state is the
+source of truth in **Stripe**, mirrored into Supabase `user_data` via webhook so the frontend can
+gate without hitting Stripe on every load.*
+
+**Decisions to confirm before building (open questions):**
+- Pricing: monthly vs. annual vs. both; price point(s); single "Premium" tier vs. multiple.
+- Trial start: on account creation vs. on first reaching a gated feature. Default assumption below
+  is **trial starts at signup**, no card required up front (lower friction).
+- Gate strictness: hard paywall at trial end (app locked) vs. soft (read-only / nagging banner).
+  Default assumption: **read-only after expiry** — data stays visible, edits/saves blocked.
+- Whether trial requires a payment method up front (Stripe `trial_period_days` on a real
+  subscription) vs. a card-less app-managed trial. Default below is **card-less app-managed trial**,
+  converting to a Stripe Checkout only when the user upgrades.
+
+---
+
+### A. Data model & migration
+
+- [ ] **Migration `016_add_subscription_fields.sql`** — add to `user_data`:
+  - [ ] `stripe_customer_id TEXT` (nullable; set on first Checkout)
+  - [ ] `stripe_subscription_id TEXT` (nullable)
+  - [ ] `subscription_status TEXT` — mirror of Stripe status: `trialing | active | past_due |
+    canceled | incomplete | unpaid`; default `null` until trial is seeded
+  - [ ] `trial_started_at TIMESTAMPTZ`, `trial_ends_at TIMESTAMPTZ` (app-managed 14-day window)
+  - [ ] `current_period_end TIMESTAMPTZ` (from Stripe; when the paid period lapses)
+  - [ ] `plan TEXT` (nullable; e.g. `monthly` / `annual` once tiers exist)
+- [ ] **Seed trial on account creation** — in the App.jsx `SIGNED_IN` first-row upsert (same place
+  the OAuth row is seeded, §5), set `trial_started_at = now()`, `trial_ends_at = now() + 14 days`,
+  `subscription_status = "trialing"` when the row is brand new. Never overwrite on returning users.
+- [ ] **`db.js` mapping** — load the new columns into a `subscription` object on the in-memory
+  user model; keep them OUT of the `config` JSON blob (they're authoritative columns, not user prefs).
+- [ ] **RLS** — users may `SELECT` their own subscription columns but must **not** `UPDATE` them
+  (writes happen only via service-role in the webhook). Add/verify column-safe policies.
+
+### B. Stripe account & product setup *(config steps, no app code)*
+
+- [ ] **Create Stripe products + prices** in the Stripe dashboard (Premium monthly / annual);
+  capture the `price_…` IDs for env config.
+- [ ] **Configure the Customer Portal** (Billing → Customer portal) so users can cancel / update
+  card / switch plan without custom UI.
+- [ ] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
+- [ ] **Set Vercel env vars** (see env block at the bottom).
+
+### C. Serverless API routes (`api/`, Vercel functions)
+
+*Follow `api/delete-account.js`: reject non-POST, require `Authorization: Bearer <supabase token>`,
+verify with an anon client `getUser()`, then use the service-role client for privileged writes.*
+
+- [ ] **`api/stripe-create-checkout.js`** — verify the user → find-or-create the Stripe customer
+  (store `stripe_customer_id` back on `user_data`) → create a Checkout Session for the chosen price
+  → return the session URL. Pass `client_reference_id = user.id` and set success/cancel URLs to
+  whitelisted app routes.
+- [ ] **`api/stripe-webhook.js`** — verify the Stripe signature with the webhook secret (use the
+  **raw** request body — disable body parsing for this route). Handle: `checkout.session.completed`,
+  `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`. On each,
+  upsert `subscription_status`, `stripe_subscription_id`, `current_period_end`, `plan` into
+  `user_data` via service-role, keyed by `stripe_customer_id`. Idempotent on event id.
+- [ ] **`api/stripe-portal.js`** — verify the user → create a Billing Portal session for their
+  `stripe_customer_id` → return the URL (for the "Manage subscription" button).
+
+### D. Trial logic (14 days)
+
+- [ ] **Derive entitlement client-side** from the mirrored columns — a single helper
+  (`lib/subscription.js → getEntitlement(subscription, now)`) returning
+  `{ state: "trial" | "active" | "expired" | "none", trialDaysLeft, isEntitled }`. `isEntitled` is
+  true when `subscription_status === "active"` OR (`trialing` AND `now < trial_ends_at`).
+- [ ] **Trial countdown** — `trialDaysLeft = ceil((trial_ends_at − now) / day)`, floored at 0.
+- [ ] **Expiry transition** — when `trialing` and `now ≥ trial_ends_at`, treat as `expired`
+  (entitlement off) even before any Stripe event exists; don't depend on a webhook to lock.
+- [ ] **No double trials** — a returning/!new user never re-seeds a trial; expired-trial users see
+  the upgrade path, not a fresh 14 days.
+
+### E. Frontend gating / paywall
+
+- [ ] **Entitlement gate** — wrap the gated surface in App.jsx using `getEntitlement`. Per the
+  default decision, **expired** users get a read-only app: panels render, but edits/saves
+  (add goal/expense, run wizard, log events, Force Sync writes) are blocked behind an upgrade modal.
+- [ ] **Upgrade modal** — Liquid-Glass styled (`LiquidGlass.jsx`), Pulse signal accent allowed since
+  this is a premium surface; CTA opens Stripe Checkout via `api/stripe-create-checkout`. Honors the
+  mobile portal pattern (render via `createPortal`, see §16 portal audit).
+- [ ] **Post-checkout return** — success route shows a confirming state and refetches the
+  `user_data` row (webhook may lag a beat; poll/refetch `subscription_status` briefly).
+
+### F. Trial + subscription UI
+
+- [ ] **Trial banner** — slim persistent banner (mirrors the Job Loss banner pattern) reading
+  "X days left in your free trial" with an Upgrade button; turns amber at ≤3 days; becomes a
+  "Trial ended — upgrade to keep editing" bar once expired. Dismissible, re-shows on reload.
+- [ ] **ProfilePanel → Account: Subscription card** — replaces the §8 "subscription status
+  placeholder." Shows current state (Trial · N days left / Active · renews [date] / Past due /
+  Canceled), plan, and a **Manage Subscription** button → `api/stripe-portal`. Upgrade button when
+  not yet subscribed.
+- [ ] **Admin visibility** — Live State Inspector / Config Raw View: surface `subscription_status`,
+  `trial_ends_at`, `current_period_end` so a diagnostic session can read billing state at a glance
+  (see the §15.I admin pattern). Add to CLAUDE.md "Diagnostic request templates."
+
+### G. Edge cases, security & testing
+
+- [ ] **Webhook signature** — reject unsigned/invalid events; never trust client-reported status.
+- [ ] **Card declines / `past_due`** — keep entitlement until `current_period_end`, then lock;
+  surface the Stripe-hosted update-card flow via the portal.
+- [ ] **Cancellation** — `canceled` keeps access through `current_period_end` (Stripe "cancel at
+  period end"), then drops to read-only.
+- [ ] **Account deletion** — extend `api/delete-account.js` to also cancel the Stripe subscription
+  (or rely on the customer being orphaned) so a deleted user isn't billed.
+- [ ] **Clock skew / tz** — all trial math in UTC against `trial_ends_at`; don't use the client's
+  local lock-date offset (admin Lock Date must not extend a trial).
+- [ ] **Tests** — unit-test `getEntitlement` across trial/active/expired/past_due/canceled and the
+  exact trial-end boundary; webhook handler upsert mapping with a signed fixture event; create-checkout
+  rejects missing/invalid tokens (mirror the delete-account auth tests).
+
+### H. Env vars (Vercel)
+
+```
+STRIPE_SECRET_KEY=...            # server only (api/ functions)
+STRIPE_WEBHOOK_SECRET=...        # server only (signature verify)
+STRIPE_PRICE_MONTHLY=price_...   # + STRIPE_PRICE_ANNUAL if annual ships
+VITE_STRIPE_PUBLISHABLE_KEY=...  # client (only if using Stripe.js redirect; not needed for hosted Checkout URL)
+# Reuses existing SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_* already set for delete-account.
+```
+
+---
+
 ## 15. Life Events Feature
 
 *Life events are moments that fundamentally change a user's financial picture. The app should

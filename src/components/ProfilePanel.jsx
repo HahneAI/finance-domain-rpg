@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
@@ -68,7 +69,7 @@ function DetailCard({ children, style }) {
 
 // ── Sub-views ───────────────────────────────────────────────────────────────
 
-function AccountDetail({ authedUser, config, onBack }) {
+export function AccountDetail({ authedUser, config, onBack }) {
   const setupColor  = config.setupComplete ? "var(--color-green)"           : "var(--color-gold)";
   const setupBg     = config.setupComplete ? "rgba(76,175,125,0.12)"        : "rgba(0,200,150,0.08)";
   const setupBorder = config.setupComplete ? "rgba(76,175,125,0.3)"         : "rgba(0,200,150,0.22)";
@@ -94,6 +95,11 @@ function AccountDetail({ authedUser, config, onBack }) {
 
   const [linkState, setLinkState] = useState({ loading: false, error: null });
   const hasGoogleLinked = authedUser?.identities?.some(id => id.provider === "google") ?? false;
+  // Change-password requires re-verifying the current password via signInWithPassword,
+  // which only works for accounts that have an email/password identity. Google-only
+  // users have no password, so the form is hidden for them (the re-auth would always
+  // fail with a misleading "Current password is incorrect").
+  const hasEmailIdentity = authedUser?.identities?.some(id => id.provider === "email") ?? false;
   const displayName = authedUser?.user_metadata?.full_name ?? null;
 
   async function handleChangeEmail(e) {
@@ -290,6 +296,7 @@ function AccountDetail({ authedUser, config, onBack }) {
         )}
       </DetailCard>
 
+      {hasEmailIdentity && (
       <DetailCard>
         {!showPwForm ? (
           <button
@@ -327,6 +334,7 @@ function AccountDetail({ authedUser, config, onBack }) {
           </form>
         )}
       </DetailCard>
+      )}
 
       <DetailCard>
         <button
@@ -358,7 +366,10 @@ function AccountDetail({ authedUser, config, onBack }) {
         </button>
       </DetailCard>
 
-      {showDeleteDialog && (
+      {/* Portaled to document.body so position:fixed resolves against the viewport,
+          not the scrolling .main-content ancestor — iOS Safari hit-tests a fixed
+          element nested in an overflow:auto container at a scrollTop offset. */}
+      {showDeleteDialog && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div style={{ width: "100%", maxWidth: "430px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
             <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-deduction)" }}>Delete Account</div>
@@ -377,7 +388,8 @@ function AccountDetail({ authedUser, config, onBack }) {
               <button onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
@@ -1683,7 +1695,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         Sign Out (This Device)
       </button>
 
-      {showLocalSignOutConfirm && (
+      {/* Portaled to document.body so position:fixed resolves against the viewport,
+          not the scrolling .main-content ancestor (iOS Safari scrollTop hit-test bug). */}
+      {showLocalSignOutConfirm && createPortal(
         <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
           <div style={{ width: "100%", maxWidth: "420px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>Sign Out</div>
@@ -1700,7 +1714,8 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
               <button onClick={confirmLocalSignOut} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: localSignOutState.loading ? "default" : "pointer" }}>{localSignOutState.loading ? "..." : "Confirm"}</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
     </div>

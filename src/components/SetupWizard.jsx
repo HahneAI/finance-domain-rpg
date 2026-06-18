@@ -24,6 +24,10 @@ import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 
 const BUFFER_MAX = 200;
 
+// Wizard label style — promote the dim lS label (text-disabled) to primary white
+// so onboarding labels stay legible (gray-text purge, TODO §16). Mirrors ProfilePanel's lSp.
+const lSp = { ...lS, color: "var(--color-text-primary)" };
+
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 0 — Welcome (first-run) / Life Event Select (re-entry)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,7 +56,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
 
         {/* ── First question: employment status (TODO §15.H seed) ── */}
         <div>
-          <label style={lS}>Are you currently unemployed?</label>
+          <label style={lSp}>Are you currently unemployed?</label>
           <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
             {[{ v: true, label: "Yes" }, { v: false, label: "No" }].map(opt => (
               <Pill
@@ -65,7 +69,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
           </div>
           <p style={{
             marginTop: "8px", fontSize: "12px", lineHeight: "1.5",
-            color: "var(--color-text-disabled)", marginBottom: 0,
+            color: "var(--color-text-primary)", marginBottom: 0,
           }}>
             Either answer continues to pay setup for now — we're seeding a future onboarding
             path that lands jobless users straight in the Job Loss Dashboard.
@@ -74,13 +78,13 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
 
         <p style={{
           fontSize: "14px", lineHeight: "1.6",
-          color: "var(--color-text-secondary)", margin: 0,
+          color: "var(--color-text-primary)", margin: 0,
         }}>
           Set up your pay in a few steps. Update anything later from Life Events.
         </p>
         <p style={{
           fontSize: "12px", lineHeight: "1.6",
-          color: "var(--color-text-secondary)", margin: 0,
+          color: "var(--color-text-primary)", margin: 0,
         }}>
           Have these handy: a recent paystub (for tax rates), your overtime policy, and PTO details if applicable.
         </p>
@@ -100,7 +104,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
         </p>
         <p style={{
           fontSize: "13px", lineHeight: "1.6",
-          color: "var(--color-text-secondary)", margin: 0,
+          color: "var(--color-text-primary)", margin: 0,
         }}>
           The next steps are pre-filled with your current settings — only edit what actually
           changed (rate, schedule, employer, deductions, or tax setup). Goals, expenses, logs,
@@ -108,7 +112,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
         </p>
         <p style={{
           fontSize: "12px", lineHeight: "1.6",
-          color: "var(--color-text-disabled)", margin: 0,
+          color: "var(--color-text-primary)", margin: 0,
         }}>
           On the Schedule step, set the start date to the day your new pay structure takes
           effect. Forward-looking projections recalculate from that week onward.
@@ -121,7 +125,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       <p style={{
-        fontSize: "13px", color: "var(--color-text-secondary)",
+        fontSize: "13px", color: "var(--color-text-primary)",
         margin: "0 0 4px",
       }}>
         What changed? Only the affected steps will be updated — everything else stays as-is.
@@ -149,7 +153,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
             }}>
               {active && "✓ "}{ev.label}
             </span>
-            <span style={{ fontSize: "11px", color: "var(--color-text-disabled)" }}>
+            <span style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>
               {ev.sub}
             </span>
           </button>
@@ -194,7 +198,7 @@ function FieldRow({ children }) {
 function Field({ label, children, error }) {
   return (
     <div>
-      <label style={{ ...lS, ...(error ? { color: "var(--color-deduction)" } : {}) }}>{label}</label>
+      <label style={{ ...lSp, ...(error ? { color: "var(--color-deduction)" } : {}) }}>{label}</label>
       {children}
       {error && (
         <div style={{ fontSize: "10px", color: "var(--color-deduction)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>
@@ -318,7 +322,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
           </div>
           {isEmployerDHL && (
             <div style={{
-              marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
+              marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)",
               lineHeight: "1.5",
             }}>
               Rotation, attendance, and dual-rate auto-configured. Weekend rate pre-filled.
@@ -336,14 +340,14 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
               <Pill label="Team B" active={formData.dhlTeam === "B"} onClick={() => pickTeam("B")} />
             </div>
             {formData.dhlTeam && (
-              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
                 {DHL_PRESET.teams[formData.dhlTeam].startsLong
                   ? `${DHL_PRESET.rotation.long.label} (your first active week)`
                   : `${DHL_PRESET.rotation.short.label} (your first active week)`}. Teams alternate every week.
               </div>
             )}
             {!formData.dhlTeam && (
-              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
                 Team A starts short (Mon / Thu / Fri). Team B starts long (Tue / Wed / Sat / Sun).
               </div>
             )}
@@ -362,7 +366,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
                 onClick={() => onChange({ dhlNightShift: false, nightDiffRate: 0 })}
               />
             </div>
-            <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+            <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
               Night shift adds +$1.50/hr on all hours (stacks with weekend differential).
             </div>
           </Field>
@@ -403,8 +407,8 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
             </div>
             {formData.customWeeklyHours != null ? (
               <div style={{ marginTop: "10px" }}>
-                <label style={{ ...lS, ...(attempted && (formData.customWeeklyHoursLong === 0 || formData.customWeeklyHoursShort === 0) ? { color: "var(--color-deduction)" } : {}) }}>Hours per week</label>
-                <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-secondary)" }}>Long week</div>
+                <label style={{ ...lSp, ...(attempted && (formData.customWeeklyHoursLong === 0 || formData.customWeeklyHoursShort === 0) ? { color: "var(--color-deduction)" } : {}) }}>Hours per week</label>
+                <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-primary)" }}>Long week</div>
                 <input
                   type="number"
                   step="1"
@@ -418,7 +422,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
                   }}
                   style={{ ...iS, marginTop: "4px", ...errBorder(attempted && formData.customWeeklyHoursLong === 0) }}
                 />
-                <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-secondary)" }}>Short week</div>
+                <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-primary)" }}>Short week</div>
                 <input
                   type="number"
                   step="1"
@@ -435,12 +439,12 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
                 {attempted && (formData.customWeeklyHoursLong === 0 || formData.customWeeklyHoursShort === 0) && (
                   <div style={{ fontSize: "10px", color: "var(--color-deduction)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>↑ Required</div>
                 )}
-                <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+                <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
                   Projections use long/short targets by week type. DHL rotation still shows scheduled days in weekly confirmation.
                 </div>
               </div>
             ) : (
-              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
                 Override per-week from Income for extra shifts.
               </div>
             )}
@@ -468,13 +472,13 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
                   <Pill label="Salary"     active={formData.userPaySchedule === "salary"}    onClick={() => onChange({ userPaySchedule: "salary" })} />
                   <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                     <Pill label="Commission Only" active={false} onClick={() => {}} disabled />
-                    <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-disabled)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "4px", padding: "2px 5px" }}>Soon</span>
+                    <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "4px", padding: "2px 5px" }}>Soon</span>
                   </div>
                 </>
               )}
             </div>
             {isSalary && (
-              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
                 Paid every 2 weeks. Enter your annual salary and we'll derive your base rate.
               </div>
             )}
@@ -498,7 +502,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
                 placeholder="e.g. 52000"
               />
               {(formData.annualSalary ?? 0) > 0 && (
-                <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-secondary)" }}>
+                <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-primary)" }}>
                   ≈ ${(formData.annualSalary / 26).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per check · ${(formData.annualSalary / 2080).toFixed(2)}/hr equivalent
                 </div>
               )}
@@ -522,7 +526,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
                 onChange={e => onChange({ shiftHours: e.target.value === "" ? null : parseFloat(e.target.value) })}
                 placeholder="e.g. 10"
               />
-              <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: 1.4 }}>
+              <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-primary)", lineHeight: 1.4 }}>
                 For shift counting in event logging — income uses total weekly hours set in the next step.
               </div>
             </Field>
@@ -565,7 +569,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
                 </div>
                 {otCustom && (
                   <div style={{ marginTop: "10px" }}>
-                    <label style={{ ...lS, ...(attempted && !((formData.otThreshold ?? 0) > 0) ? { color: "var(--color-deduction)" } : {}) }}>Hours/week</label>
+                    <label style={{ ...lSp, ...(attempted && !((formData.otThreshold ?? 0) > 0) ? { color: "var(--color-deduction)" } : {}) }}>Hours/week</label>
                     <input
                       style={{ ...iS, ...errBorder(attempted && !((formData.otThreshold ?? 0) > 0)) }}
                       type="number" min="1" step="1"
@@ -609,7 +613,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
                 </div>
                 {formData.nightDiffEnabled === true && (
                   <div style={{ marginTop: "10px" }}>
-                    <label style={{ ...lS }}>Night Diff Rate ($/hr)</label>
+                    <label style={{ ...lSp }}>Night Diff Rate ($/hr)</label>
                     <input
                       style={{ ...iS }}
                       type="number" min="0" step="0.25"
@@ -639,7 +643,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
               </div>
               {hasCommission && (
                 <div style={{ marginTop: "10px" }}>
-                  <label style={lS}>Monthly Average ($)</label>
+                  <label style={lSp}>Monthly Average ($)</label>
                   <input
                     style={{ ...iS }}
                     type="number" min="0" step="100"
@@ -704,7 +708,7 @@ function Step2({ formData, onChange, attempted }) {
         />
         {formData.startDate && (
           <div style={{
-            marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)",
+            marginTop: "6px", fontSize: "12px", color: "var(--color-text-primary)",
           }}>
             Income tracking starts week {formData.firstActiveIdx} of the fiscal year.
           </div>
@@ -727,7 +731,7 @@ function Step2({ formData, onChange, attempted }) {
             />
           </div>
           <div style={{
-            marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
+            marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)",
             lineHeight: "1.5",
           }}>
             Used to alternate short/long week income from your start date.
@@ -744,7 +748,7 @@ function Step2({ formData, onChange, attempted }) {
             placeholder="e.g. 40"
           />
           <div style={{
-            marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)",
+            marginTop: "6px", fontSize: "12px", color: "var(--color-text-primary)",
           }}>
             Every week of your forecast will be calculated at this number. You'll confirm what you actually worked each week.
           </div>
@@ -808,7 +812,7 @@ function Step2({ formData, onChange, attempted }) {
             ))}
           </div>
           <div style={{
-            marginTop: "8px", fontSize: "12px", color: "var(--color-text-secondary)",
+            marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)",
             lineHeight: "1.5",
           }}>
             Weekly confirmation prompt fires on this day.
@@ -819,7 +823,7 @@ function Step2({ formData, onChange, attempted }) {
       {/* ── Biweekly pay week alignment ── */}
       {biweeklyParityVisible && (
         <Field label="Pay Week Timing" error={attempted && formData.biweeklyPayWeekParity == null ? "Select your pay week" : null}>
-          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "8px", lineHeight: "1.5" }}>
+          <div style={{ fontSize: "12px", color: "var(--color-text-primary)", marginBottom: "8px", lineHeight: "1.5" }}>
             Is this {payDayName} one of your paycheck {payDayName}s?
           </div>
           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
@@ -878,7 +882,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle, attempted })
           }}>
             {selected && "✓ "}{def.label}
           </div>
-          <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", marginTop: "2px" }}>
+          <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "2px" }}>
             {def.sub}
           </div>
         </div>
@@ -929,14 +933,14 @@ function BenefitCard({ def, selected, formData, onChange, onToggle, attempted })
                   <Field label="DHL Match (computed)">
                     <div style={{
                       ...iS,
-                      color: "var(--color-text-secondary)",
+                      color: "var(--color-text-primary)",
                       display: "flex",
                       alignItems: "center",
                       pointerEvents: "none",
                     }}>
                       {(dhlEmployerMatchRate(formData.k401Rate || 0) * 100).toFixed(1)}%
                     </div>
-                    <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)" }}>
+                    <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-primary)" }}>
                       100% match up to 4%, then 50% up to 6% (5% cap).
                     </div>
                   </Field>
@@ -965,7 +969,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle, attempted })
                 />
                 <div style={{
                   marginTop: "6px", fontSize: "11px",
-                  color: "var(--color-text-disabled)", lineHeight: "1.5",
+                  color: "var(--color-text-primary)", lineHeight: "1.5",
                 }}>
                   Enter your enrollment date — past dates mark 401k as already active.
                 </div>
@@ -1017,7 +1021,7 @@ function Step3({ formData, onChange, attempted }) {
       {/* ── Benefits ── */}
       <div>
         <p style={{
-          fontSize: "13px", color: "var(--color-text-secondary)",
+          fontSize: "13px", color: "var(--color-text-primary)",
           margin: "0 0 8px", lineHeight: "1.5",
         }}>
           Select benefits deducted from your paycheck — skip if none yet.
@@ -1045,17 +1049,17 @@ function Step3({ formData, onChange, attempted }) {
           value={formData.benefitsStartDate ?? ""}
           onChange={e => onChange({ benefitsStartDate: e.target.value || null })}
         />
-        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5" }}>
+        <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
           Leave blank if coverage is already active or not enrolled.
         </div>
       </Field>
 
       {/* ── Other recurring deductions ── */}
       <div>
-        <label style={lS}>Other Recurring Deductions (per paycheck)</label>
+        <label style={lSp}>Other Recurring Deductions (per paycheck)</label>
         <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
           {others.length === 0 && (
-            <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", padding: "8px 0" }}>
+            <div style={{ fontSize: "11px", color: "var(--color-text-primary)", padding: "8px 0" }}>
               Nothing added — examples: union dues, parking, equipment.
             </div>
           )}
@@ -1082,7 +1086,7 @@ function Step3({ formData, onChange, attempted }) {
                 onClick={() => removeRow(row.id)}
                 style={{
                   background: "transparent",
-                  color: "var(--color-text-disabled)",
+                  color: "var(--color-text-primary)",
                   border: "1px solid var(--color-border-subtle)",
                   borderRadius: "8px", width: "32px", height: "36px",
                   cursor: "pointer", fontSize: "14px", lineHeight: 1,
@@ -1093,7 +1097,7 @@ function Step3({ formData, onChange, attempted }) {
           <button
             onClick={addRow}
             style={{
-              background: "transparent", color: "var(--color-text-secondary)",
+              background: "transparent", color: "var(--color-text-primary)",
               border: "1px solid var(--color-border-subtle)", borderRadius: "10px",
               padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
               textTransform: "uppercase", cursor: "pointer", alignSelf: "flex-start",
@@ -1107,7 +1111,7 @@ function Step3({ formData, onChange, attempted }) {
       {/* ── Attendance policy gate — standard users only ── */}
       {isBaseUser && (
         <Field label="Does your employer track attendance with a formal policy?" error={attendErr ? "Selection required" : null}>
-          <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "10px", lineHeight: "1.5" }}>
+          <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-primary)", marginBottom: "10px", lineHeight: "1.5" }}>
             Points systems, hours-based buckets, or similar.
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
@@ -1175,7 +1179,7 @@ function Step3({ formData, onChange, attempted }) {
                 onChange={e => onChange({ attendanceIncrement: e.target.value === "" ? 1 : parseFloat(e.target.value) })}
                 placeholder="e.g. 1"
               />
-              <div style={{ marginTop: "4px", fontSize: "10px", color: "var(--color-text-disabled)" }}>Default 1 per absence</div>
+              <div style={{ marginTop: "4px", fontSize: "10px", color: "var(--color-text-primary)" }}>Default 1 per absence</div>
             </Field>
           </div>
         </>
@@ -1293,12 +1297,12 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
   };
   const hdrStyle = {
     fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
-    color: "var(--color-text-disabled)",
+    color: "var(--color-text-primary)",
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-      <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5" }}>
+      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
         Enter paystub values for exact rates — or estimate now and sharpen later.
       </div>
 
@@ -1369,7 +1373,7 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
           </button>
         )}
         <button onClick={onEstimate} style={{
-          background: "transparent", color: "var(--color-text-secondary)",
+          background: "transparent", color: "var(--color-text-primary)",
           border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
           padding: "8px 14px", fontSize: "10px", letterSpacing: "1.5px",
           textTransform: "uppercase", cursor: "pointer",
@@ -1434,7 +1438,7 @@ function Step4({ formData, onChange, attempted }) {
       {/* Variable schedule note — DHL only */}
       {isEmployerDHL && (
         <div style={{
-          fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5",
+          fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5",
           padding: "10px 12px", background: "var(--color-bg-raised)", borderRadius: "8px",
         }}>
           Variable schedule auto-enabled — your pay alternates between shorter and longer weeks.
@@ -1458,7 +1462,7 @@ function Step4({ formData, onChange, attempted }) {
           ))}
         </div>
         {formData.filingStatus && (
-          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)" }}>
+          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-primary)" }}>
             {formData.filingStatus === "single" && "Standard deduction: $15,000"}
             {formData.filingStatus === "mfj"    && "Standard deduction: $30,000 (married filing jointly)"}
             {formData.filingStatus === "hoh"    && "Standard deduction: $22,500 (head of household)"}
@@ -1479,12 +1483,12 @@ function Step4({ formData, onChange, attempted }) {
           ))}
         </select>
         {formData.userState && isNoTax && (
-          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)" }}>
+          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-primary)" }}>
             {stateConfig.name} has no state income tax — your state rate will be 0.
           </div>
         )}
         {formData.userState && !isNoTax && stateConfig && (
-          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)" }}>
+          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-primary)" }}>
             {stateConfig.model === "FLAT"
               ? `Flat rate: ${(stateConfig.flatRate * 100).toFixed(1)}% — pre-filled on estimate path.`
               : stateConfig.midpointRate != null
@@ -1506,7 +1510,7 @@ function Step4({ formData, onChange, attempted }) {
             Load DHL Missouri supply chain reference rates
           </div>
           <div style={{
-            fontSize: "11px", color: "var(--color-text-disabled)",
+            fontSize: "11px", color: "var(--color-text-primary)",
             lineHeight: "1.5", marginBottom: "10px",
           }}>
             Night shift paystub-derived. Flagged as estimated until you confirm with your own stub.
@@ -1529,7 +1533,7 @@ function Step4({ formData, onChange, attempted }) {
             <button
               onClick={() => setShowCalc(true)}
               style={{
-                background: "transparent", color: "var(--color-text-secondary)",
+                background: "transparent", color: "var(--color-text-primary)",
                 border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
                 padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
                 textTransform: "uppercase", cursor: "pointer", alignSelf: "flex-start",
@@ -1560,7 +1564,7 @@ function Step4({ formData, onChange, attempted }) {
           }}>
             <div style={{
               fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
-              color: "var(--color-text-disabled)",
+              color: "var(--color-text-primary)",
             }}>
               Tax Picture
             </div>
@@ -1586,7 +1590,7 @@ function Step4({ formData, onChange, attempted }) {
             ...(isVariable && !isNoTax ? [{ label: "State (long)", val: pct(formData.stateRateHigh),                  est: true }] : []),
           ].map(r => (
             <div key={r.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
-              <span style={{ color: "var(--color-text-secondary)" }}>{r.label}</span>
+              <span style={{ color: "var(--color-text-primary)" }}>{r.label}</span>
               <strong style={{
                 color: (r.est && formData.taxRatesEstimated)
                   ? "var(--color-gold)" : "var(--color-text-primary)",
@@ -1597,7 +1601,7 @@ function Step4({ formData, onChange, attempted }) {
           ))}
           {formData.taxRatesEstimated && (
             <div style={{
-              marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: "1.5",
+              marginTop: "6px", fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5",
             }}>
               Confirm rates anytime via <strong style={{ color: "var(--color-gold)" }}>Sharpen Rates</strong> in Income.
             </div>
@@ -1678,10 +1682,10 @@ function TaxExemptPreview() {
       border: "1px solid var(--color-border-subtle)",
       display: "flex", flexDirection: "column", gap: "8px",
     }}>
-      <div style={{ fontSize: "11px", color: "var(--color-text-disabled)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
+      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
         Tax-Exempt Projections Unlocked
       </div>
-      <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+      <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
         Tax-exempt week projections will appear in the Income panel. Remember to set aside the
         withheld amount each of those weeks — the dashboard will calculate the suggested reserve.
       </div>
@@ -1744,7 +1748,7 @@ function StructureChangeDiff({ originalConfig, formData }) {
 
   return (
     <div>
-      <label style={lS}>What's Changing</label>
+      <label style={lSp}>What's Changing</label>
       <div style={{
         marginTop: "10px",
         background: "var(--color-bg-raised)",
@@ -1753,7 +1757,7 @@ function StructureChangeDiff({ originalConfig, formData }) {
         padding: rows.length === 0 ? "14px" : "6px 14px",
       }}>
         {rows.length === 0 ? (
-          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+          <div style={{ fontSize: "12px", color: "var(--color-text-primary)", lineHeight: 1.6 }}>
             No changes detected yet. Step back through the wizard and edit any field that
             actually changed — Wrap Up will list the diff here.
           </div>
@@ -1765,12 +1769,12 @@ function StructureChangeDiff({ originalConfig, formData }) {
               borderBottom: "1px solid rgba(255,255,255,0.04)",
               fontSize: "12px",
             }}>
-              <span style={{ color: "var(--color-text-secondary)" }}>{r.label}</span>
+              <span style={{ color: "var(--color-text-primary)" }}>{r.label}</span>
               <span style={{ display: "flex", alignItems: "center", gap: "6px", fontFamily: "var(--font-mono)" }}>
-                <span style={{ color: "var(--color-text-disabled)", textDecoration: "line-through" }}>
+                <span style={{ color: "var(--color-text-primary)", textDecoration: "line-through" }}>
                   {fmtDiffValue(r.key, r.before)}
                 </span>
-                <span style={{ color: "var(--color-text-disabled)" }}>→</span>
+                <span style={{ color: "var(--color-text-primary)" }}>→</span>
                 <span style={{ color: "var(--color-gold)", fontWeight: 600 }}>
                   {fmtDiffValue(r.key, r.after)}
                 </span>
@@ -1779,7 +1783,7 @@ function StructureChangeDiff({ originalConfig, formData }) {
           ))
         )}
       </div>
-      <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
+      <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-text-primary)", lineHeight: 1.5 }}>
         Tap Finish to apply. Goals, expenses, logs, and prior week confirmations are not touched —
         only forward-looking projections recalculate.
       </div>
@@ -1845,7 +1849,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
 
       {/* ── Live net estimate ── */}
       <div>
-        <label style={lS}>Estimated {payScheduleLabel}</label>
+        <label style={lSp}>Estimated {payScheduleLabel}</label>
         <div style={{
           marginTop: "10px", background: "var(--color-bg-raised)",
           borderRadius: "12px", padding: "14px",
@@ -1855,7 +1859,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
             <div key={r.label} style={{
               display: "flex", justifyContent: "space-between",
               padding: "4px 0", fontSize: "12px",
-              color: "var(--color-text-secondary)",
+              color: "var(--color-text-primary)",
               borderBottom: "1px solid rgba(255,255,255,0.04)",
             }}>
               <span>{r.label}</span>
@@ -1873,7 +1877,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
           </div>
         </div>
         {formData.taxRatesEstimated && (
-          <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-secondary)" }}>
+          <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--color-text-primary)" }}>
             Tax rates are estimated — confirm via Sharpen Rates in Income.
           </div>
         )}
@@ -1881,8 +1885,8 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
 
       {/* ── Paycheck buffer ── */}
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        <label style={lS}>Paycheck Buffer</label>
-        <p style={{ margin: 0, fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+        <label style={lSp}>Paycheck Buffer</label>
+        <p style={{ margin: 0, fontSize: "13px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
           A fixed amount from every check that the app treats as invisible — quietly builds a safety reserve without cluttering your budget.
         </p>
         <div style={{ display: "flex", gap: "8px" }}>
@@ -1898,7 +1902,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
               onChange={e => onChange({ paycheckBuffer: e.target.value === "" ? null : Math.min(parseFloat(e.target.value) || 0, BUFFER_MAX) })}
               placeholder="e.g. 50"
             />
-            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+            <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
               At ${buf}/check — ${(buf * checksPerYear).toLocaleString()} reserved annually.
             </div>
           </>
@@ -1907,7 +1911,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
 
       {/* ── Tax exempt gate (optional, non-blocking) ── */}
       <div>
-        <label style={lS}>Tax-Exempt Week Projections</label>
+        <label style={lSp}>Tax-Exempt Week Projections</label>
         {!accepted ? (
           <div style={{
             marginTop: "8px",
@@ -1915,7 +1919,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
             border: "1px dashed rgba(0,200,150,0.3)",
             display: "flex", flexDirection: "column", gap: "10px",
           }}>
-            <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-disabled)", lineHeight: "1.6" }}>
+            <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
               {TAX_EXEMPT_DISCLAIMER}
             </p>
             <button onClick={() => onChange({ taxExemptOptIn: true })} style={{
@@ -2034,14 +2038,14 @@ function StepStub({ title, sprint }) {
     }}>
       <div style={{
         fontSize: "11px", letterSpacing: "3px", textTransform: "uppercase",
-        color: "var(--color-text-disabled)",
+        color: "var(--color-text-primary)",
       }}>
         Sprint {sprint}
       </div>
       <div style={{ fontSize: "15px", color: "var(--color-text-primary)", fontFamily: "var(--font-display)" }}>
         {title}
       </div>
-      <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+      <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
         Step UI coming in sprint {sprint}
       </div>
     </div>
@@ -2147,7 +2151,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
         <div style={{ padding: "24px 24px 0", flexShrink: 0 }}>
           <div style={{
             fontSize: "10px", letterSpacing: "3px", textTransform: "uppercase",
-            color: "var(--color-text-disabled)", marginBottom: "6px",
+            color: "var(--color-text-primary)", marginBottom: "6px",
           }}>
             {lifeEvent === null ? "Setup" : "Life Event"} · {stepIdx + 1} of {activeSteps.length}
           </div>
@@ -2203,7 +2207,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
               style={{
                 marginRight: "auto",
                 background: "var(--color-bg-raised)",
-                color: "var(--color-text-secondary)",
+                color: "var(--color-text-primary)",
                 border: "1px solid var(--color-border-subtle)",
                 borderRadius: "12px", padding: "7px 14px",
                 fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
@@ -2218,7 +2222,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
               onClick={handleBack}
               style={{
                 background: "var(--color-bg-raised)",
-                color: "var(--color-text-secondary)",
+                color: "var(--color-text-primary)",
                 border: "1px solid var(--color-border-subtle)",
                 borderRadius: "12px", padding: "8px 16px",
                 fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
@@ -2233,7 +2237,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
               onClick={handleSkip}
               style={{
                 background: "transparent",
-                color: "var(--color-text-secondary)",
+                color: "var(--color-text-primary)",
                 border: "1px solid var(--color-border-subtle)",
                 borderRadius: "12px", padding: "8px 16px",
                 fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",

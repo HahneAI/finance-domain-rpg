@@ -294,7 +294,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
     )}
 
     <div style={{ marginBottom: "24px", textAlign: "center" }}>
-      <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-disabled)", marginBottom: "12px" }}>
+      <div style={{ fontSize: "9px", letterSpacing: "4px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "12px" }}>
         Income Overview
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", marginBottom: "14px" }}>

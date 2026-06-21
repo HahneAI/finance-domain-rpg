@@ -131,15 +131,35 @@ with their Supabase Bearer token, then act with the service-role client). Subscr
 source of truth in **Stripe**, mirrored into Supabase `user_data` via webhook so the frontend can
 gate without hitting Stripe on every load.*
 
-**Decisions to confirm before building (open questions):**
-- Pricing: monthly vs. annual vs. both; price point(s); single "Premium" tier vs. multiple.
-- Trial start: on account creation vs. on first reaching a gated feature. Default assumption below
-  is **trial starts at signup**, no card required up front (lower friction).
-- Gate strictness: hard paywall at trial end (app locked) vs. soft (read-only / nagging banner).
-  Default assumption: **read-only after expiry** — data stays visible, edits/saves blocked.
-- Whether trial requires a payment method up front (Stripe `trial_period_days` on a real
-  subscription) vs. a card-less app-managed trial. Default below is **card-less app-managed trial**,
-  converting to a Stripe Checkout only when the user upgrades.
+**Resolved decisions (2026-06-16):**
+- **Price:** **$14.99/mo.** Annual = **3 months free** → 12 months for the price of 9 =
+  **$134.91/yr** (effective ~$11.24/mo). Two Stripe prices: `monthly` and `annual`.
+- **No card at signup.** Card-less, **app-managed** trial; a Stripe Checkout is created only when the
+  user upgrades. In-app + email nudges to add a card start **after day 7** of the trial ("add your
+  card early to avoid interruption").
+- **Gate strictness:** after expiry the app drops to a **read-only** experience on the **Home** and
+  **Budget** panels only — see §E for the exact locked view (expense category dropdowns disabled;
+  Lifestyle / Needs show title + per-check-period total only). Editing/saving is blocked everywhere.
+- **Free access window:** **3 weeks total**, structured as a public 14-day trial + a **hidden 7-day
+  grace**. ⚠️ **The extra week is never disclosed** — all user-facing copy and emails reference the
+  **14-day** trial only. Internally, full access continues through day 21; the read-only expiry
+  screen does not kick in until day 21.
+- **Post-expiry deletion buffer:** once expired (day 21+) with no card on file, send an account-
+  deletion warning email **every other day** until a card is added (or the account is deleted).
+
+**Lifecycle phases (single source of truth for the engine):**
+
+| Phase | Day (from `trial_started_at`) | App access | User sees | Notifications |
+|-------|------|-----------|-----------|---------------|
+| **Trial** | 0–13 | Full | "X days left in your free trial" countdown | Day 7+: in-app + email "add card to avoid interruption" |
+| **Grace** *(hidden)* | 14–20 | **Full** (undisclosed) | "Trial ended — add a card to keep using the app" | Escalating add-card warnings; **never** reveals the extra week |
+| **Expired** | 21+ | **Read-only** (Home + Budget, locked dropdowns) | Expiry / upgrade screen | Account-deletion warning **every other day** until card added |
+| **Deletion** | 21 + N | — | — | Account data deleted if still no card after the buffer (**N = confirm**) |
+
+> Two distinct timestamps drive this: `trial_ends_at` (day 14, **user-facing** countdown + "trial
+> ended" messaging) and `access_ends_at` (day 21, **internal** hard cutoff that flips the read-only
+> gate). Entitlement is keyed off `access_ends_at`; the countdown UI is keyed off `trial_ends_at`.
+> **Open question:** how many days after expiry (`N`) before actual account deletion.
 
 ---
 
@@ -150,12 +170,20 @@ gate without hitting Stripe on every load.*
   - [ ] `stripe_subscription_id TEXT` (nullable)
   - [ ] `subscription_status TEXT` — mirror of Stripe status: `trialing | active | past_due |
     canceled | incomplete | unpaid`; default `null` until trial is seeded
-  - [ ] `trial_started_at TIMESTAMPTZ`, `trial_ends_at TIMESTAMPTZ` (app-managed 14-day window)
+  - [ ] `trial_started_at TIMESTAMPTZ` — anchor for all phase math
+  - [ ] `trial_ends_at TIMESTAMPTZ` — **day 14**, user-facing trial end (countdown + "trial ended")
+  - [ ] `access_ends_at TIMESTAMPTZ` — **day 21**, internal hard cutoff that flips the read-only gate
+    (the hidden 7-day grace; never surfaced)
+  - [ ] `card_on_file BOOLEAN DEFAULT false` — set true when a payment method is attached (via
+    webhook / Checkout); gates the dunning + deletion logic
+  - [ ] `last_dunning_email_at TIMESTAMPTZ`, `dunning_email_count INT DEFAULT 0` — throttle the
+    every-other-day deletion emails and the trial add-card nudges
   - [ ] `current_period_end TIMESTAMPTZ` (from Stripe; when the paid period lapses)
-  - [ ] `plan TEXT` (nullable; e.g. `monthly` / `annual` once tiers exist)
+  - [ ] `plan TEXT` (nullable; `monthly` / `annual`)
 - [ ] **Seed trial on account creation** — in the App.jsx `SIGNED_IN` first-row upsert (same place
   the OAuth row is seeded, §5), set `trial_started_at = now()`, `trial_ends_at = now() + 14 days`,
-  `subscription_status = "trialing"` when the row is brand new. Never overwrite on returning users.
+  `access_ends_at = now() + 21 days`, `subscription_status = "trialing"` when the row is brand new.
+  Never overwrite on returning users.
 - [ ] **`db.js` mapping** — load the new columns into a `subscription` object on the in-memory
   user model; keep them OUT of the `config` JSON blob (they're authoritative columns, not user prefs).
 - [ ] **RLS** — users may `SELECT` their own subscription columns but must **not** `UPDATE` them
@@ -163,8 +191,9 @@ gate without hitting Stripe on every load.*
 
 ### B. Stripe account & product setup *(config steps, no app code)*
 
-- [ ] **Create Stripe products + prices** in the Stripe dashboard (Premium monthly / annual);
-  capture the `price_…` IDs for env config.
+- [ ] **Create Stripe product + two prices** in the dashboard: Premium **monthly = $14.99** and
+  Premium **annual = $134.91** (3 months free vs. 12× $14.99). Capture both `price_…` IDs for env
+  config. No Stripe trial on the price (`trial_period_days` unused) — the trial is app-managed.
 - [ ] **Configure the Customer Portal** (Billing → Customer portal) so users can cancel / update
   card / switch plan without custom UI.
 - [ ] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
@@ -187,43 +216,96 @@ verify with an anon client `getUser()`, then use the service-role client for pri
 - [ ] **`api/stripe-portal.js`** — verify the user → create a Billing Portal session for their
   `stripe_customer_id` → return the URL (for the "Manage subscription" button).
 
-### D. Trial logic (14 days)
+### D. Trial logic (14-day public + 7-day hidden grace)
 
-- [ ] **Derive entitlement client-side** from the mirrored columns — a single helper
-  (`lib/subscription.js → getEntitlement(subscription, now)`) returning
-  `{ state: "trial" | "active" | "expired" | "none", trialDaysLeft, isEntitled }`. `isEntitled` is
-  true when `subscription_status === "active"` OR (`trialing` AND `now < trial_ends_at`).
-- [ ] **Trial countdown** — `trialDaysLeft = ceil((trial_ends_at − now) / day)`, floored at 0.
-- [ ] **Expiry transition** — when `trialing` and `now ≥ trial_ends_at`, treat as `expired`
-  (entitlement off) even before any Stripe event exists; don't depend on a webhook to lock.
-- [ ] **No double trials** — a returning/!new user never re-seeds a trial; expired-trial users see
-  the upgrade path, not a fresh 14 days.
+- [ ] **Single entitlement helper** — `lib/subscription.js → getEntitlement(subscription, now)`
+  returning `{ state, trialDaysLeft, isEntitled, accessDaysLeft }` where
+  `state ∈ "trial" | "grace" | "active" | "expired" | "none"`:
+  - `active` — `subscription_status === "active"` (or `trialing` w/ a real Stripe sub) → entitled
+  - `trial` — `now < trial_ends_at` → entitled; `trialDaysLeft = ceil((trial_ends_at − now)/day)`
+  - `grace` — `trial_ends_at ≤ now < access_ends_at` → **still entitled**, but UI/email say "trial
+    ended." `trialDaysLeft = 0`. **Do not expose `accessDaysLeft` anywhere user-visible.**
+  - `expired` — `now ≥ access_ends_at` → **not entitled** (read-only gate on)
+  - `isEntitled = active || trial || grace`
+- [ ] **Lock off the internal cutoff, not the public one** — the read-only gate keys off
+  `access_ends_at` (day 21). The countdown + "trial ended" banner key off `trial_ends_at` (day 14).
+  Both transitions are time-derived (don't wait on a webhook to flip).
+- [ ] **No double trials** — a returning/non-new user never re-seeds trial timestamps; an
+  expired/grace user who never paid sees the upgrade path, not a fresh window.
+- [ ] **Disclosure guard** — add a lint/test note: no UI string or email template may reference the
+  21-day / grace / "extra week" concept. Public surfaces only ever say 14 days.
 
 ### E. Frontend gating / paywall
 
-- [ ] **Entitlement gate** — wrap the gated surface in App.jsx using `getEntitlement`. Per the
-  default decision, **expired** users get a read-only app: panels render, but edits/saves
-  (add goal/expense, run wizard, log events, Force Sync writes) are blocked behind an upgrade modal.
-- [ ] **Upgrade modal** — Liquid-Glass styled (`LiquidGlass.jsx`), Pulse signal accent allowed since
-  this is a premium surface; CTA opens Stripe Checkout via `api/stripe-create-checkout`. Honors the
-  mobile portal pattern (render via `createPortal`, see §16 portal audit).
+- [ ] **Entitlement gate** — wrap the gated surface in App.jsx using `getEntitlement`. While
+  `isEntitled` (trial/grace/active), the app behaves normally. When `expired`, switch to the
+  read-only experience below.
+- [ ] **Expired read-only experience** — adapt Home + Budget for the locked state:
+  - [ ] **Navigation** — only **Home** and **Budget** are reachable read-only; **Account/Profile**
+    must stay reachable so the user can add a card. Other tabs (Income, Log, Goals) route to the
+    upgrade screen instead of their panel. *(Confirm Income/Log/Goals handling.)*
+  - [ ] **Read-only Home + Budget** — all edit affordances hidden/disabled (add/edit/delete goal,
+    expense, loan; run wizard; log events; Force Sync write; reorder; reset timeline). Values render
+    but no mutations persist.
+  - [ ] **Locked expense categories** — the §16 collapsible category sections are **forced collapsed
+    and non-expandable**: chevron disabled, only the category **title + total per check period** for
+    **Lifestyle** and **Needs** shown. No row-level expense detail, no dropdown expansion.
+  - [ ] Build this as an explicit `expired`/read-only mode the panels read (e.g. a `readOnly` /
+    `entitlement` prop), not a pile of inline conditionals — one switch, testable.
+- [ ] **Upgrade modal / screen** — Liquid-Glass styled (`LiquidGlass.jsx`), Pulse signal accent
+  allowed (premium surface); shows monthly ($14.99) vs. annual ($134.91, "3 months free") and opens
+  Stripe Checkout via `api/stripe-create-checkout`. Honors the mobile portal pattern
+  (`createPortal`, see §16 portal audit).
 - [ ] **Post-checkout return** — success route shows a confirming state and refetches the
-  `user_data` row (webhook may lag a beat; poll/refetch `subscription_status` briefly).
+  `user_data` row (webhook may lag; poll/refetch `subscription_status` briefly), then lifts the gate.
 
 ### F. Trial + subscription UI
 
-- [ ] **Trial banner** — slim persistent banner (mirrors the Job Loss banner pattern) reading
-  "X days left in your free trial" with an Upgrade button; turns amber at ≤3 days; becomes a
-  "Trial ended — upgrade to keep editing" bar once expired. Dismissible, re-shows on reload.
+- [ ] **Trial/dunning banner** — slim persistent banner (mirrors the Job Loss banner pattern),
+  copy by phase: **trial** → "X days left in your free trial" (amber at ≤3 days); **grace** →
+  "Your trial ended — add a card to keep using the app" (must NOT hint that access continues);
+  **expired** → "Trial ended — add a card to restore full access." Always carries an Add Card /
+  Upgrade button. Dismissible, re-shows on reload.
 - [ ] **ProfilePanel → Account: Subscription card** — replaces the §8 "subscription status
-  placeholder." Shows current state (Trial · N days left / Active · renews [date] / Past due /
-  Canceled), plan, and a **Manage Subscription** button → `api/stripe-portal`. Upgrade button when
-  not yet subscribed.
+  placeholder." Shows state (Trial · N days left / Active · renews [date] / Past due / Canceled),
+  plan + price, and a **Manage Subscription** button → `api/stripe-portal`. Add Card / Upgrade
+  button (monthly vs. annual) when not yet subscribed. In `grace`/`expired` this is the primary
+  conversion surface.
 - [ ] **Admin visibility** — Live State Inspector / Config Raw View: surface `subscription_status`,
-  `trial_ends_at`, `current_period_end` so a diagnostic session can read billing state at a glance
-  (see the §15.I admin pattern). Add to CLAUDE.md "Diagnostic request templates."
+  the resolved **phase** (`trial`/`grace`/`expired`), `trial_ends_at`, `access_ends_at` (admin-only
+  — the hidden cutoff), `card_on_file`, `dunning_email_count`, `current_period_end` so a diagnostic
+  session can read billing + lifecycle state at a glance (§15.I admin pattern). Add to CLAUDE.md
+  "Diagnostic request templates."
 
-### G. Edge cases, security & testing
+### G. Notifications & lifecycle emails (Vercel Cron)
+
+*New infra: the app has no transactional email today (only Supabase auth emails). The card-nudge,
+grace, and every-other-day deletion warnings need an email provider + a scheduled job. All sends
+are server-side via a daily cron route; nothing here runs on the client.*
+
+- [ ] **Pick an email provider** — Resend / Postmark / SendGrid (Resend is the lightest Vercel fit).
+  Add `EMAIL_API_KEY` + a verified sender domain.
+- [ ] **`api/cron-subscription-lifecycle.js`** — scheduled daily via `vercel.json` `crons`. Runs
+  service-role, recomputes each user's phase from `trial_started_at` / `trial_ends_at` /
+  `access_ends_at` / `card_on_file`, and acts:
+  - [ ] **Trial, day ≥ 7, no card** → "add your card to avoid interruption" nudge. Throttle to a
+    sane cadence (e.g. once at day 7, again ~day 12) via `last_dunning_email_at`.
+  - [ ] **Grace (day 14–20), no card** → "trial ended — add a card to keep using the app."
+    Escalating but **never** mentions the remaining access. ~every 2 days.
+  - [ ] **Expired (day 21+), no card** → account-deletion warning **every other day** (guard:
+    `now − last_dunning_email_at ≥ 2 days`); increment `dunning_email_count`.
+  - [ ] **Past day 21 + N, no card** → call the deletion path (reuse/extend `delete-account` logic
+    server-side). **N = confirm.**
+  - [ ] **Card on file / active** → no lifecycle emails; reset `dunning_email_count`.
+- [ ] **Idempotency / safety** — cron must be safe to run twice a day; key all sends off the
+  throttle timestamps, never off "did the day flip." Protect the route (Vercel cron secret / header).
+- [ ] **Copy review** — all templates reference the **14-day** trial only; no template, subject, or
+  preview text reveals the grace week. Route the deletion-warning copy through the §16 "financial
+  alert copy" tone pass.
+- [ ] **(Optional, later) Web Push** — the app is already a PWA w/ service worker; the same phase
+  signals could fire push notifications. Defer behind email v1.
+
+### H. Edge cases, security & testing
 
 - [ ] **Webhook signature** — reject unsigned/invalid events; never trust client-reported status.
 - [ ] **Card declines / `past_due`** — keep entitlement until `current_period_end`, then lock;
@@ -232,18 +314,24 @@ verify with an anon client `getUser()`, then use the service-role client for pri
   period end"), then drops to read-only.
 - [ ] **Account deletion** — extend `api/delete-account.js` to also cancel the Stripe subscription
   (or rely on the customer being orphaned) so a deleted user isn't billed.
-- [ ] **Clock skew / tz** — all trial math in UTC against `trial_ends_at`; don't use the client's
-  local lock-date offset (admin Lock Date must not extend a trial).
-- [ ] **Tests** — unit-test `getEntitlement` across trial/active/expired/past_due/canceled and the
-  exact trial-end boundary; webhook handler upsert mapping with a signed fixture event; create-checkout
-  rejects missing/invalid tokens (mirror the delete-account auth tests).
+- [ ] **Clock skew / tz** — all phase math in UTC against `trial_ends_at` / `access_ends_at`; do not
+  use the client's local lock-date offset (admin Lock Date must not extend a trial or the grace).
+- [ ] **Disclosure** — no client string, email template, or API response exposes `access_ends_at` or
+  the grace concept to a non-admin user (covered by a test).
+- [ ] **Tests** — unit-test `getEntitlement` across trial/grace/active/expired/past_due/canceled and
+  the exact day-14 and day-21 boundaries; cron phase-routing + every-other-day throttle; webhook
+  upsert mapping with a signed fixture event; create-checkout rejects missing/invalid tokens (mirror
+  the delete-account auth tests).
 
-### H. Env vars (Vercel)
+### I. Env vars (Vercel)
 
 ```
 STRIPE_SECRET_KEY=...            # server only (api/ functions)
 STRIPE_WEBHOOK_SECRET=...        # server only (signature verify)
-STRIPE_PRICE_MONTHLY=price_...   # + STRIPE_PRICE_ANNUAL if annual ships
+STRIPE_PRICE_MONTHLY=price_...   # $14.99/mo
+STRIPE_PRICE_ANNUAL=price_...    # $134.91/yr (3 months free)
+EMAIL_API_KEY=...                # transactional email provider (Resend/Postmark/SendGrid)
+CRON_SECRET=...                  # guards api/cron-subscription-lifecycle
 VITE_STRIPE_PUBLISHABLE_KEY=...  # client (only if using Stripe.js redirect; not needed for hosted Checkout URL)
 # Reuses existing SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_* already set for delete-account.
 ```

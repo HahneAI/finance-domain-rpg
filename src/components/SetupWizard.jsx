@@ -266,9 +266,25 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
         bucketCap: 128,
         bucketPayoutRate: 9.825,
         diffRate: formData.diffRate ?? 1.75,
+        // Restore the DHL preset pay defaults. These are cleared when the gate is
+        // answered "No" (see else branch), so re-selecting DHL must re-seed them or
+        // the required Base Rate / Shift Length fields would be left blank.
+        baseRate:   formData.baseRate   ?? DHL_PRESET.defaults.baseRate,
+        shiftHours: formData.shiftHours ?? DHL_PRESET.defaults.shiftHours,
       });
     } else {
-      onChange({ employerPreset: null, userPaySchedule: null, diffRate: 0, scheduleIsVariable: false });
+      // Clear DHL-seeded pay defaults so the base user starts from blank required
+      // fields. DEFAULT_CONFIG.baseRate (19.65) and shiftHours (12) are DHL preset
+      // values — leaving them pre-filled silently persisted the DHL starting pay onto
+      // base accounts that never explicitly overwrote the field (dhl-preset-override bug).
+      onChange({
+        employerPreset: null,
+        userPaySchedule: null,
+        diffRate: 0,
+        scheduleIsVariable: false,
+        baseRate: null,
+        shiftHours: null,
+      });
     }
   }
 

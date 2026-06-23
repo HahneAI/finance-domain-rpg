@@ -186,7 +186,7 @@ export const PwaInstallModal = forwardRef(function PwaInstallModal(_props, ref) 
           padding: 0;
           display: flex;
           flex-direction: column;
-          gap: 1.25rem;
+          gap: 1.75rem;
         }
         .pwa-step {
           border: 1px solid var(--color-border-subtle);
@@ -205,12 +205,12 @@ export const PwaInstallModal = forwardRef(function PwaInstallModal(_props, ref) 
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 26px;
-          height: 26px;
+          width: 31px;
+          height: 31px;
           border-radius: 999px;
           background-color: rgba(0, 200, 150, 0.12);
           color: var(--color-accent-primary);
-          font-size: 0.8125rem;
+          font-size: 0.975rem;
           font-weight: 700;
           border: 1px solid var(--color-border-accent);
         }
@@ -222,7 +222,7 @@ export const PwaInstallModal = forwardRef(function PwaInstallModal(_props, ref) 
           line-height: 1.3;
         }
         .pwa-step-text {
-          font-size: 0.875rem;
+          font-size: 1.05rem;
           color: var(--color-text-secondary);
           margin: 0;
           line-height: 1.55;

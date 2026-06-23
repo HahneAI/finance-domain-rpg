@@ -1551,7 +1551,7 @@ function ListRow({ label, summary, onPress, last }) {
   const [hovered, setHovered] = useState(false);
   return (
     <button
-      onClick={onPress}
+      onClick={(e) => onPress?.(e)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -1576,7 +1576,7 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, today, weekConfirmations = {} }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, today, weekConfirmations = {}, onInstallClick }) {
   const [activeSection, setActiveSection] = useState(null);
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
   const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });
@@ -1682,6 +1682,19 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           />
         )}
       </div>
+
+      {/* Install instructions trigger — hidden when already running standalone
+          (App passes onInstallClick=null in that case). */}
+      {onInstallClick && (
+        <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", overflow: "hidden", marginBottom: "20px" }}>
+          <ListRow
+            label="Install on home screen"
+            summary="Add A:Fin to your home screen — opens like a native app"
+            onPress={(e) => onInstallClick(e.currentTarget)}
+            last
+          />
+        </div>
+      )}
 
       <button
         onClick={() => { setLocalSignOutState({ loading: false, error: null }); setShowLocalSignOutConfirm(true); }}

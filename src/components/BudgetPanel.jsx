@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
-import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
+import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck, breakdownMonthlyEquiv } from "../lib/expense.js";
 import { formatFiscalWeekLabel, formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
@@ -234,13 +234,21 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   };
   const shortMonth = (iso) =>
     ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(iso.split("-")[1], 10) - 1];
-  // Sum across all 12 months so monthlyOverrides are reflected in the breakdown table.
-  // 52/12 weeks per month keeps the annual total at exactly 52 weeks.
+  // Annual cost for the breakdown tab. Roots each expense on its monthly cost the
+  // way bills are charged (monthly × 12), summing all 12 months so monthlyOverrides
+  // still flow through. See breakdownMonthlyEquiv for the per-type factor.
   const yearlyExpenseCost = (exp) =>
     [0,1,2,3,4,5,6,7,8,9,10,11].reduce((s, m) => {
       const key = `2026-${String(m + 1).padStart(2, "0")}`;
-      return s + getEffectiveAmountForMonth(exp, key, Math.floor(m / 3)) * (52 / 12);
+      const phaseIdx = Math.floor(m / 3);
+      const reserve = getEffectiveAmountForMonth(exp, key, phaseIdx);
+      return s + breakdownMonthlyEquiv(reserve, exp.type === "loan");
     }, 0);
+
+  // Weekly figure for the breakdown = monthly cost ÷ 4 for bills (the simple
+  // set-aside), or a true 52-week average for loans. Ties out with each row's
+  // Monthly (× 4) and Annual (× 12) columns. 48 = 12 four-week months.
+  const expenseWeeklyAvg = (exp) => yearlyExpenseCost(exp) / (exp.type === "loan" ? 52 : 48);
 
   // Live expense snapshot for the detail sheet — stays in sync as edits land
   const sheetExpLive = sheetExp ? (expenses.find(e => e.id === sheetExp.id) ?? null) : null;
@@ -1734,9 +1742,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
     {view === "breakdown" && (() => {
       // Full-year figures — independent of the selected quarter tab
       const tsAnnual = expenses.reduce((s, e) => s + yearlyExpenseCost(e), 0);
-      const tsWeeklyAvg = tsAnnual / 52;
+      const tsWeeklyAvg = expenses.reduce((s, e) => s + expenseWeeklyAvg(e), 0);
       const wrAnnual = weeklyIncome * 52 - tsAnnual;
-      const wrWeeklyAvg = wrAnnual / 52;
+      // Income is a true 52-week figure; expenses are monthly-rooted. Tie the
+      // weekly remainder to income (spend + remaining = weekly income) rather
+      // than to wrAnnual/52, so the weekly column stays internally consistent.
+      const wrWeeklyAvg = weeklyIncome - tsWeeklyAvg;
       const checkingTot = regularExpenses.reduce((s, e) => s + displayEffective(e, ap), 0);
       const checkingDesc = regularExpenses.map(e => e.label).join(", ");
       const loansTot = loans.reduce((s, e) => s + displayEffective(e, ap), 0);
@@ -1772,7 +1783,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         })()}
         <div style={{ height: "1px", background: "var(--color-bg-raised)", marginBottom: "20px" }} />
         {cats.map(cat => {
-          const cT = regularExpenses.filter(e => e.category === cat).reduce((s, e) => s + yearlyExpenseCost(e) / 52, 0);
+          const cT = regularExpenses.filter(e => e.category === cat).reduce((s, e) => s + expenseWeeklyAvg(e), 0);
           const pct = (cT / weeklyIncome) * 100;
           return <div key={cat} style={{ marginBottom: "16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}><span style={{ fontSize: "11px", letterSpacing: "2px", color: CATEGORY_COLORS[cat], textTransform: "uppercase" }}>{cat}</span><span>{f2(cT * perCheckFactor)}/{checkUnit} avg · {pct.toFixed(1)}%</span></div>
@@ -1785,7 +1796,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           <thead><tr style={{ borderBottom: "1px solid #333", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ textAlign: "left", padding: "8px 4px" }}>Expense</th><th style={{ textAlign: "right", padding: "8px 4px" }}>{isWeekly ? "Wk Avg" : "Per Check"}</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Monthly</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Annual</th></tr></thead>
           <tbody>{expenses.map(exp => {
             const annual = yearlyExpenseCost(exp);
-            const checkAvg = (annual / 52) * perCheckFactor;
+            const checkAvg = expenseWeeklyAvg(exp) * perCheckFactor;
             const isLoan = exp.type === "loan";
             return <tr key={exp.id} style={{ borderBottom: "1px solid #181818" }} onMouseEnter={e => e.currentTarget.style.background = "var(--color-bg-surface)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
               <td style={{ padding: "8px 4px" }}>

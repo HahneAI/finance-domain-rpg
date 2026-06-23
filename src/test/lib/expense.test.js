@@ -8,6 +8,8 @@ import {
   onwardStartMonthKey,
   applyQuarterForward,
   applyAllQuarters,
+  perPaycheckFromCycle,
+  breakdownMonthlyEquiv,
 } from '../../lib/expense.js'
 import { getEffectiveAmountForMonth } from '../../lib/finance.js'
 
@@ -302,5 +304,56 @@ describe('quarter saves resolve correctly through getEffectiveAmountForMonth', (
     for (let m = 1; m <= 12; m++) {
       expect(getEffectiveAmountForMonth(saved, `2026-${String(m).padStart(2, '0')}`, Math.floor((m - 1) / 3))).toBe(60)
     }
+  })
+})
+
+// breakdownMonthlyEquiv — breakdown tab roots bills on their monthly (30-day)
+// cost: monthly is what the user entered, annual = monthly × 12, weekly = ÷ 4.
+// ─────────────────────────────────────────────────────────────
+describe('breakdownMonthlyEquiv', () => {
+  // The breakdown tab's three columns for a flat expense, exactly as BudgetPanel
+  // derives them: annual = 12 monthly-equivs; weekly = annual ÷ (loan ? 52 : 48).
+  const cols = (amount, cycle, isLoan = false) => {
+    const reserve = isLoan ? amount : perPaycheckFromCycle(amount, cycle, 4)
+    const annual = 12 * breakdownMonthlyEquiv(reserve, isLoan)
+    return { weekly: annual / (isLoan ? 52 : 48), monthly: annual / 12, annual }
+  }
+
+  it('a $400/month bill shows $100 / $400 / $4,800 (wk / mo / yr)', () => {
+    expect(cols(400, 'every30days')).toEqual({ weekly: 100, monthly: 400, annual: 4800 })
+  })
+
+  it('a $100/week bill is rooted on its $400 monthly cost ($4,800/yr), not $5,200', () => {
+    // Weekly entry is just the monthly cost split 4 ways; it normalizes to $400/mo.
+    expect(cols(100, 'weekly')).toEqual({ weekly: 100, monthly: 400, annual: 4800 })
+  })
+
+  it('a $200/biweekly bill is rooted on its $400 monthly cost', () => {
+    expect(cols(200, 'biweekly')).toEqual({ weekly: 100, monthly: 400, annual: 4800 })
+  })
+
+  it('a $1,200/year bill shows $25 / $100 / $1,200', () => {
+    expect(cols(1200, 'yearly')).toEqual({ weekly: 25, monthly: 100, annual: 1200 })
+  })
+
+  it('the three columns tie out: weekly × 4 = monthly, monthly × 12 = annual', () => {
+    const { weekly, monthly, annual } = cols(637, 'every30days')
+    expect(weekly * 4).toBeCloseTo(monthly, 5)
+    expect(monthly * 12).toBeCloseTo(annual, 5)
+  })
+
+  it('a $400/month LOAN keeps its true 52-week set-aside: $92.31 / $400 / $4,800', () => {
+    // Loans store payment × 12/52 and have a real payoff, so the weekly column is
+    // the accurate set-aside the Loans tab shows, not monthly ÷ 4.
+    const loanWeekly = (400 * 12) / 52
+    const { weekly, monthly, annual } = cols(loanWeekly, 'every30days', true)
+    expect(weekly).toBeCloseTo(92.31, 2)
+    expect(monthly).toBeCloseTo(400, 2)
+    expect(annual).toBeCloseTo(4800, 2)
+  })
+
+  it('bills use a 4-week month (× 4); loans use 52/12', () => {
+    expect(breakdownMonthlyEquiv(100)).toBeCloseTo(400, 5)
+    expect(breakdownMonthlyEquiv(100, true)).toBeCloseTo(100 * 52 / 12, 5)
   })
 })

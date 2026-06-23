@@ -56,6 +56,8 @@ tracking to work correctly.
 | Field | DEFAULT value | Neutralized by isDHL guard? | Action needed |
 |-------|--------------|-----|------|
 | `diffRate` | 1.75 | Harmless (wkndH = 0 for non-DHL) but pre-fills UI | Ask clearly in Step 1; default to 0 for non-DHL gate |
+| `baseRate` | 19.65 | **No — persisted as the user's pay** | FIXED: cleared to null on `setDHL(false)`, re-seeded on `setDHL(true)` |
+| `shiftHours` | 12 | **No — persisted as the user's shift length** | FIXED: cleared to null on `setDHL(false)`, re-seeded on `setDHL(true)` |
 | `nightDiffRate` | 1.50 | Yes — `(isDHL && dhlNightShift)` check | None (never applied) |
 | `dhlNightShift` | true | Yes | None (never applied) |
 | `bucketStartBalance/Cap/PayoutRate` | DHL values | Yes — `computeBucketModel` gated on employerPreset=DHL | None for now |
@@ -141,6 +143,17 @@ placeholder says "0 = no differential". A non-DHL user without a weekend differe
 clear it. The value is harmless in income calculations (`weekendHours = 0` for non-DHL in
 `buildYear`), but it pollutes the config and is confusing.
 Fix: `setDHL(false)` now also resets `diffRate: 0`.
+
+**[BUG — FIXED] `baseRate: 19.65` / `shiftHours: 12` pre-fill for non-DHL (DHL preset override)**
+`DEFAULT_CONFIG.baseRate = 19.65` and `shiftHours = 12` are the DHL preset values
+(`DHL_PRESET.defaults`). When a base user answered "No" at the gate, the Base Rate field rendered
+pre-filled with `19.65` (the placeholder also reads "e.g. 19.65"). A user who didn't explicitly
+overwrite it silently persisted the DHL starting pay onto their account — surfacing on the account
+panel as the DHL rate "overriding" their own pay. `setDHL(false)` cleared `diffRate` and
+`userPaySchedule` but not `baseRate`/`shiftHours`, so these DHL values leaked through.
+Fix: `setDHL(false)` now also resets `baseRate: null, shiftHours: null`, leaving the base user with
+blank required fields (validation forces an explicit entry). `setDHL(true)` re-seeds them from
+`DHL_PRESET.defaults` so toggling back to DHL never leaves the required fields blank.
 
 **[BUG — FIXED] Custom OT threshold field has no validation**
 When the user picks "Custom" OT threshold and leaves the input blank, `otThreshold` stays at 40

@@ -206,6 +206,9 @@ describe('SetupWizard — DHL hidden defaults', () => {
     clickNext()
     fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
     fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
+    // Answering "No" clears the DHL-seeded base rate / shift length, so re-supply them.
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 19\.65/i), { target: { value: '21.15' } })
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 10/i), { target: { value: '12' } })
 
     advanceSteps(4)
     fireEvent.click(screen.getByRole('button', { name: /finish/i }))
@@ -214,6 +217,30 @@ describe('SetupWizard — DHL hidden defaults', () => {
     const payload = onComplete.mock.calls[0][0]
     expect(payload.employerPreset).toBeNull()
     expect(payload.scheduleIsVariable).toBe(false)
+  })
+
+  it('clears the DHL-seeded base rate when the gate is answered "No"', () => {
+    // DEFAULT_CONFIG.baseRate (19.65) is the DHL preset value. A base user must not
+    // inherit it silently — the field should be blank after answering "No".
+    renderWizard({ config: { ...BASE_CONFIG, baseRate: 19.65, shiftHours: 12 } })
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
+
+    const baseRateInput = screen.getByPlaceholderText(/e\.g\. 19\.65/i)
+    expect(baseRateInput.value).toBe('')
+  })
+
+  it('re-seeds the DHL base rate when the gate is toggled back to "Yes"', () => {
+    // Toggling No clears baseRate to null; toggling Yes must restore the DHL preset
+    // value so the required field is never left blank for a DHL user.
+    renderWizard({ config: { ...BASE_CONFIG, baseRate: 19.65, shiftHours: 12 } })
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
+    expect(screen.getByPlaceholderText(/e\.g\. 19\.65/i).value).toBe('')
+
+    // First "Yes" is the DHL employer gate (other yes/no gates render lower in the form).
+    fireEvent.click(screen.getAllByRole('button', { name: /^yes$/i })[0])
+    expect(screen.getByPlaceholderText(/e\.g\. 19\.65/i).value).toBe('19.65')
   })
 
   it('hides OT fields for DHL users and keeps them visible for non-DHL users', () => {

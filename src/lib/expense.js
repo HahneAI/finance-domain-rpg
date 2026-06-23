@@ -68,6 +68,20 @@ export const perPaycheckFromCycle = (amount, cycle, _cpm) =>
 export const cycleAmountFromPerPaycheck = (perWeek, cycle, _cpm) =>
   fromMonthlyCost(roundToQuarter(perWeek * 4), cycle);
 
+// Breakdown-tab annualization. The breakdown roots every expense on its monthly
+// (30-day) cost — the way bills are actually charged. A $400/month bill is $400 a
+// month, 12 times a year ($4,800); the weekly and biweekly figures are just that
+// monthly cost split 4 / 2 ways for quick mental math. Sum the result across the
+// 12 months to get the annual figure.
+//   • Regular bills store monthlyCost ÷ 4 as the weekly reserve, so × 4 recovers
+//     the monthly cost (annual = monthly × 12 = reserve × 48). This holds however
+//     the bill was entered — a "$100/week" bill is treated as $400/mo, not $5,200.
+//   • Loans store a true per-week amount on a 52-week basis because they have a
+//     real payoff schedule, so × 52/12 recovers their monthly cost (annual = × 52).
+export const breakdownMonthlyEquiv = (reserve, isLoan = false) =>
+  isLoan ? reserve * (52 / 12) : reserve * 4;
+
+
 export const monthlyFromPerPaycheck = (perWeek, _cpm) => roundToQuarter(perWeek * 4);
 
 /**

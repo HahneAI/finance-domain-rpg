@@ -21,6 +21,8 @@ import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
 import { JobLossEntry } from "./components/JobLossEntry.jsx";
 import { ExpenseTriage } from "./components/ExpenseTriage.jsx";
 import { JobLossDashboard } from "./components/JobLossDashboard.jsx";
+import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
+import { isStandaloneDisplayMode } from "./lib/pwa.js";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -202,6 +204,11 @@ export default function App() {
   // "home" is always the base — never popped below depth 1.
   const [viewStack, setViewStack] = useState(["home"]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // PWA install instructions modal — single instance at the app root, opened from
+  // both the drawer and the Account panel. Hidden entirely when already installed.
+  const pwaModalRef = useRef(null);
+  const isStandalone = useMemo(() => isStandaloneDisplayMode(), []);
+  const openPwaModal = useCallback((triggerEl) => pwaModalRef.current?.open(triggerEl), []);
   // Investor pre-auth state — set when a valid code is entered on LoginScreen.
   // Cleared on sign-out or when the user navigates back from InvestorRegister.
   const [investorSession, setInvestorSession] = useState(null); // null | { code: string }
@@ -1015,6 +1022,7 @@ export default function App() {
         isAdmin={isAdmin}
         today={effectiveToday}
         weekConfirmations={weekConfirmations}
+        onInstallClick={isStandalone ? null : openPwaModal}
       />}
     </>
   );
@@ -1759,6 +1767,31 @@ export default function App() {
             >
               Life Events
             </button>
+            {!isStandalone && (
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                aria-controls="pwa-install-dialog"
+                onClick={(e) => { openPwaModal(e.currentTarget); setDrawerOpen(false); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: "10px",
+                  width: "100%", textAlign: "left",
+                  padding: "14px 20px", fontSize: "11px",
+                  letterSpacing: "2px", textTransform: "uppercase",
+                  background: "transparent",
+                  color: "var(--color-text-primary)",
+                  borderLeft: "3px solid transparent",
+                  border: "none", cursor: "pointer", transition: "all 0.15s",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Install on home screen
+              </button>
+            )}
           </div>
         </nav>
 
@@ -2621,6 +2654,9 @@ export default function App() {
           onDismiss={() => setConfirmDismissed(true)}
         />
       )}
+      {/* ── PWA install instructions (§16) — single instance, opened from drawer + Account panel ── */}
+      <PwaInstallModal ref={pwaModalRef} />
+
       {/* ── Life Events menu (entry point modal — TODO §15.A) ── */}
       <LifeEventMenu
         open={lifeEventMenu}

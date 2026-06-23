@@ -13,6 +13,7 @@ const BASE_CONFIG = {
   userState: 'MO',
   startDate: '2026-03-01',
   maxWeeklyHours: 40,
+  hoursUnderstood: true, // satisfies Step 2 (Schedule) base-user confirmation gate
   attendanceBucketEnabled: false,
   paycheckBuffer: 50,
   bufferEnabled: true,

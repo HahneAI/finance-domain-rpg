@@ -194,6 +194,8 @@ export default function App() {
   const [showExtra, setShowExtra] = useState(true);
   const [isEmployerDHL, setIsEmployerDHL] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  // Per-user unlock for the Tax Plan feature — granted via SQL to select non-admins.
+  const [taxProjectionsEnabled, setTaxProjectionsEnabled] = useState(false);
   const [ptoGoal, setPtoGoal] = useState(null);
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
@@ -363,6 +365,7 @@ export default function App() {
         setWeekConfirmations(data.weekConfirmations ?? {});
         setIsEmployerDHL(data.isEmployerDHL);
         setIsAdmin(data.isAdmin);
+        setTaxProjectionsEnabled(data.taxProjectionsEnabled);
         setPtoGoal(data.ptoGoal);
         if (data.isInvestor) {
           setInvestorProfile(data.investorProfile ?? null);
@@ -1013,6 +1016,7 @@ export default function App() {
         showExtra={showExtra}
         setShowExtra={setShowExtra}
         isAdmin={isAdmin}
+        taxProjectionsEnabled={taxProjectionsEnabled}
         today={effectiveToday}
         weekConfirmations={weekConfirmations}
       />}

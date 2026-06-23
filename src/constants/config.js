@@ -193,16 +193,19 @@ export const QUARTER_BOUNDARIES = ["2026-03-31", "2026-06-30", "2026-09-30"];
 // DHL EMPLOYER PRESET
 //
 // Standard DHL B-team rotation (used for new wizard users):
-//   Long week:  4 core shifts (Tue/Wed/Sat/Sun) + 1 required OT = 5 working days (60h)
-//   Short week: 3 core shifts (Mon/Thu/Fri)     + 1 required OT = 4 working days (48h)
-//   requiredOtShifts = 1 for both rotation types; user picks the day in WeekConfirmModal.
+//   Long week:  4 core shifts (Tue/Wed/Sat/Sun) = 48h
+//   Short week: 3 core shifts (Mon/Thu/Fri)     = 36h
+//   requiredOtShifts = 0 — DHL no longer mandates a weekly OT shift. Extra shifts
+//   are optional pickups, logged via the normal day grid in WeekConfirmModal.
 //
 // DHL custom hours (customWeeklyHours set, e.g. 60):
 //   Rotation day arrays are preserved for WeekConfirmModal display.
 //   Projection math uses customWeeklyHours as the flat weekly total instead.
-//   requiredOtShifts derived from (customWeeklyHours - coreHours) / shiftHours:
-//     Long week  core = 48h → (60−48)/12 = 1 OT shift
-//     Short week core = 36h → (60−36)/12 = 2 OT shifts
+//   requiredOtShifts derived from (customWeeklyHours - coreHours) / shiftHours —
+//   these are "schedule extension" shifts needed to reach the user's chosen target,
+//   not mandatory OT:
+//     Long week  core = 48h → (60−48)/12 = 1 extension shift
+//     Short week core = 36h → (60−36)/12 = 2 extension shifts
 //
 // dhlCustomSchedule (legacy, kept for migration reads only):
 //   Was used to activate hardcoded 6-Day/4-Day arrays for Anthony's old schedule.
@@ -213,36 +216,36 @@ export const QUARTER_BOUNDARIES = ["2026-03-31", "2026-06-30", "2026-09-30"];
 // ─────────────────────────────────────────────────────────────
 export const DHL_PRESET = {
   rotation: {
-    // Short week — 3 required shifts
+    // Short week — 3 core shifts
     short: {
       days: [1, 4, 5],            // Mon, Thu, Fri
       label: "Short Week",
       displayName: "Short Week",
-      baseHours: 36,              // 3 × 12h core hours; OT adds the 4th shift
+      baseHours: 36,              // 3 × 12h core hours
       weekendShifts: 1,           // Fri overnight earns diff only from Sat 12:00a–6:00a (½ shift)
-      otDefaults: { weekday: 2, weekend: 6 }, // Tue (weekday) or Sat (weekend) as default OT choices
+      otDefaults: { weekday: 2, weekend: 6 }, // default day choices when reaching a custom target requires an extra shift
     },
-    // Long week — 4 required shifts
+    // Long week — 4 core shifts
     long: {
       days: [2, 3, 6, 0],        // Tue, Wed, Sat, Sun
       label: "Long Week",
       displayName: "Long Week",
-      baseHours: 48,              // 4 × 12h core hours; OT adds the 5th shift
+      baseHours: 48,              // 4 × 12h core hours
       weekendShifts: 2,           // Sat + Sun earn diffRate (Fri not worked in long rotation)
-      otDefaults: { weekday: 1 }, // Monday OT default (always weekday)
+      otDefaults: { weekday: 1 }, // default extension-shift day (weekday) when a custom target needs one
     },
   },
   // While A-team works their short (4-day) week, B-team is on long (5-day).
   // Team selection auto-derives startingWeekIsLong.
   teams: {
-    A: { startsLong: false },    // A-team week 1 = short (Mon/Thu/Fri core + OT)
-    B: { startsLong: true  },    // B-team week 1 = long (Tue/Wed/Sat/Sun core + OT)
+    A: { startsLong: false },    // A-team week 1 = short (Mon/Thu/Fri core)
+    B: { startsLong: true  },    // B-team week 1 = long (Tue/Wed/Sat/Sun core)
   },
-  // DHL mandates 1 extra 12h shift per week (required OT).
-  // Worker picks any off-day for that week:
-  //   Short-week off-days: Tue, Wed, Sat, Sun → Sat/Sun OT earns diffRate (dhlOtOnWeekend flag)
-  //   Long-week off-days: Mon, Thu, Fri      → all weekdays, no diff ever applies
-  requiredOtShifts: 1,
+  // DHL no longer mandates a weekly OT shift. The preset rotation is core-only;
+  // any extra shift is an optional pickup the worker logs through the day grid.
+  // (Schedule-extension shifts for custom-hours targets are derived separately in
+  // finance.js — see getDhlPlannedPattern.)
+  requiredOtShifts: 0,
   otShiftHours: 12,
   // Preset defaults — applied to formData on team selection in the wizard
   defaults: {

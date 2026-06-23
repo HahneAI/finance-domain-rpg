@@ -2136,7 +2136,12 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
     const taxedWeeks = allWeeks
       .filter(w => w.idx >= (finalData.firstActiveIdx ?? 0))
       .map(w => w.idx);
-    onComplete({ ...finalData, taxedWeeks, setupComplete: true });
+    // Stamp the account-creation week so weeks before today are auto-assumed worked
+    // and the weekly confirm modal only surfaces weeks from account creation onward.
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const accountCreatedIdx = finalData.accountCreatedIdx ?? dateToWeekIdx(todayIso);
+    onComplete({ ...finalData, taxedWeeks, accountCreatedIdx, setupComplete: true });
   }
 
   const progressPct = ((stepIdx + 1) / activeSteps.length) * 100;

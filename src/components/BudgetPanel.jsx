@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
-import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck } from "../lib/expense.js";
+import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck, breakdownMonthlyEquiv } from "../lib/expense.js";
 import { formatFiscalWeekLabel, formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
@@ -234,12 +234,17 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
   };
   const shortMonth = (iso) =>
     ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(iso.split("-")[1], 10) - 1];
-  // Sum across all 12 months so monthlyOverrides are reflected in the breakdown table.
-  // 52/12 weeks per month keeps the annual total at exactly 52 weeks.
+  // Annual cost for the breakdown tab. Built to match what the user entered,
+  // using simple calendar math: a year is 52 weeks and 12 months. The per-month
+  // cycle is resolved (monthlyOverrides → byPhase → billingMeta) so the table
+  // still reflects mid-year changes. See breakdownMonthlyEquiv for the factor.
   const yearlyExpenseCost = (exp) =>
     [0,1,2,3,4,5,6,7,8,9,10,11].reduce((s, m) => {
       const key = `2026-${String(m + 1).padStart(2, "0")}`;
-      return s + getEffectiveAmountForMonth(exp, key, Math.floor(m / 3)) * (52 / 12);
+      const phaseIdx = Math.floor(m / 3);
+      const reserve = getEffectiveAmountForMonth(exp, key, phaseIdx);
+      const cycle = exp.monthlyOverrides?.[key]?.cycle ?? resolveExpenseCycle(exp, phaseIdx);
+      return s + breakdownMonthlyEquiv(reserve, cycle, exp.type === "loan");
     }, 0);
 
   // Live expense snapshot for the detail sheet — stays in sync as edits land

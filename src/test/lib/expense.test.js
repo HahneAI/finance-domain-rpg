@@ -8,6 +8,8 @@ import {
   onwardStartMonthKey,
   applyQuarterForward,
   applyAllQuarters,
+  perPaycheckFromCycle,
+  breakdownMonthlyEquiv,
 } from '../../lib/expense.js'
 import { getEffectiveAmountForMonth } from '../../lib/finance.js'
 
@@ -302,5 +304,47 @@ describe('quarter saves resolve correctly through getEffectiveAmountForMonth', (
     for (let m = 1; m <= 12; m++) {
       expect(getEffectiveAmountForMonth(saved, `2026-${String(m).padStart(2, '0')}`, Math.floor((m - 1) / 3))).toBe(60)
     }
+  })
+})
+
+// breakdownMonthlyEquiv — breakdown tab displays match what the user entered,
+// using simple 52-week / 12-month math (regression for the 4.33 over-count bug).
+// ─────────────────────────────────────────────────────────────
+describe('breakdownMonthlyEquiv', () => {
+  // Sums the per-month equivalent across 12 months to get the annual figure,
+  // exactly as BudgetPanel's breakdown tab does for a flat expense.
+  const annual = (amount, cycle, isLoan = false) => {
+    const reserve = isLoan ? amount : perPaycheckFromCycle(amount, cycle, 4)
+    return 12 * breakdownMonthlyEquiv(reserve, cycle, isLoan)
+  }
+
+  it('a $400/month bill annualizes to $4,800 (12 months), not $5,200', () => {
+    expect(annual(400, 'every30days')).toBeCloseTo(4800, 2)
+    expect(breakdownMonthlyEquiv(perPaycheckFromCycle(400, 'every30days', 4), 'every30days')).toBeCloseTo(400, 2)
+  })
+
+  it('a $100/week bill annualizes to $5,200 (52 weeks)', () => {
+    expect(annual(100, 'weekly')).toBeCloseTo(5200, 2)
+  })
+
+  it('a $200/biweekly bill annualizes to $5,200 (26 periods)', () => {
+    expect(annual(200, 'biweekly')).toBeCloseTo(5200, 2)
+  })
+
+  it('a $1,200/year bill annualizes to $1,200', () => {
+    expect(annual(1200, 'yearly')).toBeCloseTo(1200, 2)
+  })
+
+  it('loans annualize a true per-week reserve on the 52-week basis', () => {
+    // Loan reserve is already a true weekly amount (e.g. $400/mo → 400*12/52).
+    const loanWeekly = (400 * 12) / 52
+    expect(12 * breakdownMonthlyEquiv(loanWeekly, 'every30days', true)).toBeCloseTo(4800, 2)
+  })
+
+  it('monthly/yearly use a 4-week month; weekly/biweekly use 52/12', () => {
+    expect(breakdownMonthlyEquiv(100, 'every30days')).toBeCloseTo(400, 5)
+    expect(breakdownMonthlyEquiv(100, 'yearly')).toBeCloseTo(400, 5)
+    expect(breakdownMonthlyEquiv(100, 'weekly')).toBeCloseTo(100 * 52 / 12, 5)
+    expect(breakdownMonthlyEquiv(100, 'biweekly')).toBeCloseTo(100 * 52 / 12, 5)
   })
 })

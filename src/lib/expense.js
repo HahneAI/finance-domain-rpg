@@ -68,6 +68,23 @@ export const perPaycheckFromCycle = (amount, cycle, _cpm) =>
 export const cycleAmountFromPerPaycheck = (perWeek, cycle, _cpm) =>
   fromMonthlyCost(roundToQuarter(perWeek * 4), cycle);
 
+// Breakdown-tab annualization. Converts a stored weekly[q] reserve back into a
+// true monthly-equivalent cost using simple calendar math — a year is 52 weeks
+// and 12 months — so the breakdown's Weekly/Monthly/Annual columns match what the
+// user entered. Sum the result across 12 months to get the annual figure.
+//
+// The reserve does NOT mean the same thing for every expense:
+//   • Loans and weekly/biweekly bills store a true per-week amount
+//     (reserve × 52 = entered annual) → × 52/12 per month.
+//   • Monthly ("every30days") / yearly bills store monthlyCost ÷ 4, so a year is
+//     12 of those monthly amounts (reserve × 48), not 13 (reserve × 52) → × 4.
+// Using 52/12 for the monthly/yearly case is what made those bills read ~8% high.
+export const breakdownMonthlyEquiv = (reserve, cycle, isLoan = false) => {
+  const c = normalizeCycle(cycle);
+  const onWeeklyBasis = isLoan || c === "weekly" || c === "biweekly";
+  return onWeeklyBasis ? reserve * (52 / 12) : reserve * 4;
+};
+
 export const monthlyFromPerPaycheck = (perWeek, _cpm) => roundToQuarter(perWeek * 4);
 
 /**

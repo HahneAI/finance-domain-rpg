@@ -299,8 +299,8 @@ describe('WeekConfirmModal — Layer 2 surplus pre-fill', () => {
 
   it('shows gross estimate hint below the amount field for a pickup bonus', () => {
     goToLayer2Surplus()
-    // Hint: "Est. 1 pickup shift × 12h × $21.15/hr = $253.80 gross (pre-tax)"
-    expect(screen.getByText(/est\. 1 pickup shift/i)).toBeTruthy()
+    // Hint: "OT-adjusted pre-fill — hours past the 40h threshold earn 1.5×. Edit if actual payout differs."
+    expect(screen.getByText(/OT-adjusted pre-fill/i)).toBeTruthy()
   })
 })
 

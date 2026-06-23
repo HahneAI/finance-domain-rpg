@@ -307,44 +307,53 @@ describe('quarter saves resolve correctly through getEffectiveAmountForMonth', (
   })
 })
 
-// breakdownMonthlyEquiv — breakdown tab displays match what the user entered,
-// using simple 52-week / 12-month math (regression for the 4.33 over-count bug).
+// breakdownMonthlyEquiv — breakdown tab roots bills on their monthly (30-day)
+// cost: monthly is what the user entered, annual = monthly × 12, weekly = ÷ 4.
 // ─────────────────────────────────────────────────────────────
 describe('breakdownMonthlyEquiv', () => {
-  // Sums the per-month equivalent across 12 months to get the annual figure,
-  // exactly as BudgetPanel's breakdown tab does for a flat expense.
-  const annual = (amount, cycle, isLoan = false) => {
+  // The breakdown tab's three columns for a flat expense, exactly as BudgetPanel
+  // derives them: annual = 12 monthly-equivs; weekly = annual ÷ (loan ? 52 : 48).
+  const cols = (amount, cycle, isLoan = false) => {
     const reserve = isLoan ? amount : perPaycheckFromCycle(amount, cycle, 4)
-    return 12 * breakdownMonthlyEquiv(reserve, cycle, isLoan)
+    const annual = 12 * breakdownMonthlyEquiv(reserve, isLoan)
+    return { weekly: annual / (isLoan ? 52 : 48), monthly: annual / 12, annual }
   }
 
-  it('a $400/month bill annualizes to $4,800 (12 months), not $5,200', () => {
-    expect(annual(400, 'every30days')).toBeCloseTo(4800, 2)
-    expect(breakdownMonthlyEquiv(perPaycheckFromCycle(400, 'every30days', 4), 'every30days')).toBeCloseTo(400, 2)
+  it('a $400/month bill shows $100 / $400 / $4,800 (wk / mo / yr)', () => {
+    expect(cols(400, 'every30days')).toEqual({ weekly: 100, monthly: 400, annual: 4800 })
   })
 
-  it('a $100/week bill annualizes to $5,200 (52 weeks)', () => {
-    expect(annual(100, 'weekly')).toBeCloseTo(5200, 2)
+  it('a $100/week bill is rooted on its $400 monthly cost ($4,800/yr), not $5,200', () => {
+    // Weekly entry is just the monthly cost split 4 ways; it normalizes to $400/mo.
+    expect(cols(100, 'weekly')).toEqual({ weekly: 100, monthly: 400, annual: 4800 })
   })
 
-  it('a $200/biweekly bill annualizes to $5,200 (26 periods)', () => {
-    expect(annual(200, 'biweekly')).toBeCloseTo(5200, 2)
+  it('a $200/biweekly bill is rooted on its $400 monthly cost', () => {
+    expect(cols(200, 'biweekly')).toEqual({ weekly: 100, monthly: 400, annual: 4800 })
   })
 
-  it('a $1,200/year bill annualizes to $1,200', () => {
-    expect(annual(1200, 'yearly')).toBeCloseTo(1200, 2)
+  it('a $1,200/year bill shows $25 / $100 / $1,200', () => {
+    expect(cols(1200, 'yearly')).toEqual({ weekly: 25, monthly: 100, annual: 1200 })
   })
 
-  it('loans annualize a true per-week reserve on the 52-week basis', () => {
-    // Loan reserve is already a true weekly amount (e.g. $400/mo → 400*12/52).
+  it('the three columns tie out: weekly × 4 = monthly, monthly × 12 = annual', () => {
+    const { weekly, monthly, annual } = cols(637, 'every30days')
+    expect(weekly * 4).toBeCloseTo(monthly, 5)
+    expect(monthly * 12).toBeCloseTo(annual, 5)
+  })
+
+  it('a $400/month LOAN keeps its true 52-week set-aside: $92.31 / $400 / $4,800', () => {
+    // Loans store payment × 12/52 and have a real payoff, so the weekly column is
+    // the accurate set-aside the Loans tab shows, not monthly ÷ 4.
     const loanWeekly = (400 * 12) / 52
-    expect(12 * breakdownMonthlyEquiv(loanWeekly, 'every30days', true)).toBeCloseTo(4800, 2)
+    const { weekly, monthly, annual } = cols(loanWeekly, 'every30days', true)
+    expect(weekly).toBeCloseTo(92.31, 2)
+    expect(monthly).toBeCloseTo(400, 2)
+    expect(annual).toBeCloseTo(4800, 2)
   })
 
-  it('monthly/yearly use a 4-week month; weekly/biweekly use 52/12', () => {
-    expect(breakdownMonthlyEquiv(100, 'every30days')).toBeCloseTo(400, 5)
-    expect(breakdownMonthlyEquiv(100, 'yearly')).toBeCloseTo(400, 5)
-    expect(breakdownMonthlyEquiv(100, 'weekly')).toBeCloseTo(100 * 52 / 12, 5)
-    expect(breakdownMonthlyEquiv(100, 'biweekly')).toBeCloseTo(100 * 52 / 12, 5)
+  it('bills use a 4-week month (× 4); loans use 52/12', () => {
+    expect(breakdownMonthlyEquiv(100)).toBeCloseTo(400, 5)
+    expect(breakdownMonthlyEquiv(100, true)).toBeCloseTo(100 * 52 / 12, 5)
   })
 })

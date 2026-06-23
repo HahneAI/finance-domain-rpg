@@ -580,15 +580,23 @@ export default function App() {
     return payPeriodEndIso < effectiveToday;
   }, [config.employerPreset, effectiveToday, isAdmin, tempLockDate]);
 
-  // ── Auto-confirm all past weeks on first load when no confirmations exist ──
-  // Treats every historical week as fully worked (clean/net-zero). Over-assumption is fine:
-  // income projections already assume full attendance from account creation.
+  // Weeks before this fiscal idx are auto-assumed worked and never prompt the
+  // confirm modal; only weeks from account creation onward are confirmable.
+  // null (legacy accounts predating the stamp) = no floor → prior behavior.
+  const accountCreatedIdx = config.accountCreatedIdx ?? null;
+
+  // ── Auto-confirm pre-account-creation weeks on first load when no confirmations exist ──
+  // Treats every week before account creation as fully worked (clean/net-zero). Over-assumption
+  // is fine: income projections already assume full attendance from the job start date.
+  // Weeks from account creation onward are left for the user to confirm.
   // Runs once — after auto-confirm, weekConfirmations is non-empty so condition exits early.
   // NOTE: must be declared after today and allWeeks to avoid TDZ errors in the dep array.
   useEffect(() => {
     if (loading) return;
     if (Object.keys(weekConfirmations).length > 0) return;
-    const pastActiveWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
+    const pastActiveWeeks = allWeeks.filter(w =>
+      w.active && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx < accountCreatedIdx)
+    );
     if (!pastActiveWeeks.length) return;
     const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const confirmedAt = new Date().toISOString();
@@ -608,7 +616,7 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setWeekConfirmations(bulk);
-  }, [loading, weekConfirmations, allWeeks, effectiveToday, isPayPeriodPast]);
+  }, [loading, weekConfirmations, allWeeks, effectiveToday, isPayPeriodPast, accountCreatedIdx]);
 
   // ── Future active weeks: today onward, used for spend/goal simulation ──
   const futureWeeks = useMemo(() => {
@@ -627,17 +635,21 @@ export default function App() {
   // isPayWeek is set in buildYear: all active weeks for weekly, every-other for
   // biweekly/salary (driven by biweeklyPayWeekParity), last-of-month for monthly.
   const confirmTriggerWeek = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
+    const pastWeeks = allWeeks.filter(w =>
+      w.active && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx >= accountCreatedIdx)
+    );
     const unconfirmedPayWeeks = pastWeeks.filter(w => w.isPayWeek && !weekConfirmations[w.idx]);
     return unconfirmedPayWeeks.length ? unconfirmedPayWeeks[unconfirmedPayWeeks.length - 1] : null;
-  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast]);
+  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast, accountCreatedIdx]);
 
-  // Total count of all past pay weeks lacking a confirmation record.
+  // Total count of all past pay weeks (from account creation onward) lacking a confirmation record.
   // Badge accumulates across all skipped pay weeks until they are addressed.
   const unconfirmedCount = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
+    const pastWeeks = allWeeks.filter(w =>
+      w.active && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx >= accountCreatedIdx)
+    );
     return pastWeeks.filter(w => w.isPayWeek && !weekConfirmations[w.idx]).length;
-  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast]);
+  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast, accountCreatedIdx]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);

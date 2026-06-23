@@ -2,6 +2,7 @@
 
 exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations) 1`] = `
 {
+  "accountCreatedIdx": null,
   "annualSalary": null,
   "attendanceBucketEnabled": null,
   "attendanceCurrentBalance": null,

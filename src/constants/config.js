@@ -100,6 +100,10 @@ export const DEFAULT_CONFIG = {
   // ── Schedule ─────────────────────────────────────────────────
   startDate: null,             // "YYYY-MM-DD" job start — used to derive firstActiveIdx; null = not yet set
   firstActiveIdx: 7,
+  // Fiscal week idx when the account was created (stamped on setup completion).
+  // Weeks before this are auto-assumed worked; the weekly confirm modal only
+  // surfaces weeks from account creation onward. null = legacy account (no floor).
+  accountCreatedIdx: null,
 
   // ── Job Loss Mode (TODO §15.C) ───────────────────────────────
   // When jobLossMode is true, buildYear zeros out earned income for every

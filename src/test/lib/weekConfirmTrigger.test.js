@@ -36,7 +36,10 @@ function isPayPeriodPast(week, today, config, nowHour = 23) {
  * Mirrors App.jsx confirmTriggerWeek memo.
  */
 function confirmTriggerWeek(allWeeks, weekConfirmations, today, config = {}, nowHour = 23) {
-  const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w, today, config, nowHour))
+  const floor = config?.accountCreatedIdx ?? null
+  const pastWeeks = allWeeks.filter(w =>
+    w.active && isPayPeriodPast(w, today, config, nowHour) && (floor == null || w.idx >= floor)
+  )
   const unconfirmedWeeks = pastWeeks.filter(w => !weekConfirmations[w.idx])
   if (!unconfirmedWeeks.length) return null
   return unconfirmedWeeks[unconfirmedWeeks.length - 1]
@@ -44,10 +47,14 @@ function confirmTriggerWeek(allWeeks, weekConfirmations, today, config = {}, now
 
 /**
  * Returns the count of ALL unconfirmed weeks whose pay period has closed.
- * Mirrors App.jsx unconfirmedCount memo.
+ * Mirrors App.jsx unconfirmedCount memo. Weeks before config.accountCreatedIdx
+ * are auto-assumed worked and excluded.
  */
 function unconfirmedCount(allWeeks, weekConfirmations, today, config = {}, nowHour = 23) {
-  const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w, today, config, nowHour))
+  const floor = config?.accountCreatedIdx ?? null
+  const pastWeeks = allWeeks.filter(w =>
+    w.active && isPayPeriodPast(w, today, config, nowHour) && (floor == null || w.idx >= floor)
+  )
   return pastWeeks.filter(w => !weekConfirmations[w.idx]).length
 }
 
@@ -261,5 +268,42 @@ describe('unconfirmedCount', () => {
   it('badge accumulates — confirming newest week does not reduce count of older ones', () => {
     const weeks = [makeWeek(1, '2026-01-12'), makeWeek(2, '2026-01-19'), makeWeek(3, '2026-01-26')]
     expect(unconfirmedCount(weeks, { 3: {} }, '2026-01-26')).toBe(2)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// accountCreatedIdx floor — weeks before account creation are auto-assumed worked
+// and must never surface in the confirm modal or the unconfirmed badge.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('accountCreatedIdx floor', () => {
+  const weeks = [makeWeek(1, '2026-01-12'), makeWeek(2, '2026-01-19'), makeWeek(3, '2026-01-26')]
+  const today = '2026-02-02' // all three weeks are past
+
+  it('excludes weeks before account creation from the unconfirmed count', () => {
+    // Account created at week 3 → weeks 1 and 2 are pre-creation, only week 3 counts.
+    expect(unconfirmedCount(weeks, {}, today, { accountCreatedIdx: 3 })).toBe(1)
+  })
+
+  it('does not surface a pre-creation week in the confirm modal', () => {
+    // No confirmations at all, but account created at week 3 → modal only offers week 3.
+    const trigger = confirmTriggerWeek(weeks, {}, today, { accountCreatedIdx: 3 })
+    expect(trigger.idx).toBe(3)
+  })
+
+  it('returns null when every past week predates account creation', () => {
+    // Brand-new account: creation idx is beyond all past weeks → nothing to confirm.
+    expect(confirmTriggerWeek(weeks, {}, today, { accountCreatedIdx: 4 })).toBeNull()
+    expect(unconfirmedCount(weeks, {}, today, { accountCreatedIdx: 4 })).toBe(0)
+  })
+
+  it('legacy accounts (no accountCreatedIdx) keep prior behavior — all past weeks count', () => {
+    expect(unconfirmedCount(weeks, {}, today)).toBe(3)
+    expect(unconfirmedCount(weeks, {}, today, { accountCreatedIdx: null })).toBe(3)
+  })
+
+  it('a week exactly at the creation idx is confirmable (boundary is inclusive)', () => {
+    expect(unconfirmedCount(weeks, {}, today, { accountCreatedIdx: 2 })).toBe(2)
+    expect(confirmTriggerWeek(weeks, {}, today, { accountCreatedIdx: 2 }).idx).toBe(3)
   })
 })

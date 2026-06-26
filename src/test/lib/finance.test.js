@@ -35,7 +35,8 @@ import { DEFAULT_CONFIG, DHL_PRESET } from '../../constants/config.js'
 // DHL_CONFIG: exercises DHL rotation + customWeeklyHours behavior (the "Anthony tier").
 // startingWeekIsLong=false with firstActiveIdx=7 → even idx = long (6-Day).
 // customWeeklyHours=60 overrides hours for projection math; rotation days preserved for
-// WeekConfirmModal display. requiredOtShifts: 0 for long weeks (5 days×12=60h, already at target), 1 for short weeks (4 days×12=48h, 1 extra shift to reach 60h).
+// WeekConfirmModal display. requiredOtShifts (schedule-extension shifts to reach the 60h
+// target, no mandatory OT): 1 for long weeks (4 core days×12=48h → 1 extra), 2 for short weeks (3 core days×12=36h → 2 extra).
 const DHL_CONFIG = {
   ...DEFAULT_CONFIG,
   employerPreset: "DHL",
@@ -180,24 +181,24 @@ describe('buildYear', () => {
     expect(fourDay.totalHours).toBe(60)
   })
 
-  it('6-Day (long) weeks have 24 weekend hours (Sat + Sun core, Mon OT is weekday)', () => {
-    // B-team long rotation: Tue/Wed/Sat/Sun + Mon OT. Sat=12h, Sun=12h, others=0.
+  it('6-Day (long) weeks have 24 weekend hours (Sat + Sun core)', () => {
+    // B-team long core rotation: Tue/Wed/Sat/Sun. Sat=12h, Sun=12h, others=0.
     const sixDay = weeks.find(w => w.rotation === '6-Day')
     expect(sixDay.weekendHours).toBe(24)
   })
 
   it('4-Day (short) weeks have 6 weekend hours (Fri midnight → Sat 6a only)', () => {
-    // B-team short rotation: Mon/Thu/Fri + Tue OT. Fri earns half diff (6h), others=0.
+    // B-team short core rotation: Mon/Thu/Fri. Fri earns half diff (6h), others=0.
     const fourDay = weeks.find(w => w.rotation === '4-Day')
     expect(fourDay.weekendHours).toBe(6)
   })
 
-  it('6-Day (long) weeks need 0 extra OT shifts; 4-Day (short) weeks need 1 extra OT shift (60h target)', () => {
-    // Long: 5 scheduled days × 12h = 60h = target → 0 extra. Short: 4 days × 12h = 48h → 1 extra.
+  it('6-Day (long) weeks need 1 extension shift; 4-Day (short) weeks need 2 extension shifts (60h target)', () => {
+    // Long: 4 core days × 12h = 48h → 1 extra to reach 60h. Short: 3 days × 12h = 36h → 2 extra.
     const sixDay = weeks.find(w => w.rotation === '6-Day')
     const fourDay = weeks.find(w => w.rotation === '4-Day')
-    expect(sixDay.requiredOtShifts).toBe(0)
-    expect(fourDay.requiredOtShifts).toBe(1)
+    expect(sixDay.requiredOtShifts).toBe(1)
+    expect(fourDay.requiredOtShifts).toBe(2)
   })
 
   it('6-Day active weeks have higher grossPay than 4-Day active weeks', () => {
@@ -303,7 +304,7 @@ describe('buildYear', () => {
     expect(post401k.payrollDeductions.total).toBeCloseTo(post401k.benefitsDeduction + post401k.k401kEmployee)
   })
 
-  it('standard DHL preset rotation schedules 5-day long weeks and enforces required OT even without dhlTeam', () => {
+  it('standard DHL preset rotation schedules core-only weeks (4-day long, 3-day short) with no mandatory OT even without dhlTeam', () => {
     const presetConfig = {
       ...DHL_STANDARD_CONFIG,
       dhlTeam: null,                 // new hires may not have picked a team yet
@@ -314,9 +315,9 @@ describe('buildYear', () => {
     expect(activeWeeks.length).toBeGreaterThan(0)
     const longWeek  = activeWeeks.find(w => w.rotation === '6-Day')
     const shortWeek = activeWeeks.find(w => w.rotation === '4-Day')
-    expect(longWeek.totalHours).toBe((presetConfig.shiftHours || 12) * 5)
-    expect(shortWeek.totalHours).toBe((presetConfig.shiftHours || 12) * 4)
-    expect(longWeek.requiredOtShifts).toBe(DHL_PRESET.requiredOtShifts)
+    expect(longWeek.totalHours).toBe((presetConfig.shiftHours || 12) * 4)
+    expect(shortWeek.totalHours).toBe((presetConfig.shiftHours || 12) * 3)
+    expect(longWeek.requiredOtShifts).toBe(DHL_PRESET.requiredOtShifts)  // 0 — OT no longer mandatory
     expect(shortWeek.requiredOtShifts).toBe(DHL_PRESET.requiredOtShifts)
   })
 
@@ -344,22 +345,22 @@ describe('customWeeklyHours', () => {
     expect(short.totalHours).toBe(60)
   })
 
-  it('DHL: requiredOtShifts is extra shifts beyond already-scheduled rotation hours', () => {
-    // 60h target: long 5×12=60h → 0 extra; short 4×12=48h → 1 extra shift to reach target
+  it('DHL: requiredOtShifts is the extension shifts needed to reach the custom target', () => {
+    // 60h target: long 4×12=48h core → 1 extra; short 3×12=36h core → 2 extra shifts to reach target
     const weeks = buildYear(DHL_CONFIG)
     const long = weeks.find(w => w.active && w.rotation === '6-Day')
     const short = weeks.find(w => w.active && w.rotation === '4-Day')
-    expect(long.requiredOtShifts).toBe(0)
-    expect(short.requiredOtShifts).toBe(1)
+    expect(long.requiredOtShifts).toBe(1)
+    expect(short.requiredOtShifts).toBe(2)
   })
 
-  it('DHL: customWeeklyHours=null (preset) uses rotation hours and requiredOtShifts=1', () => {
-    // DHL_STANDARD_CONFIG has no customWeeklyHours — standard preset behavior
+  it('DHL: customWeeklyHours=null (preset) uses core rotation hours and requiredOtShifts=0', () => {
+    // DHL_STANDARD_CONFIG has no customWeeklyHours — core-only preset, no mandatory OT
     const weeks = buildYear(DHL_STANDARD_CONFIG)
     const long = weeks.find(w => w.active && w.rotation === '6-Day')
     const short = weeks.find(w => w.active && w.rotation === '4-Day')
-    expect(long.totalHours).toBe(DHL_PRESET.rotation.long.days.length * DHL_STANDARD_CONFIG.shiftHours + DHL_PRESET.otShiftHours)
-    expect(short.totalHours).toBe(DHL_PRESET.rotation.short.days.length * DHL_STANDARD_CONFIG.shiftHours + DHL_PRESET.otShiftHours)
+    expect(long.totalHours).toBe(DHL_PRESET.rotation.long.days.length * DHL_STANDARD_CONFIG.shiftHours)
+    expect(short.totalHours).toBe(DHL_PRESET.rotation.short.days.length * DHL_STANDARD_CONFIG.shiftHours)
     expect(long.requiredOtShifts).toBe(DHL_PRESET.requiredOtShifts)
     expect(short.requiredOtShifts).toBe(DHL_PRESET.requiredOtShifts)
   })
@@ -371,9 +372,9 @@ describe('customWeeklyHours', () => {
     // Rotation labels stay from DHL preset
     expect(long.rotationLabel).toBe('Long Week')
     expect(short.rotationLabel).toBe('Short Week')
-    // Day names are B-team preset (5 days for long, 4 for short)
-    expect(long.workedDayNames).toHaveLength(5)
-    expect(short.workedDayNames).toHaveLength(4)
+    // Day names are B-team core preset (4 days for long, 3 for short — no mandatory OT day)
+    expect(long.workedDayNames).toHaveLength(4)
+    expect(short.workedDayNames).toHaveLength(3)
   })
 
   it('DHL: grossPay is higher for long weeks than short weeks (more weekend hours at 60h total)', () => {
@@ -384,10 +385,10 @@ describe('customWeeklyHours', () => {
     expect(long.grossPay).toBeGreaterThan(short.grossPay)
   })
 
-  it('DHL: customWeeklyHours=48 trims long week worked days to 4 (drops Mon OT day)', () => {
-    // B-team long rotation: 5 days (Tue/Wed/Sat/Sun + Mon OT) = 60h.
-    // With customWeeklyHours=48, targetShifts=4, Mon (OT default) is dropped first.
-    // weekendHours stays 24 (Sat+Sun) since Mon has no diff contribution.
+  it('DHL: customWeeklyHours=48 keeps the 4-day long core and projects 48h flat', () => {
+    // B-team long core rotation: 4 days (Tue/Wed/Sat/Sun) = 48h — already at the 48h target.
+    // Short core is 3 days (36h); the 12h gap is an extension shift, so totalHours is forced to 48.
+    // weekendHours: long Sat+Sun (24h), short Fri half (6h).
     const cfg = {
       ...DEFAULT_CONFIG,
       employerPreset: 'DHL',
@@ -403,11 +404,11 @@ describe('customWeeklyHours', () => {
     // Both weeks flat at 48h
     expect(long.totalHours).toBe(48)
     expect(short.totalHours).toBe(48)
-    // Long week trimmed from 5 to 4 shifts (dropped Mon OT day)
+    // Long core is already 4 shifts — no Mon (Mon is not a long-core day)
     expect(long.workedDayNames).toHaveLength(4)
     expect(long.workedDayNames).not.toContain('Mon')
-    // Short week already 4 shifts — unchanged
-    expect(short.workedDayNames).toHaveLength(4)
+    // Short core is 3 shifts (extension shift not baked into worked days)
+    expect(short.workedDayNames).toHaveLength(3)
     // weekend hours: long keeps Sat+Sun (24h), short keeps Fri half (6h)
     expect(long.weekendHours).toBe(24)
     expect(short.weekendHours).toBe(6)
@@ -727,17 +728,17 @@ describe('projectedGross', () => {
   it('DHL: calculates correct gross for long week (standard rotation, no customWeeklyHours)', () => {
     const cfg = DHL_STANDARD_CONFIG
     const rate = cfg.baseRate + cfg.nightDiffRate  // 21.15
-    // Long: 5 shifts×12h=60h. wkndH=24 (Sat+Sun). nonWkndH=36. regWknd=4, otWknd=20. reg=40, ot=20.
-    const expected = 40*rate + 4*cfg.diffRate + 20*rate*cfg.otMultiplier + 20*cfg.diffRate*cfg.otMultiplier
-    expect(projectedGross(true, cfg)).toBeCloseTo(expected)  // 1540
+    // Long: 4 core shifts×12h=48h (no mandatory OT). wkndH=24 (Sat+Sun). nonWkndH=24. regWknd=16, otWknd=8. reg=40, ot=8.
+    const expected = 40*rate + 16*cfg.diffRate + 8*rate*cfg.otMultiplier + 8*cfg.diffRate*cfg.otMultiplier
+    expect(projectedGross(true, cfg)).toBeCloseTo(expected)  // 1148.8
   })
 
   it('DHL: calculates correct gross for short week (standard rotation, no customWeeklyHours)', () => {
     const cfg = DHL_STANDARD_CONFIG
     const rate = cfg.baseRate + cfg.nightDiffRate  // 21.15
-    // Short: 4 shifts×12h=48h. wkndH=6 (Fri). nonWkndH=42. regWknd=0, otWknd=6. reg=40, ot=8.
-    const expected = 40*rate + 8*rate*cfg.otMultiplier + 6*cfg.diffRate*cfg.otMultiplier
-    expect(projectedGross(false, cfg)).toBeCloseTo(expected)  // 1115.55
+    // Short: 3 core shifts×12h=36h (no mandatory OT). wkndH=6 (Fri). nonWkndH=30. regWknd=6, otWknd=0. reg=36, ot=0.
+    const expected = 36*rate + 6*cfg.diffRate
+    expect(projectedGross(false, cfg)).toBeCloseTo(expected)  // 771.9
   })
 
   it('matches the grossPay of the corresponding active week from buildYear', () => {

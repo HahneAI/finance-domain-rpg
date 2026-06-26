@@ -355,12 +355,13 @@ export function getStateConfig(userState) {
 //
 //   DHL preset   (!customWeeklyHours, !dhlCustomSchedule)
 //     Alternates long/short from firstActiveIdx using DHL_PRESET day arrays.
-//     requiredOtShifts = 1 for all weeks (user picks OT day in WeekConfirmModal).
+//     requiredOtShifts = 0 — no mandatory OT; extra shifts are optional pickups.
 //
 //   DHL custom hours (customWeeklyHours set, !dhlCustomSchedule)
 //     Same rotation day arrays for workedDayNames / WeekConfirmModal display.
 //     totalHours overridden to customWeeklyHours for all projection math.
-//     requiredOtShifts = (customWeeklyHours − coreHours) / shiftHours per week.
+//     requiredOtShifts = (customWeeklyHours − coreHours) / shiftHours per week —
+//     "schedule extension" shifts needed to reach the custom target (not OT).
 //
 //   DHL legacy (dhlCustomSchedule: true) — kept until db.js migration window closes.
 //     Uses hardcoded CUSTOM_LONG/SHORT_DAY_INDEXES. requiredOtShifts = 0.

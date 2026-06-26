@@ -21,6 +21,8 @@ import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
 import { JobLossEntry } from "./components/JobLossEntry.jsx";
 import { ExpenseTriage } from "./components/ExpenseTriage.jsx";
 import { JobLossDashboard } from "./components/JobLossDashboard.jsx";
+import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
+import { isStandaloneDisplayMode } from "./lib/pwa.js";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -204,6 +206,11 @@ export default function App() {
   // "home" is always the base — never popped below depth 1.
   const [viewStack, setViewStack] = useState(["home"]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // PWA install instructions modal — single instance at the app root, opened from
+  // both the drawer and the Account panel. Hidden entirely when already installed.
+  const pwaModalRef = useRef(null);
+  const isStandalone = useMemo(() => isStandaloneDisplayMode(), []);
+  const openPwaModal = useCallback((triggerEl) => pwaModalRef.current?.open(triggerEl), []);
   // Investor pre-auth state — set when a valid code is entered on LoginScreen.
   // Cleared on sign-out or when the user navigates back from InvestorRegister.
   const [investorSession, setInvestorSession] = useState(null); // null | { code: string }
@@ -576,15 +583,23 @@ export default function App() {
     return payPeriodEndIso < effectiveToday;
   }, [config.employerPreset, effectiveToday, isAdmin, tempLockDate]);
 
-  // ── Auto-confirm all past weeks on first load when no confirmations exist ──
-  // Treats every historical week as fully worked (clean/net-zero). Over-assumption is fine:
-  // income projections already assume full attendance from account creation.
+  // Weeks before this fiscal idx are auto-assumed worked and never prompt the
+  // confirm modal; only weeks from account creation onward are confirmable.
+  // null (legacy accounts predating the stamp) = no floor → prior behavior.
+  const accountCreatedIdx = config.accountCreatedIdx ?? null;
+
+  // ── Auto-confirm pre-account-creation weeks on first load when no confirmations exist ──
+  // Treats every week before account creation as fully worked (clean/net-zero). Over-assumption
+  // is fine: income projections already assume full attendance from the job start date.
+  // Weeks from account creation onward are left for the user to confirm.
   // Runs once — after auto-confirm, weekConfirmations is non-empty so condition exits early.
   // NOTE: must be declared after today and allWeeks to avoid TDZ errors in the dep array.
   useEffect(() => {
     if (loading) return;
     if (Object.keys(weekConfirmations).length > 0) return;
-    const pastActiveWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
+    const pastActiveWeeks = allWeeks.filter(w =>
+      w.active && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx < accountCreatedIdx)
+    );
     if (!pastActiveWeeks.length) return;
     const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const confirmedAt = new Date().toISOString();
@@ -604,7 +619,7 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setWeekConfirmations(bulk);
-  }, [loading, weekConfirmations, allWeeks, effectiveToday, isPayPeriodPast]);
+  }, [loading, weekConfirmations, allWeeks, effectiveToday, isPayPeriodPast, accountCreatedIdx]);
 
   // ── Future active weeks: today onward, used for spend/goal simulation ──
   const futureWeeks = useMemo(() => {
@@ -623,17 +638,21 @@ export default function App() {
   // isPayWeek is set in buildYear: all active weeks for weekly, every-other for
   // biweekly/salary (driven by biweeklyPayWeekParity), last-of-month for monthly.
   const confirmTriggerWeek = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
+    const pastWeeks = allWeeks.filter(w =>
+      w.active && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx >= accountCreatedIdx)
+    );
     const unconfirmedPayWeeks = pastWeeks.filter(w => w.isPayWeek && !weekConfirmations[w.idx]);
     return unconfirmedPayWeeks.length ? unconfirmedPayWeeks[unconfirmedPayWeeks.length - 1] : null;
-  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast]);
+  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast, accountCreatedIdx]);
 
-  // Total count of all past pay weeks lacking a confirmation record.
+  // Total count of all past pay weeks (from account creation onward) lacking a confirmation record.
   // Badge accumulates across all skipped pay weeks until they are addressed.
   const unconfirmedCount = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
+    const pastWeeks = allWeeks.filter(w =>
+      w.active && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx >= accountCreatedIdx)
+    );
     return pastWeeks.filter(w => w.isPayWeek && !weekConfirmations[w.idx]).length;
-  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast]);
+  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast, accountCreatedIdx]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);
@@ -1019,6 +1038,7 @@ export default function App() {
         taxProjectionsEnabled={taxProjectionsEnabled}
         today={effectiveToday}
         weekConfirmations={weekConfirmations}
+        onInstallClick={isStandalone ? null : openPwaModal}
       />}
     </>
   );
@@ -1763,6 +1783,31 @@ export default function App() {
             >
               Life Events
             </button>
+            {!isStandalone && (
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                aria-controls="pwa-install-dialog"
+                onClick={(e) => { openPwaModal(e.currentTarget); setDrawerOpen(false); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: "10px",
+                  width: "100%", textAlign: "left",
+                  padding: "14px 20px", fontSize: "11px",
+                  letterSpacing: "2px", textTransform: "uppercase",
+                  background: "transparent",
+                  color: "var(--color-text-primary)",
+                  borderLeft: "3px solid transparent",
+                  border: "none", cursor: "pointer", transition: "all 0.15s",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Install on home screen
+              </button>
+            )}
           </div>
         </nav>
 
@@ -2625,6 +2670,9 @@ export default function App() {
           onDismiss={() => setConfirmDismissed(true)}
         />
       )}
+      {/* ── PWA install instructions (§16) — single instance, opened from drawer + Account panel ── */}
+      <PwaInstallModal ref={pwaModalRef} />
+
       {/* ── Life Events menu (entry point modal — TODO §15.A) ── */}
       <LifeEventMenu
         open={lifeEventMenu}

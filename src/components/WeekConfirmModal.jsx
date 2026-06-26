@@ -113,7 +113,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
 
   // ── Layer 2 form state (mirrors LogPanel's blank event shape) ─────────────
   const [eventVals, setEventVals] = useState({});
-  // DHL OT confirmation — one entry per requiredOtShifts slot: null=unanswered, "missed", or a day name
+  // Schedule-extension confirmation — one entry per requiredOtShifts slot: null=unanswered, "missed", or a day name
   const requiredOtCount = week.requiredOtShifts ?? 0;
   const [otDays, setOtDays] = useState(() => Array(requiredOtCount).fill(null));
 
@@ -145,15 +145,17 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
   const baseCeilingHours = isBaseUser ? (config.maxWeeklyHours ?? config.standardWeeklyHours ?? 0) : 0;
   const baseCeilingShifts = baseCeilingHours > 0 ? Math.round(baseCeilingHours / (config.shiftHours || 8)) : 0;
 
-  // DHL OT tracking — must be declared before pickupDays/totalHoursPlanned/extraPickupCandidates
+  // Schedule-extension tracking — must be declared before pickupDays/totalHoursPlanned/extraPickupCandidates
   // which all reference workedOtDays. Moving these up avoids a TDZ ReferenceError when
   // hasCustomSchedule is true (short-circuit no longer hides the access).
-  const requiresOtSelection = isEmployerDHL && requiredOtCount > 0;
+  // DHL preset no longer mandates OT (requiredOtShifts is 0), so this selector is
+  // exclusive to the custom-hours flow — gated on hasCustomSchedule to keep it that way.
+  const requiresOtSelection = isEmployerDHL && requiredOtCount > 0 && hasCustomSchedule;
   const anyOtMissed = otDays.some(d => d === "missed");
   const missedOtCount = otDays.filter(d => d === "missed").length;
   const workedOtDays = otDays.filter(d => d && d !== "missed");
 
-  // Custom-schedule users: exclude confirmed OT days from pickups so hitting the
+  // Custom-schedule users: exclude confirmed extension days from pickups so hitting the
   // custom target via requiredOtShifts doesn't inflate netShiftDelta as a "bonus".
   const pickupDays = DAY_NAMES.filter(d =>
     !scheduledDays.includes(d) &&
@@ -170,7 +172,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
   const allMissedPreLogged = preLoggedMissedDays.size > 0
     && missedScheduledDays.length > 0
     && missedScheduledDays.every(d => preLoggedMissedDays.has(d));
-  // Total planned hours: scheduled worked + confirmed OT + extra pickups
+  // Total planned hours: scheduled worked + confirmed extension shifts + extra pickups
   const totalHoursPlanned = hasCustomSchedule
     ? (scheduledDays.length - missedScheduledDays.length + workedOtDays.length + pickupDays.length) * config.shiftHours
     : null;
@@ -205,7 +207,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
     }
   }, [requiresOtSelection]);
 
-  // Sets a specific OT slot; keeps dayToggles in sync for the changed slot.
+  // Sets a specific extension-shift slot; keeps dayToggles in sync for the changed slot.
   const selectOtDayAt = (slotIdx, value) => {
     const oldValue = otDays[slotIdx];
     setOtDays(prev => {
@@ -238,7 +240,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       // Unscheduled: null (off) ↔ true (pickup)
       [day]: newVal,
     }));
-    // Auto-sync the OT/extension slot: picking up an unscheduled day fills the
+    // Auto-sync the extension-shift slot: picking up an unscheduled day fills the
     // first empty slot so the user doesn't have to select the same day twice.
     if (!isScheduled && requiresOtSelection) {
       if (newVal === true) {
@@ -310,7 +312,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
     if (otSelectionMissing) {
       return;
     }
-    // DHL preset: any missed OT → pre-fill Layer 2 as unapproved miss (hits bucket hours)
+    // Custom-hours schedule extension: any missed extension shift → pre-fill Layer 2 as unapproved miss (hits bucket hours)
     if (requiresOtSelection && anyOtMissed) {
       setEventVals({
         weekEnd: toLocalIso(week.weekEnd),
@@ -323,9 +325,9 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
         hoursLost: missedOtCount * config.shiftHours,
         amount: 0,
         ptoHours: 0,
-        note: hasCustomSchedule
-          ? (missedOtCount === 1 ? `Custom schedule extension shift not worked (${weeklyTarget}h target)` : `${missedOtCount} custom schedule extension shifts not worked (${weeklyTarget}h target)`)
-          : (missedOtCount === 1 ? "Mandatory OT shift not worked" : `${missedOtCount} mandatory OT shifts not worked`),
+        note: missedOtCount === 1
+          ? `Custom schedule extension shift not worked (${weeklyTarget}h target)`
+          : `${missedOtCount} custom schedule extension shifts not worked (${weeklyTarget}h target)`,
       });
       setLayer(2);
       setWentToLayer2(true);
@@ -462,7 +464,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       })() : 0,
       ptoHours: 0,
       note: requiresOtSelection && workedOtDays.length > 0
-        ? workedOtDays.map(d => `OT day: ${d}${["Sat", "Sun"].includes(d) ? " (weekend — diff applies)" : ""}`).join("; ")
+        ? workedOtDays.map(d => `Extension day: ${d}${["Sat", "Sun"].includes(d) ? " (weekend — diff applies)" : ""}`).join("; ")
         : "",
     });
     if (isDeficit && showCoreDayPills && missedCoreDays.length > 0) setIsMissedCoreEntry(true);
@@ -794,14 +796,10 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
               {requiresOtSelection && (
                 <div style={{ margin: "12px 20px 0", padding: "12px 14px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "6px" }}>
-                    {hasCustomSchedule
-                      ? `Schedule Extension — ${requiredOtCount === 1 ? "1 additional shift" : `${requiredOtCount} additional shifts`} to reach ${weeklyTarget}h`
-                      : `Mandatory OT ${requiredOtCount === 1 ? "Shift" : `Shifts (${requiredOtCount} required)`}`}
+                    {`Schedule Extension — ${requiredOtCount === 1 ? "1 additional shift" : `${requiredOtCount} additional shifts`} to reach ${weeklyTarget}h`}
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5", marginBottom: "10px" }}>
-                    {hasCustomSchedule
-                      ? `Your ${weeklyTarget}h/week target requires ${requiredOtCount === 1 ? "1 extra shift" : `${requiredOtCount} extra shifts`} beyond your base rotation. Pick the day${requiredOtCount !== 1 ? "s" : ""} you worked or mark as missed — missed shifts hit your attendance bucket.`
-                      : `DHL rotations include ${requiredOtCount === 1 ? "a required OT shift" : `${requiredOtCount} required OT shifts`} each week. Pick the day you worked or mark "Missed". Weekend selections automatically apply the differential.`}
+                    {`Your ${weeklyTarget}h/week target requires ${requiredOtCount === 1 ? "1 extra shift" : `${requiredOtCount} extra shifts`} beyond your base rotation. Pick the day${requiredOtCount !== 1 ? "s" : ""} you worked or mark as missed — missed shifts hit your attendance bucket.`}
                   </div>
                   {Array.from({ length: requiredOtCount }, (_, slotIdx) => {
                     const otDaysWorkedOtherSlots = otDays.filter((d, i) => i !== slotIdx && d && d !== "missed");
@@ -812,7 +810,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                       <div key={slotIdx} style={{ marginTop: slotIdx > 0 ? "12px" : "0" }}>
                         {requiredOtCount > 1 && (
                           <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1px", marginBottom: "6px", textTransform: "uppercase" }}>
-                            {hasCustomSchedule ? `Extension Shift ${slotIdx + 1}` : `OT Shift ${slotIdx + 1}`}
+                            {`Extension Shift ${slotIdx + 1}`}
                           </div>
                         )}
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>

@@ -1699,11 +1699,12 @@ function TaxExemptPreview() {
       display: "flex", flexDirection: "column", gap: "8px",
     }}>
       <div style={{ fontSize: "11px", color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
-        Tax-Exempt Projections Unlocked
+        Tax-Exempt Projections — Coming Soon
       </div>
       <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
-        Tax-exempt week projections will appear in the Income panel. Remember to set aside the
-        withheld amount each of those weeks — the dashboard will calculate the suggested reserve.
+        Thanks — we've noted that you'd like tax-exempt week projections. The feature is being
+        finalized and will be turned on for your account once it's ready. Until then, your
+        paychecks use standard withholding and nothing here changes.
       </div>
     </div>
   );
@@ -1945,7 +1946,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
               fontWeight: 700, textTransform: "uppercase", cursor: "pointer",
               alignSelf: "flex-start",
             }}>
-              Unlock projections
+              Request access
             </button>
           </div>
         ) : (
@@ -2136,7 +2137,12 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
     const taxedWeeks = allWeeks
       .filter(w => w.idx >= (finalData.firstActiveIdx ?? 0))
       .map(w => w.idx);
-    onComplete({ ...finalData, taxedWeeks, setupComplete: true });
+    // Stamp the account-creation week so weeks before today are auto-assumed worked
+    // and the weekly confirm modal only surfaces weeks from account creation onward.
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const accountCreatedIdx = finalData.accountCreatedIdx ?? dateToWeekIdx(todayIso);
+    onComplete({ ...finalData, taxedWeeks, accountCreatedIdx, setupComplete: true });
   }
 
   const progressPct = ((stepIdx + 1) / activeSteps.length) * 100;

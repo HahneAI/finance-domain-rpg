@@ -5,6 +5,7 @@ import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js"
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, PanelHero, SH } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
+import { canAccessTaxPlan } from "../lib/entitlements.js";
 import { InvestorAdminPanel } from "./InvestorAdminPanel.jsx";
 
 // Account panel uses white (primary) labels instead of the shared dim label color.
@@ -1194,7 +1195,11 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
   );
 }
 
-function PreferencesDetail({ config, setConfig, onSaveConfig, onBack }) {
+function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeatureUnlocked = false }) {
+  // Reflect tax-exempt status only when the tax feature is unlocked. taxExemptOptIn
+  // is ignored by the withholding math, so for everyone else "Standard withholding"
+  // is both the safe and the accurate label (avoids implying an exemption isn't real).
+  const showTaxExempt = taxFeatureUnlocked && config.taxExemptOptIn;
   const [editingBuffer, setEditingBuffer] = useState(false);
   const [bufferEnabled, setBufferEnabled] = useState(config.bufferEnabled ?? true);
   const [paycheckBuffer, setPaycheckBuffer] = useState(config.paycheckBuffer ?? 50);
@@ -1248,8 +1253,8 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack }) {
         )}
         <DetailRow
           label="Tax Exempt"
-          value={config.taxExemptOptIn ? "Opted in" : "Standard withholding"}
-          valueColor={config.taxExemptOptIn ? "var(--color-gold)" : "var(--color-text-secondary)"}
+          value={showTaxExempt ? "Opted in" : "Standard withholding"}
+          valueColor={showTaxExempt ? "var(--color-gold)" : "var(--color-text-secondary)"}
           last
         />
       </DetailCard>
@@ -1576,7 +1581,11 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, today, weekConfirmations = {}, onInstallClick }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, today, weekConfirmations = {} }) {
+  // Tax Plan unlock is manual-only for now (admin or the per-user
+  // tax_projections_enabled flag). The setup wizard's "Unlock projections" choice
+  // intentionally does NOT reveal it — see canAccessTaxPlan for why.
+  const canSeeTaxPlan = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled });
   const [activeSection, setActiveSection] = useState(null);
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
   const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });
@@ -1617,9 +1626,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
     return <BenefitsDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "preferences") {
-    return <PreferencesDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
+    return <PreferencesDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} taxFeatureUnlocked={canSeeTaxPlan} />;
   }
-  if (activeSection === "taxplan") {
+  if (activeSection === "taxplan" && canSeeTaxPlan) {
     return <TaxPlanDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} today={today} weekConfirmations={weekConfirmations} />;
   }
   if (activeSection === "investorcodes") {
@@ -1662,15 +1671,16 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         />
         <ListRow
           label="App Preferences"
-          summary={config.bufferEnabled ? `Buffer $${config.paycheckBuffer}/check · ${config.taxExemptOptIn ? "Tax exempt on" : "Standard tax"}` : `Buffer off · ${config.taxExemptOptIn ? "Tax exempt on" : "Standard tax"}`}
+          summary={`${config.bufferEnabled ? `Buffer $${config.paycheckBuffer}/check` : "Buffer off"} · ${canSeeTaxPlan && config.taxExemptOptIn ? "Tax exempt on" : "Standard tax"}`}
           onPress={() => setActiveSection("preferences")}
-          last={!isAdmin}
+          last={!canSeeTaxPlan && !isAdmin}
         />
-        {isAdmin && (
+        {canSeeTaxPlan && (
           <ListRow
             label="Tax Plan"
             summary={`${config.taxedWeeks?.length ?? 0} taxed weeks · target $${config.targetOwedAtFiling} owed`}
             onPress={() => setActiveSection("taxplan")}
+            last={!isAdmin}
           />
         )}
         {isAdmin && (

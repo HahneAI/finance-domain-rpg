@@ -1002,6 +1002,7 @@ export default function App() {
         config={config}
         bufferPerWeek={bufferPerWeek}
         isAdmin={isAdmin}
+        taxProjectionsEnabled={taxProjectionsEnabled}
       />}
       {currentView === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}

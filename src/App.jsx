@@ -630,26 +630,57 @@ export default function App() {
   // Cleared by badge click so the modal re-opens. Resets to false on page reload.
   const [confirmDismissed, setConfirmDismissed] = useState(false);
 
-  // ── Week confirmation modal trigger ──
-  // Surfaces the most-recent UNCONFIRMED pay week whose pay period has closed.
-  // isPayWeek is set in buildYear: all active weeks for weekly, every-other for
-  // biweekly/salary (driven by biweeklyPayWeekParity), last-of-month for monthly.
-  const confirmTriggerWeek = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w =>
-      w.active && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx >= accountCreatedIdx)
-    );
-    const unconfirmedPayWeeks = pastWeeks.filter(w => w.isPayWeek && !weekConfirmations[w.idx]);
-    return unconfirmedPayWeeks.length ? unconfirmedPayWeeks[unconfirmedPayWeeks.length - 1] : null;
-  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast, accountCreatedIdx]);
+  // ── Pay weeks eligible for the confirm modal ──
+  // Closed-pay-period pay weeks from account creation onward. isPayWeek is set in
+  // buildYear: all active weeks for weekly, every-other for biweekly/salary
+  // (driven by biweeklyPayWeekParity), last-of-month for monthly.
+  const eligiblePastPayWeeks = useMemo(() =>
+    allWeeks.filter(w =>
+      w.active && w.isPayWeek && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx >= accountCreatedIdx)
+    ),
+    [allWeeks, effectiveToday, isPayPeriodPast, accountCreatedIdx]
+  );
 
-  // Total count of all past pay weeks (from account creation onward) lacking a confirmation record.
+  // ── Week confirmation modal trigger ──
+  // Surfaces the most-recent UNCONFIRMED eligible pay week.
+  const confirmTriggerWeek = useMemo(() => {
+    const unconfirmed = eligiblePastPayWeeks.filter(w => !weekConfirmations[w.idx]);
+    return unconfirmed.length ? unconfirmed[unconfirmed.length - 1] : null;
+  }, [eligiblePastPayWeeks, weekConfirmations]);
+
+  // Total count of all eligible pay weeks lacking a confirmation record.
   // Badge accumulates across all skipped pay weeks until they are addressed.
-  const unconfirmedCount = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w =>
-      w.active && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx >= accountCreatedIdx)
-    );
-    return pastWeeks.filter(w => w.isPayWeek && !weekConfirmations[w.idx]).length;
-  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast, accountCreatedIdx]);
+  const unconfirmedCount = useMemo(() =>
+    eligiblePastPayWeeks.filter(w => !weekConfirmations[w.idx]).length,
+    [eligiblePastPayWeeks, weekConfirmations]
+  );
+
+  // ── Admin: most-recent CONFIRMED eligible pay week (null when none) ──
+  // The "Reopen Last Check-In" tool targets this week so admins can re-review
+  // the weekly confirm modal on demand.
+  const reopenableWeekIdx = useMemo(() => {
+    const confirmed = eligiblePastPayWeeks.filter(w => weekConfirmations[w.idx]);
+    return confirmed.length ? confirmed[confirmed.length - 1].idx : null;
+  }, [eligiblePastPayWeeks, weekConfirmations]);
+
+  // Resets the most-recent confirmed pay period so its weekly confirm modal
+  // reopens as if it was never finished. Drops the confirmation record and any
+  // log entry it created — income projections are independent of confirmations,
+  // so the model is unaffected. Admin-only diagnostic.
+  const handleReopenLastCheckIn = useCallback(() => {
+    if (reopenableWeekIdx == null) return;
+    const record = weekConfirmations[reopenableWeekIdx];
+    if (record?.eventId != null) {
+      setLogs(ls => ls.filter(l => l.id !== record.eventId));
+    }
+    setWeekConfirmations(c => {
+      const next = { ...c };
+      delete next[reopenableWeekIdx];
+      return next;
+    });
+    setConfirmDismissed(false);  // ensure the modal pops back open
+    setToolSheetOpen(false);     // close the admin sheet so the modal is visible
+  }, [reopenableWeekIdx, weekConfirmations]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);
@@ -1305,6 +1336,16 @@ export default function App() {
                 )}
               </div>
 
+              {/* Reopen Last Check-In */}
+              <div style={{ padding: "0 20px 10px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Weekly Check-In</div>
+                <button
+                  onClick={handleReopenLastCheckIn}
+                  disabled={reopenableWeekIdx == null}
+                  style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer" }}
+                >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last · Wk ${reopenableWeekIdx}`}</button>
+              </div>
+
               {/* Config Raw View */}
               <div style={{ padding: "0 20px 10px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
@@ -1908,6 +1949,16 @@ export default function App() {
               )}
             </div>
 
+            {/* Reopen Last Check-In */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Weekly Check-In</div>
+              <button
+                onClick={handleReopenLastCheckIn}
+                disabled={reopenableWeekIdx == null}
+                style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer" }}
+              >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last · Wk ${reopenableWeekIdx}`}</button>
+            </div>
+
             {/* Config Raw View */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
@@ -2488,6 +2539,19 @@ export default function App() {
                         : `✗ ${syncStatus.op === "push" ? "Push" : "Pull"} failed`}
                   </div>
                 )}
+              </div>
+
+              {/* ── Reopen Last Check-In ── */}
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Weekly Check-In</div>
+                <button
+                  onClick={handleReopenLastCheckIn}
+                  disabled={reopenableWeekIdx == null}
+                  style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer", minHeight: "44px", fontWeight: "bold" }}
+                >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last Check-In · Wk ${reopenableWeekIdx}`}</button>
+                <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "6px", lineHeight: "1.4" }}>
+                  Reopens the most recent confirmed week's modal for review. Income projections are unaffected.
+                </div>
               </div>
 
               {/* ── Config JSON ── */}

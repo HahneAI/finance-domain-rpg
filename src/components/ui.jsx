@@ -44,7 +44,73 @@ export const iS = { background: "var(--color-bg-base)", border: "1px solid var(-
 export const lS = { fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "4px", display: "block", fontFamily: "var(--font-sans)" };
 
 export function NT({ label, active, onClick }) { return <button onClick={onClick} style={{ padding: "10px 18px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontFamily: "var(--font-sans)", background: active ? "var(--color-gold)" : "var(--color-bg-surface)", color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)", border: "1px solid " + (active ? "var(--color-gold)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{label}</button>; }
-export function VT({ label, active, onClick }) { return <button onClick={onClick} style={{ padding: "10px 16px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontFamily: "var(--font-sans)", background: active ? "var(--color-gold)" : "var(--color-bg-surface)", color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)", border: "1px solid " + (active ? "var(--color-gold)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{label}</button>; }
+// VT — view tab. Carries the Apple-style press: scale(0.97) press-in, a gentle
+// spring back on release, and a soft gold flash that fades over ~300ms. All within
+// the CLAUDE.md press budget (scale-only, ≤500ms). This is the prototype surface for
+// the flash+bounce rollout; once dialed in the same pattern promotes to the other
+// ui.jsx primitives.
+export function VT({ label, active, onClick }) {
+  const [pressed, setPressed]   = useState(false);
+  const [flashing, setFlashing] = useState(false);
+  const flashTimer = useRef(null);
+
+  // Clean up a pending flash timer on unmount so we never setState after teardown.
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
+
+  const press = () => {
+    setPressed(true);
+    setFlashing(true);
+    clearTimeout(flashTimer.current);
+    // Hold the flash briefly, then let the CSS opacity transition fade it out.
+    flashTimer.current = setTimeout(() => setFlashing(false), 120);
+  };
+  const release = () => setPressed(false);
+
+  return (
+    <button
+      onPointerDown={press}
+      onPointerUp={release}
+      onPointerLeave={release}
+      onClick={onClick}
+      style={{
+        position: "relative",
+        overflow: "hidden",
+        padding: "10px 16px",
+        minHeight: "44px",
+        fontSize: "11px",
+        letterSpacing: "2px",
+        textTransform: "uppercase",
+        fontFamily: "var(--font-sans)",
+        background: active ? "var(--color-gold)" : "var(--color-bg-surface)",
+        color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)",
+        border: "1px solid " + (active ? "var(--color-gold)" : "var(--color-border-subtle)"),
+        borderRadius: "12px",
+        cursor: "pointer",
+        transform: pressed ? "scale(0.97)" : "scale(1)",
+        // Quick ease-out on press-in; gentle overshoot spring on release.
+        transition: pressed
+          ? "transform 110ms ease-out, background 0.15s ease, color 0.15s ease"
+          : "transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, color 0.15s ease",
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      {/* Soft gold flash overlay — brightens on press, fades back over ~300ms. */}
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          borderRadius: "inherit",
+          background: active ? "rgba(255,255,255,0.35)" : "var(--color-gold-bright)",
+          opacity: flashing ? (active ? 0.5 : 0.28) : 0,
+          transition: "opacity 300ms ease-out",
+          pointerEvents: "none",
+        }}
+      />
+      <span style={{ position: "relative" }}>{label}</span>
+    </button>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────
 // METRIC CARD

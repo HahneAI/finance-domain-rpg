@@ -1576,7 +1576,10 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, today, weekConfirmations = {}, onInstallClick }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, today, weekConfirmations = {} }) {
+  // Tax Plan is admin-only by default, but can be unlocked per-user (e.g. trusted
+  // coworkers) via the tax_projections_enabled flag — see migration 016.
+  const canSeeTaxPlan = isAdmin || taxProjectionsEnabled;
   const [activeSection, setActiveSection] = useState(null);
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
   const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });
@@ -1619,7 +1622,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   if (activeSection === "preferences") {
     return <PreferencesDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
   }
-  if (activeSection === "taxplan") {
+  if (activeSection === "taxplan" && canSeeTaxPlan) {
     return <TaxPlanDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} allWeeks={allWeeks} taxDerived={taxDerived} showExtra={showExtra} setShowExtra={setShowExtra} onBack={() => setActiveSection(null)} isAdmin={isAdmin} today={today} weekConfirmations={weekConfirmations} />;
   }
   if (activeSection === "investorcodes") {
@@ -1664,13 +1667,14 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           label="App Preferences"
           summary={config.bufferEnabled ? `Buffer $${config.paycheckBuffer}/check · ${config.taxExemptOptIn ? "Tax exempt on" : "Standard tax"}` : `Buffer off · ${config.taxExemptOptIn ? "Tax exempt on" : "Standard tax"}`}
           onPress={() => setActiveSection("preferences")}
-          last={!isAdmin}
+          last={!canSeeTaxPlan && !isAdmin}
         />
-        {isAdmin && (
+        {canSeeTaxPlan && (
           <ListRow
             label="Tax Plan"
             summary={`${config.taxedWeeks?.length ?? 0} taxed weeks · target $${config.targetOwedAtFiling} owed`}
             onPress={() => setActiveSection("taxplan")}
+            last={!isAdmin}
           />
         )}
         {isAdmin && (

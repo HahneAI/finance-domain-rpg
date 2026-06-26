@@ -19,6 +19,7 @@ Last updated: 2026-04-12 | App: Authority Finance (A:Fin)
 | 7 | Year Summary — Adjusted Net + Event Loss | `IncomePanel.jsx`, `App.jsx` | Live |
 | 8 | Log Tab — Hero + Log Effect Summary | `LogPanel.jsx` | Live |
 | 9 | Loan payoff quarter persistence | `finance.js` | Live — keeps payoff amounts through the payoff quarter |
+| 10 | Biweekly Two-Week Check-In | `WeekConfirmModal.jsx`, `App.jsx` | Live |
 | 12 | Pulse Intelligence Layer — InsightRow | `ui.jsx`, `HomePanel.jsx`, `IncomePanel.jsx`, `BudgetPanel.jsx` | Rough draft — signal tokens live, insights wired to real data |
 | 13 | Liquid Glass Premium UI Layer | `LiquidGlass.jsx`, `ui.jsx`, `index.css` | Live — InsightRow wired as first Pulse placement |
 | 14 | Swipeable Stacks — Horizontal Snap Cards | `useSwipeStack.js`, `ui.jsx`, `IncomePanel.jsx`, `HomePanel.jsx` | Sprint 1 shipped · Sprint 2 in progress · Sprints 3–5 pending |
@@ -450,3 +451,39 @@ fundedGoalSpend`). So the literal "net worth < 10% of projected annual income" b
 
 **Tests:** `src/test/lib/netWorthHealth.test.js` covers boundary (exactly 10%), below, negative
 savings, zero/negative income, and non-finite inputs.
+
+---
+
+## 10. Biweekly Two-Week Check-In
+
+**Why:** A biweekly (non-salary) base user works two distinct 7-day weeks per pay
+period but is paid once, after the second week closes. The check-in must capture
+what was actually worked in *both* weeks, not auto-assume the first week clean.
+
+**Trigger timing:** unchanged and correct by construction — `confirmTriggerWeek`
+only considers `isPayWeek` weeks (the paycheck / second week), and `isPayPeriodPast`
+gates on that week's `payPeriodEndDate`. So the modal never opens until the day
+**after** the second week's pay-period close day (the user's `payPeriodEndDay`).
+
+**Flow (`WeekConfirmModal`):** gated on `config.userPaySchedule === "biweekly" &&
+priorWeek?.active` (`isBiweeklyTwoWeek`).
+1. `subWeek 1` collects the **first** week (`priorWeek`) — header shows "Week 1 of 2".
+   All existing Layer 1/Layer 2 logic runs against `targetWeek` (= the sub-week
+   being collected), so deficits log against the correct week idx.
+2. On commit, `finalizeWeek` stashes the result and raises the **"Did you work
+   these exact same days the second week?"** prompt.
+   - **Yes** → mirror the selection onto the paycheck week (re-stamped idx/weekEnd,
+     fresh log id) and fire `onConfirm` once.
+   - **No** → `resetForSecondWeek` opens a fresh grid for the paycheck week
+     ("Week 2 of 2"); its commit finalizes the period.
+3. Terminal `onConfirm(confirmation, logEntry)` carries the first week under
+   `confirmation.firstWeek = { idx, confirmation, logEntry }`. `App` writes the
+   paycheck-week record, writes `firstWeek.idx`'s record, and appends both log
+   entries. `firstWeek` is stripped from the stored paycheck-week record.
+
+**Fallbacks:** salary (and biweekly's very first period, where no active prior
+week exists) keep the prior "auto-confirm the paired week clean" path. Every
+non-two-week schedule has `targetWeek === week`, so behavior is unchanged.
+
+**Tests:** `src/test/components/WeekConfirmModal.test.jsx` (two-week collection
+suite) + `src/test/lib/weekConfirmTrigger.test.js` (biweekly paycheck-week gating).

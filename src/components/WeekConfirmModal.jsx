@@ -23,7 +23,7 @@
  *   onConfirm(confirmation, logEntry|null) — called on confirm; logEntry is null for net-zero
  *   onDismiss() — session-only skip; badge persists in sidebar until confirmed
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { EVENT_TYPES, DHL_PRESET } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -86,11 +86,27 @@ function DayPicker({ scheduledDays, missedDays, onToggle }) {
   );
 }
 
-export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss, isAdmin = false, pendingCount = 1 }) {
+export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss, isAdmin = false, pendingCount = 1, priorWeek = null }) {
+  // ── Biweekly two-week collection ──────────────────────────────────────────
+  // A biweekly (non-salary) base user works two distinct 7-day weeks per pay
+  // period but is paid once, after the second week closes. The check-in collects
+  // BOTH weeks: subWeek 1 = the first week of the period (priorWeek), subWeek 2 =
+  // the paycheck week (week). After subWeek 1 we ask whether the same days were
+  // worked the second week — "yes" mirrors the selection onto week 2, "no" opens
+  // a fresh grid for week 2. Gated on priorWeek.active so the very first pay
+  // period (no prior active week) cleanly falls back to single-week behavior.
+  const isBiweeklyTwoWeek = config.userPaySchedule === "biweekly" && !!priorWeek?.active;
+  const [subWeek, setSubWeek] = useState(1);
+  const [firstWeekData, setFirstWeekData] = useState(null);
+  const [sameDaysPrompt, setSameDaysPrompt] = useState(false);
+  // The week currently being collected. For every non-two-week schedule this is
+  // always `week`, so all downstream logic is unchanged for those users.
+  const targetWeek = isBiweeklyTwoWeek && subWeek === 1 ? priorWeek : week;
+
   // ── Existing logs for this week ───────────────────────────────────────────
   // Pre-computed from props so the dayToggles initializer can reference them.
-  const weekEndIso = toLocalIso(week.weekEnd);
-  const weekLogEntries = logs.filter(l => l.weekEnd === weekEndIso || l.weekIdx === week.idx);
+  const weekEndIso = toLocalIso(targetWeek.weekEnd);
+  const weekLogEntries = logs.filter(l => l.weekEnd === weekEndIso || l.weekIdx === targetWeek.idx);
   const preLoggedMissedDays = new Set(
     weekLogEntries
       .filter(l => ["missed_unpaid", "missed_unapproved", "pto_unapproved"].includes(l.type))
@@ -101,7 +117,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
   // Scheduled days default to true (worked); unscheduled days default to null (off, but clickable).
   // Pre-populate missed days from any existing log entries so the grid reflects what's already logged.
   const [dayToggles, setDayToggles] = useState(() => {
-    const toggles = Object.fromEntries(DAY_NAMES.map(d => [d, week.workedDayNames.includes(d) ? true : null]));
+    const toggles = Object.fromEntries(DAY_NAMES.map(d => [d, targetWeek.workedDayNames.includes(d) ? true : null]));
     preLoggedMissedDays.forEach(d => { if (toggles[d] !== undefined) toggles[d] = false; });
     return toggles;
   });
@@ -111,26 +127,31 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
   const [skipWarning, setSkipWarning] = useState(false);
   const [isMissedCoreEntry, setIsMissedCoreEntry] = useState(false);
 
+  // Scroll container for the active layer body — used to keep the view oriented
+  // as the user moves through the flow (reset on layer change, reveal new blocks).
+  const scrollRef = useRef(null);
+  const revealRef = useRef(null);
+
   // ── Layer 2 form state (mirrors LogPanel's blank event shape) ─────────────
   const [eventVals, setEventVals] = useState({});
   // Schedule-extension confirmation — one entry per requiredOtShifts slot: null=unanswered, "missed", or a day name
-  const requiredOtCount = week.requiredOtShifts ?? 0;
+  const requiredOtCount = targetWeek.requiredOtShifts ?? 0;
   const [otDays, setOtDays] = useState(() => Array(requiredOtCount).fill(null));
 
-  const scheduledDays = week.workedDayNames;
+  const scheduledDays = targetWeek.workedDayNames;
   const missedScheduledDays = scheduledDays.filter(d => dayToggles[d] === false);
   const hasCustomSchedule = config.customWeeklyHours != null && config.employerPreset === "DHL";
   // Core-day pill UI: custom schedule users only (not Anthony's legacy dhlCustomSchedule path).
   const DOW_TO_NAME = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const showCoreDayPills = hasCustomSchedule && !config.dhlCustomSchedule;
   const coreDayNames = showCoreDayPills
-    ? (week.isHighWeek ? DHL_PRESET.rotation.long.days : DHL_PRESET.rotation.short.days)
+    ? (targetWeek.isHighWeek ? DHL_PRESET.rotation.long.days : DHL_PRESET.rotation.short.days)
         .map(i => DOW_TO_NAME[i])
     : [];
   const missedCoreDays = coreDayNames.filter(d => dayToggles[d] === false);
   // Per-week-type target (Sprint 2): uses long/short fields when set, falls back to flat customWeeklyHours.
   const weeklyTarget = hasCustomSchedule
-    ? (week.isHighWeek
+    ? (targetWeek.isHighWeek
         ? (config.customWeeklyHoursLong ?? config.customWeeklyHours ?? 0)
         : (config.customWeeklyHoursShort ?? config.customWeeklyHours ?? 0))
     : 0;
@@ -183,7 +204,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
     ? DAY_NAMES.filter(d => !scheduledDays.includes(d) && !workedOtDays.includes(d) && dayToggles[d] !== true)
     : [];
 
-  const dayDates = weekDayDates(week.weekStart);
+  const dayDates = weekDayDates(targetWeek.weekStart);
   // Pay period starts the day after payPeriodEndDay (e.g. end=Sun→start=Mon=1)
   const payPeriodStartDow = ((config.payPeriodEndDay ?? 0) + 1) % 7;
   const rotationDisplay = formatRotationDisplay(week, { isAdmin });
@@ -206,6 +227,25 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       setOtDays(Array(requiredOtCount).fill(null));
     }
   }, [requiresOtSelection]);
+
+  // Lock background scroll while the modal is open so the page behind stays put.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  // Switching layers starts the new body at the top — no jarring mid-scroll jump.
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [layer]);
+
+  // When the final confirmation block appears, ease it into view (guarded for jsdom).
+  useEffect(() => {
+    if (confirming && revealRef.current) {
+      revealRef.current.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+    }
+  }, [confirming]);
 
   // Sets a specific extension-shift slot; keeps dayToggles in sync for the changed slot.
   const selectOtDayAt = (slotIdx, value) => {
@@ -296,6 +336,63 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
     (eventVals.missedDays ?? []).length === 0
   );
 
+  // ── Terminal confirm router ───────────────────────────────────────────────
+  // Every place that would historically call onConfirm() routes through here so
+  // the biweekly two-week flow can intercept the first week. For every other
+  // schedule this is a pass-through to onConfirm — behavior is unchanged.
+  //
+  //   subWeek 1 → stash the week's result and raise the "same days?" prompt.
+  //   subWeek 2 → bundle the stashed first-week data under `firstWeek` and fire
+  //               onConfirm once for the whole pay period.
+  const finalizeWeek = (confirmation, logEntry) => {
+    if (!isBiweeklyTwoWeek) {
+      onConfirm(confirmation, logEntry);
+      return;
+    }
+    if (subWeek === 1) {
+      setFirstWeekData({ confirmation, logEntry });
+      setSameDaysPrompt(true);
+      return;
+    }
+    onConfirm(
+      { ...confirmation, firstWeek: firstWeekData ? { idx: priorWeek.idx, confirmation: firstWeekData.confirmation, logEntry: firstWeekData.logEntry } : null },
+      logEntry
+    );
+  };
+
+  // ── Reset Layer 1 state for the start of the second week ──────────────────
+  const resetForSecondWeek = () => {
+    setSubWeek(2);
+    setSameDaysPrompt(false);
+    setLayer(1);
+    setWentToLayer2(false);
+    setConfirming(false);
+    setIsMissedCoreEntry(false);
+    setEventVals({});
+    setOtDays(Array(requiredOtCount).fill(null));
+    // week (the paycheck week) has the same schedule as priorWeek for a base
+    // user, so default toggles reset to its scheduled days (all null for base).
+    setDayToggles(Object.fromEntries(DAY_NAMES.map(d => [d, week.workedDayNames.includes(d) ? true : null])));
+  };
+
+  // "Yes — same days": mirror the first week's selection onto the paycheck week.
+  const handleSameDaysYes = () => {
+    const fw = firstWeekData;
+    const newLogId = Date.now();
+    const week2LogEntry = fw?.logEntry
+      ? { ...fw.logEntry, id: newLogId, weekEnd: toLocalIso(week.weekEnd), weekIdx: week.idx, weekRotation: week.rotation }
+      : null;
+    const week2Confirmation = {
+      ...(fw?.confirmation ?? {}),
+      confirmedAt: new Date().toISOString(),
+      eventId: week2LogEntry ? week2LogEntry.id : null,
+    };
+    onConfirm(
+      { ...week2Confirmation, firstWeek: fw ? { idx: priorWeek.idx, confirmation: fw.confirmation, logEntry: fw.logEntry } : null },
+      week2LogEntry
+    );
+  };
+
   // ── Layer 1 save ──────────────────────────────────────────────────────────
   // Called when user clicks "Confirm Week" or "Next →".
   //
@@ -315,9 +412,9 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
     // Custom-hours schedule extension: any missed extension shift → pre-fill Layer 2 as unapproved miss (hits bucket hours)
     if (requiresOtSelection && anyOtMissed) {
       setEventVals({
-        weekEnd: toLocalIso(week.weekEnd),
-        weekIdx: week.idx,
-        weekRotation: week.rotation,
+        weekEnd: toLocalIso(targetWeek.weekEnd),
+        weekIdx: targetWeek.idx,
+        weekRotation: targetWeek.rotation,
         type: "missed_unapproved",
         missedDays: [],
         shiftsLost: missedOtCount,
@@ -339,8 +436,8 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
     if (showCoreDayPills && missedCoreDays.length > 0 && netShiftDelta === 0) {
       setEventVals({
         weekEnd: weekEndIso,
-        weekIdx: week.idx,
-        weekRotation: week.rotation,
+        weekIdx: targetWeek.idx,
+        weekRotation: targetWeek.rotation,
         type: "missed_unpaid",
         missedDays: missedCoreDays,
         shiftsLost: missedCoreDays.length,
@@ -362,7 +459,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
     // If every missed day is already logged and there are no pickups to record,
     // confirm directly — no new log entry needed.
     if (missedScheduledDays.length > 0 && newMissedDays.length === 0 && pickupDays.length === 0) {
-      onConfirm({
+      finalizeWeek({
         confirmedAt: new Date().toISOString(),
         dayToggles, scheduledDays, missedScheduledDays, pickupDays,
         netShiftDelta, eventId: null,
@@ -378,7 +475,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
     // Base user: compare worked hours against maxWeeklyHours ceiling instead of shift delta.
     if (isBaseUser && baseCeilingHours > 0) {
       if (baseHourDelta === 0) {
-        onConfirm({
+        finalizeWeek({
           confirmedAt: new Date().toISOString(),
           dayToggles, scheduledDays: [], missedScheduledDays: [], pickupDays,
           netShiftDelta: 0, eventId: null,
@@ -390,8 +487,8 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       const shiftGap = Math.round(hoursGap / (config.shiftHours || 8));
       setEventVals({
         weekEnd: weekEndIso,
-        weekIdx: week.idx,
-        weekRotation: week.rotation,
+        weekIdx: targetWeek.idx,
+        weekRotation: targetWeek.rotation,
         type: isDeficitNonDHL ? "missed_unpaid" : "bonus",
         missedDays: [],
         shiftsLost: isDeficitNonDHL ? shiftGap : 0,
@@ -417,7 +514,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
 
     if (netShiftDelta === 0) {
       // Net-zero: same total hours regardless of which days — confirm clean
-      onConfirm({
+      finalizeWeek({
         confirmedAt: new Date().toISOString(),
         dayToggles, scheduledDays, missedScheduledDays, pickupDays,
         netShiftDelta: 0, eventId: null,
@@ -436,8 +533,8 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       : [];
     setEventVals({
       weekEnd: weekEndIso,
-      weekIdx: week.idx,
-      weekRotation: week.rotation,
+      weekIdx: targetWeek.idx,
+      weekRotation: targetWeek.rotation,
       type: isDeficit ? "missed_unpaid" : "bonus",
       missedDays: missedDaysForLog,
       shiftsLost: missedDaysForLog.length,
@@ -480,9 +577,9 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       return;
     }
     setEventVals({
-      weekEnd: toLocalIso(week.weekEnd),
-      weekIdx: week.idx,
-      weekRotation: week.rotation,
+      weekEnd: toLocalIso(targetWeek.weekEnd),
+      weekIdx: targetWeek.idx,
+      weekRotation: targetWeek.rotation,
       type: "missed_unpaid",
       missedDays: missedScheduledDays,
       shiftsLost: missedScheduledDays.length,
@@ -502,9 +599,9 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
   // Logs the remaining gap as missed_unpaid when user can't hit their custom target.
   const handleMarkShort = () => {
     setEventVals({
-      weekEnd: toLocalIso(week.weekEnd),
-      weekIdx: week.idx,
-      weekRotation: week.rotation,
+      weekEnd: toLocalIso(targetWeek.weekEnd),
+      weekIdx: targetWeek.idx,
+      weekRotation: targetWeek.rotation,
       type: "missed_unpaid",
       missedDays: [],
       shiftsLost: customShiftsNeeded,
@@ -535,7 +632,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       hoursLost:    parseFloat(eventVals.hoursLost)  || 0,
       amount:       parseFloat(eventVals.amount)     || 0,
     };
-    onConfirm({
+    finalizeWeek({
       confirmedAt: new Date().toISOString(),
       dayToggles, scheduledDays, missedScheduledDays, pickupDays,
       netShiftDelta, eventId: logEntry.id,
@@ -547,8 +644,8 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
     }, logEntry);
   };
 
-  const weekStartDate = fmtDate(week.weekStart);
-  const weekEndDate = fmtDate(week.weekEnd);
+  const weekStartDate = fmtDate(targetWeek.weekStart);
+  const weekEndDate = fmtDate(targetWeek.weekEnd);
 
   return (
     <div style={{
@@ -557,11 +654,10 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       display: "flex", alignItems: "center", justifyContent: "center",
       padding: "16px",
     }}>
-      <div style={{
+      <div className="wc-modal-in" style={{
         background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px",
         width: "100%", maxWidth: "460px",
         overflow: "hidden", maxHeight: "90vh", display: "flex", flexDirection: "column",
-        animation: "weekCardIn 220ms ease-out",
       }}>
 
         {/* ── Header ── */}
@@ -570,8 +666,17 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>
-                  {isBiweeklySchedule ? "Pay Period Check-In" : isMonthlySchedule ? "Monthly Check-In" : `Week ${week.idx} Check-In`}
+                  {isBiweeklySchedule ? "Pay Period Check-In" : isMonthlySchedule ? "Monthly Check-In" : `Week ${targetWeek.idx} Check-In`}
                 </div>
+                {isBiweeklyTwoWeek && (
+                  <span style={{
+                    fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
+                    color: "var(--color-bg-base)", background: "var(--color-gold)",
+                    padding: "2px 7px", borderRadius: "3px", fontWeight: "bold",
+                  }}>
+                    Week {subWeek} of 2
+                  </span>
+                )}
                 {pendingCount > 1 && (
                   <span style={{
                     fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
@@ -583,13 +688,19 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                 )}
               </div>
               <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
-                {isBiweeklySchedule
-                  ? `${periodStartDate} — ${weekEndDate}`
-                  : isMonthlySchedule
-                    ? week.weekEnd.toLocaleDateString("en-US", { month: "long", year: "numeric" })
-                    : `${weekStartDate} — ${weekEndDate}`}
+                {isBiweeklyTwoWeek
+                  ? `${weekStartDate} — ${weekEndDate}`
+                  : isBiweeklySchedule
+                    ? `${periodStartDate} — ${weekEndDate}`
+                    : isMonthlySchedule
+                      ? targetWeek.weekEnd.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+                      : `${weekStartDate} — ${weekEndDate}`}
               </div>
-              {isNonWeekly && (
+              {isBiweeklyTwoWeek ? (
+                <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+                  Biweekly · {subWeek === 1 ? "first week of pay period" : "paycheck week of pay period"}
+                </div>
+              ) : isNonWeekly && (
                 <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
                   {isBiweeklySchedule ? "Biweekly · confirming paycheck week" : "Monthly · confirming final week of period"}
                 </div>
@@ -607,11 +718,11 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
               false (missed):  coral "Missed" pill active
               null  (off):     greyed "+ Pickup" button (unscheduled days only)
         */}
-        {layer === 1 && (
+        {!sameDaysPrompt && layer === 1 && (
           <>
-            <div style={{ overflowY: "auto", flex: 1 }}>
-              <div style={{ padding: "6px 20px 4px", fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
-                {isBaseUser ? `Mark days worked — ceiling: ${baseCeilingHours}h / ${baseCeilingShifts} shift${baseCeilingShifts !== 1 ? "s" : ""}` : `Mark your actual ${isBiweeklySchedule ? "paycheck week" : isMonthlySchedule ? "final week of period" : "week"} — tap any day to update`}
+            <div ref={scrollRef} className="wc-content-in" key="layer1" style={{ overflowY: "auto", flex: 1 }}>
+              <div style={{ padding: "8px 20px 4px", fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
+                {isBaseUser ? `Tap days worked — ceiling ${baseCeilingHours}h / ${baseCeilingShifts} shift${baseCeilingShifts !== 1 ? "s" : ""}` : "Tap any day to adjust"}
               </div>
 
               {/* ── Previously Logged — shown when existing logs exist for this week ── */}
@@ -636,7 +747,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   })}
                   {allMissedPreLogged && pickupDays.length === 0 && (
                     <div style={{ marginTop: "6px", fontSize: "9px", color: "var(--color-text-disabled)", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "6px" }}>
-                      All missed days accounted for — confirm below to finalize the week.
+                      All accounted for — confirm below.
                     </div>
                   )}
                 </div>
@@ -733,8 +844,8 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                       </div>
                       <div style={{ color: "var(--color-text-secondary)", fontSize: "9px", marginTop: "5px", lineHeight: "1.5" }}>
                         {baseHourDelta < 0
-                          ? `Your income was projected at ${baseCeilingHours}h. Logging the difference keeps your actual earnings accurate — it won't affect future weeks.`
-                          : `You worked past your ${baseCeilingHours}h ceiling. The next screen will let you log the extra pay.`
+                          ? `Projected at ${baseCeilingHours}h — logging the difference keeps this week accurate. Future weeks are unaffected.`
+                          : `Past your ${baseCeilingHours}h ceiling — log the extra pay next.`
                         }
                       </div>
                     </>
@@ -766,7 +877,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
               {showCoreDayPills && (
                 <div style={{ margin: "12px 20px 0", padding: "12px 14px", background: "var(--color-bg-base)", border: `1px solid ${missedCoreDays.length > 0 ? "rgba(239,68,68,0.35)" : "var(--color-border-subtle)"}`, borderRadius: "6px" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "8px" }}>
-                    Core Shifts — {week.isHighWeek ? "Long Week" : "Short Week"}
+                    Core Shifts — {targetWeek.isHighWeek ? "Long Week" : "Short Week"}
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: missedCoreDays.length > 0 ? "8px" : "0" }}>
                     {coreDayNames.map(day => {
@@ -787,7 +898,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   </div>
                   {missedCoreDays.length > 0 && (
                     <div style={{ fontSize: "10px", color: "var(--color-deduction)", lineHeight: "1.5" }}>
-                      {missedCoreDays.length} core shift{missedCoreDays.length > 1 ? "s" : ""} missed ({missedCoreDays.length * config.shiftHours}h). This will be logged as an attendance miss.
+                      {missedCoreDays.length} core shift{missedCoreDays.length > 1 ? "s" : ""} missed ({missedCoreDays.length * config.shiftHours}h) — logged as an attendance miss.
                     </div>
                   )}
                 </div>
@@ -799,7 +910,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     {`Schedule Extension — ${requiredOtCount === 1 ? "1 additional shift" : `${requiredOtCount} additional shifts`} to reach ${weeklyTarget}h`}
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5", marginBottom: "10px" }}>
-                    {`Your ${weeklyTarget}h/week target requires ${requiredOtCount === 1 ? "1 extra shift" : `${requiredOtCount} extra shifts`} beyond your base rotation. Pick the day${requiredOtCount !== 1 ? "s" : ""} you worked or mark as missed — missed shifts hit your attendance bucket.`}
+                    {`Pick the day${requiredOtCount !== 1 ? "s" : ""} you worked, or mark missed. Missed shifts hit your attendance bucket.`}
                   </div>
                   {Array.from({ length: requiredOtCount }, (_, slotIdx) => {
                     const otDaysWorkedOtherSlots = otDays.filter((d, i) => i !== slotIdx && d && d !== "missed");
@@ -877,10 +988,10 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                           letterSpacing: "0.5px",
                         }}>
                           {slotValue === "missed"
-                            ? "Shift not worked — will be logged and hits your attendance bucket."
+                            ? "Logged as missed — hits your attendance bucket."
                             : slotValue
-                              ? (slotIsWeekend ? "Weekend shift earns your diff rate automatically." : "Weekday shift does not include the differential.")
-                              : `Required — select the day or mark it missed to continue.`}
+                              ? (slotIsWeekend ? "Weekend shift earns your diff rate." : "Weekday shift — no differential.")
+                              : `Select a day or mark missed.`}
                         </div>
                       </div>
                     );
@@ -910,7 +1021,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     <>
                       <div style={{ fontSize: "10px", color: "var(--color-warning)", marginBottom: "10px", lineHeight: "1.5" }}>
                         {customShiftsNeeded} shift{customShiftsNeeded !== 1 ? "s" : ""} ({customGap}h) short of your {weeklyTarget}h target.
-                        {requiresOtSelection && otSelectionMissing ? " Complete the extension shift selection above first." : " Add a day below or mark the shortfall."}
+                        {requiresOtSelection && otSelectionMissing ? " Finish the extension picks above first." : " Add a day or mark short."}
                       </div>
                       {!otSelectionMissing && extraPickupCandidates.length > 0 && (
                         <div style={{ marginBottom: "10px" }}>
@@ -963,7 +1074,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     }}>
                       ← Keep logging
                     </button>
-                    <button onClick={onDismiss} style={{
+                    <button onClick={onDismiss} className="wc-press" style={{
                       background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none",
                       borderRadius: "4px", padding: "8px 16px", fontSize: "10px",
                       letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold",
@@ -983,7 +1094,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   </button>
               {netShiftDelta === 0 && (missedScheduledDays.length > 0 || pickupDays.length > 0) ? (
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button onClick={handleSave} disabled={otSelectionMissing} style={{
+                  <button onClick={handleSave} disabled={otSelectionMissing} className="wc-press" style={{
                     background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)",
                     borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase",
@@ -992,7 +1103,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   }}>
                     {isBiweeklySchedule ? "Clean Period" : isMonthlySchedule ? "Clean Month" : "Confirm Clean"}
                   </button>
-                  <button onClick={handleLogSwap} disabled={logSwapDisabled} style={{
+                  <button onClick={handleLogSwap} disabled={logSwapDisabled} className="wc-press" style={{
                     background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase",
@@ -1004,7 +1115,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   </button>
                 </div>
               ) : (
-                <button onClick={handleSave} disabled={otSelectionMissing} style={{
+                <button onClick={handleSave} disabled={otSelectionMissing} className="wc-press" style={{
                   background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
                   borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
                   letterSpacing: "2px", textTransform: "uppercase",
@@ -1012,7 +1123,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   fontWeight: "bold",
                   opacity: otSelectionMissing ? 0.5 : 1,
                 }}>
-                  {netShiftDelta !== 0 ? "Next →" : isBiweeklySchedule ? "Confirm Pay Period" : isMonthlySchedule ? "Confirm Month" : "Confirm Week"}
+                  {isBiweeklyTwoWeek && subWeek === 1 ? "Next →" : netShiftDelta !== 0 ? "Next →" : isBiweeklySchedule ? "Confirm Pay Period" : isMonthlySchedule ? "Confirm Month" : "Confirm Week"}
                 </button>
               )}
                 </div>
@@ -1026,9 +1137,9 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
             the Layer 1 day grid but fully editable. All numeric inputs store as strings
             in eventVals; handleConfirmLayer2() coerces to numbers before adding to logs.
         */}
-        {layer === 2 && (
+        {!sameDaysPrompt && layer === 2 && (
           <>
-            <div style={{ overflowY: "auto", flex: 1, padding: "18px 20px" }}>
+            <div ref={scrollRef} className="wc-content-in" key="layer2" style={{ overflowY: "auto", flex: 1, padding: "18px 20px" }}>
 
               {/* Net delta summary — non-interactive; reminds user why they're here */}
               <div style={{
@@ -1160,7 +1271,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                 <div style={{ marginBottom: "12px" }}>
                   <label style={lS}>Hours Lost</label>
                   <input type="number" min="0" max={config.shiftHours} step="0.5" value={eventVals.hoursLost ?? ""} onChange={e => setEventVals(v => ({ ...v, hoursLost: e.target.value }))} style={{ ...iS, marginTop: "4px" }} />
-                  <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "4px" }}>Partial shift — reduces pay and PTO accrual, does not hit attendance bucket.</div>
+                  <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "4px" }}>Partial shift — lowers pay and PTO accrual; no bucket hit.</div>
                 </div>
               )}
 
@@ -1171,7 +1282,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   <input type="number" min="0" value={eventVals.amount ?? ""} onChange={e => setEventVals(v => ({ ...v, amount: e.target.value }))} style={{ ...iS, marginTop: "4px" }} />
                   {eventVals.type === "bonus" && pickupDays.length > 0 && (
                     <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
-                      OT-adjusted pre-fill — hours past the {config.otThreshold ?? "N/A"}h threshold earn {config.otMultiplier ?? 1.5}×{config.employerPreset === "DHL" ? "; weekend diff included" : ""}. Edit if actual payout differs.
+                      OT-adjusted estimate — past {config.otThreshold ?? "N/A"}h earns {config.otMultiplier ?? 1.5}×{config.employerPreset === "DHL" ? ", weekend diff included" : ""}. Edit if it differs.
                     </div>
                   )}
                 </div>
@@ -1233,7 +1344,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
 
               {/* Confirmation block — shown after first click of "Log & Confirm" */}
               {confirming && (
-                <div style={{ marginTop: "16px", padding: "14px", background: "var(--color-bg-raised)", border: "1px solid rgba(34,197,94,0.4)", borderRadius: "6px" }}>
+                <div ref={revealRef} style={{ marginTop: "16px", padding: "14px", background: "var(--color-bg-raised)", border: "1px solid rgba(34,197,94,0.4)", borderRadius: "6px" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "10px" }}>Confirm entry</div>
                   <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.9" }}>
                     <div><span style={{ color: "var(--color-text-disabled)" }}>Type:</span> {EVENT_TYPES[eventVals.type]?.label ?? eventVals.type}</div>
@@ -1277,7 +1388,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   }}>
                     ← Back
                   </button>
-                  <button onClick={() => !isVacuousEvent && setConfirming(true)} disabled={isVacuousEvent} style={{
+                  <button onClick={() => !isVacuousEvent && setConfirming(true)} disabled={isVacuousEvent} className="wc-press" style={{
                     background: isVacuousEvent ? "var(--color-text-disabled)" : "var(--color-green)",
                     color: isVacuousEvent ? "var(--color-bg-surface)" : "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
@@ -1297,7 +1408,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   }}>
                     ← Edit
                   </button>
-                  <button onClick={handleConfirmLayer2} style={{
+                  <button onClick={handleConfirmLayer2} className="wc-press" style={{
                     background: "var(--color-green)", color: "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
@@ -1310,6 +1421,66 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
             </div>
           </>
         )}
+
+        {/* ──────────── SAME-DAYS PROMPT — biweekly week 1 → week 2 ──────────── */}
+        {/* After the first week of a biweekly pay period is recorded, ask whether
+            the same days were worked the second week. "Yes" mirrors the selection
+            onto the paycheck week; "No" opens a fresh grid for the second week. */}
+        {sameDaysPrompt && (() => {
+          const week1Worked = DAY_NAMES.filter(d => dayToggles[d] === true);
+          const week2Start = fmtDate(week.weekStart);
+          const week2End = fmtDate(week.weekEnd);
+          return (
+            <div style={{ display: "flex", flexDirection: "column", flex: 1, overflowY: "auto" }}>
+              <div style={{ padding: "20px", flex: 1 }}>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "10px" }}>
+                  Second week of pay period
+                </div>
+                <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-text-primary)", lineHeight: "1.5", marginBottom: "14px" }}>
+                  Did you work these exact same days the second week of your pay period?
+                </div>
+                <div style={{ padding: "12px 14px", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", marginBottom: "14px" }}>
+                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "6px" }}>
+                    First week — {weekStartDate} – {weekEndDate}
+                  </div>
+                  <div style={{ fontSize: "11px", color: week1Worked.length > 0 ? "var(--color-green)" : "var(--color-text-secondary)" }}>
+                    {week1Worked.length > 0
+                      ? `${week1Worked.length} day${week1Worked.length !== 1 ? "s" : ""} worked: ${week1Worked.join(", ")}`
+                      : "No days marked worked"}
+                  </div>
+                </div>
+                <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+                  The second week of this pay period runs <span style={{ color: "var(--color-text-primary)" }}>{week2Start} – {week2End}</span>. Choosing
+                  {" "}<span style={{ color: "var(--color-text-primary)" }}>No</span> lets you mark exactly what you worked that week.
+                </div>
+              </div>
+              <div style={{ padding: "14px 20px", borderTop: "1px solid var(--color-border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+                <button onClick={() => { setSameDaysPrompt(false); setFirstWeekData(null); }} style={{
+                  background: "transparent", border: "none", color: "var(--color-text-disabled)",
+                  fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", padding: "6px 0",
+                }}>
+                  ← Back
+                </button>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button onClick={resetForSecondWeek} style={{
+                    background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)",
+                    borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
+                    letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
+                  }}>
+                    No — different days
+                  </button>
+                  <button onClick={handleSameDaysYes} style={{
+                    background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
+                    borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
+                    letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold",
+                  }}>
+                    Yes — same days
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       </div>
     </div>

@@ -1699,11 +1699,12 @@ function TaxExemptPreview() {
       display: "flex", flexDirection: "column", gap: "8px",
     }}>
       <div style={{ fontSize: "11px", color: "var(--color-text-primary)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
-        Tax-Exempt Projections Unlocked
+        Tax-Exempt Projections — Coming Soon
       </div>
       <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
-        Tax-exempt week projections will appear in the Income panel. Remember to set aside the
-        withheld amount each of those weeks — the dashboard will calculate the suggested reserve.
+        Thanks — we've noted that you'd like tax-exempt week projections. The feature is being
+        finalized and will be turned on for your account once it's ready. Until then, your
+        paychecks use standard withholding and nothing here changes.
       </div>
     </div>
   );
@@ -1945,7 +1946,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
               fontWeight: 700, textTransform: "uppercase", cursor: "pointer",
               alignSelf: "flex-start",
             }}>
-              Unlock projections
+              Request access
             </button>
           </div>
         ) : (

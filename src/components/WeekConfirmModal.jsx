@@ -23,7 +23,7 @@
  *   onConfirm(confirmation, logEntry|null) — called on confirm; logEntry is null for net-zero
  *   onDismiss() — session-only skip; badge persists in sidebar until confirmed
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { EVENT_TYPES, DHL_PRESET } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -110,6 +110,11 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
   const [wentToLayer2, setWentToLayer2] = useState(false);
   const [skipWarning, setSkipWarning] = useState(false);
   const [isMissedCoreEntry, setIsMissedCoreEntry] = useState(false);
+
+  // Scroll container for the active layer body — used to keep the view oriented
+  // as the user moves through the flow (reset on layer change, reveal new blocks).
+  const scrollRef = useRef(null);
+  const revealRef = useRef(null);
 
   // ── Layer 2 form state (mirrors LogPanel's blank event shape) ─────────────
   const [eventVals, setEventVals] = useState({});
@@ -206,6 +211,25 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       setOtDays(Array(requiredOtCount).fill(null));
     }
   }, [requiresOtSelection]);
+
+  // Lock background scroll while the modal is open so the page behind stays put.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  // Switching layers starts the new body at the top — no jarring mid-scroll jump.
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [layer]);
+
+  // When the final confirmation block appears, ease it into view (guarded for jsdom).
+  useEffect(() => {
+    if (confirming && revealRef.current) {
+      revealRef.current.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+    }
+  }, [confirming]);
 
   // Sets a specific extension-shift slot; keeps dayToggles in sync for the changed slot.
   const selectOtDayAt = (slotIdx, value) => {
@@ -557,11 +581,10 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
       display: "flex", alignItems: "center", justifyContent: "center",
       padding: "16px",
     }}>
-      <div style={{
+      <div className="wc-modal-in" style={{
         background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px",
         width: "100%", maxWidth: "460px",
         overflow: "hidden", maxHeight: "90vh", display: "flex", flexDirection: "column",
-        animation: "weekCardIn 220ms ease-out",
       }}>
 
         {/* ── Header ── */}
@@ -609,9 +632,9 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
         */}
         {layer === 1 && (
           <>
-            <div style={{ overflowY: "auto", flex: 1 }}>
-              <div style={{ padding: "6px 20px 4px", fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
-                {isBaseUser ? `Mark days worked — ceiling: ${baseCeilingHours}h / ${baseCeilingShifts} shift${baseCeilingShifts !== 1 ? "s" : ""}` : `Mark your actual ${isBiweeklySchedule ? "paycheck week" : isMonthlySchedule ? "final week of period" : "week"} — tap any day to update`}
+            <div ref={scrollRef} className="wc-content-in" key="layer1" style={{ overflowY: "auto", flex: 1 }}>
+              <div style={{ padding: "8px 20px 4px", fontSize: "9px", color: "var(--color-text-disabled)", letterSpacing: "1.5px", textTransform: "uppercase" }}>
+                {isBaseUser ? `Tap days worked — ceiling ${baseCeilingHours}h / ${baseCeilingShifts} shift${baseCeilingShifts !== 1 ? "s" : ""}` : "Tap any day to adjust"}
               </div>
 
               {/* ── Previously Logged — shown when existing logs exist for this week ── */}
@@ -636,7 +659,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   })}
                   {allMissedPreLogged && pickupDays.length === 0 && (
                     <div style={{ marginTop: "6px", fontSize: "9px", color: "var(--color-text-disabled)", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "6px" }}>
-                      All missed days accounted for — confirm below to finalize the week.
+                      All accounted for — confirm below.
                     </div>
                   )}
                 </div>
@@ -733,8 +756,8 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                       </div>
                       <div style={{ color: "var(--color-text-secondary)", fontSize: "9px", marginTop: "5px", lineHeight: "1.5" }}>
                         {baseHourDelta < 0
-                          ? `Your income was projected at ${baseCeilingHours}h. Logging the difference keeps your actual earnings accurate — it won't affect future weeks.`
-                          : `You worked past your ${baseCeilingHours}h ceiling. The next screen will let you log the extra pay.`
+                          ? `Projected at ${baseCeilingHours}h — logging the difference keeps this week accurate. Future weeks are unaffected.`
+                          : `Past your ${baseCeilingHours}h ceiling — log the extra pay next.`
                         }
                       </div>
                     </>
@@ -787,7 +810,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   </div>
                   {missedCoreDays.length > 0 && (
                     <div style={{ fontSize: "10px", color: "var(--color-deduction)", lineHeight: "1.5" }}>
-                      {missedCoreDays.length} core shift{missedCoreDays.length > 1 ? "s" : ""} missed ({missedCoreDays.length * config.shiftHours}h). This will be logged as an attendance miss.
+                      {missedCoreDays.length} core shift{missedCoreDays.length > 1 ? "s" : ""} missed ({missedCoreDays.length * config.shiftHours}h) — logged as an attendance miss.
                     </div>
                   )}
                 </div>
@@ -799,7 +822,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     {`Schedule Extension — ${requiredOtCount === 1 ? "1 additional shift" : `${requiredOtCount} additional shifts`} to reach ${weeklyTarget}h`}
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.5", marginBottom: "10px" }}>
-                    {`Your ${weeklyTarget}h/week target requires ${requiredOtCount === 1 ? "1 extra shift" : `${requiredOtCount} extra shifts`} beyond your base rotation. Pick the day${requiredOtCount !== 1 ? "s" : ""} you worked or mark as missed — missed shifts hit your attendance bucket.`}
+                    {`Pick the day${requiredOtCount !== 1 ? "s" : ""} you worked, or mark missed. Missed shifts hit your attendance bucket.`}
                   </div>
                   {Array.from({ length: requiredOtCount }, (_, slotIdx) => {
                     const otDaysWorkedOtherSlots = otDays.filter((d, i) => i !== slotIdx && d && d !== "missed");
@@ -877,10 +900,10 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                           letterSpacing: "0.5px",
                         }}>
                           {slotValue === "missed"
-                            ? "Shift not worked — will be logged and hits your attendance bucket."
+                            ? "Logged as missed — hits your attendance bucket."
                             : slotValue
-                              ? (slotIsWeekend ? "Weekend shift earns your diff rate automatically." : "Weekday shift does not include the differential.")
-                              : `Required — select the day or mark it missed to continue.`}
+                              ? (slotIsWeekend ? "Weekend shift earns your diff rate." : "Weekday shift — no differential.")
+                              : `Select a day or mark missed.`}
                         </div>
                       </div>
                     );
@@ -910,7 +933,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     <>
                       <div style={{ fontSize: "10px", color: "var(--color-warning)", marginBottom: "10px", lineHeight: "1.5" }}>
                         {customShiftsNeeded} shift{customShiftsNeeded !== 1 ? "s" : ""} ({customGap}h) short of your {weeklyTarget}h target.
-                        {requiresOtSelection && otSelectionMissing ? " Complete the extension shift selection above first." : " Add a day below or mark the shortfall."}
+                        {requiresOtSelection && otSelectionMissing ? " Finish the extension picks above first." : " Add a day or mark short."}
                       </div>
                       {!otSelectionMissing && extraPickupCandidates.length > 0 && (
                         <div style={{ marginBottom: "10px" }}>
@@ -963,7 +986,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     }}>
                       ← Keep logging
                     </button>
-                    <button onClick={onDismiss} style={{
+                    <button onClick={onDismiss} className="wc-press" style={{
                       background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none",
                       borderRadius: "4px", padding: "8px 16px", fontSize: "10px",
                       letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold",
@@ -983,7 +1006,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   </button>
               {netShiftDelta === 0 && (missedScheduledDays.length > 0 || pickupDays.length > 0) ? (
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button onClick={handleSave} disabled={otSelectionMissing} style={{
+                  <button onClick={handleSave} disabled={otSelectionMissing} className="wc-press" style={{
                     background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)",
                     borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase",
@@ -992,7 +1015,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   }}>
                     {isBiweeklySchedule ? "Clean Period" : isMonthlySchedule ? "Clean Month" : "Confirm Clean"}
                   </button>
-                  <button onClick={handleLogSwap} disabled={logSwapDisabled} style={{
+                  <button onClick={handleLogSwap} disabled={logSwapDisabled} className="wc-press" style={{
                     background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase",
@@ -1004,7 +1027,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   </button>
                 </div>
               ) : (
-                <button onClick={handleSave} disabled={otSelectionMissing} style={{
+                <button onClick={handleSave} disabled={otSelectionMissing} className="wc-press" style={{
                   background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
                   borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
                   letterSpacing: "2px", textTransform: "uppercase",
@@ -1028,7 +1051,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
         */}
         {layer === 2 && (
           <>
-            <div style={{ overflowY: "auto", flex: 1, padding: "18px 20px" }}>
+            <div ref={scrollRef} className="wc-content-in" key="layer2" style={{ overflowY: "auto", flex: 1, padding: "18px 20px" }}>
 
               {/* Net delta summary — non-interactive; reminds user why they're here */}
               <div style={{
@@ -1160,7 +1183,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                 <div style={{ marginBottom: "12px" }}>
                   <label style={lS}>Hours Lost</label>
                   <input type="number" min="0" max={config.shiftHours} step="0.5" value={eventVals.hoursLost ?? ""} onChange={e => setEventVals(v => ({ ...v, hoursLost: e.target.value }))} style={{ ...iS, marginTop: "4px" }} />
-                  <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "4px" }}>Partial shift — reduces pay and PTO accrual, does not hit attendance bucket.</div>
+                  <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "4px" }}>Partial shift — lowers pay and PTO accrual; no bucket hit.</div>
                 </div>
               )}
 
@@ -1171,7 +1194,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   <input type="number" min="0" value={eventVals.amount ?? ""} onChange={e => setEventVals(v => ({ ...v, amount: e.target.value }))} style={{ ...iS, marginTop: "4px" }} />
                   {eventVals.type === "bonus" && pickupDays.length > 0 && (
                     <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "4px" }}>
-                      OT-adjusted pre-fill — hours past the {config.otThreshold ?? "N/A"}h threshold earn {config.otMultiplier ?? 1.5}×{config.employerPreset === "DHL" ? "; weekend diff included" : ""}. Edit if actual payout differs.
+                      OT-adjusted estimate — past {config.otThreshold ?? "N/A"}h earns {config.otMultiplier ?? 1.5}×{config.employerPreset === "DHL" ? ", weekend diff included" : ""}. Edit if it differs.
                     </div>
                   )}
                 </div>
@@ -1233,7 +1256,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
 
               {/* Confirmation block — shown after first click of "Log & Confirm" */}
               {confirming && (
-                <div style={{ marginTop: "16px", padding: "14px", background: "var(--color-bg-raised)", border: "1px solid rgba(34,197,94,0.4)", borderRadius: "6px" }}>
+                <div ref={revealRef} style={{ marginTop: "16px", padding: "14px", background: "var(--color-bg-raised)", border: "1px solid rgba(34,197,94,0.4)", borderRadius: "6px" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-green)", textTransform: "uppercase", marginBottom: "10px" }}>Confirm entry</div>
                   <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.9" }}>
                     <div><span style={{ color: "var(--color-text-disabled)" }}>Type:</span> {EVENT_TYPES[eventVals.type]?.label ?? eventVals.type}</div>
@@ -1277,7 +1300,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   }}>
                     ← Back
                   </button>
-                  <button onClick={() => !isVacuousEvent && setConfirming(true)} disabled={isVacuousEvent} style={{
+                  <button onClick={() => !isVacuousEvent && setConfirming(true)} disabled={isVacuousEvent} className="wc-press" style={{
                     background: isVacuousEvent ? "var(--color-text-disabled)" : "var(--color-green)",
                     color: isVacuousEvent ? "var(--color-bg-surface)" : "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
@@ -1297,7 +1320,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   }}>
                     ← Edit
                   </button>
-                  <button onClick={handleConfirmLayer2} style={{
+                  <button onClick={handleConfirmLayer2} className="wc-press" style={{
                     background: "var(--color-green)", color: "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",

@@ -578,3 +578,134 @@ describe('WeekConfirmModal — Sprint 3 core-day pills', () => {
     expect(screen.getByText(/schedule extension/i)).toBeTruthy()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Biweekly two-week collection (base user, userPaySchedule: "biweekly")
+// ─────────────────────────────────────────────────────────────────────────────
+
+const BIWEEKLY_CONFIG = {
+  ...DEFAULT_CONFIG,
+  employerPreset: null,
+  userPaySchedule: 'biweekly',
+  maxWeeklyHours: 40,
+  shiftHours: 8,
+  baseRate: 20,
+  ficaRate: 0.0765,
+  payPeriodEndDay: 5, // Friday
+}
+
+// Base-user weeks have no scheduled day names (ceiling model). The pay period is
+// two fiscal weeks: priorWeek (first week) + week (paycheck / second week).
+const BIWEEKLY_PRIOR_WEEK = {
+  idx: 6, rotation: 'Standard', active: true, isHighWeek: false, requiredOtShifts: 0,
+  weekStart: new Date(2026, 2, 9),  // Mar 9
+  weekEnd:   new Date(2026, 2, 15), // Mar 15
+  workedDayNames: [],
+}
+const BIWEEKLY_PAY_WEEK = {
+  idx: 7, rotation: 'Standard', active: true, isHighWeek: false, requiredOtShifts: 0,
+  weekStart: new Date(2026, 2, 16), // Mar 16
+  weekEnd:   new Date(2026, 2, 22), // Mar 22
+  workedDayNames: [],
+}
+
+function renderBiweekly({ onConfirm, priorWeek = BIWEEKLY_PRIOR_WEEK } = {}) {
+  const mockConfirm = onConfirm ?? vi.fn()
+  render(
+    <WeekConfirmModal
+      week={BIWEEKLY_PAY_WEEK}
+      priorWeek={priorWeek}
+      config={BIWEEKLY_CONFIG}
+      logs={[]}
+      onConfirm={mockConfirm}
+      onDismiss={vi.fn()}
+    />
+  )
+  return { mockConfirm }
+}
+
+// Marks `n` of the unscheduled "+ Mark" day buttons as worked.
+function markDaysWorked(n) {
+  const markBtns = screen.getAllByRole('button', { name: /\+ mark/i })
+  for (let i = 0; i < n; i++) fireEvent.click(markBtns[i])
+}
+
+describe('WeekConfirmModal — biweekly two-week collection', () => {
+  it('opens on the first week of the pay period with a "Week 1 of 2" indicator', () => {
+    renderBiweekly()
+    expect(screen.getByText(/week 1 of 2/i)).toBeTruthy()
+    expect(screen.getByText(/first week of pay period/i)).toBeTruthy()
+    // First-week date range (Mar 9 – Mar 15), not the paycheck week
+    expect(screen.getAllByText(/mar 9/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/mar 15/i).length).toBeGreaterThan(0)
+  })
+
+  it('raises the "same days?" prompt after the first week is recorded', () => {
+    renderBiweekly()
+    markDaysWorked(5) // hit the 40h / 5-shift ceiling → clean week
+    fireEvent.click(screen.getByRole('button', { name: /next →/i }))
+    expect(screen.getByText(/did you work these exact same days/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /yes — same days/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /no — different days/i })).toBeTruthy()
+  })
+
+  it('"Yes — same days" fires onConfirm once with the first week bundled under firstWeek', () => {
+    const { mockConfirm } = renderBiweekly()
+    markDaysWorked(5)
+    fireEvent.click(screen.getByRole('button', { name: /next →/i }))
+    fireEvent.click(screen.getByRole('button', { name: /yes — same days/i }))
+    expect(mockConfirm).toHaveBeenCalledOnce()
+    const [confirmation, logEntry] = mockConfirm.mock.calls[0]
+    expect(confirmation.firstWeek).toBeTruthy()
+    expect(confirmation.firstWeek.idx).toBe(BIWEEKLY_PRIOR_WEEK.idx)
+    // Clean week → no log entry for either week
+    expect(logEntry).toBeNull()
+    expect(confirmation.firstWeek.logEntry).toBeNull()
+  })
+
+  it('"No — different days" opens a fresh grid for the second (paycheck) week', () => {
+    renderBiweekly()
+    markDaysWorked(5)
+    fireEvent.click(screen.getByRole('button', { name: /next →/i }))
+    fireEvent.click(screen.getByRole('button', { name: /no — different days/i }))
+    expect(screen.getByText(/week 2 of 2/i)).toBeTruthy()
+    expect(screen.getByText(/paycheck week of pay period/i)).toBeTruthy()
+    // Second-week date range now visible (Mar 16 – Mar 22)
+    expect(screen.getAllByText(/mar 16/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/mar 22/i).length).toBeGreaterThan(0)
+  })
+
+  it('second week confirm bundles distinct first-week data and finalizes the period', () => {
+    const { mockConfirm } = renderBiweekly()
+    markDaysWorked(5)                                                     // week 1: full ceiling
+    fireEvent.click(screen.getByRole('button', { name: /next →/i }))
+    fireEvent.click(screen.getByRole('button', { name: /no — different days/i }))
+    markDaysWorked(5)                                                     // week 2: full ceiling
+    fireEvent.click(screen.getByRole('button', { name: /next →/i }))
+    expect(mockConfirm).toHaveBeenCalledOnce()
+    const [confirmation] = mockConfirm.mock.calls[0]
+    expect(confirmation.firstWeek.idx).toBe(BIWEEKLY_PRIOR_WEEK.idx)
+  })
+
+  it('falls back to single-week behavior when there is no active prior week', () => {
+    renderBiweekly({ priorWeek: null })
+    // No two-week indicator; behaves as a normal pay-period check-in
+    expect(screen.queryByText(/week 1 of 2/i)).toBeNull()
+  })
+
+  it('a first-week deficit is logged against the prior week idx, not the paycheck week', () => {
+    const { mockConfirm } = renderBiweekly()
+    markDaysWorked(4) // 4 of 5 shifts → under ceiling → Layer 2
+    fireEvent.click(screen.getByRole('button', { name: /next →/i }))
+    // Layer 2 pre-filled as a missed/under-ceiling entry — confirm it
+    fireEvent.click(screen.getByRole('button', { name: /log & confirm/i }))
+    fireEvent.click(screen.getByRole('button', { name: /yes, log it/i }))
+    // Now on the same-days prompt → reuse for week 2
+    fireEvent.click(screen.getByRole('button', { name: /yes — same days/i }))
+    const [confirmation, logEntry] = mockConfirm.mock.calls[0]
+    // First-week log entry stamped to the prior week
+    expect(confirmation.firstWeek.logEntry.weekIdx).toBe(BIWEEKLY_PRIOR_WEEK.idx)
+    // Mirrored paycheck-week log entry stamped to the pay week
+    expect(logEntry.weekIdx).toBe(BIWEEKLY_PAY_WEEK.idx)
+  })
+})

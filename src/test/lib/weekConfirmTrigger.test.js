@@ -140,6 +140,48 @@ describe('confirmTriggerWeek — base user (Friday pay period)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Biweekly confirmTriggerWeek — the check-in must not fire until the day after
+// the SECOND (paycheck) week of the pay period closes. The real App memo filters
+// on w.isPayWeek (only paycheck weeks), so this variant adds that filter.
+// Period = [week 6 (first), week 7 (paycheck)]; payPeriodEndDay=5 (Friday).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('confirmTriggerWeek — biweekly (paycheck week gates the period)', () => {
+  // isPayWeek is true only for the paycheck (second) week. Mirror the App filter.
+  function biweeklyTrigger(allWeeks, weekConfirmations, today) {
+    const payWeeks = allWeeks.filter(w =>
+      w.active && w.isPayWeek && isPayPeriodPast(w, today, {})
+    )
+    const unconfirmed = payWeeks.filter(w => !weekConfirmations[w.idx])
+    return unconfirmed.length ? unconfirmed[unconfirmed.length - 1] : null
+  }
+
+  // First week of the period: Jan 5 fiscal weekEnd. Not a pay week.
+  const FIRST_WEEK = { ...makeWeek(6, '2026-01-05', true, 5), isPayWeek: false }
+  // Paycheck week: Jan 12 weekEnd (Mon) → payPeriodEndDate = Jan 9 (Fri).
+  const PAY_WEEK = { ...makeWeek(7, '2026-01-12', true, 5), isPayWeek: true }
+  const PERIOD = [FIRST_WEEK, PAY_WEEK]
+
+  it('does NOT trigger after only the first week closes (Jan 3, before the paycheck week Friday)', () => {
+    // FIRST_WEEK payPeriodEndDate = Jan 2 (Fri of week ending Jan 5); its period is
+    // "past" on Jan 3 — but it is not a pay week, so the check-in stays closed.
+    expect(biweeklyTrigger(PERIOD, {}, '2026-01-03')).toBeNull()
+  })
+
+  it('does NOT trigger on the paycheck week pay-period end day itself (Fri Jan 9)', () => {
+    expect(biweeklyTrigger(PERIOD, {}, '2026-01-09')).toBeNull()
+  })
+
+  it('triggers the day after the paycheck week closes (Sat Jan 10) — on the pay week', () => {
+    expect(biweeklyTrigger(PERIOD, {}, '2026-01-10')).toMatchObject({ idx: 7, isPayWeek: true })
+  })
+
+  it('never surfaces the non-paycheck first week as the trigger', () => {
+    expect(biweeklyTrigger(PERIOD, {}, '2026-01-20')).toMatchObject({ idx: 7 })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DHL confirmTriggerWeek (payPeriodEndDay=0, Sunday) — Monday 6:01 AM gate
 // weekEnd=Jan 12 Mon → payPeriodEndDate=Jan 11 Sun → triggerDay=Jan 12 Mon
 // ─────────────────────────────────────────────────────────────────────────────

@@ -2628,6 +2628,7 @@ export default function App() {
         <WeekConfirmModal
           key={confirmTriggerWeek.idx}
           week={confirmTriggerWeek}
+          priorWeek={allWeeks.find(w => w.idx === confirmTriggerWeek.idx - 1) ?? null}
           config={config}
           logs={logs}
           isAdmin={isAdmin}
@@ -2635,10 +2636,19 @@ export default function App() {
           onConfirm={(confirmation, logEntry) => {
             const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
             const confirmedAt = new Date().toISOString();
+            // Biweekly two-week flow bundles the first week's real confirmation +
+            // log entry under `firstWeek`; strip it out of the stored paycheck-week
+            // record so we don't duplicate the log blob in persistence.
+            const firstWeek = confirmation.firstWeek ?? null;
+            const { firstWeek: _omitFirstWeek, ...payWeekConfirmation } = confirmation;
             setWeekConfirmations(c => {
-              const next = { ...c, [confirmTriggerWeek.idx]: confirmation };
-              // Biweekly: auto-confirm the paired non-paycheck week (the one before) as clean
-              if ((config.userPaySchedule === "biweekly" || config.userPaySchedule === "salary") && confirmTriggerWeek.idx > 0) {
+              const next = { ...c, [confirmTriggerWeek.idx]: payWeekConfirmation };
+              if (firstWeek) {
+                // The modal collected the first week explicitly — store its record.
+                next[firstWeek.idx] = firstWeek.confirmation;
+              } else if ((config.userPaySchedule === "biweekly" || config.userPaySchedule === "salary") && confirmTriggerWeek.idx > 0) {
+                // Salary (and biweekly first-period fallback): auto-confirm the
+                // paired non-paycheck week (the one before) as clean.
                 const priorIdx = confirmTriggerWeek.idx - 1;
                 if (!next[priorIdx]) {
                   const prior = allWeeks.find(w => w.idx === priorIdx);
@@ -2667,6 +2677,7 @@ export default function App() {
               return next;
             });
             if (logEntry) setLogs(p => [...p, logEntry]);
+            if (firstWeek?.logEntry) setLogs(p => [...p, firstWeek.logEntry]);
           }}
           onDismiss={() => setConfirmDismissed(true)}
         />

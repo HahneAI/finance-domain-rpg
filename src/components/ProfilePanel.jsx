@@ -5,6 +5,7 @@ import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js"
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, PanelHero, SH } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
+import { canAccessTaxPlan } from "../lib/entitlements.js";
 import { InvestorAdminPanel } from "./InvestorAdminPanel.jsx";
 
 // Account panel uses white (primary) labels instead of the shared dim label color.
@@ -1577,9 +1578,16 @@ function ListRow({ label, summary, onPress, last }) {
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
 export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, today, weekConfirmations = {} }) {
-  // Tax Plan is admin-only by default, but can be unlocked per-user (e.g. trusted
-  // coworkers) via the tax_projections_enabled flag — see migration 016.
-  const canSeeTaxPlan = isAdmin || taxProjectionsEnabled;
+  // Tax Plan unlock paths (any one grants it — see canAccessTaxPlan):
+  //   • setup wizard "Unlock projections" (config.taxExemptOptIn) — the normal path
+  //   • manual per-user flag (tax_projections_enabled, migration 016) — overrides the
+  //     wizard path, so a user who never opted in during setup can still be granted it
+  //   • admin
+  const canSeeTaxPlan = canAccessTaxPlan({
+    isAdmin,
+    taxProjectionsEnabled,
+    taxExemptOptIn: config.taxExemptOptIn,
+  });
   const [activeSection, setActiveSection] = useState(null);
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
   const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });

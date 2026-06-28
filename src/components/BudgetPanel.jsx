@@ -5,7 +5,7 @@ import { getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, bu
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck, breakdownMonthlyEquiv } from "../lib/expense.js";
 import { formatFiscalWeekLabel, formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { Card, VT, SmBtn, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
+import { Card, VT, SmBtn, Pressable, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 import { MonthQuarterSelector } from "./MonthQuarterSelector.jsx";
 import { BulkEditPanel } from "./BulkEditPanel.jsx";
@@ -1341,7 +1341,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           />
         )}
         {checkBreakdown && (
-          <button
+          <Pressable
             onClick={() => setShowCheckInfo(true)}
             aria-label="Show paycheck breakdown"
             style={{
@@ -1355,7 +1355,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             }}
             onMouseEnter={e => { e.currentTarget.style.color = "var(--color-accent-primary)"; }}
             onMouseLeave={e => { e.currentTarget.style.color = "var(--color-text-secondary)"; }}
-          >breakdown ↗</button>
+          >breakdown ↗</Pressable>
         )}
       </div>
     </div>
@@ -1467,7 +1467,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             });
             return deletedInCat.length > 0 ? (
               <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
-                <button
+                <Pressable
                   onClick={() => { setRestoreSheetCat(cat); setRestorePendingExpId(null); document.body.classList.add("modal-open"); }}
                   style={{
                     fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
@@ -1476,7 +1476,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                     padding: "5px 12px", cursor: "pointer", fontFamily: "var(--font-sans)",
                     fontWeight: "500",
                   }}
-                >Restore Deleted</button>
+                >Restore Deleted</Pressable>
               </div>
             ) : null;
           })()}
@@ -1634,7 +1634,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   }}>
                     {f2(effAmt * perCheckFactor)}<span style={{ fontSize: "10px", color: "var(--color-text-secondary)", fontWeight: "normal" }}>/{checkUnit}</span>
                   </div>
-                  {<button
+                  {<Pressable
                     onClick={(e) => { e.stopPropagation(); openSheet(exp); }}
                     aria-label={`Edit ${exp.label}`}
                     style={{
@@ -1652,7 +1652,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                       <path d="M11.5 2.5 L13.5 4.5 L5 13 L2 14 L3 11 Z"/>
                       <path d="M10.5 3.5 L12.5 5.5"/>
                     </svg>
-                  </button>}
+                  </Pressable>}
                 </div>
               </div>
             </div>;
@@ -1727,7 +1727,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px", width: "100%" }}>Save scope:</div>
           {/* Primary: this-month-onward gets its own full-width row, label spells out the viewed month
               (falls back to the current month when viewing a whole quarter) */}
-          <button onClick={addExpFromMonthForward} disabled={!newExp.label} style={{ width: "100%", background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "14px", minHeight: "48px", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>{anchorMonthFull}+ Onward</button>
+          <Pressable onClick={addExpFromMonthForward} disabled={!newExp.label} style={{ width: "100%", background: newExp.label ? "var(--color-green)" : "var(--color-border-subtle)", color: newExp.label ? "var(--color-bg-base)" : "#666", border: "none", borderRadius: "12px", padding: "14px", minHeight: "48px", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: newExp.label ? "pointer" : "default", fontWeight: "bold" }}>{anchorMonthFull}+ Onward</Pressable>
           {/* Secondary row: month-only, all-quarters, and exit */}
           <div style={{ display: "flex", gap: "8px", width: "100%" }}>
             <SmBtn onClick={addExpThisMonth} c={newExp.label ? "var(--color-accent-primary)" : "var(--color-text-disabled)"} style={{ flex: 1 }}>{anchorMonthLabel} ONLY</SmBtn>
@@ -1735,7 +1735,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             <SmBtn onClick={_closeAddForm} style={{ flex: 1 }}>✕</SmBtn>
           </div>
         </div>
-      </div> : <button onClick={() => setAddingExp(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</button>}
+      </div> : <Pressable onClick={() => setAddingExp(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</Pressable>}
     </div>}
 
     {/* BREAKDOWN — cashflow summary at top, then annual projection table */}
@@ -1997,10 +1997,10 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             </div>;
           })()}
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-green)" : "var(--color-border-subtle)", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontWeight: "bold" }}>ADD LOAN</button>
-            <button onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
+            <Pressable onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-green)" : "var(--color-border-subtle)", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontWeight: "bold" }}>ADD LOAN</Pressable>
+            <Pressable onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</Pressable>
           </div>
-        </div> : <button onClick={() => setAddingLoan(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</button>}
+        </div> : <Pressable onClick={() => setAddingLoan(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</Pressable>}
       </div>;
     })()}
     {touchDragOverlay.label && createPortal(<div
@@ -2077,10 +2077,10 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 </span>
               )}
             </div>
-            <button
+            <Pressable
               onClick={() => setShowCheckInfo(false)}
               style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1, flexShrink: 0 }}
-            >×</button>
+            >×</Pressable>
           </div>
 
           {/* ── Subtraction math formula ── */}
@@ -2118,7 +2118,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
           <MathRow op="=" label="Left" val={f2(checkBreakdown.left)} valColor={checkBreakdown.left >= 0 ? "var(--color-green)" : "var(--color-deduction)"} large />
 
           <div style={{ marginTop: "20px", textAlign: "center" }}>
-            <button
+            <Pressable
               onClick={() => setShowCheckInfo(false)}
               style={{
                 background: "var(--color-bg-raised)", color: "var(--color-text-secondary)",
@@ -2126,7 +2126,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 padding: "8px 20px", fontSize: "10px", letterSpacing: "2px",
                 textTransform: "uppercase", cursor: "pointer", fontFamily: "var(--font-sans)",
               }}
-            >Close</button>
+            >Close</Pressable>
           </div>
         </div>
       </div>,
@@ -2190,8 +2190,8 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 </div>
                 <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--color-text-primary)" }}>Restore Deleted</div>
               </div>
-              <button onClick={closeRestoreSheet}
-                style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1 }}>×</button>
+              <Pressable onClick={closeRestoreSheet}
+                style={{ background: "none", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "4px 8px", lineHeight: 1 }}>×</Pressable>
             </div>
             {/* Scrollable content */}
             <div style={{ overflowY: "auto", flex: 1, padding: "0 20px calc(20px + var(--safe-area-bottom))" }}>
@@ -2221,7 +2221,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                       </div>
                     </div>
                     {!isPending && (
-                      <button
+                      <Pressable
                         onClick={() => setRestorePendingExpId(exp.id)}
                         style={{
                           fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
@@ -2229,7 +2229,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                           border: "1px solid rgba(0,200,150,0.24)", borderRadius: "8px",
                           padding: "5px 12px", cursor: "pointer", fontFamily: "var(--font-sans)", flexShrink: 0,
                         }}
-                      >Restore</button>
+                      >Restore</Pressable>
                     )}
                   </div>
 
@@ -2241,23 +2241,23 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                       </div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                         {activeMonth && (
-                          <button onClick={() => restoreExpense(exp.id, "month")}
+                          <Pressable onClick={() => restoreExpense(exp.id, "month")}
                             style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
                             {activeMonthLabel} only
-                          </button>
+                          </Pressable>
                         )}
-                        <button onClick={() => restoreExpense(exp.id, "quarter")}
+                        <Pressable onClick={() => restoreExpense(exp.id, "quarter")}
                           style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
                           Q{ap + 1} months
-                        </button>
-                        <button onClick={() => restoreExpense(exp.id, "year")}
+                        </Pressable>
+                        <Pressable onClick={() => restoreExpense(exp.id, "year")}
                           style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-accent-primary)", background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.24)", borderRadius: "8px", padding: "6px 12px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
                           Rest of year
-                        </button>
-                        <button onClick={() => setRestorePendingExpId(null)}
+                        </Pressable>
+                        <Pressable onClick={() => setRestorePendingExpId(null)}
                           style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", background: "transparent", border: "none", padding: "6px 4px", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
                           Cancel
-                        </button>
+                        </Pressable>
                       </div>
                     </div>
                   )}
@@ -2326,7 +2326,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 ) : null;
               })()}
             </div>
-            <button onClick={closeSheet} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "2px", lineHeight: 1, flexShrink: 0 }}>✕</button>
+            <Pressable onClick={closeSheet} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "20px", cursor: "pointer", padding: "2px", lineHeight: 1, flexShrink: 0 }}>✕</Pressable>
           </div>
           {/* Scrollable content */}
           <div style={{ overflowY: "auto", flex: 1, padding: "18px 20px 40px" }}>
@@ -2415,17 +2415,17 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                         { label: `Q${ap + 1} +`,    action: () => { deleteMonthForward(sheetExpLive.id); closeSheet(); } },
                       ]),
                     ].map(({ label, action }) => (
-                      <button key={label} onClick={action} style={{ flex: 1, padding: "11px 8px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "12px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "80px" }}>
+                      <Pressable key={label} onClick={action} style={{ flex: 1, padding: "11px 8px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "12px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "80px" }}>
                         {label}
-                      </button>
+                      </Pressable>
                     ))}
                   </div>
-                  <button onClick={() => setSheetDeleteConfirm(false)} style={{ padding: "10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+                  <Pressable onClick={() => setSheetDeleteConfirm(false)} style={{ padding: "10px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: "10px" }}>
-                  <button onClick={() => { setSheetMode("edit"); startEditExp(sheetExpLive); }} style={{ flex: 1, padding: "13px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-primary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Edit</button>
-                  {!isFoodSheet && <button onClick={() => setSheetDeleteConfirm(true)} style={{ flex: 1, padding: "13px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "14px", color: "var(--color-deduction)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Delete</button>}
+                  <Pressable onClick={() => { setSheetMode("edit"); startEditExp(sheetExpLive); }} style={{ flex: 1, padding: "13px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-primary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Edit</Pressable>
+                  {!isFoodSheet && <Pressable onClick={() => setSheetDeleteConfirm(true)} style={{ flex: 1, padding: "13px", background: "#1e0f0f", border: "1px solid #3d1515", borderRadius: "14px", color: "var(--color-deduction)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600 }}>Delete</Pressable>}
                 </div>
               )}
             </>) : (
@@ -2457,23 +2457,23 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 {/* Primary: the onward save gets its own full-width row; the rest sit in a secondary row */}
                 {activeMonth !== null ? (
                   <>
-                    <button disabled={belowFloor} onClick={() => saveFromMonthForward(sheetExpLive.id)} style={{ width: "100%", padding: "14px", minHeight: "48px", background: "var(--color-green)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold", ...saveBtnDisabledStyle }}>{activeMonthFull}+ Onward</button>
+                    <Pressable disabled={belowFloor} onClick={() => saveFromMonthForward(sheetExpLive.id)} style={{ width: "100%", padding: "14px", minHeight: "48px", background: "var(--color-green)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold", ...saveBtnDisabledStyle }}>{activeMonthFull}+ Onward</Pressable>
                     <div style={{ display: "flex", gap: "6px", width: "100%" }}>
-                      <button disabled={belowFloor} onClick={() => saveThisMonth(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>{activeMonthLabel} Only</button>
-                      <button disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "10px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>This Qtr</button>
-                      <button disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>All Qtrs</button>
+                      <Pressable disabled={belowFloor} onClick={() => saveThisMonth(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>{activeMonthLabel} Only</Pressable>
+                      <Pressable disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "10px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>This Qtr</Pressable>
+                      <Pressable disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>All Qtrs</Pressable>
                     </div>
                   </>
                 ) : (
                   <>
-                    <button disabled={belowFloor} onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ width: "100%", padding: "14px", minHeight: "48px", background: "var(--color-green)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold", ...saveBtnDisabledStyle }}>Q{ap + 1}+ Onward</button>
+                    <Pressable disabled={belowFloor} onClick={() => saveAllQuarters(sheetExpLive.id)} style={{ width: "100%", padding: "14px", minHeight: "48px", background: "var(--color-green)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold", ...saveBtnDisabledStyle }}>Q{ap + 1}+ Onward</Pressable>
                     <div style={{ display: "flex", gap: "6px", width: "100%" }}>
-                      <button disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>Q{ap + 1} Only</button>
-                      <button disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>All Qtrs</button>
+                      <Pressable disabled={belowFloor} onClick={() => saveThisQuarterOnly(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.3)", borderRadius: "10px", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>Q{ap + 1} Only</Pressable>
+                      <Pressable disabled={belowFloor} onClick={() => saveAllQuartersFull(sheetExpLive.id)} style={{ flex: 1, padding: "10px 6px", background: "rgba(34,197,94,0.10)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "10px", color: "var(--color-green)", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, minWidth: "60px", ...saveBtnDisabledStyle }}>All Qtrs</Pressable>
                     </div>
                   </>
                 )}
-                <button onClick={() => { setSheetMode("view"); setEditId(null); }} style={{ padding: "11px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+                <Pressable onClick={() => { setSheetMode("view"); setEditId(null); }} style={{ padding: "11px", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "14px", color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
                   </>);
                 })()}
               </div>
@@ -2510,8 +2510,8 @@ function LoanEditForm({ vals, setVals, onSave, onCancel, iS, lS }) {
       <div><label style={lS}>Note</label><input type="text" value={vals.note ?? ""} onChange={e => setVals(v => ({ ...v, note: e.target.value }))} style={iS} /></div>
     </div>
     <div style={{ display: "flex", gap: "8px" }}>
-      <button onClick={onSave} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</button>
-      <button onClick={onCancel} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</button>
+      <Pressable onClick={onSave} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</Pressable>
+      <Pressable onClick={onCancel} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</Pressable>
     </div>
   </div>;
 }

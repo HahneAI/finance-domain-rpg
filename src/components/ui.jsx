@@ -212,6 +212,10 @@ export function Pressable({
     handlers.onPointerDown(e);
   };
 
+  // Preserve any transition the consumer set (e.g. hover color) by appending it to
+  // the scale-spring transition instead of letting `...style` clobber it.
+  const { transition: consumerTransition, ...restStyle } = style || {};
+
   return (
     <Tag
       ref={elRef}
@@ -223,8 +227,8 @@ export function Pressable({
         position: "relative",
         overflow: "hidden",
         isolation: "isolate",
-        ...pressScaleStyle(interactive && pressed, scale),
-        ...style,
+        ...pressScaleStyle(interactive && pressed, scale, consumerTransition),
+        ...restStyle,
       }}
     >
       <PressFlashOverlay lit={interactive && lit} color={fill ?? flashColor} opacity={flashOpacity} />

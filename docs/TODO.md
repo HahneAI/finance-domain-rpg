@@ -391,8 +391,12 @@ financial advisor — Coach answers questions about the app using the user's rea
   acknowledges the disclaimer when those topics come up
 - [ ] **Claude API integration** — Haiku for short conversational answers; Sonnet for richer
   multi-step responses; prompt caching on the feature guide context block
-- [ ] **Conversation scope** — session-scoped only (not persisted across sessions initially);
-  "New Chat" clears history
+- [ ] **Conversation persistence** — chat history, Coach summaries, and key insights are saved
+  per-session to Supabase via the `coach_chats` table → full schema in **§18.H**; "New Chat"
+  starts a fresh record; past chats are browsable in a history list
+- [ ] **Auto-summary** — at end of session (user closes chat or after 10 min idle), Coach
+  generates a 1–3 sentence summary of the conversation stored in `coach_chats.summary`; surfaced
+  in the history list as a preview
 - [ ] **Mobile UX** — full-screen sheet; keyboard push handled cleanly with `safe-area-inset-bottom`;
   Coach avatar shown in the panel header; input pinned above keyboard
 
@@ -492,6 +496,191 @@ trend, and the static copy is rewritten to match Coach's voice.*
 - [ ] **Cost controls** — Haiku for Coach messages, FAQ answers, and net worth triggers; Sonnet
   for statement summaries and job hunt drafts; log token counts per call type in dev
 - [ ] **Env vars** — add `ANTHROPIC_API_KEY` to Vercel env + CLAUDE.md env vars section
+- [ ] **`coach_chats` table** — all conversation + search history lives here; schema in **§18.H**;
+  load recent chats on auth via `db.js` alongside the main `user_data` fetch
+
+---
+
+### H. Chat & Search History Persistence (Supabase)
+
+*Every Coach conversation and every Job Scout search is a row in `coach_chats`, linked to the
+user by a foreign key. This gives users a persistent record across devices and sessions, and
+gives Coach context to reference past conversations when relevant.*
+
+#### H1. Migration — `017_add_coach_chats.sql`
+
+```sql
+CREATE TABLE coach_chats (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         UUID NOT NULL REFERENCES user_data(id) ON DELETE CASCADE,
+
+  -- discriminator: what kind of record is this row?
+  chat_type       TEXT NOT NULL
+                  CHECK (chat_type IN ('ask_coach', 'job_scout', 'job_hunt', 'statement_summary')),
+
+  -- human-readable label shown in history list; auto-generated, user-editable
+  title           TEXT,
+
+  -- full message thread: [{role, content, timestamp}]
+  messages        JSONB NOT NULL DEFAULT '[]'::jsonb,
+
+  -- Coach-generated 1-3 sentence summary written at end of session
+  summary         TEXT,
+
+  -- structured insights extracted from the conversation (statement insight keys, etc.)
+  insights        JSONB,
+
+  -- job_scout only: the search parameters that produced this record
+  search_params   JSONB,   -- { jobTitle, address, radiusMiles, searchTerms[] }
+
+  -- job_scout only: compiled employer list
+  search_results  JSONB,   -- [{ businessName, town, state, phone, category, searchTerm }]
+
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- fast lookup: all chats for a user, newest first
+CREATE INDEX coach_chats_user_id_created_at
+  ON coach_chats (user_id, created_at DESC);
+```
+
+- [ ] **Write migration** `database/migrations/017_add_coach_chats.sql`
+- [ ] **RLS policies** — users may `SELECT`, `INSERT`, `UPDATE`, `DELETE` their own rows
+  (`user_id = auth.uid()`); no public access; service-role bypasses for admin diagnostic
+- [ ] **`updated_at` trigger** — add `moddatetime` trigger so `updated_at` auto-updates on row change
+  (same pattern as `user_data`)
+
+#### H2. `db.js` integration
+
+- [ ] **`loadCoachChats(userId, limit = 20)`** — fetches the N most recent rows for the user on
+  sign-in; stored in a `coachChats` array alongside the existing in-memory state
+- [ ] **`saveCoachChat(chat)`** — upserts a single row by `id`; called on every message append
+  (debounced 1s) and on session close (immediate)
+- [ ] **`deleteCoachChat(id)`** — hard-deletes a single history row; exposed via a swipe-to-delete
+  or long-press action in the history list
+- [ ] **In-memory shape** — `coachChats` array is a peer of `config`, `logs`, `goals` in App state;
+  passed down only to the Coach panel (no other panels read it)
+
+#### H3. Chat history UI
+
+- [ ] **History list panel** — within the Ask Coach panel, a scrollable list of past chats grouped
+  by date (Today / This Week / Older); each row shows: `title` (or first user message truncated),
+  `summary` preview, `chat_type` chip (ask_coach / job_scout), and `created_at` relative date
+- [ ] **Tap to resume** — tapping a history row loads the full `messages` array back into the
+  active chat view so the user can continue the conversation
+- [ ] **New Chat button** — always visible at the top of the history list; starts a fresh
+  `coach_chats` row with `messages: []` and focuses the input
+- [ ] **Job Scout entries** — `chat_type: 'job_scout'` rows render a compact result-count preview
+  ("Found 14 employers") instead of a message preview; tapping opens the Job Scout results view
+  (§18.I) rather than the chat view
+
+#### H4. Summary + insight generation
+
+- [ ] **End-of-session summary** — after session idle (10 min) or explicit "End Chat", fire a
+  Haiku call: system prompt instructs Coach to summarize the conversation in 1–3 sentences;
+  result written to `coach_chats.summary` and `updated_at` bumped
+- [ ] **Statement insight extraction** — for `chat_type: 'statement_summary'` rows, write
+  structured key findings into `insights` JSONB so the Statements panel can display them inline
+  without re-calling the API on every render
+- [ ] **Admin diagnostic** — DB Row Viewer → add a "Coach Chats" count line: "N saved chats
+  (M job scout / K ask_coach / J statement)"; tapping the count shows the 5 most recent titles
+
+---
+
+### I. Job Scout — Location-Based Employer Search
+
+*A specialized search that answers: "Who around me is likely to have this job opening?" — not a
+job board, not a posting aggregator. Coach runs a grid of industry-category searches against a
+business lookup API, compiles every result into a deduplicated employer list with phone numbers,
+and saves the whole thing as a persistent "search" that the user can call from.*
+
+*Saved as `chat_type: 'job_scout'` in `coach_chats`. Lives inside the Job Loss Dashboard (§15.C)
+and the Job Hunt panel (§18.E), but the search entry point can also live in the Ask Coach panel
+history sidebar for quick re-access.*
+
+#### I1. Search input
+
+- [ ] **Job title / type field** — free-text input; examples: "forklift operator", "warehouse
+  associate", "CDL driver"; used both to generate category search terms and to label the saved search
+- [ ] **Location input** — full address or city + state; geocoded on the serverless side to a
+  lat/lng center point; pre-filled from `config.userState` if no address is set
+- [ ] **Radius slider** — miles from the center point; range 5–100 mi; default 30 mi
+- [ ] **"Run Search" button** — triggers `api/job-scout.js`; shows a loading state with a
+  progress indicator per search term batch ("Searching: warehouses…")
+
+#### I2. Search term generation (Coach-assisted)
+
+- [ ] **Term generation** — before hitting the business API, call Claude (Haiku) with the job
+  title and ask it to return 3–5 industry category labels that are most likely to employ someone
+  in that role; examples for "forklift operator": ["warehouse", "distribution center", "lumber
+  yard", "manufacturing plant", "building supply"]; this avoids hardcoding term lists and adapts
+  to any job type
+- [ ] **Term override** — advanced toggle lets the user see and manually edit the generated search
+  terms before running the search
+
+#### I3. Business search API
+
+- [ ] **Primary API choice** — Google Places API "Text Search" (`/maps/api/place/textsearch/json`)
+  with query = `"[search term] near [lat,lng]"` + `radius` in meters; returns name, address
+  components (city/town), and phone (via Place Details); chosen for coverage depth in rural/suburban
+  areas where the use case concentrates
+- [ ] **Fallback / alternative** — if Google Places is cost-prohibitive, evaluate SerpAPI
+  "Local Results" (wraps Google Maps search) or Yelp Fusion `business/search` by lat/lng + category
+- [ ] **Per-term calls** — run one API call per search term (3–5 calls); merge all result arrays
+- [ ] **Deduplication** — deduplicate by `place_id` (Google) or by normalized `(businessName,
+  phone)` pair; a business that appears under two search terms is kept once with both `searchTerms`
+  merged into its record
+- [ ] **Fields captured per result:**
+  - `businessName` (Place `name`)
+  - `town` (address component: `locality` or `sublocality`)
+  - `state` (address component: `administrative_area_level_1`)
+  - `phone` (Place Details `formatted_phone_number`)
+  - `category` (the search term that surfaced this result)
+  - `placeId` (for dedup and potential deep-link to Google Maps)
+
+#### I4. Results UI
+
+- [ ] **Results list** — full-screen view with a header card showing: job title, location, radius,
+  result count, search date; employer rows below sorted by distance (closest first)
+- [ ] **Employer row** — shows: business name (bold), town + state, category chip (e.g. "lumber yard"),
+  and a **Call** button
+- [ ] **Call button** — renders as `<a href="tel:+1XXXXXXXXXX">` with the phone number stripped to
+  digits only (`replace(/\D/g, '')`); on mobile, tapping triggers the native OS phone dialer UI
+  (no custom implementation needed — the `tel:` scheme is handled by the OS); styled as a
+  teal-filled SmBtn with a phone icon; shows the formatted number as label ("(573) 555-0182")
+- [ ] **"No phone found" state** — if the Place Details call returns no phone, row shows a grey
+  "No phone on file" badge instead of the Call button; business name links to Google Maps via
+  `maps.google.com/?q=place_id:...`
+- [ ] **Filter bar** — filter by category chip (e.g. show only "warehouse" results); "All" default
+- [ ] **Result count badge** — header shows "14 employers found"; updates live as filters change
+
+#### I5. Saving + revisiting
+
+- [ ] **Auto-save** — as soon as the search completes, write a `coach_chats` row with:
+  `chat_type: 'job_scout'`, `title: "Forklift Operator — Perryville MO (30 mi)"`,
+  `search_params: { jobTitle, address, radiusMiles, searchTerms }`,
+  `search_results: [...]` (full deduplicated array)
+- [ ] **History list entry** — shows up in the Ask Coach history sidebar as a job scout chip;
+  tapping reopens the results view with no re-fetch (data is in the saved row)
+- [ ] **Re-run search** — "Refresh" button in the results header re-runs the same search params
+  and overwrites `search_results` + `updated_at` on the existing row; useful when checking back
+  after a few weeks
+- [ ] **Application tracker link** — each employer row has a secondary "Track" action that creates
+  a Re-employment Tracker entry (§15.C6) pre-filled with business name and "Applied" status
+
+#### I6. Serverless route — `api/job-scout.js`
+
+- [ ] **Auth** — verify Supabase Bearer token (same pattern as `api/delete-account.js`)
+- [ ] **Term generation call** — call Claude Haiku to produce 3–5 search terms for the given job
+  title; cache the result in the response so re-runs with the same title don't re-call Claude
+- [ ] **Business API calls** — fan out 3–5 Places Text Search calls in parallel (`Promise.all`);
+  for each result that lacks a phone number, fire a Places Details call to fetch it
+- [ ] **Assemble + return** — deduplicate, sort by distance, return the full result array to the
+  client; also write the `coach_chats` row server-side (so it's persisted even if the client
+  closes before the save fires)
+- [ ] **Env vars** — `GOOGLE_PLACES_API_KEY` added to Vercel env; key restricted to the
+  Places API only (not Maps JS, not Geocoding); billing alert set at a low threshold
 
 ---
 

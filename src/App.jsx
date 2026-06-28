@@ -17,6 +17,7 @@ import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
+import { Pressable } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
 import { JobLossEntry } from "./components/JobLossEntry.jsx";
 import { ExpenseTriage } from "./components/ExpenseTriage.jsx";
@@ -82,7 +83,7 @@ const BOTTOM_NAV = [
 
 function SidebarNavItem({ item, active, onClick }) {
   return (
-    <button
+    <Pressable
       onClick={onClick}
       style={{
         display: "block",
@@ -102,7 +103,7 @@ function SidebarNavItem({ item, active, onClick }) {
       }}
     >
       {item.label}
-    </button>
+    </Pressable>
   );
 }
 
@@ -1175,7 +1176,7 @@ export default function App() {
                 <div style={{ fontSize: "13px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>Authority Finance</div>
               </div>
             </div>
-            <button
+            <Pressable
               title="Sign out"
               onClick={async () => { await supabase.auth.signOut({ scope: "local" }); }}
               style={{ background: "transparent", border: "none", color: "var(--color-deduction)", cursor: "pointer", padding: "2px 0", marginTop: "1px", lineHeight: 1, display: "flex", alignItems: "center" }}
@@ -1185,15 +1186,15 @@ export default function App() {
                 <polyline points="16 17 21 12 16 7"/>
                 <line x1="21" y1="12" x2="9" y2="12"/>
               </svg>
-            </button>
+            </Pressable>
           </div>
           {currentWeekNumber && <div style={{ display: "inline-block", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 8px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px" }}>{currentWeekLabel}</div>}
           {/* Persistent unconfirmed-weeks badge — always visible when any past week
               lacks a confirmation. Clicking clears confirmDismissed so the modal re-opens. */}
           {unconfirmedCount > 0 && (
-            <button onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-deduction)", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
+            <Pressable onClick={() => setConfirmDismissed(false)} style={{ marginTop: "8px", display: "block", width: "100%", background: "transparent", border: "1px solid #e8856a55", borderRadius: "3px", color: "var(--color-deduction)", padding: "5px 8px", fontSize: "9px", letterSpacing: "1.5px", cursor: "pointer", textTransform: "uppercase", textAlign: "left" }}>
               ◷ {unconfirmedCount} {(config.userPaySchedule ?? "weekly") === "weekly" ? (unconfirmedCount === 1 ? "week" : "weeks") : (unconfirmedCount === 1 ? "pay period" : "pay periods")} to confirm
-            </button>
+            </Pressable>
           )}
           {isAdmin && tempLockDate && (
             <div style={{ marginTop: "8px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: "3px", padding: "5px 8px" }}>
@@ -1203,11 +1204,11 @@ export default function App() {
                   {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                 </span>
               </div>
-              <button
+              <Pressable
                 onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
                 style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", fontSize: "14px", lineHeight: 1, padding: "0 2px", display: "flex", alignItems: "center" }}
                 aria-label="Clear lock date"
-              >×</button>
+              >×</Pressable>
             </div>
           )}
         </div>
@@ -1218,7 +1219,7 @@ export default function App() {
           ))}
           {/* ── Life Events (re-entry wizard) ── */}
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
-            <button
+            <Pressable
               onClick={() => setLifeEventMenu(true)}
               style={{
                 display: "block", width: "100%", textAlign: "left",
@@ -1231,7 +1232,7 @@ export default function App() {
               }}
             >
               Life Events
-            </button>
+            </Pressable>
           </div>
 
           {/* ── Admin Tools ── */}
@@ -1248,10 +1249,10 @@ export default function App() {
                 {tempLockDate ? (
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <span style={{ fontSize: "11px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
-                    <button
+                    <Pressable
                       onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
                       style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 8px", cursor: "pointer" }}
-                    >Clear</button>
+                    >Clear</Pressable>
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
@@ -1261,11 +1262,11 @@ export default function App() {
                       onChange={e => setAdminDateDraft(e.target.value)}
                       style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "11px", padding: "4px 6px", fontFamily: "var(--font-mono)", colorScheme: "dark" }}
                     />
-                    <button
+                    <Pressable
                       onClick={() => { if (adminDateDraft) setTempLockDate(adminDateDraft); }}
                       disabled={!adminDateDraft}
                       style={{ background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "6px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold" }}
-                    >Set</button>
+                    >Set</Pressable>
                   </div>
                 )}
               </div>
@@ -1274,12 +1275,12 @@ export default function App() {
                 <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
                 <div style={{ display: "flex", gap: "6px" }}>
                   {["push", "pull"].map(op => (
-                    <button
+                    <Pressable
                       key={op}
                       onClick={op === "push" ? handleForcePush : handleForcePull}
                       disabled={!!syncStatus?.pending}
                       style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "5px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer" }}
-                    >{op === "push" ? "Push ↑" : "Pull ↓"}</button>
+                    >{op === "push" ? "Push ↑" : "Pull ↓"}</Pressable>
                   ))}
                 </div>
                 {syncStatus && (
@@ -1297,20 +1298,20 @@ export default function App() {
               <div style={{ padding: "0 20px 10px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
-                  <button
+                  <Pressable
                     onClick={() => setConfigViewOpen(v => !v)}
                     style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
-                  >{configViewOpen ? "Hide" : "View"}</button>
+                  >{configViewOpen ? "Hide" : "View"}</Pressable>
                 </div>
                 {configViewOpen && (
                   <div style={{ position: "relative" }}>
                     <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "180px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                       {JSON.stringify(config, null, 2)}
                     </pre>
-                    <button
+                    <Pressable
                       onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
                       style={{ marginTop: "5px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 0", cursor: "pointer" }}
-                    >Copy to Clipboard</button>
+                    >Copy to Clipboard</Pressable>
                   </div>
                 )}
               </div>
@@ -1321,8 +1322,8 @@ export default function App() {
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
                   <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                     {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)" }}>{rowDiff.length} drift</span>}
-                    <button onClick={handleFetchRow} disabled={rowFetching} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</button>
-                    {rowData && <button onClick={() => setRowViewOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide" : "View"}</button>}
+                    <Pressable onClick={handleFetchRow} disabled={rowFetching} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</Pressable>
+                    {rowData && <Pressable onClick={() => setRowViewOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide" : "View"}</Pressable>}
                   </div>
                 </div>
                 {rowData && rowViewOpen && (
@@ -1345,7 +1346,7 @@ export default function App() {
               <div style={{ padding: "0 20px 10px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
-                  <button onClick={() => setTaxGridOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide" : "View"}</button>
+                  <Pressable onClick={() => setTaxGridOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide" : "View"}</Pressable>
                 </div>
                 {taxGridOpen && (() => {
                   const overrides = config.pastWeekTaxStatusOverrides ?? {};
@@ -1382,7 +1383,7 @@ export default function App() {
                 )}
                 <div style={{ display: "flex", gap: "6px" }}>
                   {[1, 2].map(n => (
-                    <button
+                    <Pressable
                       key={n}
                       onClick={() => setAdminDemoView(adminDemoView === n ? null : n)}
                       title={adminDemoView === n ? "Click to exit demo edit mode" : `Edit Demo Account ${n}`}
@@ -1402,7 +1403,7 @@ export default function App() {
                       }}
                     >
                       {adminDemoView === n ? "← Exit" : `Demo ${n}`}
-                    </button>
+                    </Pressable>
                   ))}
                 </div>
               </div>
@@ -1443,7 +1444,7 @@ export default function App() {
             flex: "none",
           }}>
             {/* ── Hamburger — top LEFT (Chime-style) ── */}
-          <button
+          <Pressable
             onClick={() => setDrawerOpen(true)}
             style={{
               background: "transparent",
@@ -1464,7 +1465,7 @@ export default function App() {
             <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-accent-primary)", borderRadius: "1px" }} />
             <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-accent-primary)", borderRadius: "1px" }} />
             <span style={{ display: "block", width: "20px", height: "2px", background: "var(--color-accent-primary)", borderRadius: "1px" }} />
-          </button>
+          </Pressable>
 
           {/* ── Title block — center ── */}
           <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
@@ -1478,11 +1479,11 @@ export default function App() {
                     <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-warning)" }}>
                       {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                     </span>
-                    <button
+                    <Pressable
                       onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
                       style={{ background: "transparent", border: "none", color: "var(--color-warning)", cursor: "pointer", padding: "0 2px", lineHeight: 1, fontSize: "11px", display: "flex", alignItems: "center" }}
                       aria-label="Clear lock date"
-                    >×</button>
+                    >×</Pressable>
                   </div>
                 )}
               </div>
@@ -1491,7 +1492,7 @@ export default function App() {
           </div>
 
           {/* ── Notification bell — top RIGHT (Chime-style) ── */}
-          <button
+          <Pressable
             onClick={() => setConfirmDismissed(false)}
             style={{
               background: "transparent",
@@ -1531,7 +1532,7 @@ export default function App() {
                 {unconfirmedCount}
               </span>
             )}
-          </button>
+          </Pressable>
           </div>
         </div>
 
@@ -1588,7 +1589,7 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                <button
+                <Pressable
                   onClick={() => setExpenseTriageOpen(true)}
                   style={{
                     background: "transparent",
@@ -1601,8 +1602,8 @@ export default function App() {
                   }}
                 >
                   Triage Expenses
-                </button>
-                <button
+                </Pressable>
+                <Pressable
                   onClick={() => {
                     // Auto-reactivate flagged expenses on exit (§15.C3).
                     setExpenses(prev => prev.map(exp => {
@@ -1638,8 +1639,8 @@ export default function App() {
                   }}
                 >
                   Back to Work
-                </button>
-                <button
+                </Pressable>
+                <Pressable
                   onClick={() => setJobLossBannerDismissed(true)}
                   aria-label="Dismiss banner"
                   style={{
@@ -1655,7 +1656,7 @@ export default function App() {
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M18 6L6 18" /><path d="M6 6l12 12" />
                   </svg>
-                </button>
+                </Pressable>
               </div>
             </div>
             );
@@ -1724,7 +1725,7 @@ export default function App() {
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
           </div>
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <button
+            <Pressable
               title="Sign out"
               onClick={async () => { await supabase.auth.signOut({ scope: "local" }); setDrawerOpen(false); setInvestorSession(null); setActiveInvestorAccount(1); setInvestorProfile(null); }}
               style={{ background: "transparent", border: "none", color: "var(--color-deduction)", cursor: "pointer", lineHeight: 1, padding: "2px 6px", display: "flex", alignItems: "center" }}
@@ -1734,14 +1735,14 @@ export default function App() {
                 <polyline points="16 17 21 12 16 7"/>
                 <line x1="21" y1="12" x2="9" y2="12"/>
               </svg>
-            </button>
-            <button
+            </Pressable>
+            <Pressable
               onClick={() => setDrawerOpen(false)}
               style={{ background: "transparent", border: "none", color: "var(--color-text-primary)", cursor: "pointer", fontSize: "20px", lineHeight: 1, padding: "2px 4px", marginTop: "2px" }}
               aria-label="Close navigation"
             >
               ✕
-            </button>
+            </Pressable>
           </div>
         </div>
 
@@ -1753,7 +1754,7 @@ export default function App() {
           ))}
           {/* ── Life Events (re-entry wizard) ── */}
           <div style={{ borderTop: "1px solid #1e1e1e", marginTop: "8px", paddingTop: "8px" }}>
-            <button
+            <Pressable
               onClick={() => { setLifeEventMenu(true); setDrawerOpen(false); }}
               style={{
                 display: "block", width: "100%", textAlign: "left",
@@ -1766,9 +1767,9 @@ export default function App() {
               }}
             >
               Life Events
-            </button>
+            </Pressable>
             {!isStandalone && (
-              <button
+              <Pressable
                 type="button"
                 aria-haspopup="dialog"
                 aria-controls="pwa-install-dialog"
@@ -1790,7 +1791,7 @@ export default function App() {
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
                 Install on home screen
-              </button>
+              </Pressable>
             )}
           </div>
         </nav>
@@ -1811,7 +1812,7 @@ export default function App() {
               {[{ n: 1, label: "1" }, { n: 2, label: "2" }, { n: 3, label: "3*" }].map(({ n, label }) => {
                 const active = activeInvestorAccount === n;
                 return (
-                  <button
+                  <Pressable
                     key={n}
                     type="button"
                     onClick={() => handleSelectInvestorAccount(n)}
@@ -1832,7 +1833,7 @@ export default function App() {
                     }}
                   >
                     {label}
-                  </button>
+                  </Pressable>
                 );
               })}
             </div>
@@ -1852,10 +1853,10 @@ export default function App() {
             {tempLockDate ? (
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <span style={{ fontSize: "12px", color: "var(--color-warning)", fontFamily: "var(--font-mono)" }}>{tempLockDate}</span>
-                <button
+                <Pressable
                   onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
                   style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "4px 10px", cursor: "pointer" }}
-                >Clear</button>
+                >Clear</Pressable>
               </div>
             ) : (
               <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
@@ -1865,11 +1866,11 @@ export default function App() {
                   onChange={e => setAdminDateDraft(e.target.value)}
                   style={{ flex: 1, background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: "var(--color-text-primary)", fontSize: "16px", padding: "6px 8px", fontFamily: "var(--font-mono)", colorScheme: "dark" }}
                 />
-                <button
+                <Pressable
                   onClick={() => { if (adminDateDraft) { setTempLockDate(adminDateDraft); setDrawerOpen(false); } }}
                   disabled={!adminDateDraft}
                   style={{ background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "6px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 12px", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold", whiteSpace: "nowrap" }}
-                >Set</button>
+                >Set</Pressable>
               </div>
             )}
             {/* Force Sync */}
@@ -1877,12 +1878,12 @@ export default function App() {
               <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Sync</div>
               <div style={{ display: "flex", gap: "8px" }}>
                 {["push", "pull"].map(op => (
-                  <button
+                  <Pressable
                     key={op}
                     onClick={op === "push" ? handleForcePush : handleForcePull}
                     disabled={!!syncStatus?.pending}
                     style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer", minHeight: "44px" }}
-                  >{op === "push" ? "Push ↑" : "Pull ↓"}</button>
+                  >{op === "push" ? "Push ↑" : "Pull ↓"}</Pressable>
                 ))}
               </div>
               {syncStatus && (
@@ -1900,20 +1901,20 @@ export default function App() {
             <div style={{ marginTop: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
-                <button
+                <Pressable
                   onClick={() => setConfigViewOpen(v => !v)}
                   style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}
-                >{configViewOpen ? "Hide" : "View"}</button>
+                >{configViewOpen ? "Hide" : "View"}</Pressable>
               </div>
               {configViewOpen && (
                 <div>
                   <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "220px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                     {JSON.stringify(config, null, 2)}
                   </pre>
-                  <button
+                  <Pressable
                     onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
                     style={{ marginTop: "8px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "10px 0", cursor: "pointer", minHeight: "44px" }}
-                  >Copy to Clipboard</button>
+                  >Copy to Clipboard</Pressable>
                 </div>
               )}
             </div>
@@ -1924,8 +1925,8 @@ export default function App() {
                 <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                   {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)" }}>{rowDiff.length} drift</span>}
-                  <button onClick={handleFetchRow} disabled={rowFetching} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</button>
-                  {rowData && <button onClick={() => setRowViewOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide" : "View"}</button>}
+                  <Pressable onClick={handleFetchRow} disabled={rowFetching} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: rowFetching ? "not-allowed" : "pointer", padding: "0" }}>{rowFetching ? "…" : "Fetch"}</Pressable>
+                  {rowData && <Pressable onClick={() => setRowViewOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{rowViewOpen ? "Hide" : "View"}</Pressable>}
                 </div>
               </div>
               {rowData && rowViewOpen && (
@@ -1948,7 +1949,7 @@ export default function App() {
             <div style={{ marginTop: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
-                <button onClick={() => setTaxGridOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide" : "View"}</button>
+                <Pressable onClick={() => setTaxGridOpen(v => !v)} style={{ background: "transparent", border: "none", color: "var(--color-accent-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer", padding: "0" }}>{taxGridOpen ? "Hide" : "View"}</Pressable>
               </div>
               {taxGridOpen && (() => {
                 const overrides = config.pastWeekTaxStatusOverrides ?? {};
@@ -1985,7 +1986,7 @@ export default function App() {
               )}
               <div style={{ display: "flex", gap: "6px" }}>
                 {[1, 2].map(n => (
-                  <button
+                  <Pressable
                     key={n}
                     onClick={() => { setAdminDemoView(adminDemoView === n ? null : n); setDrawerOpen(false); }}
                     title={adminDemoView === n ? "Click to exit demo edit mode" : `Edit Demo Account ${n}`}
@@ -2006,7 +2007,7 @@ export default function App() {
                     }}
                   >
                     {adminDemoView === n ? "← Exit" : `Demo ${n}`}
-                  </button>
+                  </Pressable>
                 ))}
               </div>
             </div>
@@ -2091,7 +2092,7 @@ export default function App() {
             const isToolsBtn = item.key === "__tools__";
             const active = isToolsBtn ? toolSheetOpen : (currentView === item.key && !toolSheetOpen);
             return (
-              <button
+              <Pressable
                 key={item.key}
                 onClick={() => {
                   if (isToolsBtn) {
@@ -2126,7 +2127,7 @@ export default function App() {
               >
                 {item.icon}
                 <span>{item.label}</span>
-              </button>
+              </Pressable>
             );
           })}
         </LiquidGlass>
@@ -2182,7 +2183,7 @@ export default function App() {
             </div>
           )}
           {/* Pill toggle button */}
-          <button
+          <Pressable
             onClick={() => setInspectorOpen(v => !v)}
             style={{
               background: inspectorOpen ? "var(--color-warning)" : "rgba(245,158,11,0.18)",
@@ -2206,7 +2207,7 @@ export default function App() {
               <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
             </svg>
             {inspectorOpen ? "Close" : "Live"}
-          </button>
+          </Pressable>
         </div>
       )}
 
@@ -2250,11 +2251,11 @@ export default function App() {
                     {w.weekEnd instanceof Date ? w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : w.weekEnd}
                   </div>
                 </div>
-                <button
+                <Pressable
                   onClick={() => setInspectedWeek(null)}
                   style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.45)", borderRadius: "50%", width: "52px", height: "52px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-red)", fontSize: "24px", lineHeight: 1, flexShrink: 0 }}
                   aria-label="Close week inspector"
-                >×</button>
+                >×</Pressable>
               </div>
 
               {/* Badges */}
@@ -2398,11 +2399,11 @@ export default function App() {
                     Admin Tools
                   </span>
                 </div>
-                <button
+                <Pressable
                   onClick={() => { setToolSheetOpen(false); setSheetDragY(0); }}
                   style={{ background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "50%", width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "18px", lineHeight: 1, flexShrink: 0 }}
                   aria-label="Close admin tools"
-                >×</button>
+                >×</Pressable>
               </div>
               {/* Row 2: current panel context + active lock pill */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
@@ -2413,11 +2414,11 @@ export default function App() {
                   <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "3px 7px 3px 8px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase" }}>
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                     <span>Locked: {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                    <button
+                    <Pressable
                       onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
                       style={{ background: "transparent", border: "none", color: "var(--color-warning)", fontSize: "12px", lineHeight: 1, cursor: "pointer", padding: "0", marginLeft: "1px" }}
                       aria-label="Clear lock date"
-                    >×</button>
+                    >×</Pressable>
                   </div>
                 )}
               </div>
@@ -2432,10 +2433,10 @@ export default function App() {
                 {tempLockDate ? (
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <span style={{ fontSize: "13px", color: "var(--color-warning)", fontFamily: "var(--font-mono)", flex: 1 }}>{tempLockDate}</span>
-                    <button
+                    <Pressable
                       onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
                       style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
-                    >Clear ×</button>
+                    >Clear ×</Pressable>
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -2445,11 +2446,11 @@ export default function App() {
                       onChange={e => setAdminDateDraft(e.target.value)}
                       style={{ width: "100%", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "16px", padding: "10px 12px", fontFamily: "var(--font-mono)", colorScheme: "dark", boxSizing: "border-box" }}
                     />
-                    <button
+                    <Pressable
                       onClick={() => { if (adminDateDraft) setTempLockDate(adminDateDraft); }}
                       disabled={!adminDateDraft}
                       style={{ width: "100%", background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "8px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold", minHeight: "44px" }}
-                    >Set Lock Date</button>
+                    >Set Lock Date</Pressable>
                   </div>
                 )}
               </div>
@@ -2459,12 +2460,12 @@ export default function App() {
                 <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Sync</div>
                 <div style={{ display: "flex", gap: "8px" }}>
                   {["push", "pull"].map(op => (
-                    <button
+                    <Pressable
                       key={op}
                       onClick={op === "push" ? handleForcePush : handleForcePull}
                       disabled={!!syncStatus?.pending}
                       style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer", minHeight: "44px" }}
-                    >{op === "push" ? "Push ↑" : "Pull ↓"}</button>
+                    >{op === "push" ? "Push ↑" : "Pull ↓"}</Pressable>
                   ))}
                 </div>
                 {syncStatus && (
@@ -2482,20 +2483,20 @@ export default function App() {
               <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: configViewOpen ? "10px" : "0" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
-                  <button
+                  <Pressable
                     onClick={() => setConfigViewOpen(v => !v)}
                     style={sheetToggleBtnStyle}
-                  >{configViewOpen ? "Hide ↑" : "View ↓"}</button>
+                  >{configViewOpen ? "Hide ↑" : "View ↓"}</Pressable>
                 </div>
                 {configViewOpen && (
                   <div>
                     <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                       {JSON.stringify(config, null, 2)}
                     </pre>
-                    <button
+                    <Pressable
                       onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
                       style={{ marginTop: "8px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: "pointer", minHeight: "44px" }}
-                    >Copy to Clipboard</button>
+                    >Copy to Clipboard</Pressable>
                   </div>
                 )}
               </div>
@@ -2508,8 +2509,8 @@ export default function App() {
                     {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)", letterSpacing: "1px" }}>{rowDiff.length} drift</span>}
                   </div>
                   <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                    <button onClick={handleFetchRow} disabled={rowFetching} style={{ ...sheetToggleBtnStyle, cursor: rowFetching ? "not-allowed" : "pointer" }}>{rowFetching ? "…" : "Fetch"}</button>
-                    {rowData && <button onClick={() => setRowViewOpen(v => !v)} style={{ ...sheetToggleBtnStyle, color: "var(--color-text-secondary)" }}>{rowViewOpen ? "Hide ↑" : "View ↓"}</button>}
+                    <Pressable onClick={handleFetchRow} disabled={rowFetching} style={{ ...sheetToggleBtnStyle, cursor: rowFetching ? "not-allowed" : "pointer" }}>{rowFetching ? "…" : "Fetch"}</Pressable>
+                    {rowData && <Pressable onClick={() => setRowViewOpen(v => !v)} style={{ ...sheetToggleBtnStyle, color: "var(--color-text-secondary)" }}>{rowViewOpen ? "Hide ↑" : "View ↓"}</Pressable>}
                   </div>
                 </div>
                 {rowData && rowViewOpen && (
@@ -2531,7 +2532,7 @@ export default function App() {
               <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: taxGridOpen ? "10px" : "0" }}>
                   <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
-                  <button onClick={() => setTaxGridOpen(v => !v)} style={sheetToggleBtnStyle}>{taxGridOpen ? "Hide ↑" : "View ↓"}</button>
+                  <Pressable onClick={() => setTaxGridOpen(v => !v)} style={sheetToggleBtnStyle}>{taxGridOpen ? "Hide ↑" : "View ↓"}</Pressable>
                 </div>
                 {taxGridOpen && (() => {
                   const overrides = config.pastWeekTaxStatusOverrides ?? {};
@@ -2583,13 +2584,13 @@ export default function App() {
                 </div>
                 <div style={{ display: "flex", gap: "8px" }}>
                   {[1, 2].map(n => (
-                    <button
+                    <Pressable
                       key={n}
                       onClick={() => { setAdminDemoView(adminDemoView === n ? null : n); setToolSheetOpen(false); }}
                       style={{ flex: 1, background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: adminDemoView === n ? "none" : "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: adminDemoView === n ? "var(--color-bg-base)" : "var(--color-text-secondary)", cursor: "pointer", fontWeight: adminDemoView === n ? "bold" : "normal", minHeight: "44px" }}
                     >
                       {adminDemoView === n ? "← Exit Demo" : `Demo ${n}`}
-                    </button>
+                    </Pressable>
                   ))}
                 </div>
               </div>

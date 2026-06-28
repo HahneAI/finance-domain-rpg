@@ -1,4 +1,5 @@
 import { forwardRef, useImperativeHandle, useRef, useEffect } from "react";
+import { Pressable } from "./ui.jsx";
 
 // Five-step iOS Safari "Add to Home Screen" tutorial. Ported from the Authority
 // OS marketing site (src/pages/products/finance.astro). Rendered once at the app
@@ -271,11 +272,11 @@ export const PwaInstallModal = forwardRef(function PwaInstallModal(_props, ref) 
             <h2 id="pwa-dialog-title" className="pwa-dialog-title">Install A:Fin on your home screen</h2>
             <p className="pwa-dialog-sub">Five quick steps. Once installed, A:Fin opens like a native app.</p>
           </div>
-          <button type="button" className="pwa-close" onClick={close} aria-label="Close install instructions">
+          <Pressable type="button" className="pwa-close" onClick={close} aria-label="Close install instructions">
             <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M3 3l10 10M13 3 3 13" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
             </svg>
-          </button>
+          </Pressable>
         </header>
 
         <ol className="pwa-steps">
@@ -294,7 +295,7 @@ export const PwaInstallModal = forwardRef(function PwaInstallModal(_props, ref) 
         </ol>
 
         <footer className="pwa-dialog-footer">
-          <button type="button" className="pwa-got-it" onClick={close}>Got it</button>
+          <Pressable type="button" className="pwa-got-it" onClick={close}>Got it</Pressable>
         </footer>
       </div>
     </dialog>

@@ -1,5 +1,6 @@
 import { PHASES } from "../constants/config.js";
 import { LiquidGlass } from "./LiquidGlass.jsx";
+import { Pressable } from "./ui.jsx";
 
 const MONTH_KEYS = [
   "2026-01", "2026-02", "2026-03",
@@ -135,7 +136,7 @@ export function MonthQuarterSelector({
                 const monthNum = parseInt(key.slice(5, 7), 10);
                 const isFirstMonthOfActiveQ = !isMonthMode && mPos === 0 && Math.floor((monthNum - 1) / 3) === activeQuarter;
                 return (
-                  <button
+                  <Pressable
                     key={key}
                     onClick={() => onSelectMonth(key)}
                     style={{
@@ -202,7 +203,7 @@ export function MonthQuarterSelector({
                         opacity: 0.8,
                       }}>◆</span>
                     )}
-                  </button>
+                  </Pressable>
                 );
               })}
             </div>
@@ -225,7 +226,7 @@ export function MonthQuarterSelector({
           const isQActive = isActive && !isMonthMode;
           const isLastQ = qPos === visibleQIndices.length - 1;
           return (
-            <button
+            <Pressable
               key={p.id}
               onClick={() => onSelectQuarter(q)}
               style={{
@@ -270,7 +271,7 @@ export function MonthQuarterSelector({
                   ● now
                 </span>
               )}
-            </button>
+            </Pressable>
           );
         })}
       </div>

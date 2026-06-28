@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Pressable } from "./ui.jsx";
 
 /**
  * JobLossEntry — modal launched from the LifeEventMenu "Lost My Job" tile.
@@ -125,7 +126,7 @@ export function JobLossEntry({ open, onClose, onActivate }) {
               {[{ v: true, label: "Yes" }, { v: false, label: "No" }].map(opt => {
                 const active = unemploymentAnswered === opt.v;
                 return (
-                  <button
+                  <Pressable
                     key={opt.label}
                     onClick={() => setUnemploymentAnswered(opt.v)}
                     style={{
@@ -140,7 +141,7 @@ export function JobLossEntry({ open, onClose, onActivate }) {
                     }}
                   >
                     {active && "✓ "}{opt.label}
-                  </button>
+                  </Pressable>
                 );
               })}
             </div>
@@ -175,7 +176,7 @@ export function JobLossEntry({ open, onClose, onActivate }) {
                   {[{ v: true, label: "Yes" }, { v: false, label: "No" }].map(opt => {
                     const active = waitingWeek === opt.v;
                     return (
-                      <button
+                      <Pressable
                         key={opt.label}
                         onClick={() => setWaitingWeek(opt.v)}
                         style={{
@@ -190,7 +191,7 @@ export function JobLossEntry({ open, onClose, onActivate }) {
                         }}
                       >
                         {active && "✓ "}{opt.label}
-                      </button>
+                      </Pressable>
                     );
                   })}
                 </div>
@@ -229,7 +230,7 @@ export function JobLossEntry({ open, onClose, onActivate }) {
           borderTop: "1px solid var(--color-border-subtle)",
           display: "flex", gap: "10px", justifyContent: "flex-end",
         }}>
-          <button
+          <Pressable
             onClick={onClose}
             style={{
               background: "var(--color-bg-raised)",
@@ -241,8 +242,8 @@ export function JobLossEntry({ open, onClose, onActivate }) {
             }}
           >
             Cancel
-          </button>
-          <button
+          </Pressable>
+          <Pressable
             onClick={confirm}
             disabled={!canActivate}
             style={{
@@ -255,7 +256,7 @@ export function JobLossEntry({ open, onClose, onActivate }) {
             }}
           >
             Activate
-          </button>
+          </Pressable>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Pressable } from "./ui.jsx";
 
 /**
  * ReemploymentTracker — embedded in JobLossDashboard (TODO §15.C6).
@@ -205,7 +206,7 @@ export function ReemploymentTracker({ config, setConfig }) {
               placeholder={`${defaultTargetAnnual}`}
               style={{ ...inputStyle, width: "130px" }}
             />
-            <button
+            <Pressable
               onClick={commitTarget}
               disabled={targetDraft === ""}
               style={{
@@ -218,9 +219,9 @@ export function ReemploymentTracker({ config, setConfig }) {
               }}
             >
               Set
-            </button>
+            </Pressable>
             {config?.targetIncomeAnnual != null && (
-              <button
+              <Pressable
                 onClick={() => setConfig(prev => ({ ...prev, targetIncomeAnnual: null }))}
                 style={{
                   background: "transparent",
@@ -233,7 +234,7 @@ export function ReemploymentTracker({ config, setConfig }) {
                 }}
               >
                 Reset
-              </button>
+              </Pressable>
             )}
           </div>
         </div>
@@ -258,7 +259,7 @@ export function ReemploymentTracker({ config, setConfig }) {
               style={{ ...inputStyle, width: "160px" }}
             />
             {config?.returnToWorkDate && (
-              <button
+              <Pressable
                 onClick={() => setReturnDate(null)}
                 style={{
                   background: "transparent",
@@ -271,7 +272,7 @@ export function ReemploymentTracker({ config, setConfig }) {
                 }}
               >
                 Clear
-              </button>
+              </Pressable>
             )}
           </div>
         </div>
@@ -284,7 +285,7 @@ export function ReemploymentTracker({ config, setConfig }) {
             Applications ({apps.length})
           </div>
           {!addOpen && (
-            <button
+            <Pressable
               onClick={() => {
                 setEditingId(null);
                 setDraft({ company: "", role: "", dateApplied: new Date().toISOString().slice(0, 10), status: "applied" });
@@ -301,7 +302,7 @@ export function ReemploymentTracker({ config, setConfig }) {
               }}
             >
               + Add
-            </button>
+            </Pressable>
           )}
         </div>
 
@@ -345,7 +346,7 @@ export function ReemploymentTracker({ config, setConfig }) {
               </select>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
-              <button
+              <Pressable
                 onClick={() => {
                   setAddOpen(false);
                   setEditingId(null);
@@ -362,8 +363,8 @@ export function ReemploymentTracker({ config, setConfig }) {
                 }}
               >
                 Cancel
-              </button>
-              <button
+              </Pressable>
+              <Pressable
                 onClick={saveDraft}
                 disabled={!draft.company.trim() || !draft.role.trim() || !draft.dateApplied}
                 style={{
@@ -377,7 +378,7 @@ export function ReemploymentTracker({ config, setConfig }) {
                 }}
               >
                 {editingId ? "Save" : "Add"}
-              </button>
+              </Pressable>
             </div>
           </div>
         )}
@@ -429,7 +430,7 @@ export function ReemploymentTracker({ config, setConfig }) {
                     {STATUS_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
                   </select>
                   <div style={{ display: "flex", gap: "4px" }}>
-                    <button
+                    <Pressable
                       onClick={() => startEdit(app)}
                       aria-label="Edit"
                       style={{
@@ -445,8 +446,8 @@ export function ReemploymentTracker({ config, setConfig }) {
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
                       </svg>
-                    </button>
-                    <button
+                    </Pressable>
+                    <Pressable
                       onClick={() => deleteApp(app.id)}
                       aria-label="Delete"
                       style={{
@@ -462,7 +463,7 @@ export function ReemploymentTracker({ config, setConfig }) {
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="3 6 5 6 21 6" /><path d="M19 6l-2 14H7L5 6" /><path d="M10 11v6" /><path d="M14 11v6" />
                       </svg>
-                    </button>
+                    </Pressable>
                   </div>
                 </div>
               );

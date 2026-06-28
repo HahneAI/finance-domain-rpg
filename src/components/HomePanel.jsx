@@ -6,7 +6,7 @@ import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { MetricCard, SmBtn, iS, lS, ScrollSnapRow } from "./ui.jsx";
+import { MetricCard, SmBtn, Pressable, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
@@ -581,7 +581,7 @@ export function HomePanel({
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>Active Goals</div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               {tl.length > 0 && setConfig && (
-                <button
+                <Pressable
                   onClick={() => setShowResetTimeline(true)}
                   style={{
                     fontSize: "9px",
@@ -597,7 +597,7 @@ export function HomePanel({
                   }}
                 >
                   Reset Timeline
-                </button>
+                </Pressable>
               )}
               <div style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{tl.length}</div>
             </div>
@@ -898,12 +898,12 @@ export function HomePanel({
                 <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>
                   REORDER GOALS
                 </div>
-                <button
+                <Pressable
                   onClick={closeReorderModal}
                   style={{ background: "none", border: "none", color: "var(--color-text-secondary)", cursor: "pointer", fontSize: "16px", lineHeight: 1, padding: "4px" }}
                 >
                   ✕
-                </button>
+                </Pressable>
               </div>
               <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginBottom: "18px", flexShrink: 0 }}>
                 {isCoarsePointer ? "Tap ↑ ↓ to reprioritize. Goals fund in order." : "Drag goals to reorder. Goals fund in order."}
@@ -1016,12 +1016,9 @@ export function HomePanel({
                           zIndex: 1,
                           flexShrink: 0,
                         }}>
-                          <button
+                          <Pressable
                             onClick={() => handleMoveWithAnim(g.id, -1, i)}
                             disabled={upDisabled}
-                            onPointerDown={e => { if (!upDisabled) e.currentTarget.style.background = 'rgba(0,200,150,0.12)'; }}
-                            onPointerUp={e => { e.currentTarget.style.background = ''; }}
-                            onPointerLeave={e => { e.currentTarget.style.background = ''; }}
                             style={{
                               background: "none",
                               border: "none",
@@ -1034,15 +1031,11 @@ export function HomePanel({
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              transition: "background 80ms",
                             }}
-                          >↑</button>
-                          <button
+                          >↑</Pressable>
+                          <Pressable
                             onClick={() => handleMoveWithAnim(g.id, 1, i)}
                             disabled={downDisabled}
-                            onPointerDown={e => { if (!downDisabled) e.currentTarget.style.background = 'rgba(0,200,150,0.12)'; }}
-                            onPointerUp={e => { e.currentTarget.style.background = ''; }}
-                            onPointerLeave={e => { e.currentTarget.style.background = ''; }}
                             style={{
                               background: "none",
                               border: "none",
@@ -1054,9 +1047,8 @@ export function HomePanel({
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              transition: "background 80ms",
                             }}
-                          >↓</button>
+                          >↓</Pressable>
                         </div>
                       )}
                       {/* Desktop: drag handle */}
@@ -1078,7 +1070,7 @@ export function HomePanel({
                 })}
               </div>
               {/* Done button */}
-              <button
+              <Pressable
                 onClick={closeReorderModal}
                 style={{
                   marginTop: "18px",
@@ -1097,7 +1089,7 @@ export function HomePanel({
                 }}
               >
                 Done
-              </button>
+              </Pressable>
             </div>
           </div>,
           document.body,
@@ -1146,7 +1138,7 @@ export function HomePanel({
                 labels stay; only the timeline start moves.
               </div>
               <div style={{ display: "flex", gap: "10px" }}>
-                <button
+                <Pressable
                   onClick={() => setShowResetTimeline(false)}
                   style={{
                     flex: 1,
@@ -1163,8 +1155,8 @@ export function HomePanel({
                   }}
                 >
                   Cancel
-                </button>
-                <button
+                </Pressable>
+                <Pressable
                   onClick={resetGoalTimeline}
                   style={{
                     flex: 1,
@@ -1181,7 +1173,7 @@ export function HomePanel({
                   }}
                 >
                   Reset Timeline
-                </button>
+                </Pressable>
               </div>
             </div>
           </div>,
@@ -1200,14 +1192,14 @@ export function HomePanel({
               <SmBtn onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
             </div>
           </div>
-        ) : <button onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</button>}
+        ) : <Pressable onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</Pressable>}
 
         {completedGoals.length > 0 && (
           <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "12px" }}>
-            <button onClick={() => setShowCompleted((v) => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer" }}>
+            <Pressable onClick={() => setShowCompleted((v) => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#111", border: "none", padding: "12px 16px", cursor: "pointer" }}>
               <span style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Funded History ({completedGoals.length})</span>
               <span style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>{showCompleted ? "Hide" : "Show"}</span>
-            </button>
+            </Pressable>
             {showCompleted && completedGoals.map((g) => (
               <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ color: "var(--color-text-primary)", textDecoration: "line-through" }}>{g.label}</div>

@@ -73,6 +73,9 @@ export function HomePanel({
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
   const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
   const annualSavings = avgWeeklySurplus * 52 - fundedGoalSpend;
+  const startDateDisplay = config?.startDate
+    ? new Date(config.startDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
   // Net worth health: thin-cushion nudge when projected savings rate < 10%.
   // Suppressed in Job Loss Mode, which has its own dedicated runway UI.
@@ -200,7 +203,7 @@ export function HomePanel({
       title: "Net Worth Trend",
       value: fmt$(annualSavings),
       rawVal: annualSavings,
-      sub: weekNumber != null ? `projected annual savings · ${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(weekNumber, checksPerYear)}` : "projected annual savings",
+      sub: weekNumber != null ? `${startDateDisplay ? `from ${startDateDisplay} · ` : ""}projected annual savings · ${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(weekNumber, checksPerYear)}` : startDateDisplay ? `from ${startDateDisplay} · projected annual savings` : "projected annual savings",
       status: annualSavings > 5000 ? "green" : annualSavings >= 0 ? "gold" : "red",
       span: 2,
       onClick: () => navigate("income"),
@@ -1266,7 +1269,7 @@ export function HomePanel({
       <div style={{ marginTop: "28px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />
         <div style={{ marginBottom: "16px" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "4px" }}>Fiscal Year 2026</div>
+          <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "4px" }}>Fiscal Year 2026{startDateDisplay ? ` · from ${startDateDisplay}` : ""}</div>
           <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px" }}>Year-End Outlook</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>

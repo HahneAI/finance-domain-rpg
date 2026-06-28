@@ -1272,6 +1272,9 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gN = w => computeNet(w, config, extraPerCheck, showExtra);
+  const startDateDisplay = config.startDate
+    ? new Date(config.startDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
   const [taxDraft, setTaxDraft] = useState(null);
   const pastOverrides = config.pastWeekTaxStatusOverrides ?? {};
   const hasPastOverride = (idx) => Object.prototype.hasOwnProperty.call(pastOverrides, idx);
@@ -1387,7 +1390,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
 
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "12px", marginBottom: "20px" }}>
-        <Card label="Full Year Fed Liability" val={f(fedLiability)} rawVal={fedLiability} sub={`On ${f(fedAGI)} AGI`} color="var(--color-deduction)" size="20px" />
+        <Card label="Full Year Fed Liability" val={f(fedLiability)} rawVal={fedLiability} sub={`${startDateDisplay ? `from ${startDateDisplay} · ` : ""}On ${f(fedAGI)} AGI`} color="var(--color-deduction)" size="20px" />
         <Card label="Full Year MO Liability" val={f(moLiability)} rawVal={moLiability} sub="4.7% flat" color="var(--color-gold)" size="20px" />
         <Card label="FICA (Always Paid)" val={f(ficaTotal)} rawVal={ficaTotal} sub="7.65% every check" color="var(--color-text-primary)" size="20px" />
       </div>

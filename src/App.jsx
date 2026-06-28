@@ -197,6 +197,8 @@ export default function App() {
   const [showExtra, setShowExtra] = useState(true);
   const [isEmployerDHL, setIsEmployerDHL] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  // Per-user unlock for the Tax Plan feature — granted via SQL to select non-admins.
+  const [taxProjectionsEnabled, setTaxProjectionsEnabled] = useState(false);
   const [ptoGoal, setPtoGoal] = useState(null);
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
@@ -371,6 +373,7 @@ export default function App() {
         setWeekConfirmations(data.weekConfirmations ?? {});
         setIsEmployerDHL(data.isEmployerDHL);
         setIsAdmin(data.isAdmin);
+        setTaxProjectionsEnabled(data.taxProjectionsEnabled);
         setPtoGoal(data.ptoGoal);
         if (data.isInvestor) {
           setInvestorProfile(data.investorProfile ?? null);
@@ -581,15 +584,23 @@ export default function App() {
     return payPeriodEndIso < effectiveToday;
   }, [config.employerPreset, effectiveToday, isAdmin, tempLockDate]);
 
-  // ── Auto-confirm all past weeks on first load when no confirmations exist ──
-  // Treats every historical week as fully worked (clean/net-zero). Over-assumption is fine:
-  // income projections already assume full attendance from account creation.
+  // Weeks before this fiscal idx are auto-assumed worked and never prompt the
+  // confirm modal; only weeks from account creation onward are confirmable.
+  // null (legacy accounts predating the stamp) = no floor → prior behavior.
+  const accountCreatedIdx = config.accountCreatedIdx ?? null;
+
+  // ── Auto-confirm pre-account-creation weeks on first load when no confirmations exist ──
+  // Treats every week before account creation as fully worked (clean/net-zero). Over-assumption
+  // is fine: income projections already assume full attendance from the job start date.
+  // Weeks from account creation onward are left for the user to confirm.
   // Runs once — after auto-confirm, weekConfirmations is non-empty so condition exits early.
   // NOTE: must be declared after today and allWeeks to avoid TDZ errors in the dep array.
   useEffect(() => {
     if (loading) return;
     if (Object.keys(weekConfirmations).length > 0) return;
-    const pastActiveWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
+    const pastActiveWeeks = allWeeks.filter(w =>
+      w.active && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx < accountCreatedIdx)
+    );
     if (!pastActiveWeeks.length) return;
     const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const confirmedAt = new Date().toISOString();
@@ -609,7 +620,7 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setWeekConfirmations(bulk);
-  }, [loading, weekConfirmations, allWeeks, effectiveToday, isPayPeriodPast]);
+  }, [loading, weekConfirmations, allWeeks, effectiveToday, isPayPeriodPast, accountCreatedIdx]);
 
   // ── Future active weeks: today onward, used for spend/goal simulation ──
   const futureWeeks = useMemo(() => {
@@ -623,22 +634,57 @@ export default function App() {
   // Cleared by badge click so the modal re-opens. Resets to false on page reload.
   const [confirmDismissed, setConfirmDismissed] = useState(false);
 
-  // ── Week confirmation modal trigger ──
-  // Surfaces the most-recent UNCONFIRMED pay week whose pay period has closed.
-  // isPayWeek is set in buildYear: all active weeks for weekly, every-other for
-  // biweekly/salary (driven by biweeklyPayWeekParity), last-of-month for monthly.
-  const confirmTriggerWeek = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
-    const unconfirmedPayWeeks = pastWeeks.filter(w => w.isPayWeek && !weekConfirmations[w.idx]);
-    return unconfirmedPayWeeks.length ? unconfirmedPayWeeks[unconfirmedPayWeeks.length - 1] : null;
-  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast]);
+  // ── Pay weeks eligible for the confirm modal ──
+  // Closed-pay-period pay weeks from account creation onward. isPayWeek is set in
+  // buildYear: all active weeks for weekly, every-other for biweekly/salary
+  // (driven by biweeklyPayWeekParity), last-of-month for monthly.
+  const eligiblePastPayWeeks = useMemo(() =>
+    allWeeks.filter(w =>
+      w.active && w.isPayWeek && isPayPeriodPast(w) && (accountCreatedIdx == null || w.idx >= accountCreatedIdx)
+    ),
+    [allWeeks, effectiveToday, isPayPeriodPast, accountCreatedIdx]
+  );
 
-  // Total count of all past pay weeks lacking a confirmation record.
+  // ── Week confirmation modal trigger ──
+  // Surfaces the most-recent UNCONFIRMED eligible pay week.
+  const confirmTriggerWeek = useMemo(() => {
+    const unconfirmed = eligiblePastPayWeeks.filter(w => !weekConfirmations[w.idx]);
+    return unconfirmed.length ? unconfirmed[unconfirmed.length - 1] : null;
+  }, [eligiblePastPayWeeks, weekConfirmations]);
+
+  // Total count of all eligible pay weeks lacking a confirmation record.
   // Badge accumulates across all skipped pay weeks until they are addressed.
-  const unconfirmedCount = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w));
-    return pastWeeks.filter(w => w.isPayWeek && !weekConfirmations[w.idx]).length;
-  }, [allWeeks, effectiveToday, weekConfirmations, isPayPeriodPast]);
+  const unconfirmedCount = useMemo(() =>
+    eligiblePastPayWeeks.filter(w => !weekConfirmations[w.idx]).length,
+    [eligiblePastPayWeeks, weekConfirmations]
+  );
+
+  // ── Admin: most-recent CONFIRMED eligible pay week (null when none) ──
+  // The "Reopen Last Check-In" tool targets this week so admins can re-review
+  // the weekly confirm modal on demand.
+  const reopenableWeekIdx = useMemo(() => {
+    const confirmed = eligiblePastPayWeeks.filter(w => weekConfirmations[w.idx]);
+    return confirmed.length ? confirmed[confirmed.length - 1].idx : null;
+  }, [eligiblePastPayWeeks, weekConfirmations]);
+
+  // Resets the most-recent confirmed pay period so its weekly confirm modal
+  // reopens as if it was never finished. Drops the confirmation record and any
+  // log entry it created — income projections are independent of confirmations,
+  // so the model is unaffected. Admin-only diagnostic.
+  const handleReopenLastCheckIn = useCallback(() => {
+    if (reopenableWeekIdx == null) return;
+    const record = weekConfirmations[reopenableWeekIdx];
+    if (record?.eventId != null) {
+      setLogs(ls => ls.filter(l => l.id !== record.eventId));
+    }
+    setWeekConfirmations(c => {
+      const next = { ...c };
+      delete next[reopenableWeekIdx];
+      return next;
+    });
+    setConfirmDismissed(false);  // ensure the modal pops back open
+    setToolSheetOpen(false);     // close the admin sheet so the modal is visible
+  }, [reopenableWeekIdx, weekConfirmations]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);
@@ -988,6 +1034,7 @@ export default function App() {
         config={config}
         bufferPerWeek={bufferPerWeek}
         isAdmin={isAdmin}
+        taxProjectionsEnabled={taxProjectionsEnabled}
       />}
       {currentView === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
@@ -1021,6 +1068,7 @@ export default function App() {
         showExtra={showExtra}
         setShowExtra={setShowExtra}
         isAdmin={isAdmin}
+        taxProjectionsEnabled={taxProjectionsEnabled}
         today={effectiveToday}
         weekConfirmations={weekConfirmations}
         onInstallClick={isStandalone ? null : openPwaModal}
@@ -1292,6 +1340,16 @@ export default function App() {
                         : `✗ ${syncStatus.op === "push" ? "Push" : "Pull"} failed`}
                   </div>
                 )}
+              </div>
+
+              {/* Reopen Last Check-In */}
+              <div style={{ padding: "0 20px 10px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Weekly Check-In</div>
+                <button
+                  onClick={handleReopenLastCheckIn}
+                  disabled={reopenableWeekIdx == null}
+                  style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer" }}
+                >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last · Wk ${reopenableWeekIdx}`}</button>
               </div>
 
               {/* Config Raw View */}
@@ -1897,6 +1955,16 @@ export default function App() {
               )}
             </div>
 
+            {/* Reopen Last Check-In */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Weekly Check-In</div>
+              <button
+                onClick={handleReopenLastCheckIn}
+                disabled={reopenableWeekIdx == null}
+                style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "6px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer" }}
+              >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last · Wk ${reopenableWeekIdx}`}</button>
+            </div>
+
             {/* Config Raw View */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
@@ -2479,6 +2547,19 @@ export default function App() {
                 )}
               </div>
 
+              {/* ── Reopen Last Check-In ── */}
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Weekly Check-In</div>
+                <button
+                  onClick={handleReopenLastCheckIn}
+                  disabled={reopenableWeekIdx == null}
+                  style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer", minHeight: "44px", fontWeight: "bold" }}
+                >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last Check-In · Wk ${reopenableWeekIdx}`}</button>
+                <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "6px", lineHeight: "1.4" }}>
+                  Reopens the most recent confirmed week's modal for review. Income projections are unaffected.
+                </div>
+              </div>
+
               {/* ── Config JSON ── */}
               <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: configViewOpen ? "10px" : "0" }}>
@@ -2612,6 +2693,7 @@ export default function App() {
         <WeekConfirmModal
           key={confirmTriggerWeek.idx}
           week={confirmTriggerWeek}
+          priorWeek={allWeeks.find(w => w.idx === confirmTriggerWeek.idx - 1) ?? null}
           config={config}
           logs={logs}
           isAdmin={isAdmin}
@@ -2619,10 +2701,19 @@ export default function App() {
           onConfirm={(confirmation, logEntry) => {
             const DAY_NAMES_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
             const confirmedAt = new Date().toISOString();
+            // Biweekly two-week flow bundles the first week's real confirmation +
+            // log entry under `firstWeek`; strip it out of the stored paycheck-week
+            // record so we don't duplicate the log blob in persistence.
+            const firstWeek = confirmation.firstWeek ?? null;
+            const { firstWeek: _omitFirstWeek, ...payWeekConfirmation } = confirmation;
             setWeekConfirmations(c => {
-              const next = { ...c, [confirmTriggerWeek.idx]: confirmation };
-              // Biweekly: auto-confirm the paired non-paycheck week (the one before) as clean
-              if ((config.userPaySchedule === "biweekly" || config.userPaySchedule === "salary") && confirmTriggerWeek.idx > 0) {
+              const next = { ...c, [confirmTriggerWeek.idx]: payWeekConfirmation };
+              if (firstWeek) {
+                // The modal collected the first week explicitly — store its record.
+                next[firstWeek.idx] = firstWeek.confirmation;
+              } else if ((config.userPaySchedule === "biweekly" || config.userPaySchedule === "salary") && confirmTriggerWeek.idx > 0) {
+                // Salary (and biweekly first-period fallback): auto-confirm the
+                // paired non-paycheck week (the one before) as clean.
                 const priorIdx = confirmTriggerWeek.idx - 1;
                 if (!next[priorIdx]) {
                   const prior = allWeeks.find(w => w.idx === priorIdx);
@@ -2651,6 +2742,7 @@ export default function App() {
               return next;
             });
             if (logEntry) setLogs(p => [...p, logEntry]);
+            if (firstWeek?.logEntry) setLogs(p => [...p, firstWeek.logEntry]);
           }}
           onDismiss={() => setConfirmDismissed(true)}
         />

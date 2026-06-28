@@ -36,7 +36,10 @@ function isPayPeriodPast(week, today, config, nowHour = 23) {
  * Mirrors App.jsx confirmTriggerWeek memo.
  */
 function confirmTriggerWeek(allWeeks, weekConfirmations, today, config = {}, nowHour = 23) {
-  const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w, today, config, nowHour))
+  const floor = config?.accountCreatedIdx ?? null
+  const pastWeeks = allWeeks.filter(w =>
+    w.active && isPayPeriodPast(w, today, config, nowHour) && (floor == null || w.idx >= floor)
+  )
   const unconfirmedWeeks = pastWeeks.filter(w => !weekConfirmations[w.idx])
   if (!unconfirmedWeeks.length) return null
   return unconfirmedWeeks[unconfirmedWeeks.length - 1]
@@ -44,10 +47,14 @@ function confirmTriggerWeek(allWeeks, weekConfirmations, today, config = {}, now
 
 /**
  * Returns the count of ALL unconfirmed weeks whose pay period has closed.
- * Mirrors App.jsx unconfirmedCount memo.
+ * Mirrors App.jsx unconfirmedCount memo. Weeks before config.accountCreatedIdx
+ * are auto-assumed worked and excluded.
  */
 function unconfirmedCount(allWeeks, weekConfirmations, today, config = {}, nowHour = 23) {
-  const pastWeeks = allWeeks.filter(w => w.active && isPayPeriodPast(w, today, config, nowHour))
+  const floor = config?.accountCreatedIdx ?? null
+  const pastWeeks = allWeeks.filter(w =>
+    w.active && isPayPeriodPast(w, today, config, nowHour) && (floor == null || w.idx >= floor)
+  )
   return pastWeeks.filter(w => !weekConfirmations[w.idx]).length
 }
 
@@ -129,6 +136,48 @@ describe('confirmTriggerWeek — base user (Friday pay period)', () => {
 
   it('returns null once the week is confirmed', () => {
     expect(confirmTriggerWeek([WEEK], { 1: { confirmedAt: 'x' } }, '2026-01-10')).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Biweekly confirmTriggerWeek — the check-in must not fire until the day after
+// the SECOND (paycheck) week of the pay period closes. The real App memo filters
+// on w.isPayWeek (only paycheck weeks), so this variant adds that filter.
+// Period = [week 6 (first), week 7 (paycheck)]; payPeriodEndDay=5 (Friday).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('confirmTriggerWeek — biweekly (paycheck week gates the period)', () => {
+  // isPayWeek is true only for the paycheck (second) week. Mirror the App filter.
+  function biweeklyTrigger(allWeeks, weekConfirmations, today) {
+    const payWeeks = allWeeks.filter(w =>
+      w.active && w.isPayWeek && isPayPeriodPast(w, today, {})
+    )
+    const unconfirmed = payWeeks.filter(w => !weekConfirmations[w.idx])
+    return unconfirmed.length ? unconfirmed[unconfirmed.length - 1] : null
+  }
+
+  // First week of the period: Jan 5 fiscal weekEnd. Not a pay week.
+  const FIRST_WEEK = { ...makeWeek(6, '2026-01-05', true, 5), isPayWeek: false }
+  // Paycheck week: Jan 12 weekEnd (Mon) → payPeriodEndDate = Jan 9 (Fri).
+  const PAY_WEEK = { ...makeWeek(7, '2026-01-12', true, 5), isPayWeek: true }
+  const PERIOD = [FIRST_WEEK, PAY_WEEK]
+
+  it('does NOT trigger after only the first week closes (Jan 3, before the paycheck week Friday)', () => {
+    // FIRST_WEEK payPeriodEndDate = Jan 2 (Fri of week ending Jan 5); its period is
+    // "past" on Jan 3 — but it is not a pay week, so the check-in stays closed.
+    expect(biweeklyTrigger(PERIOD, {}, '2026-01-03')).toBeNull()
+  })
+
+  it('does NOT trigger on the paycheck week pay-period end day itself (Fri Jan 9)', () => {
+    expect(biweeklyTrigger(PERIOD, {}, '2026-01-09')).toBeNull()
+  })
+
+  it('triggers the day after the paycheck week closes (Sat Jan 10) — on the pay week', () => {
+    expect(biweeklyTrigger(PERIOD, {}, '2026-01-10')).toMatchObject({ idx: 7, isPayWeek: true })
+  })
+
+  it('never surfaces the non-paycheck first week as the trigger', () => {
+    expect(biweeklyTrigger(PERIOD, {}, '2026-01-20')).toMatchObject({ idx: 7 })
   })
 })
 
@@ -261,5 +310,42 @@ describe('unconfirmedCount', () => {
   it('badge accumulates — confirming newest week does not reduce count of older ones', () => {
     const weeks = [makeWeek(1, '2026-01-12'), makeWeek(2, '2026-01-19'), makeWeek(3, '2026-01-26')]
     expect(unconfirmedCount(weeks, { 3: {} }, '2026-01-26')).toBe(2)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// accountCreatedIdx floor — weeks before account creation are auto-assumed worked
+// and must never surface in the confirm modal or the unconfirmed badge.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('accountCreatedIdx floor', () => {
+  const weeks = [makeWeek(1, '2026-01-12'), makeWeek(2, '2026-01-19'), makeWeek(3, '2026-01-26')]
+  const today = '2026-02-02' // all three weeks are past
+
+  it('excludes weeks before account creation from the unconfirmed count', () => {
+    // Account created at week 3 → weeks 1 and 2 are pre-creation, only week 3 counts.
+    expect(unconfirmedCount(weeks, {}, today, { accountCreatedIdx: 3 })).toBe(1)
+  })
+
+  it('does not surface a pre-creation week in the confirm modal', () => {
+    // No confirmations at all, but account created at week 3 → modal only offers week 3.
+    const trigger = confirmTriggerWeek(weeks, {}, today, { accountCreatedIdx: 3 })
+    expect(trigger.idx).toBe(3)
+  })
+
+  it('returns null when every past week predates account creation', () => {
+    // Brand-new account: creation idx is beyond all past weeks → nothing to confirm.
+    expect(confirmTriggerWeek(weeks, {}, today, { accountCreatedIdx: 4 })).toBeNull()
+    expect(unconfirmedCount(weeks, {}, today, { accountCreatedIdx: 4 })).toBe(0)
+  })
+
+  it('legacy accounts (no accountCreatedIdx) keep prior behavior — all past weeks count', () => {
+    expect(unconfirmedCount(weeks, {}, today)).toBe(3)
+    expect(unconfirmedCount(weeks, {}, today, { accountCreatedIdx: null })).toBe(3)
+  })
+
+  it('a week exactly at the creation idx is confirmable (boundary is inclusive)', () => {
+    expect(unconfirmedCount(weeks, {}, today, { accountCreatedIdx: 2 })).toBe(2)
+    expect(confirmTriggerWeek(weeks, {}, today, { accountCreatedIdx: 2 }).idx).toBe(3)
   })
 })

@@ -67,6 +67,7 @@ export async function loadUserData() {
       weekConfirmations:  {},
       isEmployerDHL:              false,
       isAdmin:            false,
+      taxProjectionsEnabled: false,
     };
   }
 
@@ -74,7 +75,7 @@ export async function loadUserData() {
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, pto_goal, is_investor")
+    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, pto_goal, is_investor, tax_projections_enabled")
     .eq("user_id", userId)
     .single();
 
@@ -107,6 +108,7 @@ export async function loadUserData() {
       weekConfirmations:  {},
       isEmployerDHL:              false,
       isAdmin:            false,
+      taxProjectionsEnabled: false,
     };
   }
 
@@ -212,6 +214,25 @@ export async function loadUserData() {
     mergedConfig.dhlCustomSchedule = false;
   }
 
+  // ── startDate → firstActiveIdx sync ─────────────────────────────────────────
+  // startDate is the "Job Start Date" the user explicitly enters in wizard Step 2,
+  // and DEFAULT_CONFIG documents it as "used to derive firstActiveIdx". When the
+  // stored firstActiveIdx is later than what startDate implies — which happens when
+  // the pre-wizard DHL migration stamped the default (7) and a wizard re-entry didn't
+  // trigger onChange for an unchanged date field — correct firstActiveIdx so income
+  // projections start from the actual job start week, not the legacy default.
+  // Direction guard: only move the boundary earlier (adding active weeks). Moving it
+  // later would remove previously-modeled income and is left to user action.
+  if (mergedConfig.startDate) {
+    const _weekZeroEnd = new Date(FISCAL_YEAR_START + "T00:00:00");
+    const _startTarget = new Date(mergedConfig.startDate + "T00:00:00");
+    const _diffDays = (_startTarget - _weekZeroEnd) / 86400000;
+    const _derivedIdx = Math.max(0, Math.min(Math.ceil(_diffDays / 7), 51));
+    if (_derivedIdx < (mergedConfig.firstActiveIdx ?? 0)) {
+      mergedConfig.firstActiveIdx = _derivedIdx;
+    }
+  }
+
   // ── One-time baseRate correction (night diff separation) ─────────────────────
   // Prior to 2026-03-25 the night shift differential (+$1.50) was baked into
   // baseRate (19.65 + 1.50 = 21.15) rather than tracked as nightDiffRate.
@@ -251,6 +272,7 @@ export async function loadUserData() {
     weekConfirmations:    wcData?.week_confirmations ?? {},
     isEmployerDHL:                data.is_employer_dhl      ?? false,
     isAdmin:              data.is_admin    ?? false,
+    taxProjectionsEnabled: data.tax_projections_enabled ?? false,
     ptoGoal:              data.pto_goal    ?? null,
     isInvestor:           data.is_investor ?? false,
     investorProfile:      investorRow,

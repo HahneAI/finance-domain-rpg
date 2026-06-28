@@ -5,6 +5,7 @@ import { getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, bu
 import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonthEdit, applyMonthEditForward, clearMonth, clearMonthForward, clearQuarterMonths, onwardStartMonthKey, applyQuarterForward, applyAllQuarters, EXPENSE_CYCLE_OPTIONS, CHECKS_PER_MONTH, normalizeCycle, roundToQuarter, toMonthlyCost, fromMonthlyCost, perPaycheckFromCycle, cycleAmountFromPerPaycheck, monthlyFromPerPaycheck, breakdownMonthlyEquiv } from "../lib/expense.js";
 import { formatFiscalWeekLabel, formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
+import { canAccessTaxPlan } from "../lib/entitlements.js";
 import { Card, VT, SmBtn, Pressable, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 import { MonthQuarterSelector } from "./MonthQuarterSelector.jsx";
@@ -74,7 +75,11 @@ function scrollCategoryHeaderNearTop(cat) {
 }
 
 
-export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false }) {
+export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false, taxProjectionsEnabled = false }) {
+  // Tax-exempt projection UI (e.g. the TAXED/EXEMPT badge) is gated behind the
+  // manual feature unlock, not config.taxExemptOptIn alone — so clicking "Unlock
+  // projections" in setup never surfaces it to a normal user. See canAccessTaxPlan.
+  const taxFeatureUnlocked = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled });
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
@@ -2066,7 +2071,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                 <div style={{ fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "2px" }}>{infoLabel}</div>
                 <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--color-accent-primary)", fontFamily: "var(--font-sans)" }}>Breakdown</div>
               </div>
-              {config?.taxExemptOptIn && infoRefWeek && (
+              {taxFeatureUnlocked && config?.taxExemptOptIn && infoRefWeek && (
                 <span style={{
                   fontSize: "9px", padding: "2px 7px", borderRadius: "12px", letterSpacing: "0.5px",
                   background: infoRefWeek.taxedBySchedule ? "#1e1e3a" : "#1e4a30",

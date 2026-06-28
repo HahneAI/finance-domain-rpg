@@ -34,9 +34,9 @@ simplified but the original intent and constraints are preserved.*
   - [x] Removed the bottom-left detail line and the right-side `/mo` figure from the overview
     loan card; kept name, LOAN/status badges, per-paycheck amount, and EDIT/delete. Loans tab unchanged.
 
-- [ ] **Proofread and audit the text for the financial alert feature** — Revisit the Net Worth
-  Health "Financial Breakthrough" tips copy (`NetWorthHealthTips.jsx`) and tune up the wording and
-  messaging.
+- [ ] **Financial alert feature — copy + AI tuneup** — Revisit the Net Worth Health
+  "Financial Breakthrough" tips copy (`NetWorthHealthTips.jsx`) and upgrade it from static text to
+  Coach-generated responses tied to real net worth trends. Full spec → **§18.C**.
 
 - [x] **Log panel — declutter event cards** — Event cards read like a word dump. Raise **title +
   notes** higher in the text hierarchy; for lost-money events show only a single **minus amount**
@@ -345,6 +345,156 @@ VITE_STRIPE_PUBLISHABLE_KEY=...  # client (only if using Stripe.js redirect; not
 
 ---
 
+## 18. AI Layer — Coach + Contextual Intelligence
+
+*Authority Finance's AI layer is built around a single character: **Coach** — a financial wellness
+companion with a visual mascot identity. Coach appears across the app as a contextual presence:
+answering how-to questions, responding to financial stress signals, and delivering insight-rich
+summaries tied to the user's real data. All AI calls run through the Claude API (Anthropic).*
+
+*Items consolidated here from: §15.E (Job Hunt AI), §15.F (Application Assistant), §9 (Statements
+AI layer), §16 (Financial alert copy + Net Worth mental health trigger).*
+
+---
+
+### A. Coach — Character Identity
+
+- [ ] **Name:** Coach
+- [ ] **Mascot icon design** — create a recognizable, single-color mark for Coach to use as an
+  avatar in chat bubbles, beside insight cards, and in triggered messages; suggestions: a stylized
+  chart-and-figure silhouette, an abstract upward-momentum mark, or a minimal shield/compass — keep
+  it at home in a teal-on-dark-green palette; must read at 24×24px and 48×48px
+- [ ] **Personality brief** — Coach speaks in the first person; concise and direct; supportive
+  without being patronizing; always grounds a message in the user's actual numbers rather than
+  generic affirmations; one concrete next step per message
+- [ ] **Visual placement standard** — small Coach avatar chip appears beside every AI-generated
+  output (chat, triggered cards, statement summaries); consistent sizing + spacing across all
+  surfaces (16px avatar in inline cards; 32px in full chat header)
+
+---
+
+### B. General AI Chat — "Ask Coach"
+
+*An app-scoped chat for users who want to understand how Authority Finance works. Not a general
+financial advisor — Coach answers questions about the app using the user's real config as context.*
+
+- [ ] **Entry point** — "Ask Coach" button accessible from the mobile bottom nav (or a floating
+  action chip); opens a full-screen chat panel (bottom-sheet on mobile, side panel on desktop)
+- [ ] **System prompt scope** — Coach answers questions about Authority Finance features (how the
+  setup wizard works, what a given metric means, how to log an event, what the goals system does,
+  etc.); system prompt includes a compressed snapshot of the user's config + key live metrics so
+  answers are personalized ("Your current weekly net is $X — here's how that's calculated…")
+- [ ] **Feature FAQ context block** — pre-seed Coach's context with a structured feature guide
+  covering: setup wizard steps, log event types, goal system, Income panel math, Budget categories,
+  Life Events, Admin Tools; prompt-cached so repeat questions are cheap
+- [ ] **Guardrail** — Coach does not give tax advice, legal advice, or investment recommendations;
+  acknowledges the disclaimer when those topics come up
+- [ ] **Claude API integration** — Haiku for short conversational answers; Sonnet for richer
+  multi-step responses; prompt caching on the feature guide context block
+- [ ] **Conversation scope** — session-scoped only (not persisted across sessions initially);
+  "New Chat" clears history
+- [ ] **Mobile UX** — full-screen sheet; keyboard push handled cleanly with `safe-area-inset-bottom`;
+  Coach avatar shown in the panel header; input pinned above keyboard
+
+---
+
+### C. Net Worth Trend Mental Health Trigger + Coach Response
+
+*`NetWorthHealthTips.jsx` already exists and fires static "Financial Breakthrough" copy. This
+upgrades it: Coach generates a short, context-aware message tied to the user's actual net worth
+trend, and the static copy is rewritten to match Coach's voice.*
+
+- [ ] **Copy audit — static tips rewrite** — rewrite all existing "Financial Breakthrough" tips
+  in `NetWorthHealthTips.jsx` to match Coach's voice: direct, supportive, data-grounded; remove
+  generic affirmations; every tip should reference a real lever the user can pull inside the app
+  (adjust an expense, fund a goal, run the Budget panel, etc.)
+- [ ] **Trigger conditions (formalize)** — define the exact signal conditions that fire a Coach
+  response; candidates:
+  - Net worth flat or declining for ≥ 3 consecutive weeks
+  - A single-period net worth drop exceeding a configurable threshold (e.g. > 10%)
+  - Runway cliff approaching within 30 days (Job Loss Mode)
+  - A goal falling critically behind schedule (> 4 weeks off projected finish)
+- [ ] **Signal tiers:**
+  - [ ] **Amber (attention)** — net worth flat/down ≤ 3 consecutive weeks; brief check-in from
+    Coach: "Your net worth has been flat for 3 weeks — here's one thing worth looking at."
+  - [ ] **Red (critical)** — runway < 30 days OR net worth down > 10% in one period; urgent but
+    not alarming; message ends with one deep-link action (Triage Expenses, Review Goals, Life
+    Events); never catastrophizes
+  - [ ] **Green (recovery)** — net worth up after a red/amber streak; Coach acknowledges the
+    turnaround with a brief, specific data point: "Up $X since last week — you turned it around."
+- [ ] **Coach API response** — instead of (or alongside) static copy, call the Claude API with
+  the user's actual net worth delta, runway, and goal status; response is 2–3 sentences; Haiku
+  model for cost efficiency
+- [ ] **Mental health framing guardrail** — messages acknowledge the emotional weight of financial
+  stress without dramatizing or lecturing; every message ends with one concrete action the user
+  can take in the app right now
+- [ ] **Rate-limiting** — at most one Coach net worth message per week per signal tier; track
+  `lastCoachTriggerAt` in config or session state; don't fire on every re-render
+- [ ] **Dismissal** — each Coach card has a `✕` dismiss; dismissed cards don't re-fire until the
+  signal condition changes (e.g. a new week's data shifts the trend)
+
+---
+
+### D. Statements AI Insights *(extracted from §9)*
+
+*Previously listed under §9 Statements Tab.*
+
+- [ ] **End-of-period Coach summary** — when a monthly/quarterly/yearly statement is generated,
+  Coach writes a 3–5 sentence narrative: what went well, what missed, key spending patterns, goal
+  velocity, and one forward recommendation — all grounded in the statement's actual numbers
+- [ ] **Year-end narrative arc** — deeper annual Coach summary: full goal reconciliation, total tax
+  picture, 401k growth, biggest expense shifts, and a prose arc of the fiscal year
+- [ ] **Prompt caching** — cache the financial context block across the statement session to reduce
+  token cost on follow-up queries within the same report
+
+---
+
+### E. Job Hunt AI Assistant *(extracted from §15.E — Phase 3)*
+
+*Requires Job Loss Mode (§15.C) to be live first.*
+
+- [ ] **Job Hunt Chat panel** — dedicated sub-view in Job Loss Dashboard; powered by Coach (Claude
+  API) with a system prompt including: current role title, prior income, runway days, target income,
+  state/region, application log summary
+- [ ] **Contextual prompt modes:**
+  - [ ] "Help me with my resume" — structured resume review tied to target roles
+  - [ ] "Write a cover letter for [role]" — drafts from stored job title + experience summary
+  - [ ] "Prep me for [company] interview" — role-specific Q&A from company + job title
+  - [ ] "Salary negotiation coaching" — uses prior income + target income + runway as context
+  - [ ] "How long can I be selective?" — runway-aware guidance on holding out vs. taking a quick offer
+- [ ] **Financial context injection** — every session receives a condensed snapshot (runway, burn
+  rate, target net, current week) so advice is grounded in real numbers
+- [ ] **Prompt caching** — cache the financial context block across the conversation session
+
+---
+
+### F. Application Assistant *(extracted from §15.F — Phase 4)*
+
+*Requires Job Board integrations (§15.F) to be live first.*
+
+- [ ] **Draft application mode** — for saved job listings, "Draft application" launches Coach
+  pre-loaded with the specific job description for cover letter / interview prep mode
+
+---
+
+### G. Shared Infrastructure
+
+- [ ] **`lib/claude.js` wrapper** — single client: handles auth, retries, prompt caching headers;
+  exports `chatWithCoach(messages, systemPrompt, contextBlock, model)` where `model` defaults to
+  Haiku and callers can pass Sonnet for richer responses
+- [ ] **`lib/aiContext.js` serializer** — deterministic compressed financial snapshot builder for
+  injection into Coach's system prompt; same output shape every call so prompt caching is effective;
+  includes: weekly net, net worth delta, goal count/status, expense total, runway (if in job loss
+  mode), current week + fiscal context
+- [ ] **`api/coach.js` serverless route** — proxies Claude API calls through a Vercel function so
+  the API key stays server-side; same auth pattern as `api/delete-account.js` (verify Supabase
+  Bearer token, then call Anthropic); returns streamed response for chat UX
+- [ ] **Cost controls** — Haiku for Coach messages, FAQ answers, and net worth triggers; Sonnet
+  for statement summaries and job hunt drafts; log token counts per call type in dev
+- [ ] **Env vars** — add `ANTHROPIC_API_KEY` to Vercel env + CLAUDE.md env vars section
+
+---
+
 ## 15. Life Events Feature
 
 *Life events are moments that fundamentally change a user's financial picture. The app should
@@ -494,23 +644,7 @@ leave the record intact but drop out of projections until reactivated.*
 
 ### E. Future — AI Job Hunt Assistant *(Phase 3)*
 
-*Claude API integration. Contextual to the user's actual financial data — not generic career advice.*
-
-- [ ] **Job Hunt Chat panel** — dedicated sub-view in Job Loss Dashboard; chat interface powered
-  by Claude API with a system prompt that includes: current role title, prior income, runway days,
-  target income, state/region, and application log summary
-- [ ] **Contextual prompt modes:**
-  - [ ] "Help me with my resume" — structured resume review with suggestions tied to target roles
-  - [ ] "Write a cover letter for [role]" — drafts from stored job title, experience summary, and
-    target application details
-  - [ ] "Prep me for [company] interview" — role-specific Q&A based on company + job title
-  - [ ] "Salary negotiation coaching" — uses prior income + target income + runway as context
-  - [ ] "How long can I be selective?" — runway-aware guidance on how long to hold out for the
-    right offer vs. needing to take something quickly
-- [ ] **Financial context injection** — every chat session receives a condensed financial snapshot
-  (runway, burn rate, target net, current week) so advice is grounded in real numbers
-- [ ] **Prompt caching** — use Anthropic SDK prompt caching on the financial context block to
-  reduce token cost across a conversation session
+*Consolidated into §18.E. Requires Job Loss Mode (§15.C) to be live first.*
 
 ---
 
@@ -521,8 +655,8 @@ leave the record intact but drop out of projections until reactivated.*
 - [ ] **Salary filter by target** — filter listings by salary range anchored to target income goal
 - [ ] **One-click application tracking** — "Save to tracker" button on any listing → auto-creates
   an entry in the Re-employment Tracker (C6) with company, role, and date pre-filled
-- [ ] **Application assistant** — for saved listings, "Draft application" launches the AI
-  assistant (E) pre-loaded with the specific job description for cover letter / prep mode
+- [ ] **Application assistant** — for saved listings, "Draft application" launches Coach
+  pre-loaded with the specific job description for cover letter / prep mode → **§18.F**
 - [ ] **Profile store for auto-fill** — stored work history summary, skills list, and resume text
   (user-entered) used to pre-fill application fields and feed the AI assistant context
 
@@ -989,8 +1123,7 @@ The setup wizard collects health, dental, vision, STD, life/AD&D, HSA, FSA premi
     - [x] Net worth delta — estimated change in financial position over the period
   - [x] Download formats — clean PDF and/or CSV export
   - [x] Statement storage — saved statements persist in Supabase so you can pull up any past period
-  - [x] AI insights layer — end-of-period summary generated by Claude: what went well, what missed, spending patterns, goal velocity, and forward recommendations based on trajectory
-  - [x] Year-end summary — deeper annual report: full goal reconciliation, total tax picture, 401k growth, biggest expense shifts, and a narrative arc of the fiscal year
+  - [ ] **AI insights layer** — end-of-period Coach summary + year-end narrative arc → **§18.D** (spec consolidated there)
 
 ---
 

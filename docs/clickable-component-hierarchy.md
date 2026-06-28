@@ -49,6 +49,7 @@ release so fast taps still register.
 | Bottom-nav buttons | `App.jsx` (local) | ⬜ pending (nav-bar pass) |
 | Hamburger / drawer / header buttons | `App.jsx` | ⬜ pending (nav-bar pass) |
 | Bespoke `<button>`s in **HomePanel** | `HomePanel.jsx` | ✅ on `Pressable` (goal add/edit/delete, reorder ↑↓/done, reset-timeline, show-completed) |
+| Bespoke `<button>`s in **IncomePanel** | `IncomePanel.jsx` | ✅ on `Pressable` (sharpener cancel/confirm, event-loss close, sharpen-rates, info, full-detail, ✕). Week rows skipped — admin-only diagnostics; desktop rows are `<tr>` (can't host the overlay). |
 | Raw `<button>` / `<div onClick>` in other panels | each panel | ⬜ pending (per-panel passes) |
 | Modal / SetupWizard buttons | modal files | ⬜ pending (modal pass) |
 
@@ -58,7 +59,7 @@ bespoke raw `<button>`s, swept region by region.
 
 ### Rollout order (one region at a time)
 1. ✅ Shared `ui.jsx` primitives (`VT`/`NT`/`SmBtn`/`MetricCard`) — baseline for all panels.
-2. Panels, one at a time (bespoke buttons): ✅ Home → ⬜ Income → ⬜ Budget → ⬜ Log → ⬜ Account.
+2. Panels, one at a time (bespoke buttons): ✅ Home → ✅ Income → ⬜ Budget → ⬜ Log → ⬜ Account.
 3. ⬜ Persistent chrome: bottom nav, hamburger, drawer, mobile header.
 4. ⬜ Modals + SetupWizard buttons.
 

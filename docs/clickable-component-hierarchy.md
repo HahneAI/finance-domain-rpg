@@ -9,27 +9,54 @@ roll out an Apple-style **flash + bounce** press animation section by section.
 
 ---
 
-## How clicks are wired today
+## The default tap-feedback system
 
-Almost every interactive element is one of a handful of shapes. This matters: the
-animation can be applied at the *primitive* level and inherited everywhere, rather
-than touched at 500+ call sites.
+**Standard:** every clickable surface uses the press feedback defined in `ui.jsx`.
+Two cues, within the CLAUDE.md press budget (scale-only, ≤500ms):
 
-| Funnel | Where defined | Press anim today? | Notes |
-|--------|---------------|-------------------|-------|
-| `MetricCard` / `Card` (button mode) | `ui.jsx` | ✅ `scale(0.97)` on `onPointerDown/Up/Leave` | The reference press behavior. Only this primitive animates today. |
-| `NT` (nav tab) | `ui.jsx` | ❌ | Raw `<button>`, teal fill when active. |
-| `VT` (view tab) | `ui.jsx` | ❌ | Raw `<button>`, smaller padding. |
-| `SmBtn` (inline utility) | `ui.jsx` | ❌ | Raw `<button>`. |
-| `SidebarNavItem` | `App.jsx` (local) | ❌ | Sidebar + drawer rows. |
-| Bottom-nav buttons | `App.jsx` (local) | ❌ | `color` transition only. |
-| Raw `<button>` / `<div onClick>` | every file | ❌ | ~515 onClick/button sites across 22 files. |
+1. **Green press fill** — a quick fill of the lighter same-family green
+   (`--color-gold-bright` `#33e0b0`) that fades quickly (~180ms) to whatever the
+   control settles to (the selected green `#00c896` on tabs, or the control's own bg).
+   This is the primary cue.
+2. **Scale spring** — a subtle `scale(0.94)` press-in with a gentle overshoot spring
+   back. Supporting cue.
 
-**Implication for the animation rollout:** wrapping/upgrading the five `ui.jsx`
-primitives (`MetricCard`, `NT`, `VT`, `SmBtn`, + a new shared `Pressable`/CSS class)
-covers the majority of taps. Raw buttons in `App.jsx` and panels are the long tail.
-The current press scale already obeys the CLAUDE.md Animation Rules
-(*"Press = `scale(0.97)` only … ≤ 500ms"*) — the flash+bounce must stay within that budget.
+**Building blocks (all exported from `ui.jsx`):**
+
+| Export | Use it when |
+|--------|-------------|
+| `<Pressable as="button" …>` | New or refactored call sites — drop-in for `<button>`/`<div onClick>`. Bakes in the fill + spring; forwards `style`/`onClick`/`aria`/`disabled`. |
+| `usePressFeedback()` → `{ pressed, lit, handlers }` + `<PressFlashOverlay lit={lit} />` | A component must keep its own element/state but wants identical feedback (e.g. `MetricCard`). Parent needs `position:relative; overflow:hidden; isolation:isolate`. |
+| `pressScaleStyle(pressed)` | Just the transform/transition for the scale spring. |
+
+**Mechanics:** the green fill is a `<span>` overlay at `zIndex:-1` (paints over the
+control's background, behind its text/icons), clipped to the radius by `overflow:hidden`,
+contained by `isolation:isolate`. A short `lit` timer keeps the fill up briefly after
+release so fast taps still register.
+
+## How clicks are wired — rollout status
+
+| Funnel | Where | Status |
+|--------|-------|--------|
+| `VT` (view tab) | `ui.jsx` | ✅ on default system (prototype surface) |
+| `NT` (nav tab) | `ui.jsx` | ✅ on default system (via `Pressable`) |
+| `SmBtn` (inline utility) | `ui.jsx` | ✅ on default system (via `Pressable`) |
+| `MetricCard` / `Card` (button mode) | `ui.jsx` | ✅ on default system (`usePressFeedback` + overlay; `scale(0.97)` for the larger surface) |
+| `SidebarNavItem` | `App.jsx` (local) | ⬜ pending (nav-bar pass) |
+| Bottom-nav buttons | `App.jsx` (local) | ⬜ pending (nav-bar pass) |
+| Hamburger / drawer / header buttons | `App.jsx` | ⬜ pending (nav-bar pass) |
+| Raw `<button>` / `<div onClick>` in panels | each panel | ⬜ pending (per-panel passes) |
+| Modal / SetupWizard buttons | modal files | ⬜ pending (modal pass) |
+
+Because most panel tap targets funnel through the four `ui.jsx` primitives above,
+**every panel already has baseline feedback.** The remaining work is the long tail of
+bespoke raw `<button>`s, swept region by region.
+
+### Rollout order (one region at a time)
+1. ✅ Shared `ui.jsx` primitives (`VT`/`NT`/`SmBtn`/`MetricCard`) — baseline for all panels.
+2. ⬜ Panels, one at a time: Home → Income → Budget → Log → Account (bespoke buttons).
+3. ⬜ Persistent chrome: bottom nav, hamburger, drawer, mobile header.
+4. ⬜ Modals + SetupWizard buttons.
 
 ---
 

@@ -14,10 +14,13 @@ roll out an Apple-style **flash + bounce** press animation section by section.
 **Standard:** every clickable surface uses the press feedback defined in `ui.jsx`.
 Two cues, within the CLAUDE.md press budget (scale-only, ≤500ms):
 
-1. **Green press fill** — a quick fill of the lighter same-family green
-   (`--color-gold-bright` `#33e0b0`) that fades quickly (~180ms) to whatever the
-   control settles to (the selected green `#00c896` on tabs, or the control's own bg).
-   This is the primary cue.
+1. **Family press fill** — a quick fill in a lighter shade of the target's **own**
+   resting color (same hue family) that fades quickly (~180ms) back to the control's
+   color. A red ✕/Cancel flashes lighter red, a gold tab lighter gold, a green Save
+   lighter green, etc. The fill auto-derives at press time via `getComputedStyle` +
+   HSL lightening (`deriveTapFillColor`), picking the most chromatic of the control's
+   background/border/text. Pass `flashColor` to override; falls back to gold-bright
+   when no usable color is found. This is the primary cue.
 2. **Scale spring** — a subtle `scale(0.94)` press-in with a gentle overshoot spring
    back. Supporting cue.
 

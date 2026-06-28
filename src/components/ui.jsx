@@ -108,8 +108,62 @@ export function pressScaleStyle(pressed, scale = 0.94, extra = "") {
   };
 }
 
-// PressFlashOverlay — the green press fill. Renders behind the control's content
+// ── Press-fill color derivation ──────────────────────────────────────────────
+// The press fill is a lighter shade of the tappable target's OWN resting color,
+// same family — so a red ✕/Cancel flashes lighter red, a gold tab flashes lighter
+// gold, a green Save flashes lighter green, etc. We read the control's computed
+// colors at press time and lighten the most chromatic one in HSL.
+
+function _parseRgb(str) {
+  if (!str) return null;
+  const m = str.match(/rgba?\(([^)]+)\)/i);
+  if (!m) return null;
+  const [r, g, b, a = 1] = m[1].split(",").map(s => parseFloat(s.trim()));
+  if ([r, g, b].some(Number.isNaN)) return null;
+  return { r, g, b, a };
+}
+
+function _rgbToHsl({ r, g, b }) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  const l = (max + min) / 2;
+  let h = 0, s = 0;
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+  }
+  return { h: h * 360, s, l };
+}
+
+// Returns a CSS color string: a lighter, same-family shade of the target's color.
+// Falls back to gold-bright if nothing usable is found (or in non-DOM/test env).
+function deriveTapFillColor(el, fallback = "var(--color-gold-bright)") {
+  try {
+    if (!el || typeof getComputedStyle !== "function") return fallback;
+    const cs = getComputedStyle(el);
+    const cands = [cs.backgroundColor, cs.borderTopColor, cs.color]
+      .map(_parseRgb)
+      .filter(c => c && c.a > 0.05)            // ignore transparent (e.g. ghost-button bg)
+      .map(c => ({ ...c, hsl: _rgbToHsl(c) }));
+    if (!cands.length) return fallback;
+    // Pick the most chromatic color — that's the control's identity (red, gold, …),
+    // not the dark neutral surface behind it.
+    cands.sort((a, b) => b.hsl.s - a.hsl.s);
+    const { h, s, l } = cands[0].hsl;
+    // Lighten within the family: clearly lighter, but never blown out to white.
+    const targetL = Math.min(Math.max(l + 0.22, 0.55), 0.82);
+    return `hsl(${Math.round(h)}, ${Math.round(s * 100)}%, ${Math.round(targetL * 100)}%)`;
+  } catch {
+    return fallback;
+  }
+}
+
+// PressFlashOverlay — the press fill. Renders behind the control's content
 // (zIndex -1, so it never covers text/icons) and clips to the parent's radius.
+// `color` defaults to gold-bright but callers normally pass a derived family color.
 // The parent MUST set `position: relative`, `overflow: hidden`, and
 // `isolation: isolate` (Pressable and the primitives below all do).
 export function PressFlashOverlay({ lit, color = "var(--color-gold-bright)", opacity = 1 }) {
@@ -132,9 +186,10 @@ export function PressFlashOverlay({ lit, color = "var(--color-gold-bright)", opa
 }
 
 // Pressable — drop-in <button>/<div> with the default tap feedback baked in.
-// Keeps the consumer's style/onClick/aria props; just adds the green fill + spring.
-// `as` switches the element (default "button"); `scale`, `flashColor`, `flashOpacity`
-// tune the feedback. Disabled buttons get no feedback.
+// Keeps the consumer's style/onClick/aria props; just adds the press fill + spring.
+// The fill auto-derives from the target's own resting color (lighter, same family);
+// pass `flashColor` to override. `as` switches the element (default "button");
+// `scale`/`flashOpacity` tune the feedback. Disabled buttons get no feedback.
 export function Pressable({
   as: Tag = "button",
   children,
@@ -147,12 +202,22 @@ export function Pressable({
   ...rest
 }) {
   const { pressed, lit, handlers } = usePressFeedback();
+  const elRef = useRef(null);
+  // Derived lighter-shade fill, computed from the element's own color on press.
+  const [fill, setFill] = useState(flashColor);
   const interactive = !disabled;
+
+  const onPointerDown = (e) => {
+    if (!flashColor) setFill(deriveTapFillColor(elRef.current));
+    handlers.onPointerDown(e);
+  };
+
   return (
     <Tag
+      ref={elRef}
       onClick={onClick}
       {...(Tag === "button" ? { disabled } : {})}
-      {...(interactive ? handlers : {})}
+      {...(interactive ? { ...handlers, onPointerDown } : {})}
       {...rest}
       style={{
         position: "relative",
@@ -162,7 +227,7 @@ export function Pressable({
         ...style,
       }}
     >
-      <PressFlashOverlay lit={interactive && lit} color={flashColor} opacity={flashOpacity} />
+      <PressFlashOverlay lit={interactive && lit} color={fill ?? flashColor} opacity={flashOpacity} />
       {children}
     </Tag>
   );
@@ -253,6 +318,9 @@ const GLASS_TIER = {
 
 export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight, visualTier, centered }) {
   const { pressed, lit, handlers } = usePressFeedback();
+  const btnRef = useRef(null);
+  // Press fill derived from the card's own color (status green/gold/red, etc).
+  const [fill, setFill] = useState(undefined);
   const [flashing, setFlashing] = useState(false);
   const prevRaw = useRef(null);
 
@@ -339,8 +407,14 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
   );
 
   return isButton ? (
-    <button {...handlers} onClick={onClick} style={containerStyle}>
-      <PressFlashOverlay lit={lit} />
+    <button
+      ref={btnRef}
+      {...handlers}
+      onPointerDown={(e) => { setFill(deriveTapFillColor(btnRef.current)); handlers.onPointerDown(e); }}
+      onClick={onClick}
+      style={containerStyle}
+    >
+      <PressFlashOverlay lit={lit} color={fill} />
       {content}
     </button>
   ) : (

@@ -99,20 +99,20 @@ export function VT({ label, active, onClick }) {
         WebkitTapHighlightColor: "transparent",
       }}
     >
-      {/* iOS-style press highlight — a translucent overlay that fades in fast on
-          touch-down, stays while held, then eases out on release. This (not the
-          scale) is the primary "noticeable but subtle" cue. On the dark inactive
-          tab it lightens; on the bright active tab it dims, matching iOS controls. */}
+      {/* Press fill — a quick lighter-green flash in the same family as the selected
+          tab fill (gold-bright #33e0b0 vs the selected gold #00c896), which then fades
+          quickly to reveal the selected green beneath. This green fill (not the scale)
+          is the primary "noticeable but subtle" press cue. */}
       <span
         aria-hidden="true"
         style={{
           position: "absolute",
           inset: 0,
           borderRadius: "inherit",
-          background: active ? "rgba(5,16,12,0.22)" : "rgba(230,244,239,0.22)",
+          background: "var(--color-gold-bright)",
           opacity: lit ? 1 : 0,
-          // Snap in on press, ease out softly on release.
-          transition: lit ? "opacity 50ms ease-out" : "opacity 280ms ease-out",
+          // Quick fill in on press, then fade quickly to the selected green on release.
+          transition: lit ? "opacity 40ms ease-out" : "opacity 180ms ease-out",
           pointerEvents: "none",
         }}
       />

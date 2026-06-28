@@ -3,7 +3,7 @@ import { useState } from "react";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { calcEventImpact, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getPayPeriodBounds } from "../lib/fiscalWeek.js";
-import { Card, iS, lS, SmBtn, PanelHero, SectionHeader } from "./ui.jsx";
+import { Card, iS, lS, SmBtn, Pressable, PanelHero, SectionHeader } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -307,7 +307,7 @@ export function LogPanel({
             const isScheduled = scheduled.includes(day);
             const isMissed = missed.includes(day);
             return (
-              <button key={day} type="button" onClick={() => toggleDay(day, vals, set)} style={{
+              <Pressable key={day} type="button" onClick={() => toggleDay(day, vals, set)} style={{
                 padding: "6px 10px", borderRadius: "12px", fontSize: "10px", letterSpacing: "1px",
                 cursor: "pointer",
                 border: isMissed ? "1px solid #e8856a" : isScheduled ? "1px solid #444" : "1px solid #222",
@@ -317,7 +317,7 @@ export function LogPanel({
                 textTransform: "uppercase",
               }}>
                 {day}
-              </button>
+              </Pressable>
             );
           })}
         </div>
@@ -520,14 +520,14 @@ export function LogPanel({
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={lS}>Extra day outside your schedule?</label>
         <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-          <button type="button" onClick={() => set(v => ({ ...v, extraDay: true }))}
+          <Pressable type="button" onClick={() => set(v => ({ ...v, extraDay: true }))}
             style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: vals.extraDay ? "rgba(34,197,94,0.13)" : "var(--color-bg-raised)", color: vals.extraDay ? "var(--color-green)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: vals.extraDay ? "bold" : "normal" }}>
             Yes — extra pay
-          </button>
-          <button type="button" onClick={() => set(v => ({ ...v, extraDay: false }))}
+          </Pressable>
+          <Pressable type="button" onClick={() => set(v => ({ ...v, extraDay: false }))}
             style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !vals.extraDay ? "rgba(122,139,191,0.16)" : "var(--color-bg-raised)", color: !vals.extraDay ? "#7a8bbf" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: !vals.extraDay ? "bold" : "normal" }}>
             No — paid day off
-          </button>
+          </Pressable>
         </div>
         <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "6px", lineHeight: 1.5 }}>
           {vals.extraDay
@@ -564,7 +564,7 @@ export function LogPanel({
     {/* Log header + add button */}
     <div style={{ marginBottom: "12px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "10px" }}>Event Log ({logs.length})</div>
-      <button onClick={() => { setAdding(true); setEditId(null); }} style={{ width: "100%", background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "14px", fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>+ LOG EVENT</button>
+      <Pressable onClick={() => { setAdding(true); setEditId(null); }} style={{ width: "100%", background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "14px", fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>+ LOG EVENT</Pressable>
     </div>
 
     {/* Add form */}
@@ -594,21 +594,21 @@ export function LogPanel({
           <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-deduction)", textTransform: "uppercase", marginBottom: "6px" }}>Leave without saving?</div>
           <div style={{ color: "var(--color-text-secondary)", marginBottom: "10px", fontSize: "10px" }}>This event will be discarded.</div>
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={() => { setAdding(false); setNEv(blank); setAddConfirming(false); setCancelWarning(false); }} style={{ background: "var(--color-deduction)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Yes, Discard</button>
-            <button onClick={() => setCancelWarning(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Keep Editing</button>
+            <Pressable onClick={() => { setAdding(false); setNEv(blank); setAddConfirming(false); setCancelWarning(false); }} style={{ background: "var(--color-deduction)", color: "#0a0a0a", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Yes, Discard</Pressable>
+            <Pressable onClick={() => setCancelWarning(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Keep Editing</Pressable>
           </div>
         </div>
       )}
       <div style={{ display: "flex", gap: "8px" }}>
         {!addConfirming ? (
           <>
-            <button onClick={() => setAddConfirming(true)} disabled={!nEv.weekEnd} style={{ background: nEv.weekEnd ? "var(--color-green)" : "var(--color-border-subtle)", color: nEv.weekEnd ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: nEv.weekEnd ? "pointer" : "default", fontWeight: "bold" }}>SAVE</button>
-            <button onClick={() => nEv.weekEnd ? setCancelWarning(true) : (setAdding(false), setNEv(blank), setAddConfirming(false))} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</button>
+            <Pressable onClick={() => setAddConfirming(true)} disabled={!nEv.weekEnd} style={{ background: nEv.weekEnd ? "var(--color-green)" : "var(--color-border-subtle)", color: nEv.weekEnd ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: nEv.weekEnd ? "pointer" : "default", fontWeight: "bold" }}>SAVE</Pressable>
+            <Pressable onClick={() => nEv.weekEnd ? setCancelWarning(true) : (setAdding(false), setNEv(blank), setAddConfirming(false))} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</Pressable>
           </>
         ) : (
           <>
-            <button onClick={addLog} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>YES, LOG IT</button>
-            <button onClick={() => setAddConfirming(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>EDIT</button>
+            <Pressable onClick={addLog} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>YES, LOG IT</Pressable>
+            <Pressable onClick={() => setAddConfirming(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>EDIT</Pressable>
           </>
         )}
       </div>
@@ -682,13 +682,13 @@ export function LogPanel({
             <div style={{ display: "flex", gap: "8px" }}>
               {!editConfirming ? (
                 <>
-                  <button onClick={() => setEditConfirming(true)} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</button>
-                  <button onClick={() => { setEditId(null); setEditConfirming(false); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</button>
+                  <Pressable onClick={() => setEditConfirming(true)} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>SAVE</Pressable>
+                  <Pressable onClick={() => { setEditId(null); setEditConfirming(false); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>CANCEL</Pressable>
                 </>
               ) : (
                 <>
-                  <button onClick={saveEdit} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>YES, SAVE</button>
-                  <button onClick={() => setEditConfirming(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>EDIT</button>
+                  <Pressable onClick={saveEdit} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>YES, SAVE</Pressable>
+                  <Pressable onClick={() => setEditConfirming(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>EDIT</Pressable>
                 </>
               )}
             </div>
@@ -715,7 +715,7 @@ export function LogPanel({
             </div>
             <div style={{ borderTop: "1px solid #1e1e1e", paddingTop: "10px", display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
               <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                <button
+                <Pressable
                   onClick={() => setExpandedImpact(prev => {
                     const next = new Set(prev);
                     next.has(entry.id) ? next.delete(entry.id) : next.add(entry.id);
@@ -723,14 +723,14 @@ export function LogPanel({
                   })}
                   style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", padding: "4px 6px", cursor: "pointer", fontSize: "12px", lineHeight: 1 }}
                   title="Impact breakdown"
-                >{expandedImpact.has(entry.id) ? "▲" : "▼"}</button>
-                <button onClick={() => startEdit(entry)} style={{ background: "transparent", border: "1px solid #444", color: "var(--color-text-primary)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>EDIT</button>
+                >{expandedImpact.has(entry.id) ? "▲" : "▼"}</Pressable>
+                <Pressable onClick={() => startEdit(entry)} style={{ background: "transparent", border: "1px solid #444", color: "var(--color-text-primary)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>EDIT</Pressable>
                 {cdel === entry.id
                   ? <>
-                      <button onClick={() => { setLogs(p => p.filter(e => e.id !== entry.id)); setCdel(null); }} style={{ background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CONFIRM</button>
-                      <button onClick={() => setCdel(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CANCEL</button>
+                      <Pressable onClick={() => { setLogs(p => p.filter(e => e.id !== entry.id)); setCdel(null); }} style={{ background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CONFIRM</Pressable>
+                      <Pressable onClick={() => setCdel(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CANCEL</Pressable>
                     </>
-                  : <button onClick={() => setCdel(entry.id)} style={{ background: "transparent", border: "1px solid #333", color: "var(--color-text-disabled)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>DELETE</button>
+                  : <Pressable onClick={() => setCdel(entry.id)} style={{ background: "transparent", border: "1px solid #333", color: "var(--color-text-disabled)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>DELETE</Pressable>
                 }
               </div>
             </div>
@@ -865,7 +865,7 @@ export function LogPanel({
     {/* ── Attendance History ── */}
     {attendanceLogs.length > 0 && (
       <div style={{ marginBottom: "20px" }}>
-        <button
+        <Pressable
           onClick={() => setHistOpen(o => !o)}
           style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: histOpen ? "6px 6px 0 0" : "6px", padding: "10px 14px", cursor: "pointer" }}
         >
@@ -874,7 +874,7 @@ export function LogPanel({
             {(ytdUnpaid + ytdUnapproved) > 0 && <span style={{ fontSize: "11px", color: "var(--color-deduction)" }}>{ytdUnpaid + ytdUnapproved} days missed YTD</span>}
             <span style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{histOpen ? "▲" : "▼"}</span>
           </span>
-        </button>
+        </Pressable>
         {histOpen && (
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderTop: "none", borderRadius: "0 0 6px 6px", padding: "14px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px", marginBottom: "14px" }}>
@@ -1099,8 +1099,8 @@ export function LogPanel({
             </div>
             <div><label style={lS}>Leave Start Date</label><input {...iS} style={{ ...iS }} type="date" value={formVals.targetDate} onChange={e => setFormVals(v => ({ ...v, targetDate: e.target.value }))} /><div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>App projects your PTO accrual up to this date.</div></div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-              <button onClick={() => setFormOpen(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
-              <button onClick={saveForm} disabled={!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", fontWeight: "bold", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", opacity: (!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate) ? 0.4 : 1 }}>Save</button>
+              <Pressable onClick={() => setFormOpen(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable onClick={saveForm} disabled={!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", fontWeight: "bold", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", opacity: (!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate) ? 0.4 : 1 }}>Save</Pressable>
             </div>
           </div>
         )}

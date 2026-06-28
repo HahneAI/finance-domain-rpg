@@ -50,21 +50,26 @@ export function NT({ label, active, onClick }) { return <button onClick={onClick
 // the flash+bounce rollout; once dialed in the same pattern promotes to the other
 // ui.jsx primitives.
 export function VT({ label, active, onClick }) {
-  const [pressed, setPressed]   = useState(false);
-  const [flashing, setFlashing] = useState(false);
-  const flashTimer = useRef(null);
+  const [pressed, setPressed] = useState(false);
+  // `lit` keeps the highlight visible for a minimum beat even on a fast tap, so a
+  // quick press still reads. It tracks `pressed` but lingers via a release timer.
+  const [lit, setLit] = useState(false);
+  const litTimer = useRef(null);
 
-  // Clean up a pending flash timer on unmount so we never setState after teardown.
-  useEffect(() => () => clearTimeout(flashTimer.current), []);
+  // Clean up a pending timer on unmount so we never setState after teardown.
+  useEffect(() => () => clearTimeout(litTimer.current), []);
 
   const press = () => {
+    clearTimeout(litTimer.current);
     setPressed(true);
-    setFlashing(true);
-    clearTimeout(flashTimer.current);
-    // Hold the flash briefly, then let the CSS opacity transition fade it out.
-    flashTimer.current = setTimeout(() => setFlashing(false), 120);
+    setLit(true);
   };
-  const release = () => setPressed(false);
+  const release = () => {
+    setPressed(false);
+    // Hold the highlight briefly after lift so quick taps still show it, then fade.
+    clearTimeout(litTimer.current);
+    litTimer.current = setTimeout(() => setLit(false), 90);
+  };
 
   return (
     <button
@@ -86,24 +91,28 @@ export function VT({ label, active, onClick }) {
         border: "1px solid " + (active ? "var(--color-gold)" : "var(--color-border-subtle)"),
         borderRadius: "12px",
         cursor: "pointer",
-        transform: pressed ? "scale(0.97)" : "scale(1)",
+        transform: pressed ? "scale(0.94)" : "scale(1)",
         // Quick ease-out on press-in; gentle overshoot spring on release.
         transition: pressed
-          ? "transform 110ms ease-out, background 0.15s ease, color 0.15s ease"
-          : "transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease, color 0.15s ease",
+          ? "transform 90ms ease-out, background 0.15s ease, color 0.15s ease"
+          : "transform 340ms cubic-bezier(0.34, 1.7, 0.5, 1), background 0.15s ease, color 0.15s ease",
         WebkitTapHighlightColor: "transparent",
       }}
     >
-      {/* Soft gold flash overlay — brightens on press, fades back over ~300ms. */}
+      {/* Press fill — a quick lighter-green flash in the same family as the selected
+          tab fill (gold-bright #33e0b0 vs the selected gold #00c896), which then fades
+          quickly to reveal the selected green beneath. This green fill (not the scale)
+          is the primary "noticeable but subtle" press cue. */}
       <span
         aria-hidden="true"
         style={{
           position: "absolute",
           inset: 0,
           borderRadius: "inherit",
-          background: active ? "rgba(255,255,255,0.35)" : "var(--color-gold-bright)",
-          opacity: flashing ? (active ? 0.5 : 0.28) : 0,
-          transition: "opacity 300ms ease-out",
+          background: "var(--color-gold-bright)",
+          opacity: lit ? 1 : 0,
+          // Quick fill in on press, then fade quickly to the selected green on release.
+          transition: lit ? "opacity 40ms ease-out" : "opacity 180ms ease-out",
           pointerEvents: "none",
         }}
       />

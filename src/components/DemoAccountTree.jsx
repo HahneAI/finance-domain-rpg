@@ -11,7 +11,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { DEMO_ACCOUNT_1 } from "../fixtures/demo-account-1.js";
 import { DEMO_ACCOUNT_2 } from "../fixtures/demo-account-2.js";
-import { SH } from "./ui.jsx";
+import { SH, Pressable } from "./ui.jsx";
 import { SetupWizard } from "./SetupWizard.jsx";
 import { HomePanel } from "./HomePanel.jsx";
 import { IncomePanel } from "./IncomePanel.jsx";
@@ -527,7 +527,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
                   </span>
                 </div>
                 {/* Reconfigure button — opens SetupWizard */}
-                <button
+                <Pressable
                   onClick={() => setWizardOpen(true)}
                   style={{
                     background: "rgba(0,200,150,0.10)",
@@ -543,7 +543,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
                   }}
                 >
                   Reconfigure
-                </button>
+                </Pressable>
               </>
             ) : (
               /* Investor: read-only badge */
@@ -578,7 +578,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
           }}>
             {/* Exit is always the leftmost action — most important escape hatch */}
             {onExit && (
-              <button
+              <Pressable
                 onClick={onExit}
                 style={{
                   background: "var(--color-bg-raised)",
@@ -601,10 +601,10 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
                   <polyline points="15 18 9 12 15 6"/>
                 </svg>
                 My Account
-              </button>
+              </Pressable>
             )}
 
-            <button
+            <Pressable
               onClick={handleSave}
               disabled={saveStatus === "saving" || !isDirty}
               style={{
@@ -627,10 +627,10 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
                 : saveStatus === "saved" ? "Saved ✓"
                 : saveStatus === "error" ? "Error ✗"
                 : "Save Demo"}
-            </button>
+            </Pressable>
 
             {isDirty && (
-              <button
+              <Pressable
                 onClick={handleRevert}
                 style={{
                   background: "transparent",
@@ -647,7 +647,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
                 }}
               >
                 Revert
-              </button>
+              </Pressable>
             )}
           </div>
         )}
@@ -663,7 +663,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
           {DEMO_TABS.map(tab => {
             const active = activeTab === tab.key;
             return (
-              <button
+              <Pressable
                 key={tab.key}
                 onClick={() => setInternalTab(tab.key)}
                 style={{
@@ -682,7 +682,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
                 }}
               >
                 {tab.label}
-              </button>
+              </Pressable>
             );
           })}
           {currentWeekNumber && (

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Pressable } from "./ui.jsx";
 import { getEffectiveAmount, getPhaseIndex } from "../lib/finance.js";
 import { getNextDueDate } from "../lib/expense.js";
 import { ReemploymentTracker } from "./ReemploymentTracker.jsx";
@@ -249,7 +250,7 @@ export function JobLossDashboard({ config, setConfig, expenses, effectiveToday }
             {[{ v: true, label: "With unemployment" }, { v: false, label: "Without" }].map(opt => {
               const active = includeBenefits === opt.v;
               return (
-                <button
+                <Pressable
                   key={opt.label}
                   onClick={() => setIncludeBenefits(opt.v)}
                   style={{
@@ -264,7 +265,7 @@ export function JobLossDashboard({ config, setConfig, expenses, effectiveToday }
                   }}
                 >
                   {active && "✓ "}{opt.label}
-                </button>
+                </Pressable>
               );
             })}
           </div>

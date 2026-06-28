@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { Pressable } from "./ui.jsx";
 import { CATEGORY_COLORS } from "../constants/config.js";
 import { getNextDueDate } from "../lib/expense.js";
 
@@ -143,7 +144,7 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses, config, ef
                 Paused or cancelled rows drop out of projections until you exit Job Loss Mode.
               </div>
             </div>
-            <button
+            <Pressable
               onClick={onClose}
               aria-label="Close"
               style={{
@@ -160,11 +161,11 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses, config, ef
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 6L6 18" /><path d="M6 6l12 12" />
               </svg>
-            </button>
+            </Pressable>
           </div>
 
           {flexibleActiveCount > 0 && (
-            <button
+            <Pressable
               onClick={pauseAllFlexible}
               style={{
                 marginTop: "12px",
@@ -178,7 +179,7 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses, config, ef
               }}
             >
               Pause all Flexible ({flexibleActiveCount})
-            </button>
+            </Pressable>
           )}
         </div>
 
@@ -242,7 +243,7 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses, config, ef
                     {STATUS_OPTIONS.map(opt => {
                       const active = status === opt.v;
                       return (
-                        <button
+                        <Pressable
                           key={opt.v}
                           onClick={() => setStatus(exp.id, opt.v)}
                           style={{
@@ -259,7 +260,7 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses, config, ef
                           }}
                         >
                           {opt.label}
-                        </button>
+                        </Pressable>
                       );
                     })}
                   </div>
@@ -293,7 +294,7 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses, config, ef
           borderTop: "1px solid var(--color-border-subtle)",
           display: "flex", justifyContent: "flex-end",
         }}>
-          <button
+          <Pressable
             onClick={onClose}
             style={{
               background: "var(--color-gold)",
@@ -305,7 +306,7 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses, config, ef
             }}
           >
             Done
-          </button>
+          </Pressable>
         </div>
       </div>
     </div>

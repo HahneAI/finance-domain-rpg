@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { buildYear, dhlEmployerMatchRate } from "../lib/finance.js";
-import { iS, lS } from "./ui.jsx";
+import { iS, lS, Pressable } from "./ui.jsx";
 import { FISCAL_YEAR_START, DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR } from "../lib/fiscalWeek.js";
 
@@ -133,7 +133,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
       {LIFE_EVENTS.filter(ev => ev.value !== "structure_change").map(ev => {
         const active = lifeEvent === ev.value;
         return (
-          <button
+          <Pressable
             key={ev.value}
             onClick={() => onLifeEventChange(ev.value)}
             style={{
@@ -156,7 +156,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
             <span style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>
               {ev.sub}
             </span>
-          </button>
+          </Pressable>
         );
       })}
     </div>
@@ -168,7 +168,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
 // ─────────────────────────────────────────────────────────────────────────────
 function Pill({ label, active, onClick, disabled }) {
   return (
-    <button
+    <Pressable
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       style={{
@@ -183,7 +183,7 @@ function Pill({ label, active, onClick, disabled }) {
       }}
     >
       {!disabled && active && "✓ "}{label}
-    </button>
+    </Pressable>
   );
 }
 
@@ -881,7 +881,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle, attempted })
     }}>
 
       {/* ── Toggle row ── */}
-      <button
+      <Pressable
         onClick={onToggle}
         style={{
           width: "100%", display: "flex", alignItems: "center",
@@ -909,7 +909,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle, attempted })
         }}>
           {selected ? "On" : "Off"}
         </div>
-      </button>
+      </Pressable>
 
       {/* ── Expanded fields ── */}
       {selected && (
@@ -1098,7 +1098,7 @@ function Step3({ formData, onChange, attempted }) {
                 value={row.perCheckAmount ?? row.weeklyAmount ?? ""}
                 onChange={e => updateRow(row.id, { perCheckAmount: e.target.value === "" ? null : parseFloat(e.target.value) })}
               />
-              <button
+              <Pressable
                 onClick={() => removeRow(row.id)}
                 style={{
                   background: "transparent",
@@ -1107,10 +1107,10 @@ function Step3({ formData, onChange, attempted }) {
                   borderRadius: "8px", width: "32px", height: "36px",
                   cursor: "pointer", fontSize: "14px", lineHeight: 1,
                 }}
-              >×</button>
+              >×</Pressable>
             </div>
           ))}
-          <button
+          <Pressable
             onClick={addRow}
             style={{
               background: "transparent", color: "var(--color-text-primary)",
@@ -1120,7 +1120,7 @@ function Step3({ formData, onChange, attempted }) {
             }}
           >
             + Add Deduction
-          </button>
+          </Pressable>
         </div>
       </div>
 
@@ -1379,23 +1379,23 @@ function PaystubCalc({ isVariable, isNoTax, onConfirm, onEstimate }) {
       {/* Action buttons */}
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
         {canApply && (
-          <button onClick={handleConfirm} style={{
+          <Pressable onClick={handleConfirm} style={{
             background: "var(--color-green)", color: "var(--color-bg-base)",
             border: "none", borderRadius: "12px", padding: "8px 16px",
             fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
             fontWeight: "bold", cursor: "pointer",
           }}>
             Apply These Rates
-          </button>
+          </Pressable>
         )}
-        <button onClick={onEstimate} style={{
+        <Pressable onClick={onEstimate} style={{
           background: "transparent", color: "var(--color-text-primary)",
           border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
           padding: "8px 14px", fontSize: "10px", letterSpacing: "1.5px",
           textTransform: "uppercase", cursor: "pointer",
         }}>
           Use Estimate for Now
-        </button>
+        </Pressable>
       </div>
     </div>
   );
@@ -1531,14 +1531,14 @@ function Step4({ formData, onChange, attempted }) {
           }}>
             Night shift paystub-derived. Flagged as estimated until you confirm with your own stub.
           </div>
-          <button onClick={loadDHLPreset} style={{
+          <Pressable onClick={loadDHLPreset} style={{
             background: "rgba(0,200,150,0.10)", color: "var(--color-gold)",
             border: "1px solid rgba(0,200,150,0.28)", borderRadius: "10px",
             padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
             textTransform: "uppercase", cursor: "pointer",
           }}>
             Load DHL MO Preset
-          </button>
+          </Pressable>
         </div>
       )}
 
@@ -1546,7 +1546,7 @@ function Step4({ formData, onChange, attempted }) {
       {formData.userState && (
         <>
           {hasRates && !showCalc ? (
-            <button
+            <Pressable
               onClick={() => setShowCalc(true)}
               style={{
                 background: "transparent", color: "var(--color-text-primary)",
@@ -1556,7 +1556,7 @@ function Step4({ formData, onChange, attempted }) {
               }}
             >
               Recalculate from Paystub
-            </button>
+            </Pressable>
           ) : showCalc && (
             <PaystubCalc
               isVariable={isVariable}
@@ -1938,7 +1938,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
             <p style={{ margin: 0, fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
               {TAX_EXEMPT_DISCLAIMER}
             </p>
-            <button onClick={() => onChange({ taxExemptOptIn: true })} style={{
+            <Pressable onClick={() => onChange({ taxExemptOptIn: true })} style={{
               background: "rgba(0,200,150,0.12)", color: "var(--color-gold)",
               border: "1px solid rgba(0,200,150,0.4)", borderRadius: "10px",
               padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
@@ -1946,7 +1946,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
               alignSelf: "flex-start",
             }}>
               Unlock projections
-            </button>
+            </Pressable>
           </div>
         ) : (
           <TaxExemptPreview />
@@ -2218,7 +2218,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
           borderTop: "1px solid var(--color-border-subtle)",
         }}>
           {onCancel && (
-            <button
+            <Pressable
               onClick={onCancel}
               style={{
                 marginRight: "auto",
@@ -2231,10 +2231,10 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
               }}
             >
               Cancel
-            </button>
+            </Pressable>
           )}
           {stepIdx > 0 && (
-            <button
+            <Pressable
               onClick={handleBack}
               style={{
                 background: "var(--color-bg-raised)",
@@ -2246,10 +2246,10 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
               }}
             >
               Back
-            </button>
+            </Pressable>
           )}
           {current?.skippable && (
-            <button
+            <Pressable
               onClick={handleSkip}
               style={{
                 background: "transparent",
@@ -2261,9 +2261,9 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
               }}
             >
               Skip
-            </button>
+            </Pressable>
           )}
-          <button
+          <Pressable
             onClick={handleNext}
             disabled={!canProceed}
             style={{
@@ -2278,7 +2278,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
             }}
           >
             {isLast ? (lifeEvent === "structure_change" ? "Confirm Changes" : "Finish") : "Next →"}
-          </button>
+          </Pressable>
         </div>
 
       </div>

@@ -54,7 +54,8 @@ release so fast taps still register.
 | Bespoke `<button>`s in **LogPanel** | `LogPanel.jsx` | ✅ on `Pressable` (all 22: + Log Event, save/cancel/confirm flows, day + extra-day toggles, per-entry edit/delete + impact chevron, attendance-history toggle, PTO form save/cancel). No drag handles to skip. |
 | Bespoke `<button>`s in **ProfilePanel** | `ProfilePanel.jsx` | ✅ on `Pressable` (all ~40: settings rows, email/password forms `type="submit"`, delete-account, buffer On/Off + save, tax On/Off + past-week Taxed/Exempt toggles, edit/save/cancel, local sign-out confirm). `type`/`disabled`/hover handlers preserved via prop-forwarding + transition merge. |
 | Persistent chrome + App-level overlays | `App.jsx` | ✅ on `Pressable` (all 48: sidebar/drawer nav rows via `SidebarNavItem`, hamburger, notification bell, sign-out, bottom nav, life-events/install, investor pills, admin tools in sidebar/drawer/sheet, live inspector pill, week inspector closes, lock-date clears). Sheet drag-handle is a `<div>` (untouched). |
-| Modal / SetupWizard buttons | modal files | ⬜ pending (modal pass) |
+| Modal + SetupWizard buttons | `WeekConfirmModal`, `LifeEventMenu`, `JobLossEntry`, `ExpenseTriage`, `PwaInstallModal`, `SetupWizard` | ✅ on `Pressable`. LifeEventMenu + NetWorthHealthTips had manual scale hacks (`onMouseDown`/`onPointerDown` mutating `transform`) — removed in favor of the standard feedback. |
+| Aux components | `BenefitsPanel`, `DemoAccountTree`, `InvestorAdminPanel`, `ReemploymentTracker`, `JobLossDashboard`, `MonthQuarterSelector`, `NetWorthHealthTips` | ✅ on `Pressable` (`type="submit"` preserved; `<tr>` table rows left as-is). |
 
 Because most panel tap targets funnel through the four `ui.jsx` primitives above,
 **every panel already has baseline feedback.** The remaining work is the long tail of
@@ -64,7 +65,12 @@ bespoke raw `<button>`s, swept region by region.
 1. ✅ Shared `ui.jsx` primitives (`VT`/`NT`/`SmBtn`/`MetricCard`) — baseline for all panels.
 2. ✅ Panels, one at a time (bespoke buttons): ✅ Home → ✅ Income → ✅ Budget → ✅ Log → ✅ Account.
 3. ✅ Persistent chrome + App-level overlays (bottom nav, hamburger, drawer, header, admin tools/inspectors — all in `App.jsx`).
-4. ⬜ Modals + SetupWizard buttons (`WeekConfirmModal`, `LifeEventMenu`, `JobLossEntry`, `ExpenseTriage`, `PwaInstallModal`, `SetupWizard`).
+4. ✅ Modals + SetupWizard + aux components (all converted to `Pressable`).
+
+**Rollout complete.** Every clickable surface in the authenticated app now uses the
+default press feedback. Only the excluded pre-auth screens (`LoginScreen`,
+`InvestorRegister`) and two deliberate non-button skips — the expense **drag handle**
+(`BudgetPanel`) and `<tr>` table rows — remain on raw elements.
 
 ---
 

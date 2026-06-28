@@ -2080,11 +2080,19 @@ function StepStub({ title, sprint }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false }) {
   const [stepIdx,   setStepIdx]   = useState(0);
-  const [formData,  setFormData]  = useState(
-    isInvestor
+  const [formData,  setFormData]  = useState(() => {
+    const base = isInvestor
       ? { ...config, employerPreset: null, otThreshold: config.otThreshold || 40, maxWeeklyHours: config.maxWeeklyHours || config.standardWeeklyHours || 40 }
-      : { ...config }
-  );
+      : { ...config };
+    // Recalculate firstActiveIdx from startDate on every wizard open.
+    // The onChange handler in Step 2 only fires when the user edits the field —
+    // a re-entry that keeps the existing startDate would carry a stale firstActiveIdx
+    // (e.g. the pre-wizard default of 7) instead of the value that startDate implies.
+    if (base.startDate) {
+      base.firstActiveIdx = dateToWeekIdx(base.startDate);
+    }
+    return base;
+  });
   const [lifeEvent, setLifeEvent] = useState(initialLifeEvent);
   const [attempted, setAttempted] = useState(false);
 

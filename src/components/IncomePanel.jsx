@@ -84,6 +84,10 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
   });
   const yG = allWeeks.filter(w => w.active).reduce((s, w) => s + w.grossPay, 0);
   const yN = adjustedTakeHome;
+  // Format job start date for sub-label display (e.g. "Feb 9")
+  const startDateDisplay = config.startDate
+    ? new Date(config.startDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
   const sc = t => t ? "#7a8bbf" : "var(--color-green)", sb = t => t ? "#1e1e3a" : "#1e4a30", sbd = t => t ? "#7a8bbf" : "var(--color-green)";
   const todayIso = today ?? toLocalIso(new Date());
   const rollingWeekly = deriveRollingIncomeWeeks(allWeeks, todayIso, 4);
@@ -316,11 +320,11 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
     </div>
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "28px" }}>
       <Card label="Gross (Year)" val={f(yG)} rawVal={yG}
-        sub={currentWeek ? `${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(getFiscalWeekNumber(currentWeek.idx), checksPerYear)} projection` : undefined}
+        sub={currentWeek ? `${startDateDisplay ? `from ${startDateDisplay} · ` : ""}${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(getFiscalWeekNumber(currentWeek.idx), checksPerYear)} projection` : startDateDisplay ? `from ${startDateDisplay}` : undefined}
         insight={yG > 0 && yN > 0 ? { arrow: "flat", delta: `${Math.round((yN / yG) * 100)}%`, label: "kept after tax", variant: "blue" } : undefined}
       />
       <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)"
-        sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : currentWeek ? `${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(getFiscalWeekNumber(currentWeek.idx), checksPerYear)} · on pace` : undefined}
+        sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : currentWeek ? `${startDateDisplay ? `from ${startDateDisplay} · ` : ""}${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(getFiscalWeekNumber(currentWeek.idx), checksPerYear)} · on pace` : startDateDisplay ? `from ${startDateDisplay}` : undefined}
         insight={missedEventDayNetLost > 0 && projectedAnnualNet > 0 ? { arrow: "down", delta: `-${Math.round((missedEventDayNetLost / projectedAnnualNet) * 100)}%`, label: "of net to missed events", variant: "purple" } : undefined}
       />
     </div>

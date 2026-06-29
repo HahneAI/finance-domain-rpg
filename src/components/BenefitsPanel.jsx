@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, iS, lS, SmBtn } from "./ui.jsx";
+import { Card, iS, lS, SmBtn, Pressable } from "./ui.jsx";
 import { formatFiscalWeekLabel } from "../lib/fiscalWeek.js";
 import { dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -399,19 +399,19 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
             </div>
 
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-              <button
+              <Pressable
                 onClick={() => setFormOpen(false)}
                 style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
               >
                 Cancel
-              </button>
-              <button
+              </Pressable>
+              <Pressable
                 onClick={saveForm}
                 disabled={!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate}
                 style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", fontWeight: "bold", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", opacity: (!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate) ? 0.4 : 1 }}
               >
                 Save
-              </button>
+              </Pressable>
             </div>
           </div>
         )}

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Pressable } from "./ui.jsx";
 
 /**
  * LifeEventMenu — modal launcher for the Life Events flow (TODO §15.A).
@@ -96,7 +97,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
                 What changed?
               </div>
             </div>
-            <button
+            <Pressable
               onClick={onClose}
               aria-label="Close"
               style={{
@@ -112,7 +113,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 6L6 18" /><path d="M6 6l12 12" />
               </svg>
-            </button>
+            </Pressable>
           </div>
         </div>
 
@@ -120,7 +121,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
           {tiles.map((t) => {
             const disabled = t.comingSoon;
             return (
-              <button
+              <Pressable
                 key={t.id}
                 onClick={() => {
                   if (disabled) return;
@@ -138,13 +139,10 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
                   textAlign: "left",
                   cursor: disabled ? "not-allowed" : "pointer",
                   opacity: disabled ? 0.55 : 1,
-                  transition: "transform 120ms ease, border-color 150ms ease, background 150ms ease",
+                  transition: "border-color 150ms ease, background 150ms ease",
                   color: "var(--color-text-primary)",
                   width: "100%",
                 }}
-                onMouseDown={(e) => { if (!disabled) e.currentTarget.style.transform = "scale(0.97)"; }}
-                onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
               >
                 <div style={{
                   flexShrink: 0,
@@ -176,7 +174,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
                     {t.desc}
                   </div>
                 </div>
-              </button>
+              </Pressable>
             );
           })}
         </div>

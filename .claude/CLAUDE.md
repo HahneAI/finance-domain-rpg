@@ -159,7 +159,8 @@ database/migrations/         — Supabase SQL migrations
 ## Development Workflow
 **30-min sprints, 4×/week.** Before: state the task clearly. After: commit + one-sentence summary.
 - `docs/active-systems.md` — how every live system works
-- `docs/TODO.md` — prioritized backlog
+- `docs/TODO.md` — prioritized backlog (open items only)
+- `docs/past-TODO-tasks.md` — completed work log (one-liner per shipped item, for historical context)
 - `docs/account-reference.json` — Anthony's primary account ground truth
 
 ---

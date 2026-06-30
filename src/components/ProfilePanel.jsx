@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
-import { iS, lS, Card, PanelHero, SH } from "./ui.jsx";
+import { iS, lS, Card, Pressable, PanelHero, SH } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan } from "../lib/entitlements.js";
 import { InvestorAdminPanel } from "./InvestorAdminPanel.jsx";
@@ -35,13 +35,13 @@ function fmt(dateStr) {
 function BackBar({ onBack, title }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
-      <button
+      <Pressable
         onClick={onBack}
         style={{ background: "transparent", border: "none", color: "var(--color-gold)", cursor: "pointer", fontSize: "13px", padding: "4px 0", display: "flex", alignItems: "center", gap: "5px" }}
       >
         <span style={{ fontSize: "16px", lineHeight: 1 }}>‹</span>
         <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>Profile</span>
-      </button>
+      </Pressable>
       <div style={{ flex: 1, fontSize: "13px", fontWeight: "bold", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>
         {title}
       </div>
@@ -248,13 +248,13 @@ export function AccountDetail({ authedUser, config, onBack }) {
             )}
           </div>
           {!hasGoogleLinked && (
-            <button
+            <Pressable
               onClick={handleLinkGoogle}
               disabled={linkState.loading}
               style={{ marginTop: "12px", padding: "8px 14px", background: "transparent", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "12px", cursor: linkState.loading ? "default" : "pointer" }}
             >
               {linkState.loading ? "Redirecting to Google…" : "Link Google Account"}
-            </button>
+            </Pressable>
           )}
           {linkState.error && (
             <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--color-deduction)" }}>{linkState.error}</div>
@@ -264,13 +264,13 @@ export function AccountDetail({ authedUser, config, onBack }) {
 
       <DetailCard>
         {!showEmailForm ? (
-          <button
+          <Pressable
             onClick={() => setShowEmailForm(true)}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "14px 16px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
           >
             <span style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500" }}>Change Email</span>
             <span style={{ fontSize: "18px", color: "var(--color-text-primary)", lineHeight: 1 }}>›</span>
-          </button>
+          </Pressable>
         ) : (
           <form onSubmit={handleChangeEmail} style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", fontWeight: "600" }}>Change Email</div>
@@ -285,8 +285,8 @@ export function AccountDetail({ authedUser, config, onBack }) {
               <div style={{ fontSize: "11px", color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{emailStatus.error}</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button type="button" onClick={() => { setShowEmailForm(false); setEmailStatus({ error: null, success: null, loading: false }); setNewEmail(authedUser?.email ?? ""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
-              <button type="submit" disabled={emailStatus.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: emailStatus.loading ? "default" : "pointer" }}>{emailStatus.loading ? "..." : "Save"}</button>
+              <Pressable type="button" onClick={() => { setShowEmailForm(false); setEmailStatus({ error: null, success: null, loading: false }); setNewEmail(authedUser?.email ?? ""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable type="submit" disabled={emailStatus.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: emailStatus.loading ? "default" : "pointer" }}>{emailStatus.loading ? "..." : "Save"}</Pressable>
             </div>
           </form>
         )}
@@ -300,13 +300,13 @@ export function AccountDetail({ authedUser, config, onBack }) {
       {hasEmailIdentity && (
       <DetailCard>
         {!showPwForm ? (
-          <button
+          <Pressable
             onClick={() => setShowPwForm(true)}
             style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "14px 16px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }}
           >
             <span style={{ fontSize: "14px", color: "var(--color-text-primary)", fontWeight: "500" }}>Change Password</span>
             <span style={{ fontSize: "18px", color: "var(--color-text-primary)", lineHeight: 1 }}>›</span>
-          </button>
+          </Pressable>
         ) : (
           <form onSubmit={handleChangePw} style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", fontWeight: "600" }}>Change Password</div>
@@ -329,8 +329,8 @@ export function AccountDetail({ authedUser, config, onBack }) {
               <div style={{ fontSize: "11px", color: "var(--color-green)" }}>Password updated.</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button type="button" onClick={() => { setShowPwForm(false); setPwError(null); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
-              <button type="submit" disabled={pwLoading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: pwLoading ? "default" : "pointer" }}>{pwLoading ? "..." : "Save"}</button>
+              <Pressable type="button" onClick={() => { setShowPwForm(false); setPwError(null); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable type="submit" disabled={pwLoading} style={{ flex: 1, padding: "9px 0", background: "var(--color-green)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: pwLoading ? "default" : "pointer" }}>{pwLoading ? "..." : "Save"}</Pressable>
             </div>
           </form>
         )}
@@ -338,7 +338,7 @@ export function AccountDetail({ authedUser, config, onBack }) {
       )}
 
       <DetailCard>
-        <button
+        <Pressable
           onClick={handleGlobalSignOut}
           disabled={globalSignoutState.loading}
           style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", textAlign: "left", cursor: globalSignoutState.loading ? "default" : "pointer" }}
@@ -347,7 +347,7 @@ export function AccountDetail({ authedUser, config, onBack }) {
           <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
             Ends active sessions on every device for this account.
           </div>
-        </button>
+        </Pressable>
         {(globalSignoutState.error || globalSignoutState.success) && (
           <div style={{ padding: "0 16px 12px", fontSize: "11px", color: globalSignoutState.error ? "var(--color-deduction)" : "var(--color-green)" }}>
             {globalSignoutState.error || globalSignoutState.success}
@@ -356,7 +356,7 @@ export function AccountDetail({ authedUser, config, onBack }) {
       </DetailCard>
 
       <DetailCard style={{ borderColor: "rgba(224,92,92,0.32)" }}>
-        <button
+        <Pressable
           onClick={() => { setDeleteText(""); setDeleteState({ error: null, loading: false }); setShowDeleteDialog(true); }}
           style={{ width: "100%", padding: "14px 16px", background: "transparent", border: "none", textAlign: "left", cursor: "pointer" }}
         >
@@ -364,7 +364,7 @@ export function AccountDetail({ authedUser, config, onBack }) {
           <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
             This permanently deletes your account and dashboard data.
           </div>
-        </button>
+        </Pressable>
       </DetailCard>
 
       {/* Portaled to document.body so position:fixed resolves against the viewport,
@@ -385,8 +385,8 @@ export function AccountDetail({ authedUser, config, onBack }) {
               <div style={{ fontSize: "11px", color: "var(--color-deduction)", padding: "8px 12px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px" }}>{deleteState.error}</div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => setShowDeleteDialog(false)} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
-              <button onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</button>
+              <Pressable onClick={() => setShowDeleteDialog(false)} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable onClick={handleDeleteAccount} disabled={deleteText.trim() !== "DELETE" || deleteState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: deleteState.loading ? "default" : "pointer", opacity: deleteText.trim() !== "DELETE" ? 0.6 : 1 }}>{deleteState.loading ? "..." : "Delete"}</Pressable>
             </div>
           </div>
         </div>,
@@ -458,7 +458,7 @@ function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
             <label style={lSp}>DHL Team</label>
             <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
               {["A", "B"].map(t => (
-                <button
+                <Pressable
                   key={t}
                   onClick={() => { setDhlTeam(t); setTeamDirty(t !== config.dhlTeam); }}
                   style={{
@@ -470,7 +470,7 @@ function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
                   }}
                 >
                   Team {t}
-                </button>
+                </Pressable>
               ))}
             </div>
             {teamDirty && (
@@ -483,12 +483,12 @@ function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
       </DetailCard>
 
       {canSave && (
-        <button
+        <Pressable
           onClick={handleSave}
           style={{ width: "100%", padding: "13px 16px", background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
         >
           Save
-        </button>
+        </Pressable>
       )}
     </>
   );
@@ -660,12 +660,12 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", paddingLeft: "4px" }}>
         <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>Base Pay & Differentials</div>
         {!editing && (
-          <button
+          <Pressable
             onClick={startEditing}
             style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}
           >
             Edit
-          </button>
+          </Pressable>
         )}
       </div>
 
@@ -765,7 +765,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                       {`${config.dhlTeam ?? "B"}-Team · Long/Short alternating (DHL preset rotation)`}
                     </div>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                      <button
+                      <Pressable
                         type="button"
                         onClick={() => handleDraftChange("customScheduleEnabled", false)}
                         style={{
@@ -777,8 +777,8 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                         }}
                       >
                         Use rotation hours
-                      </button>
-                      <button
+                      </Pressable>
+                      <Pressable
                         type="button"
                         onClick={() => handleDraftChange("customScheduleEnabled", true)}
                         style={{
@@ -790,7 +790,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                         }}
                       >
                         Set custom weekly hours
-                      </button>
+                      </Pressable>
                     </div>
                     {payDraft.customScheduleEnabled && (
                       <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -842,7 +842,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                 ) : (
                   <>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                      <button
+                      <Pressable
                         type="button"
                         onClick={() => handleDraftChange("customScheduleEnabled", false)}
                         style={{
@@ -854,8 +854,8 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                         }}
                       >
                         Standard hours
-                      </button>
-                      <button
+                      </Pressable>
+                      <Pressable
                         type="button"
                         onClick={() => handleDraftChange("customScheduleEnabled", true)}
                         style={{
@@ -867,7 +867,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
                         }}
                       >
                         Custom hours
-                      </button>
+                      </Pressable>
                     </div>
                     {payDraft.customScheduleEnabled && (
                       <div style={{ marginTop: "10px" }}>
@@ -972,18 +972,18 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
             )}
 
             <div style={{ display: "flex", gap: "10px" }}>
-              <button
+              <Pressable
                 onClick={handleSave}
                 style={{ flex: 1, padding: "10px 0", background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
               >
                 Save Changes
-              </button>
-              <button
+              </Pressable>
+              <Pressable
                 onClick={cancelEditing}
                 style={{ flex: 1, padding: "10px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "10px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: "pointer" }}
               >
                 Cancel
-              </button>
+              </Pressable>
             </div>
           </div>
         </DetailCard>
@@ -1057,7 +1057,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", paddingLeft: "4px" }}>401k</div>
         {!editing && (
-          <button onClick={() => setEditing(true)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</button>
+          <Pressable onClick={() => setEditing(true)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
         )}
       </div>
 
@@ -1088,7 +1088,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
               {BENEFIT_OPTIONS.map((benefit) => (
-                <button
+                <Pressable
                   key={benefit.id}
                   onClick={() => toggleBenefit(benefit.id)}
                   style={{
@@ -1104,7 +1104,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
                   }}
                 >
                   {selectedBenefits.has(benefit.id) ? "✓ " : ""}{BENEFIT_LABELS[benefit.id] ?? benefit.id}
-                </button>
+                </Pressable>
               ))}
             </div>
             {isEmployerDHL && (
@@ -1153,8 +1153,8 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
               </div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => setEditing(false)} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
-              <button onClick={handleSave} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</button>
+              <Pressable onClick={() => setEditing(false)} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable onClick={handleSave} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</Pressable>
             </div>
           </div>
         </DetailCard>
@@ -1217,7 +1217,7 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
       <BackBar onBack={onBack} title="App Preferences" />
       <DetailCard>
         {!editingBuffer ? (
-          <button
+          <Pressable
             onClick={() => setEditingBuffer(true)}
             style={{ width: "100%", background: "transparent", border: "none", textAlign: "left", cursor: "pointer", padding: 0 }}
           >
@@ -1226,13 +1226,13 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
               value={config.bufferEnabled ? `On — $${config.paycheckBuffer}/check` : "Off"}
               valueColor={config.bufferEnabled ? undefined : "var(--color-text-disabled)"}
             />
-          </button>
+          </Pressable>
         ) : (
           <div style={{ padding: "13px 16px", borderBottom: "1px solid #1e1e1e" }}>
             <div style={{ fontSize: "13px", color: "var(--color-text-primary)", marginBottom: "10px" }}>Paycheck Buffer</div>
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-              <button onClick={() => setBufferEnabled(true)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: bufferEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: bufferEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>On</button>
-              <button onClick={() => setBufferEnabled(false)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !bufferEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: !bufferEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Off</button>
+              <Pressable onClick={() => setBufferEnabled(true)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: bufferEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: bufferEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>On</Pressable>
+              <Pressable onClick={() => setBufferEnabled(false)} style={{ flex: 1, padding: "8px 0", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", background: !bufferEnabled ? "rgba(0,200,150,0.12)" : "var(--color-bg-raised)", color: !bufferEnabled ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Off</Pressable>
             </div>
             <label style={lSp}>Buffer Amount ($ / check)</label>
             <input
@@ -1246,8 +1246,8 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
               disabled={!bufferEnabled}
             />
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => { setEditingBuffer(false); setBufferEnabled(config.bufferEnabled ?? true); setPaycheckBuffer(config.paycheckBuffer ?? 50); }} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
-              <button onClick={handleSaveBuffer} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</button>
+              <Pressable onClick={() => { setEditingBuffer(false); setBufferEnabled(config.bufferEnabled ?? true); setPaycheckBuffer(config.paycheckBuffer ?? 50); }} style={{ flex: 1, padding: "8px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "12px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
+              <Pressable onClick={handleSaveBuffer} style={{ flex: 1, padding: "8px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}>Save</Pressable>
             </div>
           </div>
         )}
@@ -1272,6 +1272,9 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
   const f  = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const f2 = n => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gN = w => computeNet(w, config, extraPerCheck, showExtra);
+  const startDateDisplay = config.startDate
+    ? new Date(config.startDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
   const [taxDraft, setTaxDraft] = useState(null);
   const pastOverrides = config.pastWeekTaxStatusOverrides ?? {};
   const hasPastOverride = (idx) => Object.prototype.hasOwnProperty.call(pastOverrides, idx);
@@ -1350,23 +1353,23 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       {/* Extra withholding quick-toggle */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", padding: "10px 14px", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
         <div style={{ fontSize: "11px", color: "var(--color-text-primary)", flex: 1 }}>Apply extra withholding <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerPaycheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
-        <button onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)", color: showExtra ? "var(--color-gold)" : "var(--color-text-primary)", border: "1px solid " + (showExtra ? "var(--color-gold)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</button>
+        <Pressable onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)", color: showExtra ? "var(--color-gold)" : "var(--color-text-primary)", border: "1px solid " + (showExtra ? "var(--color-gold)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</Pressable>
       </div>
 
       <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", gap: "10px" }}>
           <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px", lineHeight: 1 }}>Tax Strategy & Planning</div>
           {taxDraft === null ? (
-            <button onClick={() => setTaxDraft({
+            <Pressable onClick={() => setTaxDraft({
               fedStdDeduction: String(config.fedStdDeduction ?? ""),
               moFlatRate: String(config.moFlatRate ?? ""),
               targetOwedAtFiling: String(config.targetOwedAtFiling ?? ""),
               firstActiveIdx: String(config.firstActiveIdx ?? ""),
-            })} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Edit Tax Plan</button>
+            })} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Edit Tax Plan</Pressable>
           ) : (
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => { const nc = { ...config, fedStdDeduction: parseFloat(taxDraft.fedStdDeduction) || 0, moFlatRate: parseFloat(taxDraft.moFlatRate) || 0, targetOwedAtFiling: parseFloat(taxDraft.targetOwedAtFiling) || 0, firstActiveIdx: parseInt(taxDraft.firstActiveIdx) || 0 }; setConfig(nc); onSaveConfig?.(nc); setTaxDraft(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</button>
-              <button onClick={() => setTaxDraft(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+              <Pressable onClick={() => { const nc = { ...config, fedStdDeduction: parseFloat(taxDraft.fedStdDeduction) || 0, moFlatRate: parseFloat(taxDraft.moFlatRate) || 0, targetOwedAtFiling: parseFloat(taxDraft.targetOwedAtFiling) || 0, firstActiveIdx: parseInt(taxDraft.firstActiveIdx) || 0 }; setConfig(nc); onSaveConfig?.(nc); setTaxDraft(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</Pressable>
+              <Pressable onClick={() => setTaxDraft(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
             </div>
           )}
         </div>
@@ -1387,7 +1390,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
 
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "12px", marginBottom: "20px" }}>
-        <Card label="Full Year Fed Liability" val={f(fedLiability)} rawVal={fedLiability} sub={`On ${f(fedAGI)} AGI`} color="var(--color-deduction)" size="20px" />
+        <Card label="Full Year Fed Liability" val={f(fedLiability)} rawVal={fedLiability} sub={`${startDateDisplay ? `from ${startDateDisplay} · ` : ""}On ${f(fedAGI)} AGI`} color="var(--color-deduction)" size="20px" />
         <Card label="Full Year MO Liability" val={f(moLiability)} rawVal={moLiability} sub="4.7% flat" color="var(--color-gold)" size="20px" />
         <Card label="FICA (Always Paid)" val={f(ficaTotal)} rawVal={ficaTotal} sub="7.65% every check" color="var(--color-text-primary)" size="20px" />
       </div>
@@ -1499,9 +1502,9 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
                   </div>
                 </div>
                 <div style={{ display: "flex", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", overflow: "hidden", flexShrink: 0 }}>
-                  <button onClick={() => setPastStatus(w.idx, true)} style={{ padding: "6px 10px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: taxed ? "rgba(0,200,150,0.16)" : "transparent", color: taxed ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontWeight: taxed ? "bold" : "normal" }}>Taxed</button>
+                  <Pressable onClick={() => setPastStatus(w.idx, true)} style={{ padding: "6px 10px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: taxed ? "rgba(0,200,150,0.16)" : "transparent", color: taxed ? "var(--color-accent-primary)" : "var(--color-text-secondary)", fontWeight: taxed ? "bold" : "normal" }}>Taxed</Pressable>
                   <div style={{ width: "1px", background: "var(--color-border-subtle)" }} />
-                  <button onClick={() => setPastStatus(w.idx, false)} style={{ padding: "6px 10px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: !taxed ? "rgba(34,197,94,0.16)" : "transparent", color: !taxed ? "var(--color-green)" : "var(--color-text-secondary)", fontWeight: !taxed ? "bold" : "normal" }}>Exempt</button>
+                  <Pressable onClick={() => setPastStatus(w.idx, false)} style={{ padding: "6px 10px", fontSize: "9px", textTransform: "uppercase", letterSpacing: "1.5px", border: "none", cursor: "pointer", background: !taxed ? "rgba(34,197,94,0.16)" : "transparent", color: !taxed ? "var(--color-green)" : "var(--color-text-secondary)", fontWeight: !taxed ? "bold" : "normal" }}>Exempt</Pressable>
                 </div>
               </div>
             );
@@ -1535,9 +1538,9 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
               </div>
             </div>
             <div style={{ display: "flex", background: "var(--color-bg-base)", border: "1px solid #2a2a2a", borderRadius: "5px", overflow: "hidden" }}>
-              <button disabled={isPast} onClick={() => !isPast && !taxed && toggleWeek(w.idx)} style={{ padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", cursor: isPast || taxed ? "default" : "pointer", background: taxed ? (isPast ? "#15152a" : "#1e1e3a") : "transparent", color: taxed ? (isPast ? "#3a3a5a" : "#7a8bbf") : "var(--color-border-subtle)", fontWeight: taxed ? "bold" : "normal", transition: "all 0.12s" }}>Taxed</button>
+              <Pressable disabled={isPast} onClick={() => !isPast && !taxed && toggleWeek(w.idx)} style={{ padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", cursor: isPast || taxed ? "default" : "pointer", background: taxed ? (isPast ? "#15152a" : "#1e1e3a") : "transparent", color: taxed ? (isPast ? "#3a3a5a" : "#7a8bbf") : "var(--color-border-subtle)", fontWeight: taxed ? "bold" : "normal", transition: "all 0.12s" }}>Taxed</Pressable>
               <div style={{ width: "1px", background: "var(--color-border-subtle)" }} />
-              <button disabled={isPast} onClick={() => !isPast && taxed && toggleWeek(w.idx)} style={{ padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", cursor: isPast || !taxed ? "default" : "pointer", background: !taxed ? (isPast ? "#0f2a1a" : "#1e4a30") : "transparent", color: !taxed ? (isPast ? "#1f4a2a" : "var(--color-green)") : "var(--color-border-subtle)", fontWeight: !taxed ? "bold" : "normal", transition: "all 0.12s" }}>Exempt</button>
+              <Pressable disabled={isPast} onClick={() => !isPast && taxed && toggleWeek(w.idx)} style={{ padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", cursor: isPast || !taxed ? "default" : "pointer", background: !taxed ? (isPast ? "#0f2a1a" : "#1e4a30") : "transparent", color: !taxed ? (isPast ? "#1f4a2a" : "var(--color-green)") : "var(--color-border-subtle)", fontWeight: !taxed ? "bold" : "normal", transition: "all 0.12s" }}>Exempt</Pressable>
             </div>
           </div>;
         })}
@@ -1555,7 +1558,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
 function ListRow({ label, summary, onPress, last }) {
   const [hovered, setHovered] = useState(false);
   return (
-    <button
+    <Pressable
       onClick={(e) => onPress?.(e)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -1575,7 +1578,7 @@ function ListRow({ label, summary, onPress, last }) {
         {summary && <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</div>}
       </div>
       <span style={{ fontSize: "18px", color: "var(--color-text-primary)", marginLeft: "12px", lineHeight: 1 }}>›</span>
-    </button>
+    </Pressable>
   );
 }
 
@@ -1706,7 +1709,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         </div>
       )}
 
-      <button
+      <Pressable
         onClick={() => { setLocalSignOutState({ loading: false, error: null }); setShowLocalSignOutConfirm(true); }}
         style={{ width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.3)", borderRadius: "12px", color: "var(--color-deduction)", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
       >
@@ -1716,7 +1719,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           <line x1="21" y1="12" x2="9" y2="12"/>
         </svg>
         Sign Out (This Device)
-      </button>
+      </Pressable>
 
       {/* Portaled to document.body so position:fixed resolves against the viewport,
           not the scrolling .main-content ancestor (iOS Safari scrollTop hit-test bug). */}
@@ -1733,8 +1736,8 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
               </div>
             )}
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => setShowLocalSignOutConfirm(false)} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: localSignOutState.loading ? "default" : "pointer" }}>Cancel</button>
-              <button onClick={confirmLocalSignOut} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: localSignOutState.loading ? "default" : "pointer" }}>{localSignOutState.loading ? "..." : "Confirm"}</button>
+              <Pressable onClick={() => setShowLocalSignOutConfirm(false)} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid #333", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: localSignOutState.loading ? "default" : "pointer" }}>Cancel</Pressable>
+              <Pressable onClick={confirmLocalSignOut} disabled={localSignOutState.loading} style={{ flex: 1, padding: "9px 0", background: "var(--color-deduction)", border: "none", borderRadius: "8px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: "bold", cursor: localSignOutState.loading ? "default" : "pointer" }}>{localSignOutState.loading ? "..." : "Confirm"}</Pressable>
             </div>
           </div>
         </div>,

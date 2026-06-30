@@ -43,81 +43,236 @@ export const iS = { background: "var(--color-bg-base)", border: "1px solid var(-
 // eslint-disable-next-line react-refresh/only-export-components
 export const lS = { fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase", marginBottom: "4px", display: "block", fontFamily: "var(--font-sans)" };
 
-export function NT({ label, active, onClick }) { return <button onClick={onClick} style={{ padding: "10px 18px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontFamily: "var(--font-sans)", background: active ? "var(--color-gold)" : "var(--color-bg-surface)", color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)", border: "1px solid " + (active ? "var(--color-gold)" : "var(--color-border-subtle)"), borderRadius: "12px", cursor: "pointer", }}>{label}</button>; }
-// VT — view tab. Carries the Apple-style press: scale(0.97) press-in, a gentle
-// spring back on release, and a soft gold flash that fades over ~300ms. All within
-// the CLAUDE.md press budget (scale-only, ≤500ms). This is the prototype surface for
-// the flash+bounce rollout; once dialed in the same pattern promotes to the other
-// ui.jsx primitives.
-export function VT({ label, active, onClick }) {
+// ─────────────────────────────────────────────────────────────
+// TAP FEEDBACK — default press system
+//
+// This is the app-wide standard for press/tap feedback. Every clickable surface
+// should adopt it so the whole app feels consistent. Two primary cues:
+//   1. Green press fill — a quick fill of the lighter same-family green
+//      (--color-gold-bright #33e0b0) that fades quickly to whatever the control
+//      settles to (the selected green #00c896 on tabs, or the control's own bg).
+//   2. Scale spring — a subtle scale(0.94) press-in with a gentle overshoot
+//      spring back. Supporting cue only; the green fill is the star.
+// Stays within the CLAUDE.md press budget (scale-only, ≤500ms).
+//
+// Three ways to consume it (in order of preference):
+//   • <Pressable> — drop-in replacement for <button>/<div onClick>. Easiest; use
+//     for new or refactored call sites.
+//   • usePressFeedback() + <PressFlashOverlay> — when a component needs to keep
+//     its own element/state but wants the same feedback (e.g. MetricCard).
+//   • Copy the inline pattern — only if neither fits.
+// ─────────────────────────────────────────────────────────────
+
+// usePressFeedback — handlers + state driving the press fill + scale.
+// `pressed` drives the scale; `lit` drives the green fill and lingers briefly after
+// release (via litTimer) so a fast tap still shows the fill.
+// eslint-disable-next-line react-refresh/only-export-components
+export function usePressFeedback() {
   const [pressed, setPressed] = useState(false);
-  // `lit` keeps the highlight visible for a minimum beat even on a fast tap, so a
-  // quick press still reads. It tracks `pressed` but lingers via a release timer.
-  const [lit, setLit] = useState(false);
+  const [lit, setLit]         = useState(false);
   const litTimer = useRef(null);
 
   // Clean up a pending timer on unmount so we never setState after teardown.
   useEffect(() => () => clearTimeout(litTimer.current), []);
 
-  const press = () => {
+  const down = () => {
     clearTimeout(litTimer.current);
     setPressed(true);
     setLit(true);
   };
-  const release = () => {
+  const up = () => {
     setPressed(false);
-    // Hold the highlight briefly after lift so quick taps still show it, then fade.
+    // Hold the fill briefly after lift so quick taps still register, then fade.
     clearTimeout(litTimer.current);
     litTimer.current = setTimeout(() => setLit(false), 90);
   };
 
+  return {
+    pressed,
+    lit,
+    handlers: { onPointerDown: down, onPointerUp: up, onPointerLeave: up },
+  };
+}
+
+// pressScaleStyle — transform + transition for the scale spring. Spread onto any
+// element already wired with usePressFeedback handlers.
+// eslint-disable-next-line react-refresh/only-export-components
+export function pressScaleStyle(pressed, scale = 0.94, extra = "") {
+  const tail = extra ? `, ${extra}` : "";
+  return {
+    transform: pressed ? `scale(${scale})` : "scale(1)",
+    transition: pressed
+      ? `transform 90ms ease-out${tail}`
+      : `transform 340ms cubic-bezier(0.34, 1.7, 0.5, 1)${tail}`,
+    WebkitTapHighlightColor: "transparent",
+  };
+}
+
+// ── Press-fill color derivation ──────────────────────────────────────────────
+// The press fill is a lighter shade of the tappable target's OWN resting color,
+// same family — so a red ✕/Cancel flashes lighter red, a gold tab flashes lighter
+// gold, a green Save flashes lighter green, etc. We read the control's computed
+// colors at press time and lighten the most chromatic one in HSL.
+
+function _parseRgb(str) {
+  if (!str) return null;
+  const m = str.match(/rgba?\(([^)]+)\)/i);
+  if (!m) return null;
+  const [r, g, b, a = 1] = m[1].split(",").map(s => parseFloat(s.trim()));
+  if ([r, g, b].some(Number.isNaN)) return null;
+  return { r, g, b, a };
+}
+
+function _rgbToHsl({ r, g, b }) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  const l = (max + min) / 2;
+  let h = 0, s = 0;
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+  }
+  return { h: h * 360, s, l };
+}
+
+// Returns a CSS color string: a lighter, same-family shade of the target's color.
+// Falls back to gold-bright if nothing usable is found (or in non-DOM/test env).
+function deriveTapFillColor(el, fallback = "var(--color-gold-bright)") {
+  try {
+    if (!el || typeof getComputedStyle !== "function") return fallback;
+    const cs = getComputedStyle(el);
+    const cands = [cs.backgroundColor, cs.borderTopColor, cs.color]
+      .map(_parseRgb)
+      .filter(c => c && c.a > 0.05)            // ignore transparent (e.g. ghost-button bg)
+      .map(c => ({ ...c, hsl: _rgbToHsl(c) }));
+    if (!cands.length) return fallback;
+    // Pick the most chromatic color — that's the control's identity (red, gold, …),
+    // not the dark neutral surface behind it.
+    cands.sort((a, b) => b.hsl.s - a.hsl.s);
+    const { h, s, l } = cands[0].hsl;
+    // Lighten within the family: clearly lighter, but never blown out to white.
+    const targetL = Math.min(Math.max(l + 0.22, 0.55), 0.82);
+    return `hsl(${Math.round(h)}, ${Math.round(s * 100)}%, ${Math.round(targetL * 100)}%)`;
+  } catch {
+    return fallback;
+  }
+}
+
+// PressFlashOverlay — the press fill. Renders behind the control's content
+// (zIndex -1, so it never covers text/icons) and clips to the parent's radius.
+// `color` defaults to gold-bright but callers normally pass a derived family color.
+// The parent MUST set `position: relative`, `overflow: hidden`, and
+// `isolation: isolate` (Pressable and the primitives below all do).
+export function PressFlashOverlay({ lit, color = "var(--color-gold-bright)", opacity = 1 }) {
   return (
-    <button
-      onPointerDown={press}
-      onPointerUp={release}
-      onPointerLeave={release}
+    <span
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: 0,
+        borderRadius: "inherit",
+        background: color,
+        zIndex: -1,
+        opacity: lit ? opacity : 0,
+        // Quick fill in on press; fade quickly to the settled color on release.
+        transition: lit ? "opacity 40ms ease-out" : "opacity 180ms ease-out",
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
+
+// Pressable — drop-in <button>/<div> with the default tap feedback baked in.
+// Keeps the consumer's style/onClick/aria props; just adds the press fill + spring.
+// The fill auto-derives from the target's own resting color (lighter, same family);
+// pass `flashColor` to override. `as` switches the element (default "button");
+// `scale`/`flashOpacity` tune the feedback. Disabled buttons get no feedback.
+export function Pressable({
+  as: Tag = "button",
+  children,
+  style,
+  onClick,
+  scale = 0.94,
+  flashColor,
+  flashOpacity,
+  disabled = false,
+  ...rest
+}) {
+  const { pressed, lit, handlers } = usePressFeedback();
+  const elRef = useRef(null);
+  // Derived lighter-shade fill, computed from the element's own color on press.
+  const [fill, setFill] = useState(flashColor);
+  const interactive = !disabled;
+
+  const onPointerDown = (e) => {
+    if (!flashColor) setFill(deriveTapFillColor(elRef.current));
+    handlers.onPointerDown(e);
+  };
+
+  // Preserve any transition the consumer set (e.g. hover color) by appending it to
+  // the scale-spring transition instead of letting `...style` clobber it.
+  const { transition: consumerTransition, ...restStyle } = style || {};
+
+  return (
+    <Tag
+      ref={elRef}
       onClick={onClick}
+      {...(Tag === "button" ? { disabled } : {})}
+      {...(interactive ? { ...handlers, onPointerDown } : {})}
+      {...rest}
       style={{
         position: "relative",
         overflow: "hidden",
-        padding: "10px 16px",
-        minHeight: "44px",
-        fontSize: "11px",
-        letterSpacing: "2px",
-        textTransform: "uppercase",
-        fontFamily: "var(--font-sans)",
+        isolation: "isolate",
+        ...pressScaleStyle(interactive && pressed, scale, consumerTransition),
+        ...restStyle,
+      }}
+    >
+      <PressFlashOverlay lit={interactive && lit} color={fill ?? flashColor} opacity={flashOpacity} />
+      {children}
+    </Tag>
+  );
+}
+
+// NT — nav tab. Uses the default tap feedback via Pressable.
+export function NT({ label, active, onClick }) {
+  return (
+    <Pressable
+      onClick={onClick}
+      style={{
+        padding: "10px 18px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px",
+        textTransform: "uppercase", fontFamily: "var(--font-sans)",
         background: active ? "var(--color-gold)" : "var(--color-bg-surface)",
         color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)",
         border: "1px solid " + (active ? "var(--color-gold)" : "var(--color-border-subtle)"),
-        borderRadius: "12px",
-        cursor: "pointer",
-        transform: pressed ? "scale(0.94)" : "scale(1)",
-        // Quick ease-out on press-in; gentle overshoot spring on release.
-        transition: pressed
-          ? "transform 90ms ease-out, background 0.15s ease, color 0.15s ease"
-          : "transform 340ms cubic-bezier(0.34, 1.7, 0.5, 1), background 0.15s ease, color 0.15s ease",
-        WebkitTapHighlightColor: "transparent",
+        borderRadius: "12px", cursor: "pointer",
       }}
     >
-      {/* Press fill — a quick lighter-green flash in the same family as the selected
-          tab fill (gold-bright #33e0b0 vs the selected gold #00c896), which then fades
-          quickly to reveal the selected green beneath. This green fill (not the scale)
-          is the primary "noticeable but subtle" press cue. */}
-      <span
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          inset: 0,
-          borderRadius: "inherit",
-          background: "var(--color-gold-bright)",
-          opacity: lit ? 1 : 0,
-          // Quick fill in on press, then fade quickly to the selected green on release.
-          transition: lit ? "opacity 40ms ease-out" : "opacity 180ms ease-out",
-          pointerEvents: "none",
-        }}
-      />
-      <span style={{ position: "relative" }}>{label}</span>
-    </button>
+      {label}
+    </Pressable>
+  );
+}
+
+// VT — view tab. Uses the default tap feedback via Pressable: a quick lighter-green
+// fill (--color-gold-bright) that fades to the selected green, plus a subtle spring.
+export function VT({ label, active, onClick }) {
+  return (
+    <Pressable
+      onClick={onClick}
+      style={{
+        padding: "10px 16px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px",
+        textTransform: "uppercase", fontFamily: "var(--font-sans)",
+        background: active ? "var(--color-gold)" : "var(--color-bg-surface)",
+        color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)",
+        border: "1px solid " + (active ? "var(--color-gold)" : "var(--color-border-subtle)"),
+        borderRadius: "12px", cursor: "pointer",
+      }}
+    >
+      {label}
+    </Pressable>
   );
 }
 
@@ -166,7 +321,10 @@ const GLASS_TIER = {
 };
 
 export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight, visualTier, centered }) {
-  const [pressed,  setPressed]  = useState(false);
+  const { pressed, lit, handlers } = usePressFeedback();
+  const btnRef = useRef(null);
+  // Press fill derived from the card's own color (status green/gold/red, etc).
+  const [fill, setFill] = useState(undefined);
   const [flashing, setFlashing] = useState(false);
   const prevRaw = useRef(null);
 
@@ -210,8 +368,17 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
     ...entranceStyle,
     ...(isButton && {
       cursor: "pointer",
+      // Press feedback: subtle scale (larger surface → gentler than tabs) + green
+      // fill via PressFlashOverlay below. position/overflow/isolation let the
+      // overlay clip to the radius and sit behind content (zIndex -1).
+      position: "relative",
+      overflow: "hidden",
+      isolation: "isolate",
       transform: pressed ? "scale(0.97)" : "scale(1)",
-      transition: "transform 120ms ease, box-shadow 160ms ease",
+      transition: pressed
+        ? "transform 90ms ease-out, box-shadow 160ms ease"
+        : "transform 340ms cubic-bezier(0.34, 1.7, 0.5, 1), box-shadow 160ms ease",
+      WebkitTapHighlightColor: "transparent",
       minHeight: "88px",
       display: "flex",
       flexDirection: "column",
@@ -245,12 +412,13 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
 
   return isButton ? (
     <button
-      onPointerDown={() => setPressed(true)}
-      onPointerUp={() => setPressed(false)}
-      onPointerLeave={() => setPressed(false)}
+      ref={btnRef}
+      {...handlers}
+      onPointerDown={(e) => { setFill(deriveTapFillColor(btnRef.current)); handlers.onPointerDown(e); }}
       onClick={onClick}
       style={containerStyle}
     >
+      <PressFlashOverlay lit={lit} color={fill} />
       {content}
     </button>
   ) : (
@@ -332,7 +500,7 @@ export function FlowSparklineCard({
   );
 }
 
-export function SmBtn({ children, onClick, c = "var(--color-text-secondary)", bg = "var(--color-bg-surface)", style: extraStyle }) { return <button onClick={onClick} style={{ background: bg, color: c, border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "10px 14px", minHeight: "44px", fontSize: "11px", fontFamily: "var(--font-sans)", cursor: "pointer", ...extraStyle }}>{children}</button>; }
+export function SmBtn({ children, onClick, c = "var(--color-text-secondary)", bg = "var(--color-bg-surface)", style: extraStyle }) { return <Pressable onClick={onClick} style={{ background: bg, color: c, border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "10px 14px", minHeight: "44px", fontSize: "11px", fontFamily: "var(--font-sans)", cursor: "pointer", ...extraStyle }}>{children}</Pressable>; }
 export function SH({ children, color, textColor, right }) { const c = color || "var(--color-gold)"; const tc = textColor || c; return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "4px" }}><div style={{ display: "flex", alignItems: "center", gap: "12px" }}><div style={{ width: "3px", height: "18px", background: c, borderRadius: "2px", flexShrink: 0 }} /><div style={{ fontSize: "11px", letterSpacing: "3px", color: tc, textTransform: "uppercase", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{children}</div></div>{right != null && <div style={{ fontSize: "12px", color: tc, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{right}</div>}</div>; }
 
 export function PanelHero({ eyebrow, children }) {

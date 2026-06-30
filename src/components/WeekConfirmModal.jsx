@@ -27,7 +27,7 @@ import { useState, useEffect, useRef } from "react";
 import { EVENT_TYPES, DHL_PRESET } from "../constants/config.js";
 import { calcEventImpact, toLocalIso } from "../lib/finance.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { iS, lS } from "./ui.jsx";
+import { iS, lS, Pressable } from "./ui.jsx";
 
 // Canonical day ordering — must match LogPanel's DayPicker to keep missedDays arrays consistent
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -69,7 +69,7 @@ function DayPicker({ scheduledDays, missedDays, onToggle }) {
           const isScheduled = scheduledDays.includes(day);
           const isMissed = missedDays.includes(day);
           return (
-            <button key={day} type="button" onClick={() => isScheduled && onToggle(day)} style={{
+            <Pressable key={day} type="button" onClick={() => isScheduled && onToggle(day)} style={{
               padding: "6px 10px", borderRadius: "3px", fontSize: "10px", letterSpacing: "1px",
               cursor: isScheduled ? "pointer" : "default",
               border: isMissed ? "1px solid var(--color-deduction)" : isScheduled ? "1px solid var(--color-text-disabled)" : "1px solid var(--color-border-subtle)",
@@ -78,7 +78,7 @@ function DayPicker({ scheduledDays, missedDays, onToggle }) {
               fontWeight: isMissed ? "bold" : "normal", textTransform: "uppercase",
             }}>
               {day}
-            </button>
+            </Pressable>
           );
         })}
       </div>
@@ -792,28 +792,28 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     {/* Scheduled day — Worked / Missed pill */}
                     {isScheduled && (
                       <div style={{ display: "flex", borderRadius: "4px", overflow: "hidden", border: "1px solid var(--color-border-subtle)" }}>
-                        <button onClick={() => setDayToggles(t => ({ ...t, [day]: true }))} style={{
+                        <Pressable onClick={() => setDayToggles(t => ({ ...t, [day]: true }))} style={{
                           padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
                           cursor: "pointer", border: "none", borderRight: "1px solid var(--color-border-subtle)",
                           fontWeight: toggle === true ? "bold" : "normal",
                           background: toggle === true ? "rgba(34,197,94,0.13)" : "var(--color-bg-surface)",
                           color: toggle === true ? "var(--color-green)" : "var(--color-text-disabled)",
                           transition: "background 0.15s, color 0.15s",
-                        }}>Worked</button>
-                        <button onClick={() => setDayToggles(t => ({ ...t, [day]: false }))} style={{
+                        }}>Worked</Pressable>
+                        <Pressable onClick={() => setDayToggles(t => ({ ...t, [day]: false }))} style={{
                           padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
                           cursor: "pointer", border: "none",
                           fontWeight: toggle === false ? "bold" : "normal",
                           background: toggle === false ? "rgba(239,68,68,0.13)" : "var(--color-bg-surface)",
                           color: toggle === false ? "var(--color-deduction)" : "var(--color-text-disabled)",
                           transition: "background 0.15s, color 0.15s",
-                        }}>Missed</button>
+                        }}>Missed</Pressable>
                       </div>
                     )}
 
                     {/* Unscheduled day — single "Pickup Shift" toggle */}
                     {!isScheduled && (
-                      <button onClick={() => toggleDay(day)} style={{
+                      <Pressable onClick={() => toggleDay(day)} style={{
                         padding: "5px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase",
                         cursor: "pointer", border: `1px solid ${isPickup ? "rgba(34,197,94,0.33)" : "var(--color-border-subtle)"}`,
                         borderRadius: "4px",
@@ -822,7 +822,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                         transition: "background 0.15s, color 0.15s, border-color 0.15s",
                       }}>
                         {isPickup ? (isEmployerDHL ? "✓ Pickup" : "✓ Worked") : (isEmployerDHL ? "+ Pickup" : "+ Mark")}
-                      </button>
+                      </Pressable>
                     )}
                   </div>
                 );
@@ -884,7 +884,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                       const worked = dayToggles[day] !== false;
                       const weekend = day === "Fri" || day === "Sat" || day === "Sun";
                       return (
-                        <button key={day} type="button" onClick={() => toggleDay(day)} style={{
+                        <Pressable key={day} type="button" onClick={() => toggleDay(day)} style={{
                           padding: "6px 14px", borderRadius: "4px", fontSize: "9px", letterSpacing: "1px",
                           textTransform: "uppercase", cursor: "pointer", fontWeight: worked ? "bold" : "normal",
                           border: worked ? `1px solid ${weekend ? "rgba(34,197,94,0.6)" : "rgba(0,200,150,0.4)"}` : "1px solid rgba(239,68,68,0.5)",
@@ -892,7 +892,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                           color: worked ? (weekend ? "var(--color-green)" : "var(--color-accent-primary)") : "var(--color-deduction)",
                         }}>
                           {day}
-                        </button>
+                        </Pressable>
                       );
                     })}
                   </div>
@@ -929,7 +929,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                             const active = slotValue === day;
                             const weekend = day === "Sat" || day === "Sun";
                             return (
-                              <button
+                              <Pressable
                                 key={day}
                                 type="button"
                                 onClick={() => selectOtDayAt(slotIdx, day)}
@@ -955,10 +955,10 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                                     weekend
                                   </span>
                                 )}
-                              </button>
+                              </Pressable>
                             );
                           })}
-                          <button
+                          <Pressable
                             type="button"
                             onClick={() => selectOtDayAt(slotIdx, "missed")}
                             style={{
@@ -975,7 +975,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                             }}
                           >
                             {slotValue === "missed" ? "✓ Missed" : "Missed"}
-                          </button>
+                          </Pressable>
                         </div>
                         <div style={{
                           marginTop: "8px",
@@ -1030,7 +1030,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                             {extraPickupCandidates.map(day => {
                               const weekend = day === "Sat" || day === "Sun";
                               return (
-                                <button key={day} type="button" onClick={() => toggleDay(day)} style={{
+                                <Pressable key={day} type="button" onClick={() => toggleDay(day)} style={{
                                   padding: "6px 12px", borderRadius: "4px", fontSize: "9px", letterSpacing: "1px",
                                   textTransform: "uppercase", cursor: "pointer",
                                   border: "1px solid var(--color-border-subtle)",
@@ -1038,20 +1038,20 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                                   color: weekend ? "var(--color-green)" : "var(--color-text-secondary)",
                                 }}>
                                   + {day}{weekend ? " (diff)" : ""}
-                                </button>
+                                </Pressable>
                               );
                             })}
                           </div>
                         </div>
                       )}
                       {!otSelectionMissing && (
-                        <button type="button" onClick={handleMarkShort} style={{
+                        <Pressable type="button" onClick={handleMarkShort} style={{
                           padding: "7px 14px", borderRadius: "4px", fontSize: "9px", letterSpacing: "1.5px",
                           textTransform: "uppercase", cursor: "pointer",
                           border: "1px solid rgba(239,68,68,0.4)", background: "transparent", color: "var(--color-deduction)",
                         }}>
                           Mark {customShiftsNeeded} shift{customShiftsNeeded !== 1 ? "s" : ""} short
-                        </button>
+                        </Pressable>
                       )}
                     </>
                   )}
@@ -1068,33 +1068,33 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     You started logging an event — skip anyway?
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <button onClick={() => setSkipWarning(false)} style={{
+                    <Pressable onClick={() => setSkipWarning(false)} style={{
                       background: "transparent", border: "none", color: "var(--color-text-secondary)",
                       fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", padding: "6px 0",
                     }}>
                       ← Keep logging
-                    </button>
-                    <button onClick={onDismiss} className="wc-press" style={{
+                    </Pressable>
+                    <Pressable onClick={onDismiss} style={{
                       background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none",
                       borderRadius: "4px", padding: "8px 16px", fontSize: "10px",
                       letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold",
                     }}>
                       Yes, skip
-                    </button>
+                    </Pressable>
                   </div>
                 </div>
               ) : (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <button onClick={() => wentToLayer2 ? setSkipWarning(true) : onDismiss()} style={{
+                  <Pressable onClick={() => wentToLayer2 ? setSkipWarning(true) : onDismiss()} style={{
                     background: "transparent", border: "none", color: "var(--color-text-disabled)",
                     fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
                     cursor: "pointer", padding: "6px 0",
                   }}>
                     Skip for now
-                  </button>
+                  </Pressable>
               {netShiftDelta === 0 && (missedScheduledDays.length > 0 || pickupDays.length > 0) ? (
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button onClick={handleSave} disabled={otSelectionMissing} className="wc-press" style={{
+                  <Pressable onClick={handleSave} disabled={otSelectionMissing} style={{
                     background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid var(--color-border-subtle)",
                     borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase",
@@ -1102,8 +1102,8 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     opacity: otSelectionMissing ? 0.5 : 1,
                   }}>
                     {isBiweeklySchedule ? "Clean Period" : isMonthlySchedule ? "Clean Month" : "Confirm Clean"}
-                  </button>
-                  <button onClick={handleLogSwap} disabled={logSwapDisabled} className="wc-press" style={{
+                  </Pressable>
+                  <Pressable onClick={handleLogSwap} disabled={logSwapDisabled} style={{
                     background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase",
@@ -1112,10 +1112,10 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     fontWeight: "bold",
                   }}>
                     Log Swap →
-                  </button>
+                  </Pressable>
                 </div>
               ) : (
-                <button onClick={handleSave} disabled={otSelectionMissing} className="wc-press" style={{
+                <Pressable onClick={handleSave} disabled={otSelectionMissing} style={{
                   background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
                   borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
                   letterSpacing: "2px", textTransform: "uppercase",
@@ -1124,7 +1124,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                   opacity: otSelectionMissing ? 0.5 : 1,
                 }}>
                   {isBiweeklyTwoWeek && subWeek === 1 ? "Next →" : netShiftDelta !== 0 ? "Next →" : isBiweeklySchedule ? "Confirm Pay Period" : isMonthlySchedule ? "Confirm Month" : "Confirm Week"}
-                </button>
+                </Pressable>
               )}
                 </div>
               )}
@@ -1187,7 +1187,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     ].map(opt => {
                       const selected = eventVals.type === opt.key;
                       return (
-                        <button
+                        <Pressable
                           key={opt.key}
                           type="button"
                           onClick={() => changeEventType(opt.key)}
@@ -1206,7 +1206,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                           <div style={{ fontSize: "10px", color: "var(--color-text-secondary)", marginTop: "3px" }}>
                             {opt.sub}
                           </div>
-                        </button>
+                        </Pressable>
                       );
                     })}
                   </div>
@@ -1381,14 +1381,14 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
             <div style={{ padding: "14px 20px", borderTop: "1px solid var(--color-border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               {!confirming ? (
                 <>
-                  <button onClick={() => { setLayer(1); setConfirming(false); setIsMissedCoreEntry(false); }} style={{
+                  <Pressable onClick={() => { setLayer(1); setConfirming(false); setIsMissedCoreEntry(false); }} style={{
                     background: "transparent", border: "none", color: "var(--color-text-disabled)",
                     fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
                     cursor: "pointer", padding: "6px 0",
                   }}>
                     ← Back
-                  </button>
-                  <button onClick={() => !isVacuousEvent && setConfirming(true)} disabled={isVacuousEvent} className="wc-press" style={{
+                  </Pressable>
+                  <Pressable onClick={() => !isVacuousEvent && setConfirming(true)} disabled={isVacuousEvent} style={{
                     background: isVacuousEvent ? "var(--color-text-disabled)" : "var(--color-green)",
                     color: isVacuousEvent ? "var(--color-bg-surface)" : "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
@@ -1397,25 +1397,25 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     fontWeight: "bold",
                   }}>
                     Log &amp; Confirm
-                  </button>
+                  </Pressable>
                 </>
               ) : (
                 <>
-                  <button onClick={() => setConfirming(false)} style={{
+                  <Pressable onClick={() => setConfirming(false)} style={{
                     background: "transparent", border: "none", color: "var(--color-text-disabled)",
                     fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
                     cursor: "pointer", padding: "6px 0",
                   }}>
                     ← Edit
-                  </button>
-                  <button onClick={handleConfirmLayer2} className="wc-press" style={{
+                  </Pressable>
+                  <Pressable onClick={handleConfirmLayer2} style={{
                     background: "var(--color-green)", color: "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer",
                     fontWeight: "bold",
                   }}>
                     Yes, Log It
-                  </button>
+                  </Pressable>
                 </>
               )}
             </div>

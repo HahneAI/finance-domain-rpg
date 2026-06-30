@@ -9,27 +9,68 @@ roll out an Apple-style **flash + bounce** press animation section by section.
 
 ---
 
-## How clicks are wired today
+## The default tap-feedback system
 
-Almost every interactive element is one of a handful of shapes. This matters: the
-animation can be applied at the *primitive* level and inherited everywhere, rather
-than touched at 500+ call sites.
+**Standard:** every clickable surface uses the press feedback defined in `ui.jsx`.
+Two cues, within the CLAUDE.md press budget (scale-only, ≤500ms):
 
-| Funnel | Where defined | Press anim today? | Notes |
-|--------|---------------|-------------------|-------|
-| `MetricCard` / `Card` (button mode) | `ui.jsx` | ✅ `scale(0.97)` on `onPointerDown/Up/Leave` | The reference press behavior. Only this primitive animates today. |
-| `NT` (nav tab) | `ui.jsx` | ❌ | Raw `<button>`, teal fill when active. |
-| `VT` (view tab) | `ui.jsx` | ❌ | Raw `<button>`, smaller padding. |
-| `SmBtn` (inline utility) | `ui.jsx` | ❌ | Raw `<button>`. |
-| `SidebarNavItem` | `App.jsx` (local) | ❌ | Sidebar + drawer rows. |
-| Bottom-nav buttons | `App.jsx` (local) | ❌ | `color` transition only. |
-| Raw `<button>` / `<div onClick>` | every file | ❌ | ~515 onClick/button sites across 22 files. |
+1. **Family press fill** — a quick fill in a lighter shade of the target's **own**
+   resting color (same hue family) that fades quickly (~180ms) back to the control's
+   color. A red ✕/Cancel flashes lighter red, a gold tab lighter gold, a green Save
+   lighter green, etc. The fill auto-derives at press time via `getComputedStyle` +
+   HSL lightening (`deriveTapFillColor`), picking the most chromatic of the control's
+   background/border/text. Pass `flashColor` to override; falls back to gold-bright
+   when no usable color is found. This is the primary cue.
+2. **Scale spring** — a subtle `scale(0.94)` press-in with a gentle overshoot spring
+   back. Supporting cue.
 
-**Implication for the animation rollout:** wrapping/upgrading the five `ui.jsx`
-primitives (`MetricCard`, `NT`, `VT`, `SmBtn`, + a new shared `Pressable`/CSS class)
-covers the majority of taps. Raw buttons in `App.jsx` and panels are the long tail.
-The current press scale already obeys the CLAUDE.md Animation Rules
-(*"Press = `scale(0.97)` only … ≤ 500ms"*) — the flash+bounce must stay within that budget.
+**Building blocks (all exported from `ui.jsx`):**
+
+| Export | Use it when |
+|--------|-------------|
+| `<Pressable as="button" …>` | New or refactored call sites — drop-in for `<button>`/`<div onClick>`. Bakes in the fill + spring; forwards `style`/`onClick`/`aria`/`disabled`. |
+| `usePressFeedback()` → `{ pressed, lit, handlers }` + `<PressFlashOverlay lit={lit} />` | A component must keep its own element/state but wants identical feedback (e.g. `MetricCard`). Parent needs `position:relative; overflow:hidden; isolation:isolate`. |
+| `pressScaleStyle(pressed)` | Just the transform/transition for the scale spring. |
+
+**Mechanics:** the green fill is a `<span>` overlay at `zIndex:-1` (paints over the
+control's background, behind its text/icons), clipped to the radius by `overflow:hidden`,
+contained by `isolation:isolate`. A short `lit` timer keeps the fill up briefly after
+release so fast taps still register.
+
+## How clicks are wired — rollout status
+
+| Funnel | Where | Status |
+|--------|-------|--------|
+| `VT` (view tab) | `ui.jsx` | ✅ on default system (prototype surface) |
+| `NT` (nav tab) | `ui.jsx` | ✅ on default system (via `Pressable`) |
+| `SmBtn` (inline utility) | `ui.jsx` | ✅ on default system (via `Pressable`) |
+| `MetricCard` / `Card` (button mode) | `ui.jsx` | ✅ on default system (`usePressFeedback` + overlay; `scale(0.97)` for the larger surface) |
+| `SidebarNavItem` | `App.jsx` (local) | ⬜ pending (nav-bar pass) |
+| Bottom-nav buttons | `App.jsx` (local) | ⬜ pending (nav-bar pass) |
+| Hamburger / drawer / header buttons | `App.jsx` | ⬜ pending (nav-bar pass) |
+| Bespoke `<button>`s in **HomePanel** | `HomePanel.jsx` | ✅ on `Pressable` (goal add/edit/delete, reorder ↑↓/done, reset-timeline, show-completed) |
+| Bespoke `<button>`s in **IncomePanel** | `IncomePanel.jsx` | ✅ on `Pressable` (sharpener cancel/confirm, event-loss close, sharpen-rates, info, full-detail, ✕). Week rows skipped — admin-only diagnostics; desktop rows are `<tr>` (can't host the overlay). |
+| Bespoke `<button>`s in **BudgetPanel** | `BudgetPanel.jsx` | ✅ on `Pressable` (add expense/loan, edit/restore, expense-sheet save-scope/edit/delete/cancel, check-info + restore-sheet closes, inline editor SAVE/CANCEL). **Expense drag handle left as raw `<button>`** — it's a drag initiator (`data-expense-drag-handle`, `cursor:grab`), so press feedback would fight the DnD system. |
+| Bespoke `<button>`s in **LogPanel** | `LogPanel.jsx` | ✅ on `Pressable` (all 22: + Log Event, save/cancel/confirm flows, day + extra-day toggles, per-entry edit/delete + impact chevron, attendance-history toggle, PTO form save/cancel). No drag handles to skip. |
+| Bespoke `<button>`s in **ProfilePanel** | `ProfilePanel.jsx` | ✅ on `Pressable` (all ~40: settings rows, email/password forms `type="submit"`, delete-account, buffer On/Off + save, tax On/Off + past-week Taxed/Exempt toggles, edit/save/cancel, local sign-out confirm). `type`/`disabled`/hover handlers preserved via prop-forwarding + transition merge. |
+| Persistent chrome + App-level overlays | `App.jsx` | ✅ on `Pressable` (all 48: sidebar/drawer nav rows via `SidebarNavItem`, hamburger, notification bell, sign-out, bottom nav, life-events/install, investor pills, admin tools in sidebar/drawer/sheet, live inspector pill, week inspector closes, lock-date clears). Sheet drag-handle is a `<div>` (untouched). |
+| Modal + SetupWizard buttons | `WeekConfirmModal`, `LifeEventMenu`, `JobLossEntry`, `ExpenseTriage`, `PwaInstallModal`, `SetupWizard` | ✅ on `Pressable`. LifeEventMenu + NetWorthHealthTips had manual scale hacks (`onMouseDown`/`onPointerDown` mutating `transform`) — removed in favor of the standard feedback. |
+| Aux components | `BenefitsPanel`, `DemoAccountTree`, `InvestorAdminPanel`, `ReemploymentTracker`, `JobLossDashboard`, `MonthQuarterSelector`, `NetWorthHealthTips` | ✅ on `Pressable` (`type="submit"` preserved; `<tr>` table rows left as-is). |
+
+Because most panel tap targets funnel through the four `ui.jsx` primitives above,
+**every panel already has baseline feedback.** The remaining work is the long tail of
+bespoke raw `<button>`s, swept region by region.
+
+### Rollout order (one region at a time)
+1. ✅ Shared `ui.jsx` primitives (`VT`/`NT`/`SmBtn`/`MetricCard`) — baseline for all panels.
+2. ✅ Panels, one at a time (bespoke buttons): ✅ Home → ✅ Income → ✅ Budget → ✅ Log → ✅ Account.
+3. ✅ Persistent chrome + App-level overlays (bottom nav, hamburger, drawer, header, admin tools/inspectors — all in `App.jsx`).
+4. ✅ Modals + SetupWizard + aux components (all converted to `Pressable`).
+
+**Rollout complete.** Every clickable surface in the authenticated app now uses the
+default press feedback. Only the excluded pre-auth screens (`LoginScreen`,
+`InvestorRegister`) and two deliberate non-button skips — the expense **drag handle**
+(`BudgetPanel`) and `<tr>` table rows — remain on raw elements.
 
 ---
 

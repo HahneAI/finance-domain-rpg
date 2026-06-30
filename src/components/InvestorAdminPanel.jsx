@@ -7,7 +7,7 @@
  * on the Supabase side (migration 013_investor_admin_policies.sql).
  */
 import { useState, useEffect, useMemo } from "react";
-import { SH, iS, lS } from "./ui.jsx";
+import { SH, iS, lS, Pressable } from "./ui.jsx";
 import {
   fetchAllInvestorCodes,
   fetchAllInvestorUsers,
@@ -18,7 +18,7 @@ import {
 function BackBar({ onBack }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
-      <button
+      <Pressable
         onClick={onBack}
         style={{
           background: "transparent", border: "none",
@@ -29,7 +29,7 @@ function BackBar({ onBack }) {
       >
         <span style={{ fontSize: "16px", lineHeight: 1 }}>‹</span>
         <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>Profile</span>
-      </button>
+      </Pressable>
       <div style={{
         flex: 1, fontSize: "13px", fontWeight: "bold",
         letterSpacing: "1px", textTransform: "uppercase",
@@ -150,7 +150,7 @@ function CodeCard({ code, investors, onToggle, toggling }) {
         {/* Actions row */}
         <div style={{ display: "flex", gap: "8px", marginTop: "12px", alignItems: "center" }}>
           {/* Toggle active button */}
-          <button
+          <Pressable
             onClick={() => onToggle(code.id, !code.is_active)}
             disabled={toggling}
             style={{
@@ -167,11 +167,11 @@ function CodeCard({ code, investors, onToggle, toggling }) {
             }}
           >
             {toggling ? "Saving…" : code.is_active ? "Deactivate" : "Activate"}
-          </button>
+          </Pressable>
 
           {/* Expand registrations */}
           {registered.length > 0 && (
-            <button
+            <Pressable
               onClick={() => setExpanded(p => !p)}
               style={{
                 fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase",
@@ -183,7 +183,7 @@ function CodeCard({ code, investors, onToggle, toggling }) {
               }}
             >
               {expanded ? "Hide" : `Show ${registered.length}`}
-            </button>
+            </Pressable>
           )}
         </div>
       </div>
@@ -281,7 +281,7 @@ function AddCodeForm({ onAdd, onCancel }) {
       )}
 
       <div style={{ display: "flex", gap: "8px" }}>
-        <button
+        <Pressable
           type="submit"
           disabled={state.loading || !form.code.trim()}
           style={{
@@ -293,8 +293,8 @@ function AddCodeForm({ onAdd, onCancel }) {
           }}
         >
           {state.loading ? "Creating…" : "Create Code"}
-        </button>
-        <button
+        </Pressable>
+        <Pressable
           type="button"
           onClick={onCancel}
           style={{
@@ -307,7 +307,7 @@ function AddCodeForm({ onAdd, onCancel }) {
           }}
         >
           Cancel
-        </button>
+        </Pressable>
       </div>
     </form>
   );
@@ -393,7 +393,7 @@ export function InvestorAdminPanel({ onBack }) {
       {showAddForm ? (
         <AddCodeForm onAdd={handleAdd} onCancel={() => setShowAddForm(false)} />
       ) : (
-        <button
+        <Pressable
           onClick={() => setShowAddForm(true)}
           style={{
             width: "100%", padding: "11px 16px", borderRadius: "10px",
@@ -407,7 +407,7 @@ export function InvestorAdminPanel({ onBack }) {
         >
           <span style={{ fontSize: "16px", lineHeight: 1 }}>+</span>
           Add Access Code
-        </button>
+        </Pressable>
       )}
 
       <SH color="var(--color-gold)">Access Codes</SH>

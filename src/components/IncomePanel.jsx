@@ -6,7 +6,7 @@ import { computeNet, toLocalIso } from "../lib/finance.js";
 import { deriveRollingIncomeWeeks, progressiveScale } from "../lib/rollingTimeline.js";
 import { getFiscalWeekNumber, weekNumToPaycheckNum, payPeriodUnit } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { Card, iS, lS, ScrollSnapRow } from "./ui.jsx";
+import { Card, Pressable, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {}, onWeekInspect = null }) {
   const [showSharpener, setShowSharpener] = useState(false);
@@ -84,6 +84,10 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
   });
   const yG = allWeeks.filter(w => w.active).reduce((s, w) => s + w.grossPay, 0);
   const yN = adjustedTakeHome;
+  // Format job start date for sub-label display (e.g. "Feb 9")
+  const startDateDisplay = config.startDate
+    ? new Date(config.startDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : null;
   const sc = t => t ? "#7a8bbf" : "var(--color-green)", sb = t => t ? "#1e1e3a" : "#1e4a30", sbd = t => t ? "#7a8bbf" : "var(--color-green)";
   const todayIso = today ?? toLocalIso(new Date());
   const rollingWeekly = deriveRollingIncomeWeeks(allWeeks, todayIso, 4);
@@ -194,15 +198,15 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
           )}
 
           <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-            <button onClick={() => setShowSharpener(false)} style={{
+            <Pressable onClick={() => setShowSharpener(false)} style={{
               background: "var(--color-bg-raised)", color: "var(--color-text-secondary)",
               border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
               padding: "8px 16px", fontSize: "10px", letterSpacing: "2px",
               textTransform: "uppercase", cursor: "pointer",
             }}>
               Cancel
-            </button>
-            <button onClick={applySharpener} disabled={!canSharpenerApply} style={{
+            </Pressable>
+            <Pressable onClick={applySharpener} disabled={!canSharpenerApply} style={{
               background: canSharpenerApply ? "var(--color-green)" : "var(--color-bg-raised)",
               color: canSharpenerApply ? "var(--color-bg-base)" : "var(--color-text-disabled)",
               border: "none", borderRadius: "12px", padding: "8px 18px",
@@ -210,7 +214,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
               fontWeight: "bold", cursor: canSharpenerApply ? "pointer" : "not-allowed",
             }}>
               Confirm Rates
-            </button>
+            </Pressable>
           </div>
         </div>
       </div>,
@@ -256,14 +260,14 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
             Card and modal both use the same adjusted net event-impact source.
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button onClick={() => setShowEventLossInfo(false)} style={{
+            <Pressable onClick={() => setShowEventLossInfo(false)} style={{
               background: "var(--color-bg-raised)", color: "var(--color-text-secondary)",
               border: "1px solid var(--color-border-subtle)", borderRadius: "12px",
               padding: "8px 16px", fontSize: "10px", letterSpacing: "2px",
               textTransform: "uppercase", cursor: "pointer",
             }}>
               Close
-            </button>
+            </Pressable>
           </div>
         </div>
       </div>,
@@ -282,14 +286,14 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
         <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
           Tax rates are <strong style={{ color: "var(--color-gold)" }}>estimated</strong> — net figures are approximate until you confirm from a paystub.
         </div>
-        <button onClick={() => setShowSharpener(true)} style={{
+        <Pressable onClick={() => setShowSharpener(true)} style={{
           fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase",
           background: "transparent", color: "var(--color-gold)",
           border: "1px solid rgba(0,200,150,0.28)", borderRadius: "10px",
           padding: "5px 12px", cursor: "pointer", flexShrink: 0,
         }}>
           Sharpen Rates
-        </button>
+        </Pressable>
       </div>
     )}
 
@@ -301,7 +305,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
         <div style={{ fontSize: "32px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-accent-primary)", letterSpacing: "-1px", lineHeight: 1 }}>
           Year Summary
         </div>
-        <button
+        <Pressable
           onClick={() => setShowEventLossInfo(true)}
           aria-label="Show missed event day loss details"
           style={{
@@ -310,17 +314,17 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
             display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "12px", lineHeight: 1,
             flexShrink: 0,
           }}
-        >i</button>
+        >i</Pressable>
       </div>
       <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto", borderRadius: "1px", opacity: 0.45 }} />
     </div>
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "28px" }}>
       <Card label="Gross (Year)" val={f(yG)} rawVal={yG}
-        sub={currentWeek ? `${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(getFiscalWeekNumber(currentWeek.idx), checksPerYear)} projection` : undefined}
+        sub={currentWeek ? `${startDateDisplay ? `from ${startDateDisplay} · ` : ""}${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(getFiscalWeekNumber(currentWeek.idx), checksPerYear)} projection` : startDateDisplay ? `from ${startDateDisplay}` : undefined}
         insight={yG > 0 && yN > 0 ? { arrow: "flat", delta: `${Math.round((yN / yG) * 100)}%`, label: "kept after tax", variant: "blue" } : undefined}
       />
       <Card label="Adjusted Net" val={f(yN)} rawVal={yN} color="var(--color-green)"
-        sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : currentWeek ? `${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(getFiscalWeekNumber(currentWeek.idx), checksPerYear)} · on pace` : undefined}
+        sub={missedEventDayNetLost > 0 ? `${f(missedEventDayNetLost)} missed-day loss` : currentWeek ? `${startDateDisplay ? `from ${startDateDisplay} · ` : ""}${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(getFiscalWeekNumber(currentWeek.idx), checksPerYear)} · on pace` : startDateDisplay ? `from ${startDateDisplay}` : undefined}
         insight={missedEventDayNetLost > 0 && projectedAnnualNet > 0 ? { arrow: "down", delta: `-${Math.round((missedEventDayNetLost / projectedAnnualNet) * 100)}%`, label: "of net to missed events", variant: "purple" } : undefined}
       />
     </div>
@@ -340,7 +344,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
                 : `${rollingMonthCards.length} months`}
             </div>
           </div>
-          <button onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase", flexShrink: 0 }}>⊞ Full Detail</button>
+          <Pressable onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase", flexShrink: 0 }}>⊞ Full Detail</Pressable>
         </div>
       </div>
 
@@ -490,7 +494,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
       <div onClick={e => e.stopPropagation()} style={{ background: "var(--color-bg-surface)", borderRadius: "8px", maxWidth: "860px", margin: "0 auto", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
           <span style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase" }}>{isBiweekly ? "Pay Period Breakdown" : isMonthlyPay ? "Monthly Breakdown" : "Weekly Breakdown"} — Active Window Detail</span>
-          <button onClick={() => setShowWeekDetail(false)} style={{ background: "transparent", border: "none", color: "var(--color-text-primary)", fontSize: "16px", cursor: "pointer", padding: "4px 8px" }}>✕</button>
+          <Pressable onClick={() => setShowWeekDetail(false)} style={{ background: "transparent", border: "none", color: "var(--color-text-primary)", fontSize: "16px", cursor: "pointer", padding: "4px 8px" }}>✕</Pressable>
         </div>
         <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}><table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
           <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>

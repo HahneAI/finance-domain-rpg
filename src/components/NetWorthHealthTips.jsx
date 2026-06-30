@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Pressable } from "./ui.jsx";
 
 // Net Worth Health — Financial Breakthrough Tips
 // ---------------------------------------------------------------------------
@@ -65,7 +66,7 @@ export function NetWorthHealthTips({ seed = 0, aiTip = null }) {
       }}
     >
       {/* Collapsed header — calm teal cue, never alarm-colored */}
-      <button
+      <Pressable
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
@@ -80,11 +81,7 @@ export function NetWorthHealthTips({ seed = 0, aiTip = null }) {
           cursor: "pointer",
           textAlign: "left",
           minHeight: "44px",
-          transition: "transform 120ms ease",
         }}
-        onPointerDown={(e) => { e.currentTarget.style.transform = "scale(0.99)"; }}
-        onPointerUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
-        onPointerLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
       >
         <span
           style={{
@@ -128,7 +125,7 @@ export function NetWorthHealthTips({ seed = 0, aiTip = null }) {
         >
           ▾
         </span>
-      </button>
+      </Pressable>
 
       {open && (
         <div style={{ padding: "0 16px 18px", animation: "fadeSlideUp 300ms ease both" }}>

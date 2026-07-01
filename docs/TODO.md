@@ -62,7 +62,7 @@ gate without hitting Stripe on every load.*
 | **Trial** | 0–13 | Full | "X days left in your free trial" countdown | Day 7+: in-app + email "add card to avoid interruption" |
 | **Grace** *(hidden)* | 14–20 | **Full** (undisclosed) | "Trial ended — add a card to keep using the app" | Escalating add-card warnings; **never** reveals the extra week |
 | **Expired** | 21+ | **Read-only** (Home + Budget, locked dropdowns) | Expiry / upgrade screen | Account-deletion warning **every other day** until card added |
-| **Deletion** | 21 + N | — | — | Account data deleted if still no card after the buffer (**N = confirm**) |
+| **Deletion** | 21 + 7 | — | — | Account archived + deleted if still no card after the 7-day buffer — see §I for the revival path this enables |
 
 > Two distinct timestamps drive this: `trial_ends_at` (day 14, **user-facing** countdown + "trial
 > ended" messaging) and `access_ends_at` (day 21, **internal** hard cutoff that flips the read-only
@@ -73,29 +73,38 @@ gate without hitting Stripe on every load.*
 
 ### A. Data model & migration
 
-- [ ] **Migration `016_add_subscription_fields.sql`** — add to `user_data`:
-  - [ ] `stripe_customer_id TEXT` (nullable; set on first Checkout)
-  - [ ] `stripe_subscription_id TEXT` (nullable)
-  - [ ] `subscription_status TEXT` — mirror of Stripe status: `trialing | active | past_due |
+- [x] **Migration `017_add_subscription_fields.sql`** *(renumbered — `016` was already taken by
+  `016_add_tax_projections_flag.sql`)* — add to `user_data`:
+  - [x] `stripe_customer_id TEXT` (nullable; set on first Checkout)
+  - [x] `stripe_subscription_id TEXT` (nullable)
+  - [x] `subscription_status TEXT` — mirror of Stripe status: `trialing | active | past_due |
     canceled | incomplete | unpaid`; default `null` until trial is seeded
-  - [ ] `trial_started_at TIMESTAMPTZ` — anchor for all phase math
-  - [ ] `trial_ends_at TIMESTAMPTZ` — **day 14**, user-facing trial end (countdown + "trial ended")
-  - [ ] `access_ends_at TIMESTAMPTZ` — **day 21**, internal hard cutoff that flips the read-only gate
+  - [x] `trial_started_at TIMESTAMPTZ` — anchor for all phase math
+  - [x] `trial_ends_at TIMESTAMPTZ` — **day 14**, user-facing trial end (countdown + "trial ended")
+  - [x] `access_ends_at TIMESTAMPTZ` — **day 21**, internal hard cutoff that flips the read-only gate
     (the hidden 7-day grace; never surfaced)
-  - [ ] `card_on_file BOOLEAN DEFAULT false` — set true when a payment method is attached (via
+  - [x] `card_on_file BOOLEAN DEFAULT false` — set true when a payment method is attached (via
     webhook / Checkout); gates the dunning + deletion logic
-  - [ ] `last_dunning_email_at TIMESTAMPTZ`, `dunning_email_count INT DEFAULT 0` — throttle the
+  - [x] `last_dunning_email_at TIMESTAMPTZ`, `dunning_email_count INT DEFAULT 0` — throttle the
     every-other-day deletion emails and the trial add-card nudges
-  - [ ] `current_period_end TIMESTAMPTZ` (from Stripe; when the paid period lapses)
-  - [ ] `plan TEXT` (nullable; `monthly` / `annual`)
-- [ ] **Seed trial on account creation** — in the App.jsx `SIGNED_IN` first-row upsert (same place
-  the OAuth row is seeded, §5), set `trial_started_at = now()`, `trial_ends_at = now() + 14 days`,
-  `access_ends_at = now() + 21 days`, `subscription_status = "trialing"` when the row is brand new.
-  Never overwrite on returning users.
-- [ ] **`db.js` mapping** — load the new columns into a `subscription` object on the in-memory
-  user model; keep them OUT of the `config` JSON blob (they're authoritative columns, not user prefs).
-- [ ] **RLS** — users may `SELECT` their own subscription columns but must **not** `UPDATE` them
-  (writes happen only via service-role in the webhook). Add/verify column-safe policies.
+  - [x] `current_period_end TIMESTAMPTZ` (from Stripe; when the paid period lapses)
+  - [x] `plan TEXT` (nullable; `monthly` / `annual`)
+  - **Not yet run in Supabase** — migration file exists in the repo only; must be run in the
+    Supabase SQL editor before this code is deployed (see below).
+- [x] **Seed trial on account creation** — implemented in `src/lib/db.js` `syncUserProfile()`
+  (called on every `SIGNED_IN`, same place the OAuth row is seeded, §5). Keyed off
+  `trial_started_at IS NULL` rather than row-existence, since email sign-up (`LoginScreen.jsx`)
+  already inserts a bare row before `SIGNED_IN` fires — this still fires exactly once and never
+  re-stamps a returning user.
+- [x] **`db.js` mapping** — `loadUserData()` fetches the new columns in their own isolated query
+  (same pattern as `week_confirmations`, so a not-yet-migrated DB falls back to
+  `DEFAULT_SUBSCRIPTION` instead of breaking the whole load) and maps them into a `subscription`
+  object; kept OUT of the `config` JSON blob.
+- [ ] **RLS** — **descoped for now.** `user_data` has never had RLS enabled at all (only a
+  commented-out example in `001_initial_schema.sql`) — enabling it for the first time is a
+  higher-risk, separate task. For this feature, the subscription columns are protected at the
+  app layer instead: `saveUserData()` never accepts/writes them client-side; only the future
+  service-role webhook/checkout/portal routes (§C) will. Revisit real RLS as its own follow-up.
 
 ### B. Stripe account & product setup *(config steps, no app code)*
 
@@ -202,8 +211,8 @@ are server-side via a daily cron route; nothing here runs on the client.*
     Escalating but **never** mentions the remaining access. ~every 2 days.
   - [ ] **Expired (day 21+), no card** → account-deletion warning **every other day** (guard:
     `now − last_dunning_email_at ≥ 2 days`); increment `dunning_email_count`.
-  - [ ] **Past day 21 + N, no card** → call the deletion path (reuse/extend `delete-account` logic
-    server-side). **N = confirm.**
+  - [ ] **Past day 21 + 7, no card** → archive the account (see §I) then call the deletion path
+    (reuse/extend `delete-account` logic server-side).
   - [ ] **Card on file / active** → no lifecycle emails; reset `dunning_email_count`.
 - [ ] **Idempotency / safety** — cron must be safe to run twice a day; key all sends off the
   throttle timestamps, never off "did the day flip." Protect the route (Vercel cron secret / header).
@@ -220,7 +229,10 @@ are server-side via a daily cron route; nothing here runs on the client.*
 - [ ] **Cancellation** — `canceled` keeps access through `current_period_end` (Stripe "cancel at
   period end"), then drops to read-only.
 - [ ] **Account deletion** — extend `api/delete-account.js` to also cancel the Stripe subscription
-  so a deleted user isn't billed.
+  so a deleted user isn't billed. **Non-payment auto-deletion (cron, §G) must archive first** —
+  see §I — this is the one deletion path that isn't a clean hard-delete, because it needs to stay
+  revivable. The user-initiated "type DELETE" flow in ProfilePanel is unaffected and stays a true
+  hard delete with no archive.
 - [ ] **Clock skew / tz** — all phase math in UTC against `trial_ends_at` / `access_ends_at`; do not
   use the client's local lock-date offset (admin Lock Date must not extend a trial or the grace).
 - [ ] **Disclosure** — no client string, email template, or API response exposes `access_ends_at` or
@@ -229,7 +241,81 @@ are server-side via a daily cron route; nothing here runs on the client.*
   the exact day-14 and day-21 boundaries; cron phase-routing + every-other-day throttle; webhook
   upsert mapping with a signed fixture event; create-checkout rejects missing/invalid tokens.
 
-### I. Env vars (Vercel)
+### I. Account Revival After Non-Payment Deletion
+
+*New workstream (2026-07-01). When the day-21+7 dunning cron (§G) finally deletes an account for
+non-payment, the user should still be able to come back — but coming back must require a real,
+successful charge, not just re-entering the same info. This section defines that recovery path.
+Depends on §G's deletion cron writing an archive record instead of a bare hard-delete.*
+
+**Core distinction:** the existing `api/delete-account.js` flow (user types "DELETE" in
+ProfilePanel) stays a **true, unrecoverable hard delete** — that's an explicit user choice and
+gets no archive. The **cron-driven non-payment deletion** (§G, day 21+7) is the only path that
+archives first, specifically so revival is possible. Both still delete the live `auth.users` row
+and `user_data` row — the difference is only whether a recoverable snapshot was taken first.
+
+- [ ] **Archive-then-delete in the lifecycle cron** — before `api/cron-subscription-lifecycle.js`
+  hard-deletes a non-payment account, it upserts a snapshot into `deleted_accounts` (migration
+  017, added below) keyed by email: `config`, `expenses`, `goals`, `logs`, `show_extra`,
+  `week_confirmations`, `pto_goal`, `stripe_customer_id`, `plan`, `display_name`, `avatar_url`,
+  and the OAuth provider if any (so the revival screen can say "Continue with Google" instead of
+  a password field). `deletion_reason = 'non_payment_dunning_expired'`. Upsert-on-email so a
+  second deletion cycle (revive → cancel again) overwrites the same tombstone rather than piling
+  up duplicates.
+- [ ] **Login-time detection** — `LoginScreen.jsx` needs to distinguish "wrong password" from
+  "this email belongs to an archived, revivable account":
+  - **Email/password:** Supabase Auth intentionally returns the same generic "Invalid login
+    credentials" for both wrong-password and no-such-user, so the client can't tell them apart
+    from the auth error alone. On any login failure, look up the email against
+    `deleted_accounts` via a server route (`api/revival-lookup.js`, service-role — never expose
+    this table to anon/authenticated SELECT directly, since it holds archived financial data).
+    If a match with `revived_at IS NULL` exists, route to the Revive Account screen instead of
+    showing the generic error.
+  - **OAuth (Google):** sign-in with a previously-deleted email transparently creates a **new**
+    `auth.users` row (OAuth signup doesn't fail for "new" emails) before the app ever gets a
+    chance to object. The `SIGNED_IN` handler must check `deleted_accounts` for that email
+    *before* `syncUserProfile` seeds a fresh trial — if a revivable tombstone exists, short-circuit
+    into the Revive Account screen and hold off on trial seeding / normal onboarding entirely.
+- [ ] **Revive Account screen** — reachable only via the redirect above (not a normal nav
+  destination). Shows the archived `display_name`/`avatar_url`/email so the user recognizes their
+  old account, and:
+  - Prompts for a **new password** (email/password accounts) — note in the UI copy (and here, for
+    the humans building this): **there is no restriction on reusing the exact same password they
+    had before cancellation** — that part is intentionally unblocked. For OAuth accounts, this
+    step is just "Continue with Google" again.
+  - Requires choosing a plan (monthly/annual) and entering a payment method via Stripe Checkout —
+    **entering a card, even the exact same card that was on file before, does not by itself
+    restore access.** Access is only restored once that card is actually **charged successfully**
+    for the selected plan. No free re-entry path.
+  - Reuses `stripe_customer_id` from the archive when present (same Stripe customer, new
+    subscription) rather than creating a duplicate customer.
+- [ ] **`api/stripe-revive-checkout.js`** — like `stripe-create-checkout.js` but keyed off the
+  archived tombstone rather than an existing `user_data` row: verify the new (just-created, empty)
+  Supabase session belongs to the matching email, create/reuse the Stripe customer from
+  `deleted_accounts.stripe_customer_id`, create a Checkout Session for the chosen plan.
+- [ ] **On successful charge (webhook `checkout.session.completed` for a revival session)** —
+  restore the archived `config`/`expenses`/`goals`/`logs`/`show_extra`/`week_confirmations`/
+  `pto_goal` into the new `user_data` row, set `subscription_status = 'active'`, `plan`, and
+  `stripe_subscription_id`, stamp `deleted_accounts.revived_at = now()` (tombstone consumed —
+  next cancellation cycle starts a fresh one via the same upsert-on-email), and clear
+  `revival_attempt_count`.
+- [ ] **Decline handling — the "two-way door"** — a declined charge must never be a dead end:
+  - On decline, increment `deleted_accounts.revival_attempt_count`, stamp
+    `last_revival_attempt_at`, and store Stripe's `decline_code`/message in `last_decline_code` /
+    `last_decline_message`.
+  - Show the user a clear, specific message: **"Your card was declined. Try a different payment
+    method, make sure the card isn't frozen, or add funds to the account, then try again."** The
+    Revive Account screen stays up — the user can immediately retry with a different card or the
+    same one after resolving the issue; nothing about this flow should force them back to square
+    one (re-enter password, re-confirm email, etc.) just because a charge failed.
+  - No attempt cap for now — a struggling card shouldn't lock someone out of ever reviving; revisit
+    if abuse becomes a real concern.
+- [ ] **Tests** — login-failure → revival-lookup routing; OAuth new-signup → tombstone-match
+  short-circuit; successful-charge → full data restore + tombstone consumed; declined-charge →
+  attempt count increments and the screen remains usable; second deletion cycle after a revival
+  correctly overwrites (not duplicates) the same tombstone row.
+
+### J. Env vars (Vercel)
 
 ```
 STRIPE_SECRET_KEY=...            # server only (api/ functions)
@@ -567,6 +653,168 @@ history sidebar for quick re-access.*
   write the `coach_chats` row server-side so it's persisted even if the client closes first
 - [ ] **Env vars** — `GOOGLE_PLACES_API_KEY` added to Vercel env; key restricted to Places API
   only; billing alert set at a low threshold
+
+---
+
+## 19. Master Timeline — Config History & Point-in-Time Computation Integrity
+
+*Structural/data-model workstream, not yet scoped to a sprint. Seeded 2026-07-01 — placed
+right after the AI section deliberately: once §18's Coach chat history (`coach_chats`) is
+live, we may fold it into the same history table this section builds rather than giving it a
+permanent table of its own. Still fuzzy on exact mechanics below — this section is the
+structural map to de-fuzz it before implementation, not a locked spec.*
+
+**Original brain-dump (verbatim, for provenance):**
+
+> We need to orchestrate a master timeline tracking system for things like when a bill is
+> altered so the annual estimation of the year doesn't change when a bill is updated in June.
+> When the bill was created is when it should historically affect the yearly projections and
+> what's left over. This is one example but I want to identify and button up the system flow
+> for a master timeline of a user's fiscal financial year. This is especially needed at the
+> very least on the user changing their hours schedule in case their routine pay period hours
+> change during the year at their job.
+
+### A. What already solves this (don't rebuild it)
+
+Expenses already have exactly the point-in-time mechanism described above — **this problem is
+solved for bills specifically**, and is the pattern to generalize, not replicate from scratch:
+
+- [ ] Each expense carries `history: [{ effectiveFrom, weekly: [q1,q2,q3,q4] }]` (+ optional
+  `monthlyOverrides` for a single-month exception). Editing a bill's amount appends a new
+  history entry dated from today forward; it never rewrites past entries.
+- [ ] `getEffectiveAmount(expense, weekEndDate, phaseIdx)` / `getEffectiveAmountForMonth(...)`
+  (`src/lib/finance.js:633`, `:652`) walk the history array and pick the entry whose
+  `effectiveFrom` is the latest one on-or-before the week/month in question. A June edit only
+  changes weeks from June forward — Jan–May keep the old entry's amount.
+- [ ] Documented in `docs/active-systems.md` §2 ("Expense Inline Editor + Pay Cycle Math").
+- [ ] **Takeaway:** the new master-timeline system should either (a) generalize this exact
+  `history[]` + `effectiveFrom` + resolver-function shape to other entities, or (b) replace it
+  with the new history table and reimplement `getEffectiveAmount` as a thin wrapper over it —
+  decide which during design; don't end up with two competing point-in-time mechanisms.
+
+### B. Where the gap actually is (confirmed by reading the engine)
+
+Pay structure / employment config has **no** equivalent mechanism. `config` is one flat object,
+and both engine functions apply whatever is in it *uniformly to every week in the fiscal year,
+including weeks that already happened*:
+
+- [ ] **`buildYear(cfg)`** (`src/lib/finance.js:388`) loops every fiscal week (idx 0–~52) and
+  computes `grossPay` for each one from the *current* `cfg.baseRate`, `cfg.shiftHours`,
+  `cfg.diffRate`, `cfg.otThreshold`/`otMultiplier`, `cfg.standardWeeklyHours` /
+  `maxWeeklyHours` / `customWeeklyHours`, `cfg.employerPreset` (DHL vs. base — this decides the
+  *entire rotation-hours branch*), `cfg.dhlNightShift`/`nightDiffRate`, `cfg.k401Rate` /
+  `k401MatchRate` — there is no per-week snapshot of what these values *were* at that point in
+  the year. Change any of them today and every past week in `allWeeks` silently recomputes too.
+- [ ] **`computeNet(w, cfg, ...)`** (`src/lib/finance.js:574`) layers on the same problem for
+  tax: `cfg.fedRateLow/High`, `cfg.stateRateLow/High`, `cfg.ficaRate` are likewise applied to
+  every week from today's config, not the config that was active when that week's paycheck
+  actually happened.
+- [ ] **Confirmed blast radius:** `ProfilePanel`'s Tax Plan tab sums `computeNet`/`buildYear`
+  output across the *whole year* (`fedLiability`, `moLiability`, `fedWithheldBase`, `totalGap`,
+  `targetExtraTotal`, etc. in `taxDerived`) — so a mid-year pay-structure edit doesn't just
+  shift future projections (expected/correct), it silently distorts the *already-elapsed*
+  portion of those annual totals too (not expected/correct). This is the concrete instance of
+  the brain-dump's "annual estimation of the year" complaint.
+- [ ] **A second instance of the same bug class, already in production:** `buildLoanHistory(loan)`
+  (`src/lib/finance.js:1028`) regenerates a loan's *entire* weekly-payment history from
+  `loanMeta` every time it runs (`src/lib/db.js` calls it on every `loadUserData`). Editing a
+  loan's terms (payment amount, rate, payoff date) retroactively rewrites the loan's whole
+  historical payment trace the same way a pay-structure edit rewrites `buildYear`. Same root
+  cause, different entity — worth fixing in the same pass.
+- [ ] **Lower-risk, still worth a decision:** `goals` (`{ id, target, completed, completedAt,
+  ... }`, no `history` field at all) have zero versioning today. Goal timelines are
+  forward-looking by nature (mostly benign), but "what was my goal target on date X" has no
+  answer if we ever need it for audit/reporting.
+
+### C. Existing ad hoc "history-shaped" patterns already in the codebase
+
+Don't reinvent these — fold them into (or explicitly exclude them from) the new system on
+purpose, rather than ending up with four uncoordinated partial mechanisms:
+
+- [ ] **`config.pastWeekTaxStatusOverrides`** — a bare `{ [weekIdx]: taxed }` map bolted directly
+  onto `config` (`constants/config.js:166`) letting a user retroactively correct one field
+  (taxed/exempt) for a specific past week. Structurally, this *is* a point-in-time override —
+  just implemented as a single-purpose hack instead of a row in a general history table.
+- [ ] **`weekConfirmations`** — a per-week-idx record of what was *actually* worked
+  (`dayToggles`, `scheduledDays`, `missedScheduledDays`, `pickupDays`, `netShiftDelta`),
+  written once per week via `WeekConfirmModal`. Closest existing analog to a real per-week
+  history row, but (a) only exists for weeks the user has explicitly confirmed, (b) is never
+  consulted by `buildYear`/`computeNet` for the headline gross/net numbers described in §B —
+  it's a schedule-actuals record, not a config-snapshot record.
+- [ ] **`logs`** — the event log (`bonus`, `missed_unpaid`, `pto`, etc., see `EVENT_TYPES` in
+  `constants/config.js`) is already a discrete, point-in-time financial ledger keyed to a
+  week/date, computed via `calcEventImpact`. Effectively a narrow "histories" table already —
+  just stored as a JSONB array on `user_data` instead of a foreign-keyed child table.
+
+### D. Proposed shape (still fuzzy — resolve via design pass before building)
+
+The user-facing goal: the **active** `user_data` row stays exactly what it is today (current
+config, current expenses, current goals, current logs — no schema change to the hot path), and
+every historically-trackable *change* becomes a row in a new child table, foreign-keyed to the
+account:
+
+```sql
+create table account_history (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references user_data(user_id),
+  entity_type   text not null,       -- 'config' | 'pay_structure' | 'expense' | 'loan' | 'goal' | (future) 'coach_chat'
+  entity_id     text,                -- expense/goal/loan id when entity_type scopes to one record; null = whole-config snapshot
+  field_snapshot jsonb not null,     -- the superseded value(s)
+  effective_from date not null,      -- when the OLD value(s) stopped applying / new value takes over
+  changed_at    timestamptz not null default now(),
+  source        text,                -- 'setup_wizard' | 'life_event:structure_change' | 'profile_pay_edit' | 'expense_edit' | ...
+  created_at    timestamptz not null default now()
+);
+create index account_history_user_id_effective_from on account_history (user_id, effective_from desc);
+```
+
+- [ ] **Write path** — before any historically-sensitive field changes (wizard `onComplete`,
+  `ProfilePanel` Pay Structure section saves, expense/loan edits, goal edits), insert a snapshot
+  row capturing the *old* value(s) + the `effective_from` boundary — mirroring exactly what
+  `expense.history` already does per-expense (§A), generalized to any entity/field.
+- [ ] **Read path (can ship later, per user's own "connect it on edge case testing" framing)** —
+  a "resolve config as of week N" function analogous to `getEffectiveAmount`, which
+  `buildYear`/`computeNet` would call instead of reading the flat live `cfg` directly for weeks
+  that fall before the most recent relevant `account_history` boundary. **This does not need to
+  ship in the same pass as the write path** — capturing history correctly first, then wiring
+  the engine to actually consult it for past weeks, is an explicit two-phase plan (see F).
+
+### E. Open questions to resolve before writing the migration
+
+- [ ] **Snapshot granularity** — whole-config snapshot per change (simple, matches the
+  expense-history precedent) vs. field-level diffs (smaller rows, precise, harder to
+  reconstruct "config as of week N" from)?
+- [ ] **Which fields are actually in scope** — full enumeration needed: all of §B's pay/schedule/
+  tax-rate fields, `employerPreset` DHL↔base switches specifically (since that flips which
+  entire code branch `buildYear` uses), benefit elections, loan terms, goal targets. Expense
+  billing amounts are already covered by the existing mechanism (§A).
+- [ ] **Backfill or clean start?** — there is no history for config values already in production;
+  the first `account_history` row for an existing account starts at rollout, not fabricated
+  retroactively. Confirm this is acceptable (it should be — same as how expense `history[]`
+  arrays start wherever the expense was created, not before).
+- [ ] **Fold in or leave alone** — does `pastWeekTaxStatusOverrides` / `weekConfirmations` /
+  `logs` (§C) become an `entity_type` inside `account_history`, or do they stay as their own
+  JSONB columns and only *new* config-history is added alongside them? Recommend deciding this
+  during the design pass, not now.
+- [ ] **AI chat history hook (flagged explicitly by product)** — once §18.H's `coach_chats`
+  table ships, evaluate folding it into `account_history` as `entity_type: 'coach_chat'`
+  instead of keeping its own table. Don't block this section on that decision — §18 needs to
+  ship first.
+
+### F. Suggested first implementation slice
+
+*Deliberately small — a proof of the write path, not the full system.*
+
+- [ ] **Migration** — `account_history` table per §D's sketch (or the design pass's revision of
+  it), RLS scoped to `user_id = auth.uid()` matching every other table's pattern.
+- [ ] **One integration point** — wrap the config save path (`saveConfigNow` in `App.jsx`,
+  called from `SetupWizard.onComplete` and every `ProfilePanel` Pay Structure section) to diff
+  old vs. new config and insert an `account_history` row for whatever changed, before
+  persisting the new config. This alone captures every pay-structure/life-event/DHL↔base change
+  in `account_history` going forward.
+- [ ] **Explicitly defer** — the `buildYear`/`computeNet` read-path rewrite (§D's "read path")
+  is its own follow-up task once the write path has real data to test against. Don't try to
+  land both in the same PR.
 
 ---
 

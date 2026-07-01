@@ -6,13 +6,14 @@ Built for individuals who want clarity over their income, spending, and goals in
 
 ---
 
-## What it does
+## Core domains
 
-- **Income modeling** — projects your full-year net take-home based on your pay structure, schedule, tax rates, and deductions
-- **Budget management** — tracks expenses by category with drag-and-drop reordering; supports multiple billing cycles (weekly through yearly) with automatic per-paycheck allocation
-- **Goal timelines** — maps savings goals against projected weekly surplus, showing realistic completion dates on a month/week grid
-- **Event logging** — records schedule changes (missed days, bonuses, adjustments) that cascade through take-home, tax projections, and goal timelines in real time
-- **Rolling views** — active periods scale and age progressively; historical data preserved for future review
+- **Income & pay modeling** — projects full-year net take-home from your actual pay structure, schedule, and tax situation; adapts automatically across hourly, salaried, shift-based, and commission income
+- **Budgeting, goals & debt payoff** — tracks expenses, savings goals, and loans together, projecting realistic funding and payoff dates from real income timing rather than flat averages
+- **Life events & adaptive planning** — guided flows for a raise, a new job, or a pay-structure change, including a dedicated mode for navigating a job loss without losing sight of the rest of your finances
+- **Benefits & time-off tracking** — projects retirement contributions and employer matching, and tracks paid-time-off accrual against actual worked history
+- **Event logging & impact tracking** — log real-world changes (missed shifts, bonuses, one-off adjustments) and see the exact ripple effect on take-home pay, taxes, and goal timelines
+- **Account, security & installable experience** — Supabase-backed auth with per-user data isolation, full account control, and a mobile-first installable app experience
 
 ---
 

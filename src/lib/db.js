@@ -11,6 +11,37 @@ import { buildLoanHistory } from "./finance.js";
 const FOOD_DEFAULT_MONTHLY = 400;
 const FOOD_DEFAULT_WEEKLY = FOOD_DEFAULT_MONTHLY / 4;
 
+// Stripe/trial lifecycle fields (docs/TODO.md §17.A) — kept OUT of the config JSON
+// blob since they're authoritative billing columns, not user prefs. Never written
+// by saveUserData(); only the service-role webhook/checkout/portal routes touch them.
+const DEFAULT_SUBSCRIPTION = {
+  stripeCustomerId: null,
+  stripeSubscriptionId: null,
+  status: null,
+  trialStartedAt: null,
+  trialEndsAt: null,
+  accessEndsAt: null,
+  cardOnFile: false,
+  lastDunningEmailAt: null,
+  dunningEmailCount: 0,
+  currentPeriodEnd: null,
+  plan: null,
+};
+
+const mapSubscription = (row) => row ? ({
+  stripeCustomerId: row.stripe_customer_id ?? null,
+  stripeSubscriptionId: row.stripe_subscription_id ?? null,
+  status: row.subscription_status ?? null,
+  trialStartedAt: row.trial_started_at ?? null,
+  trialEndsAt: row.trial_ends_at ?? null,
+  accessEndsAt: row.access_ends_at ?? null,
+  cardOnFile: row.card_on_file ?? false,
+  lastDunningEmailAt: row.last_dunning_email_at ?? null,
+  dunningEmailCount: row.dunning_email_count ?? 0,
+  currentPeriodEnd: row.current_period_end ?? null,
+  plan: row.plan ?? null,
+}) : DEFAULT_SUBSCRIPTION;
+
 const isFoodPrimaryExpense = (expense) => {
   if (!expense || expense.type === "loan") return false;
   if (expense.isFoodPrimary === true) return true;
@@ -68,6 +99,7 @@ export async function loadUserData() {
       isEmployerDHL:              false,
       isAdmin:            false,
       taxProjectionsEnabled: false,
+      subscription:       DEFAULT_SUBSCRIPTION,
     };
   }
 
@@ -83,6 +115,18 @@ export async function loadUserData() {
   const { data: wcData } = await supabase
     .from("user_data")
     .select("week_confirmations")
+    .eq("user_id", userId)
+    .single();
+
+  // Fetch subscription/trial columns independently (migration 017) — same isolation
+  // pattern as week_confirmations, so a not-yet-migrated DB falls back to
+  // DEFAULT_SUBSCRIPTION instead of blowing up the whole load.
+  const { data: subData } = await supabase
+    .from("user_data")
+    .select(
+      "stripe_customer_id, stripe_subscription_id, subscription_status, trial_started_at, trial_ends_at, " +
+      "access_ends_at, card_on_file, last_dunning_email_at, dunning_email_count, current_period_end, plan"
+    )
     .eq("user_id", userId)
     .single();
 
@@ -109,6 +153,7 @@ export async function loadUserData() {
       isEmployerDHL:              false,
       isAdmin:            false,
       taxProjectionsEnabled: false,
+      subscription:       DEFAULT_SUBSCRIPTION,
     };
   }
 
@@ -233,6 +278,16 @@ export async function loadUserData() {
     }
   }
 
+  // ── taxExemptOptIn → clear taxedWeeks ─────────────────────────────────────────
+  // When the user opted into tax-exempt status in the wizard WrapUp step, the engine
+  // should not withhold federal/state income tax — only FICA applies. The wizard
+  // previously set all active weeks as taxed regardless of this flag. Clear the array
+  // so computeNet() uses the untaxed path (grossPay − fica − deductions) for every week.
+  // Safe to run every load: no-op when array is already empty.
+  if (mergedConfig.taxExemptOptIn === true && (mergedConfig.taxedWeeks ?? []).length > 0) {
+    mergedConfig.taxedWeeks = [];
+  }
+
   // ── One-time baseRate correction (night diff separation) ─────────────────────
   // Prior to 2026-03-25 the night shift differential (+$1.50) was baked into
   // baseRate (19.65 + 1.50 = 21.15) rather than tracked as nightDiffRate.
@@ -277,12 +332,16 @@ export async function loadUserData() {
     isInvestor:           data.is_investor ?? false,
     investorProfile:      investorRow,
     activeInvestorAccount: investorRow?.active_account ?? 1,
+    subscription:         mapSubscription(subData),
   };
 }
 
 /**
  * Upsert all state blobs atomically.
  * Called from a debounced useEffect in App.jsx on any state change.
+ * Intentionally destructures only these fields — subscription/trial columns
+ * (migration 017) are never accepted here; only the service-role webhook/
+ * checkout/portal routes may write them.
  */
 export async function saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal }) {
   const userId = await getCurrentUserId();
@@ -500,12 +559,22 @@ export async function saveDemoAccount(accountNumber, { config, expenses, goals, 
   if (error) throw new Error(error.message);
 }
 
+const TRIAL_DAYS = 14;
+const ACCESS_DAYS = 21; // day 14 public trial end + hidden 7-day grace, never disclosed
+
 /**
- * Called on every SIGNED_IN auth event. Does two things:
+ * Called on every SIGNED_IN auth event. Does three things:
  *   1. Seeds a user_data row for OAuth users (email sign-up does this explicitly;
  *      OAuth sign-in does not — this closes that gap).
  *   2. Syncs Google profile metadata (full_name, avatar_url) into the row so the
  *      ProfilePanel can surface them without a separate API call.
+ *   3. Seeds the trial window (trial_started_at/trial_ends_at/access_ends_at,
+ *      subscription_status="trialing") exactly once, the first time this user
+ *      has no trial_started_at yet. Email sign-up already inserts a bare row
+ *      (see LoginScreen.jsx) before this fires, so "brand new" is keyed off
+ *      trial_started_at IS NULL rather than row existence — this still fires
+ *      exactly once and never re-stamps a returning user, since a returning
+ *      user's trial_started_at is always already set.
  * Safe to call for email/password users — no-op if no metadata present.
  */
 export async function syncUserProfile(user) {
@@ -514,6 +583,21 @@ export async function syncUserProfile(user) {
   const patch = { user_id: user.id };
   if (meta.full_name)  patch.display_name = meta.full_name;
   if (meta.avatar_url) patch.avatar_url   = meta.avatar_url;
+
+  const { data: existing } = await supabase
+    .from("user_data")
+    .select("trial_started_at")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!existing?.trial_started_at) {
+    const now = new Date();
+    patch.trial_started_at = now.toISOString();
+    patch.trial_ends_at = new Date(now.getTime() + TRIAL_DAYS * 86400000).toISOString();
+    patch.access_ends_at = new Date(now.getTime() + ACCESS_DAYS * 86400000).toISOString();
+    patch.subscription_status = "trialing";
+  }
+
   const { error } = await supabase.from("user_data").upsert(patch, { onConflict: "user_id" });
   if (error) console.warn("syncUserProfile failed:", error.message);
 }

@@ -62,7 +62,7 @@ gate without hitting Stripe on every load.*
 | **Trial** | 0–13 | Full | "X days left in your free trial" countdown | Day 7+: in-app + email "add card to avoid interruption" |
 | **Grace** *(hidden)* | 14–20 | **Full** (undisclosed) | "Trial ended — add a card to keep using the app" | Escalating add-card warnings; **never** reveals the extra week |
 | **Expired** | 21+ | **Read-only** (Home + Budget, locked dropdowns) | Expiry / upgrade screen | Account-deletion warning **every other day** until card added |
-| **Deletion** | 21 + N | — | — | Account data deleted if still no card after the buffer (**N = confirm**) |
+| **Deletion** | 21 + 7 | — | — | Account archived + deleted if still no card after the 7-day buffer — see §I for the revival path this enables |
 
 > Two distinct timestamps drive this: `trial_ends_at` (day 14, **user-facing** countdown + "trial
 > ended" messaging) and `access_ends_at` (day 21, **internal** hard cutoff that flips the read-only
@@ -211,8 +211,8 @@ are server-side via a daily cron route; nothing here runs on the client.*
     Escalating but **never** mentions the remaining access. ~every 2 days.
   - [ ] **Expired (day 21+), no card** → account-deletion warning **every other day** (guard:
     `now − last_dunning_email_at ≥ 2 days`); increment `dunning_email_count`.
-  - [ ] **Past day 21 + N, no card** → call the deletion path (reuse/extend `delete-account` logic
-    server-side). **N = confirm.**
+  - [ ] **Past day 21 + 7, no card** → archive the account (see §I) then call the deletion path
+    (reuse/extend `delete-account` logic server-side).
   - [ ] **Card on file / active** → no lifecycle emails; reset `dunning_email_count`.
 - [ ] **Idempotency / safety** — cron must be safe to run twice a day; key all sends off the
   throttle timestamps, never off "did the day flip." Protect the route (Vercel cron secret / header).
@@ -229,7 +229,10 @@ are server-side via a daily cron route; nothing here runs on the client.*
 - [ ] **Cancellation** — `canceled` keeps access through `current_period_end` (Stripe "cancel at
   period end"), then drops to read-only.
 - [ ] **Account deletion** — extend `api/delete-account.js` to also cancel the Stripe subscription
-  so a deleted user isn't billed.
+  so a deleted user isn't billed. **Non-payment auto-deletion (cron, §G) must archive first** —
+  see §I — this is the one deletion path that isn't a clean hard-delete, because it needs to stay
+  revivable. The user-initiated "type DELETE" flow in ProfilePanel is unaffected and stays a true
+  hard delete with no archive.
 - [ ] **Clock skew / tz** — all phase math in UTC against `trial_ends_at` / `access_ends_at`; do not
   use the client's local lock-date offset (admin Lock Date must not extend a trial or the grace).
 - [ ] **Disclosure** — no client string, email template, or API response exposes `access_ends_at` or
@@ -238,7 +241,81 @@ are server-side via a daily cron route; nothing here runs on the client.*
   the exact day-14 and day-21 boundaries; cron phase-routing + every-other-day throttle; webhook
   upsert mapping with a signed fixture event; create-checkout rejects missing/invalid tokens.
 
-### I. Env vars (Vercel)
+### I. Account Revival After Non-Payment Deletion
+
+*New workstream (2026-07-01). When the day-21+7 dunning cron (§G) finally deletes an account for
+non-payment, the user should still be able to come back — but coming back must require a real,
+successful charge, not just re-entering the same info. This section defines that recovery path.
+Depends on §G's deletion cron writing an archive record instead of a bare hard-delete.*
+
+**Core distinction:** the existing `api/delete-account.js` flow (user types "DELETE" in
+ProfilePanel) stays a **true, unrecoverable hard delete** — that's an explicit user choice and
+gets no archive. The **cron-driven non-payment deletion** (§G, day 21+7) is the only path that
+archives first, specifically so revival is possible. Both still delete the live `auth.users` row
+and `user_data` row — the difference is only whether a recoverable snapshot was taken first.
+
+- [ ] **Archive-then-delete in the lifecycle cron** — before `api/cron-subscription-lifecycle.js`
+  hard-deletes a non-payment account, it upserts a snapshot into `deleted_accounts` (migration
+  017, added below) keyed by email: `config`, `expenses`, `goals`, `logs`, `show_extra`,
+  `week_confirmations`, `pto_goal`, `stripe_customer_id`, `plan`, `display_name`, `avatar_url`,
+  and the OAuth provider if any (so the revival screen can say "Continue with Google" instead of
+  a password field). `deletion_reason = 'non_payment_dunning_expired'`. Upsert-on-email so a
+  second deletion cycle (revive → cancel again) overwrites the same tombstone rather than piling
+  up duplicates.
+- [ ] **Login-time detection** — `LoginScreen.jsx` needs to distinguish "wrong password" from
+  "this email belongs to an archived, revivable account":
+  - **Email/password:** Supabase Auth intentionally returns the same generic "Invalid login
+    credentials" for both wrong-password and no-such-user, so the client can't tell them apart
+    from the auth error alone. On any login failure, look up the email against
+    `deleted_accounts` via a server route (`api/revival-lookup.js`, service-role — never expose
+    this table to anon/authenticated SELECT directly, since it holds archived financial data).
+    If a match with `revived_at IS NULL` exists, route to the Revive Account screen instead of
+    showing the generic error.
+  - **OAuth (Google):** sign-in with a previously-deleted email transparently creates a **new**
+    `auth.users` row (OAuth signup doesn't fail for "new" emails) before the app ever gets a
+    chance to object. The `SIGNED_IN` handler must check `deleted_accounts` for that email
+    *before* `syncUserProfile` seeds a fresh trial — if a revivable tombstone exists, short-circuit
+    into the Revive Account screen and hold off on trial seeding / normal onboarding entirely.
+- [ ] **Revive Account screen** — reachable only via the redirect above (not a normal nav
+  destination). Shows the archived `display_name`/`avatar_url`/email so the user recognizes their
+  old account, and:
+  - Prompts for a **new password** (email/password accounts) — note in the UI copy (and here, for
+    the humans building this): **there is no restriction on reusing the exact same password they
+    had before cancellation** — that part is intentionally unblocked. For OAuth accounts, this
+    step is just "Continue with Google" again.
+  - Requires choosing a plan (monthly/annual) and entering a payment method via Stripe Checkout —
+    **entering a card, even the exact same card that was on file before, does not by itself
+    restore access.** Access is only restored once that card is actually **charged successfully**
+    for the selected plan. No free re-entry path.
+  - Reuses `stripe_customer_id` from the archive when present (same Stripe customer, new
+    subscription) rather than creating a duplicate customer.
+- [ ] **`api/stripe-revive-checkout.js`** — like `stripe-create-checkout.js` but keyed off the
+  archived tombstone rather than an existing `user_data` row: verify the new (just-created, empty)
+  Supabase session belongs to the matching email, create/reuse the Stripe customer from
+  `deleted_accounts.stripe_customer_id`, create a Checkout Session for the chosen plan.
+- [ ] **On successful charge (webhook `checkout.session.completed` for a revival session)** —
+  restore the archived `config`/`expenses`/`goals`/`logs`/`show_extra`/`week_confirmations`/
+  `pto_goal` into the new `user_data` row, set `subscription_status = 'active'`, `plan`, and
+  `stripe_subscription_id`, stamp `deleted_accounts.revived_at = now()` (tombstone consumed —
+  next cancellation cycle starts a fresh one via the same upsert-on-email), and clear
+  `revival_attempt_count`.
+- [ ] **Decline handling — the "two-way door"** — a declined charge must never be a dead end:
+  - On decline, increment `deleted_accounts.revival_attempt_count`, stamp
+    `last_revival_attempt_at`, and store Stripe's `decline_code`/message in `last_decline_code` /
+    `last_decline_message`.
+  - Show the user a clear, specific message: **"Your card was declined. Try a different payment
+    method, make sure the card isn't frozen, or add funds to the account, then try again."** The
+    Revive Account screen stays up — the user can immediately retry with a different card or the
+    same one after resolving the issue; nothing about this flow should force them back to square
+    one (re-enter password, re-confirm email, etc.) just because a charge failed.
+  - No attempt cap for now — a struggling card shouldn't lock someone out of ever reviving; revisit
+    if abuse becomes a real concern.
+- [ ] **Tests** — login-failure → revival-lookup routing; OAuth new-signup → tombstone-match
+  short-circuit; successful-charge → full data restore + tombstone consumed; declined-charge →
+  attempt count increments and the screen remains usable; second deletion cycle after a revival
+  correctly overwrites (not duplicates) the same tombstone row.
+
+### J. Env vars (Vercel)
 
 ```
 STRIPE_SECRET_KEY=...            # server only (api/ functions)

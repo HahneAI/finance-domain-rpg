@@ -16,17 +16,18 @@ vi.mock('../../lib/supabase.js', () => ({
 }))
 
 import { supabase } from '../../lib/supabase.js'
-import { loadUserData, saveUserData } from '../../lib/db.js'
+import { loadUserData, saveUserData, syncUserProfile } from '../../lib/db.js'
 
 // ─────────────────────────────────────────────────────────────
 // Mock helpers
 // ─────────────────────────────────────────────────────────────
 
-/** Wire up loadUserData's two .single() calls with controlled responses. */
-function setupLoadMock(mainRowData, wcRowData = { week_confirmations: {} }) {
+/** Wire up loadUserData's three .single() calls with controlled responses. */
+function setupLoadMock(mainRowData, wcRowData = { week_confirmations: {} }, subRowData = {}) {
   const single = vi.fn()
     .mockResolvedValueOnce({ data: mainRowData, error: null })
     .mockResolvedValueOnce({ data: wcRowData, error: null })
+    .mockResolvedValueOnce({ data: subRowData, error: null })
   supabase.from.mockReturnValue({
     select: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({ single }),
@@ -465,6 +466,57 @@ describe('loadUserData — misc fields', () => {
   })
 })
 
+describe('loadUserData — subscription mapping (migration 017)', () => {
+  it('maps subscription columns from the third Supabase query', async () => {
+    const subRow = {
+      stripe_customer_id: 'cus_123',
+      stripe_subscription_id: 'sub_456',
+      subscription_status: 'active',
+      trial_started_at: '2026-01-01T00:00:00.000Z',
+      trial_ends_at: '2026-01-15T00:00:00.000Z',
+      access_ends_at: '2026-01-22T00:00:00.000Z',
+      card_on_file: true,
+      last_dunning_email_at: null,
+      dunning_email_count: 0,
+      current_period_end: '2026-02-01T00:00:00.000Z',
+      plan: 'monthly',
+    }
+    setupLoadMock(makeRow(), { week_confirmations: {} }, subRow)
+    const result = await loadUserData()
+    expect(result.subscription).toEqual({
+      stripeCustomerId: 'cus_123',
+      stripeSubscriptionId: 'sub_456',
+      status: 'active',
+      trialStartedAt: '2026-01-01T00:00:00.000Z',
+      trialEndsAt: '2026-01-15T00:00:00.000Z',
+      accessEndsAt: '2026-01-22T00:00:00.000Z',
+      cardOnFile: true,
+      lastDunningEmailAt: null,
+      dunningEmailCount: 0,
+      currentPeriodEnd: '2026-02-01T00:00:00.000Z',
+      plan: 'monthly',
+    })
+  })
+
+  it('falls back to DEFAULT_SUBSCRIPTION when the third query returns null (migration not yet run)', async () => {
+    setupLoadMock(makeRow(), { week_confirmations: {} }, null)
+    const result = await loadUserData()
+    expect(result.subscription).toEqual({
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+      status: null,
+      trialStartedAt: null,
+      trialEndsAt: null,
+      accessEndsAt: null,
+      cardOnFile: false,
+      lastDunningEmailAt: null,
+      dunningEmailCount: 0,
+      currentPeriodEnd: null,
+      plan: null,
+    })
+  })
+})
+
 describe('saveUserData', () => {
   it('calls supabase.from upsert with correct shape', async () => {
     const mockUpsert = vi.fn().mockResolvedValue({ error: null })
@@ -541,5 +593,72 @@ describe('saveUserData', () => {
 
     expect(consoleSpy).toHaveBeenCalledWith('Failed to save user data:', 'Connection refused')
     consoleSpy.mockRestore()
+  })
+})
+
+/** Wire up syncUserProfile's select().eq().maybeSingle() + upsert() calls. */
+function setupSyncProfileMock(existingTrialStartedAt) {
+  const maybeSingle = vi.fn().mockResolvedValue({
+    data: existingTrialStartedAt === undefined ? null : { trial_started_at: existingTrialStartedAt },
+    error: null,
+  })
+  const upsert = vi.fn().mockResolvedValue({ error: null })
+  supabase.from.mockReturnValue({
+    select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }),
+    upsert,
+  })
+  return { upsert }
+}
+
+describe('syncUserProfile — trial seeding (migration 017)', () => {
+  it('seeds trial_started_at/trial_ends_at/access_ends_at/subscription_status for a brand-new user (no row yet)', async () => {
+    const { upsert } = setupSyncProfileMock(undefined)
+    await syncUserProfile({ id: 'test-user-id', user_metadata: {} })
+
+    const [patch] = upsert.mock.calls[0]
+    expect(patch.subscription_status).toBe('trialing')
+    expect(patch.trial_started_at).toEqual(expect.any(String))
+    expect(new Date(patch.trial_ends_at) - new Date(patch.trial_started_at)).toBe(14 * 86400000)
+    expect(new Date(patch.access_ends_at) - new Date(patch.trial_started_at)).toBe(21 * 86400000)
+  })
+
+  it('seeds the trial for an email sign-up row that exists but has trial_started_at still null', async () => {
+    const { upsert } = setupSyncProfileMock(null)
+    await syncUserProfile({ id: 'test-user-id', user_metadata: {} })
+
+    const [patch] = upsert.mock.calls[0]
+    expect(patch.subscription_status).toBe('trialing')
+    expect(patch.trial_started_at).toEqual(expect.any(String))
+  })
+
+  it('never re-stamps a returning user whose trial_started_at is already set', async () => {
+    const { upsert } = setupSyncProfileMock('2025-01-01T00:00:00.000Z')
+    await syncUserProfile({ id: 'test-user-id', user_metadata: {} })
+
+    const [patch] = upsert.mock.calls[0]
+    expect(patch.trial_started_at).toBeUndefined()
+    expect(patch.trial_ends_at).toBeUndefined()
+    expect(patch.access_ends_at).toBeUndefined()
+    expect(patch.subscription_status).toBeUndefined()
+  })
+
+  it('still merges OAuth profile metadata alongside trial seeding', async () => {
+    const { upsert } = setupSyncProfileMock(undefined)
+    await syncUserProfile({
+      id: 'test-user-id',
+      user_metadata: { full_name: 'Anthony Hahne', avatar_url: 'https://example.com/a.png' },
+    })
+
+    const [patch] = upsert.mock.calls[0]
+    expect(patch.display_name).toBe('Anthony Hahne')
+    expect(patch.avatar_url).toBe('https://example.com/a.png')
+    expect(patch.subscription_status).toBe('trialing')
+  })
+
+  it('no-ops when user has no id', async () => {
+    const upsert = vi.fn()
+    supabase.from.mockReturnValue({ upsert })
+    await syncUserProfile(null)
+    expect(upsert).not.toHaveBeenCalled()
   })
 })

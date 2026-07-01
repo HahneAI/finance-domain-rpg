@@ -39,9 +39,18 @@ with their Supabase Bearer token, then act with the service-role client). Subscr
 source of truth in **Stripe**, mirrored into Supabase `user_data` via webhook so the frontend can
 gate without hitting Stripe on every load.*
 
-**Resolved decisions (2026-06-16):**
+**Resolved decisions (2026-06-16, pricing tiers reaffirmed 2026-07-01):**
 - **Price:** **$14.99/mo.** Annual = **3 months free** → 12 months for the price of 9 =
   **$134.91/yr** (effective ~$11.24/mo). Two Stripe prices: `monthly` and `annual`.
+- **Monthly + annual only — no weekly, no quarterly.** Considered and rejected 2026-07-01:
+  **weekly billing reads as a dark pattern** (the exact "$X.99/week to obscure the real monthly
+  cost" trick used by low-trust mobile subscriptions) and directly contradicts an app whose whole
+  value prop is financial clarity. **Quarterly** adds a third price point/decision without adding
+  real conversion value — the annual discount already exists to soften a bigger commitment; a
+  third SKU just adds paradox-of-choice clutter. Two tiers, presented as a Monthly ↔ Annual
+  toggle (not stacked cards), with the monthly-equivalent price always shown next to the annual
+  price (e.g. "$134.91/yr — $11.24/mo billed annually") so the real per-month cost is never
+  hidden behind a headline number.
 - **No card at signup.** Card-less, **app-managed** trial; a Stripe Checkout is created only when the
   user upgrades. In-app + email nudges to add a card start **after day 7** of the trial ("add your
   card early to avoid interruption").
@@ -67,7 +76,6 @@ gate without hitting Stripe on every load.*
 > Two distinct timestamps drive this: `trial_ends_at` (day 14, **user-facing** countdown + "trial
 > ended" messaging) and `access_ends_at` (day 21, **internal** hard cutoff that flips the read-only
 > gate). Entitlement is keyed off `access_ends_at`; the countdown UI is keyed off `trial_ends_at`.
-> **Open question:** how many days after expiry (`N`) before actual account deletion.
 
 ---
 
@@ -327,6 +335,13 @@ CRON_SECRET=...                  # guards api/cron-subscription-lifecycle
 VITE_STRIPE_PUBLISHABLE_KEY=...  # client (only if using Stripe.js redirect; not needed for hosted Checkout URL)
 # Reuses existing SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_* already set for delete-account.
 ```
+
+### K. Future Ideas (not in scope for v1)
+
+- [ ] **Account top-off** — let a user with spare cash pre-buy extra subscription time (e.g. a
+  week at a time) into a banked balance on their account, purely as a voluntary buffer against a
+  future missed payment — explicitly **not** "paying the bill early," and copy must make that
+  distinction clear so it doesn't read as a coerced prepayment.
 
 ---
 

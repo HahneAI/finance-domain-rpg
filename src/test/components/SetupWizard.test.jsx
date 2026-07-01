@@ -321,6 +321,70 @@ describe('SetupWizard — onComplete', () => {
     expect(payload.baseRate).toBe(24.5)
     expect(payload.k401Rate).toBe(0.08)
   })
+
+  // The wizard (any life event, including an employer-preset switch) must never
+  // carry expenses/goals/logs — those live in separate Supabase columns and
+  // App.jsx's handleWizardComplete only ever calls setConfig(payload). If the
+  // payload ever picked up one of these keys it would risk silently overwriting
+  // the user's budget/goal/log records on save.
+  it('never includes expenses, goals, or logs keys in the payload', async () => {
+    const onComplete = finishWizard()
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const payload = onComplete.mock.calls[0][0]
+    expect(payload).not.toHaveProperty('expenses')
+    expect(payload).not.toHaveProperty('goals')
+    expect(payload).not.toHaveProperty('logs')
+  })
+})
+
+describe('SetupWizard — employer switch never touches expenses/goals/logs', () => {
+  it('base -> DHL: payload flips employerPreset but carries no expenses/goals/logs keys', async () => {
+    const config = { ...BASE_CONFIG, employerPreset: null }
+    const { onComplete } = renderWizard({ lifeEvent: 'changed_jobs', config })
+
+    clickNext() // step 0 -> step 1 (Pay Structure)
+    fireEvent.click(screen.getAllByRole('button', { name: /^yes$/i })[0]) // DHL employer gate -> Yes
+    fireEvent.click(screen.getByRole('button', { name: /team b/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
+
+    advanceSteps(4)
+    fireEvent.click(screen.getByRole('button', { name: /finish/i }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const payload = onComplete.mock.calls[0][0]
+    expect(payload.employerPreset).toBe('DHL')
+    expect(payload).not.toHaveProperty('expenses')
+    expect(payload).not.toHaveProperty('goals')
+    expect(payload).not.toHaveProperty('logs')
+  })
+
+  it('DHL -> base: payload flips employerPreset but carries no expenses/goals/logs keys', async () => {
+    const config = {
+      ...BASE_CONFIG,
+      employerPreset: 'DHL',
+      dhlTeam: 'A',
+      userPaySchedule: 'weekly',
+      scheduleIsVariable: true,
+    }
+    const { onComplete } = renderWizard({ lifeEvent: 'changed_jobs', config })
+
+    clickNext() // step 0 -> step 1
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i })) // DHL employer gate -> No
+    fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
+    // Answering "No" clears the DHL-seeded base rate / shift length, so re-supply them.
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 19\.65/i), { target: { value: '21.15' } })
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 10/i), { target: { value: '12' } })
+
+    advanceSteps(4)
+    fireEvent.click(screen.getByRole('button', { name: /finish/i }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const payload = onComplete.mock.calls[0][0]
+    expect(payload.employerPreset).toBeNull()
+    expect(payload).not.toHaveProperty('expenses')
+    expect(payload).not.toHaveProperty('goals')
+    expect(payload).not.toHaveProperty('logs')
+  })
 })
 
 describe('SetupWizard — step titles', () => {

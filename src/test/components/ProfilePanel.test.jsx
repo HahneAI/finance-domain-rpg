@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { DEFAULT_CONFIG } from '../../constants/config.js'
 
 // AccountDetail imports the supabase client (created at module load from env vars).
@@ -54,6 +54,56 @@ describe('ProfilePanel — main Account list renders', () => {
     unmount()
     renderMainProfile({ onInstallClick: () => {} })
     expect(screen.getByText('Install on home screen')).toBeInTheDocument()
+  })
+})
+
+// ProfilePanel is mounted without expenses/goals/logs props at all (see App.jsx),
+// so its Pay Structure sections structurally cannot touch them. These tests lock
+// in the other half of that guarantee: the config object each section hands to
+// setConfig/saveConfigNow only ever carries pay-structure fields.
+describe('ProfilePanel — Pay Structure section saves never touch expenses/goals/logs', () => {
+  it('Base Pay card (base user) patches only pay fields on save', () => {
+    const setConfig = vi.fn()
+    const saveConfigNow = vi.fn()
+    renderMainProfile({ setConfig, saveConfigNow })
+
+    fireEvent.click(screen.getByText('Pay Structure'))
+    fireEvent.click(screen.getAllByText('Edit')[0]) // Base Pay is the first card
+
+    const rateInput = screen.getByDisplayValue(String(DEFAULT_CONFIG.baseRate))
+    fireEvent.change(rateInput, { target: { value: '25' } })
+    fireEvent.click(screen.getByText('Save Changes'))
+
+    expect(setConfig).toHaveBeenCalledTimes(1)
+    const newConfig = setConfig.mock.calls[0][0]
+    expect(newConfig.baseRate).toBe(25)
+    expect(newConfig).not.toHaveProperty('expenses')
+    expect(newConfig).not.toHaveProperty('goals')
+    expect(newConfig).not.toHaveProperty('logs')
+    expect(saveConfigNow).toHaveBeenCalledWith(newConfig)
+  })
+
+  it('Differentials card (DHL user) patches only differential fields on save', () => {
+    const setConfig = vi.fn()
+    const saveConfigNow = vi.fn()
+    const dhlConfig = { ...DEFAULT_CONFIG, employerPreset: 'DHL', dhlTeam: 'B' }
+    renderMainProfile({ config: dhlConfig, setConfig, saveConfigNow })
+
+    fireEvent.click(screen.getByText('Pay Structure'))
+    fireEvent.click(screen.getAllByText('Edit')[1]) // Differentials is the second card
+
+    const nightDiffInput = screen.getByDisplayValue(String(dhlConfig.nightDiffRate))
+    fireEvent.change(nightDiffInput, { target: { value: '2.25' } })
+    fireEvent.click(screen.getByText('Save Changes'))
+
+    expect(setConfig).toHaveBeenCalledTimes(1)
+    const newConfig = setConfig.mock.calls[0][0]
+    expect(newConfig.nightDiffRate).toBe(2.25)
+    expect(newConfig.employerPreset).toBe('DHL') // untouched by this section
+    expect(newConfig).not.toHaveProperty('expenses')
+    expect(newConfig).not.toHaveProperty('goals')
+    expect(newConfig).not.toHaveProperty('logs')
+    expect(saveConfigNow).toHaveBeenCalledWith(newConfig)
   })
 })
 

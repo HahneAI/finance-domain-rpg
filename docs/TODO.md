@@ -73,29 +73,38 @@ gate without hitting Stripe on every load.*
 
 ### A. Data model & migration
 
-- [ ] **Migration `016_add_subscription_fields.sql`** — add to `user_data`:
-  - [ ] `stripe_customer_id TEXT` (nullable; set on first Checkout)
-  - [ ] `stripe_subscription_id TEXT` (nullable)
-  - [ ] `subscription_status TEXT` — mirror of Stripe status: `trialing | active | past_due |
+- [x] **Migration `017_add_subscription_fields.sql`** *(renumbered — `016` was already taken by
+  `016_add_tax_projections_flag.sql`)* — add to `user_data`:
+  - [x] `stripe_customer_id TEXT` (nullable; set on first Checkout)
+  - [x] `stripe_subscription_id TEXT` (nullable)
+  - [x] `subscription_status TEXT` — mirror of Stripe status: `trialing | active | past_due |
     canceled | incomplete | unpaid`; default `null` until trial is seeded
-  - [ ] `trial_started_at TIMESTAMPTZ` — anchor for all phase math
-  - [ ] `trial_ends_at TIMESTAMPTZ` — **day 14**, user-facing trial end (countdown + "trial ended")
-  - [ ] `access_ends_at TIMESTAMPTZ` — **day 21**, internal hard cutoff that flips the read-only gate
+  - [x] `trial_started_at TIMESTAMPTZ` — anchor for all phase math
+  - [x] `trial_ends_at TIMESTAMPTZ` — **day 14**, user-facing trial end (countdown + "trial ended")
+  - [x] `access_ends_at TIMESTAMPTZ` — **day 21**, internal hard cutoff that flips the read-only gate
     (the hidden 7-day grace; never surfaced)
-  - [ ] `card_on_file BOOLEAN DEFAULT false` — set true when a payment method is attached (via
+  - [x] `card_on_file BOOLEAN DEFAULT false` — set true when a payment method is attached (via
     webhook / Checkout); gates the dunning + deletion logic
-  - [ ] `last_dunning_email_at TIMESTAMPTZ`, `dunning_email_count INT DEFAULT 0` — throttle the
+  - [x] `last_dunning_email_at TIMESTAMPTZ`, `dunning_email_count INT DEFAULT 0` — throttle the
     every-other-day deletion emails and the trial add-card nudges
-  - [ ] `current_period_end TIMESTAMPTZ` (from Stripe; when the paid period lapses)
-  - [ ] `plan TEXT` (nullable; `monthly` / `annual`)
-- [ ] **Seed trial on account creation** — in the App.jsx `SIGNED_IN` first-row upsert (same place
-  the OAuth row is seeded, §5), set `trial_started_at = now()`, `trial_ends_at = now() + 14 days`,
-  `access_ends_at = now() + 21 days`, `subscription_status = "trialing"` when the row is brand new.
-  Never overwrite on returning users.
-- [ ] **`db.js` mapping** — load the new columns into a `subscription` object on the in-memory
-  user model; keep them OUT of the `config` JSON blob (they're authoritative columns, not user prefs).
-- [ ] **RLS** — users may `SELECT` their own subscription columns but must **not** `UPDATE` them
-  (writes happen only via service-role in the webhook). Add/verify column-safe policies.
+  - [x] `current_period_end TIMESTAMPTZ` (from Stripe; when the paid period lapses)
+  - [x] `plan TEXT` (nullable; `monthly` / `annual`)
+  - **Not yet run in Supabase** — migration file exists in the repo only; must be run in the
+    Supabase SQL editor before this code is deployed (see below).
+- [x] **Seed trial on account creation** — implemented in `src/lib/db.js` `syncUserProfile()`
+  (called on every `SIGNED_IN`, same place the OAuth row is seeded, §5). Keyed off
+  `trial_started_at IS NULL` rather than row-existence, since email sign-up (`LoginScreen.jsx`)
+  already inserts a bare row before `SIGNED_IN` fires — this still fires exactly once and never
+  re-stamps a returning user.
+- [x] **`db.js` mapping** — `loadUserData()` fetches the new columns in their own isolated query
+  (same pattern as `week_confirmations`, so a not-yet-migrated DB falls back to
+  `DEFAULT_SUBSCRIPTION` instead of breaking the whole load) and maps them into a `subscription`
+  object; kept OUT of the `config` JSON blob.
+- [ ] **RLS** — **descoped for now.** `user_data` has never had RLS enabled at all (only a
+  commented-out example in `001_initial_schema.sql`) — enabling it for the first time is a
+  higher-risk, separate task. For this feature, the subscription columns are protected at the
+  app layer instead: `saveUserData()` never accepts/writes them client-side; only the future
+  service-role webhook/checkout/portal routes (§C) will. Revisit real RLS as its own follow-up.
 
 ### B. Stripe account & product setup *(config steps, no app code)*
 

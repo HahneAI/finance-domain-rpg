@@ -371,6 +371,44 @@ describe('loadUserData — rotation correction', () => {
   })
 })
 
+describe('loadUserData — taxExemptOptIn clears taxedWeeks', () => {
+  it('clears taxedWeeks when taxExemptOptIn is true and array is non-empty', async () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      setupComplete: true,
+      taxExemptOptIn: true,
+      taxedWeeks: [5, 6, 7, 8, 9, 10],
+    }
+    setupLoadMock(makeRow({ config }))
+    const result = await loadUserData()
+    expect(result.config.taxedWeeks).toEqual([])
+  })
+
+  it('leaves taxedWeeks alone when taxExemptOptIn is false', async () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      setupComplete: true,
+      taxExemptOptIn: false,
+      taxedWeeks: [7, 8, 19, 20],
+    }
+    setupLoadMock(makeRow({ config }))
+    const result = await loadUserData()
+    expect(result.config.taxedWeeks).toEqual([7, 8, 19, 20])
+  })
+
+  it('is a no-op when taxExemptOptIn is true but taxedWeeks is already empty', async () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      setupComplete: true,
+      taxExemptOptIn: true,
+      taxedWeeks: [],
+    }
+    setupLoadMock(makeRow({ config }))
+    const result = await loadUserData()
+    expect(result.config.taxedWeeks).toEqual([])
+  })
+})
+
 describe('loadUserData — goals and logs fallback', () => {
   it('returns empty array for goals when row has empty goals (new user isolation)', async () => {
     setupLoadMock(makeRow({ goals: [] }))

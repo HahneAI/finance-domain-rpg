@@ -233,6 +233,16 @@ export async function loadUserData() {
     }
   }
 
+  // ── taxExemptOptIn → clear taxedWeeks ─────────────────────────────────────────
+  // When the user opted into tax-exempt status in the wizard WrapUp step, the engine
+  // should not withhold federal/state income tax — only FICA applies. The wizard
+  // previously set all active weeks as taxed regardless of this flag. Clear the array
+  // so computeNet() uses the untaxed path (grossPay − fica − deductions) for every week.
+  // Safe to run every load: no-op when array is already empty.
+  if (mergedConfig.taxExemptOptIn === true && (mergedConfig.taxedWeeks ?? []).length > 0) {
+    mergedConfig.taxedWeeks = [];
+  }
+
   // ── One-time baseRate correction (night diff separation) ─────────────────────
   // Prior to 2026-03-25 the night shift differential (+$1.50) was baked into
   // baseRate (19.65 + 1.50 = 21.15) rather than tracked as nightDiffRate.

@@ -570,6 +570,168 @@ history sidebar for quick re-access.*
 
 ---
 
+## 19. Master Timeline — Config History & Point-in-Time Computation Integrity
+
+*Structural/data-model workstream, not yet scoped to a sprint. Seeded 2026-07-01 — placed
+right after the AI section deliberately: once §18's Coach chat history (`coach_chats`) is
+live, we may fold it into the same history table this section builds rather than giving it a
+permanent table of its own. Still fuzzy on exact mechanics below — this section is the
+structural map to de-fuzz it before implementation, not a locked spec.*
+
+**Original brain-dump (verbatim, for provenance):**
+
+> We need to orchestrate a master timeline tracking system for things like when a bill is
+> altered so the annual estimation of the year doesn't change when a bill is updated in June.
+> When the bill was created is when it should historically affect the yearly projections and
+> what's left over. This is one example but I want to identify and button up the system flow
+> for a master timeline of a user's fiscal financial year. This is especially needed at the
+> very least on the user changing their hours schedule in case their routine pay period hours
+> change during the year at their job.
+
+### A. What already solves this (don't rebuild it)
+
+Expenses already have exactly the point-in-time mechanism described above — **this problem is
+solved for bills specifically**, and is the pattern to generalize, not replicate from scratch:
+
+- [ ] Each expense carries `history: [{ effectiveFrom, weekly: [q1,q2,q3,q4] }]` (+ optional
+  `monthlyOverrides` for a single-month exception). Editing a bill's amount appends a new
+  history entry dated from today forward; it never rewrites past entries.
+- [ ] `getEffectiveAmount(expense, weekEndDate, phaseIdx)` / `getEffectiveAmountForMonth(...)`
+  (`src/lib/finance.js:633`, `:652`) walk the history array and pick the entry whose
+  `effectiveFrom` is the latest one on-or-before the week/month in question. A June edit only
+  changes weeks from June forward — Jan–May keep the old entry's amount.
+- [ ] Documented in `docs/active-systems.md` §2 ("Expense Inline Editor + Pay Cycle Math").
+- [ ] **Takeaway:** the new master-timeline system should either (a) generalize this exact
+  `history[]` + `effectiveFrom` + resolver-function shape to other entities, or (b) replace it
+  with the new history table and reimplement `getEffectiveAmount` as a thin wrapper over it —
+  decide which during design; don't end up with two competing point-in-time mechanisms.
+
+### B. Where the gap actually is (confirmed by reading the engine)
+
+Pay structure / employment config has **no** equivalent mechanism. `config` is one flat object,
+and both engine functions apply whatever is in it *uniformly to every week in the fiscal year,
+including weeks that already happened*:
+
+- [ ] **`buildYear(cfg)`** (`src/lib/finance.js:388`) loops every fiscal week (idx 0–~52) and
+  computes `grossPay` for each one from the *current* `cfg.baseRate`, `cfg.shiftHours`,
+  `cfg.diffRate`, `cfg.otThreshold`/`otMultiplier`, `cfg.standardWeeklyHours` /
+  `maxWeeklyHours` / `customWeeklyHours`, `cfg.employerPreset` (DHL vs. base — this decides the
+  *entire rotation-hours branch*), `cfg.dhlNightShift`/`nightDiffRate`, `cfg.k401Rate` /
+  `k401MatchRate` — there is no per-week snapshot of what these values *were* at that point in
+  the year. Change any of them today and every past week in `allWeeks` silently recomputes too.
+- [ ] **`computeNet(w, cfg, ...)`** (`src/lib/finance.js:574`) layers on the same problem for
+  tax: `cfg.fedRateLow/High`, `cfg.stateRateLow/High`, `cfg.ficaRate` are likewise applied to
+  every week from today's config, not the config that was active when that week's paycheck
+  actually happened.
+- [ ] **Confirmed blast radius:** `ProfilePanel`'s Tax Plan tab sums `computeNet`/`buildYear`
+  output across the *whole year* (`fedLiability`, `moLiability`, `fedWithheldBase`, `totalGap`,
+  `targetExtraTotal`, etc. in `taxDerived`) — so a mid-year pay-structure edit doesn't just
+  shift future projections (expected/correct), it silently distorts the *already-elapsed*
+  portion of those annual totals too (not expected/correct). This is the concrete instance of
+  the brain-dump's "annual estimation of the year" complaint.
+- [ ] **A second instance of the same bug class, already in production:** `buildLoanHistory(loan)`
+  (`src/lib/finance.js:1028`) regenerates a loan's *entire* weekly-payment history from
+  `loanMeta` every time it runs (`src/lib/db.js` calls it on every `loadUserData`). Editing a
+  loan's terms (payment amount, rate, payoff date) retroactively rewrites the loan's whole
+  historical payment trace the same way a pay-structure edit rewrites `buildYear`. Same root
+  cause, different entity — worth fixing in the same pass.
+- [ ] **Lower-risk, still worth a decision:** `goals` (`{ id, target, completed, completedAt,
+  ... }`, no `history` field at all) have zero versioning today. Goal timelines are
+  forward-looking by nature (mostly benign), but "what was my goal target on date X" has no
+  answer if we ever need it for audit/reporting.
+
+### C. Existing ad hoc "history-shaped" patterns already in the codebase
+
+Don't reinvent these — fold them into (or explicitly exclude them from) the new system on
+purpose, rather than ending up with four uncoordinated partial mechanisms:
+
+- [ ] **`config.pastWeekTaxStatusOverrides`** — a bare `{ [weekIdx]: taxed }` map bolted directly
+  onto `config` (`constants/config.js:166`) letting a user retroactively correct one field
+  (taxed/exempt) for a specific past week. Structurally, this *is* a point-in-time override —
+  just implemented as a single-purpose hack instead of a row in a general history table.
+- [ ] **`weekConfirmations`** — a per-week-idx record of what was *actually* worked
+  (`dayToggles`, `scheduledDays`, `missedScheduledDays`, `pickupDays`, `netShiftDelta`),
+  written once per week via `WeekConfirmModal`. Closest existing analog to a real per-week
+  history row, but (a) only exists for weeks the user has explicitly confirmed, (b) is never
+  consulted by `buildYear`/`computeNet` for the headline gross/net numbers described in §B —
+  it's a schedule-actuals record, not a config-snapshot record.
+- [ ] **`logs`** — the event log (`bonus`, `missed_unpaid`, `pto`, etc., see `EVENT_TYPES` in
+  `constants/config.js`) is already a discrete, point-in-time financial ledger keyed to a
+  week/date, computed via `calcEventImpact`. Effectively a narrow "histories" table already —
+  just stored as a JSONB array on `user_data` instead of a foreign-keyed child table.
+
+### D. Proposed shape (still fuzzy — resolve via design pass before building)
+
+The user-facing goal: the **active** `user_data` row stays exactly what it is today (current
+config, current expenses, current goals, current logs — no schema change to the hot path), and
+every historically-trackable *change* becomes a row in a new child table, foreign-keyed to the
+account:
+
+```sql
+create table account_history (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references user_data(user_id),
+  entity_type   text not null,       -- 'config' | 'pay_structure' | 'expense' | 'loan' | 'goal' | (future) 'coach_chat'
+  entity_id     text,                -- expense/goal/loan id when entity_type scopes to one record; null = whole-config snapshot
+  field_snapshot jsonb not null,     -- the superseded value(s)
+  effective_from date not null,      -- when the OLD value(s) stopped applying / new value takes over
+  changed_at    timestamptz not null default now(),
+  source        text,                -- 'setup_wizard' | 'life_event:structure_change' | 'profile_pay_edit' | 'expense_edit' | ...
+  created_at    timestamptz not null default now()
+);
+create index account_history_user_id_effective_from on account_history (user_id, effective_from desc);
+```
+
+- [ ] **Write path** — before any historically-sensitive field changes (wizard `onComplete`,
+  `ProfilePanel` Pay Structure section saves, expense/loan edits, goal edits), insert a snapshot
+  row capturing the *old* value(s) + the `effective_from` boundary — mirroring exactly what
+  `expense.history` already does per-expense (§A), generalized to any entity/field.
+- [ ] **Read path (can ship later, per user's own "connect it on edge case testing" framing)** —
+  a "resolve config as of week N" function analogous to `getEffectiveAmount`, which
+  `buildYear`/`computeNet` would call instead of reading the flat live `cfg` directly for weeks
+  that fall before the most recent relevant `account_history` boundary. **This does not need to
+  ship in the same pass as the write path** — capturing history correctly first, then wiring
+  the engine to actually consult it for past weeks, is an explicit two-phase plan (see F).
+
+### E. Open questions to resolve before writing the migration
+
+- [ ] **Snapshot granularity** — whole-config snapshot per change (simple, matches the
+  expense-history precedent) vs. field-level diffs (smaller rows, precise, harder to
+  reconstruct "config as of week N" from)?
+- [ ] **Which fields are actually in scope** — full enumeration needed: all of §B's pay/schedule/
+  tax-rate fields, `employerPreset` DHL↔base switches specifically (since that flips which
+  entire code branch `buildYear` uses), benefit elections, loan terms, goal targets. Expense
+  billing amounts are already covered by the existing mechanism (§A).
+- [ ] **Backfill or clean start?** — there is no history for config values already in production;
+  the first `account_history` row for an existing account starts at rollout, not fabricated
+  retroactively. Confirm this is acceptable (it should be — same as how expense `history[]`
+  arrays start wherever the expense was created, not before).
+- [ ] **Fold in or leave alone** — does `pastWeekTaxStatusOverrides` / `weekConfirmations` /
+  `logs` (§C) become an `entity_type` inside `account_history`, or do they stay as their own
+  JSONB columns and only *new* config-history is added alongside them? Recommend deciding this
+  during the design pass, not now.
+- [ ] **AI chat history hook (flagged explicitly by product)** — once §18.H's `coach_chats`
+  table ships, evaluate folding it into `account_history` as `entity_type: 'coach_chat'`
+  instead of keeping its own table. Don't block this section on that decision — §18 needs to
+  ship first.
+
+### F. Suggested first implementation slice
+
+*Deliberately small — a proof of the write path, not the full system.*
+
+- [ ] **Migration** — `account_history` table per §D's sketch (or the design pass's revision of
+  it), RLS scoped to `user_id = auth.uid()` matching every other table's pattern.
+- [ ] **One integration point** — wrap the config save path (`saveConfigNow` in `App.jsx`,
+  called from `SetupWizard.onComplete` and every `ProfilePanel` Pay Structure section) to diff
+  old vs. new config and insert an `account_history` row for whatever changed, before
+  persisting the new config. This alone captures every pay-structure/life-event/DHL↔base change
+  in `account_history` going forward.
+- [ ] **Explicitly defer** — the `buildYear`/`computeNet` read-path rewrite (§D's "read path")
+  is its own follow-up task once the write path has real data to test against. Don't try to
+  land both in the same PR.
+
+---
+
 ## 15. Life Events Feature
 
 *Life events are moments that fundamentally change a user's financial picture. The app should

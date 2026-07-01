@@ -1072,6 +1072,7 @@ export default function App() {
         today={effectiveToday}
         weekConfirmations={weekConfirmations}
         onInstallClick={isStandalone ? null : openPwaModal}
+        onOpenLifeEvents={() => setLifeEventMenu(true)}
       />}
     </>
   );

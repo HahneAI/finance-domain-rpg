@@ -2142,9 +2142,11 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
       finalData.paycheckBuffer = finalData.paycheckBuffer ?? 50;
     }
     const allWeeks   = buildYear(finalData);
-    const taxedWeeks = allWeeks
-      .filter(w => w.idx >= (finalData.firstActiveIdx ?? 0))
-      .map(w => w.idx);
+    // taxExemptOptIn: true = user filed W-4 as exempt from federal/state withholding.
+    // Only FICA applies; income tax withholding is $0.
+    const taxedWeeks = finalData.taxExemptOptIn
+      ? []
+      : allWeeks.filter(w => w.idx >= (finalData.firstActiveIdx ?? 0)).map(w => w.idx);
     // Stamp the account-creation week so weeks before today are auto-assumed worked
     // and the weekly confirm modal only surfaces weeks from account creation onward.
     const today = new Date();

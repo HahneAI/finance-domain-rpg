@@ -39,9 +39,12 @@ with their Supabase Bearer token, then act with the service-role client). Subscr
 source of truth in **Stripe**, mirrored into Supabase `user_data` via webhook so the frontend can
 gate without hitting Stripe on every load.*
 
-**Resolved decisions (2026-06-16, pricing tiers reaffirmed 2026-07-01):**
-- **Price:** **$14.99/mo.** Annual = **3 months free** → 12 months for the price of 9 =
-  **$134.91/yr** (effective ~$11.24/mo). Two Stripe prices: `monthly` and `annual`.
+**Resolved decisions (2026-06-16, pricing tiers reaffirmed 2026-07-01, annual price locked in 2026-07-02):**
+- **Price:** **$14.99/mo.** Annual = **flat $120/yr — exactly $10.00/mo**, chosen over the earlier
+  $134.91 (9-months-for-12) figure specifically for the clean, quotable "$10 a month when you pay
+  annually" line. This also happens to equate to **~4 months free** (120 / 14.99 ≈ 8.0 months
+  paid), so the "months free" framing still works and is slightly more generous than before. Two
+  Stripe prices: `monthly` and `annual`.
 - **Monthly + annual only — no weekly, no quarterly.** Considered and rejected 2026-07-01:
   **weekly billing reads as a dark pattern** (the exact "$X.99/week to obscure the real monthly
   cost" trick used by low-trust mobile subscriptions) and directly contradicts an app whose whole
@@ -49,8 +52,8 @@ gate without hitting Stripe on every load.*
   real conversion value — the annual discount already exists to soften a bigger commitment; a
   third SKU just adds paradox-of-choice clutter. Two tiers, presented as a Monthly ↔ Annual
   toggle (not stacked cards), with the monthly-equivalent price always shown next to the annual
-  price (e.g. "$134.91/yr — $11.24/mo billed annually") so the real per-month cost is never
-  hidden behind a headline number.
+  price (e.g. "$120/yr — $10.00/mo billed annually") so the real per-month cost is never hidden
+  behind a headline number.
 - **No card at signup.** Card-less, **app-managed** trial; a Stripe Checkout is created only when the
   user upgrades. In-app + email nudges to add a card start **after day 7** of the trial ("add your
   card early to avoid interruption").
@@ -117,7 +120,8 @@ gate without hitting Stripe on every load.*
 ### B. Stripe account & product setup *(config steps, no app code)*
 
 - [ ] **Create Stripe product + two prices** in the dashboard: Premium **monthly = $14.99** and
-  Premium **annual = $134.91** (3 months free vs. 12× $14.99). Capture both `price_…` IDs for env
+  Premium **annual = $120** (a flat $10.00/mo, ~4 months free vs. 12× $14.99). Capture both
+  `price_…` IDs for env
   config. No Stripe trial on the price (`trial_period_days` unused) — the trial is app-managed.
 - [ ] **Configure the Customer Portal** (Billing → Customer portal) so users can cancel / update
   card / switch plan without custom UI.
@@ -178,8 +182,8 @@ verify with an anon client `getUser()`, then use the service-role client for pri
   - [ ] Build this as an explicit `expired`/read-only mode the panels read (e.g. a `readOnly` /
     `entitlement` prop), not a pile of inline conditionals — one switch, testable.
 - [ ] **Upgrade modal / screen** — Liquid-Glass styled (`LiquidGlass.jsx`), Pulse signal accent
-  allowed (premium surface); shows monthly ($14.99) vs. annual ($134.91, "3 months free") and opens
-  Stripe Checkout via `api/stripe-create-checkout`. Honors the mobile portal pattern
+  allowed (premium surface); shows monthly ($14.99) vs. annual ($120, "$10.00/mo billed annually")
+  and opens Stripe Checkout via `api/stripe-create-checkout`. Honors the mobile portal pattern
   (`createPortal`, see §16 portal audit in past-TODO-tasks.md).
 - [ ] **Post-checkout return** — success route shows a confirming state and refetches the
   `user_data` row (webhook may lag; poll/refetch `subscription_status` briefly), then lifts the gate.
@@ -329,7 +333,7 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
 STRIPE_SECRET_KEY=...            # server only (api/ functions)
 STRIPE_WEBHOOK_SECRET=...        # server only (signature verify)
 STRIPE_PRICE_MONTHLY=price_...   # $14.99/mo
-STRIPE_PRICE_ANNUAL=price_...    # $134.91/yr (3 months free)
+STRIPE_PRICE_ANNUAL=price_...    # $120/yr ($10.00/mo flat, ~4 months free)
 EMAIL_API_KEY=...                # transactional email provider (Resend/Postmark/SendGrid)
 CRON_SECRET=...                  # guards api/cron-subscription-lifecycle
 VITE_STRIPE_PUBLISHABLE_KEY=...  # client (only if using Stripe.js redirect; not needed for hosted Checkout URL)

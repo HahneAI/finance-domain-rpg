@@ -119,31 +119,38 @@ gate without hitting Stripe on every load.*
 
 ### B. Stripe account & product setup *(config steps, no app code)*
 
-- [ ] **Create Stripe product + two prices** in the dashboard: Premium **monthly = $14.99** and
-  Premium **annual = $120** (a flat $10.00/mo, ~4 months free vs. 12× $14.99). Capture both
-  `price_…` IDs for env
-  config. No Stripe trial on the price (`trial_period_days` unused) — the trial is app-managed.
+- [x] **Create Stripe product + two prices** in the dashboard: Premium **monthly = $14.99** and
+  Premium **annual = $120** (a flat $10.00/mo, ~4 months free vs. 12× $14.99). Price IDs captured.
+  No Stripe trial on the price (`trial_period_days` unused) — the trial is app-managed.
 - [ ] **Configure the Customer Portal** (Billing → Customer portal) so users can cancel / update
-  card / switch plan without custom UI.
-- [ ] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
-- [ ] **Set Vercel env vars** (see env block at the bottom).
+  card / switch plan without custom UI. *(Not yet confirmed done.)*
+- [x] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
+- [ ] **Set Vercel env vars** (see env block at the bottom) — `STRIPE_SECRET_KEY`,
+  `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `APP_URL` still need to
+  be added in the Vercel dashboard.
 
 ### C. Serverless API routes (`api/`, Vercel functions)
 
 *Follow `api/delete-account.js`: reject non-POST, require `Authorization: Bearer <supabase token>`,
 verify with an anon client `getUser()`, then use the service-role client for privileged writes.*
 
-- [ ] **`api/stripe-create-checkout.js`** — verify the user → find-or-create the Stripe customer
+- [x] **`api/stripe-create-checkout.js`** — verify the user → find-or-create the Stripe customer
   (store `stripe_customer_id` back on `user_data`) → create a Checkout Session for the chosen price
   → return the session URL. Pass `client_reference_id = user.id` and set success/cancel URLs to
-  whitelisted app routes.
-- [ ] **`api/stripe-webhook.js`** — verify the Stripe signature with the webhook secret (use the
-  **raw** request body — disable body parsing for this route). Handle: `checkout.session.completed`,
+  `APP_URL` (new env var, §J).
+- [x] **`api/stripe-webhook.js`** — verify the Stripe signature with the webhook secret (use the
+  **raw** request body — `bodyParser: false`). Handles `checkout.session.completed`,
   `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`. On each,
-  upsert `subscription_status`, `stripe_subscription_id`, `current_period_end`, `plan` into
-  `user_data` via service-role, keyed by `stripe_customer_id`. Idempotent on event id.
-- [ ] **`api/stripe-portal.js`** — verify the user → create a Billing Portal session for their
+  upserts `subscription_status`, `stripe_subscription_id`, `current_period_end`, `plan` into
+  `user_data` via service-role, keyed by `stripe_customer_id` (or `client_reference_id` for the
+  first `checkout.session.completed`, since that's the only event where the customer↔user link is
+  being established). Idempotent on event id via new migration `018_add_stripe_webhook_events.sql`
+  — atomically claims the event id (unique-constraint insert) before doing any work, so Stripe
+  retries/redeliveries can't double-process.
+- [x] **`api/stripe-portal.js`** — verify the user → create a Billing Portal session for their
   `stripe_customer_id` → return the URL (for the "Manage subscription" button).
+- **Not yet deployed/tested** — `STRIPE_SECRET_KEY` and `APP_URL` still need to be set in Vercel
+  before these routes can run for real (see §J).
 
 ### D. Trial logic (14-day public + 7-day hidden grace)
 
@@ -334,6 +341,8 @@ STRIPE_SECRET_KEY=...            # server only (api/ functions)
 STRIPE_WEBHOOK_SECRET=...        # server only (signature verify)
 STRIPE_PRICE_MONTHLY=price_...   # $14.99/mo
 STRIPE_PRICE_ANNUAL=price_...    # $120/yr ($10.00/mo flat, ~4 months free)
+APP_URL=https://...              # server only — whitelisted base URL for Checkout/Portal success,
+                                  # cancel, and return URLs (added with §C)
 EMAIL_API_KEY=...                # transactional email provider (Resend/Postmark/SendGrid)
 CRON_SECRET=...                  # guards api/cron-subscription-lifecycle
 VITE_STRIPE_PUBLISHABLE_KEY=...  # client (only if using Stripe.js redirect; not needed for hosted Checkout URL)

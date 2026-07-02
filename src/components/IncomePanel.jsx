@@ -489,14 +489,16 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
 
     {/* FULL-DETAIL WEEKLY MODAL */}
     {/* Portaled to document.body so position:fixed resolves against the viewport,
-        not the scrolling .main-content ancestor (iOS Safari offset hit-test). */}
-    {showWeekDetail && createPortal(<div onClick={() => setShowWeekDetail(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 1000, overflowY: "auto", padding: "16px" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "var(--color-bg-surface)", borderRadius: "8px", maxWidth: "860px", margin: "0 auto", padding: "16px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+        not the scrolling .main-content ancestor (iOS Safari offset hit-test).
+        Capped to 90dvh with its own internal scroll region (header stays fixed)
+        so the box always fits the viewport instead of overflowing top/bottom. */}
+    {showWeekDetail && createPortal(<div onClick={() => setShowWeekDetail(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "var(--color-bg-surface)", borderRadius: "8px", maxWidth: "860px", width: "100%", maxHeight: "90dvh", display: "flex", flexDirection: "column", overflow: "hidden", padding: "16px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexShrink: 0 }}>
           <span style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase" }}>{isBiweekly ? "Pay Period Breakdown" : isMonthlyPay ? "Monthly Breakdown" : "Weekly Breakdown"} — Active Window Detail</span>
           <Pressable onClick={() => setShowWeekDetail(false)} style={{ background: "transparent", border: "none", color: "var(--color-text-primary)", fontSize: "16px", cursor: "pointer", padding: "4px 8px" }}>✕</Pressable>
         </div>
-        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}><table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
+        <div style={{ overflow: "auto", minHeight: 0, WebkitOverflowScrolling: "touch" }}><table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
           <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
             <th style={{ textAlign: "left", padding: "8px 4px" }}>{isBiweekly ? "Period End" : "Wk End"}</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Hrs</th><th style={{ textAlign: "center", padding: "8px 4px" }}>OT</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Wknd</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
           </tr></thead>

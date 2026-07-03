@@ -1,18 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
-import Stripe from "stripe";
+import { stripe, PRICE_ID_BY_PLAN } from "./_stripeClient.js";
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
 const anonKey = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
 const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-const stripeSecretKey = env.STRIPE_SECRET_KEY;
 const appUrl = env.APP_URL;
-const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
-
-const PRICE_IDS = {
-  monthly: env.STRIPE_PRICE_MONTHLY,
-  annual: env.STRIPE_PRICE_ANNUAL,
-};
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -30,7 +23,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Missing access token" });
   }
 
-  const priceId = PRICE_IDS[req.body?.plan];
+  const priceId = PRICE_ID_BY_PLAN[req.body?.plan];
   if (!priceId) {
     return res.status(400).json({ error: "Invalid plan" });
   }

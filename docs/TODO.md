@@ -349,6 +349,36 @@ VITE_STRIPE_PUBLISHABLE_KEY=...  # client (only if using Stripe.js redirect; not
 # Reuses existing SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_* already set for delete-account.
 ```
 
+**Test mode vs. live mode (2026-07-03).** The Stripe account defaults to live mode with no
+visible toggle in the mobile UI — it's under account name → **Test mode** (the simple, classic
+toggle; *not* "Switch to sandbox", which is Stripe's newer isolated-environment feature and is
+more than this app needs). Test and live are fully separate: products, prices, customers, and
+webhooks created in one never appear in the other. Both sets now exist:
+
+| | Live mode (for launch) | Test mode (for building/testing now) |
+|---|---|---|
+| Product | (not captured — see live price IDs below) | `prod_UodCQD1AbN33wy` |
+| Price — monthly $14.99 | `price_1TodbhD1cN4rPkqb510vKlKi` | `price_1TozwQD1cN4rPkqb1NqhIQoR` |
+| Price — annual $120 | `price_1Toe4ND1cN4rPkqbf9EmRJQr` | `price_1TozwQD1cN4rPkqbahFeMbOL` |
+| Webhook secret | set in Vercel, not repeated here | set in Vercel, not repeated here |
+| Secret key | set in Vercel, not repeated here | set in Vercel, not repeated here |
+
+Price/product IDs aren't secret (Stripe treats them as public identifiers — they're useless
+without the secret key), so they're safe to keep here. **Webhook secrets and the Stripe secret
+key are never written to this repo** — only to Vercel env vars.
+
+**Vercel env var scoping** — rather than juggling two sets of the same 4 keys, use Vercel's
+per-environment scoping: the existing live values stay on the `STRIPE_*` keys scoped to
+**Production only**; the test values above go on the *same key names* scoped to **Preview** and
+**Development** only. Production deploys get live keys automatically; preview/local testing gets
+test keys. `APP_URL` doesn't need to change between the two — it's just the app's domain, not
+Stripe-mode-specific.
+
+`api/_stripeClient.js` centralizes the Stripe client + price/plan lookups for all three routes
+and logs `TEST` or `LIVE` mode (derived from the `sk_test_`/`sk_live_` key prefix) on cold start,
+so which mode is actually live in a given deploy is visible in the Vercel function logs rather
+than something to remember.
+
 ### K. Future Ideas (not in scope for v1)
 
 - [ ] **Account top-off** — let a user with spare cash pre-buy extra subscription time (e.g. a

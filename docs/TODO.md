@@ -337,17 +337,58 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
 ### J. Env vars (Vercel)
 
 ```
-STRIPE_SECRET_KEY=...            # server only (api/ functions)
-STRIPE_WEBHOOK_SECRET=...        # server only (signature verify)
-STRIPE_PRICE_MONTHLY=price_...   # $14.99/mo
-STRIPE_PRICE_ANNUAL=price_...    # $120/yr ($10.00/mo flat, ~4 months free)
-APP_URL=https://...              # server only — whitelisted base URL for Checkout/Portal success,
-                                  # cancel, and return URLs (added with §C)
-EMAIL_API_KEY=...                # transactional email provider (Resend/Postmark/SendGrid)
-CRON_SECRET=...                  # guards api/cron-subscription-lifecycle
-VITE_STRIPE_PUBLISHABLE_KEY=...  # client (only if using Stripe.js redirect; not needed for hosted Checkout URL)
+STRIPE_SECRET_KEY=...             # LIVE server key (api/ functions)
+STRIPE_SECRET_KEY_TEST=...        # TEST server key
+STRIPE_WEBHOOK_SECRET=...         # LIVE webhook signing secret
+STRIPE_WEBHOOK_SECRET_TEST=...    # TEST webhook signing secret
+STRIPE_PRICE_MONTHLY=price_...    # LIVE — $14.99/mo
+STRIPE_PRICE_MONTHLY_TEST=price_... # TEST — $14.99/mo
+STRIPE_PRICE_ANNUAL=price_...     # LIVE — $120/yr ($10.00/mo flat, ~4 months free)
+STRIPE_PRICE_ANNUAL_TEST=price_...  # TEST — $120/yr
+APP_URL=https://...               # server only — whitelisted base URL for Checkout/Portal
+                                   # success, cancel, and return URLs. Not mode-specific.
+EMAIL_API_KEY=...                 # transactional email provider (Resend/Postmark/SendGrid)
+CRON_SECRET=...                   # guards api/cron-subscription-lifecycle
+VITE_STRIPE_PUBLISHABLE_KEY=...   # client (only if using Stripe.js redirect; not needed for hosted Checkout URL)
 # Reuses existing SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_* already set for delete-account.
 ```
+
+**Test mode vs. live mode (2026-07-03).** The Stripe account defaults to live mode with no
+visible toggle in the mobile UI — it's under account name → **Test mode** (the simple, classic
+toggle; *not* "Switch to sandbox", which is Stripe's newer isolated-environment feature and is
+more than this app needs). Test and live are fully separate: products, prices, customers, and
+webhooks created in one never appear in the other. Both sets now exist:
+
+| | Live mode (for launch) | Test mode (for building/testing now) |
+|---|---|---|
+| Product | (not captured — see live price IDs below) | `prod_UodCQD1AbN33wy` |
+| Price — monthly $14.99 | `price_1TodbhD1cN4rPkqb510vKlKi` | `price_1TozwQD1cN4rPkqb1NqhIQoR` |
+| Price — annual $120 | `price_1Toe4ND1cN4rPkqbf9EmRJQr` | `price_1TozwQD1cN4rPkqbahFeMbOL` |
+| Webhook secret | set in Vercel, not repeated here | set in Vercel, not repeated here |
+| Secret key | set in Vercel, not repeated here | set in Vercel, not repeated here |
+
+Price/product IDs aren't secret (Stripe treats them as public identifiers — they're useless
+without the secret key), so they're safe to keep here. **Webhook secrets and the Stripe secret
+keys are never written to this repo** — only to Vercel env vars.
+
+**Distinct env var names per mode, not Vercel environment scoping** (switched from the original
+plan 2026-07-03 — trying to keep one key name with different values per Vercel environment scope
+turned out to be more friction than it was worth). Every `STRIPE_*` var now has a `_TEST` sibling
+holding the test-mode value, and both live in Vercel simultaneously regardless of environment.
+`api/_stripeClient.js` picks which pair to use:
+- **Checkout/Portal (routes we call outward)** — no ambiguity, so pick by `VERCEL_ENV`:
+  `production` → live vars, anything else (preview/development/unset) → test vars. Defaults to
+  test whenever `VERCEL_ENV` is missing, so a misconfigured/local run never silently uses live.
+- **Webhook (Stripe calls us)** — this is the one case with real ambiguity: both the live and
+  test webhook endpoints were registered against the *same* deployed URL, so a single running
+  instance can receive events from either mode. There's no per-request mode signal except "which
+  secret validates the signature," so `constructWebhookEvent()` tries the live secret first, then
+  the test one, and returns whichever Stripe client actually verified it — that client (not a
+  fixed one) is what's used for any follow-up Stripe API call the handler makes for that event
+  (e.g. `subscriptions.retrieve`), since a test-mode object only exists in the test account.
+
+`PLAN_BY_PRICE_ID` merges both modes' price IDs into one lookup for the same reason — an incoming
+webhook event's price id could be either mode's, so there's no "pick a side" step there either.
 
 ### K. Future Ideas (not in scope for v1)
 

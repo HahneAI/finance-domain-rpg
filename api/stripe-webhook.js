@@ -1,16 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
-import Stripe from "stripe";
+import { constructWebhookEvent, PLAN_BY_PRICE_ID } from "./_stripeClient.js";
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
 const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-const stripeSecretKey = env.STRIPE_SECRET_KEY;
-const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
-const priceIdToPlan = {
-  [env.STRIPE_PRICE_MONTHLY]: "monthly",
-  [env.STRIPE_PRICE_ANNUAL]: "annual",
-};
-const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 // Vercel must not pre-parse this body — Stripe's signature is computed over
 // the exact raw bytes.
@@ -35,7 +28,7 @@ function periodEndOf(subscription) {
 
 function planOf(subscription) {
   const priceId = subscription.items?.data?.[0]?.price?.id ?? null;
-  return priceId ? (priceIdToPlan[priceId] ?? null) : null;
+  return priceId ? (PLAN_BY_PRICE_ID[priceId] ?? null) : null;
 }
 
 export default async function handler(req, res) {
@@ -44,15 +37,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  if (!supabaseUrl || !serviceRoleKey || !stripe || !webhookSecret) {
+  if (!supabaseUrl || !serviceRoleKey) {
     return res.status(500).json({ error: "Server configuration is missing" });
   }
 
   const signature = req.headers["stripe-signature"];
-  let event;
+  let event, stripe;
   try {
     const rawBody = await readRawBody(req);
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    ({ event, client: stripe } = constructWebhookEvent(rawBody, signature));
   } catch (err) {
     console.error("stripe-webhook signature verification failed:", err.message);
     return res.status(400).json({ error: "Invalid signature" });

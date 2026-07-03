@@ -39,9 +39,21 @@ with their Supabase Bearer token, then act with the service-role client). Subscr
 source of truth in **Stripe**, mirrored into Supabase `user_data` via webhook so the frontend can
 gate without hitting Stripe on every load.*
 
-**Resolved decisions (2026-06-16):**
-- **Price:** **$14.99/mo.** Annual = **3 months free** → 12 months for the price of 9 =
-  **$134.91/yr** (effective ~$11.24/mo). Two Stripe prices: `monthly` and `annual`.
+**Resolved decisions (2026-06-16, pricing tiers reaffirmed 2026-07-01, annual price locked in 2026-07-02):**
+- **Price:** **$14.99/mo.** Annual = **flat $120/yr — exactly $10.00/mo**, chosen over the earlier
+  $134.91 (9-months-for-12) figure specifically for the clean, quotable "$10 a month when you pay
+  annually" line. This also happens to equate to **~4 months free** (120 / 14.99 ≈ 8.0 months
+  paid), so the "months free" framing still works and is slightly more generous than before. Two
+  Stripe prices: `monthly` and `annual`.
+- **Monthly + annual only — no weekly, no quarterly.** Considered and rejected 2026-07-01:
+  **weekly billing reads as a dark pattern** (the exact "$X.99/week to obscure the real monthly
+  cost" trick used by low-trust mobile subscriptions) and directly contradicts an app whose whole
+  value prop is financial clarity. **Quarterly** adds a third price point/decision without adding
+  real conversion value — the annual discount already exists to soften a bigger commitment; a
+  third SKU just adds paradox-of-choice clutter. Two tiers, presented as a Monthly ↔ Annual
+  toggle (not stacked cards), with the monthly-equivalent price always shown next to the annual
+  price (e.g. "$120/yr — $10.00/mo billed annually") so the real per-month cost is never hidden
+  behind a headline number.
 - **No card at signup.** Card-less, **app-managed** trial; a Stripe Checkout is created only when the
   user upgrades. In-app + email nudges to add a card start **after day 7** of the trial ("add your
   card early to avoid interruption").
@@ -67,7 +79,6 @@ gate without hitting Stripe on every load.*
 > Two distinct timestamps drive this: `trial_ends_at` (day 14, **user-facing** countdown + "trial
 > ended" messaging) and `access_ends_at` (day 21, **internal** hard cutoff that flips the read-only
 > gate). Entitlement is keyed off `access_ends_at`; the countdown UI is keyed off `trial_ends_at`.
-> **Open question:** how many days after expiry (`N`) before actual account deletion.
 
 ---
 
@@ -108,30 +119,38 @@ gate without hitting Stripe on every load.*
 
 ### B. Stripe account & product setup *(config steps, no app code)*
 
-- [ ] **Create Stripe product + two prices** in the dashboard: Premium **monthly = $14.99** and
-  Premium **annual = $134.91** (3 months free vs. 12× $14.99). Capture both `price_…` IDs for env
-  config. No Stripe trial on the price (`trial_period_days` unused) — the trial is app-managed.
+- [x] **Create Stripe product + two prices** in the dashboard: Premium **monthly = $14.99** and
+  Premium **annual = $120** (a flat $10.00/mo, ~4 months free vs. 12× $14.99). Price IDs captured.
+  No Stripe trial on the price (`trial_period_days` unused) — the trial is app-managed.
 - [ ] **Configure the Customer Portal** (Billing → Customer portal) so users can cancel / update
-  card / switch plan without custom UI.
-- [ ] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
-- [ ] **Set Vercel env vars** (see env block at the bottom).
+  card / switch plan without custom UI. *(Not yet confirmed done.)*
+- [x] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
+- [ ] **Set Vercel env vars** (see env block at the bottom) — `STRIPE_SECRET_KEY`,
+  `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `APP_URL` still need to
+  be added in the Vercel dashboard.
 
 ### C. Serverless API routes (`api/`, Vercel functions)
 
 *Follow `api/delete-account.js`: reject non-POST, require `Authorization: Bearer <supabase token>`,
 verify with an anon client `getUser()`, then use the service-role client for privileged writes.*
 
-- [ ] **`api/stripe-create-checkout.js`** — verify the user → find-or-create the Stripe customer
+- [x] **`api/stripe-create-checkout.js`** — verify the user → find-or-create the Stripe customer
   (store `stripe_customer_id` back on `user_data`) → create a Checkout Session for the chosen price
   → return the session URL. Pass `client_reference_id = user.id` and set success/cancel URLs to
-  whitelisted app routes.
-- [ ] **`api/stripe-webhook.js`** — verify the Stripe signature with the webhook secret (use the
-  **raw** request body — disable body parsing for this route). Handle: `checkout.session.completed`,
+  `APP_URL` (new env var, §J).
+- [x] **`api/stripe-webhook.js`** — verify the Stripe signature with the webhook secret (use the
+  **raw** request body — `bodyParser: false`). Handles `checkout.session.completed`,
   `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`. On each,
-  upsert `subscription_status`, `stripe_subscription_id`, `current_period_end`, `plan` into
-  `user_data` via service-role, keyed by `stripe_customer_id`. Idempotent on event id.
-- [ ] **`api/stripe-portal.js`** — verify the user → create a Billing Portal session for their
+  upserts `subscription_status`, `stripe_subscription_id`, `current_period_end`, `plan` into
+  `user_data` via service-role, keyed by `stripe_customer_id` (or `client_reference_id` for the
+  first `checkout.session.completed`, since that's the only event where the customer↔user link is
+  being established). Idempotent on event id via new migration `018_add_stripe_webhook_events.sql`
+  — atomically claims the event id (unique-constraint insert) before doing any work, so Stripe
+  retries/redeliveries can't double-process.
+- [x] **`api/stripe-portal.js`** — verify the user → create a Billing Portal session for their
   `stripe_customer_id` → return the URL (for the "Manage subscription" button).
+- **Not yet deployed/tested** — `STRIPE_SECRET_KEY` and `APP_URL` still need to be set in Vercel
+  before these routes can run for real (see §J).
 
 ### D. Trial logic (14-day public + 7-day hidden grace)
 
@@ -170,8 +189,8 @@ verify with an anon client `getUser()`, then use the service-role client for pri
   - [ ] Build this as an explicit `expired`/read-only mode the panels read (e.g. a `readOnly` /
     `entitlement` prop), not a pile of inline conditionals — one switch, testable.
 - [ ] **Upgrade modal / screen** — Liquid-Glass styled (`LiquidGlass.jsx`), Pulse signal accent
-  allowed (premium surface); shows monthly ($14.99) vs. annual ($134.91, "3 months free") and opens
-  Stripe Checkout via `api/stripe-create-checkout`. Honors the mobile portal pattern
+  allowed (premium surface); shows monthly ($14.99) vs. annual ($120, "$10.00/mo billed annually")
+  and opens Stripe Checkout via `api/stripe-create-checkout`. Honors the mobile portal pattern
   (`createPortal`, see §16 portal audit in past-TODO-tasks.md).
 - [ ] **Post-checkout return** — success route shows a confirming state and refetches the
   `user_data` row (webhook may lag; poll/refetch `subscription_status` briefly), then lifts the gate.
@@ -321,12 +340,21 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
 STRIPE_SECRET_KEY=...            # server only (api/ functions)
 STRIPE_WEBHOOK_SECRET=...        # server only (signature verify)
 STRIPE_PRICE_MONTHLY=price_...   # $14.99/mo
-STRIPE_PRICE_ANNUAL=price_...    # $134.91/yr (3 months free)
+STRIPE_PRICE_ANNUAL=price_...    # $120/yr ($10.00/mo flat, ~4 months free)
+APP_URL=https://...              # server only — whitelisted base URL for Checkout/Portal success,
+                                  # cancel, and return URLs (added with §C)
 EMAIL_API_KEY=...                # transactional email provider (Resend/Postmark/SendGrid)
 CRON_SECRET=...                  # guards api/cron-subscription-lifecycle
 VITE_STRIPE_PUBLISHABLE_KEY=...  # client (only if using Stripe.js redirect; not needed for hosted Checkout URL)
 # Reuses existing SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_* already set for delete-account.
 ```
+
+### K. Future Ideas (not in scope for v1)
+
+- [ ] **Account top-off** — let a user with spare cash pre-buy extra subscription time (e.g. a
+  week at a time) into a banked balance on their account, purely as a voluntary buffer against a
+  future missed payment — explicitly **not** "paying the bill early," and copy must make that
+  distinction clear so it doesn't read as a coerced prepayment.
 
 ---
 
@@ -653,6 +681,46 @@ history sidebar for quick re-access.*
   write the `coach_chats` row server-side so it's persisted even if the client closes first
 - [ ] **Env vars** — `GOOGLE_PLACES_API_KEY` added to Vercel env; key restricted to Places API
   only; billing alert set at a low threshold
+
+---
+
+### J. Tax Onboarding Interview — AI-Guided Paystub Capture & Withholding Setup
+
+*Crossover with **§20** (Tax Accuracy). Two ideas from the same brain-dump: (1) let a user
+photograph/screenshot a paystub and have an AI model pull the tax figures instead of hand-typing
+them into the existing Sharpen Rates modal; (2) once split fed/state exempt tracking exists
+(§20.B) and the pre-account history gap is real (§20.C), route the whole tax setup through a
+short, guided Coach conversation instead of a wall of form fields — the account-variable surface
+(job start date, account creation date, exempt history, split fed/state gap) is too tangled for a
+generic form to ask the right follow-up questions on its own.*
+
+- [ ] **Paystub screenshot capture** — image upload (camera roll or live camera) attached to the
+  existing Sharpen Rates flow (`IncomePanel.jsx`); replaces manually typing gross/fed$/state$ with
+  "upload a photo of your paystub."
+- [ ] **AI extraction call** — send the image to a vision-capable Claude model with a system
+  prompt scoped to extracting exactly: gross pay (this period), federal income tax withheld,
+  state income tax withheld, pay period end date. Return structured JSON; reject/flag anything
+  that doesn't parse as a paystub rather than silently guessing.
+- [ ] **Human-confirm step, never auto-apply** — extracted numbers pre-fill the *existing* Sharpen
+  Rates fields (`sg1/sf1/ss1`, etc.) rather than writing straight to config — the user still sees
+  and confirms the numbers before `applySharpener()` runs, same trust boundary as today's manual
+  flow.
+- [ ] **Backfill target for pre-account weeks** — per §20.C, let the uploader optionally target a
+  specific past `weekIdx` (for a paystub predating `firstActiveIdx`'s confirmation window) instead
+  of only ever setting the current rate going forward.
+- [ ] **Guided tax setup interview** — once §20.B's split fed/state schema exists, a short Coach
+  conversation (reuses §18.B's "Ask Coach" infra) walks a user through questions like "Is your
+  federal withholding currently on or off? What about state — same or different?" / "When did
+  that change?" / "Do you have a recent paystub to scan?" — replacing a dense settings form with a
+  handful of short, punchy questions. **Exact question set deferred** — flagged by product as "to
+  be identified later," don't invent the final script here.
+- [ ] **Context injection** — this Coach mode needs the account-variable snapshot (job start
+  date/`firstActiveIdx`, account `created_at`, current `taxedWeeksFed`/`taxedWeeksState`,
+  `taxHistoryReliableFrom`) so its questions are actually informed by what the app already knows —
+  same `lib/aiContext.js` serializer pattern as the rest of §18.
+- [ ] **Same accountant gate as §20.D** — this entire flow is downstream of the split-tracking
+  schema and the disclosure boundary; it cannot ship ahead of either, and the guided interview's
+  question set/copy needs the same professional review before it goes live.
 
 ---
 
@@ -1125,11 +1193,124 @@ a true branched onboarding so jobless users land in a usable app from day one.*
 
 ---
 
-## Deferred
+## 20. Tax Accuracy — Split Withholding, Paystub Capture & Pre-Account History Gap
 
-- [ ] **`taxExemptOptIn` wire-up** — Stored in config but nothing reads it in `App.jsx` or
-  `IncomePanel`. The opt-in gate and disclaimer copy are correct; backend wire-up is deferred
-  to Phase 5. No action needed until then.
-  > **Note:** Before implementing, bring to an accountant's office for safe-tax feature insights.
-  > The mechanics (withholding suspension + catch-up) have tax risk implications that need
-  > professional sign-off before we expose them to users.
+*Seeded 2026-07-02 from two brain-dump excerpts (verbatim below). Consolidates the
+`taxExemptOptIn` item that previously sat alone under **Deferred** with two new, closely related
+problems — all three share the same accountant-sign-off gate, so they're tracked together instead
+of scattered. Crossover with **§18.J** for the AI-guided capture/interview half of this work.*
+
+**Original brain-dump excerpts (verbatim, for provenance):**
+
+> For the specific input paystub feature to understand taxes, exactly off the rip I'm thinking
+> that a screenshot image uploader would be a quick and easy way and if we have to use something,
+> that's an AI tool to analyze the screenshot. Pull out the specifics for the tax numbers on the
+> paystub screenshot or picture from Phone that's what we will do. We need to finish flushing out
+> the paystub input for users who want to input their paystub to separate out their taxes. The
+> pre-work was it featured to this is being able to separate state and federal taxes when it comes
+> to turning exempt math on and off because sometimes you might just turn federal off and leave
+> state on and vice versa. This math needs to be understood as separate, so it can be tracked
+> separate on an independent timeline so when it comes to what extra money to withhold the user can
+> actually see a down to the nearest dollar math number for what to withhold extra when they go to
+> fix and catch up their tax debt.
+
+> Problem case with the tax feature. If a user creates their account and their start date dates
+> previous to the account start date, and their taxes have been exempt since a previous date, there
+> is no true way to account for extra days picked up outside of the users normal schedule for any
+> paychecks received before account creation — besides going through a million weekly check-in
+> models and having every little bit of overtime or missed day in memory, which is not feasible.
+> This is vitally important because for the user to be able to trust our extra withholding math for
+> when they eventually turn taxes back on, this has to be articulated. This will go hand-in-hand
+> with the paystub-uploading feature, but truly will need to be gated with a message clarifying
+> that extra withholding can only read from account creation day on, as long as they log their
+> money gained / money lost correctly. This is tricky — the tax feature should almost mandatorily
+> go through an AI chat where the agent gets past all the user's account variables and asks a series
+> of short, punchy questions (to be identified later). This must be figured out before release to
+> the general public, and needs a real tax accountant to audit and poke holes in it.
+
+### A. What already exists (don't rebuild it)
+
+- [ ] **Sharpen Rates modal** (`IncomePanel.jsx` — `showSharpener` state, `applySharpener()`) is
+  already a manual paystub-input flow: the user types gross pay + fed tax withheld + state tax
+  withheld from a real paystub (`sg1/sf1/ss1`, plus a second pair `sg2/sf2/ss2` when
+  `scheduleIsVariable`), and it derives `fedRateLow/High` + `stateRateLow/High` as percentages
+  (`sharpenDr(gross, withheld) = withheld / gross`). This is the exact "pre-work" the first
+  excerpt references — the screenshot/AI uploader (§18.J) should feed this same pipeline (gross +
+  fed$ + state$ → rate) rather than inventing a parallel one.
+- [ ] **Fed/state gap math is already split internally, just not surfaced separately** —
+  `taxDerived` in `App.jsx` (~line 741) computes `fedGap` (`fG`) and the state gap (`mG`) as two
+  separate numbers before summing them into `totalGap` (`tG`) and dividing into one blended
+  `extraPerCheck`. The separate-timeline number the first excerpt wants is one field away from
+  existing — the gap is presentation/schema, not a missing computation.
+- [ ] **The taxed/exempt flag is one boolean per week, not two** — `config.taxedWeeks` (flat array
+  of week indices, `constants/config.js:163`) and `config.pastWeekTaxStatusOverrides`
+  (`{ [weekIdx]: boolean }`, `constants/config.js:166`) both store a single taxed/exempt state per
+  week. There is no `taxedWeeksFed` vs. `taxedWeeksState` split today — turning federal exempt off
+  while leaving state on (or vice versa) is not representable in the current schema at all. This
+  is the actual blocker behind excerpt 1, not just a UI gap.
+- [ ] **`taxExemptOptIn`** (`constants/config.js:15`) — stored in config, disclaimer copy exists,
+  but nothing reads it yet in `App.jsx` or `IncomePanel` (the original **Deferred** item, folded
+  in here). No action until §D's accountant gate clears.
+
+### B. Excerpt 1 — Split federal/state exempt tracking + down-to-the-dollar extra withholding
+
+- [ ] **Schema change** — split `taxedWeeks` into `taxedWeeksFed` / `taxedWeeksState` (or an
+  equivalent per-week `{ fed: boolean, state: boolean }` shape); mirror the same split for
+  `pastWeekTaxStatusOverrides`. `w.taxedBySchedule` (computed per week in `buildYear`) becomes two
+  flags: `w.taxedByScheduleFed` / `w.taxedByScheduleState`.
+- [ ] **Engine split** — `taxDerived` already computes `fG`/`mG` separately (§A); stop collapsing
+  them into one `tG`/`extraPerCheck`. Expose `targetExtraFedPerCheck` and
+  `targetExtraStatePerCheck` (each `Math.max(gap − target, 0) / remainingTaxedChecksForThatTax`)
+  so the two timelines are independently trackable, per the excerpt's "separate independent
+  timeline" requirement.
+- [ ] **UI** — Tax Weeks Grid (admin) and any user-facing exempt toggle need two lanes (fed row +
+  state row) instead of one cell per week; ProfilePanel's Tax Plan tab shows fed extra/check and
+  state extra/check as two line items, not one blended number.
+- [ ] **Rounding to the dollar** — `targetExtraFedPerCheck`/`targetExtraStatePerCheck` should
+  round consistently (nearest cent for storage, nearest dollar for the user-facing "withhold an
+  extra $X" instruction) — confirm the rounding direction with the accountant audit (§D); under-
+  rounding compounds into a real shortfall over dozens of checks.
+
+### C. Excerpt 2 — Pre-account-creation history gap for extra-withholding math
+
+- [ ] **Confirm the exact blast radius** — `taxDerived` sums over every `w` in
+  `allWeeks.filter(w => w.active)`, and `active = idx >= cfg.firstActiveIdx`. `firstActiveIdx` is
+  derived from the *job start date* entered in the wizard, which can be — and often is — earlier
+  than the Supabase account's `created_at`. `weekConfirmations` (the only record of *actual*
+  worked/missed days, written by `WeekConfirmModal`) only exists for weeks the user has explicitly
+  confirmed going forward from signup. Every week between `firstActiveIdx` and account creation is
+  therefore counted in the fed/state gap totals using pure *scheduled* math (`w.taxedBySchedule`,
+  scheduled hours), with zero ability to reflect real overtime, missed days, or pickups that
+  actually happened before the app existed for that user.
+- [ ] **Not fixable by more manual entry** — per the excerpt, requiring the user to reconstruct
+  every pre-signup week via the weekly check-in modal is explicitly called out as infeasible. The
+  fix has to be a boundary/disclosure, not a backfill UI.
+- [ ] **Gating boundary field** — introduce `config.taxHistoryReliableFrom` (the *later* of account
+  `created_at` or `firstActiveIdx`, since reliable actuals can't predate either), marking the
+  earliest week the extra-withholding math can actually stand behind.
+- [ ] **Disclosure copy — mandatory, not optional** — anywhere the app shows a fed/state "withhold
+  an extra $X per check" number, if any part of the taxed-week window includes weeks before
+  `taxHistoryReliableFrom`, show a clear caveat, e.g.: *"This estimate assumes your scheduled hours
+  were worked exactly as planned for weeks before [date] — log any overtime or missed days from
+  that period for a more accurate number, or treat this as directional until your next full year."*
+  Exact copy TBD, but the gate must exist before this feature ships — this is the core "must be
+  figured out before general release" requirement from the excerpt.
+- [ ] **Overlaps with the paystub uploader (§18.J)** — a scanned paystub from *before* signup is
+  one legitimate way to backfill real numbers into this gap without a manual week-by-week crawl —
+  if the user kept an old paystub from the pre-account period, letting them upload it to correct
+  that one week's actual gross/withholding closes part of the gap. Not a full fix (most users won't
+  have kept every old stub), but worth wiring the uploader to accept a `weekIdx` target that
+  predates `firstActiveIdx`'s normal confirmation window.
+
+### D. Mandatory gates before public release
+
+- [ ] **Tax accountant audit** — carried over verbatim from the original **Deferred** note: bring
+  the whole withholding-suspension + catch-up mechanism (not just the exempt toggle) to an
+  accountant's office for professional sign-off before any of §B/§C ships to users. Covers the
+  rounding direction (§B), the disclosure boundary wording (§C), and whether split fed/state
+  "extra withholding" guidance needs a disclaimer beyond what `taxExemptOptIn`'s existing copy
+  covers.
+- [ ] **`taxExemptOptIn` wire-up** — stays gated on the above; do not wire it into `App.jsx` /
+  `IncomePanel` until the accountant pass is done.
+- [ ] **§18.J's guided interview copy** — the AI-guided tax setup conversation (§18.J) ships under
+  this same gate — its question set and any tax-status copy it generates needs the same review.

@@ -199,7 +199,6 @@ VITE_SUPABASE_ANON_KEY=...
 Files: kebab-case · Components: PascalCase · Utilities/hooks: camelCase · Database: snake_case
 
 ## Known Cleanup
-- `index.html`: stale Google Fonts (DM Serif/Sans) · `<title>` "2026 Financial Dashboard" → "Authority Finance" · `apple-mobile-web-app-title` "Finance RPG" → "Authority Finance"
 - `WeekConfirmModal.jsx`, `LoginScreen.jsx`, `ProfilePanel.jsx` — hardcoded hex colors not yet tokenized (tracked in TODO §10)
 
 ---

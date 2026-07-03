@@ -1781,7 +1781,7 @@ export default function App() {
         <div className="drawer-header" style={{ padding: "16px 18px", borderBottom: "1px solid var(--color-border-subtle)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
             <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
-            <div style={{ fontSize: "15px", fontWeight: "bold" }}>2026 Financial Dashboard</div>
+            <div style={{ fontSize: "15px", fontWeight: "bold" }}>Authority Finance</div>
           </div>
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <Pressable

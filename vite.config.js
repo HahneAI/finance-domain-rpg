@@ -15,8 +15,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/*.png'],
       manifest: {
-        name: '2026 Financial Dashboard',
-        short_name: 'Finance RPG',
+        name: 'Authority Finance',
+        short_name: 'A:Fin',
         description: 'Personal finance dashboard — DHL/P&G Jackson MO',
         theme_color: '#0d0d0d',
         background_color: '#0d0d0d',

@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { stripe, PRICE_ID_BY_PLAN } from "./_stripeClient.js";
+import { stripe, PRICE_ID_BY_PLAN, MODE } from "./_stripeClient.js";
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
@@ -13,7 +13,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  if (!supabaseUrl || !anonKey || !serviceRoleKey || !stripe || !appUrl) {
+  const missing = [
+    !supabaseUrl && "VITE_SUPABASE_URL/SUPABASE_URL",
+    !anonKey && "VITE_SUPABASE_ANON_KEY/SUPABASE_ANON_KEY",
+    !serviceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
+    !stripe && `STRIPE_SECRET_KEY${MODE === "live" ? "" : "_TEST"} (MODE=${MODE})`,
+    !appUrl && "APP_URL",
+  ].filter(Boolean);
+  if (missing.length) {
+    console.error("stripe-create-checkout missing env vars:", missing.join(", "));
     return res.status(500).json({ error: "Server configuration is missing" });
   }
 

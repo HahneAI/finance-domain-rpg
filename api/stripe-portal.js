@@ -1,13 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
-import Stripe from "stripe";
+import { stripe } from "./_stripeClient.js";
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
 const anonKey = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
 const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-const stripeSecretKey = env.STRIPE_SECRET_KEY;
 const appUrl = env.APP_URL;
-const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {

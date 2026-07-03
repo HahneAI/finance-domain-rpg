@@ -189,6 +189,39 @@ export function AccountDetail({ authedUser, config, onBack }) {
     if (error) setLinkState({ loading: false, error: error.message });
   }
 
+  // Minimal checkout trigger for validating the Stripe integration end-to-end
+  // (docs/TODO.md §17.C/D/E) — no entitlement-aware phase copy yet, that's §D.
+  const [checkoutState, setCheckoutState] = useState({ plan: null, error: null });
+
+  async function handleCheckout(plan) {
+    setCheckoutState({ plan, error: null });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
+      setCheckoutState({ plan: null, error: "No active session found." });
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/stripe-create-checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ plan }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload?.url) {
+        setCheckoutState({ plan: null, error: payload?.error || "Failed to start checkout." });
+        return;
+      }
+      window.location.href = payload.url;
+    } catch {
+      setCheckoutState({ plan: null, error: "Failed to start checkout." });
+    }
+  }
+
   async function handleDeleteAccount() {
     setDeleteState({ error: null, loading: true });
     const { data: sessionData } = await supabase.auth.getSession();
@@ -230,6 +263,31 @@ export function AccountDetail({ authedUser, config, onBack }) {
             {setupLabel}
           </span>
         } />
+      </DetailCard>
+
+      <DetailCard>
+        <div style={{ padding: "13px 16px" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "10px" }}>Subscription</div>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <Pressable
+              onClick={() => handleCheckout("monthly")}
+              disabled={checkoutState.plan !== null}
+              style={{ flex: 1, minWidth: "120px", padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", color: "var(--color-text-primary)", fontSize: "12px", fontWeight: "600", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "monthly" ? 0.5 : 1 }}
+            >
+              {checkoutState.plan === "monthly" ? "Redirecting…" : "Monthly — $14.99"}
+            </Pressable>
+            <Pressable
+              onClick={() => handleCheckout("annual")}
+              disabled={checkoutState.plan !== null}
+              style={{ flex: 1, minWidth: "120px", padding: "9px 0", background: "var(--color-gold)", border: "none", borderRadius: "10px", color: "var(--color-bg-base)", fontSize: "12px", fontWeight: "700", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "annual" ? 0.5 : 1 }}
+            >
+              {checkoutState.plan === "annual" ? "Redirecting…" : "Annual — $10.00/mo"}
+            </Pressable>
+          </div>
+          {checkoutState.error && (
+            <div style={{ fontSize: "12px", color: "var(--color-deduction)", marginTop: "8px" }}>{checkoutState.error}</div>
+          )}
+        </div>
       </DetailCard>
 
       <DetailCard>

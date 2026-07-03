@@ -656,6 +656,46 @@ history sidebar for quick re-access.*
 
 ---
 
+### J. Tax Onboarding Interview — AI-Guided Paystub Capture & Withholding Setup
+
+*Crossover with **§20** (Tax Accuracy). Two ideas from the same brain-dump: (1) let a user
+photograph/screenshot a paystub and have an AI model pull the tax figures instead of hand-typing
+them into the existing Sharpen Rates modal; (2) once split fed/state exempt tracking exists
+(§20.B) and the pre-account history gap is real (§20.C), route the whole tax setup through a
+short, guided Coach conversation instead of a wall of form fields — the account-variable surface
+(job start date, account creation date, exempt history, split fed/state gap) is too tangled for a
+generic form to ask the right follow-up questions on its own.*
+
+- [ ] **Paystub screenshot capture** — image upload (camera roll or live camera) attached to the
+  existing Sharpen Rates flow (`IncomePanel.jsx`); replaces manually typing gross/fed$/state$ with
+  "upload a photo of your paystub."
+- [ ] **AI extraction call** — send the image to a vision-capable Claude model with a system
+  prompt scoped to extracting exactly: gross pay (this period), federal income tax withheld,
+  state income tax withheld, pay period end date. Return structured JSON; reject/flag anything
+  that doesn't parse as a paystub rather than silently guessing.
+- [ ] **Human-confirm step, never auto-apply** — extracted numbers pre-fill the *existing* Sharpen
+  Rates fields (`sg1/sf1/ss1`, etc.) rather than writing straight to config — the user still sees
+  and confirms the numbers before `applySharpener()` runs, same trust boundary as today's manual
+  flow.
+- [ ] **Backfill target for pre-account weeks** — per §20.C, let the uploader optionally target a
+  specific past `weekIdx` (for a paystub predating `firstActiveIdx`'s confirmation window) instead
+  of only ever setting the current rate going forward.
+- [ ] **Guided tax setup interview** — once §20.B's split fed/state schema exists, a short Coach
+  conversation (reuses §18.B's "Ask Coach" infra) walks a user through questions like "Is your
+  federal withholding currently on or off? What about state — same or different?" / "When did
+  that change?" / "Do you have a recent paystub to scan?" — replacing a dense settings form with a
+  handful of short, punchy questions. **Exact question set deferred** — flagged by product as "to
+  be identified later," don't invent the final script here.
+- [ ] **Context injection** — this Coach mode needs the account-variable snapshot (job start
+  date/`firstActiveIdx`, account `created_at`, current `taxedWeeksFed`/`taxedWeeksState`,
+  `taxHistoryReliableFrom`) so its questions are actually informed by what the app already knows —
+  same `lib/aiContext.js` serializer pattern as the rest of §18.
+- [ ] **Same accountant gate as §20.D** — this entire flow is downstream of the split-tracking
+  schema and the disclosure boundary; it cannot ship ahead of either, and the guided interview's
+  question set/copy needs the same professional review before it goes live.
+
+---
+
 ## 19. Master Timeline — Config History & Point-in-Time Computation Integrity
 
 *Structural/data-model workstream, not yet scoped to a sprint. Seeded 2026-07-01 — placed
@@ -1125,11 +1165,124 @@ a true branched onboarding so jobless users land in a usable app from day one.*
 
 ---
 
-## Deferred
+## 20. Tax Accuracy — Split Withholding, Paystub Capture & Pre-Account History Gap
 
-- [ ] **`taxExemptOptIn` wire-up** — Stored in config but nothing reads it in `App.jsx` or
-  `IncomePanel`. The opt-in gate and disclaimer copy are correct; backend wire-up is deferred
-  to Phase 5. No action needed until then.
-  > **Note:** Before implementing, bring to an accountant's office for safe-tax feature insights.
-  > The mechanics (withholding suspension + catch-up) have tax risk implications that need
-  > professional sign-off before we expose them to users.
+*Seeded 2026-07-02 from two brain-dump excerpts (verbatim below). Consolidates the
+`taxExemptOptIn` item that previously sat alone under **Deferred** with two new, closely related
+problems — all three share the same accountant-sign-off gate, so they're tracked together instead
+of scattered. Crossover with **§18.J** for the AI-guided capture/interview half of this work.*
+
+**Original brain-dump excerpts (verbatim, for provenance):**
+
+> For the specific input paystub feature to understand taxes, exactly off the rip I'm thinking
+> that a screenshot image uploader would be a quick and easy way and if we have to use something,
+> that's an AI tool to analyze the screenshot. Pull out the specifics for the tax numbers on the
+> paystub screenshot or picture from Phone that's what we will do. We need to finish flushing out
+> the paystub input for users who want to input their paystub to separate out their taxes. The
+> pre-work was it featured to this is being able to separate state and federal taxes when it comes
+> to turning exempt math on and off because sometimes you might just turn federal off and leave
+> state on and vice versa. This math needs to be understood as separate, so it can be tracked
+> separate on an independent timeline so when it comes to what extra money to withhold the user can
+> actually see a down to the nearest dollar math number for what to withhold extra when they go to
+> fix and catch up their tax debt.
+
+> Problem case with the tax feature. If a user creates their account and their start date dates
+> previous to the account start date, and their taxes have been exempt since a previous date, there
+> is no true way to account for extra days picked up outside of the users normal schedule for any
+> paychecks received before account creation — besides going through a million weekly check-in
+> models and having every little bit of overtime or missed day in memory, which is not feasible.
+> This is vitally important because for the user to be able to trust our extra withholding math for
+> when they eventually turn taxes back on, this has to be articulated. This will go hand-in-hand
+> with the paystub-uploading feature, but truly will need to be gated with a message clarifying
+> that extra withholding can only read from account creation day on, as long as they log their
+> money gained / money lost correctly. This is tricky — the tax feature should almost mandatorily
+> go through an AI chat where the agent gets past all the user's account variables and asks a series
+> of short, punchy questions (to be identified later). This must be figured out before release to
+> the general public, and needs a real tax accountant to audit and poke holes in it.
+
+### A. What already exists (don't rebuild it)
+
+- [ ] **Sharpen Rates modal** (`IncomePanel.jsx` — `showSharpener` state, `applySharpener()`) is
+  already a manual paystub-input flow: the user types gross pay + fed tax withheld + state tax
+  withheld from a real paystub (`sg1/sf1/ss1`, plus a second pair `sg2/sf2/ss2` when
+  `scheduleIsVariable`), and it derives `fedRateLow/High` + `stateRateLow/High` as percentages
+  (`sharpenDr(gross, withheld) = withheld / gross`). This is the exact "pre-work" the first
+  excerpt references — the screenshot/AI uploader (§18.J) should feed this same pipeline (gross +
+  fed$ + state$ → rate) rather than inventing a parallel one.
+- [ ] **Fed/state gap math is already split internally, just not surfaced separately** —
+  `taxDerived` in `App.jsx` (~line 741) computes `fedGap` (`fG`) and the state gap (`mG`) as two
+  separate numbers before summing them into `totalGap` (`tG`) and dividing into one blended
+  `extraPerCheck`. The separate-timeline number the first excerpt wants is one field away from
+  existing — the gap is presentation/schema, not a missing computation.
+- [ ] **The taxed/exempt flag is one boolean per week, not two** — `config.taxedWeeks` (flat array
+  of week indices, `constants/config.js:163`) and `config.pastWeekTaxStatusOverrides`
+  (`{ [weekIdx]: boolean }`, `constants/config.js:166`) both store a single taxed/exempt state per
+  week. There is no `taxedWeeksFed` vs. `taxedWeeksState` split today — turning federal exempt off
+  while leaving state on (or vice versa) is not representable in the current schema at all. This
+  is the actual blocker behind excerpt 1, not just a UI gap.
+- [ ] **`taxExemptOptIn`** (`constants/config.js:15`) — stored in config, disclaimer copy exists,
+  but nothing reads it yet in `App.jsx` or `IncomePanel` (the original **Deferred** item, folded
+  in here). No action until §D's accountant gate clears.
+
+### B. Excerpt 1 — Split federal/state exempt tracking + down-to-the-dollar extra withholding
+
+- [ ] **Schema change** — split `taxedWeeks` into `taxedWeeksFed` / `taxedWeeksState` (or an
+  equivalent per-week `{ fed: boolean, state: boolean }` shape); mirror the same split for
+  `pastWeekTaxStatusOverrides`. `w.taxedBySchedule` (computed per week in `buildYear`) becomes two
+  flags: `w.taxedByScheduleFed` / `w.taxedByScheduleState`.
+- [ ] **Engine split** — `taxDerived` already computes `fG`/`mG` separately (§A); stop collapsing
+  them into one `tG`/`extraPerCheck`. Expose `targetExtraFedPerCheck` and
+  `targetExtraStatePerCheck` (each `Math.max(gap − target, 0) / remainingTaxedChecksForThatTax`)
+  so the two timelines are independently trackable, per the excerpt's "separate independent
+  timeline" requirement.
+- [ ] **UI** — Tax Weeks Grid (admin) and any user-facing exempt toggle need two lanes (fed row +
+  state row) instead of one cell per week; ProfilePanel's Tax Plan tab shows fed extra/check and
+  state extra/check as two line items, not one blended number.
+- [ ] **Rounding to the dollar** — `targetExtraFedPerCheck`/`targetExtraStatePerCheck` should
+  round consistently (nearest cent for storage, nearest dollar for the user-facing "withhold an
+  extra $X" instruction) — confirm the rounding direction with the accountant audit (§D); under-
+  rounding compounds into a real shortfall over dozens of checks.
+
+### C. Excerpt 2 — Pre-account-creation history gap for extra-withholding math
+
+- [ ] **Confirm the exact blast radius** — `taxDerived` sums over every `w` in
+  `allWeeks.filter(w => w.active)`, and `active = idx >= cfg.firstActiveIdx`. `firstActiveIdx` is
+  derived from the *job start date* entered in the wizard, which can be — and often is — earlier
+  than the Supabase account's `created_at`. `weekConfirmations` (the only record of *actual*
+  worked/missed days, written by `WeekConfirmModal`) only exists for weeks the user has explicitly
+  confirmed going forward from signup. Every week between `firstActiveIdx` and account creation is
+  therefore counted in the fed/state gap totals using pure *scheduled* math (`w.taxedBySchedule`,
+  scheduled hours), with zero ability to reflect real overtime, missed days, or pickups that
+  actually happened before the app existed for that user.
+- [ ] **Not fixable by more manual entry** — per the excerpt, requiring the user to reconstruct
+  every pre-signup week via the weekly check-in modal is explicitly called out as infeasible. The
+  fix has to be a boundary/disclosure, not a backfill UI.
+- [ ] **Gating boundary field** — introduce `config.taxHistoryReliableFrom` (the *later* of account
+  `created_at` or `firstActiveIdx`, since reliable actuals can't predate either), marking the
+  earliest week the extra-withholding math can actually stand behind.
+- [ ] **Disclosure copy — mandatory, not optional** — anywhere the app shows a fed/state "withhold
+  an extra $X per check" number, if any part of the taxed-week window includes weeks before
+  `taxHistoryReliableFrom`, show a clear caveat, e.g.: *"This estimate assumes your scheduled hours
+  were worked exactly as planned for weeks before [date] — log any overtime or missed days from
+  that period for a more accurate number, or treat this as directional until your next full year."*
+  Exact copy TBD, but the gate must exist before this feature ships — this is the core "must be
+  figured out before general release" requirement from the excerpt.
+- [ ] **Overlaps with the paystub uploader (§18.J)** — a scanned paystub from *before* signup is
+  one legitimate way to backfill real numbers into this gap without a manual week-by-week crawl —
+  if the user kept an old paystub from the pre-account period, letting them upload it to correct
+  that one week's actual gross/withholding closes part of the gap. Not a full fix (most users won't
+  have kept every old stub), but worth wiring the uploader to accept a `weekIdx` target that
+  predates `firstActiveIdx`'s normal confirmation window.
+
+### D. Mandatory gates before public release
+
+- [ ] **Tax accountant audit** — carried over verbatim from the original **Deferred** note: bring
+  the whole withholding-suspension + catch-up mechanism (not just the exempt toggle) to an
+  accountant's office for professional sign-off before any of §B/§C ships to users. Covers the
+  rounding direction (§B), the disclosure boundary wording (§C), and whether split fed/state
+  "extra withholding" guidance needs a disclaimer beyond what `taxExemptOptIn`'s existing copy
+  covers.
+- [ ] **`taxExemptOptIn` wire-up** — stays gated on the above; do not wire it into `App.jsx` /
+  `IncomePanel` until the accountant pass is done.
+- [ ] **§18.J's guided interview copy** — the AI-guided tax setup conversation (§18.J) ships under
+  this same gate — its question set and any tax-status copy it generates needs the same review.

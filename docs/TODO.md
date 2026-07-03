@@ -39,9 +39,21 @@ with their Supabase Bearer token, then act with the service-role client). Subscr
 source of truth in **Stripe**, mirrored into Supabase `user_data` via webhook so the frontend can
 gate without hitting Stripe on every load.*
 
-**Resolved decisions (2026-06-16):**
-- **Price:** **$14.99/mo.** Annual = **3 months free** → 12 months for the price of 9 =
-  **$134.91/yr** (effective ~$11.24/mo). Two Stripe prices: `monthly` and `annual`.
+**Resolved decisions (2026-06-16, pricing tiers reaffirmed 2026-07-01, annual price locked in 2026-07-02):**
+- **Price:** **$14.99/mo.** Annual = **flat $120/yr — exactly $10.00/mo**, chosen over the earlier
+  $134.91 (9-months-for-12) figure specifically for the clean, quotable "$10 a month when you pay
+  annually" line. This also happens to equate to **~4 months free** (120 / 14.99 ≈ 8.0 months
+  paid), so the "months free" framing still works and is slightly more generous than before. Two
+  Stripe prices: `monthly` and `annual`.
+- **Monthly + annual only — no weekly, no quarterly.** Considered and rejected 2026-07-01:
+  **weekly billing reads as a dark pattern** (the exact "$X.99/week to obscure the real monthly
+  cost" trick used by low-trust mobile subscriptions) and directly contradicts an app whose whole
+  value prop is financial clarity. **Quarterly** adds a third price point/decision without adding
+  real conversion value — the annual discount already exists to soften a bigger commitment; a
+  third SKU just adds paradox-of-choice clutter. Two tiers, presented as a Monthly ↔ Annual
+  toggle (not stacked cards), with the monthly-equivalent price always shown next to the annual
+  price (e.g. "$120/yr — $10.00/mo billed annually") so the real per-month cost is never hidden
+  behind a headline number.
 - **No card at signup.** Card-less, **app-managed** trial; a Stripe Checkout is created only when the
   user upgrades. In-app + email nudges to add a card start **after day 7** of the trial ("add your
   card early to avoid interruption").
@@ -67,7 +79,6 @@ gate without hitting Stripe on every load.*
 > Two distinct timestamps drive this: `trial_ends_at` (day 14, **user-facing** countdown + "trial
 > ended" messaging) and `access_ends_at` (day 21, **internal** hard cutoff that flips the read-only
 > gate). Entitlement is keyed off `access_ends_at`; the countdown UI is keyed off `trial_ends_at`.
-> **Open question:** how many days after expiry (`N`) before actual account deletion.
 
 ---
 
@@ -108,30 +119,38 @@ gate without hitting Stripe on every load.*
 
 ### B. Stripe account & product setup *(config steps, no app code)*
 
-- [ ] **Create Stripe product + two prices** in the dashboard: Premium **monthly = $14.99** and
-  Premium **annual = $134.91** (3 months free vs. 12× $14.99). Capture both `price_…` IDs for env
-  config. No Stripe trial on the price (`trial_period_days` unused) — the trial is app-managed.
+- [x] **Create Stripe product + two prices** in the dashboard: Premium **monthly = $14.99** and
+  Premium **annual = $120** (a flat $10.00/mo, ~4 months free vs. 12× $14.99). Price IDs captured.
+  No Stripe trial on the price (`trial_period_days` unused) — the trial is app-managed.
 - [ ] **Configure the Customer Portal** (Billing → Customer portal) so users can cancel / update
-  card / switch plan without custom UI.
-- [ ] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
-- [ ] **Set Vercel env vars** (see env block at the bottom).
+  card / switch plan without custom UI. *(Not yet confirmed done.)*
+- [x] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
+- [ ] **Set Vercel env vars** (see env block at the bottom) — `STRIPE_SECRET_KEY`,
+  `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `APP_URL` still need to
+  be added in the Vercel dashboard.
 
 ### C. Serverless API routes (`api/`, Vercel functions)
 
 *Follow `api/delete-account.js`: reject non-POST, require `Authorization: Bearer <supabase token>`,
 verify with an anon client `getUser()`, then use the service-role client for privileged writes.*
 
-- [ ] **`api/stripe-create-checkout.js`** — verify the user → find-or-create the Stripe customer
+- [x] **`api/stripe-create-checkout.js`** — verify the user → find-or-create the Stripe customer
   (store `stripe_customer_id` back on `user_data`) → create a Checkout Session for the chosen price
   → return the session URL. Pass `client_reference_id = user.id` and set success/cancel URLs to
-  whitelisted app routes.
-- [ ] **`api/stripe-webhook.js`** — verify the Stripe signature with the webhook secret (use the
-  **raw** request body — disable body parsing for this route). Handle: `checkout.session.completed`,
+  `APP_URL` (new env var, §J).
+- [x] **`api/stripe-webhook.js`** — verify the Stripe signature with the webhook secret (use the
+  **raw** request body — `bodyParser: false`). Handles `checkout.session.completed`,
   `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`. On each,
-  upsert `subscription_status`, `stripe_subscription_id`, `current_period_end`, `plan` into
-  `user_data` via service-role, keyed by `stripe_customer_id`. Idempotent on event id.
-- [ ] **`api/stripe-portal.js`** — verify the user → create a Billing Portal session for their
+  upserts `subscription_status`, `stripe_subscription_id`, `current_period_end`, `plan` into
+  `user_data` via service-role, keyed by `stripe_customer_id` (or `client_reference_id` for the
+  first `checkout.session.completed`, since that's the only event where the customer↔user link is
+  being established). Idempotent on event id via new migration `018_add_stripe_webhook_events.sql`
+  — atomically claims the event id (unique-constraint insert) before doing any work, so Stripe
+  retries/redeliveries can't double-process.
+- [x] **`api/stripe-portal.js`** — verify the user → create a Billing Portal session for their
   `stripe_customer_id` → return the URL (for the "Manage subscription" button).
+- **Not yet deployed/tested** — `STRIPE_SECRET_KEY` and `APP_URL` still need to be set in Vercel
+  before these routes can run for real (see §J).
 
 ### D. Trial logic (14-day public + 7-day hidden grace)
 
@@ -170,8 +189,8 @@ verify with an anon client `getUser()`, then use the service-role client for pri
   - [ ] Build this as an explicit `expired`/read-only mode the panels read (e.g. a `readOnly` /
     `entitlement` prop), not a pile of inline conditionals — one switch, testable.
 - [ ] **Upgrade modal / screen** — Liquid-Glass styled (`LiquidGlass.jsx`), Pulse signal accent
-  allowed (premium surface); shows monthly ($14.99) vs. annual ($134.91, "3 months free") and opens
-  Stripe Checkout via `api/stripe-create-checkout`. Honors the mobile portal pattern
+  allowed (premium surface); shows monthly ($14.99) vs. annual ($120, "$10.00/mo billed annually")
+  and opens Stripe Checkout via `api/stripe-create-checkout`. Honors the mobile portal pattern
   (`createPortal`, see §16 portal audit in past-TODO-tasks.md).
 - [ ] **Post-checkout return** — success route shows a confirming state and refetches the
   `user_data` row (webhook may lag; poll/refetch `subscription_status` briefly), then lifts the gate.
@@ -321,12 +340,21 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
 STRIPE_SECRET_KEY=...            # server only (api/ functions)
 STRIPE_WEBHOOK_SECRET=...        # server only (signature verify)
 STRIPE_PRICE_MONTHLY=price_...   # $14.99/mo
-STRIPE_PRICE_ANNUAL=price_...    # $134.91/yr (3 months free)
+STRIPE_PRICE_ANNUAL=price_...    # $120/yr ($10.00/mo flat, ~4 months free)
+APP_URL=https://...              # server only — whitelisted base URL for Checkout/Portal success,
+                                  # cancel, and return URLs (added with §C)
 EMAIL_API_KEY=...                # transactional email provider (Resend/Postmark/SendGrid)
 CRON_SECRET=...                  # guards api/cron-subscription-lifecycle
 VITE_STRIPE_PUBLISHABLE_KEY=...  # client (only if using Stripe.js redirect; not needed for hosted Checkout URL)
 # Reuses existing SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_* already set for delete-account.
 ```
+
+### K. Future Ideas (not in scope for v1)
+
+- [ ] **Account top-off** — let a user with spare cash pre-buy extra subscription time (e.g. a
+  week at a time) into a banked balance on their account, purely as a voluntary buffer against a
+  future missed payment — explicitly **not** "paying the bill early," and copy must make that
+  distinction clear so it doesn't read as a coerced prepayment.
 
 ---
 

@@ -14,7 +14,7 @@
  * no extra handling needed; onAuthStateChange in App.jsx fires on return.
  * Providers must be enabled in the Supabase dashboard under Authentication > Providers.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase, validateInvestorCode } from "../lib/supabase.js";
 import { iS, lS } from "./ui.jsx";
 
@@ -89,7 +89,7 @@ export function Shell({ title, subtitle, children }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVerified }) {
+export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVerified, oauthCallbackFailed = false, onOauthRetry }) {
   const [mode, setMode]         = useState("signin"); // "signin" | "signup" | "forgot"
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -98,6 +98,12 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState(null);
   const [info, setInfo]         = useState(null); // success / info messages
+
+  // Google sign-in redirected back here without completing — explain it instead of
+  // silently showing a blank form (see App.jsx's oauthCallbackFailed detection).
+  useEffect(() => {
+    if (oauthCallbackFailed) setError("Google sign-in didn't finish — please tap Continue with Google again.");
+  }, [oauthCallbackFailed]);
 
   // ── Investor code section ─────────────────────────────────────────────────
   const [investorCode, setInvestorCode]       = useState("");
@@ -111,6 +117,7 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
 
   async function handleOAuth(provider) {
     setError(null);
+    onOauthRetry?.();
 
     const options = { redirectTo: window.location.origin };
     if (provider === "google" && isSignUp) {

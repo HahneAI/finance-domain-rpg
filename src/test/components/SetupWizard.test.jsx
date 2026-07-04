@@ -308,9 +308,13 @@ describe('SetupWizard — onComplete', () => {
   })
 
   it('taxedWeeks only contains indices >= firstActiveIdx', async () => {
-    const onComplete = finishWizard({ firstActiveIdx: 10 })
+    // startDate '2026-03-10' is week idx 10 (FISCAL_YEAR_START '2026-01-05' + 64 days).
+    // The wizard recalculates firstActiveIdx from startDate on mount, so a bare
+    // firstActiveIdx override without a matching startDate gets overwritten.
+    const onComplete = finishWizard({ startDate: '2026-03-10' })
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
     const payload = onComplete.mock.calls[0][0]
+    expect(payload.firstActiveIdx).toBe(10)
     expect(payload.taxedWeeks.every(idx => idx >= 10)).toBe(true)
   })
 

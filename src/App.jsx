@@ -193,6 +193,11 @@ export default function App() {
   const [authedUser, setAuthedUser]         = useState(null);
   const [authChecked, setAuthChecked]       = useState(false);
   const [pendingPasswordReset, setPendingPasswordReset] = useState(false);
+  // Set when a Google OAuth redirect lands back on the app but never resolves into
+  // a session (e.g. the PKCE code exchange fails on a first-time sign-in). Surfaced
+  // to LoginScreen so the user sees why they're back at the sign-in form instead of
+  // silently landing there with no explanation.
+  const [oauthCallbackFailed, setOauthCallbackFailed] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -362,6 +367,26 @@ export default function App() {
       setAuthChecked(true);
     });
   }, []);
+
+  // ── Detect a Google OAuth callback that reached the app but produced no session ──
+  // supabase-js only strips `?code=` from the URL after a *successful* PKCE exchange
+  // (see GoTrueClient#_getSessionFromURL) and never surfaces the failure through
+  // onAuthStateChange, so a failed exchange (e.g. code-verifier lookup miss on a
+  // first-time sign-in) silently lands the user back on a blank login form with a
+  // stale `code`/`error` param still sitting in the URL. Detect that state, log it
+  // for diagnosis, clean the URL, and tell LoginScreen so it can explain what happened.
+  useEffect(() => {
+    if (!authChecked || authedUser) return;
+    const params = new URLSearchParams(window.location.search);
+    const hasStaleCode = params.has("code");
+    const oauthError = params.get("error_description") || params.get("error");
+    if (!hasStaleCode && !oauthError) return;
+    console.error("[Auth] Google sign-in callback did not complete:", oauthError || "code exchange failed — no session produced");
+    setOauthCallbackFailed(true);
+    ["code", "error", "error_description", "error_code"].forEach(k => params.delete(k));
+    const cleanUrl = window.location.pathname + (params.toString() ? `?${params}` : "") + window.location.hash;
+    window.history.replaceState(window.history.state, "", cleanUrl);
+  }, [authChecked, authedUser]);
 
   // ── Load from Supabase once auth resolves to a signed-in user ──
   // Depend on authedUser?.id (not the full object) so TOKEN_REFRESHED events — which
@@ -1015,7 +1040,13 @@ export default function App() {
 
   // No valid session — show login / create account screen.
   if (!authedUser) {
-    return <LoginScreen onInvestorVerified={code => setInvestorSession({ code })} />;
+    return (
+      <LoginScreen
+        onInvestorVerified={code => setInvestorSession({ code })}
+        oauthCallbackFailed={oauthCallbackFailed}
+        onOauthRetry={() => setOauthCallbackFailed(false)}
+      />
+    );
   }
 
   // Supabase PASSWORD_RECOVERY event — user clicked a reset link, show set-new-password form.

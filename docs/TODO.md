@@ -149,8 +149,12 @@ verify with an anon client `getUser()`, then use the service-role client for pri
   retries/redeliveries can't double-process.
 - [x] **`api/stripe-portal.js`** — verify the user → create a Billing Portal session for their
   `stripe_customer_id` → return the URL (for the "Manage subscription" button).
-- **Not yet deployed/tested** — `STRIPE_SECRET_KEY` and `APP_URL` still need to be set in Vercel
-  before these routes can run for real (see §J).
+- [x] **Validated end-to-end in test mode (2026-07-03)** — both plans tested via the temporary
+  Subscription buttons in `ProfilePanel` (`AccountDetail`): Checkout Session created and opened
+  correctly for monthly and annual, test card `4242 4242 4242 4242` completed successfully,
+  `checkout.session.completed` webhook fired and populated `stripe_customer_id`,
+  `stripe_subscription_id`, and `subscription_status` on the `user_data` row (confirmed via the
+  admin Config JSON / DB Row tools). §C is fully working; not yet tested against live mode.
 
 ### D. Trial logic (14-day public + 7-day hidden grace)
 

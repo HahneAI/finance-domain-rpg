@@ -1466,3 +1466,126 @@ insight over raw categorization, and consolidation into fewer, smarter surfaces.
 - [ ] **Accessibility audit** — contrast check on the dark-green token palette (secondary text
   `#7fa39a` on `#112c1f` surfaces is the likely first fix), full keyboard nav, screen-reader
   labels on the metric cards. Do it before the paid tier launches, not after.
+
+---
+
+### F. Horizon Tier — Fable-Class Features
+
+*Second pass, 2026-07-04 — deeper push. Everything below is a moonshot: not yet provable with
+today's stack, but each idea keeps one foot on real technology (its **tether**, noted inline).
+The organizing thesis: the tagline isn't just "take control of your money" — it's **take your
+life back from the brain fog and the dopamine machine**. Money is where the fog does its most
+expensive damage, so a finance app is a legitimate weapon in that fight. Attention is treated
+here as a second currency the app helps the user stop hemorrhaging.*
+
+#### F1. The Attention Counter-Offensive — treat attention like money
+
+- [ ] **The Attention Ledger** — the fog made visible in dollars. Import screen-time data
+  (iOS Screen Time / Android Digital Wellbeing exports — user-initiated, never scraped) and
+  price doomscroll hours at the user's own after-tax rate: "You spent 11 hours in the feed
+  this week — at your rate, that's $214 of your life." Not a lecture, a ledger line, in the
+  same mono font as every other number in the app. *Tether: screen-time exports exist today;
+  the rate math is already in the engine.*
+- [ ] **The Impulse Airlock** — the anti-dopamine purchase ritual. Instead of buying, the user
+  logs the *urge*: what it was, what it cost. Coach instantly translates it into their own
+  units: "That $68 is 4.5 days off your truck loan, or one-third of your PTO goal week." The
+  urge sits in the airlock 72 hours; buying it after that is fine and judgment-free — the win
+  is the pause, not the denial. Urges that expire un-bought accumulate into a visible
+  **Reclaimed** total. No money is ever held — it's a log entry with a timer. *Tether: this is
+  the existing event-log system plus a countdown.*
+- [ ] **Life-Force Pricing** — the *Your Money or Your Life* idea, finally automatic. Anywhere
+  a dollar amount appears in the app, long-press flips it into hours-of-your-actual-shift at
+  your real marginal after-tax rate ("this bill = 6.2 hours on the floor"). Later: an optional
+  browser extension that overlays the same translation on shopping sites. *Tether: the
+  marginal-rate math ships with §21.A's OT ROI calculator; the extension is a WebExtension
+  reading DOM prices.*
+- [ ] **The Fog Index** — a single 0–100 ambient-financial-anxiety score, tracked like net
+  worth. Inputs: 2-tap micro check-ins ("how heavy does money feel today?"), plus behavioral
+  signals the app already sees — anxious-open frequency (opening the app 9× a day without
+  acting), 3am sessions, check-in streak breaks. The pitch: watch the fog number *fall* over
+  months of using the app. This becomes the retention metric that matters more than DAU.
+  *Tether: it's session analytics + a weekly one-question survey; the science can start as an
+  honest heuristic, clearly labeled.*
+- [ ] **Quiet Hours — the app that tells you to leave** — user-set hours (evenings, Sundays)
+  when the app opens to a single card: "Your money is fine. Week 27 is funded. Go live." — and
+  *nothing else*, no numbers, no red, no pull-to-refresh. An app that guards the user's
+  attention against *itself* is the credibility move no engagement-farmed competitor can copy.
+  *Tether: trivially buildable; the hard part is the discipline, which is the point.*
+- [ ] **The Calm Covenant** — publish an anti-dopamine design constitution as a public page:
+  no infinite scroll, no red badge counts, no variable-reward animations, no streak-shaming,
+  notifications never fire to re-engage — only to inform. Wire it into CI as lint rules where
+  possible (e.g. forbid badge APIs). It's the animation-rules section of CLAUDE.md, promoted
+  to a brand promise. *Tether: already 80% true of the current design system.*
+
+#### F2. Coach Becomes a Presence — AI that earns silence
+
+- [ ] **The Graduation Curve** — Coach is designed to speak *less* over time. As the user's
+  patterns stabilize (confirmations consistent, fog index falling, goals on-trend), Coach's
+  cadence deliberately decays from weekly briefings to monthly to quarterly — and it *says
+  so*: "You don't need me weekly anymore. That's the win." An AI whose KPI is its own growing
+  silence inverts the entire engagement industry. *Tether: a cadence policy over signals §21
+  already computes.*
+- [ ] **Council of Future Selves** — the fable feature. Coach can stage a conversation with
+  *you at 60* — but grounded: the future self's circumstances are computed from the user's
+  actual projection curves (current savings velocity, loan payoff dates, 401k trajectory via
+  `buildYear`), and the user can talk to *two* of them — the one their current plan creates
+  and the one a 5%-better plan creates — and feel the gap as a person instead of a chart.
+  Heavy disclaimer framing: this is a mirror of your own assumptions, not a prophecy.
+  *Tether: persona prompting over `lib/aiContext.js` snapshots; the projections already exist.*
+- [ ] **Shift-End Debrief (voice-first ambient logging)** — clocking out, walking to the car:
+  hold the button, talk for 20 seconds — "worked over an hour, skipped lunch, grabbed $12
+  food, Dave says Saturday OT is open." Coach parses it into log entries, a calendar note,
+  and a heads-up for the OT decision — confirm-all with one tap at home. The app dissolves
+  into the user's day instead of demanding a sit-down session. *Tether: Whisper-class
+  speech-to-text + the §21.B natural-language logging pipeline.*
+- [ ] **The Whisper Model (on-device Coach)** — a small local model (WebGPU / WebLLM-class)
+  handles the intimate layer — urge logging, fog check-ins, quick math — entirely on the
+  phone, offline, with financial details never leaving the device; the cloud Claude tier is
+  reserved for heavy reasoning and is clearly marked as such. Privacy stops being a policy
+  page and becomes an architecture. *Tether: on-device inference of small models in-browser
+  is real today and improving fast; the split-brain routing is the new work.*
+- [ ] **Burnout Sentinel** — the inverse of every hustle app: detect *unsustainable* earning.
+  Six-day streaks, rising OT with rising missed-day corrections, fog index climbing while
+  income climbs — Coach names it: "You've worked 19 of 21 days. The 6th day pays $96 and
+  costs you the other six. Your goals survive a Saturday off — here's the math." Optional
+  wearable correlation (HealthKit/Google Fit sleep + recovery) later. *Tether: the detection
+  is pattern analysis over `weekConfirmations`; wearables are a documented API import.*
+
+#### F3. The Fable Frame — the RPG made literal
+
+- [ ] **The Domain Map** — the repo name cashes its check: the user's financial year rendered
+  as a living territory. Loans are **sieges** slowly being broken (payoff progress = siege
+  lines receding), goals are **expeditions** with provision lines (funding rate), the
+  emergency buffer is the **keep wall**, income is the **harvest road**, and the fog itself
+  is literal fog-of-war that rolls back as weeks get confirmed and unknowns become knowns.
+  One glance answers "how is my kingdom?" — every element deep-links to the real panel
+  underneath. Rendered in the Flow palette, calm and painterly — Ghibli, not Vegas.
+  *Tether: it's a data-driven SVG/Canvas scene over state the engine already computes; the
+  fog-of-war mapping to unconfirmed weeks is almost embarrassingly literal.*
+- [ ] **Chronicle of the Year** — the year-end "Wrapped" (§21.C) told as an illustrated saga:
+  "In the eighth week, the furnace failed — a $600 raid. You held the wall without touching
+  the keep." Generated from real log entries, in Coach's voice, exportable as a keepsake.
+  Emotional truth from literal data. *Tether: narrative generation over the logs table.*
+- [ ] **Crews (guild mode)** — coworkers at the same employer preset form small anonymous
+  crews: shared *consistency* streaks (check-ins, not balances — no income comparison, ever),
+  collective siege victories ("the crew retired $11k of debt this quarter"), and one shared
+  ritual: when someone's loan dies, the crew sees the banner fall. Solidarity mechanics for
+  people who already cover each other's shifts. *Tether: presence + aggregate counters over
+  the employer-preset relation; the §21.D benchmark privacy rules apply verbatim.*
+- [ ] **Heirloom Letters** — at any goal's creation, the user can seal a note to the person
+  who finishes it ("if you're reading this, the truck is paid off — I wrote this in the
+  break room"). Sealed until the goal completes; delivered by Coach with ceremony. Zero AI,
+  zero infra beyond a locked text column — possibly the highest emotion-per-line-of-code
+  feature in this document. *Tether: a `sealed_until_complete` text field.*
+
+#### F4. Honesty rails for the whole horizon tier
+
+- [ ] **Label the magic** — every F-tier feature that estimates, roleplays, or narrativizes
+  carries the §21.E confidence labels; the Council of Future Selves and Fog Index especially
+  must never present themselves as prediction or diagnosis.
+- [ ] **No dark-pattern inversions** — the attention features must never become their own
+  dopamine loop (no Reclaimed-total push notifications, no fog-score shame states). Each F1
+  feature gets audited against the Calm Covenant before ship.
+- [ ] **Mental-health boundary** — the Fog Index and Burnout Sentinel are wellness mirrors,
+  not clinical instruments; copy review with the same rigor as §20.D's accountant gate, and
+  a visible hand-off line to real resources when signals are severe.

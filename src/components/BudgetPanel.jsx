@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { PHASES, CATEGORY_COLORS, CATEGORY_BG, FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { getEffectiveAmountForMonth, phaseIdxForMonth, computeLoanPayoffDate, buildLoanHistory, loanPaymentsRemaining, loanWeeklyAmount, toLocalIso, getPhaseIndex, computeRemainingSpend, deriveWeeklyPayrollDeductions, fmtLoanDate, fmtFullDate } from "../lib/finance.js";
@@ -75,11 +75,17 @@ function scrollCategoryHeaderNearTop(cat) {
 }
 
 
-export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false, taxProjectionsEnabled = false }) {
+export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false, taxProjectionsEnabled = false, readOnly = false }) {
   // Tax-exempt projection UI (e.g. the TAXED/EXEMPT badge) is gated behind the
   // manual feature unlock, not config.taxExemptOptIn alone — so clicking "Unlock
   // projections" in setup never surfaces it to a normal user. See canAccessTaxPlan.
   const taxFeatureUnlocked = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled });
+  // Paywall-expired read-only mode (docs/TODO.md §17.E): shadow setExpenses with
+  // a no-op so every existing setExpenses() call in this file — expense AND loan
+  // mutations both go through it — is automatically safe, without having to find
+  // and gate each individual call site.
+  const noop = useCallback(() => {}, []);
+  const setExpenses = readOnly ? noop : setExpensesProp;
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
@@ -1390,7 +1396,10 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         const cTot = cExp.reduce((s, e) => s + displayEffective(e, ap), 0)
                    + loanItems.reduce((s, e) => s + displayEffective(e, ap), 0);
         const isExpenseDropLane = cat === "Needs" || cat === "Lifestyle";
-        const isCatExpanded = expandedCats.has(cat);
+        // Paywall-expired read-only mode (§17.E "Locked expense categories"):
+        // force every category collapsed and non-expandable, regardless of the
+        // user's remembered expandedCats — no chevron toggle, no row detail.
+        const isCatExpanded = !readOnly && expandedCats.has(cat);
         return <div
           key={cat}
           draggable={false}
@@ -1430,11 +1439,12 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
         >
           <div
             data-cat-header={cat}
-            onClick={() => toggleCat(cat)}
+            onClick={readOnly ? undefined : () => toggleCat(cat)}
             role="button"
             aria-expanded={isCatExpanded}
+            aria-disabled={readOnly}
             style={{
-              cursor: "pointer",
+              cursor: readOnly ? "default" : "pointer",
               userSelect: "none",
               display: "flex",
               alignItems: "center",
@@ -1452,7 +1462,9 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               <SH color={CATEGORY_COLORS[cat]} textColor="var(--color-text-primary)" right={
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "10px" }}>
                   <span>{f2(cTot * perCheckFactor) + `/${checkUnit}`}</span>
+                  {!readOnly && (
                   <svg width={isCatExpanded ? "12" : "15"} height={isCatExpanded ? "12" : "15"} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCatExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: `transform ${CAT_ANIM_MS}ms ${EXPENSE_DRAG_EASE}`, opacity: 0.8 }}><path d="M4 6 L8 10 L12 6" /></svg>
+                  )}
                 </span>
               }>{cat}</SH>
             </div>
@@ -1716,7 +1728,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
       })}
 
       {/* Add expense form */}
-      {addingExp ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
+      {!readOnly && (addingExp ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
         <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Expense Line</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
           <div><label style={lS}>Label</label><input type="text" value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Insurance" /></div>
@@ -1740,7 +1752,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             <SmBtn onClick={_closeAddForm} style={{ flex: 1 }}>✕</SmBtn>
           </div>
         </div>
-      </div> : <Pressable onClick={() => setAddingExp(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</Pressable>}
+      </div> : <Pressable onClick={() => setAddingExp(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD EXPENSE LINE</Pressable>)}
     </div>}
 
     {/* BREAKDOWN — cashflow summary at top, then annual projection table */}
@@ -1953,6 +1965,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
               </div>}
 
               {/* Actions */}
+              {!readOnly && (
               <div style={{ display: "flex", gap: "6px", borderTop: "1px solid #1e1e1e", paddingTop: "10px" }}>
                 <SmBtn onClick={() => startEditLoan(exp)} c="var(--color-gold)">EDIT</SmBtn>
                 {delLoanId === exp.id ? <div style={{ display: "flex", gap: "4px" }}>
@@ -1960,12 +1973,13 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
                   <SmBtn onClick={() => setDelLoanId(null)}>NO</SmBtn>
                 </div> : <SmBtn onClick={() => setDelLoanId(exp.id)} c="var(--color-deduction)">✕</SmBtn>}
               </div>
+              )}
             </div>}
           </div>;
         })}
 
         {/* Add loan form */}
-        {addingLoan ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
+        {!readOnly && (addingLoan ? <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
           <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Loan</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
             <div style={{ gridColumn: "1/-1" }}><label style={lS}>Loan Name</label><input type="text" value={newLoan.label} onChange={e => setNewLoan(v => ({ ...v, label: e.target.value }))} style={iS} placeholder="e.g. Car Note" /></div>
@@ -2005,7 +2019,7 @@ export function BudgetPanel({ expenses, setExpenses, weeklyIncome, prevWeekNet, 
             <Pressable onClick={addLoan} disabled={!newLoan.label || !newLoan.totalAmount || !newLoan.paymentAmount} style={{ background: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-green)" : "var(--color-border-subtle)", color: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "var(--color-bg-base)" : "var(--color-text-primary)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: (newLoan.label && newLoan.totalAmount && newLoan.paymentAmount) ? "pointer" : "default", fontWeight: "bold" }}>ADD LOAN</Pressable>
             <Pressable onClick={() => { setAddingLoan(false); setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" }); }} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", }}>CANCEL</Pressable>
           </div>
-        </div> : <Pressable onClick={() => setAddingLoan(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</Pressable>}
+        </div> : <Pressable onClick={() => setAddingLoan(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD LOAN</Pressable>)}
       </div>;
     })()}
     {touchDragOverlay.label && createPortal(<div

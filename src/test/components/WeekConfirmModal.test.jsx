@@ -299,8 +299,8 @@ describe('WeekConfirmModal — Layer 2 surplus pre-fill', () => {
 
   it('shows gross estimate hint below the amount field for a pickup bonus', () => {
     goToLayer2Surplus()
-    // Hint: "OT-adjusted pre-fill — hours past the 40h threshold earn 1.5×. Edit if actual payout differs."
-    expect(screen.getByText(/OT-adjusted pre-fill/i)).toBeTruthy()
+    // Hint: "OT-adjusted estimate — past 40h earns 1.5×. Edit if it differs." (copy shortened in a86c566)
+    expect(screen.getByText(/OT-adjusted estimate/i)).toBeTruthy()
   })
 })
 

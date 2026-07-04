@@ -5,6 +5,7 @@ import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpac
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount } from "./lib/db.js";
+import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
 import { BudgetPanel } from "./components/BudgetPanel.jsx";
@@ -16,6 +17,7 @@ import { LoginScreen } from "./components/LoginScreen.jsx";
 import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
+import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { Pressable } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
@@ -191,11 +193,22 @@ export default function App() {
   const [authedUser, setAuthedUser]         = useState(null);
   const [authChecked, setAuthChecked]       = useState(false);
   const [pendingPasswordReset, setPendingPasswordReset] = useState(false);
+  // Set when a Google OAuth redirect lands back on the app but never resolves into
+  // a session (e.g. the PKCE code exchange fails on a first-time sign-in). Surfaced
+  // to LoginScreen so the user sees why they're back at the sign-in form instead of
+  // silently landing there with no explanation.
+  const [oauthCallbackFailed, setOauthCallbackFailed] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [showExtra, setShowExtra] = useState(true);
   const [isEmployerDHL, setIsEmployerDHL] = useState(false);
+  // Trial/subscription state (docs/TODO.md §17.D/E) — null until loadUserData resolves.
+  const [subscription, setSubscription] = useState(null);
+  // ?checkout=success|cancel return from Stripe Checkout — null once resolved/dismissed.
+  const [checkoutReturn, setCheckoutReturn] = useState(null);
+  // Upgrade modal triggered from the read-only Home/Budget notice (§17.E).
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   // Per-user unlock for the Tax Plan feature — granted via SQL to select non-admins.
   const [taxProjectionsEnabled, setTaxProjectionsEnabled] = useState(false);
@@ -355,6 +368,26 @@ export default function App() {
     });
   }, []);
 
+  // ── Detect a Google OAuth callback that reached the app but produced no session ──
+  // supabase-js only strips `?code=` from the URL after a *successful* PKCE exchange
+  // (see GoTrueClient#_getSessionFromURL) and never surfaces the failure through
+  // onAuthStateChange, so a failed exchange (e.g. code-verifier lookup miss on a
+  // first-time sign-in) silently lands the user back on a blank login form with a
+  // stale `code`/`error` param still sitting in the URL. Detect that state, log it
+  // for diagnosis, clean the URL, and tell LoginScreen so it can explain what happened.
+  useEffect(() => {
+    if (!authChecked || authedUser) return;
+    const params = new URLSearchParams(window.location.search);
+    const hasStaleCode = params.has("code");
+    const oauthError = params.get("error_description") || params.get("error");
+    if (!hasStaleCode && !oauthError) return;
+    console.error("[Auth] Google sign-in callback did not complete:", oauthError || "code exchange failed — no session produced");
+    setOauthCallbackFailed(true);
+    ["code", "error", "error_description", "error_code"].forEach(k => params.delete(k));
+    const cleanUrl = window.location.pathname + (params.toString() ? `?${params}` : "") + window.location.hash;
+    window.history.replaceState(window.history.state, "", cleanUrl);
+  }, [authChecked, authedUser]);
+
   // ── Load from Supabase once auth resolves to a signed-in user ──
   // Depend on authedUser?.id (not the full object) so TOKEN_REFRESHED events — which
   // produce a new user object reference with the same ID — don't re-trigger a load
@@ -375,6 +408,7 @@ export default function App() {
         setIsAdmin(data.isAdmin);
         setTaxProjectionsEnabled(data.taxProjectionsEnabled);
         setPtoGoal(data.ptoGoal);
+        setSubscription(data.subscription);
         if (data.isInvestor) {
           setInvestorProfile(data.investorProfile ?? null);
           setActiveInvestorAccount(data.activeInvestorAccount ?? 1);
@@ -391,6 +425,43 @@ export default function App() {
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authedUser?.id, reloadTrigger]);
+
+  // ── Post-checkout return (docs/TODO.md §17.E) ──
+  // Stripe redirects back to APP_URL/?checkout=success|cancel. Read it once,
+  // then scrub the query param so a later manual reload doesn't re-trigger it.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get("checkout");
+    if (checkout !== "success" && checkout !== "cancel") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCheckoutReturn(checkout);
+    params.delete("checkout");
+    const rest = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
+  }, []);
+
+  // On a successful return, the webhook may not have landed yet — poll-refetch
+  // subscription_status briefly rather than trusting the redirect alone.
+  useEffect(() => {
+    if (checkoutReturn !== "success" || !authedUser) return;
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 5;
+    const poll = async () => {
+      attempts += 1;
+      const data = await loadUserData();
+      if (cancelled) return;
+      setSubscription(data.subscription);
+      if (data.subscription?.status === "active" || attempts >= maxAttempts) {
+        setCheckoutReturn(null);
+        return;
+      }
+      setTimeout(poll, 2000);
+    };
+    poll();
+    return () => { cancelled = true; };
+  }, [checkoutReturn, authedUser]);
 
   // ── Debounced save to Supabase (800ms) ──
   const saveTimer = useRef(null);
@@ -969,7 +1040,13 @@ export default function App() {
 
   // No valid session — show login / create account screen.
   if (!authedUser) {
-    return <LoginScreen onInvestorVerified={code => setInvestorSession({ code })} />;
+    return (
+      <LoginScreen
+        onInvestorVerified={code => setInvestorSession({ code })}
+        oauthCallbackFailed={oauthCallbackFailed}
+        onOauthRetry={() => setOauthCallbackFailed(false)}
+      />
+    );
   }
 
   // Supabase PASSWORD_RECOVERY event — user clicked a reset link, show set-new-password form.
@@ -980,6 +1057,17 @@ export default function App() {
   if (loading) {
     return <FullScreenLoadingState />;
   }
+
+  // Trial/subscription gate (docs/TODO.md §17.D/E). `now` is always the real
+  // wall-clock time, never effectiveToday/tempLockDate — see the disclosure
+  // note in lib/subscription.js: admin Lock Date must not extend a trial or
+  // the hidden grace window.
+  const entitlement = getEntitlement(subscription, new Date());
+  // Investors/demo accounts and admins never hit the paywall — they either
+  // aren't real paying customers (investors) or need unrestricted access to
+  // support other users (admins).
+  const paywallBypassed = isAdmin || config.isInvestor;
+  const isExpiredReadOnly = !paywallBypassed && entitlement.state === "expired";
 
   const activePanel = (
     <>
@@ -1006,8 +1094,9 @@ export default function App() {
         today={effectiveToday}
         fundedGoalSpend={fundedGoalSpend}
         isAdmin={isAdmin}
+        readOnly={isExpiredReadOnly}
       />}
-      {currentView === "income" && <IncomePanel
+      {currentView === "income" && (isExpiredReadOnly ? <UpgradeModal /> : <IncomePanel
         allWeeks={allWeeks} config={config} setConfig={setConfig}
         showExtra={showExtra} setShowExtra={setShowExtra}
         taxDerived={taxDerived}
@@ -1019,7 +1108,7 @@ export default function App() {
         today={effectiveToday}
         weekNetLookup={weekNetLookup}
         onWeekInspect={isAdmin ? setInspectedWeek : null}
-      />}
+      />)}
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
         weeklyIncome={weeklyIncome}
@@ -1035,8 +1124,9 @@ export default function App() {
         bufferPerWeek={bufferPerWeek}
         isAdmin={isAdmin}
         taxProjectionsEnabled={taxProjectionsEnabled}
+        readOnly={isExpiredReadOnly}
       />}
-      {currentView === "log" && <LogPanel
+      {currentView === "log" && (isExpiredReadOnly ? <UpgradeModal /> : <LogPanel
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
         effectiveToday={effectiveToday}
         setConfig={setConfig} weekConfirmations={weekConfirmations}
@@ -1056,7 +1146,7 @@ export default function App() {
         goals={goals}
         fundedGoalSpend={fundedGoalSpend}
         bucketModel={bucketModel}
-      />}
+      />)}
       {currentView === "profile" && <ProfilePanel
         authedUser={authedUser}
         config={config}
@@ -1597,6 +1687,47 @@ export default function App() {
 
         {/* Panel content */}
         <div ref={mainContentCallbackRef} className="main-content" style={{ padding: "18px 16px", flex: 1, minHeight: 0 }}>
+          {/* ── Post-checkout return banner (§17.E) ── */}
+          {checkoutReturn === "success" && (
+            <div style={{
+              background: "rgba(0,200,150,0.10)", border: "1px solid rgba(0,200,150,0.32)",
+              borderRadius: "12px", padding: "10px 14px", marginBottom: "14px",
+              display: "flex", alignItems: "center", gap: "10px",
+            }}>
+              <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+                Confirming your subscription…
+              </div>
+            </div>
+          )}
+          {checkoutReturn === "cancel" && (
+            <div style={{
+              background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)",
+              borderRadius: "12px", padding: "10px 14px", marginBottom: "14px",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px",
+            }}>
+              <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+                Checkout canceled — no charge was made.
+              </div>
+              <Pressable onClick={() => setCheckoutReturn(null)} aria-label="Dismiss" style={{ background: "transparent", color: "var(--color-text-secondary)", border: "none", cursor: "pointer", fontSize: "14px", padding: "2px 6px" }}>✕</Pressable>
+            </div>
+          )}
+          {/* ── Expired read-only notice (§17.E) — minimal for now; §F replaces this
+               with the full phase-aware trial/dunning banner (trial/grace/expired copy). ── */}
+          {isExpiredReadOnly && (currentView === "home" || currentView === "budget") && (
+            <div style={{
+              background: "rgba(244,164,164,0.08)", border: "1px solid rgba(244,164,164,0.28)",
+              borderRadius: "12px", padding: "10px 14px", marginBottom: "14px",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap",
+            }}>
+              <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
+                Your trial has ended — this view is read-only.
+              </div>
+              <Pressable onClick={() => setShowUpgradeModal(true)} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", padding: "6px 14px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer" }}>
+                Upgrade
+              </Pressable>
+            </div>
+          )}
+          {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
           {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
           {config.jobLossMode && !jobLossBannerDismissed && (() => {
             // Compute benefits-end date when duration is set, so the banner can

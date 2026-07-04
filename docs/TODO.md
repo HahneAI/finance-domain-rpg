@@ -190,33 +190,69 @@ verify with an anon client `getUser()`, then use the service-role client for pri
   `trial_started_at IS NULL`, not row-existence) — a returning user's trial timestamps are never
   re-seeded, so an expired/grace user who never paid always resolves to `expired`/`grace` (upgrade
   path), never gets a fresh window.
-- [ ] **Disclosure guard** — no UI string or email template may reference the 21-day / grace /
-  "extra week" concept; public surfaces only ever say 14 days. Deferred until §E/§F/§G actually
-  produce UI copy and email templates to test — nothing to grep yet.
+- [x] **Disclosure guard** — no UI string may reference the 21-day / grace / "extra week" concept;
+  public surfaces only ever say 14 days. `src/test/components/UpgradeModal.test.jsx` renders the
+  actual paywall UI and asserts on rendered `document.body.textContent` (not source text — scanning
+  source would false-positive on legitimate internal comments, e.g. this very codebase's
+  `subscription.js` correctly says "grace" throughout as the technical term) against forbidden
+  patterns (`21-day`, `grace`, `extra week`), plus a sanity check guarding against a vacuous pass on
+  an empty/broken render. Email templates not built yet (§G) — covered when they exist.
 
 ### E. Frontend gating / paywall
 
-- [ ] **Entitlement gate** — wrap the gated surface in App.jsx using `getEntitlement`. While
-  `isEntitled` (trial/grace/active), the app behaves normally. When `expired`, switch to the
-  read-only experience below.
-- [ ] **Expired read-only experience** — adapt Home + Budget for the locked state:
-  - [ ] **Navigation** — only **Home** and **Budget** are reachable read-only; **Account/Profile**
-    must stay reachable so the user can add a card. Other tabs (Income, Log, Goals) route to the
-    upgrade screen instead of their panel. *(Confirm Income/Log/Goals handling.)*
-  - [ ] **Read-only Home + Budget** — all edit affordances hidden/disabled (add/edit/delete goal,
-    expense, loan; run wizard; log events; Force Sync write; reorder; reset timeline). Values render
-    but no mutations persist.
-  - [ ] **Locked expense categories** — the §16 collapsible category sections are **forced collapsed
-    and non-expandable**: chevron disabled, only the category **title + total per check period** for
-    **Lifestyle** and **Needs** shown. No row-level expense detail, no dropdown expansion.
-  - [ ] Build this as an explicit `expired`/read-only mode the panels read (e.g. a `readOnly` /
-    `entitlement` prop), not a pile of inline conditionals — one switch, testable.
-- [ ] **Upgrade modal / screen** — Liquid-Glass styled (`LiquidGlass.jsx`), Pulse signal accent
-  allowed (premium surface); shows monthly ($14.99) vs. annual ($120, "$10.00/mo billed annually")
-  and opens Stripe Checkout via `api/stripe-create-checkout`. Honors the mobile portal pattern
-  (`createPortal`, see §16 portal audit in past-TODO-tasks.md).
-- [ ] **Post-checkout return** — success route shows a confirming state and refetches the
-  `user_data` row (webhook may lag; poll/refetch `subscription_status` briefly), then lifts the gate.
+- [x] **Entitlement gate** — `App.jsx` computes `getEntitlement(subscription, new Date())` (real
+  wall-clock time, never `effectiveToday`/`tempLockDate`) and derives `isExpiredReadOnly = !(isAdmin
+  || config.isInvestor) && entitlement.state === "expired"`. Investors and admins bypass the paywall
+  entirely — investors aren't paying customers and admins need unrestricted access to support users.
+- [x] **Expired read-only experience** — Home + Budget:
+  - [x] **Navigation** — Income and Log render `<UpgradeModal />` instead of their panel when
+    `isExpiredReadOnly`. Home and Budget stay reachable, read-only. Account/Profile is untouched —
+    always reachable. **Resolved the "Confirm Income/Log/Goals" open question**: there is no
+    separate "Goals" nav tab — goals live inside Home (`goals`/`setGoals` are HomePanel props, not
+    BudgetPanel's, confirmed by reading `App.jsx`'s panel routing block), so Home's `readOnly` prop
+    already covers goal editing. Nothing separate needed for "Goals."
+  - [x] **Read-only Home + Budget** — implemented as a `readOnly` prop on both panels (exactly the
+    "one switch" the TODO asked for), with a shadow-safety guarantee underneath the UI polish:
+    `HomePanel`/`BudgetPanel` rename their `setGoals`/`setExpenses` prop to `...Prop` and declare a
+    local `const setGoals = readOnly ? noop : setGoalsProp` (same for `setExpenses`) — every
+    existing mutation call in either file, however deeply nested, is automatically a no-op in
+    read-only mode without having to find and gate each call site individually. On top of that data
+    guarantee, the visible entry points are hidden: "+ ADD GOAL", the per-goal action row
+    (REORDER/EDIT/DONE/DEL — both the mobile and desktop blocks), "Reset Timeline" (Home); "+ ADD
+    EXPENSE LINE", "+ ADD LOAN", and the loans-tab EDIT/DEL row (Budget). Values render, nothing
+    persists.
+  - [x] **Locked expense categories** — `isCatExpanded = !readOnly && expandedCats.has(cat)` forces
+    every category collapsed regardless of the user's remembered expand state; the header's
+    `onClick`/`cursor` are disabled and the chevron `<svg>` itself is hidden when `readOnly`. Since
+    loan rows render nested inside the "Needs" category's fold-out (`loanItems = cat === "Needs" ?
+    loans : []`), forcing categories collapsed also hides loan row-level edit/delete in the
+    Overview tab as a side effect — the standalone Loans tab needed its own separate gate (above).
+  - [x] Implemented as the explicit `readOnly` prop the TODO asked for, not inline conditionals.
+  - **Known gap, not covered**: "run wizard" — `SetupWizard` re-entry via `LifeEventMenu`/life-event
+    flows isn't blocked yet. Exhaustively tracing every wizard entry point across the app was out of
+    scope for this pass; flagging so it isn't mistaken for handled.
+- [x] **Upgrade modal / screen** — `src/components/UpgradeModal.jsx`: Liquid-Glass styled
+  (`purpose="modal"`, already whitelisted — no doc update needed for a new *usage* of an existing
+  purpose), shows monthly ($14.99) vs. annual ($120, "$10.00/mo billed annually"), opens Stripe
+  Checkout via `api/stripe-create-checkout` using the same `getSession()`/Bearer-token pattern as
+  `ProfilePanel`. Uses `createPortal` per the mobile portal pattern. Optional `onClose` — omitted
+  when it replaces a whole panel (Income/Log has nothing to "go back to" but switching tabs),
+  passed when triggered as an overlay on top of read-only Home/Budget (real content behind it, so a
+  dismiss ✕ is shown). A minimal (non-phase-aware) read-only notice with an "Upgrade" button was
+  added directly in `App.jsx` for Home/Budget — **not to spec**, since §F's full trial/dunning
+  banner is the "real" version of this; added now only so silently-disabled buttons don't read as
+  broken before §F ships. §F should replace/absorb it rather than stack alongside it.
+- [x] **Post-checkout return** — `App.jsx` reads `?checkout=success|cancel` once on mount, scrubs
+  the query string immediately (so a manual reload doesn't re-trigger it), shows a confirming
+  banner, and polls `loadUserData()` every 2s (max 5 attempts) while `checkoutReturn === "success"`
+  until `subscription.status === "active"`, updating `subscription` state each time — which
+  re-evaluates `getEntitlement` and lifts the gate as soon as the webhook lands.
+- **Not yet verified live**: this was built and statically verified (lint clean relative to
+  baseline, full production build succeeds, full test suite green, 2 new test files covering
+  `getEntitlement` boundaries and the disclosure guard) but **not exercised in a real browser
+  against a live Supabase account** — this sandbox has no `.env`/Supabase credentials configured,
+  so an actual login + expired-account click-through hasn't happened yet. Needs a real pass once
+  deployed to a preview environment, same as §C's Stripe testing.
 
 ### F. Trial + subscription UI
 

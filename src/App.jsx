@@ -1065,7 +1065,7 @@ export default function App() {
         isAdmin={isAdmin}
         readOnly={isExpiredReadOnly}
       />}
-      {currentView === "income" && (isExpiredReadOnly ? <UpgradeModal /> : <IncomePanel
+      {currentView === "income" && <IncomePanel
         allWeeks={allWeeks} config={config} setConfig={setConfig}
         showExtra={showExtra} setShowExtra={setShowExtra}
         taxDerived={taxDerived}
@@ -1077,7 +1077,8 @@ export default function App() {
         today={effectiveToday}
         weekNetLookup={weekNetLookup}
         onWeekInspect={isAdmin ? setInspectedWeek : null}
-      />)}
+        readOnly={isExpiredReadOnly}
+      />}
       {currentView === "budget" && <BudgetPanel
         expenses={expenses} setExpenses={setExpenses}
         weeklyIncome={weeklyIncome}
@@ -1095,7 +1096,7 @@ export default function App() {
         taxProjectionsEnabled={taxProjectionsEnabled}
         readOnly={isExpiredReadOnly}
       />}
-      {currentView === "log" && (isExpiredReadOnly ? <UpgradeModal /> : <LogPanel
+      {currentView === "log" && <LogPanel
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
         effectiveToday={effectiveToday}
         setConfig={setConfig} weekConfirmations={weekConfirmations}
@@ -1115,7 +1116,8 @@ export default function App() {
         goals={goals}
         fundedGoalSpend={fundedGoalSpend}
         bucketModel={bucketModel}
-      />)}
+        readOnly={isExpiredReadOnly}
+      />}
       {currentView === "profile" && <ProfilePanel
         authedUser={authedUser}
         config={config}
@@ -1681,7 +1683,7 @@ export default function App() {
           )}
           {/* ── Expired read-only notice (§17.E) — minimal for now; §F replaces this
                with the full phase-aware trial/dunning banner (trial/grace/expired copy). ── */}
-          {isExpiredReadOnly && (currentView === "home" || currentView === "budget") && (
+          {isExpiredReadOnly && (currentView === "home" || currentView === "budget" || currentView === "income" || currentView === "log") && (
             <div style={{
               background: "rgba(244,164,164,0.08)", border: "1px solid rgba(244,164,164,0.28)",
               borderRadius: "12px", padding: "10px 14px", marginBottom: "14px",

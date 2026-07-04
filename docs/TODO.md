@@ -204,23 +204,34 @@ verify with an anon client `getUser()`, then use the service-role client for pri
   wall-clock time, never `effectiveToday`/`tempLockDate`) and derives `isExpiredReadOnly = !(isAdmin
   || config.isInvestor) && entitlement.state === "expired"`. Investors and admins bypass the paywall
   entirely — investors aren't paying customers and admins need unrestricted access to support users.
-- [x] **Expired read-only experience** — Home + Budget:
-  - [x] **Navigation** — Income and Log render `<UpgradeModal />` instead of their panel when
-    `isExpiredReadOnly`. Home and Budget stay reachable, read-only. Account/Profile is untouched —
-    always reachable. **Resolved the "Confirm Income/Log/Goals" open question**: there is no
-    separate "Goals" nav tab — goals live inside Home (`goals`/`setGoals` are HomePanel props, not
-    BudgetPanel's, confirmed by reading `App.jsx`'s panel routing block), so Home's `readOnly` prop
-    already covers goal editing. Nothing separate needed for "Goals."
-  - [x] **Read-only Home + Budget** — implemented as a `readOnly` prop on both panels (exactly the
-    "one switch" the TODO asked for), with a shadow-safety guarantee underneath the UI polish:
-    `HomePanel`/`BudgetPanel` rename their `setGoals`/`setExpenses` prop to `...Prop` and declare a
-    local `const setGoals = readOnly ? noop : setGoalsProp` (same for `setExpenses`) — every
-    existing mutation call in either file, however deeply nested, is automatically a no-op in
-    read-only mode without having to find and gate each call site individually. On top of that data
-    guarantee, the visible entry points are hidden: "+ ADD GOAL", the per-goal action row
-    (REORDER/EDIT/DONE/DEL — both the mobile and desktop blocks), "Reset Timeline" (Home); "+ ADD
-    EXPENSE LINE", "+ ADD LOAN", and the loans-tab EDIT/DEL row (Budget). Values render, nothing
-    persists.
+- [x] **Expired read-only experience** — Home, Income, Budget, and Log all go read-only:
+  - [x] **Navigation — revised after hands-on testing (2026-07-05).** The original plan (Income/Log
+    fully replaced by a blocking `<UpgradeModal />`, no way to view them at all) shipped first, but
+    testing it live surfaced a real UX problem: the modal had no dismiss, so a user landing on
+    Income/Log was hard-blocked with no way to "click off" and keep browsing read-only, which felt
+    forced rather than informative. **Revised to match Home/Budget's pattern exactly**: Income and
+    Log now render their real panel with `readOnly={isExpiredReadOnly}` (values visible, editing
+    disabled) plus the same dismissible read-only notice + Upgrade button as Home/Budget, instead of
+    being blocked outright. All four panels are now consistent — nothing is walled off, the paywall
+    nudges rather than traps. `UpgradeModal`'s `onClose` is effectively always passed now (every
+    caller is an overlay on top of real content); the "no onClose" code path is still supported for
+    a future placement but nothing currently uses it. Account/Profile is untouched — always reachable
+    and fully editable regardless. **Resolved the "Confirm Income/Log/Goals" open question**: there
+    is no separate "Goals" nav tab — goals live inside Home (`goals`/`setGoals` are HomePanel props,
+    not BudgetPanel's, confirmed by reading `App.jsx`'s panel routing block), so Home's `readOnly`
+    prop already covers goal editing.
+  - [x] **Read-only Home, Income, Budget, Log** — implemented as a `readOnly` prop on all four
+    panels (exactly the "one switch" the TODO asked for), with a shadow-safety guarantee underneath
+    the UI polish: each panel renames its mutation setter prop(s) to `...Prop` and declares a local
+    `const setX = readOnly ? noop : setXProp` — every existing mutation call in that file, however
+    deeply nested, is automatically a no-op in read-only mode without having to find and gate each
+    call site individually. Covers `setGoals`/`setConfig` (Home), `setExpenses` (Budget),
+    `setLogs`/`setConfig`/`setPtoGoal` (Log), `setConfig` (Income). On top of that data guarantee,
+    the visible entry points are hidden: "+ ADD GOAL", the per-goal action row (REORDER/EDIT/DONE/
+    DEL — both mobile and desktop blocks), "Reset Timeline" (Home); "+ ADD EXPENSE LINE", "+ ADD
+    LOAN", the loans-tab EDIT/DEL row (Budget); "+ LOG EVENT", per-entry EDIT/DELETE, the PTO-balance
+    and bucket-balance override editors (Log); "Sharpen Rates" (Income, its only mutation surface).
+    Values render, nothing persists.
   - [x] **Locked expense categories** — `isCatExpanded = !readOnly && expandedCats.has(cat)` forces
     every category collapsed regardless of the user's remembered expand state; the header's
     `onClick`/`cursor` are disabled and the chevron `<svg>` itself is hidden when `readOnly`. Since

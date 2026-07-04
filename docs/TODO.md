@@ -1355,3 +1355,114 @@ of scattered. Crossover with **§18.J** for the AI-guided capture/interview half
   `IncomePanel` until the accountant pass is done.
 - [ ] **§18.J's guided interview copy** — the AI-guided tax setup conversation (§18.J) ships under
   this same gate — its question set and any tax-status copy it generates needs the same review.
+
+---
+
+## 21. Fable Five Creative Brainstorming — Tasks & Features
+
+*Seeded 2026-07-04 by Claude as an open idea pool: features, AI/automation intelligence, and
+best practices that apps in this category should be building toward. Nothing here is committed
+work — promote items into a numbered workstream when they're ready to be scoped.*
+
+**Scope guardrail:** Authority Finance stays a *modeling and intelligence* layer. Nothing below
+moves money, holds money, issues cards, or extends credit. The moat is knowing the user's income
+engine better than anyone — not becoming a bank.
+
+### A. Predictive Intelligence — know the paycheck before it lands
+
+- [ ] **Paycheck variance forecaster** — learn from confirmed weeks vs. scheduled weeks
+  (`weekConfirmations` history) to predict this week's *actual* check, not just the scheduled
+  one; show a confidence band ("likely $912–$958") instead of a single false-precision number.
+- [ ] **Seasonal pattern memory** — once 1+ fiscal years of data exist, surface recurring
+  patterns: "OT usually spikes for you in November–December" / "your utilities run $40 higher
+  June–August" — and fold them into forward projections automatically.
+- [ ] **Cash-flow crunch early warning** — walk projected weeks forward and flag the lowest
+  upcoming spendable point ("Week 34 is your tightest week — $61 after bills") weeks before it
+  arrives, with one suggested lever to pull.
+- [ ] **Overtime ROI calculator** — the marginal, *after-tax, after-401k* value of one more OT
+  hour this week, so "is Saturday worth it?" gets a real number. Cheap to build — the engine
+  already computes every input.
+- [ ] **Goal ETA drift alerts** — when a goal's projected finish date slips by more than N weeks
+  from its trend line, say so early, not when the due date is already blown.
+
+### B. Automation Intelligence — the app does the housekeeping
+
+- [ ] **Smart check-in prefill** — the weekly confirm modal pre-answers itself from the user's
+  dominant pattern (e.g. "you've confirmed this exact schedule 9 of the last 10 weeks");
+  confirming becomes one tap, correcting stays easy. Never auto-confirms without the tap.
+- [ ] **Schedule drift detector** — when confirmed weeks consistently diverge from the configured
+  schedule (3+ weeks of the same deviation), suggest updating the config instead of letting the
+  user hand-correct forever: "Your last 4 weeks were all 36 hrs, not 40 — update your schedule?"
+- [ ] **Bill-creep detector** — scan expense `history[]` for amounts that ratchet up quietly
+  (subscription raised $2/mo, insurance +8% at renewal) and surface an annualized cost of the
+  creep ("these 3 bills grew $312/yr combined").
+- [ ] **Natural-language event logging** — type or dictate "picked up 3 extra hours Tuesday and
+  spent $40 on a work boot" → Coach parses it into structured log entries, shows them for
+  confirmation, then commits. Kills the #1 friction point of manual logging.
+- [ ] **Rules engine (user-authored automations)** — simple if/then triggers the user composes:
+  "if a week's net drops below $X, notify me" / "when goal Y hits 80%, remind me to raise the
+  target." Runs client-side off already-computed state; no new infra.
+- [ ] **Calendar sync** — publish pay dates, check-in reminders, and goal milestones to the
+  user's calendar (ICS feed or Google Calendar) so the app's rhythm lives where they already look.
+
+### C. Coach Expansions — beyond chat (builds on §18)
+
+- [ ] **Weekly pre-game briefing** — proactive Monday digest from Coach: this week's projected
+  check, bills due, goal contributions, and one heads-up ("holiday Thursday shifts your OT
+  math"). Push notification via the existing PWA service worker; 3 sentences max.
+- [ ] **What-if simulator** — a sandboxed conversation mode: "what if I drop to 32 hrs for 3
+  weeks?" / "what if I get a $1.50 raise in September?" Coach runs the scenario through a cloned
+  `buildYear` and answers with real deltas — never mutating live config.
+- [ ] **Raise-negotiation prep** — Coach assembles the user's own case from their data: hours
+  worked, OT reliability, attendance streak, tenure — a one-page brief to walk into a review
+  with. Nobody else has this data shape; pure differentiation for hourly workers.
+- [ ] **Yearly recap — "Your Fiscal Year, Wrapped"** — shareable end-of-year story: total gross,
+  taxes weathered, goals funded, biggest OT week, longest confirmation streak. Emotional payoff
+  for a year of logging; doubles as organic marketing.
+- [ ] **Explain-this-number everywhere** — long-press any computed value (net, gap, runway) to
+  get Coach's plain-English derivation of *that exact number* from the user's config. Turns the
+  whole app into its own documentation.
+
+### D. Product & Growth Ideas
+
+- [ ] **Employer preset marketplace** — generalize the DHL preset pattern (per the naming
+  convention in CLAUDE.md): an AI-assisted preset builder ingests a paystub photo + a few
+  questions and drafts a new employer preset; vetted presets get published for other users at
+  the same employer. Each preset is an acquisition channel.
+- [ ] **Lean into the RPG identity** — the repo is literally `finance-domain-rpg`: check-in
+  streaks, goal-funding milestones, and levels for financial consistency. Keep it dignified
+  (progress, not confetti) per the animation rules — think "quiet mastery," not slot machine.
+- [ ] **Household mode (view-only sharing)** — invite a partner to a read-only view of selected
+  panels (Home/Budget). No shared editing, no joint accounts — just shared visibility, the #1
+  ask of couples budgeting apps.
+- [ ] **Benchmarks without creepiness** — opt-in, anonymized cohort comparisons ("hourly workers
+  in your state save a median of X% per check") computed from aggregates only; never
+  individual-level sharing.
+
+### E. Best Practices — table stakes for a trustworthy AI finance app
+
+*Grounded in where the category is heading in 2026: forecasting over reporting, contextual
+insight over raw categorization, and consolidation into fewer, smarter surfaces.*
+
+- [ ] **Human-confirm boundary for all AI writes** — codify the §18.J paystub rule as a global
+  invariant: AI may *propose* config/log/expense changes, only the user commits them. Write it
+  into CLAUDE.md as a standard once the first AI-write feature ships.
+- [ ] **Confidence labeling** — every AI-generated number carries a visible basis:
+  "projected" vs. "confirmed" vs. "estimated from pattern." Never let a guess cosplay as a fact
+  (this is the same disclosure discipline as §20.C, generalized).
+- [ ] **Coach eval suite** — a fixture set of (user snapshot → expected answer quality) cases
+  run against prompt changes, so Coach regressions are caught like code regressions. Start with
+  10 golden conversations; grow it from real flagged answers.
+- [ ] **AI cost telemetry** — per-feature token/cost dashboards from day one of §18 (log
+  call-type + token counts, per §18.G) so a runaway prompt is a graph, not a surprise invoice.
+- [ ] **Thumbs feedback on Coach messages** — one-tap 👍/👎 on every AI output, stored with the
+  chat row (`coach_chats.insights` can hold it); the flagged set feeds the eval suite above.
+- [ ] **Data export + portability** — one-tap full export (JSON + CSV) of config, logs, expenses,
+  goals. Trust feature and churn-guilt-remover; also the prerequisite for the household/benchmark
+  ideas above being consent-clean.
+- [ ] **Offline-first resilience pass** — the PWA should degrade gracefully: log events and
+  confirm weeks offline, queue writes, sync on reconnect. Hourly workers are on warehouse floors
+  with bad signal — this is a core-audience feature, not an edge case.
+- [ ] **Accessibility audit** — contrast check on the dark-green token palette (secondary text
+  `#7fa39a` on `#112c1f` surfaces is the likely first fix), full keyboard nav, screen-reader
+  labels on the metric cards. Do it before the paid tier launches, not after.

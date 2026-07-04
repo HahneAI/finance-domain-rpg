@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, fmtFullDate, fmtLoanDate, toLocalIso, netWorthHealthStatus } from "../lib/finance.js";
 import { NetWorthHealthTips } from "./NetWorthHealthTips.jsx";
@@ -36,8 +36,8 @@ export function HomePanel({
   adjustedTakeHome,
   remainingSpend,
   goals = [],
-  setGoals,
-  setConfig,
+  setGoals: setGoalsProp,
+  setConfig: setConfigProp,
   futureWeeks = [],
   timelineWeekNets = [],
   expenses = [],
@@ -52,7 +52,15 @@ export function HomePanel({
   today,
   fundedGoalSpend = 0,
   isAdmin = false,
+  readOnly = false,
 }) {
+  // Paywall-expired read-only mode (docs/TODO.md §17.E): shadow the mutation
+  // setters with no-ops so every existing setGoals()/setConfig() call in this
+  // file — however deeply nested — is automatically safe, without having to
+  // find and gate each individual call site.
+  const noop = useCallback(() => {}, []);
+  const setGoals = readOnly ? noop : setGoalsProp;
+  const setConfig = readOnly ? noop : setConfigProp;
   // Scale factor: weekly → per-paycheck (1 for weekly, 2 for biweekly/salary, ~4.33 for monthly).
   // All card values shown to the user are scaled by this factor so the amount matches
   // what lands in their bank account each paycheck cycle.
@@ -583,7 +591,7 @@ export function HomePanel({
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0", padding: "0 12px" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>Active Goals</div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              {tl.length > 0 && setConfig && (
+              {tl.length > 0 && setConfigProp && !readOnly && (
                 <Pressable
                   onClick={() => setShowResetTimeline(true)}
                   style={{
@@ -710,6 +718,7 @@ export function HomePanel({
                               })()}
                             </div>
                           )}
+                          {!readOnly && (
                           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                             {canShowReorder && (
                               <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)" style={{ flex: 1 }}>
@@ -725,6 +734,7 @@ export function HomePanel({
                               </>
                             ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>✕</SmBtn>}
                           </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -839,6 +849,7 @@ export function HomePanel({
                               })()}
                             </div>
                           )}
+                          {!readOnly && (
                           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                             {canShowReorder && (
                               <SmBtn onClick={() => setShowReorderModal(true)} c="var(--color-text-secondary)" style={{ flex: 1 }}>
@@ -854,6 +865,7 @@ export function HomePanel({
                               </>
                             ) : <SmBtn onClick={() => setDelGoalId(g.id)} c="var(--color-deduction)" style={{ flex: 1 }}>✕</SmBtn>}
                           </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1183,7 +1195,7 @@ export function HomePanel({
           document.body,
         )}
 
-        {addingGoal ? (
+        {!readOnly && (addingGoal ? (
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
               <div style={{ gridColumn: "1/-1" }}><label style={lS}>Label</label><input type="text" value={newGoal.label} onChange={(e) => setNewGoal((v) => ({ ...v, label: e.target.value }))} style={iS} /></div>
@@ -1195,7 +1207,7 @@ export function HomePanel({
               <SmBtn onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
             </div>
           </div>
-        ) : <Pressable onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</Pressable>}
+        ) : <Pressable onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</Pressable>)}
 
         {completedGoals.length > 0 && (
           <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "12px" }}>

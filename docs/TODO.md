@@ -158,22 +158,41 @@ verify with an anon client `getUser()`, then use the service-role client for pri
 
 ### D. Trial logic (14-day public + 7-day hidden grace)
 
-- [ ] **Single entitlement helper** — `lib/subscription.js → getEntitlement(subscription, now)`
+- [x] **Single entitlement helper** — `src/lib/subscription.js → getEntitlement(subscription, now)`
   returning `{ state, trialDaysLeft, isEntitled, accessDaysLeft }` where
   `state ∈ "trial" | "grace" | "active" | "expired" | "none"`:
-  - `active` — `subscription_status === "active"` (or `trialing` w/ a real Stripe sub) → entitled
+  - `active` — `subscription_status === "active"` (or `trialing` w/ a real Stripe sub) → entitled.
+    **Extended beyond the original spec** to also cover the §H dunning/cancellation cases as
+    `active`, since leaving them out would have been a live bug against code already shipped in
+    §C: `past_due` (webhook sets this on `invoice.payment_failed`) and `canceled` both stay
+    entitled *while `now < current_period_end`* — matches §H "keep entitlement until
+    current_period_end" / "cancel at period end" verbatim. Once that period passes, they fall
+    through to the trial/grace/expired math like anyone else (which resolves to `expired` for any
+    real past subscriber, since their trial window is long over).
   - `trial` — `now < trial_ends_at` → entitled; `trialDaysLeft = ceil((trial_ends_at − now)/day)`
   - `grace` — `trial_ends_at ≤ now < access_ends_at` → **still entitled**, but UI/email say "trial
-    ended." `trialDaysLeft = 0`. **Do not expose `accessDaysLeft` anywhere user-visible.**
+    ended." `trialDaysLeft = 0`. **`accessDaysLeft` is computed but reserved for admin-only
+    surfaces (Live State Inspector / Config Raw View) — never rendered to a non-admin user.**
   - `expired` — `now ≥ access_ends_at` → **not entitled** (read-only gate on)
+  - `none` — no trial window seeded at all (investor/demo accounts, or a pre-migration-017 row)
   - `isEntitled = active || trial || grace`
-- [ ] **Lock off the internal cutoff, not the public one** — the read-only gate keys off
+  - `now` is always a real wall-clock `Date` (defaults to `new Date()`) — **never** the app's admin
+    Lock Date / `effectiveToday` simulation, so Lock Date can't be used to extend a trial or grace.
+  - Unit-tested (`src/test/lib/subscription.test.js`, 15 tests): every state, the exact day-14 and
+    day-21 boundaries (inclusive/exclusive verified precisely), `past_due`/`canceled` before and
+    after `current_period_end`, and the missing-timestamps/`null` defensive cases. This also
+    satisfies the equivalent test bullet listed under §H.
+- [x] **Lock off the internal cutoff, not the public one** — the read-only gate keys off
   `access_ends_at` (day 21). The countdown + "trial ended" banner key off `trial_ends_at` (day 14).
-  Both transitions are time-derived (don't wait on a webhook to flip).
-- [ ] **No double trials** — a returning/non-new user never re-seeds trial timestamps; an
-  expired/grace user who never paid sees the upgrade path, not a fresh window.
-- [ ] **Disclosure guard** — add a lint/test note: no UI string or email template may reference the
-  21-day / grace / "extra week" concept. Public surfaces only ever say 14 days.
+  Both transitions are time-derived (don't wait on a webhook to flip) — satisfied by
+  `getEntitlement` computing both directly from stored timestamps vs. wall-clock `now`.
+- [x] **No double trials** — already satisfied by §A's `syncUserProfile()` (keyed off
+  `trial_started_at IS NULL`, not row-existence) — a returning user's trial timestamps are never
+  re-seeded, so an expired/grace user who never paid always resolves to `expired`/`grace` (upgrade
+  path), never gets a fresh window.
+- [ ] **Disclosure guard** — no UI string or email template may reference the 21-day / grace /
+  "extra week" concept; public surfaces only ever say 14 days. Deferred until §E/§F/§G actually
+  produce UI copy and email templates to test — nothing to grep yet.
 
 ### E. Frontend gating / paywall
 

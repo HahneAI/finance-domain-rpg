@@ -22,6 +22,9 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
       include: ['src/lib/**', 'src/constants/**', 'src/hooks/**', 'src/components/**'],
+      // Coverage is most useful exactly when tests fail — without this,
+      // a single red test silently suppresses the whole report.
+      reportOnFailure: true,
     },
   },
 })

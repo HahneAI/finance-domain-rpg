@@ -18,6 +18,7 @@ import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
 import { UpgradeModal } from "./components/UpgradeModal.jsx";
+import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { Pressable } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
@@ -1096,7 +1097,7 @@ export default function App() {
         isAdmin={isAdmin}
         readOnly={isExpiredReadOnly}
       />}
-      {currentView === "income" && (isExpiredReadOnly ? <UpgradeModal /> : <IncomePanel
+      {currentView === "income" && (isExpiredReadOnly ? <UpgradePanel tab="income" /> : <IncomePanel
         allWeeks={allWeeks} config={config} setConfig={setConfig}
         showExtra={showExtra} setShowExtra={setShowExtra}
         taxDerived={taxDerived}
@@ -1126,7 +1127,7 @@ export default function App() {
         taxProjectionsEnabled={taxProjectionsEnabled}
         readOnly={isExpiredReadOnly}
       />}
-      {currentView === "log" && (isExpiredReadOnly ? <UpgradeModal /> : <LogPanel
+      {currentView === "log" && (isExpiredReadOnly ? <UpgradePanel tab="log" /> : <LogPanel
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
         effectiveToday={effectiveToday}
         setConfig={setConfig} weekConfirmations={weekConfirmations}

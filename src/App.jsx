@@ -19,6 +19,7 @@ import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
 import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
+import { TrialBanner } from "./components/TrialBanner.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { Pressable } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
@@ -270,6 +271,7 @@ export default function App() {
   // Session-only dismissal so the banner re-appears on every page load,
   // matching the §15.C1 spec ("dismissible but re-shows on reload").
   const [jobLossBannerDismissed, setJobLossBannerDismissed] = useState(false);
+  const [trialBannerDismissed, setTrialBannerDismissed] = useState(false);
 
   const currentView = viewStack[viewStack.length - 1];
   const mainContentRef = useRef(null);
@@ -1164,6 +1166,7 @@ export default function App() {
         weekConfirmations={weekConfirmations}
         onInstallClick={isStandalone ? null : openPwaModal}
         onOpenLifeEvents={() => setLifeEventMenu(true)}
+        subscription={subscription}
       />}
     </>
   );
@@ -1712,21 +1715,18 @@ export default function App() {
               <Pressable onClick={() => setCheckoutReturn(null)} aria-label="Dismiss" style={{ background: "transparent", color: "var(--color-text-secondary)", border: "none", cursor: "pointer", fontSize: "14px", padding: "2px 6px" }}>✕</Pressable>
             </div>
           )}
-          {/* ── Expired read-only notice (§17.E) — minimal for now; §F replaces this
-               with the full phase-aware trial/dunning banner (trial/grace/expired copy). ── */}
-          {isExpiredReadOnly && (currentView === "home" || currentView === "budget") && (
-            <div style={{
-              background: "rgba(244,164,164,0.08)", border: "1px solid rgba(244,164,164,0.28)",
-              borderRadius: "12px", padding: "10px 14px", marginBottom: "14px",
-              display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap",
-            }}>
-              <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
-                Your trial has ended — this view is read-only.
-              </div>
-              <Pressable onClick={() => setShowUpgradeModal(true)} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", padding: "6px 14px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer" }}>
-                Upgrade
-              </Pressable>
-            </div>
+          {/* ── Trial/dunning banner (§17.F) — phase-aware (trial/grace/expired),
+               persistent across views except where UpgradePanel already replaces
+               the whole panel (Income/Log while expired — showing both would be
+               redundant). Dismissible for the session; re-shows on reload since
+               dismissal isn't persisted, same pattern as the Job Loss banner. ── */}
+          {!paywallBypassed && !trialBannerDismissed &&
+            !(isExpiredReadOnly && (currentView === "income" || currentView === "log")) && (
+            <TrialBanner
+              entitlement={entitlement}
+              onUpgrade={() => setShowUpgradeModal(true)}
+              onDismiss={() => setTrialBannerDismissed(true)}
+            />
           )}
           {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
           {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
@@ -2372,6 +2372,15 @@ export default function App() {
                 ["Buffer / Wk", `$${Math.round(bufferPerWeek).toLocaleString()}`, null],
                 ["Weekly Income", `$${Math.round(weeklyIncome).toLocaleString()}`, null],
                 ["Annual Net", `$${Math.round(projectedAnnualNet).toLocaleString()}`, null],
+                // §17.F admin visibility — resolved phase + the raw lifecycle
+                // fields a diagnostic session needs. Access Ends is the hidden
+                // day-21 cutoff (§D/§H disclosure rule) — this Inspector is
+                // isAdmin-gated, never shown to a non-admin user.
+                ["Sub Phase", entitlement.state, subscription.status ? `stripe: ${subscription.status}` : null],
+                ["Trial Ends", subscription.trialEndsAt ? new Date(subscription.trialEndsAt).toLocaleDateString() : "—", null],
+                ["Access Ends", subscription.accessEndsAt ? new Date(subscription.accessEndsAt).toLocaleDateString() : "—", "hidden cutoff"],
+                ["Period End", subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : "—", null],
+                ["Card / Dunning", subscription.cardOnFile ? "on file" : "none", subscription.dunningEmailCount ? `${subscription.dunningEmailCount} sent` : null],
               ].map(([label, val, sub]) => (
                 <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
                   <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", flexShrink: 0 }}>{label}</span>

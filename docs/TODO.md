@@ -111,11 +111,23 @@ gate without hitting Stripe on every load.*
   (same pattern as `week_confirmations`, so a not-yet-migrated DB falls back to
   `DEFAULT_SUBSCRIPTION` instead of breaking the whole load) and maps them into a `subscription`
   object; kept OUT of the `config` JSON blob.
-- [ ] **RLS** — **descoped for now.** `user_data` has never had RLS enabled at all (only a
-  commented-out example in `001_initial_schema.sql`) — enabling it for the first time is a
-  higher-risk, separate task. For this feature, the subscription columns are protected at the
-  app layer instead: `saveUserData()` never accepts/writes them client-side; only the future
-  service-role webhook/checkout/portal routes (§C) will. Revisit real RLS as its own follow-up.
+- [x] **RLS** — landed via migration `019_enable_user_data_rls.sql` (security audit
+  `docs/security-audit-2026-07-04.md` finding #1) plus its two required companion moves,
+  completed 2026-07-06:
+  - [x] **`api/seed-trial.js`** — new service-role route. `syncUserProfile()` in `src/lib/db.js`
+    now POSTs its Bearer token here instead of upserting `trial_started_at`/`trial_ends_at`/
+    `access_ends_at`/`subscription_status` directly; the route re-checks `trial_started_at IS
+    NULL` server-side before seeding. `display_name`/`avatar_url` stay a direct client upsert
+    (still client-writable columns).
+  - [x] **`api/seed-investor.js`** — new service-role route. `createInvestorAccount()` now upserts
+    `user_data` without `is_investor`, then POSTs the investor code here to grant `is_investor =
+    true`; the route re-validates the code against `investor_codes.is_active` itself rather than
+    trusting the client. Known gap: if email confirmation is required at sign-up there's no
+    session yet to call this route, so `is_investor` stays unset until a later authenticated
+    sign-in seeds it — a limitation the RLS migration introduces for any unauthenticated write to
+    this table, not specific to this one column.
+  - Both routes + `db.js` covered by updated `db.test.js` / `dbInvestor.test.js` (fetch mocked,
+    same pattern as `UpgradeCard`'s checkout call).
 
 ### B. Stripe account & product setup *(config steps, no app code)*
 
@@ -290,27 +302,79 @@ verify with an anon client `getUser()`, then use the service-role client for pri
 
 ### F. Trial + subscription UI
 
-- [ ] **Trial/dunning banner** — slim persistent banner (mirrors the Job Loss banner pattern),
-  copy by phase: **trial** → "X days left in your free trial" (amber at ≤3 days); **grace** →
-  "Your trial ended — add a card to keep using the app" (must NOT hint that access continues);
-  **expired** → "Trial ended — add a card to restore full access." Always carries an Add Card /
-  Upgrade button. Dismissible, re-shows on reload.
-- [ ] **ProfilePanel → Account: Subscription card** — replaces the §8 "subscription status
-  placeholder." Shows state (Trial · N days left / Active · renews [date] / Past due / Canceled),
-  plan + price, and a **Manage Subscription** button → `api/stripe-portal`. Add Card / Upgrade
-  button (monthly vs. annual) when not yet subscribed. In `grace`/`expired` this is the primary
-  conversion surface.
-- [ ] **Admin visibility** — Live State Inspector / Config Raw View: surface `subscription_status`,
-  the resolved **phase** (`trial`/`grace`/`expired`), `trial_ends_at`, `access_ends_at` (admin-only
-  — the hidden cutoff), `card_on_file`, `dunning_email_count`, `current_period_end` so a diagnostic
-  session can read billing + lifecycle state at a glance. Add to CLAUDE.md "Diagnostic request
-  templates."
+- [x] **Trial/dunning banner** — `src/components/TrialBanner.jsx`, wired into `App.jsx` in place of
+  the §E minimal read-only notice it was always meant to be replaced by. Phase-aware copy: **trial**
+  → "N days left in your free trial" (amber/warning tone once `trialDaysLeft ≤ 3`, otherwise a
+  neutral tone); **grace** → "Your trial ended — add a card to keep using the app"; **expired** →
+  "Trial ended — add a card to restore full access" (red tone). Renders nothing for `active`/`none`.
+  Persistent across every view except Income/Log while expired (those are already fully replaced by
+  `UpgradePanel` — showing both would be redundant). Dismiss state is a plain `useState` (not
+  persisted), so it re-shows on reload, same pattern as the Job Loss banner. Disclosure-guard tested
+  (`TrialBanner.test.jsx`) — grace/expired copy asserted to never mention "grace," "21-day," or
+  "extra week."
+- [x] **ProfilePanel → Account: Subscription card** — replaces the §8 placeholder in
+  `AccountDetail` (`ProfilePanel.jsx`). Status label prioritizes the **raw Stripe status**
+  (`past_due`/`canceled`) over the collapsed entitlement state, but only while `getEntitlement`
+  still resolves `active` (i.e. within `current_period_end`) — Trial/Active/Past Due/Canceled as
+  specced; once a canceled/past-due period actually lapses it falls into the same "Trial Ended"
+  bucket as any other non-entitled account (no invented fifth label — mirrors how `subscription.js`
+  itself already collapses a long-lapsed real subscriber into `expired`). Investor/demo/pre-migration
+  accounts (`entitlement.state === "none"`) show "N/A — no subscription required" with no
+  checkout/manage buttons at all, instead of a misleading "Trial Ended." Shows plan + price when
+  known. **Manage Subscription** (→ `api/stripe-portal`, same `getSession()`/Bearer pattern as
+  checkout) appears once `stripe_customer_id` exists; the Monthly/Annual checkout buttons appear
+  otherwise — never both. `subscription` threaded App.jsx → ProfilePanel → AccountDetail as a new
+  prop. 10 tests (`AccountDetailSubscription.test.jsx`) cover every status branch and the portal
+  call/error path.
+- [x] **Admin visibility** — Live State Inspector gains `Sub Phase` (resolved phase + raw Stripe
+  status as its sub-label), `Trial Ends`, `Access Ends` (hidden cutoff — this Inspector is
+  isAdmin-gated already, so no new disclosure risk), `Period End`, `Card / Dunning`. Turned out the
+  **DB Row Viewer already covers "Config Raw View"** for this — its `select("*")` was already
+  pulling every subscription column before this pass; nothing to add there. CLAUDE.md's admin
+  toolkit table and "Diagnostic request templates" updated to match (11 → 16 Live values, new
+  template #6 pointing at DB Row + Live State together for billing/paywall issues).
+
+---
+
+**Handoff checkpoint (2026-07-06) — §A–F are done; picking up here in a fresh session:**
+All work so far is on branch `claude/stripe-paywall-integration-d2b3sw` (repo
+`HahneAI/finance-domain-rpg`), validated in Stripe test mode end-to-end including a real
+manual click-through (expired user → Income/Log Upgrade panels → Checkout → back-button
+return, all confirmed working). Load-bearing context for whatever's next:
+- `getEntitlement()` (`src/lib/subscription.js`) is the one place phase math lives —
+  trial/grace/active/expired/none. Never re-derive it inline; `now` must always be real
+  wall-clock time, never the admin Lock Date simulation.
+- The disclosure rule is absolute: no user-facing string (UI, email, API response) may ever
+  say "grace," "21-day," "extra week," or otherwise hint the trial is longer than 14 days.
+  Every surface built so far has a test enforcing this — copy that pattern for anything new
+  (see `TrialBanner.test.jsx` / `UpgradeModal.test.jsx` for the shape).
+- Migration `019_enable_user_data_rls.sql` (RLS) is written and both required companion
+  service-role routes (`api/seed-trial.js`, `api/seed-investor.js`) already exist — but
+  **it's unconfirmed whether the user has actually run it in Supabase yet.** Don't assume
+  RLS is live; ask or check first if a task depends on it.
+- `api/_stripeClient.js` exports `resolveAppOrigin(req)` for any redirect URL (success/
+  cancel/return) — derives the origin from the request instead of a static `APP_URL`, since
+  there are multiple live deployments (preview + production) and a hardcoded URL bounces
+  users to the wrong one. Use it, don't reintroduce a static URL.
+- This sandbox has no live Supabase/Stripe credentials — verification here means
+  `npm run test:run` (846 passing as of this checkpoint) + `npx eslint` (diff against
+  `git stash` to catch only new issues — there are pre-existing baseline warnings) +
+  `npm run build`. Real browser/backend verification has only ever happened via the user's
+  own manual pass on the deployed preview — ask for that before marking anything "done."
+- §G–K below are still italicized-intro-only or partially stale relative to what §A–F
+  actually shipped; skim them for the plan but verify against the current code before
+  assuming a referenced file/component doesn't exist yet.
+
+---
 
 ### G. Notifications & lifecycle emails (Vercel Cron)
 
 *New infra: the app has no transactional email today (only Supabase auth emails). The card-nudge,
 grace, and every-other-day deletion warnings need an email provider + a scheduled job. All sends
-are server-side via a daily cron route; nothing here runs on the client.*
+are server-side via a daily cron route; nothing here runs on the client. Nothing in this section
+has been started — nothing under `api/` sends email today, and no cron is registered in
+`vercel.json`. Depends on §D/§F's phase math and columns, both already shipped, so this is
+unblocked and ready to start whenever picked up.*
 
 - [ ] **Pick an email provider** — Resend / Postmark / SendGrid (Resend is the lightest Vercel fit).
   Add `EMAIL_API_KEY` + a verified sender domain.
@@ -335,6 +399,12 @@ are server-side via a daily cron route; nothing here runs on the client.*
 
 ### H. Edge cases, security & testing
 
+*Mostly a hardening/audit pass over what §A–F already shipped, not new build-out — several
+bullets below may already be satisfied by existing code and just need a test written or a
+double-check, not fresh implementation. E.g. webhook signature verification and the past_due/
+canceled entitlement handling already exist in `api/_stripeClient.js`/`subscription.js`; confirm
+before treating any bullet here as starting from zero.*
+
 - [ ] **Webhook signature** — reject unsigned/invalid events; never trust client-reported status.
 - [ ] **Card declines / `past_due`** — keep entitlement until `current_period_end`, then lock;
   surface the Stripe-hosted update-card flow via the portal.
@@ -358,7 +428,8 @@ are server-side via a daily cron route; nothing here runs on the client.*
 *New workstream (2026-07-01). When the day-21+7 dunning cron (§G) finally deletes an account for
 non-payment, the user should still be able to come back — but coming back must require a real,
 successful charge, not just re-entering the same info. This section defines that recovery path.
-Depends on §G's deletion cron writing an archive record instead of a bare hard-delete.*
+Depends on §G's deletion cron writing an archive record instead of a bare hard-delete — since §G
+hasn't been built yet either, nothing here is actionable until that lands first.*
 
 **Core distinction:** the existing `api/delete-account.js` flow (user types "DELETE" in
 ProfilePanel) stays a **true, unrecoverable hard delete** — that's an explicit user choice and
@@ -429,6 +500,11 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
 
 ### J. Env vars (Vercel)
 
+*Reference only — all Stripe/Supabase vars listed here are already set in Vercel and working
+(validated by the §C test-mode checkout pass and confirmed live by the user). `EMAIL_API_KEY` and
+`CRON_SECRET` are the only two not yet set, since they belong to §G which hasn't been built.
+Revisit this list only if §G/§I introduce new vars (an email provider key, a cron secret, etc.).*
+
 ```
 STRIPE_SECRET_KEY=...             # LIVE server key (api/ functions)
 STRIPE_SECRET_KEY_TEST=...        # TEST server key
@@ -484,6 +560,9 @@ holding the test-mode value, and both live in Vercel simultaneously regardless o
 webhook event's price id could be either mode's, so there's no "pick a side" step there either.
 
 ### K. Future Ideas (not in scope for v1)
+
+*Deliberately deferred — don't pick these up unless the user explicitly asks, even if §G–I are
+finished first.*
 
 - [ ] **Account top-off** — let a user with spare cash pre-buy extra subscription time (e.g. a
   week at a time) into a banked balance on their account, purely as a voluntary buffer against a

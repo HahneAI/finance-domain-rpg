@@ -8,7 +8,7 @@ import { Pressable } from "./ui.jsx";
 // overlay on top of read-only Home/Budget) and UpgradePanel (a real panel
 // that replaces Income/Log entirely, docs/TODO.md §17.E). Same
 // getSession()/Bearer-token checkout pattern as ProfilePanel's AccountDetail.
-export function UpgradeCard({ onClose } = {}) {
+export function UpgradeCard({ onClose, tagline } = {}) {
   const [checkoutState, setCheckoutState] = useState({ plan: null, error: null });
 
   async function handleCheckout(plan) {
@@ -55,6 +55,11 @@ export function UpgradeCard({ onClose } = {}) {
     <LiquidGlass purpose="modal" tone="teal" intensity="strong" style={{ maxWidth: "420px", width: "100%", padding: "28px 24px", borderRadius: "18px", position: "relative" }}>
       {onClose && (
         <Pressable onClick={onClose} aria-label="Dismiss" style={{ position: "absolute", top: "14px", right: "14px", background: "transparent", color: "var(--color-text-secondary)", border: "none", cursor: "pointer", fontSize: "16px", padding: "4px 8px" }}>✕</Pressable>
+      )}
+      {tagline && (
+        <div style={{ fontSize: "13px", color: "var(--color-text-primary)", marginBottom: "14px" }}>
+          {tagline}
+        </div>
       )}
       <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)", marginBottom: "8px" }}>
         Authority Finance Premium

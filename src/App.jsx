@@ -1066,7 +1066,7 @@ export default function App() {
         isAdmin={isAdmin}
         readOnly={isExpiredReadOnly}
       />}
-      {currentView === "income" && (isExpiredReadOnly ? <UpgradePanel /> : <IncomePanel
+      {currentView === "income" && (isExpiredReadOnly ? <UpgradePanel tab="income" /> : <IncomePanel
         allWeeks={allWeeks} config={config} setConfig={setConfig}
         showExtra={showExtra} setShowExtra={setShowExtra}
         taxDerived={taxDerived}
@@ -1096,7 +1096,7 @@ export default function App() {
         taxProjectionsEnabled={taxProjectionsEnabled}
         readOnly={isExpiredReadOnly}
       />}
-      {currentView === "log" && (isExpiredReadOnly ? <UpgradePanel /> : <LogPanel
+      {currentView === "log" && (isExpiredReadOnly ? <UpgradePanel tab="log" /> : <LogPanel
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
         effectiveToday={effectiveToday}
         setConfig={setConfig} weekConfirmations={weekConfirmations}

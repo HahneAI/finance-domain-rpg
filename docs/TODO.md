@@ -547,7 +547,10 @@ STRIPE_PRICE_ANNUAL=price_...     # LIVE — $120/yr ($10.00/mo flat, ~4 months 
 STRIPE_PRICE_ANNUAL_TEST=price_...  # TEST — $120/yr
 APP_URL=https://...               # server only — whitelisted base URL for Checkout/Portal
                                    # success, cancel, and return URLs. Not mode-specific.
-EMAIL_API_KEY=...                 # Resend API key (§G lifecycle emails; api/_email.js)
+EMAIL_API_KEY=...                 # Resend API key (§G lifecycle emails; api/_email.js) —
+                                   # RESEND_API_KEY (the name Resend's Vercel integration
+                                   # injects) is accepted as a fallback
+
 EMAIL_FROM=...                    # optional verified sender, e.g. "Authority Finance <no-reply@domain>"
                                    # — defaults to onboarding@resend.dev (dev-only delivery) when unset
 CRON_SECRET=...                   # guards api/cron-subscription-lifecycle; Vercel auto-sends it

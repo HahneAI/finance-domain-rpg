@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { stripe, MODE } from "./_stripeClient.js";
+import { stripe, MODE, resolveAppOrigin } from "./_stripeClient.js";
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
   try {
     const session = await stripe.billingPortal.sessions.create({
       customer: row.stripe_customer_id,
-      return_url: `${appUrl}/`,
+      return_url: `${resolveAppOrigin(req)}/`,
     });
     return res.status(200).json({ url: session.url });
   } catch (err) {

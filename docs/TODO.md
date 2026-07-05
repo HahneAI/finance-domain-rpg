@@ -138,6 +138,22 @@ verify with an anon client `getUser()`, then use the service-role client for pri
   (store `stripe_customer_id` back on `user_data`) → create a Checkout Session for the chosen price
   → return the session URL. Pass `client_reference_id = user.id` and set success/cancel URLs to
   `APP_URL` (new env var, §J).
+  - [x] **Fixed (2026-07-06): stale-domain crash on checkout return.** Reported symptom — an
+    expired-trial user on the `Version-control` preview deployment hit "back" from Stripe Checkout
+    and landed on a flash of Home, then a stuck loading screen, at
+    `authority-finance.vercel.app//?checkout=cancel`. Root cause: `success_url`/`cancel_url` (and
+    `return_url` in `stripe-portal.js`) were built from a single static `APP_URL` env var, so
+    Stripe always redirected back to whichever one deployment that var named — here,
+    `authority-finance.vercel.app`, which (confirmed via `git show origin/master:...`) is running a
+    build from before `getEntitlement`/`checkoutReturn` existed at all, so it has no idea what to do
+    with a `?checkout=` param and just hangs. The double slash in the reported URL was a second,
+    independent bug — `APP_URL` had a trailing slash. Fix: `api/_stripeClient.js` now exports
+    `resolveAppOrigin(req)`, which derives the redirect origin from the actual request's `Origin` /
+    `Referer` header (validated against an allowlist — `*.vercel.app`, `localhost`, or `APP_URL`'s
+    own hostname — so this can't become an open redirect), falling back to `APP_URL` (trailing
+    slash stripped) only when neither header is present. Both `stripe-create-checkout.js` and
+    `stripe-portal.js` now use it instead of the static `appUrl`. `APP_URL` itself is unchanged and
+    still required as the fallback/config-check value — no Vercel env var changes needed.
 - [x] **`api/stripe-webhook.js`** — verify the Stripe signature with the webhook secret (use the
   **raw** request body — `bodyParser: false`). Handles `checkout.session.completed`,
   `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`. On each,

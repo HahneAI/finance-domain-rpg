@@ -1648,3 +1648,72 @@ here as a second currency the app helps the user stop hemorrhaging.*
 - [ ] **Mental-health boundary** — the Fog Index and Burnout Sentinel are wellness mirrors,
   not clinical instruments; copy review with the same rigor as §20.D's accountant gate, and
   a visible hand-off line to real resources when signals are severe.
+
+---
+
+### G. Post-Merge Honing Pass — grounded by the 2026-07-05 master sync
+
+*Third pass. Master landed five workstreams since §21 was seeded: the §17.D/E entitlement
+state machine + read-only paywall, the security breach audit (`docs/security-audit-2026-07-04.md`)
+with RLS remediation migration 019, the Google OAuth callback-failure surfacing, 157 new tests
+(exposing Job Loss engine math, investor/demo account infra, and the swipe/scroll hooks as
+mature systems), and Stripe §17.C validated end-to-end in test mode. Each shipment either
+**sharpens an existing fable idea's tether** or **opens a door that wasn't visible before**.*
+
+#### G1. Tethers that just got shorter (existing ideas, now cheaper)
+
+- [ ] **Household view-only mode (§21.D) — the mechanism now exists.** The paywall pass built
+  exactly the primitive this idea needed: a `readOnly` prop on Home/Budget whose noop-setter
+  pattern (`setGoals = readOnly ? noop : setGoalsProp`) makes every nested mutation a no-op
+  with one switch. A partner's shared view is that same prop pointed at someone else's data —
+  what was a moonshot is now mostly an auth/invite problem. Promote this toward real scoping.
+- [ ] **The Storm Drill — Job Loss Mode as a fire drill.** The new `buildYearJobLoss` /
+  `jobLossFlow` tests confirm the engine can already recompute a whole year around a job-loss
+  event. New idea on top: let a *currently-employed* user run the storm as a **drill** — "if I
+  lost my job today, my runway is 11 weeks; here's the week the keep wall breaks" — sandboxed
+  (cloned config, like §21.C's what-if simulator), never touching live state. Preparedness is
+  the single best fog-cutter there is, and the math is already tested. On the Domain Map (F3),
+  this renders literally as a storm rolling across the territory.
+- [ ] **Council of Future Selves (F2) — stronger legs.** `estimateGoalNextYear` shipping with
+  tests means multi-year projection is no longer hypothetical; the future-self personas can be
+  seeded from a real next-year estimate instead of a hand-rolled extrapolation.
+- [ ] **Impulse Airlock (F1) — the gesture already exists.** `useSwipeStack` (now under test)
+  is a card-swipe interaction primitive: urge triage becomes a swipe stack — swipe one way to
+  release an expired urge, the other to bank it into the Reclaimed total. The UX centerpiece
+  of the airlock is a hook the codebase already ships.
+- [ ] **Post-checkout polling → ambient sync.** `App.jsx` now polls `loadUserData()` after
+  Stripe checkout because the webhook may lag. Supabase Realtime subscriptions could replace
+  that poll *and* become the backbone for F3's Crews (live guild counters) and household mode
+  (partner's view updates as the earner confirms a week) — one infra piece, three features.
+
+#### G2. New ideas the merge surfaced
+
+- [ ] **The Open Keep — a public trust page.** The security audit is genuinely good writing:
+  it names what was broken, what was already strong, and what got locked down (RLS + column
+  locks on billing/admin flags). Turn that posture into a user-facing surface: a plain-English
+  "how your data is guarded" page — what we store, what we can see, what we *cannot* do
+  (move money, touch accounts), when we were last audited. Financial apps hide this; an app
+  about taking control back should hand the user the keys inventory. Sibling to F1's Calm
+  Covenant: **Calm Covenant for attention, Open Keep for data.**
+- [ ] **RLS regression sentinel** — promote the audit's recommendation #4 into §21.E practice:
+  a standing test that signs in as user B and asserts user A's row is unreachable
+  (read/write/delete all fail), so the crown-jewel protection can never silently regress.
+  Cheap, permanent, and the Open Keep page can truthfully say "verified on every deploy."
+- [ ] **The Playable Character — public demo world.** Investor/demo account infra
+  (`demo_accounts`, `investor_codes`, now fully under test in `dbInvestor.test.js`) already
+  solves "a fake account with realistic data." Generalize it: before signup, anyone can play
+  a **pre-made character** — a fictional hourly worker with a year of history, goals mid-siege,
+  a storm on the horizon — and poke every panel. The RPG frame makes this natural (every RPG
+  lets you try a character before you build your own), it converts better than screenshots,
+  and it's the §18 Coach demo stage too. The infra cost was already paid for investors.
+- [ ] **Honest-failure standard** — the OAuth fix (surfacing a silently-failed Google callback
+  instead of dumping the user on a blank login form) is a pattern worth codifying in §21.E:
+  *no dead-end states.* Every failure the app can detect, it explains in one sentence and
+  offers one next action. Fog thrives on unexplained dead ends; an app against brain fog
+  never leaves the user asking "…did that work?"
+- [ ] **Expired ≠ erased — the Archive promise.** The read-only expired mode (§17.E) locks
+  editing, which is fair — but pair it with an explicit promise: your *history* (chronicle,
+  logs, completed goals, Heirloom Letters) stays readable and exportable forever, paid or
+  not. The paywall gates the engine, never the user's own memories. That single sentence of
+  policy is a trust differentiator competitors structurally can't match, and it makes F3's
+  Chronicle/Heirloom features safe to invest emotion in.

@@ -1429,22 +1429,35 @@ engine better than anyone — not becoming a bank.
 
 ### A. Predictive Intelligence — know the paycheck before it lands
 
+*Section thesis: every number the app shows should get more accurate the longer the user lives
+with it — projections learn from confirmed actuals instead of trusting the schedule forever.*
+
 - [ ] **Paycheck variance forecaster** — learn from confirmed weeks vs. scheduled weeks
   (`weekConfirmations` history) to predict this week's *actual* check, not just the scheduled
   one; show a confidence band ("likely $912–$958") instead of a single false-precision number.
+  Vision: a small range chip beside the projected net on the Income panel's current-week row;
+  tapping it shows the last 6 weeks of predicted-vs-actual so trust in the band is earned.
 - [ ] **Seasonal pattern memory** — once 1+ fiscal years of data exist, surface recurring
   patterns: "OT usually spikes for you in November–December" / "your utilities run $40 higher
-  June–August" — and fold them into forward projections automatically.
+  June–August" — and fold them into forward projections automatically. Surfaces as a Coach
+  insight card at the start of the affected season — never as a silent change to projections
+  with no note explaining why the numbers moved.
 - [ ] **Cash-flow crunch early warning** — walk projected weeks forward and flag the lowest
   upcoming spendable point ("Week 34 is your tightest week — $61 after bills") weeks before it
-  arrives, with one suggested lever to pull.
+  arrives, with one suggested lever to pull. Example lever: "shift $25/wk into the buffer for
+  the next 4 weeks and Week 34 clears with $161 instead" — always one lever, never a list.
 - [ ] **Overtime ROI calculator** — the marginal, *after-tax, after-401k* value of one more OT
   hour this week, so "is Saturday worth it?" gets a real number. Cheap to build — the engine
-  already computes every input.
+  already computes every input. Vision: a one-line chip in the Week Inspector and the weekly
+  briefing — "your next OT hour ≈ $19.40 take-home."
 - [ ] **Goal ETA drift alerts** — when a goal's projected finish date slips by more than N weeks
-  from its trend line, say so early, not when the due date is already blown.
+  from its trend line, say so early, not when the due date is already blown. Example: "Truck
+  fund slipped 5 weeks this month — one $240 log entry caused most of it; here's the entry."
 
 ### B. Automation Intelligence — the app does the housekeeping
+
+*Section thesis: the user should never do bookkeeping the app could have drafted for them —
+automation proposes, the human approves with one tap (see §21.E human-confirm boundary).*
 
 - [ ] **Smart check-in prefill** — the weekly confirm modal pre-answers itself from the user's
   dominant pattern (e.g. "you've confirmed this exact schedule 9 of the last 10 weeks");
@@ -1460,11 +1473,18 @@ engine better than anyone — not becoming a bank.
   confirmation, then commits. Kills the #1 friction point of manual logging.
 - [ ] **Rules engine (user-authored automations)** — simple if/then triggers the user composes:
   "if a week's net drops below $X, notify me" / "when goal Y hits 80%, remind me to raise the
-  target." Runs client-side off already-computed state; no new infra.
+  target." Runs client-side off already-computed state; no new infra. Vision: rules are built
+  from three dropdowns (signal → comparator/threshold → action), never a formula box — think
+  phone-automation-shortcut simplicity, not IFTTT scripting.
 - [ ] **Calendar sync** — publish pay dates, check-in reminders, and goal milestones to the
   user's calendar (ICS feed or Google Calendar) so the app's rhythm lives where they already look.
+  Example events: an all-day "Payday — projected $947" each pay Friday, and a "Confirm week 26"
+  reminder the morning the weekly check-in opens.
 
 ### C. Coach Expansions — beyond chat (builds on §18)
+
+*Section thesis: Coach stops being a chat window you visit and becomes a presence with good
+timing — it shows up with the right sentence at the right moment, then gets out of the way.*
 
 - [ ] **Weekly pre-game briefing** — proactive Monday digest from Coach: this week's projected
   check, bills due, goal contributions, and one heads-up ("holiday Thursday shifts your OT
@@ -1474,23 +1494,35 @@ engine better than anyone — not becoming a bank.
   `buildYear` and answers with real deltas — never mutating live config.
 - [ ] **Raise-negotiation prep** — Coach assembles the user's own case from their data: hours
   worked, OT reliability, attendance streak, tenure — a one-page brief to walk into a review
-  with. Nobody else has this data shape; pure differentiation for hourly workers.
+  with. Nobody else has this data shape; pure differentiation for hourly workers. Example brief
+  line: "In 14 months you worked 96% of scheduled hours and covered 11 short-notice Saturdays —
+  a $1.25/hr ask is defensible; here's the sentence to open with."
 - [ ] **Yearly recap — "Your Fiscal Year, Wrapped"** — shareable end-of-year story: total gross,
   taxes weathered, goals funded, biggest OT week, longest confirmation streak. Emotional payoff
   for a year of logging; doubles as organic marketing.
 - [ ] **Explain-this-number everywhere** — long-press any computed value (net, gap, runway) to
   get Coach's plain-English derivation of *that exact number* from the user's config. Turns the
-  whole app into its own documentation.
+  whole app into its own documentation. Example: long-press the $3,690 tax gap → "this is your
+  projected federal + state liability minus what your 22 remaining taxed checks will withhold —
+  the biggest input is your 14 exempt weeks last spring."
 
 ### D. Product & Growth Ideas
+
+*Section thesis: growth loops that come from being genuinely useful to one workplace, household,
+or crew at a time — never from engagement mechanics.*
 
 - [ ] **Employer preset marketplace** — generalize the DHL preset pattern (per the naming
   convention in CLAUDE.md): an AI-assisted preset builder ingests a paystub photo + a few
   questions and drafts a new employer preset; vetted presets get published for other users at
-  the same employer. Each preset is an acquisition channel.
+  the same employer. Each preset is an acquisition channel. Vision: a new Amazon warehouse hire
+  types their employer name, gets a vetted preset (shifts, diffs, OT rules pre-filled), and
+  skips most of the setup wizard — the preset *is* the onboarding.
 - [ ] **Lean into the RPG identity** — the repo is literally `finance-domain-rpg`: check-in
   streaks, goal-funding milestones, and levels for financial consistency. Keep it dignified
   (progress, not confetti) per the animation rules — think "quiet mastery," not slot machine.
+  Example: profile titles that upgrade quietly (Apprentice → Steward → Warden of the Ledger),
+  earned only by confirmed-week streaks and funded goals — never by opens, taps, or streaks of
+  merely looking at the app.
 - [ ] **Household mode (view-only sharing)** — invite a partner to a read-only view of selected
   panels (Home/Budget). No shared editing, no joint accounts — just shared visibility, the #1
   ask of couples budgeting apps.
@@ -1505,13 +1537,17 @@ insight over raw categorization, and consolidation into fewer, smarter surfaces.
 
 - [ ] **Human-confirm boundary for all AI writes** — codify the §18.J paystub rule as a global
   invariant: AI may *propose* config/log/expense changes, only the user commits them. Write it
-  into CLAUDE.md as a standard once the first AI-write feature ships.
+  into CLAUDE.md as a standard once the first AI-write feature ships. Vision: every AI proposal
+  renders as the same diff-style confirm card (current value → proposed value, one Apply button)
+  so the trust boundary looks identical everywhere it appears.
 - [ ] **Confidence labeling** — every AI-generated number carries a visible basis:
   "projected" vs. "confirmed" vs. "estimated from pattern." Never let a guess cosplay as a fact
   (this is the same disclosure discipline as §20.C, generalized).
 - [ ] **Coach eval suite** — a fixture set of (user snapshot → expected answer quality) cases
   run against prompt changes, so Coach regressions are caught like code regressions. Start with
-  10 golden conversations; grow it from real flagged answers.
+  10 golden conversations; grow it from real flagged answers. Example golden case: given a
+  snapshot with a $3,690 tax gap, Coach's answer must mention the gap, name the per-check extra,
+  and propose exactly one action — an answer missing any of the three fails the eval.
 - [ ] **AI cost telemetry** — per-feature token/cost dashboards from day one of §18 (log
   call-type + token counts, per §18.G) so a runaway prompt is a graph, not a surprise invoice.
 - [ ] **Thumbs feedback on Coach messages** — one-tap 👍/👎 on every AI output, stored with the
@@ -1590,7 +1626,10 @@ here as a second currency the app helps the user stop hemorrhaging.*
   `buildYear`), and the user can talk to *two* of them — the one their current plan creates
   and the one a 5%-better plan creates — and feel the gap as a person instead of a chart.
   Heavy disclaimer framing: this is a mirror of your own assumptions, not a prophecy.
-  *Tether: persona prompting over `lib/aiContext.js` snapshots; the projections already exist.*
+  Example exchange — user: "was the truck worth it?" → future self: "paid off week 40 of next
+  year on your current plan; I remember the Saturdays that bought it. The other me — the one
+  who added $15 a week — was done by June." *Tether: persona prompting over `lib/aiContext.js`
+  snapshots; the projections already exist.*
 - [ ] **Shift-End Debrief (voice-first ambient logging)** — clocking out, walking to the car:
   hold the button, talk for 20 seconds — "worked over an hour, skipped lunch, grabbed $12
   food, Dave says Saturday OT is open." Coach parses it into log entries, a calendar note,
@@ -1635,7 +1674,10 @@ here as a second currency the app helps the user stop hemorrhaging.*
   who finishes it ("if you're reading this, the truck is paid off — I wrote this in the
   break room"). Sealed until the goal completes; delivered by Coach with ceremony. Zero AI,
   zero infra beyond a locked text column — possibly the highest emotion-per-line-of-code
-  feature in this document. *Tether: a `sealed_until_complete` text field.*
+  feature in this document. Delivery vision: the goal-complete screen holds one quiet beat,
+  then — "you left yourself a letter when this began, 14 months ago. Ready?" — one tap opens
+  it; the letter is theirs to keep, screenshot, or seal into the Chronicle.
+  *Tether: a `sealed_until_complete` text field.*
 
 #### F4. Honesty rails for the whole horizon tier
 
@@ -1694,7 +1736,8 @@ mature systems), and Stripe §17.C validated end-to-end in test mode. Each shipm
   "how your data is guarded" page — what we store, what we can see, what we *cannot* do
   (move money, touch accounts), when we were last audited. Financial apps hide this; an app
   about taking control back should hand the user the keys inventory. Sibling to F1's Calm
-  Covenant: **Calm Covenant for attention, Open Keep for data.**
+  Covenant: **Calm Covenant for attention, Open Keep for data.** Example page lines: "We cannot
+  move your money. We never see your bank. Here is every column we store, and who can read it."
 - [ ] **RLS regression sentinel** — promote the audit's recommendation #4 into §21.E practice:
   a standing test that signs in as user B and asserts user A's row is unreachable
   (read/write/delete all fail), so the crown-jewel protection can never silently regress.
@@ -1706,6 +1749,9 @@ mature systems), and Stripe §17.C validated end-to-end in test mode. Each shipm
   a storm on the horizon — and poke every panel. The RPG frame makes this natural (every RPG
   lets you try a character before you build your own), it converts better than screenshots,
   and it's the §18 Coach demo stage too. The infra cost was already paid for investors.
+  Vision: the login screen offers "Play a character" — you step into Sam, a forklift operator
+  31 weeks into the year with a truck-loan siege half-broken and a storm on the radar — and
+  signup reframes as "Create your own character."
 - [ ] **Honest-failure standard** — the OAuth fix (surfacing a silently-failed Google callback
   instead of dumping the user on a blank login form) is a pattern worth codifying in §21.E:
   *no dead-end states.* Every failure the app can detect, it explains in one sentence and

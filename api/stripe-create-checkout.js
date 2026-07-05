@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { stripe, PRICE_ID_BY_PLAN, MODE } from "./_stripeClient.js";
+import { stripe, PRICE_ID_BY_PLAN, MODE, resolveAppOrigin } from "./_stripeClient.js";
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
@@ -77,13 +77,14 @@ export default async function handler(req, res) {
       }
     }
 
+    const origin = resolveAppOrigin(req);
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
       client_reference_id: userId,
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${appUrl}/?checkout=success`,
-      cancel_url: `${appUrl}/?checkout=cancel`,
+      success_url: `${origin}/?checkout=success`,
+      cancel_url: `${origin}/?checkout=cancel`,
     });
 
     return res.status(200).json({ url: session.url });

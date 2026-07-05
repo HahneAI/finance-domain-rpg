@@ -60,3 +60,43 @@ export function constructWebhookEvent(rawBody, signature) {
   }
   throw lastError;
 }
+
+// Multiple live Vercel deployments (production + preview branches like
+// Version-control) can all initiate checkout, but APP_URL only ever names one
+// of them. Redirecting Stripe's success/cancel/return URLs at a fixed APP_URL
+// bounces users testing on a preview back to a different, possibly stale,
+// deployment. Instead, derive the origin the request actually came from —
+// falling back to APP_URL only when the request carries neither header —
+// and only trust it when the hostname is one we recognize, so this can't be
+// abused as an open redirect.
+function isAllowedHost(hostname) {
+  if (!hostname) return false;
+  if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+  if (hostname.endsWith(".vercel.app")) return true;
+  const appUrlHost = env.APP_URL ? safeHostname(env.APP_URL) : null;
+  return appUrlHost != null && hostname === appUrlHost;
+}
+
+function safeHostname(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveAppOrigin(req) {
+  const candidates = [req.headers.origin, req.headers.referer];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const parsed = new URL(candidate);
+      if (isAllowedHost(parsed.hostname)) {
+        return `${parsed.protocol}//${parsed.host}`;
+      }
+    } catch {
+      // not a valid absolute URL — skip
+    }
+  }
+  return env.APP_URL ? env.APP_URL.replace(/\/+$/, "") : null;
+}

@@ -334,11 +334,47 @@ verify with an anon client `getUser()`, then use the service-role client for pri
   toolkit table and "Diagnostic request templates" updated to match (11 → 16 Live values, new
   template #6 pointing at DB Row + Live State together for billing/paywall issues).
 
+---
+
+**Handoff checkpoint (2026-07-06) — §A–F are done; picking up here in a fresh session:**
+All work so far is on branch `claude/stripe-paywall-integration-d2b3sw` (repo
+`HahneAI/finance-domain-rpg`), validated in Stripe test mode end-to-end including a real
+manual click-through (expired user → Income/Log Upgrade panels → Checkout → back-button
+return, all confirmed working). Load-bearing context for whatever's next:
+- `getEntitlement()` (`src/lib/subscription.js`) is the one place phase math lives —
+  trial/grace/active/expired/none. Never re-derive it inline; `now` must always be real
+  wall-clock time, never the admin Lock Date simulation.
+- The disclosure rule is absolute: no user-facing string (UI, email, API response) may ever
+  say "grace," "21-day," "extra week," or otherwise hint the trial is longer than 14 days.
+  Every surface built so far has a test enforcing this — copy that pattern for anything new
+  (see `TrialBanner.test.jsx` / `UpgradeModal.test.jsx` for the shape).
+- Migration `019_enable_user_data_rls.sql` (RLS) is written and both required companion
+  service-role routes (`api/seed-trial.js`, `api/seed-investor.js`) already exist — but
+  **it's unconfirmed whether the user has actually run it in Supabase yet.** Don't assume
+  RLS is live; ask or check first if a task depends on it.
+- `api/_stripeClient.js` exports `resolveAppOrigin(req)` for any redirect URL (success/
+  cancel/return) — derives the origin from the request instead of a static `APP_URL`, since
+  there are multiple live deployments (preview + production) and a hardcoded URL bounces
+  users to the wrong one. Use it, don't reintroduce a static URL.
+- This sandbox has no live Supabase/Stripe credentials — verification here means
+  `npm run test:run` (846 passing as of this checkpoint) + `npx eslint` (diff against
+  `git stash` to catch only new issues — there are pre-existing baseline warnings) +
+  `npm run build`. Real browser/backend verification has only ever happened via the user's
+  own manual pass on the deployed preview — ask for that before marking anything "done."
+- §G–K below are still italicized-intro-only or partially stale relative to what §A–F
+  actually shipped; skim them for the plan but verify against the current code before
+  assuming a referenced file/component doesn't exist yet.
+
+---
+
 ### G. Notifications & lifecycle emails (Vercel Cron)
 
 *New infra: the app has no transactional email today (only Supabase auth emails). The card-nudge,
 grace, and every-other-day deletion warnings need an email provider + a scheduled job. All sends
-are server-side via a daily cron route; nothing here runs on the client.*
+are server-side via a daily cron route; nothing here runs on the client. Nothing in this section
+has been started — nothing under `api/` sends email today, and no cron is registered in
+`vercel.json`. Depends on §D/§F's phase math and columns, both already shipped, so this is
+unblocked and ready to start whenever picked up.*
 
 - [ ] **Pick an email provider** — Resend / Postmark / SendGrid (Resend is the lightest Vercel fit).
   Add `EMAIL_API_KEY` + a verified sender domain.
@@ -363,6 +399,12 @@ are server-side via a daily cron route; nothing here runs on the client.*
 
 ### H. Edge cases, security & testing
 
+*Mostly a hardening/audit pass over what §A–F already shipped, not new build-out — several
+bullets below may already be satisfied by existing code and just need a test written or a
+double-check, not fresh implementation. E.g. webhook signature verification and the past_due/
+canceled entitlement handling already exist in `api/_stripeClient.js`/`subscription.js`; confirm
+before treating any bullet here as starting from zero.*
+
 - [ ] **Webhook signature** — reject unsigned/invalid events; never trust client-reported status.
 - [ ] **Card declines / `past_due`** — keep entitlement until `current_period_end`, then lock;
   surface the Stripe-hosted update-card flow via the portal.
@@ -386,7 +428,8 @@ are server-side via a daily cron route; nothing here runs on the client.*
 *New workstream (2026-07-01). When the day-21+7 dunning cron (§G) finally deletes an account for
 non-payment, the user should still be able to come back — but coming back must require a real,
 successful charge, not just re-entering the same info. This section defines that recovery path.
-Depends on §G's deletion cron writing an archive record instead of a bare hard-delete.*
+Depends on §G's deletion cron writing an archive record instead of a bare hard-delete — since §G
+hasn't been built yet either, nothing here is actionable until that lands first.*
 
 **Core distinction:** the existing `api/delete-account.js` flow (user types "DELETE" in
 ProfilePanel) stays a **true, unrecoverable hard delete** — that's an explicit user choice and
@@ -457,6 +500,11 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
 
 ### J. Env vars (Vercel)
 
+*Reference only — all Stripe/Supabase vars listed here are already set in Vercel and working
+(validated by the §C test-mode checkout pass and confirmed live by the user). `EMAIL_API_KEY` and
+`CRON_SECRET` are the only two not yet set, since they belong to §G which hasn't been built.
+Revisit this list only if §G/§I introduce new vars (an email provider key, a cron secret, etc.).*
+
 ```
 STRIPE_SECRET_KEY=...             # LIVE server key (api/ functions)
 STRIPE_SECRET_KEY_TEST=...        # TEST server key
@@ -512,6 +560,9 @@ holding the test-mode value, and both live in Vercel simultaneously regardless o
 webhook event's price id could be either mode's, so there's no "pick a side" step there either.
 
 ### K. Future Ideas (not in scope for v1)
+
+*Deliberately deferred — don't pick these up unless the user explicitly asks, even if §G–I are
+finished first.*
 
 - [ ] **Account top-off** — let a user with spare cash pre-buy extra subscription time (e.g. a
   week at a time) into a banked balance on their account, purely as a voluntary buffer against a

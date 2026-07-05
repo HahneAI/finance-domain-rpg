@@ -8,10 +8,7 @@ import { getFiscalWeekNumber, weekNumToPaycheckNum, payPeriodUnit } from "../lib
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, Pressable, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
-export function IncomePanel({ allWeeks, config, setConfig: setConfigProp, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {}, onWeekInspect = null, readOnly = false }) {
-  // Paywall-expired read-only mode (docs/TODO.md §17.E) — same shadow-safe-setter
-  // pattern as HomePanel/BudgetPanel/LogPanel.
-  const setConfig = readOnly ? () => {} : setConfigProp;
+export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {}, onWeekInspect = null }) {
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
@@ -289,7 +286,6 @@ export function IncomePanel({ allWeeks, config, setConfig: setConfigProp, showEx
         <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
           Tax rates are <strong style={{ color: "var(--color-gold)" }}>estimated</strong> — net figures are approximate until you confirm from a paystub.
         </div>
-        {!readOnly && (
         <Pressable onClick={() => setShowSharpener(true)} style={{
           fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase",
           background: "transparent", color: "var(--color-gold)",
@@ -298,7 +294,6 @@ export function IncomePanel({ allWeeks, config, setConfig: setConfigProp, showEx
         }}>
           Sharpen Rates
         </Pressable>
-        )}
       </div>
     )}
 

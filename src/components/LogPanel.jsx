@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/static-components */
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { calcEventImpact, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getPayPeriodBounds } from "../lib/fiscalWeek.js";
@@ -31,20 +31,11 @@ const fmtDate  = iso => {
 const EMPTY_FORM = { label: "", hoursNeeded: "", targetDate: "", negativeBalanceCap: "40" };
 
 export function LogPanel({
-  logs, setLogs: setLogsProp, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals,
-  fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isEmployerDHL = false, isAdmin = false, effectiveToday = null, setConfig: setConfigProp,
+  logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals,
+  fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isEmployerDHL = false, isAdmin = false, effectiveToday = null, setConfig,
   logK401kLost = 0, logK401kMatchLost = 0, logK401kGained = 0, logK401kMatchGained = 0, logPTOHoursLost = 0,
-  ptoGoal, setPtoGoal: setPtoGoalProp, weekConfirmations = {},
-  readOnly = false,
+  ptoGoal, setPtoGoal, weekConfirmations = {},
 }) {
-  // Paywall-expired read-only mode (docs/TODO.md §17.E) — same shadow-safe-setter
-  // pattern as HomePanel/BudgetPanel: every existing setLogs()/setConfig()/
-  // setPtoGoal() call in this file becomes a no-op automatically.
-  const noop = useCallback(() => {}, []);
-  const setLogs = readOnly ? noop : setLogsProp;
-  const setConfig = readOnly ? noop : setConfigProp;
-  const setPtoGoal = readOnly ? noop : setPtoGoalProp;
-
   const blank = {
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
     shiftsLost: 0, weekendShifts: 0, ptoHours: 0, hoursLost: 0, amount: 0,
@@ -189,7 +180,7 @@ export function LogPanel({
   function saveForm() {
     const hrs = parseFloat(formVals.hoursNeeded) || 0;
     const cap = parseFloat(formVals.negativeBalanceCap) || 40;
-    if (!setPtoGoalProp || !formVals.label.trim() || !hrs || !formVals.targetDate) return;
+    if (!setPtoGoal || !formVals.label.trim() || !hrs || !formVals.targetDate) return;
     setPtoGoal({
       label: formVals.label.trim(),
       hoursNeeded: hrs,
@@ -573,9 +564,7 @@ export function LogPanel({
     {/* Log header + add button */}
     <div style={{ marginBottom: "12px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "10px" }}>Event Log ({logs.length})</div>
-      {!readOnly && (
-        <Pressable onClick={() => { setAdding(true); setEditId(null); }} style={{ width: "100%", background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "14px", fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>+ LOG EVENT</Pressable>
-      )}
+      <Pressable onClick={() => { setAdding(true); setEditId(null); }} style={{ width: "100%", background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "14px", fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>+ LOG EVENT</Pressable>
     </div>
 
     {/* Add form */}
@@ -735,13 +724,14 @@ export function LogPanel({
                   style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", padding: "4px 6px", cursor: "pointer", fontSize: "12px", lineHeight: 1 }}
                   title="Impact breakdown"
                 >{expandedImpact.has(entry.id) ? "▲" : "▼"}</Pressable>
-                {!readOnly && <Pressable onClick={() => startEdit(entry)} style={{ background: "transparent", border: "1px solid #444", color: "var(--color-text-primary)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>EDIT</Pressable>}
-                {!readOnly && (cdel === entry.id
+                <Pressable onClick={() => startEdit(entry)} style={{ background: "transparent", border: "1px solid #444", color: "var(--color-text-primary)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>EDIT</Pressable>
+                {cdel === entry.id
                   ? <>
                       <Pressable onClick={() => { setLogs(p => p.filter(e => e.id !== entry.id)); setCdel(null); }} style={{ background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CONFIRM</Pressable>
                       <Pressable onClick={() => setCdel(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CANCEL</Pressable>
                     </>
-                  : <Pressable onClick={() => setCdel(entry.id)} style={{ background: "transparent", border: "1px solid #333", color: "var(--color-text-disabled)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>DELETE</Pressable>)}
+                  : <Pressable onClick={() => setCdel(entry.id)} style={{ background: "transparent", border: "1px solid #333", color: "var(--color-text-disabled)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>DELETE</Pressable>
+                }
               </div>
             </div>
             {/* Base-user friendly breakdown — event type + the key money figures, no admin internals. */}
@@ -1024,17 +1014,17 @@ export function LogPanel({
             </div>
             <span style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-text-primary)" }}>{effectiveAdjP.toFixed(1)} hrs</span>
           </div>
-          {!readOnly && (editingPto ? (
+          {editingPto ? (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <input {...iS} style={{ ...iS, width: "100px", padding: "6px 10px" }} type="number" min="0" step="0.5" value={ptoInput} onChange={e => setPtoInput(e.target.value)} placeholder="hours" autoFocus />
-              <SmBtn onClick={() => { const val = parseFloat(ptoInput); if (setConfigProp && Number.isFinite(val) && val >= 0) setConfig(c => ({ ...c, ptoHoursOverride: val, ptoOverrideWeekIdx: currentWeek?.idx ?? 0 })); setEditingPto(false); }} c="var(--color-bg-base)" bg="var(--color-gold)">Save</SmBtn>
+              <SmBtn onClick={() => { const val = parseFloat(ptoInput); if (setConfig && Number.isFinite(val) && val >= 0) setConfig(c => ({ ...c, ptoHoursOverride: val, ptoOverrideWeekIdx: currentWeek?.idx ?? 0 })); setEditingPto(false); }} c="var(--color-bg-base)" bg="var(--color-gold)">Save</SmBtn>
               <SmBtn onClick={() => setEditingPto(false)} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Cancel</SmBtn>
             </div>
           ) : (
             <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
               <SmBtn onClick={() => { setPtoInput(String(effectiveAdjP.toFixed(1))); setEditingPto(true); }} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Set Balance</SmBtn>
             </div>
-          ))}
+          )}
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
@@ -1085,23 +1075,21 @@ export function LogPanel({
               <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
                 <div style={{ fontSize: "14px", fontWeight: "bold", color: onTrack ? "var(--color-green)" : "var(--color-deduction)" }}>{onTrack ? "On Track" : "Shortfall"}</div>
                 {!onTrack && <div style={{ fontSize: "10px", color: "var(--color-deduction)" }}>Short {(hoursNeed - avail).toFixed(1)} hrs</div>}
-                {!readOnly && (
                 <div style={{ display: "flex", gap: "6px", marginTop: "2px" }}>
                   <SmBtn onClick={openEdit} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Edit</SmBtn>
-                  <SmBtn onClick={() => setPtoGoal(null)} c="var(--color-deduction)" bg="var(--color-bg-raised)">Clear</SmBtn>
+                  <SmBtn onClick={() => setPtoGoal?.(null)} c="var(--color-deduction)" bg="var(--color-bg-raised)">Clear</SmBtn>
                 </div>
-                )}
               </div>
             </div>
           </div>
         )}
-        {!formOpen && !ptoGoal && !readOnly && (
+        {!formOpen && !ptoGoal && (
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>No PTO leave goal set. Add one to track your accrual progress toward a leave target.</div>
             <SmBtn onClick={openAdd} c="var(--color-gold)" bg="var(--color-bg-raised)">Set Goal</SmBtn>
           </div>
         )}
-        {formOpen && !readOnly && (
+        {formOpen && (
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>{editMode ? "Edit Leave Goal" : "New Leave Goal"}</div>
             <div><label style={lS}>Goal Label</label><input {...iS} style={{ ...iS }} type="text" value={formVals.label} onChange={e => setFormVals(v => ({ ...v, label: e.target.value }))} placeholder="e.g. Paternity Leave" /></div>
@@ -1164,7 +1152,7 @@ export function LogPanel({
               </div>
               <span style={{ fontSize: "14px", fontWeight: "bold", color: bandColor }}>{bm.currentBalance}h <span style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>/ {cap}h</span></span>
             </div>
-            {!readOnly && (editingBucket ? (
+            {editingBucket ? (
               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 <input
                   {...iS} style={{ ...iS, width: "100px", padding: "6px 10px" }}
@@ -1177,7 +1165,7 @@ export function LogPanel({
                 <SmBtn
                   onClick={() => {
                     const val = parseFloat(bucketInput);
-                    if (setConfigProp && Number.isFinite(val) && val >= 0) {
+                    if (setConfig && Number.isFinite(val) && val >= 0) {
                       setConfig(c => ({ ...c, bucketBalanceOverride: val, bucketOverrideMonth: currentMonthStr }));
                     }
                     setEditingBucket(false);
@@ -1194,12 +1182,12 @@ export function LogPanel({
                 >Set Balance</SmBtn>
                 {config.bucketBalanceOverride != null && (
                   <SmBtn
-                    onClick={() => setConfig(c => ({ ...c, bucketBalanceOverride: null, bucketOverrideMonth: null }))}
+                    onClick={() => setConfig?.(c => ({ ...c, bucketBalanceOverride: null, bucketOverrideMonth: null }))}
                     c="var(--color-text-disabled)" bg="var(--color-bg-raised)"
                   >Clear Override</SmBtn>
                 )}
               </div>
-            ))}
+            )}
           </div>
 
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "10px 14px", marginBottom: "10px", fontSize: "11px" }}>

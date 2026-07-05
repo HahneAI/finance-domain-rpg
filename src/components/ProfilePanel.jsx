@@ -6,6 +6,7 @@ import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js"
 import { iS, lS, Card, Pressable, PanelHero, SH } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan } from "../lib/entitlements.js";
+import { getEntitlement } from "../lib/subscription.js";
 import { InvestorAdminPanel } from "./InvestorAdminPanel.jsx";
 
 // Account panel uses white (primary) labels instead of the shared dim label color.
@@ -70,7 +71,7 @@ function DetailCard({ children, style }) {
 
 // ── Sub-views ───────────────────────────────────────────────────────────────
 
-export function AccountDetail({ authedUser, config, onBack }) {
+export function AccountDetail({ authedUser, config, subscription, onBack }) {
   const setupColor  = config.setupComplete ? "var(--color-green)"           : "var(--color-gold)";
   const setupBg     = config.setupComplete ? "rgba(76,175,125,0.12)"        : "rgba(0,200,150,0.08)";
   const setupBorder = config.setupComplete ? "rgba(76,175,125,0.3)"         : "rgba(0,200,150,0.22)";
@@ -222,6 +223,84 @@ export function AccountDetail({ authedUser, config, onBack }) {
     }
   }
 
+  const [portalState, setPortalState] = useState({ loading: false, error: null });
+
+  async function handleManageSubscription() {
+    setPortalState({ loading: true, error: null });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
+      setPortalState({ loading: false, error: "No active session found." });
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/stripe-portal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload?.url) {
+        setPortalState({ loading: false, error: payload?.error || "Failed to open billing portal." });
+        return;
+      }
+      window.location.href = payload.url;
+    } catch {
+      setPortalState({ loading: false, error: "Failed to open billing portal." });
+    }
+  }
+
+  // §17.F subscription status card. Raw Stripe status (past_due/canceled)
+  // takes priority over the collapsed entitlement state so a still-within-
+  // paid-period cancellation shows "Canceled" rather than "Active" — but
+  // only while getEntitlement still considers the account "active" (i.e.
+  // within current_period_end); once that lapses, fall into the same
+  // trial-ended bucket as any other non-entitled account rather than
+  // inventing a fifth label. grace/expired/none all render identically here
+  // (no day-count, no mention of a grace period) — same disclosure rule as
+  // the Upgrade panels and TrialBanner.
+  const entitlement = getEntitlement(subscription, new Date());
+  const hasStripeCustomer = Boolean(subscription?.stripeCustomerId);
+  const planLabel = subscription?.plan === "annual" ? "Annual" : subscription?.plan === "monthly" ? "Monthly" : null;
+  const planPrice = subscription?.plan === "annual" ? "$120/yr ($10.00/mo)" : subscription?.plan === "monthly" ? "$14.99/mo" : null;
+  const fmtDate = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+  let subStatusLabel, subStatusTone, subDetailText;
+  if (entitlement.state === "active") {
+    if (subscription?.status === "past_due") {
+      subStatusLabel = "Past Due"; subStatusTone = "red";
+      subDetailText = "Your last payment failed — update your card to keep access.";
+    } else if (subscription?.status === "canceled") {
+      subStatusLabel = "Canceled"; subStatusTone = "gold";
+      subDetailText = subscription?.currentPeriodEnd
+        ? `Access continues through ${fmtDate(subscription.currentPeriodEnd)}.`
+        : "Your subscription has been canceled.";
+    } else {
+      subStatusLabel = "Active"; subStatusTone = "green";
+      subDetailText = subscription?.currentPeriodEnd
+        ? `Renews ${fmtDate(subscription.currentPeriodEnd)}.`
+        : "Your subscription is active.";
+    }
+  } else if (entitlement.state === "trial") {
+    subStatusLabel = "Trial"; subStatusTone = "gold";
+    subDetailText = `${entitlement.trialDaysLeft} day${entitlement.trialDaysLeft === 1 ? "" : "s"} left in your free trial.`;
+  } else if (entitlement.state === "none") {
+    subStatusLabel = "N/A"; subStatusTone = "gold";
+    subDetailText = "No subscription required for this account.";
+  } else {
+    subStatusLabel = "Trial Ended"; subStatusTone = "red";
+    subDetailText = "Add a card to restore full access.";
+  }
+
+  const subToneColors = {
+    green: { color: "var(--color-green)", bg: "rgba(76,175,125,0.12)", border: "rgba(76,175,125,0.3)" },
+    gold:  { color: "var(--color-gold)", bg: "rgba(0,200,150,0.08)", border: "rgba(0,200,150,0.22)" },
+    red:   { color: "var(--color-deduction)", bg: "rgba(244,164,164,0.1)", border: "rgba(244,164,164,0.28)" },
+  }[subStatusTone];
+
   async function handleDeleteAccount() {
     setDeleteState({ error: null, loading: true });
     const { data: sessionData } = await supabase.auth.getSession();
@@ -267,25 +346,49 @@ export function AccountDetail({ authedUser, config, onBack }) {
 
       <DetailCard>
         <div style={{ padding: "13px 16px" }}>
-          <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "10px" }}>Subscription</div>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <Pressable
-              onClick={() => handleCheckout("monthly")}
-              disabled={checkoutState.plan !== null}
-              style={{ flex: 1, minWidth: "120px", padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", color: "var(--color-text-primary)", fontSize: "12px", fontWeight: "600", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "monthly" ? 0.5 : 1 }}
-            >
-              {checkoutState.plan === "monthly" ? "Redirecting…" : "Monthly — $14.99"}
-            </Pressable>
-            <Pressable
-              onClick={() => handleCheckout("annual")}
-              disabled={checkoutState.plan !== null}
-              style={{ flex: 1, minWidth: "120px", padding: "9px 0", background: "var(--color-gold)", border: "none", borderRadius: "10px", color: "var(--color-bg-base)", fontSize: "12px", fontWeight: "700", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "annual" ? 0.5 : 1 }}
-            >
-              {checkoutState.plan === "annual" ? "Redirecting…" : "Annual — $10.00/mo"}
-            </Pressable>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>Subscription</div>
+            <span style={{ fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "3px 10px", background: subToneColors.bg, color: subToneColors.color, border: `1px solid ${subToneColors.border}`, borderRadius: "12px" }}>
+              {subStatusLabel}
+            </span>
           </div>
+          <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginBottom: "12px" }}>
+            {subDetailText}
+            {planLabel && ` ${planLabel} plan — ${planPrice}.`}
+          </div>
+          {entitlement.state !== "none" && (
+            hasStripeCustomer ? (
+              <Pressable
+                onClick={handleManageSubscription}
+                disabled={portalState.loading}
+                style={{ width: "100%", padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", color: "var(--color-text-primary)", fontSize: "12px", fontWeight: "600", cursor: portalState.loading ? "default" : "pointer" }}
+              >
+                {portalState.loading ? "Opening…" : "Manage Subscription"}
+              </Pressable>
+            ) : (
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <Pressable
+                  onClick={() => handleCheckout("monthly")}
+                  disabled={checkoutState.plan !== null}
+                  style={{ flex: 1, minWidth: "120px", padding: "9px 0", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", color: "var(--color-text-primary)", fontSize: "12px", fontWeight: "600", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "monthly" ? 0.5 : 1 }}
+                >
+                  {checkoutState.plan === "monthly" ? "Redirecting…" : "Monthly — $14.99"}
+                </Pressable>
+                <Pressable
+                  onClick={() => handleCheckout("annual")}
+                  disabled={checkoutState.plan !== null}
+                  style={{ flex: 1, minWidth: "120px", padding: "9px 0", background: "var(--color-gold)", border: "none", borderRadius: "10px", color: "var(--color-bg-base)", fontSize: "12px", fontWeight: "700", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "annual" ? 0.5 : 1 }}
+                >
+                  {checkoutState.plan === "annual" ? "Redirecting…" : "Annual — $10.00/mo"}
+                </Pressable>
+              </div>
+            )
+          )}
           {checkoutState.error && (
             <div style={{ fontSize: "12px", color: "var(--color-deduction)", marginTop: "8px" }}>{checkoutState.error}</div>
+          )}
+          {portalState.error && (
+            <div style={{ fontSize: "12px", color: "var(--color-deduction)", marginTop: "8px" }}>{portalState.error}</div>
           )}
         </div>
       </DetailCard>
@@ -1790,7 +1893,7 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, subscription }) {
   // Tax Plan unlock is manual-only for now (admin or the per-user
   // tax_projections_enabled flag). The setup wizard's "Unlock projections" choice
   // intentionally does NOT reveal it — see canAccessTaxPlan for why.
@@ -1823,7 +1926,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
 
   // Sub-view routing
   if (activeSection === "account") {
-    return <AccountDetail authedUser={authedUser} config={config} onBack={() => setActiveSection(null)} />;
+    return <AccountDetail authedUser={authedUser} config={config} subscription={subscription} onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "employment") {
     return <EmploymentDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;

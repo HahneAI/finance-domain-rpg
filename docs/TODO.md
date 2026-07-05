@@ -302,21 +302,37 @@ verify with an anon client `getUser()`, then use the service-role client for pri
 
 ### F. Trial + subscription UI
 
-- [ ] **Trial/dunning banner** — slim persistent banner (mirrors the Job Loss banner pattern),
-  copy by phase: **trial** → "X days left in your free trial" (amber at ≤3 days); **grace** →
-  "Your trial ended — add a card to keep using the app" (must NOT hint that access continues);
-  **expired** → "Trial ended — add a card to restore full access." Always carries an Add Card /
-  Upgrade button. Dismissible, re-shows on reload.
-- [ ] **ProfilePanel → Account: Subscription card** — replaces the §8 "subscription status
-  placeholder." Shows state (Trial · N days left / Active · renews [date] / Past due / Canceled),
-  plan + price, and a **Manage Subscription** button → `api/stripe-portal`. Add Card / Upgrade
-  button (monthly vs. annual) when not yet subscribed. In `grace`/`expired` this is the primary
-  conversion surface.
-- [ ] **Admin visibility** — Live State Inspector / Config Raw View: surface `subscription_status`,
-  the resolved **phase** (`trial`/`grace`/`expired`), `trial_ends_at`, `access_ends_at` (admin-only
-  — the hidden cutoff), `card_on_file`, `dunning_email_count`, `current_period_end` so a diagnostic
-  session can read billing + lifecycle state at a glance. Add to CLAUDE.md "Diagnostic request
-  templates."
+- [x] **Trial/dunning banner** — `src/components/TrialBanner.jsx`, wired into `App.jsx` in place of
+  the §E minimal read-only notice it was always meant to be replaced by. Phase-aware copy: **trial**
+  → "N days left in your free trial" (amber/warning tone once `trialDaysLeft ≤ 3`, otherwise a
+  neutral tone); **grace** → "Your trial ended — add a card to keep using the app"; **expired** →
+  "Trial ended — add a card to restore full access" (red tone). Renders nothing for `active`/`none`.
+  Persistent across every view except Income/Log while expired (those are already fully replaced by
+  `UpgradePanel` — showing both would be redundant). Dismiss state is a plain `useState` (not
+  persisted), so it re-shows on reload, same pattern as the Job Loss banner. Disclosure-guard tested
+  (`TrialBanner.test.jsx`) — grace/expired copy asserted to never mention "grace," "21-day," or
+  "extra week."
+- [x] **ProfilePanel → Account: Subscription card** — replaces the §8 placeholder in
+  `AccountDetail` (`ProfilePanel.jsx`). Status label prioritizes the **raw Stripe status**
+  (`past_due`/`canceled`) over the collapsed entitlement state, but only while `getEntitlement`
+  still resolves `active` (i.e. within `current_period_end`) — Trial/Active/Past Due/Canceled as
+  specced; once a canceled/past-due period actually lapses it falls into the same "Trial Ended"
+  bucket as any other non-entitled account (no invented fifth label — mirrors how `subscription.js`
+  itself already collapses a long-lapsed real subscriber into `expired`). Investor/demo/pre-migration
+  accounts (`entitlement.state === "none"`) show "N/A — no subscription required" with no
+  checkout/manage buttons at all, instead of a misleading "Trial Ended." Shows plan + price when
+  known. **Manage Subscription** (→ `api/stripe-portal`, same `getSession()`/Bearer pattern as
+  checkout) appears once `stripe_customer_id` exists; the Monthly/Annual checkout buttons appear
+  otherwise — never both. `subscription` threaded App.jsx → ProfilePanel → AccountDetail as a new
+  prop. 10 tests (`AccountDetailSubscription.test.jsx`) cover every status branch and the portal
+  call/error path.
+- [x] **Admin visibility** — Live State Inspector gains `Sub Phase` (resolved phase + raw Stripe
+  status as its sub-label), `Trial Ends`, `Access Ends` (hidden cutoff — this Inspector is
+  isAdmin-gated already, so no new disclosure risk), `Period End`, `Card / Dunning`. Turned out the
+  **DB Row Viewer already covers "Config Raw View"** for this — its `select("*")` was already
+  pulling every subscription column before this pass; nothing to add there. CLAUDE.md's admin
+  toolkit table and "Diagnostic request templates" updated to match (11 → 16 Live values, new
+  template #6 pointing at DB Row + Live State together for billing/paywall issues).
 
 ### G. Notifications & lifecycle emails (Vercel Cron)
 

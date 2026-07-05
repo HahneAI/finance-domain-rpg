@@ -32,6 +32,7 @@ Last updated: 2026-07-01 | App: Authority Finance (A:Fin)
 | 17 | Auth & Account | `ProfilePanel.jsx`, `LoginScreen.jsx` | Live |
 | 18 | Investor & Demo Accounts | `DemoAccountTree.jsx`, `InvestorRegister.jsx` | Live, dormant workflow |
 | 19 | PWA / Install | `vite.config.js`, `PwaInstallModal.jsx` | Live |
+| 20 | Subscription Lifecycle Emails | `api/cron-subscription-lifecycle.js`, `api/_lifecycleEngine.js`, `api/_lifecycleEmails.js`, `api/_email.js` | Code shipped — needs `EMAIL_API_KEY`/`CRON_SECRET` in Vercel |
 
 ---
 
@@ -298,3 +299,24 @@ Real, but no active roadmap item — dormant/developer-facing. `DemoAccountTree.
 shell + Supabase API. `PwaInstallModal.jsx` detects `beforeinstallprompt` and shows a
 dismissible install banner/tutorial; entry points in the mobile drawer and Account panel
 ("Install on home screen"), hidden when already running standalone.
+
+---
+
+## 20. Subscription Lifecycle Emails (Cron)
+
+Server-side only — nothing runs on the client. Full paywall/trial context in
+`docs/TODO.md` §17; §17.G is this system.
+
+- **Provider:** Resend REST API via plain `fetch` (`api/_email.js`, no npm dep).
+  `EMAIL_FROM` defaults to the dev-only `onboarding@resend.dev` sender until a custom
+  domain is verified — swap before real users hit day 7 of a trial.
+- **`api/cron-subscription-lifecycle.js`** — daily Vercel cron (`vercel.json`, 15:00 UTC),
+  guarded by `Authorization: Bearer <CRON_SECRET>`. Service-role scan of trial-seeded
+  `user_data` rows; skips `is_admin`/`is_investor`.
+- **`api/_lifecycleEngine.js`** — pure per-row decision (phase math delegated to
+  `getEntitlement`): trial nudges at day 7 + 12, grace/expired warnings every 2 days,
+  `deleteDue` flag at day 21+7 (log-only until §17.I's archive exists). Throttle keys off
+  `last_dunning_email_at`, stamped only after a successful send — idempotent, self-retrying.
+- **`api/_lifecycleEmails.js`** — templates; disclosure rule (14-day copy only, never the
+  hidden grace) enforced by `src/test/api/lifecycleEmails.test.js`; schedule/throttle by
+  `src/test/api/lifecycleEngine.test.js`.

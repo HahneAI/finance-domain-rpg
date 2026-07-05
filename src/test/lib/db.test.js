@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   DEFAULT_CONFIG,
   INITIAL_EXPENSES,
@@ -11,7 +11,7 @@ import {
 // Mock Supabase — must be declared before any imports that trigger db.js
 // ─────────────────────────────────────────────────────────────
 vi.mock('../../lib/supabase.js', () => ({
-  supabase: { from: vi.fn() },
+  supabase: { from: vi.fn(), auth: { getSession: vi.fn() } },
   getCurrentUserId: vi.fn().mockResolvedValue('test-user-id'),
 }))
 
@@ -596,54 +596,45 @@ describe('saveUserData', () => {
   })
 })
 
-/** Wire up syncUserProfile's select().eq().maybeSingle() + upsert() calls. */
-function setupSyncProfileMock(existingTrialStartedAt) {
-  const maybeSingle = vi.fn().mockResolvedValue({
-    data: existingTrialStartedAt === undefined ? null : { trial_started_at: existingTrialStartedAt },
-    error: null,
-  })
+/** Wire up syncUserProfile's profile-metadata upsert() + auth.getSession(). */
+function setupSyncProfileMock() {
   const upsert = vi.fn().mockResolvedValue({ error: null })
-  supabase.from.mockReturnValue({
-    select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }),
-    upsert,
-  })
+  supabase.from.mockReturnValue({ upsert })
+  supabase.auth.getSession.mockResolvedValue({ data: { session: { access_token: 'tok-123' } } })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
   return { upsert }
 }
 
-describe('syncUserProfile — trial seeding (migration 017)', () => {
-  it('seeds trial_started_at/trial_ends_at/access_ends_at/subscription_status for a brand-new user (no row yet)', async () => {
-    const { upsert } = setupSyncProfileMock(undefined)
-    await syncUserProfile({ id: 'test-user-id', user_metadata: {} })
-
-    const [patch] = upsert.mock.calls[0]
-    expect(patch.subscription_status).toBe('trialing')
-    expect(patch.trial_started_at).toEqual(expect.any(String))
-    expect(new Date(patch.trial_ends_at) - new Date(patch.trial_started_at)).toBe(14 * 86400000)
-    expect(new Date(patch.access_ends_at) - new Date(patch.trial_started_at)).toBe(21 * 86400000)
+describe('syncUserProfile — profile metadata + trial seeding (migration 017/019)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
-  it('seeds the trial for an email sign-up row that exists but has trial_started_at still null', async () => {
-    const { upsert } = setupSyncProfileMock(null)
+  it('calls the service-role seed-trial route with the session bearer token', async () => {
+    setupSyncProfileMock()
     await syncUserProfile({ id: 'test-user-id', user_metadata: {} })
 
-    const [patch] = upsert.mock.calls[0]
-    expect(patch.subscription_status).toBe('trialing')
-    expect(patch.trial_started_at).toEqual(expect.any(String))
+    expect(fetch).toHaveBeenCalledWith('/api/seed-trial', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ Authorization: 'Bearer tok-123' }),
+    }))
   })
 
-  it('never re-stamps a returning user whose trial_started_at is already set', async () => {
-    const { upsert } = setupSyncProfileMock('2025-01-01T00:00:00.000Z')
+  it('skips the seed-trial call when there is no active session', async () => {
+    setupSyncProfileMock()
+    supabase.auth.getSession.mockResolvedValue({ data: { session: null } })
     await syncUserProfile({ id: 'test-user-id', user_metadata: {} })
-
-    const [patch] = upsert.mock.calls[0]
-    expect(patch.trial_started_at).toBeUndefined()
-    expect(patch.trial_ends_at).toBeUndefined()
-    expect(patch.access_ends_at).toBeUndefined()
-    expect(patch.subscription_status).toBeUndefined()
+    expect(fetch).not.toHaveBeenCalled()
   })
 
-  it('still merges OAuth profile metadata alongside trial seeding', async () => {
-    const { upsert } = setupSyncProfileMock(undefined)
+  it('does not write display_name/avatar_url when no OAuth metadata is present', async () => {
+    const { upsert } = setupSyncProfileMock()
+    await syncUserProfile({ id: 'test-user-id', user_metadata: {} })
+    expect(upsert).not.toHaveBeenCalled()
+  })
+
+  it('upserts OAuth profile metadata (display_name/avatar_url) directly — still client-writable', async () => {
+    const { upsert } = setupSyncProfileMock()
     await syncUserProfile({
       id: 'test-user-id',
       user_metadata: { full_name: 'Anthony Hahne', avatar_url: 'https://example.com/a.png' },
@@ -652,13 +643,14 @@ describe('syncUserProfile — trial seeding (migration 017)', () => {
     const [patch] = upsert.mock.calls[0]
     expect(patch.display_name).toBe('Anthony Hahne')
     expect(patch.avatar_url).toBe('https://example.com/a.png')
-    expect(patch.subscription_status).toBe('trialing')
+    expect(patch.trial_started_at).toBeUndefined()
+    expect(patch.subscription_status).toBeUndefined()
   })
 
   it('no-ops when user has no id', async () => {
-    const upsert = vi.fn()
-    supabase.from.mockReturnValue({ upsert })
+    setupSyncProfileMock()
     await syncUserProfile(null)
-    expect(upsert).not.toHaveBeenCalled()
+    expect(supabase.from).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
   })
 })

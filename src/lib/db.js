@@ -415,7 +415,10 @@ export async function createInvestorAccount({ name, email, password, company, ci
     return { session: null, error: profileError.message, needsConfirmation: false };
   }
 
-  // Step 3 — user_data row seeded with investor config
+  // Step 3 — user_data row seeded with investor config. is_investor itself is
+  // NOT written here — it's a privileged column (migration
+  // 019_enable_user_data_rls.sql) the client can no longer set directly; it's
+  // granted below via the service-role api/seed-investor route instead.
   const investorConfig = {
     ...DEFAULT_CONFIG,
     isInvestor:      true,
@@ -427,7 +430,6 @@ export async function createInvestorAccount({ name, email, password, company, ci
   const { error: dataError } = await supabase.from("user_data").upsert(
     {
       user_id:    user.id,
-      is_investor: true,
       config:     investorConfig,
       expenses:   [],
       goals:      [],
@@ -440,6 +442,30 @@ export async function createInvestorAccount({ name, email, password, company, ci
     // Rollback investor_users so a re-attempt can cleanly re-insert
     await supabase.from("investor_users").delete().eq("auth_user_id", user.id);
     return { session: null, error: dataError.message, needsConfirmation: false };
+  }
+
+  // Step 4 — grant is_investor. Requires a session, so this only runs when
+  // email confirmation isn't pending; if it is, there's no access token yet
+  // to authenticate the call, and is_investor stays unset until a follow-up
+  // sign-in flow seeds it (a pre-existing gap for unauthenticated writes to
+  // this table that migration 019 introduces regardless of this function).
+  if (authData.session?.access_token) {
+    try {
+      const res = await fetch("/api/seed-investor", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authData.session.access_token}`,
+        },
+        body: JSON.stringify({ code: codeUsed }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        return { session: authData.session, error: payload?.error || "Failed to grant investor access", needsConfirmation };
+      }
+    } catch {
+      return { session: authData.session, error: "Failed to grant investor access", needsConfirmation };
+    }
   }
 
   return { session: authData.session, error: null, needsConfirmation };
@@ -559,45 +585,44 @@ export async function saveDemoAccount(accountNumber, { config, expenses, goals, 
   if (error) throw new Error(error.message);
 }
 
-const TRIAL_DAYS = 14;
-const ACCESS_DAYS = 21; // day 14 public trial end + hidden 7-day grace, never disclosed
-
 /**
- * Called on every SIGNED_IN auth event. Does three things:
- *   1. Seeds a user_data row for OAuth users (email sign-up does this explicitly;
- *      OAuth sign-in does not — this closes that gap).
- *   2. Syncs Google profile metadata (full_name, avatar_url) into the row so the
- *      ProfilePanel can surface them without a separate API call.
- *   3. Seeds the trial window (trial_started_at/trial_ends_at/access_ends_at,
- *      subscription_status="trialing") exactly once, the first time this user
- *      has no trial_started_at yet. Email sign-up already inserts a bare row
- *      (see LoginScreen.jsx) before this fires, so "brand new" is keyed off
- *      trial_started_at IS NULL rather than row existence — this still fires
- *      exactly once and never re-stamps a returning user, since a returning
- *      user's trial_started_at is always already set.
+ * Called on every SIGNED_IN auth event. Does two things:
+ *   1. Syncs Google profile metadata (full_name, avatar_url) into the row so the
+ *      ProfilePanel can surface them without a separate API call. display_name/
+ *      avatar_url are client-writable, so this stays a direct upsert.
+ *   2. Seeds the trial window (trial_started_at/trial_ends_at/access_ends_at,
+ *      subscription_status="trialing") via the service-role api/seed-trial
+ *      route — those columns are privileged (migration
+ *      019_enable_user_data_rls.sql revokes client write access to them), so
+ *      the client can no longer set them directly. The route itself decides
+ *      whether this is a brand-new user (keyed off trial_started_at IS NULL)
+ *      and no-ops for returning users.
  * Safe to call for email/password users — no-op if no metadata present.
  */
 export async function syncUserProfile(user) {
   if (!user?.id) return;
   const meta = user.user_metadata ?? {};
-  const patch = { user_id: user.id };
+  const patch = {};
   if (meta.full_name)  patch.display_name = meta.full_name;
   if (meta.avatar_url) patch.avatar_url   = meta.avatar_url;
 
-  const { data: existing } = await supabase
-    .from("user_data")
-    .select("trial_started_at")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (!existing?.trial_started_at) {
-    const now = new Date();
-    patch.trial_started_at = now.toISOString();
-    patch.trial_ends_at = new Date(now.getTime() + TRIAL_DAYS * 86400000).toISOString();
-    patch.access_ends_at = new Date(now.getTime() + ACCESS_DAYS * 86400000).toISOString();
-    patch.subscription_status = "trialing";
+  if (Object.keys(patch).length > 0) {
+    const { error } = await supabase
+      .from("user_data")
+      .upsert({ user_id: user.id, ...patch }, { onConflict: "user_id" });
+    if (error) console.warn("syncUserProfile profile metadata failed:", error.message);
   }
 
-  const { error } = await supabase.from("user_data").upsert(patch, { onConflict: "user_id" });
-  if (error) console.warn("syncUserProfile failed:", error.message);
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) return;
+    const res = await fetch("/api/seed-trial", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) console.warn("syncUserProfile trial seed failed:", res.status);
+  } catch (err) {
+    console.warn("syncUserProfile trial seed failed:", err.message);
+  }
 }

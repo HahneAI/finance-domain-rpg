@@ -1,12 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
-import { stripe, PRICE_ID_BY_PLAN, MODE, resolveAppOrigin } from "./_stripeClient.js";
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
 const anonKey = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
 const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-const appUrl = env.APP_URL;
 
+const TRIAL_DAYS = 14;
+const ACCESS_DAYS = 21; // day 14 public trial end + hidden 7-day grace, never disclosed
+
+// Seeds the trial window exactly once per user. Moved server-side (migration
+// 019_enable_user_data_rls.sql) because trial_started_at/trial_ends_at/
+// access_ends_at/subscription_status are privileged columns the client can no
+// longer write directly — only the service-role key bypasses those grants.
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -17,11 +22,9 @@ export default async function handler(req, res) {
     !supabaseUrl && "VITE_SUPABASE_URL/SUPABASE_URL",
     !anonKey && "VITE_SUPABASE_ANON_KEY/SUPABASE_ANON_KEY",
     !serviceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
-    !stripe && `STRIPE_SECRET_KEY${MODE === "live" ? "" : "_TEST"} (MODE=${MODE})`,
-    !appUrl && "APP_URL",
   ].filter(Boolean);
   if (missing.length) {
-    console.error("stripe-create-checkout missing env vars:", missing.join(", "));
+    console.error("seed-trial missing env vars:", missing.join(", "));
     return res.status(500).json({ error: "Server configuration is missing" });
   }
 
@@ -29,11 +32,6 @@ export default async function handler(req, res) {
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
   if (!token) {
     return res.status(401).json({ error: "Missing access token" });
-  }
-
-  const priceId = PRICE_ID_BY_PLAN[req.body?.plan];
-  if (!priceId) {
-    return res.status(400).json({ error: "Invalid plan" });
   }
 
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -51,45 +49,34 @@ export default async function handler(req, res) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const { data: row, error: rowError } = await adminClient
+  const { data: existing, error: fetchError } = await adminClient
     .from("user_data")
-    .select("stripe_customer_id")
+    .select("trial_started_at")
     .eq("user_id", userId)
-    .single();
-  if (rowError) {
+    .maybeSingle();
+  if (fetchError) {
+    console.error("seed-trial fetch failed:", fetchError.message);
     return res.status(500).json({ error: "Failed to load account" });
   }
-
-  try {
-    let customerId = row?.stripe_customer_id ?? null;
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: authData.user.email,
-        metadata: { supabase_user_id: userId },
-      });
-      customerId = customer.id;
-      const { error: saveError } = await adminClient
-        .from("user_data")
-        .update({ stripe_customer_id: customerId })
-        .eq("user_id", userId);
-      if (saveError) {
-        return res.status(500).json({ error: "Failed to save Stripe customer" });
-      }
-    }
-
-    const origin = resolveAppOrigin(req);
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      customer: customerId,
-      client_reference_id: userId,
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${origin}/?checkout=success`,
-      cancel_url: `${origin}/?checkout=cancel`,
-    });
-
-    return res.status(200).json({ url: session.url });
-  } catch (err) {
-    console.error("stripe-create-checkout failed:", err.message);
-    return res.status(500).json({ error: "Failed to start checkout" });
+  if (existing?.trial_started_at) {
+    return res.status(200).json({ seeded: false });
   }
+
+  const now = new Date();
+  const patch = {
+    user_id: userId,
+    trial_started_at: now.toISOString(),
+    trial_ends_at: new Date(now.getTime() + TRIAL_DAYS * 86400000).toISOString(),
+    access_ends_at: new Date(now.getTime() + ACCESS_DAYS * 86400000).toISOString(),
+    subscription_status: "trialing",
+  };
+  const { error: upsertError } = await adminClient
+    .from("user_data")
+    .upsert(patch, { onConflict: "user_id" });
+  if (upsertError) {
+    console.error("seed-trial upsert failed:", upsertError.message);
+    return res.status(500).json({ error: "Failed to seed trial" });
+  }
+
+  return res.status(200).json({ seeded: true });
 }

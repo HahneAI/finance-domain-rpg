@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ─────────────────────────────────────────────────────────────
 // Mock Supabase — chainable per-table builders. Each chain is thenable so
@@ -45,6 +45,11 @@ function routeTables(map) {
 beforeEach(() => {
   vi.clearAllMocks()
   getCurrentUserId.mockResolvedValue('test-user-id')
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }))
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -71,9 +76,32 @@ describe('createInvestorAccount', () => {
       active_account: 1,
     }))
     const [payload, opts] = tables.user_data.upsert.mock.calls[0]
-    expect(payload).toMatchObject({ user_id: 'u9', is_investor: true })
+    expect(payload).toMatchObject({ user_id: 'u9' })
+    expect(payload.is_investor).toBeUndefined()
     expect(payload.config).toMatchObject({ isInvestor: true, investorName: 'Ada', setupComplete: false })
     expect(opts).toEqual({ onConflict: 'user_id' })
+    // is_investor itself is granted via the service-role seed-investor route,
+    // not the client upsert above (migration 019 revokes that column grant).
+    expect(fetch).toHaveBeenCalledWith('/api/seed-investor', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ Authorization: 'Bearer t' }),
+      body: JSON.stringify({ code: 'alpha' }),
+    }))
+  })
+
+  it('skips the seed-investor call when no session exists yet (email confirm pending)', async () => {
+    supabase.auth.signUp.mockResolvedValue({ data: { user: { id: 'u9' }, session: null }, error: null })
+    routeTables({ investor_users: chain({ error: null }), user_data: chain({ error: null }) })
+    await createInvestorAccount(args)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('surfaces an error when the seed-investor route rejects the code', async () => {
+    supabase.auth.signUp.mockResolvedValue({ data: { user: { id: 'u9' }, session: { access_token: 't' } }, error: null })
+    routeTables({ investor_users: chain({ error: null }), user_data: chain({ error: null }) })
+    fetch.mockResolvedValue({ ok: false, json: async () => ({ error: 'Invalid or inactive investor code' }) })
+    const result = await createInvestorAccount(args)
+    expect(result.error).toBe('Invalid or inactive investor code')
   })
 
   it('flags needsConfirmation when signUp returns no session (email confirm flow)', async () => {

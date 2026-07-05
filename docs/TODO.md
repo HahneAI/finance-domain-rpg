@@ -111,11 +111,23 @@ gate without hitting Stripe on every load.*
   (same pattern as `week_confirmations`, so a not-yet-migrated DB falls back to
   `DEFAULT_SUBSCRIPTION` instead of breaking the whole load) and maps them into a `subscription`
   object; kept OUT of the `config` JSON blob.
-- [ ] **RLS** — **descoped for now.** `user_data` has never had RLS enabled at all (only a
-  commented-out example in `001_initial_schema.sql`) — enabling it for the first time is a
-  higher-risk, separate task. For this feature, the subscription columns are protected at the
-  app layer instead: `saveUserData()` never accepts/writes them client-side; only the future
-  service-role webhook/checkout/portal routes (§C) will. Revisit real RLS as its own follow-up.
+- [x] **RLS** — landed via migration `019_enable_user_data_rls.sql` (security audit
+  `docs/security-audit-2026-07-04.md` finding #1) plus its two required companion moves,
+  completed 2026-07-06:
+  - [x] **`api/seed-trial.js`** — new service-role route. `syncUserProfile()` in `src/lib/db.js`
+    now POSTs its Bearer token here instead of upserting `trial_started_at`/`trial_ends_at`/
+    `access_ends_at`/`subscription_status` directly; the route re-checks `trial_started_at IS
+    NULL` server-side before seeding. `display_name`/`avatar_url` stay a direct client upsert
+    (still client-writable columns).
+  - [x] **`api/seed-investor.js`** — new service-role route. `createInvestorAccount()` now upserts
+    `user_data` without `is_investor`, then POSTs the investor code here to grant `is_investor =
+    true`; the route re-validates the code against `investor_codes.is_active` itself rather than
+    trusting the client. Known gap: if email confirmation is required at sign-up there's no
+    session yet to call this route, so `is_investor` stays unset until a later authenticated
+    sign-in seeds it — a limitation the RLS migration introduces for any unauthenticated write to
+    this table, not specific to this one column.
+  - Both routes + `db.js` covered by updated `db.test.js` / `dbInvestor.test.js` (fetch mocked,
+    same pattern as `UpgradeCard`'s checkout call).
 
 ### B. Stripe account & product setup *(config steps, no app code)*
 

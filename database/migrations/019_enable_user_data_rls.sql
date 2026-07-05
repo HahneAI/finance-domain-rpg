@@ -19,24 +19,27 @@
 --       their OWN, non-privileged fields — even on their own row.
 --
 -- ─────────────────────────────────────────────────────────────────────────────
--- ⚠️ REQUIRED COMPANION CODE CHANGES — apply these BEFORE running this migration,
---    or the listed client writes will start failing:
+-- ✅ REQUIRED COMPANION CODE CHANGES — done (2026-07-06), safe to apply this
+--    migration now:
 --
 --    Section (B) revokes client UPDATE on is_admin, is_investor,
 --    tax_projections_enabled and every Stripe/trial/subscription column. Two
---    client functions currently write some of those columns with the anon key
---    and MUST move to a service-role server route first:
+--    client functions used to write some of those columns with the anon key
+--    and have moved to service-role routes:
 --
---      1. src/lib/db.js `syncUserProfile()` — seeds trial_started_at /
---         trial_ends_at / access_ends_at / subscription_status on first login.
---         Move this seeding into a service-role route (e.g. api/seed-trial.js)
---         or a SECURITY DEFINER function. display_name / avatar_url stay
---         client-writable (they are in the granted column list below).
+--      1. src/lib/db.js `syncUserProfile()` — trial_started_at / trial_ends_at /
+--         access_ends_at / subscription_status now seed via
+--         api/seed-trial.js (service role). display_name / avatar_url stay a
+--         direct client upsert (they're in the granted column list below).
 --
---      2. src/lib/db.js `createInvestorAccount()` — sets is_investor = true on
---         the seeded user_data row. Move that flag write to a service-role
---         route, or seed it via a SECURITY DEFINER function keyed off a
---         validated investor code.
+--      2. src/lib/db.js `createInvestorAccount()` — is_investor = true is now
+--         granted via api/seed-investor.js (service role), which
+--         re-validates the investor code server-side before writing.
+--         Known gap: if email confirmation is required at sign-up, there's no
+--         session/access token yet to call this route, so is_investor stays
+--         unset until a follow-up authenticated flow seeds it — unrelated to
+--         RLS specifically, since an unauthenticated insert to this table
+--         would fail under policy (A) regardless once this migration is live.
 --
 --    saveUserData() and the LoginScreen signup insert only touch non-privileged
 --    columns, so they keep working unchanged.

@@ -371,29 +371,60 @@ return, all confirmed working). Load-bearing context for whatever's next:
 
 *New infra: the app has no transactional email today (only Supabase auth emails). The card-nudge,
 grace, and every-other-day deletion warnings need an email provider + a scheduled job. All sends
-are server-side via a daily cron route; nothing here runs on the client. Nothing in this section
-has been started — nothing under `api/` sends email today, and no cron is registered in
-`vercel.json`. Depends on §D/§F's phase math and columns, both already shipped, so this is
-unblocked and ready to start whenever picked up.*
+are server-side via a daily cron route; nothing here runs on the client. Depends on §D/§F's phase
+math and columns, both already shipped. Code shipped 2026-07-05 — remaining unchecked items below
+are account/config steps plus the §I-blocked deletion hook.*
 
-- [ ] **Pick an email provider** — Resend / Postmark / SendGrid (Resend is the lightest Vercel fit).
-  Add `EMAIL_API_KEY` + a verified sender domain.
-- [ ] **`api/cron-subscription-lifecycle.js`** — scheduled daily via `vercel.json` `crons`. Runs
-  service-role, recomputes each user's phase from `trial_started_at` / `trial_ends_at` /
-  `access_ends_at` / `card_on_file`, and acts:
-  - [ ] **Trial, day ≥ 7, no card** → "add your card to avoid interruption" nudge. Throttle to a
-    sane cadence (e.g. once at day 7, again ~day 12) via `last_dunning_email_at`.
-  - [ ] **Grace (day 14–20), no card** → "trial ended — add a card to keep using the app."
-    Escalating but **never** mentions the remaining access. ~every 2 days.
-  - [ ] **Expired (day 21+), no card** → account-deletion warning **every other day** (guard:
-    `now − last_dunning_email_at ≥ 2 days`); increment `dunning_email_count`.
-  - [ ] **Past day 21 + 7, no card** → archive the account (see §I) then call the deletion path
-    (reuse/extend `delete-account` logic server-side).
-  - [ ] **Card on file / active** → no lifecycle emails; reset `dunning_email_count`.
-- [ ] **Idempotency / safety** — cron must be safe to run twice a day; key all sends off the
-  throttle timestamps, never off "did the day flip." Protect the route (Vercel cron secret / header).
-- [ ] **Copy review** — all templates reference the **14-day** trial only; no template, subject, or
-  preview text reveals the grace week.
+- [x] **Pick an email provider** — **Resend** (decided 2026-07-05). Free tier: 3,000/mo, 100/day,
+  one verified domain — covers 300+ concurrent trial users at ~8–10 lifecycle emails per full
+  trial→deletion cycle. SendGrid ruled out (Twilio killed the permanent free tier May 2025; 60-day
+  trial then $19.95/mo minimum) and Postmark has no free production tier (~$15/mo). Sends go
+  through Resend's REST API via plain `fetch` (`api/_email.js`) — no npm dependency added.
+  - [ ] **Create the Resend account + API key** and set `EMAIL_API_KEY` in Vercel.
+  - [ ] **Verified sender domain — deliberately deferred.** Built against Resend's shared dev
+    sender (`onboarding@resend.dev`, the `EMAIL_FROM` default); it only delivers to the Resend
+    account owner's own address, which is exactly right for testing. A custom domain (can't be
+    `*.vercel.app` — no DNS control over it) must be verified in Resend and set as `EMAIL_FROM`
+    **before real users hit day 7 of a trial**, or dunning mail lands in spam / doesn't deliver.
+- [x] **`api/cron-subscription-lifecycle.js`** — scheduled daily via `vercel.json` `crons`
+  (15:00 UTC ≈ morning US Central). Runs service-role over every `user_data` row with a seeded
+  trial; per-row decisions live in the pure engine `api/_lifecycleEngine.js` (delegates phase math
+  to `getEntitlement` — never re-derived), templates in `api/_lifecycleEmails.js`. Skips
+  `is_admin`/`is_investor` rows entirely (they bypass the paywall, §E — must never be dunned).
+  Throttle state is stamped only **after** a successful send, so failures retry next run; one bad
+  row can't abort the run (per-row try/catch; summary JSON `{checked, sent, reset, deleteDue,
+  errors}` returned + logged). User emails come from `auth.admin.getUserById` per actionable row.
+  - [x] **Trial, day ≥ 7, no card** → "add your card to avoid interruption" nudge, once at day 7
+    and once at day 12 (`TRIAL_NUDGE_DAYS`), keyed off `last_dunning_email_at` vs. the milestone
+    timestamp — a cron outage catches up with at most one send, never two.
+  - [x] **Grace (day 14–20), no card** → "trial ended — add a card to keep using the app."
+    Every 2 days; **never** mentions the remaining access.
+  - [x] **Expired (day 21+), no card** → account-deletion warning **every other day** (guard:
+    `now − last_dunning_email_at ≥ 2 days`); increments `dunning_email_count`.
+  - [ ] **Past day 21 + 7, no card** → archive the account (see §I) then call the deletion path.
+    **Not implemented — blocked on §I's `deleted_accounts` migration** (deleting without the
+    archive would make revival impossible). The engine already flags these rows (`deleteDue: true`)
+    and the cron counts + logs them, so wiring in the actual archive+delete is the only
+    remaining step once §I lands.
+  - [x] **Card on file / active** → no lifecycle emails; resets `dunning_email_count` +
+    `last_dunning_email_at` so a future lapse starts a fresh cycle.
+- [x] **Idempotency / safety** — safe to run any number of times a day: every send keys off the
+  stored throttle timestamps, never "did the day flip" (verified by the twice-daily-run tests).
+  Route requires `Authorization: Bearer <CRON_SECRET>` — Vercel sends that header automatically on
+  cron invocations when the `CRON_SECRET` env var is set; anonymous requests get 401.
+- [x] **Copy review** — all templates reference the **14-day** trial only. Enforced by
+  `src/test/api/lifecycleEmails.test.js`: forbidden patterns (`grace`, any `21`, `extra week`,
+  `access ends`) asserted against every template's subject/html/text with a vacuous-pass guard —
+  same approach as `TrialBanner.test.jsx`. Also deliberate: no "you won't be charged until your
+  trial ends" phrasing anywhere, since the trial is app-managed (§B) and Checkout charges
+  immediately on upgrade. Engine schedule/throttle covered by
+  `src/test/api/lifecycleEngine.test.js` (26 tests total across both files).
+- **Not yet verified live** — same caveat as §E: built + fully tested in the sandbox (suite green
+  at 872, build clean), but no real Resend send or deployed cron invocation has happened yet.
+  To go live: create the Resend account, set `EMAIL_API_KEY` + `CRON_SECRET` in Vercel, deploy
+  (the `vercel.json` cron registers on deploy), then trigger once manually —
+  `curl -H "Authorization: Bearer $CRON_SECRET" https://<deployment>/api/cron-subscription-lifecycle`
+  — and check the summary JSON plus the Resend dashboard's send log.
 - [ ] **(Optional, later) Web Push** — the app is already a PWA w/ service worker; the same phase
   signals could fire push notifications. Defer behind email v1.
 
@@ -502,8 +533,8 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
 
 *Reference only — all Stripe/Supabase vars listed here are already set in Vercel and working
 (validated by the §C test-mode checkout pass and confirmed live by the user). `EMAIL_API_KEY` and
-`CRON_SECRET` are the only two not yet set, since they belong to §G which hasn't been built.
-Revisit this list only if §G/§I introduce new vars (an email provider key, a cron secret, etc.).*
+`CRON_SECRET` are the only two not yet set — §G's code now ships and requires both (the cron route
+500s with a "Server configuration is missing" log until they exist). `EMAIL_FROM` is optional.*
 
 ```
 STRIPE_SECRET_KEY=...             # LIVE server key (api/ functions)
@@ -516,8 +547,11 @@ STRIPE_PRICE_ANNUAL=price_...     # LIVE — $120/yr ($10.00/mo flat, ~4 months 
 STRIPE_PRICE_ANNUAL_TEST=price_...  # TEST — $120/yr
 APP_URL=https://...               # server only — whitelisted base URL for Checkout/Portal
                                    # success, cancel, and return URLs. Not mode-specific.
-EMAIL_API_KEY=...                 # transactional email provider (Resend/Postmark/SendGrid)
-CRON_SECRET=...                   # guards api/cron-subscription-lifecycle
+EMAIL_API_KEY=...                 # Resend API key (§G lifecycle emails; api/_email.js)
+EMAIL_FROM=...                    # optional verified sender, e.g. "Authority Finance <no-reply@domain>"
+                                   # — defaults to onboarding@resend.dev (dev-only delivery) when unset
+CRON_SECRET=...                   # guards api/cron-subscription-lifecycle; Vercel auto-sends it
+                                   # as the Authorization header on cron invocations
 VITE_STRIPE_PUBLISHABLE_KEY=...   # client (only if using Stripe.js redirect; not needed for hosted Checkout URL)
 # Reuses existing SUPABASE_SERVICE_ROLE_KEY / VITE_SUPABASE_* already set for delete-account.
 ```

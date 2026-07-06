@@ -464,11 +464,12 @@ double-check, not fresh implementation. E.g. webhook signature verification and 
 canceled entitlement handling already exist in `api/_stripeClient.js`/`subscription.js`; confirm
 before treating any bullet here as starting from zero.*
 
-***Completed 2026-07-06.** The audit confirmed exactly that split: five bullets were already
-satisfied by §A–G code and needed only verification + notes; the one real code change was the
-delete-account Stripe cancellation, and the new tests are the signed-fixture webhook suite,
-the create-checkout token guards, and the delete-account cancellation suite. §B's Customer
-Portal dashboard config remains the only §A–H leftover (config-only, no code).*
+***Code + audit completed 2026-07-06.** The audit confirmed exactly that split: five bullets were
+already satisfied by §A–G code and needed only verification + notes; the one real code change was
+the delete-account Stripe cancellation, and the new tests are the signed-fixture webhook suite,
+the create-checkout token guards, and the delete-account cancellation suite. Two §A–H leftovers,
+both deliberately parked for the final pre-launch pass: §B's Customer Portal dashboard config
+(config-only, no code) and the live cancel-on-delete verification (last bullet below).*
 
 - [x] **Webhook signature** — reject unsigned/invalid events; never trust client-reported status.
   **Audited 2026-07-06 — already existed** (`constructWebhookEvent` in `api/_stripeClient.js`
@@ -516,6 +517,13 @@ Portal dashboard config remains the only §A–H leftover (config-only, no code)
   mapping with signed fixture events and create-checkout missing/invalid-token rejection
   (**added 2026-07-06**: `stripeWebhook.test.js`, `stripeCreateCheckout.test.js`, plus
   `deleteAccount.test.js` for the new cancellation path — 23 new tests, 895 total).
+- [ ] **Live verification: cancel-on-delete (deliberately left open until the end).** The
+  delete-account cancellation is unit-tested but has never run against real Stripe — this sandbox
+  has no credentials. On the preview deployment, in **test mode**: subscribe with the test card
+  (`4242 4242 4242 4242`), run the "type DELETE" flow in ProfilePanel, then confirm in the Stripe
+  test dashboard that the subscription shows **canceled** (not just the account gone). This is the
+  last §H box and should be checked during the final pre-launch pass, alongside §B's Customer
+  Portal config.
 
 ### I. Account Revival After Non-Payment Deletion
 

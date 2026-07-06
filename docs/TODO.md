@@ -4,31 +4,6 @@
 
 ---
 
-## 16. Priority Sprint — UX Polish & Cleanup
-
-*Active. Remaining open items from the 2026-06-07 brain dump.*
-
-- [ ] **Mobile PWA install tutorial** — Add a hamburger-menu option shown **only in the mobile
-  browser** (not the installed PWA) that opens a tutorial teaching users how to install the PWA.
-  The iOS flow already exists on our website (user will provide it); reuse that and place the
-  button somewhere clean.
-
-- [ ] **Financial alert feature — copy + AI tuneup** — Revisit the Net Worth Health
-  "Financial Breakthrough" tips copy (`NetWorthHealthTips.jsx`) and upgrade it from static text to
-  Coach-generated responses tied to real net worth trends. Full spec → **§18.C**.
-
-- [ ] **Purge grey text** — Replace remaining dark-grey text across the app with the standard
-  white/primary text color. Profile panel and panel headers were purged in two prior rounds;
-  a final app-wide verification pass is still needed to catch any missed surfaces.
-
-- [ ] **Verify change email + password (live round-trip)** — Code audit confirmed both flows are
-  implemented in `ProfilePanel.jsx`. Still needs live Supabase + real inbox test: change email
-  and confirm via the link (Secure email change dual-confirm + whitelisted redirect); change
-  password then sign out and confirm old password rejected / new works; wrong-current-password
-  path. Cannot be exercised from the remote dev environment.
-
----
-
 ## 17. Monetization — Stripe Subscriptions + 2-Week Free Trial
 
 *New workstream. Authority Finance is currently free with no billing layer (`CLAUDE.md`: "No
@@ -403,11 +378,11 @@ are account/config steps plus the §I-blocked deletion hook.*
     Every 2 days; **never** mentions the remaining access.
   - [x] **Expired (day 21+), no card** → account-deletion warning **every other day** (guard:
     `now − last_dunning_email_at ≥ 2 days`); increments `dunning_email_count`.
-  - [ ] **Past day 21 + 7, no card** → archive the account (see §I) then call the deletion path.
-    **Not implemented — blocked on §I's `deleted_accounts` migration** (deleting without the
-    archive would make revival impossible). The engine already flags these rows (`deleteDue: true`)
-    and the cron counts + logs them, so wiring in the actual archive+delete is the only
-    remaining step once §I lands.
+  - [x] **Past day 21 + 7, no card** → archive the account (see §I) then call the deletion path.
+    **Implemented 2026-07-06** (§I item unblocked — the `deleted_accounts` table already existed
+    in migration 017): the cron now acts on `deleteDue` rows via `archiveAndDeleteAccount()` —
+    snapshot → cancel any lingering Stripe sub → tombstone upsert → hard delete. Takes
+    precedence over the same-run deletion-warning email. See the §I archive bullet for details.
   - [x] **Card on file / active** → no lifecycle emails; resets `dunning_email_count` +
     `last_dunning_email_at` so a future lapse starts a fresh cycle.
 - [x] **Idempotency / safety** — safe to run any number of times a day: every send keys off the
@@ -464,23 +439,66 @@ double-check, not fresh implementation. E.g. webhook signature verification and 
 canceled entitlement handling already exist in `api/_stripeClient.js`/`subscription.js`; confirm
 before treating any bullet here as starting from zero.*
 
-- [ ] **Webhook signature** — reject unsigned/invalid events; never trust client-reported status.
-- [ ] **Card declines / `past_due`** — keep entitlement until `current_period_end`, then lock;
-  surface the Stripe-hosted update-card flow via the portal.
-- [ ] **Cancellation** — `canceled` keeps access through `current_period_end` (Stripe "cancel at
-  period end"), then drops to read-only.
-- [ ] **Account deletion** — extend `api/delete-account.js` to also cancel the Stripe subscription
-  so a deleted user isn't billed. **Non-payment auto-deletion (cron, §G) must archive first** —
-  see §I — this is the one deletion path that isn't a clean hard-delete, because it needs to stay
-  revivable. The user-initiated "type DELETE" flow in ProfilePanel is unaffected and stays a true
-  hard delete with no archive.
-- [ ] **Clock skew / tz** — all phase math in UTC against `trial_ends_at` / `access_ends_at`; do not
-  use the client's local lock-date offset (admin Lock Date must not extend a trial or the grace).
-- [ ] **Disclosure** — no client string, email template, or API response exposes `access_ends_at` or
-  the grace concept to a non-admin user (covered by a test).
-- [ ] **Tests** — unit-test `getEntitlement` across trial/grace/active/expired/past_due/canceled and
-  the exact day-14 and day-21 boundaries; cron phase-routing + every-other-day throttle; webhook
-  upsert mapping with a signed fixture event; create-checkout rejects missing/invalid tokens.
+***Code + audit completed 2026-07-06.** The audit confirmed exactly that split: five bullets were
+already satisfied by §A–G code and needed only verification + notes; the one real code change was
+the delete-account Stripe cancellation, and the new tests are the signed-fixture webhook suite,
+the create-checkout token guards, and the delete-account cancellation suite. Two §A–H leftovers,
+both deliberately parked for the final pre-launch pass: §B's Customer Portal dashboard config
+(config-only, no code) and the live cancel-on-delete verification (last bullet below).*
+
+- [x] **Webhook signature** — reject unsigned/invalid events; never trust client-reported status.
+  **Audited 2026-07-06 — already existed** (`constructWebhookEvent` in `api/_stripeClient.js`
+  verifies the raw body against both modes' secrets; `stripe-webhook.js` 400s on any failure, and
+  `subscription_status` is only ever written server-side — webhook, seed-trial, lifecycle cron).
+  Now also test-covered: `src/test/api/stripeWebhook.test.js` signs fixture events with Stripe's
+  real `generateTestHeaderString` (real HMAC, not a mocked verifier) and asserts that a missing
+  header, a wrong-secret signature, and a tampered body all reject with zero DB writes.
+- [x] **Card declines / `past_due`** — keep entitlement until `current_period_end`, then lock;
+  surface the Stripe-hosted update-card flow via the portal. **Audited 2026-07-06 — already
+  existed**: §D's `getEntitlement` extension keeps `past_due` entitled while
+  `now < current_period_end` (boundary-tested in `subscription.test.js`), the webhook sets
+  `past_due` on `invoice.payment_failed` (now fixture-tested), and AccountDetail's Manage
+  Subscription button opens the Stripe portal (tested in `AccountDetailSubscription.test.jsx`).
+  Nothing rebuilt.
+- [x] **Cancellation** — `canceled` keeps access through `current_period_end` (Stripe "cancel at
+  period end"), then drops to read-only. **Audited 2026-07-06 — already existed**: same
+  `getEntitlement` branch as `past_due` (tested before/after the period boundary), and
+  `customer.subscription.deleted` forces status to `canceled` regardless of the event object's
+  own status field (now fixture-tested). Nothing rebuilt.
+- [x] **Account deletion** — **implemented 2026-07-06**: `api/delete-account.js` now looks up
+  `stripe_subscription_id` and cancels the subscription **immediately** (not at period end)
+  before deleting anything. Stored subscription ids don't record which Stripe mode minted them
+  (preview checkout = test mode, production = live), so a new `STRIPE_CLIENTS` export in
+  `_stripeClient.js` tries the deployment's own mode first, then the sibling —
+  `resource_missing` means wrong mode or already gone, both safe to move past. Already-canceled
+  subs are skipped; an unexpected cancel failure **aborts the deletion with a 500** so the
+  request is retryable rather than leaving a deleted-but-still-billed user. Still a true hard
+  delete, no archive (the archive-first path is §G's non-payment cron only, blocked on §I).
+  9 tests in `src/test/api/deleteAccount.test.js`.
+- [x] **Clock skew / tz** — **audited 2026-07-06**: all phase math in `getEntitlement` is
+  UTC-epoch-ms comparison against the stored timestamps, and every caller — `App.jsx:1068`,
+  `ProfilePanel.jsx` (AccountDetail), and the server-side `_lifecycleEngine.js` — passes real
+  wall-clock `new Date()`, never `effectiveToday`/Lock Date. Boundary behavior (day-14 and
+  day-21 inclusive/exclusive) pinned by `subscription.test.js`.
+- [x] **Disclosure** — **audited 2026-07-06**: every rendered surface has a forbidden-pattern
+  test (`UpgradeModal`/`UpgradePanel`/`TrialBanner` component tests + `lifecycleEmails.test.js`),
+  and API responses expose nothing: seed-trial returns only `{seeded}`, checkout/portal only a
+  URL, webhook only `{received}`. One inherent caveat, accepted per §D's design: the raw
+  `access_ends_at` value does travel to the client inside `loadUserData()`'s row because the
+  gate is computed client-side — it is never *rendered* on a non-admin surface, but a devtools
+  user could read it. Moving the gate fully server-side is the only fix and out of scope for v1.
+- [x] **Tests** — `getEntitlement` states + day-14/21 boundaries (§D, `subscription.test.js`);
+  cron phase-routing + every-other-day throttle (§G, `lifecycleEngine.test.js`); webhook upsert
+  mapping with signed fixture events and create-checkout missing/invalid-token rejection
+  (**added 2026-07-06**: `stripeWebhook.test.js`, `stripeCreateCheckout.test.js`, plus
+  `deleteAccount.test.js` for the new cancellation path — 23 new tests, 895 total).
+- [ ] **Live verification: cancel-on-delete (deliberately left open until the end).** The
+  delete-account cancellation is unit-tested but has never run against real Stripe — this sandbox
+  has no credentials. On the preview deployment, in **test mode**: subscribe with the test card
+  (`4242 4242 4242 4242`), run the "type DELETE" flow in ProfilePanel, then confirm in the Stripe
+  test dashboard that the subscription shows **canceled** (not just the account gone). This is the
+  last §H box and should be checked during the final pre-launch pass, alongside §B's Customer
+  Portal config.
 
 ### I. Account Revival After Non-Payment Deletion
 
@@ -488,7 +506,9 @@ before treating any bullet here as starting from zero.*
 non-payment, the user should still be able to come back — but coming back must require a real,
 successful charge, not just re-entering the same info. This section defines that recovery path.
 Depends on §G's deletion cron writing an archive record instead of a bare hard-delete — since §G
-hasn't been built yet either, nothing here is actionable until that lands first.*
+hasn't been built yet either, nothing here is actionable until that lands first. **(Update
+2026-07-06: §G is live and the archive-then-delete step below is now wired in — the remaining
+§I bullets, revival detection/screen/checkout/restore, are actionable.)***
 
 **Core distinction:** the existing `api/delete-account.js` flow (user types "DELETE" in
 ProfilePanel) stays a **true, unrecoverable hard delete** — that's an explicit user choice and
@@ -496,7 +516,7 @@ gets no archive. The **cron-driven non-payment deletion** (§G, day 21+7) is the
 archives first, specifically so revival is possible. Both still delete the live `auth.users` row
 and `user_data` row — the difference is only whether a recoverable snapshot was taken first.
 
-- [ ] **Archive-then-delete in the lifecycle cron** — before `api/cron-subscription-lifecycle.js`
+- [x] **Archive-then-delete in the lifecycle cron** — before `api/cron-subscription-lifecycle.js`
   hard-deletes a non-payment account, it upserts a snapshot into `deleted_accounts` (migration
   017, added below) keyed by email: `config`, `expenses`, `goals`, `logs`, `show_extra`,
   `week_confirmations`, `pto_goal`, `stripe_customer_id`, `plan`, `display_name`, `avatar_url`,
@@ -504,23 +524,53 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
   a password field). `deletion_reason = 'non_payment_dunning_expired'`. Upsert-on-email so a
   second deletion cycle (revive → cancel again) overwrites the same tombstone rather than piling
   up duplicates.
-- [ ] **Login-time detection** — `LoginScreen.jsx` needs to distinguish "wrong password" from
+  **Implemented 2026-07-06** — `archiveAndDeleteAccount()` in the cron, ordered for retry
+  safety (any step failing leaves the account intact for the next daily run): resolve auth
+  user → snapshot full row → cancel any lingering Stripe sub (shared `cancelStripeSubscription`
+  helper, now exported from `_stripeClient.js` and reused by `delete-account.js`) → tombstone
+  upsert (`onConflict: "email"`, explicitly resetting `revived_at`/attempt/decline fields so a
+  second cycle reopens the tombstone fresh) → delete `user_data` → delete auth user. Supabase
+  reports `provider: "email"` for password accounts, so only real OAuth providers are recorded.
+  7 tests in `src/test/api/cronLifecycleDelete.test.js` (first coverage of the cron route
+  itself) drive the real engine with day-30 fixtures: full tombstone mapping, OAuth provider,
+  sub cancel, cancel-failure and archive-failure both blocking deletion, day-23 still emailing
+  instead of deleting. ⚠️ **Verify in Supabase that migration 017's `deleted_accounts` table
+  actually exists** (`select count(*) from deleted_accounts;`) — the §A note that 017 was
+  unrun proved stale for the subscription columns, but the table half of that file hasn't been
+  independently confirmed.
+- [x] **Login-time detection** — `LoginScreen.jsx` needs to distinguish "wrong password" from
   "this email belongs to an archived, revivable account":
-  - **Email/password:** Supabase Auth intentionally returns the same generic "Invalid login
+  - [x] **Email/password:** Supabase Auth intentionally returns the same generic "Invalid login
     credentials" for both wrong-password and no-such-user, so the client can't tell them apart
     from the auth error alone. On any login failure, look up the email against
     `deleted_accounts` via a server route (`api/revival-lookup.js`, service-role — never expose
     this table to anon/authenticated SELECT directly, since it holds archived financial data).
     If a match with `revived_at IS NULL` exists, route to the Revive Account screen instead of
-    showing the generic error.
-  - **OAuth (Google):** sign-in with a previously-deleted email transparently creates a **new**
+    showing the generic error. **Implemented 2026-07-06** — `lookupRevivable()` in
+    `LoginScreen.jsx` fires on every failed sign-in; a match switches to the new `"revive"` mode
+    (new-password form, or "Continue with Google" when the tombstone records an OAuth provider).
+    Lookup failures fall back to the generic error so a transient server problem can never block
+    a normal login. Note: the unauthenticated lookup returns ONLY `{revivable, oauthProvider}` —
+    never archived identity — and is deliberately an existence oracle (accepted trade-off,
+    documented in the route).
+  - [x] **OAuth (Google):** sign-in with a previously-deleted email transparently creates a **new**
     `auth.users` row (OAuth signup doesn't fail for "new" emails) before the app ever gets a
     chance to object. The `SIGNED_IN` handler must check `deleted_accounts` for that email
     *before* `syncUserProfile` seeds a fresh trial — if a revivable tombstone exists, short-circuit
     into the Revive Account screen and hold off on trial seeding / normal onboarding entirely.
-- [ ] **Revive Account screen** — reachable only via the redirect above (not a normal nav
+    **Implemented 2026-07-06** — `checkRevival()` (`db.js`) runs first in App.jsx's SIGNED_IN
+    handler; only when it resolves null does `syncUserProfile()` (and thus trial seeding) run.
+    The authenticated lookup keys off the **session's** email (never client input) and returns
+    the archived identity for the Revive screen.
+- [x] **Revive Account screen** — reachable only via the redirect above (not a normal nav
   destination). Shows the archived `display_name`/`avatar_url`/email so the user recognizes their
-  old account, and:
+  old account, and: **Implemented 2026-07-06** as two halves: LoginScreen's `"revive"` mode
+  handles re-authentication (new password → `signUp`, or Google), and
+  `src/components/ReviveScreen.jsx` (rendered by App.jsx whenever `revivalInfo` is set —
+  before the wizard, panels, or anything else) handles identity display + plan choice +
+  revive checkout. App clears the screen only when the post-checkout poll sees
+  `subscription_status = "active"` (the webhook restore landing), then closes any wizard the
+  bare pre-restore row opened and reloads the restored data.
   - Prompts for a **new password** (email/password accounts) — note in the UI copy (and here, for
     the humans building this): **there is no restriction on reusing the exact same password they
     had before cancellation** — that part is intentionally unblocked. For OAuth accounts, this
@@ -531,31 +581,79 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
     for the selected plan. No free re-entry path.
   - Reuses `stripe_customer_id` from the archive when present (same Stripe customer, new
     subscription) rather than creating a duplicate customer.
-- [ ] **`api/stripe-revive-checkout.js`** — like `stripe-create-checkout.js` but keyed off the
+- [x] **`api/stripe-revive-checkout.js`** — like `stripe-create-checkout.js` but keyed off the
   archived tombstone rather than an existing `user_data` row: verify the new (just-created, empty)
   Supabase session belongs to the matching email, create/reuse the Stripe customer from
   `deleted_accounts.stripe_customer_id`, create a Checkout Session for the chosen plan.
-- [ ] **On successful charge (webhook `checkout.session.completed` for a revival session)** —
+  **Implemented 2026-07-06** — the tombstone is looked up by the verified session's email only
+  (403 when none), so no one can revive or probe another email's archive. Sessions carry
+  `metadata: { revival: "true", revival_email }` for the webhook branch, and every checkout
+  attempt stamps `revival_attempt_count` + `last_revival_attempt_at`. Never touches `user_data`.
+- [x] **On successful charge (webhook `checkout.session.completed` for a revival session)** —
   restore the archived `config`/`expenses`/`goals`/`logs`/`show_extra`/`week_confirmations`/
   `pto_goal` into the new `user_data` row, set `subscription_status = 'active'`, `plan`, and
   `stripe_subscription_id`, stamp `deleted_accounts.revived_at = now()` (tombstone consumed —
   next cancellation cycle starts a fresh one via the same upsert-on-email), and clear
   `revival_attempt_count`.
-- [ ] **Decline handling — the "two-way door"** — a declined charge must never be a dead end:
-  - On decline, increment `deleted_accounts.revival_attempt_count`, stamp
-    `last_revival_attempt_at`, and store Stripe's `decline_code`/message in `last_decline_code` /
-    `last_decline_message`.
-  - Show the user a clear, specific message: **"Your card was declined. Try a different payment
-    method, make sure the card isn't frozen, or add funds to the account, then try again."** The
-    Revive Account screen stays up — the user can immediately retry with a different card or the
-    same one after resolving the issue; nothing about this flow should force them back to square
-    one (re-enter password, re-confirm email, etc.) just because a charge failed.
-  - No attempt cap for now — a struggling card shouldn't lock someone out of ever reviving; revisit
-    if abuse becomes a real concern.
-- [ ] **Tests** — login-failure → revival-lookup routing; OAuth new-signup → tombstone-match
+  **Implemented 2026-07-06** — `restoreRevivedAccount()` in `stripe-webhook.js`, branching on
+  `metadata.revival`. Two deliberate details: (1) the trial window is seeded entirely **in the
+  past** (`trial/access_ends_at = now`) because a revived account must never get a second free
+  window — with null timestamps a later lapse would resolve entitlement `"none"`, which App.jsx
+  doesn't gate, i.e. permanent free access; seeding a spent window makes a lapse resolve
+  `"expired"` like any other non-payer. (2) A revival event whose tombstone was already consumed
+  falls through to the plain status update, so a racing/duplicate session can't wipe restored
+  data.
+- [x] **Decline handling — the "two-way door"** — a declined charge must never be a dead end:
+  **Implemented 2026-07-06, with one honest deviation.** Hosted Stripe Checkout handles card
+  declines entirely on Stripe's page (the user retries different cards there without ever
+  returning to the app), so the app never observes individual declines. What's implemented:
+  attempt tracking stamps on every checkout-session creation (a superset of "on decline");
+  returning with `?checkout=cancel` shows the retry guidance ("try a different payment method,
+  make sure the card isn't frozen, or add funds…" — softened lead since a plain back-button
+  lands on the same return) with the plan buttons immediately usable again; nothing ever routes
+  the user back to re-enter password/email; no attempt cap.
+  - [ ] **(Open, minor) `last_decline_code`/`last_decline_message` capture** — would need
+    `payment_intent.payment_failed` webhook wiring mapped back to the tombstone; deferred until
+    there's a real support need, since hosted Checkout already shows the user Stripe's own
+    decline message in the moment.
+- [x] **Tests** — login-failure → revival-lookup routing; OAuth new-signup → tombstone-match
   short-circuit; successful-charge → full data restore + tombstone consumed; declined-charge →
   attempt count increments and the screen remains usable; second deletion cycle after a revival
   correctly overwrites (not duplicates) the same tombstone row.
+  **Added 2026-07-06 (26 tests):** `revivalLookup.test.js` (disclosure minimalism, session-email
+  keying, `revived_at IS NULL` filter), `stripeReviveCheckout.test.js` (guards, customer reuse,
+  revival metadata, attempt stamping), two signed-fixture revival cases in
+  `stripeWebhook.test.js` (full restore + tombstone consume; consumed-tombstone fall-through),
+  `ReviveScreen.test.jsx` (identity, checkout call, two-way-door retry, disclosure guard), and
+  five LoginScreen revival-routing cases. Tombstone overwrite-on-second-cycle is asserted in
+  `cronLifecycleDelete.test.js` (upsert on email + revival-field reset). **Not covered:** the
+  App.jsx SIGNED_IN short-circuit itself (App has no component test harness) — see the parked
+  live-verification bullet below.
+- [ ] **Live verification: tombstoned-email Google OAuth sign-in (deliberately parked for the
+  final pre-launch pass, alongside §H's cancel-on-delete bullet).** The one §I path no unit test
+  can reach: App.jsx's SIGNED_IN short-circuit. On the preview deployment, with a
+  `deleted_accounts` tombstone whose `oauth_provider = 'google'` and `revived_at IS NULL`
+  (backdate a Google test account past day 28 and run the cron, or hand-insert a tombstone in
+  the SQL editor): sign in with that Google account and confirm it lands on **ReviveScreen** —
+  not the setup wizard, and with **no fresh trial seeded** (check via DB Row Viewer that
+  `trial_started_at` stays null on the new `user_data` row until revival). Then complete the
+  revive checkout with the test card and confirm the archived data comes back and the tombstone's
+  `revived_at` is stamped. While here, also do the email/password variant (failed sign-in →
+  revive password form) — same session, much cheaper than a separate pass.
+
+**Handoff checkpoint #3 (2026-07-06) — §H + §I code-complete; branch
+`claude/stripe-paywall-hardening-audit-1a9s6u`:**
+Everything in checkpoints #1–2 still applies. New since then: §H shipped (delete-account cancels
+the Stripe sub; signed-fixture webhook + checkout-guard tests), the §G/§I archive-then-delete cron
+step is live in code, and the full §I revival flow is built (lookup route, LoginScreen routing,
+App SIGNED_IN short-circuit, ReviveScreen, revive-checkout, webhook restore). 928 tests green.
+Still open / needs the user:
+- **Migration 019 (RLS) is confirmed NOT yet run in Supabase** (user, 2026-07-06). All §17
+  privileged columns are app-layer-protected only until it runs. `deleted_accounts` (017) IS live.
+- Live verification pass on the preview deployment: cancel-on-delete (§H's parked bullet), the
+  §B Customer Portal config, and the full revival loop including the tombstoned-email Google
+  OAuth sign-in (§I's parked bullet above — the one path unit tests can't reach).
+- §I minor leftover: decline-code capture (open sub-bullet above).
 
 ### J. Env vars (Vercel)
 
@@ -1125,23 +1223,124 @@ create index account_history_user_id_effective_from on account_history (user_id,
   ship in the same pass as the write path** — capturing history correctly first, then wiring
   the engine to actually consult it for past weeks, is an explicit two-phase plan (see F).
 
+### D2. Resolved decisions (2026-07-06 design discussion)
+
+- **Snapshot shape — full new-value config snapshot per change**, not field-level diffs of
+  superseded values (revises §D's `field_snapshot` sketch). "Config as of week N" then resolves
+  with the exact `getEffectiveAmount` algorithm: latest row with `effective_from ≤ N`. A
+  `changed_fields TEXT[]` column rides along for UI/diff display only — never load-bearing for
+  resolution.
+- **Storage — the `account_history` child table**, not a JSONB array on `user_data`: keeps the
+  hot-path row from growing forever, stays queryable for admin diagnostics, and is the landing
+  zone for the possible §18.H `coach_chats` fold-in. Rows load once at sign-in alongside
+  `loadUserData`; the resolver runs fully in memory — the engine never touches the network.
+- **Write path — one `commitConfigChange(oldConfig, newConfig, source, effectiveFrom?)` choke
+  point**, not a wrapper around `saveConfigNow` alone: config also persists via the 800ms
+  debounced autosave path in `App.jsx`, so wrapping only the immediate-save path would silently
+  miss changes that flow through the debounce. The helper diffs old vs. new against the
+  whitelist below, inserts a history row only when a whitelisted field actually changed, then
+  persists as normal.
+- **`effective_from` semantics** — stored as a **date**, never a week idx (idx is
+  fiscal-year-relative and breaks across year boundaries; derive idx at read time). Defaults to
+  **today** for plain ProfilePanel edits; only the wizard-driven flows (§15.B structure change,
+  §15.D Quick Rate Update) pass an explicit effective/change date — no effective-date prompt on
+  quick edits.
+- **Backfill — clean start + seed row**: at rollout, insert one snapshot per existing account
+  (current config, `effective_from` = rollout date, `source: 'rollout_seed'`) so the resolver
+  always has a floor entry — no "fall back to live config" special case for pre-history weeks.
+- **§C mechanisms stay as-is** — `pastWeekTaxStatusOverrides`, `weekConfirmations`, and `logs`
+  are records of actuals / per-week corrections, not config versions; they are not folded in.
+  Expense `history[]` also stays untouched in v1 — converging later is a cheap refactor once
+  `account_history` has proven itself.
+- **Loans** — a real, shipped second instance of the bug class (§B), but the cheap fix is giving
+  loans their own expense-style `history[]`; scoped as a separate follow-up, not wired into
+  `account_history` v1.
+- **Schema drift tolerance** — snapshots capture whatever config shape existed at write time
+  (e.g. pre-§20 rows won't have `taxedWeeksFed/State`); the read-path resolver must spread each
+  snapshot over `DEFAULT_CONFIG` before use, same as loads already do.
+
+**Historically-sensitive field whitelist (v1)** — `commitConfigChange` records a snapshot when
+any of these change. Everything else in config (UI prefs, dismissal state, `goalTimelineEpochIdx`,
+investor display fields) is noise and must **not** trigger a row:
+
+- **Pay structure:** `baseRate`, `annualSalary`, `shiftHours`, `diffRate`, `nightDiffRate`,
+  `nightDiffEnabled`, `otThreshold`, `otMultiplier`, `commissionMonthly`
+- **Schedule:** `maxWeeklyHours`, `customWeeklyHours`, `customWeeklyHoursLong/Short`,
+  `scheduleIsVariable`, `userPaySchedule`, `payPeriodEndDay`, `biweeklyPayWeekParity`,
+  `startDate` / `firstActiveIdx`
+- **Employer identity:** `employerPreset` (a DHL↔base flip swaps the entire `buildYear` branch —
+  the single highest-blast-radius change there is), plus the `dhl*` fields and
+  `startingWeekIsLong`
+- **Tax:** `fedRateLow/High`, `stateRateLow/High`, `taxRatesEstimated`, `ficaRate`,
+  `fedStdDeduction`, `filingStatus`, `userState`, `targetOwedAtFiling`, `taxedWeeks`,
+  `taxExemptOptIn`
+- **Deductions / benefits:** `selectedBenefits`, every per-check premium field (`healthPremium`,
+  `dentalPremium`, `visionPremium`, `ltd`, `stdWeekly`, `lifePremium`, `hsaWeekly`, `fsaWeekly`),
+  `otherDeductions`, `k401Rate`, `k401MatchRate`, `k401StartDate`, `benefitsStartDate`
+- **Attendance / PTO / bucket:** `attendanceBucketEnabled`, `attendanceWarnThreshold`,
+  `attendanceTerminateThreshold`, `attendanceIncrement`, `ptoEnabled`, `ptoAccrualMethod`,
+  `ptoAccrualRate`, `ptoCap`, `bucketStartBalance`, `bucketCap`, `bucketPayoutRate`
+- **Buffer / risk posture:** `bufferEnabled`, `paycheckBuffer` — cheap to keep, and a genuine
+  risk-tolerance signal for Coach
+- **Job loss (fields already live in `DEFAULT_CONFIG` today):** `jobLossMode`, `jobLossDate`,
+  `unemploymentEnabled/Weekly/DurationWeeks/WaitingWeek`, `returnToWorkDate`,
+  `targetIncomeAnnual`, `startedUnemployed` — (`jobApplications` deliberately excluded; it's
+  already its own append-only log)
+
+<!-- ── FUTURE HISTORICALLY-SENSITIVE FIELDS — no schema yet, do not implement ─────────────
+Parked 2026-07-06. These become whitelist entries (or their own entity_type rows) once the
+features that create them ship and their field names / data types actually exist. Kept as a
+comment so the v1 whitelist stays honest about what exists in the codebase today.
+
+Employer identity (beyond presets):
+- Free-text employer name / employer history as users list actual employers over time — today
+  the ONLY employer identity in config is `employerPreset` ("DHL" | null); there is no name
+  field. When the §21.D preset marketplace or any "who do you work for" field lands, each
+  employer change is both a history boundary and prime Coach context ("you've been at [X] for
+  14 months; your last move came with a $2.10 raise").
+
+Job Loss Mode outputs still unbuilt (§15.C):
+- Per-expense triage stances (`jobLossStatus: active | paused | cancelled`) — snapshot each
+  triage decision; "what did this user protect first when income stopped" is the single
+  strongest signal of their real priorities Coach will ever get.
+- Auto-reactivate elections, state benefit-estimator inputs — names/types TBD with §15.C.
+
+§20 split-tax fields (blocked on the accountant gate):
+- `taxedWeeksFed` / `taxedWeeksState` + the split per-week overrides — replace `taxedWeeks` in
+  the whitelist wholesale when the schema splits. Exempt-status changes per lane are exactly
+  the "separate independent timeline" §20.B requires — account_history can carry that timeline
+  for free.
+
+Coach/AI-context candidates (decide alongside §18, not before):
+- Life-event occurrences themselves — which flow fired and when; the `source` column already
+  encodes this per row ('life_event:lost_job', 'setup_wizard', …), so this may be a read-out
+  of existing data rather than new capture. A user's sequence of life events is the
+  highest-value personalization signal Coach can have.
+- Goal target / due-date revisions (§B's "lower-risk" note) — ambition vs. follow-through
+  patterns; would land as entity_type: 'goal' rows rather than config snapshots.
+- Attendance/PTO *balances* over time as job-quality signals (the policy fields are already
+  whitelisted above; balance trajectories are a different, noisier thing — decide with §18).
+
+Privacy rail: anything captured here that feeds Coach context inherits §21.E's rules —
+confidence labeling, the human-confirm boundary for AI writes, and (if ever used for model
+training or cross-user aggregates) explicit opt-in per §21.D's benchmark privacy rules.
+History rows are per-user data under the same RLS as every other table; capture is not a
+license to train.
+──────────────────────────────────────────────────────────────────────────────────────── -->
+
 ### E. Open questions to resolve before writing the migration
 
-- [ ] **Snapshot granularity** — whole-config snapshot per change (simple, matches the
-  expense-history precedent) vs. field-level diffs (smaller rows, precise, harder to
-  reconstruct "config as of week N" from)?
-- [ ] **Which fields are actually in scope** — full enumeration needed: all of §B's pay/schedule/
-  tax-rate fields, `employerPreset` DHL↔base switches specifically (since that flips which
-  entire code branch `buildYear` uses), benefit elections, loan terms, goal targets. Expense
-  billing amounts are already covered by the existing mechanism (§A).
-- [ ] **Backfill or clean start?** — there is no history for config values already in production;
-  the first `account_history` row for an existing account starts at rollout, not fabricated
-  retroactively. Confirm this is acceptable (it should be — same as how expense `history[]`
-  arrays start wherever the expense was created, not before).
-- [ ] **Fold in or leave alone** — does `pastWeekTaxStatusOverrides` / `weekConfirmations` /
-  `logs` (§C) become an `entity_type` inside `account_history`, or do they stay as their own
-  JSONB columns and only *new* config-history is added alongside them? Recommend deciding this
-  during the design pass, not now.
+- [x] **Snapshot granularity** — resolved 2026-07-06: full **new-value** whole-config snapshot
+  per change (see §D2); field-level diffs rejected as harder to reconstruct from.
+- [x] **Which fields are actually in scope** — resolved 2026-07-06: the v1 whitelist in §D2,
+  plus the commented-out future-fields block beneath it (employer identity, §15.C job-loss
+  outputs, §20 split-tax fields, Coach/AI candidates). Expense billing amounts stay covered by
+  the existing mechanism (§A); loan terms are a separate expense-style `history[]` follow-up.
+- [x] **Backfill or clean start?** — resolved 2026-07-06: clean start plus one `rollout_seed`
+  snapshot per existing account so the resolver always has a floor entry (§D2).
+- [x] **Fold in or leave alone** — resolved 2026-07-06: leave alone. `pastWeekTaxStatusOverrides`
+  / `weekConfirmations` / `logs` are actuals/corrections, not config versions; they stay as
+  their own columns and only new config-history is added alongside them (§D2).
 - [ ] **AI chat history hook (flagged explicitly by product)** — once §18.H's `coach_chats`
   table ships, evaluate folding it into `account_history` as `entity_type: 'coach_chat'`
   instead of keeping its own table. Don't block this section on that decision — §18 needs to
@@ -1151,16 +1350,46 @@ create index account_history_user_id_effective_from on account_history (user_id,
 
 *Deliberately small — a proof of the write path, not the full system.*
 
-- [ ] **Migration** — `account_history` table per §D's sketch (or the design pass's revision of
-  it), RLS scoped to `user_id = auth.uid()` matching every other table's pattern.
-- [ ] **One integration point** — wrap the config save path (`saveConfigNow` in `App.jsx`,
-  called from `SetupWizard.onComplete` and every `ProfilePanel` Pay Structure section) to diff
-  old vs. new config and insert an `account_history` row for whatever changed, before
-  persisting the new config. This alone captures every pay-structure/life-event/DHL↔base change
-  in `account_history` going forward.
+- [x] **Migration** — `database/migrations/020_add_account_history.sql`: table per §D's sketch
+  as revised by §D2 (new-value `snapshot` + `changed_fields TEXT[]`), RLS own-row
+  select/insert only — **append-only from the client**: no update/delete policies exist and
+  those privileges are revoked outright, so history can never be rewritten after the fact —
+  plus the per-account `rollout_seed` snapshot. ⚠️ **Not yet run in Supabase** — file exists in
+  the repo only; run it in the SQL editor before expecting rows (the client tolerates the
+  missing table gracefully until then).
+- [x] **One integration point** — implemented as a **config-transition watcher** in `App.jsx`
+  (a `useEffect` diffing `prevConfigRef` vs. `config` via
+  `diffSensitiveFields` from the new `src/lib/configHistory.js`, inserting via
+  `saveConfigSnapshot` in `db.js`) rather than the literal `commitConfigChange` wrapper —
+  strictly stronger than call-site routing: **no** `setConfig` site or save path (immediate
+  or debounced) can bypass capture. Attributed flows tag `source`/`effectiveFrom` through
+  `configHistoryMetaRef` just before their `setConfig`: `setup_wizard` /
+  `life_event:<x>` (wizard, passes `startDate` as the explicit effective date),
+  `life_event:lost_job` (JobLossEntry, passes `jobLossDate`), `profile_edit`
+  (`saveConfigNow`), `force_pull` (admin pull, so drift re-adoption isn't logged as an edit);
+  everything untagged records as `config_edit` effective today (real wall clock, never the
+  admin Lock Date). Investor sandbox accounts are exempt, matching §17.G's precedent.
+- [x] **Admin verification surface** — DB Row Viewer (all three render spots) now shows
+  "config history: N snapshots · latest [date] ([source]) · [changed fields]" after Fetch;
+  shows the error string when migration 020 hasn't been run yet.
+- **§17.I interaction (noted on merge, 2026-07-06):** the non-payment deletion cron
+  hard-deletes the `user_data` row, and `account_history`'s FK cascades with it — the
+  `deleted_accounts` tombstone does **not** archive history rows, so a revived account
+  restarts with fresh history (its new floor entry is its first whitelisted edit, typically
+  the wizard-complete snapshot — same as any post-rollout signup, which never gets a
+  `rollout_seed` row either). Intentional: deleted account = deleted history is the right
+  privacy posture; revisit only if the future read path needs pre-deletion history restored.
+- [x] **Tests** — 26 new: `configHistory.test.js` (whitelist↔`DEFAULT_CONFIG` drift guard, no
+  duplicates, noise-field exclusions, scalar/array/object diffs, undefined≡null tolerance) +
+  `db.test.js` additions (insert shape, missing-table tolerance, meta fetch paths). 890 total
+  passing; lint diff-clean vs. baseline; production build green.
+- [ ] **Verify live once deployed** — run migration 020 in Supabase, then from the deployed
+  app: make a pay-rate edit in ProfilePanel and confirm DB Row → Fetch shows
+  "config history: 2 snapshots" (seed + edit) with `baseRate` in the changed fields.
 - [ ] **Explicitly defer** — the `buildYear`/`computeNet` read-path rewrite (§D's "read path")
-  is its own follow-up task once the write path has real data to test against. Don't try to
-  land both in the same PR.
+  is its own follow-up task once the write path has real data to test against, and the loan
+  `history[]` fix is its own separate follow-up (§D2). Don't try to land any of these in the
+  same PR as the write path.
 
 ---
 

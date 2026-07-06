@@ -4,7 +4,8 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival } from "./lib/db.js";
+import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
@@ -14,6 +15,7 @@ import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
 import { SetupWizard } from "./components/SetupWizard.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
+import { ReviveScreen } from "./components/ReviveScreen.jsx";
 import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
@@ -209,6 +211,10 @@ export default function App() {
   const [subscription, setSubscription] = useState(null);
   // ?checkout=success|cancel return from Stripe Checkout — null once resolved/dismissed.
   const [checkoutReturn, setCheckoutReturn] = useState(null);
+  // §17.I — non-null when the signed-in email matches an open deleted_accounts
+  // tombstone; the app renders ReviveScreen instead of anything else until a
+  // successful revival charge flips subscription_status to active.
+  const [revivalInfo, setRevivalInfo] = useState(null);
   // Upgrade modal triggered from the read-only Home/Budget notice (§17.E).
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -255,6 +261,7 @@ export default function App() {
   const [rowViewOpen, setRowViewOpen] = useState(false);
   const [rowData, setRowData] = useState(null);
   const [rowFetching, setRowFetching] = useState(false);
+  const [historyMeta, setHistoryMeta] = useState(null); // §19 config-history line in DB Row viewer
   const [taxGridOpen, setTaxGridOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectedWeek, setInspectedWeek] = useState(null);
@@ -363,7 +370,20 @@ export default function App() {
       else setPendingPasswordReset(false);
       // Seed user_data row + sync OAuth profile metadata on every sign-in.
       // Critical for Google OAuth users who have no row yet; safe no-op for email users.
-      if (event === "SIGNED_IN" && user) syncUserProfile(user);
+      // §17.I: the revival check MUST run first — an OAuth sign-in with a
+      // previously-deleted email silently creates a brand-new auth user, and
+      // syncUserProfile would seed that user a fresh free trial. If the email
+      // matches an open tombstone, route to ReviveScreen and hold off trial
+      // seeding entirely; a lookup failure falls back to the normal flow so a
+      // transient server error can't lock a regular user out.
+      if (event === "SIGNED_IN" && user) {
+        checkRevival()
+          .then((revival) => {
+            if (revival) setRevivalInfo(revival);
+            else syncUserProfile(user);
+          })
+          .catch(() => syncUserProfile(user));
+      }
       setAuthedUser(user);
       // INITIAL_SESSION fires once on startup (after OAuth code exchange if applicable).
       // All other events also mark auth as checked so late-arriving events don't re-gate.
@@ -444,6 +464,19 @@ export default function App() {
     window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
   }, []);
 
+  // §17.I — revival completes when the post-checkout poll (below) sees the
+  // webhook's restore land as an active subscription. Clear the ReviveScreen
+  // gate, close any wizard the bare pre-restore row opened (loadUserData saw
+  // setupComplete=false before the restore), and force a reload so the
+  // restored config/expenses/goals/logs replace the in-memory defaults.
+  useEffect(() => {
+    if (!revivalInfo || subscription?.status !== "active") return;
+    setRevivalInfo(null);
+    setWizardEntry(null);
+    setReloadTrigger((n) => n + 1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revivalInfo, subscription?.status]);
+
   // On a successful return, the webhook may not have landed yet — poll-refetch
   // subscription_status briefly rather than trusting the redirect alone.
   useEffect(() => {
@@ -486,6 +519,34 @@ export default function App() {
     return () => clearTimeout(saveTimer.current);
   }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal, loading]);
 
+  // ── Config history write path (TODO §19 phase 1) ──
+  // Watches every config transition rather than wrapping individual save calls,
+  // so no whitelisted change can bypass capture regardless of which setConfig
+  // site or save path (immediate vs. debounced) it flows through. Attributed
+  // flows (wizard, life events, profile saves) tag source/effectiveFrom via
+  // configHistoryMetaRef just before their setConfig; untagged changes record
+  // as plain "config_edit" effective today. effectiveFrom uses real wall-clock
+  // time, never the admin Lock Date simulation (same rule as §17 entitlement).
+  const prevConfigRef = useRef(null);
+  const configHistoryMetaRef = useRef(null); // { source, effectiveFrom } | null
+  useEffect(() => {
+    if (loading) { prevConfigRef.current = null; return; }
+    const prev = prevConfigRef.current;
+    prevConfigRef.current = config;
+    const meta = configHistoryMetaRef.current;
+    configHistoryMetaRef.current = null;
+    if (!prev || prev === config) return; // first run after load primes the ref only
+    if (config.isInvestor) return; // investor sandboxes are exempt, matching §17.G
+    const changedFields = diffSensitiveFields(prev, config);
+    if (changedFields.length === 0) return;
+    saveConfigSnapshot({
+      config,
+      changedFields,
+      source: meta?.source ?? "config_edit",
+      effectiveFrom: meta?.effectiveFrom ?? toLocalIso(new Date()),
+    });
+  }, [config, loading]);
+
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
@@ -516,6 +577,9 @@ export default function App() {
   // ── Immediate config save — for ProfilePanel sub-views that need guaranteed persistence ──
   // Called with the already-computed newConfig so we don't rely on React having flushed setConfig yet.
   const saveConfigNow = useCallback((newConfig) => {
+    // Attribute the paired setConfig's history snapshot (if any) to a profile
+    // save; ??= keeps a more specific tag (wizard/life event) when one is set.
+    configHistoryMetaRef.current ??= { source: "profile_edit" };
     clearTimeout(saveTimer.current);
     pendingSaveRef.current = false;
     saveUserData({ config: newConfig, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
@@ -538,6 +602,9 @@ export default function App() {
     setSyncStatus({ op: "pull", pending: true });
     try {
       const data = await loadUserData();
+      // §19: a pull re-adopts what the DB already holds — if it diffs against
+      // in-memory state (drift), attribute the snapshot honestly, not as an edit.
+      configHistoryMetaRef.current = { source: "force_pull" };
       setConfig(data.config);
       setShowExtra(data.showExtra);
       setLogs(data.logs);
@@ -562,6 +629,7 @@ export default function App() {
         .eq("user_id", user.id)
         .single();
       setRowData(error ? { __error: error.message } : data);
+      setHistoryMeta(await fetchConfigHistoryMeta()); // §19 snapshot count + latest
     } catch (e) {
       setRowData({ __error: e.message });
     }
@@ -627,6 +695,18 @@ export default function App() {
     ];
     return pairs.filter(([, a, b]) => a !== b).map(([col]) => col);
   }, [rowData, config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
+
+  // §19.F verification surface — one line summarizing account_history capture,
+  // shown in every DB Row viewer block alongside updated_at/drift.
+  const historyLine = useMemo(() => {
+    if (!historyMeta) return null;
+    if (historyMeta.error) return `config history: unavailable (${historyMeta.error})`;
+    const { count, latest } = historyMeta;
+    if (!count) return "config history: 0 snapshots";
+    const src = latest?.source ? ` (${latest.source})` : "";
+    const fields = latest?.changed_fields?.length ? ` · ${latest.changed_fields.join(", ")}` : "";
+    return `config history: ${count} snapshot${count === 1 ? "" : "s"} · latest ${latest?.effective_from ?? "?"}${src}${fields}`;
+  }, [historyMeta]);
 
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config), [config]);
@@ -996,6 +1076,12 @@ export default function App() {
   const futureEventDeductions = eventImpact.futureEventDeductionsByWeek;
 
   function handleWizardComplete(mergedConfig) {
+    // §19: wizard flows are the one path that passes an explicit effective date
+    // (the job start / change date anchor); plain edits default to today.
+    configHistoryMetaRef.current = {
+      source: wizardEntry === false ? "setup_wizard" : `life_event:${wizardEntry}`,
+      effectiveFrom: mergedConfig.startDate ?? undefined,
+    };
     setConfig(mergedConfig);
     setWizardEntry(null);
   }
@@ -1055,6 +1141,12 @@ export default function App() {
   // Supabase PASSWORD_RECOVERY event — user clicked a reset link, show set-new-password form.
   if (pendingPasswordReset) {
     return <LoginScreen recoveryMode onRecoveryDone={() => setPendingPasswordReset(false)} />;
+  }
+
+  // §17.I — archived, revivable account: no app, no wizard, no trial. Only a
+  // successful revival charge (subscription active → effect above) clears this.
+  if (revivalInfo) {
+    return <ReviveScreen revival={revivalInfo} checkoutReturn={checkoutReturn} />;
   }
 
   if (loading) {
@@ -1486,6 +1578,7 @@ export default function App() {
                       : <>
                           {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
                           {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
+                          {historyLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
                           <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "160px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                             {JSON.stringify(rowData, null, 2)}
                           </pre>
@@ -2137,6 +2230,7 @@ export default function App() {
                     : <>
                         {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
                         {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
+                        {historyLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
                         <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                           {JSON.stringify(rowData, null, 2)}
                         </pre>
@@ -2743,6 +2837,7 @@ export default function App() {
                         <div style={{ display: "flex", gap: "12px", marginBottom: "8px", flexWrap: "wrap" }}>
                           {rowData.updated_at && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</span>}
                           {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)" }}>Drift: {rowDiff.join(", ")}</span>}
+                          {historyLine && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)" }}>{historyLine}</span>}
                         </div>
                         <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                           {JSON.stringify(rowData, null, 2)}
@@ -2905,7 +3000,10 @@ export default function App() {
       <JobLossEntry
         open={jobLossEntryOpen}
         onClose={() => setJobLossEntryOpen(false)}
-        onActivate={(patch) => setConfig(prev => ({ ...prev, ...patch }))}
+        onActivate={(patch) => {
+          configHistoryMetaRef.current = { source: "life_event:lost_job", effectiveFrom: patch.jobLossDate ?? undefined };
+          setConfig(prev => ({ ...prev, ...patch }));
+        }}
       />
       {/* ── Expense triage (TODO §15.C3 + C5 needs-coverage sort) ── */}
       <ExpenseTriage

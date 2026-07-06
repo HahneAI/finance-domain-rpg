@@ -64,6 +64,79 @@ describe('LoginScreen — sign in', () => {
   })
 })
 
+describe('LoginScreen — §17.I revival routing', () => {
+  // Every failed sign-in checks api/revival-lookup; a match routes to the
+  // revive mode instead of the generic error.
+  const failSignIn = () =>
+    signInWithPassword.mockResolvedValueOnce({ error: { message: 'Invalid login credentials' } })
+
+  const submitLogin = () => {
+    fireEvent.change(screen.getByPlaceholderText('you@example.com'), { target: { value: 'gone@example.com' } })
+    fireEvent.change(screen.getByPlaceholderText('Your password'), { target: { value: 'whatever' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  it('routes a failed sign-in with an open tombstone to the revive password form', async () => {
+    failSignIn()
+    fetch.mockResolvedValue({ ok: true, json: async () => ({ revivable: true, oauthProvider: null }) })
+    render(<LoginScreen />)
+    submitLogin()
+    await waitFor(() => expect(screen.getByText('Welcome back')).toBeTruthy())
+    expect(fetch).toHaveBeenCalledWith('/api/revival-lookup', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ email: 'gone@example.com' }),
+    }))
+    expect(screen.getByPlaceholderText('At least 6 characters')).toBeTruthy()
+    expect(screen.queryByText(/Invalid login credentials/i)).toBeNull()
+  })
+
+  it('shows Continue with Google instead of a password form for an OAuth tombstone', async () => {
+    failSignIn()
+    fetch.mockResolvedValue({ ok: true, json: async () => ({ revivable: true, oauthProvider: 'google' }) })
+    render(<LoginScreen />)
+    submitLogin()
+    await waitFor(() => expect(screen.getByText('Welcome back')).toBeTruthy())
+    expect(screen.getByText('Continue with Google')).toBeTruthy()
+    expect(screen.queryByPlaceholderText('At least 6 characters')).toBeNull()
+  })
+
+  it('falls back to the generic error when the email is not revivable', async () => {
+    failSignIn()
+    fetch.mockResolvedValue({ ok: true, json: async () => ({ revivable: false }) })
+    render(<LoginScreen />)
+    submitLogin()
+    await waitFor(() => expect(screen.getByText(/Invalid login credentials/i)).toBeTruthy())
+  })
+
+  it('falls back to the generic error when the lookup itself fails', async () => {
+    failSignIn()
+    fetch.mockRejectedValue(new TypeError('network down'))
+    render(<LoginScreen />)
+    submitLogin()
+    await waitFor(() => expect(screen.getByText(/Invalid login credentials/i)).toBeTruthy())
+  })
+
+  it('creates the replacement account with the NEW password from the revive form', async () => {
+    failSignIn()
+    fetch.mockResolvedValue({ ok: true, json: async () => ({ revivable: true, oauthProvider: null }) })
+    signUp.mockResolvedValueOnce({ data: { user: { id: 'u2' }, session: {} }, error: null })
+    render(<LoginScreen />)
+    submitLogin()
+    await waitFor(() => expect(screen.getByText('Welcome back')).toBeTruthy())
+    fireEvent.change(screen.getByPlaceholderText('At least 6 characters'), { target: { value: 'newpass1' } })
+    fireEvent.change(screen.getByPlaceholderText('Repeat new password'), { target: { value: 'newpass1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await waitFor(() => expect(signUp).toHaveBeenCalledWith(expect.objectContaining({
+      email: 'gone@example.com',
+      password: 'newpass1',
+    })))
+  })
+})
+
 describe('LoginScreen — mode switching', () => {
   it('switches to the create-account form', () => {
     render(<LoginScreen />)

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { STRIPE_CLIENTS, cancelStripeSubscription } from "./_stripeClient.js";
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
@@ -40,6 +41,32 @@ export default async function handler(req, res) {
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+
+  // §17.H — cancel any Stripe subscription before deleting the account so a
+  // deleted user isn't billed again. This stays a true hard delete (no
+  // archive — that's only the §I non-payment cron path); the cancel happens
+  // first so a failure leaves the account intact and the request retryable.
+  const { data: subRow, error: subRowError } = await adminClient
+    .from("user_data")
+    .select("stripe_subscription_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (subRowError) {
+    return res.status(500).json({ error: "Failed to load account" });
+  }
+
+  if (subRow?.stripe_subscription_id) {
+    if (STRIPE_CLIENTS.length === 0) {
+      console.error("delete-account: subscription on file but no Stripe key configured");
+      return res.status(500).json({ error: "Server configuration is missing" });
+    }
+    try {
+      await cancelStripeSubscription(subRow.stripe_subscription_id, STRIPE_CLIENTS);
+    } catch (err) {
+      console.error("delete-account failed to cancel Stripe subscription:", err.message);
+      return res.status(500).json({ error: "Failed to cancel subscription" });
+    }
+  }
 
   const { error: userDataDeleteError } = await adminClient
     .from("user_data")

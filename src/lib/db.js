@@ -626,3 +626,31 @@ export async function syncUserProfile(user) {
     console.warn("syncUserProfile trial seed failed:", err.message);
   }
 }
+
+/**
+ * §17.I — does the signed-in user's email match an open (un-revived)
+ * deleted_accounts tombstone? Called by App.jsx on SIGNED_IN BEFORE
+ * syncUserProfile, because an OAuth sign-in with a previously-deleted email
+ * silently creates a brand-new auth user — without this check that new user
+ * would be seeded a fresh free trial, which a non-payment-deleted account
+ * must never get. Returns the revival info object ({ revivable, email,
+ * oauthProvider, displayName, avatarUrl, plan }) or null; any lookup failure
+ * resolves null so a transient error can't lock a normal user out of login.
+ */
+export async function checkRevival() {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) return null;
+    const res = await fetch("/api/revival-lookup", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const payload = await res.json().catch(() => null);
+    return payload?.revivable ? payload : null;
+  } catch (err) {
+    console.warn("checkRevival failed:", err.message);
+    return null;
+  }
+}

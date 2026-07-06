@@ -31,6 +31,67 @@ function planOf(subscription) {
   return priceId ? (PLAN_BY_PRICE_ID[priceId] ?? null) : null;
 }
 
+// §17.I — a successful revival charge restores the archived account. The
+// tombstone is keyed by the email stripe-revive-checkout stamped into the
+// session metadata; the restore upserts (the fresh account may or may not
+// have a bare user_data row yet). The trial window is seeded entirely in the
+// past on purpose: a revived account was never supposed to get a second free
+// trial, so if this subscription ever lapses, getEntitlement must resolve
+// "expired" (read-only + upgrade path) — with null timestamps it would
+// resolve "none", which App.jsx doesn't gate, i.e. free full access forever.
+async function restoreRevivedAccount(adminClient, { session, subscription, userId, now }) {
+  const email = session.metadata?.revival_email;
+  const { data: tombstone, error: tombstoneError } = await adminClient
+    .from("deleted_accounts")
+    .select("*")
+    .eq("email", email)
+    .is("revived_at", null)
+    .maybeSingle();
+  if (tombstoneError) throw new Error(`revival tombstone lookup failed: ${tombstoneError.message}`);
+  // Tombstone already consumed (or gone) — a redelivered/racing event.
+  // Treat as a plain subscription update so the billing state still lands.
+  if (!tombstone) return false;
+
+  const nowIso = now.toISOString();
+  const { error: restoreError } = await adminClient.from("user_data").upsert(
+    {
+      user_id: userId,
+      config: tombstone.archived_config ?? {},
+      expenses: tombstone.archived_expenses ?? [],
+      goals: tombstone.archived_goals ?? [],
+      logs: tombstone.archived_logs ?? [],
+      show_extra: tombstone.archived_show_extra ?? true,
+      week_confirmations: tombstone.archived_week_confirmations ?? {},
+      pto_goal: tombstone.archived_pto_goal ?? null,
+      display_name: tombstone.display_name ?? null,
+      avatar_url: tombstone.avatar_url ?? null,
+      stripe_customer_id: session.customer,
+      stripe_subscription_id: subscription.id,
+      subscription_status: subscription.status,
+      plan: planOf(subscription),
+      current_period_end: periodEndOf(subscription),
+      card_on_file: true,
+      trial_started_at: nowIso,
+      trial_ends_at: nowIso,
+      access_ends_at: nowIso,
+    },
+    { onConflict: "user_id" }
+  );
+  if (restoreError) throw new Error(`revival restore failed: ${restoreError.message}`);
+
+  const { error: consumeError } = await adminClient
+    .from("deleted_accounts")
+    .update({
+      revived_at: nowIso,
+      revival_attempt_count: 0,
+      last_decline_code: null,
+      last_decline_message: null,
+    })
+    .eq("email", email);
+  if (consumeError) throw new Error(`revival tombstone consume failed: ${consumeError.message}`);
+  return true;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -75,6 +136,17 @@ export default async function handler(req, res) {
         const userId = session.client_reference_id;
         if (userId && session.mode === "subscription" && session.subscription) {
           const subscription = await stripe.subscriptions.retrieve(session.subscription);
+          if (session.metadata?.revival === "true") {
+            const restored = await restoreRevivedAccount(adminClient, {
+              session,
+              subscription,
+              userId,
+              now: new Date(),
+            });
+            if (restored) break;
+            // fall through to the plain update when the tombstone was
+            // already consumed by an earlier delivery
+          }
           await adminClient
             .from("user_data")
             .update({

@@ -557,7 +557,10 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
   );
 }
 
-function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
+// Employment card — folded into Job & Pay (below the pay-structure cards) since
+// it's a small, low-churn set of fields (employer/state/start date/team) rather
+// than a standalone destination.
+function EmploymentCard({ config, setConfig, onSaveConfig }) {
   const isEmployerDHL = config.employerPreset === "DHL";
   const isBaseUser = !isEmployerDHL;
 
@@ -594,8 +597,7 @@ function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
 
   return (
     <>
-      <BackBar onBack={onBack} title="Employment" />
-
+      <PaySectionHeader title="Employment" editing />
       <DetailCard>
         <DetailRow label="Employer" value={employer} />
         <DetailRow label="State"    value={config.userState || "—"} last={isBaseUser && !!config.startDate} />
@@ -646,7 +648,7 @@ function EmploymentDetail({ config, setConfig, onSaveConfig, onBack }) {
       {canSave && (
         <Pressable
           onClick={handleSave}
-          style={{ width: "100%", padding: "13px 16px", background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+          style={{ width: "100%", padding: "13px 16px", marginBottom: "20px", background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
         >
           Save
         </Pressable>
@@ -1284,23 +1286,39 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
   );
 }
 
-// PayDetail — each pay-structure concern (base pay, differentials, overtime,
-// schedule override) is its own independently editable section so base users
-// and DHL users only ever see and edit the fields relevant to them, without a
-// single all-or-nothing form gating every field behind one Edit button.
-function PayDetail({ config, setConfig, onSaveConfig, onBack }) {
+// PayDetail (Job & Pay) — each pay-structure concern (base pay, differentials,
+// overtime, schedule override) is its own independently editable section so base
+// users and DHL users only ever see and edit the fields relevant to them, without
+// a single all-or-nothing form gating every field behind one Edit button.
+// Employment sits below the pay cards since it changes far less often, and a
+// Life Events link at the bottom gives a second entry point into that wizard
+// right where a pay/job change would prompt someone to look for it.
+function PayDetail({ config, setConfig, onSaveConfig, onBack, onOpenLifeEvents }) {
   const isEmployerDHL = config.employerPreset === "DHL";
 
   return (
     <>
-      <BackBar onBack={onBack} title="Pay Structure" />
+      <BackBar onBack={onBack} title="Job & Pay" />
       <BasePayCard config={config} setConfig={setConfig} onSaveConfig={onSaveConfig} />
       <DifferentialsCard config={config} setConfig={setConfig} onSaveConfig={onSaveConfig} isEmployerDHL={isEmployerDHL} />
       <OvertimeCard config={config} setConfig={setConfig} onSaveConfig={onSaveConfig} />
       <ScheduleCard config={config} setConfig={setConfig} onSaveConfig={onSaveConfig} isEmployerDHL={isEmployerDHL} />
-      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
+      <EmploymentCard config={config} setConfig={setConfig} onSaveConfig={onSaveConfig} />
+      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "20px" }}>
         Saving recalculates every paycheck, projection, and budget automatically.
       </div>
+      {onOpenLifeEvents && (
+        <Pressable
+          onClick={onOpenLifeEvents}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", cursor: "pointer", textAlign: "left" }}
+        >
+          <div>
+            <div style={{ fontSize: "14px", color: "var(--color-gold)", fontWeight: "600" }}>Life Events</div>
+            <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "2px" }}>Pay structure changed, new job, or lost your job</div>
+          </div>
+          <span style={{ fontSize: "18px", color: "var(--color-text-primary)", marginLeft: "12px", lineHeight: 1 }}>›</span>
+        </Pressable>
+      )}
     </>
   );
 }
@@ -1928,11 +1946,8 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   if (activeSection === "account") {
     return <AccountDetail authedUser={authedUser} config={config} subscription={subscription} onBack={() => setActiveSection(null)} />;
   }
-  if (activeSection === "employment") {
-    return <EmploymentDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
-  }
   if (activeSection === "pay") {
-    return <PayDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
+    return <PayDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} onOpenLifeEvents={onOpenLifeEvents} />;
   }
   if (activeSection === "retirement") {
     return <BenefitsDetail config={config} setConfig={setConfig} onSaveConfig={saveConfigNow} onBack={() => setActiveSection(null)} />;
@@ -1952,17 +1967,16 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
     <div style={{ maxWidth: "520px" }}>
       <PanelHero eyebrow="Authority Finance">Account</PanelHero>
 
-      {/* Work & Pay group */}
+      {/* Work & Pay group. Employment lives inside the Job & Pay detail view
+          (below the pay cards) rather than as its own row — it's a small,
+          low-churn set of fields. Life Events is reachable from the bottom of
+          that same detail view, plus the always-present sidebar/drawer nav, so
+          it isn't duplicated here as a standalone card. */}
       <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Work & Pay</div>
       <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", overflow: "hidden", marginBottom: "20px" }}>
         <ListRow
-          label="Employment"
-          summary={`${employer}${config.startDate ? ` · Started ${fmt(config.startDate)}` : " · Start date not set"}`}
-          onPress={() => setActiveSection("employment")}
-        />
-        <ListRow
-          label="Pay Structure"
-          summary={`$${config.baseRate}/hr${config.shiftHours ? ` · ${config.shiftHours}h shifts` : ""}`}
+          label="Job & Pay"
+          summary={`${employer} · $${config.baseRate}/hr${config.shiftHours ? ` · ${config.shiftHours}h shifts` : ""}`}
           onPress={() => setActiveSection("pay")}
         />
         <ListRow
@@ -1972,20 +1986,6 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           last
         />
       </div>
-
-      {/* Life Events group — re-entry into the setup wizard for a pay structure
-          change, new job, or job loss. Mirrors the "Life Events" trigger in the
-          desktop sidebar / mobile drawer so it's reachable from the Account panel too. */}
-      {onOpenLifeEvents && (
-        <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid rgba(0,200,150,0.28)", overflow: "hidden", marginBottom: "20px" }}>
-          <ListRow
-            label="Life Events"
-            summary="Pay structure changed, new job, or lost your job"
-            onPress={() => onOpenLifeEvents()}
-            last
-          />
-        </div>
-      )}
 
       {/* App group */}
       <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>App</div>

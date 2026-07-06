@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival } from "./lib/db.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -15,6 +15,7 @@ import { WeekConfirmModal } from "./components/WeekConfirmModal.jsx";
 import { HomePanel } from "./components/HomePanel.jsx";
 import { SetupWizard } from "./components/SetupWizard.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
+import { ReviveScreen } from "./components/ReviveScreen.jsx";
 import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
@@ -210,6 +211,10 @@ export default function App() {
   const [subscription, setSubscription] = useState(null);
   // ?checkout=success|cancel return from Stripe Checkout — null once resolved/dismissed.
   const [checkoutReturn, setCheckoutReturn] = useState(null);
+  // §17.I — non-null when the signed-in email matches an open deleted_accounts
+  // tombstone; the app renders ReviveScreen instead of anything else until a
+  // successful revival charge flips subscription_status to active.
+  const [revivalInfo, setRevivalInfo] = useState(null);
   // Upgrade modal triggered from the read-only Home/Budget notice (§17.E).
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -365,7 +370,20 @@ export default function App() {
       else setPendingPasswordReset(false);
       // Seed user_data row + sync OAuth profile metadata on every sign-in.
       // Critical for Google OAuth users who have no row yet; safe no-op for email users.
-      if (event === "SIGNED_IN" && user) syncUserProfile(user);
+      // §17.I: the revival check MUST run first — an OAuth sign-in with a
+      // previously-deleted email silently creates a brand-new auth user, and
+      // syncUserProfile would seed that user a fresh free trial. If the email
+      // matches an open tombstone, route to ReviveScreen and hold off trial
+      // seeding entirely; a lookup failure falls back to the normal flow so a
+      // transient server error can't lock a regular user out.
+      if (event === "SIGNED_IN" && user) {
+        checkRevival()
+          .then((revival) => {
+            if (revival) setRevivalInfo(revival);
+            else syncUserProfile(user);
+          })
+          .catch(() => syncUserProfile(user));
+      }
       setAuthedUser(user);
       // INITIAL_SESSION fires once on startup (after OAuth code exchange if applicable).
       // All other events also mark auth as checked so late-arriving events don't re-gate.
@@ -445,6 +463,19 @@ export default function App() {
     const rest = params.toString();
     window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
   }, []);
+
+  // §17.I — revival completes when the post-checkout poll (below) sees the
+  // webhook's restore land as an active subscription. Clear the ReviveScreen
+  // gate, close any wizard the bare pre-restore row opened (loadUserData saw
+  // setupComplete=false before the restore), and force a reload so the
+  // restored config/expenses/goals/logs replace the in-memory defaults.
+  useEffect(() => {
+    if (!revivalInfo || subscription?.status !== "active") return;
+    setRevivalInfo(null);
+    setWizardEntry(null);
+    setReloadTrigger((n) => n + 1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revivalInfo, subscription?.status]);
 
   // On a successful return, the webhook may not have landed yet — poll-refetch
   // subscription_status briefly rather than trusting the redirect alone.
@@ -1110,6 +1141,12 @@ export default function App() {
   // Supabase PASSWORD_RECOVERY event — user clicked a reset link, show set-new-password form.
   if (pendingPasswordReset) {
     return <LoginScreen recoveryMode onRecoveryDone={() => setPendingPasswordReset(false)} />;
+  }
+
+  // §17.I — archived, revivable account: no app, no wizard, no trial. Only a
+  // successful revival charge (subscription active → effect above) clears this.
+  if (revivalInfo) {
+    return <ReviveScreen revival={revivalInfo} checkoutReturn={checkoutReturn} />;
   }
 
   if (loading) {

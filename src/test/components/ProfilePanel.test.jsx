@@ -44,7 +44,7 @@ describe('ProfilePanel — main Account list renders', () => {
     renderMainProfile()
     // Core groups present — proves the main list rendered (no ReferenceError)
     expect(screen.getByText('Work & Pay')).toBeInTheDocument()
-    expect(screen.getByText('Employment')).toBeInTheDocument()
+    expect(screen.getByText('Job & Pay')).toBeInTheDocument()
     expect(screen.getByText('Sign Out (This Device)')).toBeInTheDocument()
   })
 
@@ -67,7 +67,7 @@ describe('ProfilePanel — Pay Structure section saves never touch expenses/goal
     const saveConfigNow = vi.fn()
     renderMainProfile({ setConfig, saveConfigNow })
 
-    fireEvent.click(screen.getByText('Pay Structure'))
+    fireEvent.click(screen.getByText('Job & Pay'))
     fireEvent.click(screen.getAllByText('Edit')[0]) // Base Pay is the first card
 
     const rateInput = screen.getByDisplayValue(String(DEFAULT_CONFIG.baseRate))
@@ -89,7 +89,7 @@ describe('ProfilePanel — Pay Structure section saves never touch expenses/goal
     const dhlConfig = { ...DEFAULT_CONFIG, employerPreset: 'DHL', dhlTeam: 'B' }
     renderMainProfile({ config: dhlConfig, setConfig, saveConfigNow })
 
-    fireEvent.click(screen.getByText('Pay Structure'))
+    fireEvent.click(screen.getByText('Job & Pay'))
     fireEvent.click(screen.getAllByText('Edit')[1]) // Differentials is the second card
 
     const nightDiffInput = screen.getByDisplayValue(String(dhlConfig.nightDiffRate))

@@ -438,6 +438,24 @@ are account/config steps plus the §I-blocked deletion hook.*
 - [ ] **(Optional, later) Web Push** — the app is already a PWA w/ service worker; the same phase
   signals could fire push notifications. Defer behind email v1.
 
+**Handoff checkpoint #2 (2026-07-05) — §G done and verified live; next is §H:**
+Branch `claude/free-email-provider-6u3kbo` (merged to master via Version-control). Everything in
+the first checkpoint below §F still applies (getEntitlement is the single source of phase math,
+disclosure rule absolute, resolveAppOrigin for redirects, sandbox has no creds — 872-test baseline).
+New since then:
+- §G lifecycle emails are **live**: Resend key + `CRON_SECRET` set in Vercel, daily cron registered
+  and verified in production, a real nudge email delivered end-to-end. Still on the resend.dev dev
+  sender — domain verification for **authority-os.com** (ZenBusiness DNS) is mid-propagation and
+  being finished in a separate session; once Resend shows Verified, set `EMAIL_FROM` in Vercel and
+  redeploy. Until then the cron can only deliver to the Resend owner's address; other sends 403
+  and retry harmlessly.
+- The two family beta accounts are `is_investor = true` in Supabase (paywall + email exempt);
+  flip back when beta ends.
+- §H's one real code gap: `api/delete-account.js` does not yet cancel the Stripe subscription.
+  Most other §H bullets are audit-and-test-only — webhook signatures and past_due/canceled
+  entitlement already exist in code.
+- §B leftover: Stripe Customer Portal dashboard config still unconfirmed.
+
 ### H. Edge cases, security & testing
 
 *Mostly a hardening/audit pass over what §A–F already shipped, not new build-out — several

@@ -37,6 +37,13 @@ export const PLAN_BY_PRICE_ID = {
   [env.STRIPE_PRICE_ANNUAL_TEST]: "annual",
 };
 
+// Operations on a *stored* Stripe id (e.g. canceling a user's subscription
+// during account deletion) share the webhook's mode ambiguity: the id was
+// minted in whichever mode the deployment that ran checkout was in (preview →
+// test, production → live), and user_data doesn't record which. Both clients,
+// this deployment's own mode first.
+export const STRIPE_CLIENTS = (MODE === "live" ? [stripeLive, stripeTest] : [stripeTest, stripeLive]).filter(Boolean);
+
 // Webhook signature verification tries live first, then test, since incoming
 // events carry no mode indicator besides "which secret validates the
 // signature." Returns the event plus which client (live or test) issued it,

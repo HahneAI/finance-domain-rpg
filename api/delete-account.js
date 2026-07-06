@@ -1,9 +1,29 @@
 import { createClient } from "@supabase/supabase-js";
+import { STRIPE_CLIENTS } from "./_stripeClient.js";
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
 const anonKey = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
 const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+
+// The stored subscription id doesn't say which Stripe mode created it, so try
+// each configured client in turn. "resource_missing" means either wrong mode
+// or the subscription is already gone — both fine to move past; anything else
+// must abort the deletion, or the user would keep being billed.
+async function cancelStripeSubscription(subscriptionId) {
+  for (const client of STRIPE_CLIENTS) {
+    try {
+      const subscription = await client.subscriptions.retrieve(subscriptionId);
+      if (subscription.status !== "canceled") {
+        await client.subscriptions.cancel(subscriptionId);
+      }
+      return;
+    } catch (err) {
+      if (err?.code === "resource_missing") continue;
+      throw err;
+    }
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -40,6 +60,32 @@ export default async function handler(req, res) {
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+
+  // §17.H — cancel any Stripe subscription before deleting the account so a
+  // deleted user isn't billed again. This stays a true hard delete (no
+  // archive — that's only the §I non-payment cron path); the cancel happens
+  // first so a failure leaves the account intact and the request retryable.
+  const { data: subRow, error: subRowError } = await adminClient
+    .from("user_data")
+    .select("stripe_subscription_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (subRowError) {
+    return res.status(500).json({ error: "Failed to load account" });
+  }
+
+  if (subRow?.stripe_subscription_id) {
+    if (STRIPE_CLIENTS.length === 0) {
+      console.error("delete-account: subscription on file but no Stripe key configured");
+      return res.status(500).json({ error: "Server configuration is missing" });
+    }
+    try {
+      await cancelStripeSubscription(subRow.stripe_subscription_id);
+    } catch (err) {
+      console.error("delete-account failed to cancel Stripe subscription:", err.message);
+      return res.status(500).json({ error: "Failed to cancel subscription" });
+    }
+  }
 
   const { error: userDataDeleteError } = await adminClient
     .from("user_data")

@@ -464,23 +464,58 @@ double-check, not fresh implementation. E.g. webhook signature verification and 
 canceled entitlement handling already exist in `api/_stripeClient.js`/`subscription.js`; confirm
 before treating any bullet here as starting from zero.*
 
-- [ ] **Webhook signature** — reject unsigned/invalid events; never trust client-reported status.
-- [ ] **Card declines / `past_due`** — keep entitlement until `current_period_end`, then lock;
-  surface the Stripe-hosted update-card flow via the portal.
-- [ ] **Cancellation** — `canceled` keeps access through `current_period_end` (Stripe "cancel at
-  period end"), then drops to read-only.
-- [ ] **Account deletion** — extend `api/delete-account.js` to also cancel the Stripe subscription
-  so a deleted user isn't billed. **Non-payment auto-deletion (cron, §G) must archive first** —
-  see §I — this is the one deletion path that isn't a clean hard-delete, because it needs to stay
-  revivable. The user-initiated "type DELETE" flow in ProfilePanel is unaffected and stays a true
-  hard delete with no archive.
-- [ ] **Clock skew / tz** — all phase math in UTC against `trial_ends_at` / `access_ends_at`; do not
-  use the client's local lock-date offset (admin Lock Date must not extend a trial or the grace).
-- [ ] **Disclosure** — no client string, email template, or API response exposes `access_ends_at` or
-  the grace concept to a non-admin user (covered by a test).
-- [ ] **Tests** — unit-test `getEntitlement` across trial/grace/active/expired/past_due/canceled and
-  the exact day-14 and day-21 boundaries; cron phase-routing + every-other-day throttle; webhook
-  upsert mapping with a signed fixture event; create-checkout rejects missing/invalid tokens.
+***Completed 2026-07-06.** The audit confirmed exactly that split: five bullets were already
+satisfied by §A–G code and needed only verification + notes; the one real code change was the
+delete-account Stripe cancellation, and the new tests are the signed-fixture webhook suite,
+the create-checkout token guards, and the delete-account cancellation suite. §B's Customer
+Portal dashboard config remains the only §A–H leftover (config-only, no code).*
+
+- [x] **Webhook signature** — reject unsigned/invalid events; never trust client-reported status.
+  **Audited 2026-07-06 — already existed** (`constructWebhookEvent` in `api/_stripeClient.js`
+  verifies the raw body against both modes' secrets; `stripe-webhook.js` 400s on any failure, and
+  `subscription_status` is only ever written server-side — webhook, seed-trial, lifecycle cron).
+  Now also test-covered: `src/test/api/stripeWebhook.test.js` signs fixture events with Stripe's
+  real `generateTestHeaderString` (real HMAC, not a mocked verifier) and asserts that a missing
+  header, a wrong-secret signature, and a tampered body all reject with zero DB writes.
+- [x] **Card declines / `past_due`** — keep entitlement until `current_period_end`, then lock;
+  surface the Stripe-hosted update-card flow via the portal. **Audited 2026-07-06 — already
+  existed**: §D's `getEntitlement` extension keeps `past_due` entitled while
+  `now < current_period_end` (boundary-tested in `subscription.test.js`), the webhook sets
+  `past_due` on `invoice.payment_failed` (now fixture-tested), and AccountDetail's Manage
+  Subscription button opens the Stripe portal (tested in `AccountDetailSubscription.test.jsx`).
+  Nothing rebuilt.
+- [x] **Cancellation** — `canceled` keeps access through `current_period_end` (Stripe "cancel at
+  period end"), then drops to read-only. **Audited 2026-07-06 — already existed**: same
+  `getEntitlement` branch as `past_due` (tested before/after the period boundary), and
+  `customer.subscription.deleted` forces status to `canceled` regardless of the event object's
+  own status field (now fixture-tested). Nothing rebuilt.
+- [x] **Account deletion** — **implemented 2026-07-06**: `api/delete-account.js` now looks up
+  `stripe_subscription_id` and cancels the subscription **immediately** (not at period end)
+  before deleting anything. Stored subscription ids don't record which Stripe mode minted them
+  (preview checkout = test mode, production = live), so a new `STRIPE_CLIENTS` export in
+  `_stripeClient.js` tries the deployment's own mode first, then the sibling —
+  `resource_missing` means wrong mode or already gone, both safe to move past. Already-canceled
+  subs are skipped; an unexpected cancel failure **aborts the deletion with a 500** so the
+  request is retryable rather than leaving a deleted-but-still-billed user. Still a true hard
+  delete, no archive (the archive-first path is §G's non-payment cron only, blocked on §I).
+  9 tests in `src/test/api/deleteAccount.test.js`.
+- [x] **Clock skew / tz** — **audited 2026-07-06**: all phase math in `getEntitlement` is
+  UTC-epoch-ms comparison against the stored timestamps, and every caller — `App.jsx:1068`,
+  `ProfilePanel.jsx` (AccountDetail), and the server-side `_lifecycleEngine.js` — passes real
+  wall-clock `new Date()`, never `effectiveToday`/Lock Date. Boundary behavior (day-14 and
+  day-21 inclusive/exclusive) pinned by `subscription.test.js`.
+- [x] **Disclosure** — **audited 2026-07-06**: every rendered surface has a forbidden-pattern
+  test (`UpgradeModal`/`UpgradePanel`/`TrialBanner` component tests + `lifecycleEmails.test.js`),
+  and API responses expose nothing: seed-trial returns only `{seeded}`, checkout/portal only a
+  URL, webhook only `{received}`. One inherent caveat, accepted per §D's design: the raw
+  `access_ends_at` value does travel to the client inside `loadUserData()`'s row because the
+  gate is computed client-side — it is never *rendered* on a non-admin surface, but a devtools
+  user could read it. Moving the gate fully server-side is the only fix and out of scope for v1.
+- [x] **Tests** — `getEntitlement` states + day-14/21 boundaries (§D, `subscription.test.js`);
+  cron phase-routing + every-other-day throttle (§G, `lifecycleEngine.test.js`); webhook upsert
+  mapping with signed fixture events and create-checkout missing/invalid-token rejection
+  (**added 2026-07-06**: `stripeWebhook.test.js`, `stripeCreateCheckout.test.js`, plus
+  `deleteAccount.test.js` for the new cancellation path — 23 new tests, 895 total).
 
 ### I. Account Revival After Non-Payment Deletion
 

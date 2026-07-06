@@ -4,7 +4,8 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta } from "./lib/db.js";
+import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
 import { IncomePanel } from "./components/IncomePanel.jsx";
@@ -255,6 +256,7 @@ export default function App() {
   const [rowViewOpen, setRowViewOpen] = useState(false);
   const [rowData, setRowData] = useState(null);
   const [rowFetching, setRowFetching] = useState(false);
+  const [historyMeta, setHistoryMeta] = useState(null); // §19 config-history line in DB Row viewer
   const [taxGridOpen, setTaxGridOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectedWeek, setInspectedWeek] = useState(null);
@@ -486,6 +488,34 @@ export default function App() {
     return () => clearTimeout(saveTimer.current);
   }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal, loading]);
 
+  // ── Config history write path (TODO §19 phase 1) ──
+  // Watches every config transition rather than wrapping individual save calls,
+  // so no whitelisted change can bypass capture regardless of which setConfig
+  // site or save path (immediate vs. debounced) it flows through. Attributed
+  // flows (wizard, life events, profile saves) tag source/effectiveFrom via
+  // configHistoryMetaRef just before their setConfig; untagged changes record
+  // as plain "config_edit" effective today. effectiveFrom uses real wall-clock
+  // time, never the admin Lock Date simulation (same rule as §17 entitlement).
+  const prevConfigRef = useRef(null);
+  const configHistoryMetaRef = useRef(null); // { source, effectiveFrom } | null
+  useEffect(() => {
+    if (loading) { prevConfigRef.current = null; return; }
+    const prev = prevConfigRef.current;
+    prevConfigRef.current = config;
+    const meta = configHistoryMetaRef.current;
+    configHistoryMetaRef.current = null;
+    if (!prev || prev === config) return; // first run after load primes the ref only
+    if (config.isInvestor) return; // investor sandboxes are exempt, matching §17.G
+    const changedFields = diffSensitiveFields(prev, config);
+    if (changedFields.length === 0) return;
+    saveConfigSnapshot({
+      config,
+      changedFields,
+      source: meta?.source ?? "config_edit",
+      effectiveFrom: meta?.effectiveFrom ?? toLocalIso(new Date()),
+    });
+  }, [config, loading]);
+
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
@@ -516,6 +546,9 @@ export default function App() {
   // ── Immediate config save — for ProfilePanel sub-views that need guaranteed persistence ──
   // Called with the already-computed newConfig so we don't rely on React having flushed setConfig yet.
   const saveConfigNow = useCallback((newConfig) => {
+    // Attribute the paired setConfig's history snapshot (if any) to a profile
+    // save; ??= keeps a more specific tag (wizard/life event) when one is set.
+    configHistoryMetaRef.current ??= { source: "profile_edit" };
     clearTimeout(saveTimer.current);
     pendingSaveRef.current = false;
     saveUserData({ config: newConfig, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
@@ -538,6 +571,9 @@ export default function App() {
     setSyncStatus({ op: "pull", pending: true });
     try {
       const data = await loadUserData();
+      // §19: a pull re-adopts what the DB already holds — if it diffs against
+      // in-memory state (drift), attribute the snapshot honestly, not as an edit.
+      configHistoryMetaRef.current = { source: "force_pull" };
       setConfig(data.config);
       setShowExtra(data.showExtra);
       setLogs(data.logs);
@@ -562,6 +598,7 @@ export default function App() {
         .eq("user_id", user.id)
         .single();
       setRowData(error ? { __error: error.message } : data);
+      setHistoryMeta(await fetchConfigHistoryMeta()); // §19 snapshot count + latest
     } catch (e) {
       setRowData({ __error: e.message });
     }
@@ -627,6 +664,18 @@ export default function App() {
     ];
     return pairs.filter(([, a, b]) => a !== b).map(([col]) => col);
   }, [rowData, config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
+
+  // §19.F verification surface — one line summarizing account_history capture,
+  // shown in every DB Row viewer block alongside updated_at/drift.
+  const historyLine = useMemo(() => {
+    if (!historyMeta) return null;
+    if (historyMeta.error) return `config history: unavailable (${historyMeta.error})`;
+    const { count, latest } = historyMeta;
+    if (!count) return "config history: 0 snapshots";
+    const src = latest?.source ? ` (${latest.source})` : "";
+    const fields = latest?.changed_fields?.length ? ` · ${latest.changed_fields.join(", ")}` : "";
+    return `config history: ${count} snapshot${count === 1 ? "" : "s"} · latest ${latest?.effective_from ?? "?"}${src}${fields}`;
+  }, [historyMeta]);
 
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config), [config]);
@@ -996,6 +1045,12 @@ export default function App() {
   const futureEventDeductions = eventImpact.futureEventDeductionsByWeek;
 
   function handleWizardComplete(mergedConfig) {
+    // §19: wizard flows are the one path that passes an explicit effective date
+    // (the job start / change date anchor); plain edits default to today.
+    configHistoryMetaRef.current = {
+      source: wizardEntry === false ? "setup_wizard" : `life_event:${wizardEntry}`,
+      effectiveFrom: mergedConfig.startDate ?? undefined,
+    };
     setConfig(mergedConfig);
     setWizardEntry(null);
   }
@@ -1486,6 +1541,7 @@ export default function App() {
                       : <>
                           {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
                           {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
+                          {historyLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
                           <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "160px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                             {JSON.stringify(rowData, null, 2)}
                           </pre>
@@ -2137,6 +2193,7 @@ export default function App() {
                     : <>
                         {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
                         {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
+                        {historyLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
                         <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                           {JSON.stringify(rowData, null, 2)}
                         </pre>
@@ -2743,6 +2800,7 @@ export default function App() {
                         <div style={{ display: "flex", gap: "12px", marginBottom: "8px", flexWrap: "wrap" }}>
                           {rowData.updated_at && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</span>}
                           {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)" }}>Drift: {rowDiff.join(", ")}</span>}
+                          {historyLine && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)" }}>{historyLine}</span>}
                         </div>
                         <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                           {JSON.stringify(rowData, null, 2)}
@@ -2905,7 +2963,10 @@ export default function App() {
       <JobLossEntry
         open={jobLossEntryOpen}
         onClose={() => setJobLossEntryOpen(false)}
-        onActivate={(patch) => setConfig(prev => ({ ...prev, ...patch }))}
+        onActivate={(patch) => {
+          configHistoryMetaRef.current = { source: "life_event:lost_job", effectiveFrom: patch.jobLossDate ?? undefined };
+          setConfig(prev => ({ ...prev, ...patch }));
+        }}
       />
       {/* ── Expense triage (TODO §15.C3 + C5 needs-coverage sort) ── */}
       <ExpenseTriage

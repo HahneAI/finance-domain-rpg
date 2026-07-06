@@ -371,6 +371,51 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
 }
 
 /**
+ * Append one config snapshot to account_history (TODO §19 phase 1 write path).
+ * New-value snapshot per §19.D2: `config` is the full NEW config taking effect.
+ * Fire-and-forget: a failure (e.g. migration 020 not yet run in Supabase) is
+ * logged and never blocks the main save path — same tolerance pattern as
+ * loadUserData's isolated week_confirmations fetch.
+ */
+export async function saveConfigSnapshot({ config, changedFields, source, effectiveFrom }) {
+  const userId = await getCurrentUserId();
+  if (!userId) return;
+
+  const { error } = await supabase.from("account_history").insert({
+    user_id:        userId,
+    snapshot:       config,
+    changed_fields: changedFields,
+    effective_from: effectiveFrom,
+    source,
+  });
+
+  if (error) {
+    console.error("Failed to save config snapshot:", error.message);
+  }
+}
+
+/**
+ * Count + latest row for the admin DB Row Viewer's config-history line
+ * (§19.F verification surface). Returns { count, latest } on success,
+ * { error } when the table is missing/unreachable — the caller renders
+ * whichever it gets.
+ */
+export async function fetchConfigHistoryMeta() {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error, count } = await supabase
+    .from("account_history")
+    .select("effective_from, changed_fields, source, created_at", { count: "exact" })
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) return { error: error.message };
+  return { count: count ?? 0, latest: data?.[0] ?? null };
+}
+
+/**
  * Creates a full investor account in three atomic steps:
  *   1. Supabase auth user (email + password)
  *   2. investor_users profile row

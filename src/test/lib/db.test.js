@@ -16,7 +16,7 @@ vi.mock('../../lib/supabase.js', () => ({
 }))
 
 import { supabase } from '../../lib/supabase.js'
-import { loadUserData, saveUserData, syncUserProfile } from '../../lib/db.js'
+import { loadUserData, saveUserData, syncUserProfile, saveConfigSnapshot, fetchConfigHistoryMeta } from '../../lib/db.js'
 
 // ─────────────────────────────────────────────────────────────
 // Mock helpers
@@ -652,5 +652,86 @@ describe('syncUserProfile — profile metadata + trial seeding (migration 017/01
     await syncUserProfile(null)
     expect(supabase.from).not.toHaveBeenCalled()
     expect(fetch).not.toHaveBeenCalled()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// TODO §19 phase 1 — account_history write path (migration 020)
+// ─────────────────────────────────────────────────────────────
+
+describe('saveConfigSnapshot', () => {
+  it('inserts the full new config + metadata into account_history', async () => {
+    const mockInsert = vi.fn().mockResolvedValue({ error: null })
+    supabase.from.mockReturnValue({ insert: mockInsert })
+
+    const config = { ...DEFAULT_CONFIG, baseRate: 21.15 }
+    await saveConfigSnapshot({
+      config,
+      changedFields: ['baseRate'],
+      source: 'profile_edit',
+      effectiveFrom: '2026-07-06',
+    })
+
+    expect(supabase.from).toHaveBeenCalledWith('account_history')
+    const [row] = mockInsert.mock.calls[0]
+    expect(row.user_id).toBe('test-user-id')
+    expect(row.snapshot).toBe(config)
+    expect(row.changed_fields).toEqual(['baseRate'])
+    expect(row.source).toBe('profile_edit')
+    expect(row.effective_from).toBe('2026-07-06')
+  })
+
+  it('logs and swallows the error when the table is missing (migration 020 not run)', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mockInsert = vi.fn().mockResolvedValue({ error: { message: 'relation "account_history" does not exist' } })
+    supabase.from.mockReturnValue({ insert: mockInsert })
+
+    await expect(saveConfigSnapshot({
+      config: DEFAULT_CONFIG, changedFields: ['baseRate'],
+      source: 'config_edit', effectiveFrom: '2026-07-06',
+    })).resolves.toBeUndefined()
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      'Failed to save config snapshot:',
+      'relation "account_history" does not exist',
+    )
+    consoleSpy.mockRestore()
+  })
+})
+
+describe('fetchConfigHistoryMeta', () => {
+  function setupHistoryMetaMock(result) {
+    const limit = vi.fn().mockResolvedValue(result)
+    const order = vi.fn().mockReturnValue({ limit })
+    const eq = vi.fn().mockReturnValue({ order })
+    const select = vi.fn().mockReturnValue({ eq })
+    supabase.from.mockReturnValue({ select })
+    return { select, eq }
+  }
+
+  it('returns count and the latest row', async () => {
+    const latest = {
+      effective_from: '2026-07-06',
+      changed_fields: ['baseRate'],
+      source: 'profile_edit',
+      created_at: '2026-07-06T15:00:00Z',
+    }
+    setupHistoryMetaMock({ data: [latest], error: null, count: 4 })
+
+    const meta = await fetchConfigHistoryMeta()
+    expect(supabase.from).toHaveBeenCalledWith('account_history')
+    expect(meta).toEqual({ count: 4, latest })
+  })
+
+  it('returns { error } when the table is missing', async () => {
+    setupHistoryMetaMock({ data: null, error: { message: 'relation "account_history" does not exist' }, count: null })
+    const meta = await fetchConfigHistoryMeta()
+    expect(meta).toEqual({ error: 'relation "account_history" does not exist' })
+  })
+
+  it('returns count 0 with null latest for an empty table', async () => {
+    setupHistoryMetaMock({ data: [], error: null, count: 0 })
+    const meta = await fetchConfigHistoryMeta()
+    expect(meta).toEqual({ count: 0, latest: null })
   })
 })

@@ -1227,18 +1227,35 @@ license to train.
 
 *Deliberately small — a proof of the write path, not the full system.*
 
-- [ ] **Migration** — `account_history` table per §D's sketch as revised by §D2 (new-value
-  snapshot + `changed_fields TEXT[]`), RLS scoped to `user_id = auth.uid()` matching every
-  other table's pattern, plus the per-account `rollout_seed` snapshot.
-- [ ] **One integration point** — `commitConfigChange(oldConfig, newConfig, source,
-  effectiveFrom?)` per §D2: diffs against the v1 whitelist, inserts a history row only when a
-  whitelisted field changed, then persists. Route `SetupWizard.onComplete`, every `ProfilePanel`
-  Pay Structure save, and the life-event flows through it — covering both the immediate
-  (`saveConfigNow`) and debounced save paths. This alone captures every
-  pay-structure/life-event/DHL↔base change in `account_history` going forward.
-- [ ] **Admin verification surface** — one line in the DB Row Viewer (or Live State Inspector):
-  "N config snapshots · latest [date] · [changed fields]" so capture can be verified from a
-  phone during the weeks before the read path exists.
+- [x] **Migration** — `database/migrations/020_add_account_history.sql`: table per §D's sketch
+  as revised by §D2 (new-value `snapshot` + `changed_fields TEXT[]`), RLS own-row
+  select/insert only — **append-only from the client**: no update/delete policies exist and
+  those privileges are revoked outright, so history can never be rewritten after the fact —
+  plus the per-account `rollout_seed` snapshot. ⚠️ **Not yet run in Supabase** — file exists in
+  the repo only; run it in the SQL editor before expecting rows (the client tolerates the
+  missing table gracefully until then).
+- [x] **One integration point** — implemented as a **config-transition watcher** in `App.jsx`
+  (a `useEffect` diffing `prevConfigRef` vs. `config` via
+  `diffSensitiveFields` from the new `src/lib/configHistory.js`, inserting via
+  `saveConfigSnapshot` in `db.js`) rather than the literal `commitConfigChange` wrapper —
+  strictly stronger than call-site routing: **no** `setConfig` site or save path (immediate
+  or debounced) can bypass capture. Attributed flows tag `source`/`effectiveFrom` through
+  `configHistoryMetaRef` just before their `setConfig`: `setup_wizard` /
+  `life_event:<x>` (wizard, passes `startDate` as the explicit effective date),
+  `life_event:lost_job` (JobLossEntry, passes `jobLossDate`), `profile_edit`
+  (`saveConfigNow`), `force_pull` (admin pull, so drift re-adoption isn't logged as an edit);
+  everything untagged records as `config_edit` effective today (real wall clock, never the
+  admin Lock Date). Investor sandbox accounts are exempt, matching §17.G's precedent.
+- [x] **Admin verification surface** — DB Row Viewer (all three render spots) now shows
+  "config history: N snapshots · latest [date] ([source]) · [changed fields]" after Fetch;
+  shows the error string when migration 020 hasn't been run yet.
+- [x] **Tests** — 26 new: `configHistory.test.js` (whitelist↔`DEFAULT_CONFIG` drift guard, no
+  duplicates, noise-field exclusions, scalar/array/object diffs, undefined≡null tolerance) +
+  `db.test.js` additions (insert shape, missing-table tolerance, meta fetch paths). 890 total
+  passing; lint diff-clean vs. baseline; production build green.
+- [ ] **Verify live once deployed** — run migration 020 in Supabase, then from the deployed
+  app: make a pay-rate edit in ProfilePanel and confirm DB Row → Fetch shows
+  "config history: 2 snapshots" (seed + edit) with `baseRate` in the changed fields.
 - [ ] **Explicitly defer** — the `buildYear`/`computeNet` read-path rewrite (§D's "read path")
   is its own follow-up task once the write path has real data to test against, and the loan
   `history[]` fix is its own separate follow-up (§D2). Don't try to land any of these in the

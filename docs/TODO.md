@@ -1100,23 +1100,124 @@ create index account_history_user_id_effective_from on account_history (user_id,
   ship in the same pass as the write path** — capturing history correctly first, then wiring
   the engine to actually consult it for past weeks, is an explicit two-phase plan (see F).
 
+### D2. Resolved decisions (2026-07-06 design discussion)
+
+- **Snapshot shape — full new-value config snapshot per change**, not field-level diffs of
+  superseded values (revises §D's `field_snapshot` sketch). "Config as of week N" then resolves
+  with the exact `getEffectiveAmount` algorithm: latest row with `effective_from ≤ N`. A
+  `changed_fields TEXT[]` column rides along for UI/diff display only — never load-bearing for
+  resolution.
+- **Storage — the `account_history` child table**, not a JSONB array on `user_data`: keeps the
+  hot-path row from growing forever, stays queryable for admin diagnostics, and is the landing
+  zone for the possible §18.H `coach_chats` fold-in. Rows load once at sign-in alongside
+  `loadUserData`; the resolver runs fully in memory — the engine never touches the network.
+- **Write path — one `commitConfigChange(oldConfig, newConfig, source, effectiveFrom?)` choke
+  point**, not a wrapper around `saveConfigNow` alone: config also persists via the 800ms
+  debounced autosave path in `App.jsx`, so wrapping only the immediate-save path would silently
+  miss changes that flow through the debounce. The helper diffs old vs. new against the
+  whitelist below, inserts a history row only when a whitelisted field actually changed, then
+  persists as normal.
+- **`effective_from` semantics** — stored as a **date**, never a week idx (idx is
+  fiscal-year-relative and breaks across year boundaries; derive idx at read time). Defaults to
+  **today** for plain ProfilePanel edits; only the wizard-driven flows (§15.B structure change,
+  §15.D Quick Rate Update) pass an explicit effective/change date — no effective-date prompt on
+  quick edits.
+- **Backfill — clean start + seed row**: at rollout, insert one snapshot per existing account
+  (current config, `effective_from` = rollout date, `source: 'rollout_seed'`) so the resolver
+  always has a floor entry — no "fall back to live config" special case for pre-history weeks.
+- **§C mechanisms stay as-is** — `pastWeekTaxStatusOverrides`, `weekConfirmations`, and `logs`
+  are records of actuals / per-week corrections, not config versions; they are not folded in.
+  Expense `history[]` also stays untouched in v1 — converging later is a cheap refactor once
+  `account_history` has proven itself.
+- **Loans** — a real, shipped second instance of the bug class (§B), but the cheap fix is giving
+  loans their own expense-style `history[]`; scoped as a separate follow-up, not wired into
+  `account_history` v1.
+- **Schema drift tolerance** — snapshots capture whatever config shape existed at write time
+  (e.g. pre-§20 rows won't have `taxedWeeksFed/State`); the read-path resolver must spread each
+  snapshot over `DEFAULT_CONFIG` before use, same as loads already do.
+
+**Historically-sensitive field whitelist (v1)** — `commitConfigChange` records a snapshot when
+any of these change. Everything else in config (UI prefs, dismissal state, `goalTimelineEpochIdx`,
+investor display fields) is noise and must **not** trigger a row:
+
+- **Pay structure:** `baseRate`, `annualSalary`, `shiftHours`, `diffRate`, `nightDiffRate`,
+  `nightDiffEnabled`, `otThreshold`, `otMultiplier`, `commissionMonthly`
+- **Schedule:** `maxWeeklyHours`, `customWeeklyHours`, `customWeeklyHoursLong/Short`,
+  `scheduleIsVariable`, `userPaySchedule`, `payPeriodEndDay`, `biweeklyPayWeekParity`,
+  `startDate` / `firstActiveIdx`
+- **Employer identity:** `employerPreset` (a DHL↔base flip swaps the entire `buildYear` branch —
+  the single highest-blast-radius change there is), plus the `dhl*` fields and
+  `startingWeekIsLong`
+- **Tax:** `fedRateLow/High`, `stateRateLow/High`, `taxRatesEstimated`, `ficaRate`,
+  `fedStdDeduction`, `filingStatus`, `userState`, `targetOwedAtFiling`, `taxedWeeks`,
+  `taxExemptOptIn`
+- **Deductions / benefits:** `selectedBenefits`, every per-check premium field (`healthPremium`,
+  `dentalPremium`, `visionPremium`, `ltd`, `stdWeekly`, `lifePremium`, `hsaWeekly`, `fsaWeekly`),
+  `otherDeductions`, `k401Rate`, `k401MatchRate`, `k401StartDate`, `benefitsStartDate`
+- **Attendance / PTO / bucket:** `attendanceBucketEnabled`, `attendanceWarnThreshold`,
+  `attendanceTerminateThreshold`, `attendanceIncrement`, `ptoEnabled`, `ptoAccrualMethod`,
+  `ptoAccrualRate`, `ptoCap`, `bucketStartBalance`, `bucketCap`, `bucketPayoutRate`
+- **Buffer / risk posture:** `bufferEnabled`, `paycheckBuffer` — cheap to keep, and a genuine
+  risk-tolerance signal for Coach
+- **Job loss (fields already live in `DEFAULT_CONFIG` today):** `jobLossMode`, `jobLossDate`,
+  `unemploymentEnabled/Weekly/DurationWeeks/WaitingWeek`, `returnToWorkDate`,
+  `targetIncomeAnnual`, `startedUnemployed` — (`jobApplications` deliberately excluded; it's
+  already its own append-only log)
+
+<!-- ── FUTURE HISTORICALLY-SENSITIVE FIELDS — no schema yet, do not implement ─────────────
+Parked 2026-07-06. These become whitelist entries (or their own entity_type rows) once the
+features that create them ship and their field names / data types actually exist. Kept as a
+comment so the v1 whitelist stays honest about what exists in the codebase today.
+
+Employer identity (beyond presets):
+- Free-text employer name / employer history as users list actual employers over time — today
+  the ONLY employer identity in config is `employerPreset` ("DHL" | null); there is no name
+  field. When the §21.D preset marketplace or any "who do you work for" field lands, each
+  employer change is both a history boundary and prime Coach context ("you've been at [X] for
+  14 months; your last move came with a $2.10 raise").
+
+Job Loss Mode outputs still unbuilt (§15.C):
+- Per-expense triage stances (`jobLossStatus: active | paused | cancelled`) — snapshot each
+  triage decision; "what did this user protect first when income stopped" is the single
+  strongest signal of their real priorities Coach will ever get.
+- Auto-reactivate elections, state benefit-estimator inputs — names/types TBD with §15.C.
+
+§20 split-tax fields (blocked on the accountant gate):
+- `taxedWeeksFed` / `taxedWeeksState` + the split per-week overrides — replace `taxedWeeks` in
+  the whitelist wholesale when the schema splits. Exempt-status changes per lane are exactly
+  the "separate independent timeline" §20.B requires — account_history can carry that timeline
+  for free.
+
+Coach/AI-context candidates (decide alongside §18, not before):
+- Life-event occurrences themselves — which flow fired and when; the `source` column already
+  encodes this per row ('life_event:lost_job', 'setup_wizard', …), so this may be a read-out
+  of existing data rather than new capture. A user's sequence of life events is the
+  highest-value personalization signal Coach can have.
+- Goal target / due-date revisions (§B's "lower-risk" note) — ambition vs. follow-through
+  patterns; would land as entity_type: 'goal' rows rather than config snapshots.
+- Attendance/PTO *balances* over time as job-quality signals (the policy fields are already
+  whitelisted above; balance trajectories are a different, noisier thing — decide with §18).
+
+Privacy rail: anything captured here that feeds Coach context inherits §21.E's rules —
+confidence labeling, the human-confirm boundary for AI writes, and (if ever used for model
+training or cross-user aggregates) explicit opt-in per §21.D's benchmark privacy rules.
+History rows are per-user data under the same RLS as every other table; capture is not a
+license to train.
+──────────────────────────────────────────────────────────────────────────────────────── -->
+
 ### E. Open questions to resolve before writing the migration
 
-- [ ] **Snapshot granularity** — whole-config snapshot per change (simple, matches the
-  expense-history precedent) vs. field-level diffs (smaller rows, precise, harder to
-  reconstruct "config as of week N" from)?
-- [ ] **Which fields are actually in scope** — full enumeration needed: all of §B's pay/schedule/
-  tax-rate fields, `employerPreset` DHL↔base switches specifically (since that flips which
-  entire code branch `buildYear` uses), benefit elections, loan terms, goal targets. Expense
-  billing amounts are already covered by the existing mechanism (§A).
-- [ ] **Backfill or clean start?** — there is no history for config values already in production;
-  the first `account_history` row for an existing account starts at rollout, not fabricated
-  retroactively. Confirm this is acceptable (it should be — same as how expense `history[]`
-  arrays start wherever the expense was created, not before).
-- [ ] **Fold in or leave alone** — does `pastWeekTaxStatusOverrides` / `weekConfirmations` /
-  `logs` (§C) become an `entity_type` inside `account_history`, or do they stay as their own
-  JSONB columns and only *new* config-history is added alongside them? Recommend deciding this
-  during the design pass, not now.
+- [x] **Snapshot granularity** — resolved 2026-07-06: full **new-value** whole-config snapshot
+  per change (see §D2); field-level diffs rejected as harder to reconstruct from.
+- [x] **Which fields are actually in scope** — resolved 2026-07-06: the v1 whitelist in §D2,
+  plus the commented-out future-fields block beneath it (employer identity, §15.C job-loss
+  outputs, §20 split-tax fields, Coach/AI candidates). Expense billing amounts stay covered by
+  the existing mechanism (§A); loan terms are a separate expense-style `history[]` follow-up.
+- [x] **Backfill or clean start?** — resolved 2026-07-06: clean start plus one `rollout_seed`
+  snapshot per existing account so the resolver always has a floor entry (§D2).
+- [x] **Fold in or leave alone** — resolved 2026-07-06: leave alone. `pastWeekTaxStatusOverrides`
+  / `weekConfirmations` / `logs` are actuals/corrections, not config versions; they stay as
+  their own columns and only new config-history is added alongside them (§D2).
 - [ ] **AI chat history hook (flagged explicitly by product)** — once §18.H's `coach_chats`
   table ships, evaluate folding it into `account_history` as `entity_type: 'coach_chat'`
   instead of keeping its own table. Don't block this section on that decision — §18 needs to
@@ -1126,16 +1227,22 @@ create index account_history_user_id_effective_from on account_history (user_id,
 
 *Deliberately small — a proof of the write path, not the full system.*
 
-- [ ] **Migration** — `account_history` table per §D's sketch (or the design pass's revision of
-  it), RLS scoped to `user_id = auth.uid()` matching every other table's pattern.
-- [ ] **One integration point** — wrap the config save path (`saveConfigNow` in `App.jsx`,
-  called from `SetupWizard.onComplete` and every `ProfilePanel` Pay Structure section) to diff
-  old vs. new config and insert an `account_history` row for whatever changed, before
-  persisting the new config. This alone captures every pay-structure/life-event/DHL↔base change
-  in `account_history` going forward.
+- [ ] **Migration** — `account_history` table per §D's sketch as revised by §D2 (new-value
+  snapshot + `changed_fields TEXT[]`), RLS scoped to `user_id = auth.uid()` matching every
+  other table's pattern, plus the per-account `rollout_seed` snapshot.
+- [ ] **One integration point** — `commitConfigChange(oldConfig, newConfig, source,
+  effectiveFrom?)` per §D2: diffs against the v1 whitelist, inserts a history row only when a
+  whitelisted field changed, then persists. Route `SetupWizard.onComplete`, every `ProfilePanel`
+  Pay Structure save, and the life-event flows through it — covering both the immediate
+  (`saveConfigNow`) and debounced save paths. This alone captures every
+  pay-structure/life-event/DHL↔base change in `account_history` going forward.
+- [ ] **Admin verification surface** — one line in the DB Row Viewer (or Live State Inspector):
+  "N config snapshots · latest [date] · [changed fields]" so capture can be verified from a
+  phone during the weeks before the read path exists.
 - [ ] **Explicitly defer** — the `buildYear`/`computeNet` read-path rewrite (§D's "read path")
-  is its own follow-up task once the write path has real data to test against. Don't try to
-  land both in the same PR.
+  is its own follow-up task once the write path has real data to test against, and the loan
+  `history[]` fix is its own separate follow-up (§D2). Don't try to land any of these in the
+  same PR as the write path.
 
 ---
 

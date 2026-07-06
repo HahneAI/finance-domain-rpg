@@ -32,7 +32,7 @@ Last updated: 2026-07-01 | App: Authority Finance (A:Fin)
 | 17 | Auth & Account | `ProfilePanel.jsx`, `LoginScreen.jsx` | Live |
 | 18 | Investor & Demo Accounts | `DemoAccountTree.jsx`, `InvestorRegister.jsx` | Live, dormant workflow |
 | 19 | PWA / Install | `vite.config.js`, `PwaInstallModal.jsx` | Live |
-| 20 | Subscription Lifecycle Emails | `api/cron-subscription-lifecycle.js`, `api/_lifecycleEngine.js`, `api/_lifecycleEmails.js`, `api/_email.js` | Code shipped — needs `EMAIL_API_KEY`/`CRON_SECRET` in Vercel |
+| 20 | Subscription Lifecycle Emails | `api/cron-subscription-lifecycle.js`, `api/_lifecycleEngine.js`, `api/_lifecycleEmails.js`, `api/_email.js` | Live (verified 2026-07-05) — dev sender only until domain verified |
 
 ---
 

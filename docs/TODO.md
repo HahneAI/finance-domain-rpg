@@ -380,7 +380,9 @@ are account/config steps plus the §I-blocked deletion hook.*
   trial→deletion cycle. SendGrid ruled out (Twilio killed the permanent free tier May 2025; 60-day
   trial then $19.95/mo minimum) and Postmark has no free production tier (~$15/mo). Sends go
   through Resend's REST API via plain `fetch` (`api/_email.js`) — no npm dependency added.
-  - [ ] **Create the Resend account + API key** and set `EMAIL_API_KEY` in Vercel.
+  - [x] **Create the Resend account + API key** — done 2026-07-05; key set in Vercel
+    (accepted as either `EMAIL_API_KEY` or `RESEND_API_KEY`). Resend account owner email:
+    anthonyhahne20@gmail.com — the only deliverable recipient until a domain is verified.
   - [ ] **Verified sender domain — deliberately deferred.** Built against Resend's shared dev
     sender (`onboarding@resend.dev`, the `EMAIL_FROM` default); it only delivers to the Resend
     account owner's own address, which is exactly right for testing. A custom domain (can't be
@@ -419,14 +421,40 @@ are account/config steps plus the §I-blocked deletion hook.*
   trial ends" phrasing anywhere, since the trial is app-managed (§B) and Checkout charges
   immediately on upgrade. Engine schedule/throttle covered by
   `src/test/api/lifecycleEngine.test.js` (26 tests total across both files).
-- **Not yet verified live** — same caveat as §E: built + fully tested in the sandbox (suite green
-  at 872, build clean), but no real Resend send or deployed cron invocation has happened yet.
-  To go live: create the Resend account, set `EMAIL_API_KEY` + `CRON_SECRET` in Vercel, deploy
-  (the `vercel.json` cron registers on deploy), then trigger once manually —
-  `curl -H "Authorization: Bearer $CRON_SECRET" https://<deployment>/api/cron-subscription-lifecycle`
-  — and check the summary JSON plus the Resend dashboard's send log.
+- [x] **Verified live end-to-end (2026-07-05)** — cron registered on production
+  (Vercel → Cron Jobs, `0 15 * * *`), manual Run returned 200 with a clean summary
+  (`{"checked":2,"sent":0,...}` — both checked accounts correctly skipped: one active
+  subscriber, one admin). A real send was then proven by temporarily backdating the
+  Anthony Hahne test account (auth email = the Resend owner address) to trial day 8 and
+  suspending its active status: cron produced `sent:1` and the "6 days left in your free
+  trial" email delivered to the inbox with the brand template rendering correctly; account
+  restored to its real active state afterward. Also verified along the way: the Resend
+  dev-sender 403 path (send to a non-owner address) is caught per-row, counted in `errors`,
+  and leaves the throttle unstamped for retry — exactly as designed.
+- **Beta-tester exemption (2026-07-05):** the two family beta accounts (never trial-seeded —
+  they haven't signed in since the paywall deployed) were flagged `is_investor = true` in
+  Supabase so they bypass the paywall and lifecycle emails entirely during beta. Flip back to
+  `false` when beta ends to put them on real trials (seeding fires on their next sign-in).
 - [ ] **(Optional, later) Web Push** — the app is already a PWA w/ service worker; the same phase
   signals could fire push notifications. Defer behind email v1.
+
+**Handoff checkpoint #2 (2026-07-05) — §G done and verified live; next is §H:**
+Branch `claude/free-email-provider-6u3kbo` (merged to master via Version-control). Everything in
+the first checkpoint below §F still applies (getEntitlement is the single source of phase math,
+disclosure rule absolute, resolveAppOrigin for redirects, sandbox has no creds — 872-test baseline).
+New since then:
+- §G lifecycle emails are **live**: Resend key + `CRON_SECRET` set in Vercel, daily cron registered
+  and verified in production, a real nudge email delivered end-to-end. Still on the resend.dev dev
+  sender — domain verification for **authority-os.com** (ZenBusiness DNS) is mid-propagation and
+  being finished in a separate session; once Resend shows Verified, set `EMAIL_FROM` in Vercel and
+  redeploy. Until then the cron can only deliver to the Resend owner's address; other sends 403
+  and retry harmlessly.
+- The two family beta accounts are `is_investor = true` in Supabase (paywall + email exempt);
+  flip back when beta ends.
+- §H's one real code gap: `api/delete-account.js` does not yet cancel the Stripe subscription.
+  Most other §H bullets are audit-and-test-only — webhook signatures and past_due/canceled
+  entitlement already exist in code.
+- §B leftover: Stripe Customer Portal dashboard config still unconfirmed.
 
 ### H. Edge cases, security & testing
 

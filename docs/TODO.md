@@ -652,8 +652,19 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
   `ReviveScreen.test.jsx` (identity, checkout call, two-way-door retry, disclosure guard), and
   five LoginScreen revival-routing cases. Tombstone overwrite-on-second-cycle is asserted in
   `cronLifecycleDelete.test.js` (upsert on email + revival-field reset). **Not covered:** the
-  App.jsx SIGNED_IN short-circuit itself (App has no component test harness — verify live that
-  a Google sign-in with a tombstoned email lands on ReviveScreen, not the wizard).
+  App.jsx SIGNED_IN short-circuit itself (App has no component test harness) — see the parked
+  live-verification bullet below.
+- [ ] **Live verification: tombstoned-email Google OAuth sign-in (deliberately parked for the
+  final pre-launch pass, alongside §H's cancel-on-delete bullet).** The one §I path no unit test
+  can reach: App.jsx's SIGNED_IN short-circuit. On the preview deployment, with a
+  `deleted_accounts` tombstone whose `oauth_provider = 'google'` and `revived_at IS NULL`
+  (backdate a Google test account past day 28 and run the cron, or hand-insert a tombstone in
+  the SQL editor): sign in with that Google account and confirm it lands on **ReviveScreen** —
+  not the setup wizard, and with **no fresh trial seeded** (check via DB Row Viewer that
+  `trial_started_at` stays null on the new `user_data` row until revival). Then complete the
+  revive checkout with the test card and confirm the archived data comes back and the tombstone's
+  `revived_at` is stamped. While here, also do the email/password variant (failed sign-in →
+  revive password form) — same session, much cheaper than a separate pass.
 
 **Handoff checkpoint #3 (2026-07-06) — §H + §I code-complete; branch
 `claude/stripe-paywall-hardening-audit-1a9s6u`:**
@@ -665,8 +676,8 @@ Still open / needs the user:
 - **Migration 019 (RLS) is confirmed NOT yet run in Supabase** (user, 2026-07-06). All §17
   privileged columns are app-layer-protected only until it runs. `deleted_accounts` (017) IS live.
 - Live verification pass on the preview deployment: cancel-on-delete (§H's parked bullet), the
-  §B Customer Portal config, and the full revival loop (backdate an account to day 28+ → run the
-  cron → sign in again → revive with the test card → data restored).
+  §B Customer Portal config, and the full revival loop including the tombstoned-email Google
+  OAuth sign-in (§I's parked bullet above — the one path unit tests can't reach).
 - §I minor leftover: decline-code capture (open sub-bullet above).
 
 ### J. Env vars (Vercel)

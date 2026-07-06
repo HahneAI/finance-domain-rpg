@@ -20,9 +20,13 @@ vi.mock("@supabase/supabase-js", () => ({
   ),
 }));
 
-vi.mock("../../../api/_stripeClient.js", () => ({
-  STRIPE_CLIENTS: [mocks.stripeA, mocks.stripeB],
-}));
+// Substitute only the client list — cancelStripeSubscription stays the real
+// implementation (the route passes STRIPE_CLIENTS explicitly), so the
+// mode-fallback behavior below exercises the actual helper.
+vi.mock("../../../api/_stripeClient.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, STRIPE_CLIENTS: [mocks.stripeA, mocks.stripeB] };
+});
 
 globalThis.process.env.VITE_SUPABASE_URL = "https://test.supabase.co";
 globalThis.process.env.VITE_SUPABASE_ANON_KEY = "anon-key";

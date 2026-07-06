@@ -403,11 +403,11 @@ are account/config steps plus the §I-blocked deletion hook.*
     Every 2 days; **never** mentions the remaining access.
   - [x] **Expired (day 21+), no card** → account-deletion warning **every other day** (guard:
     `now − last_dunning_email_at ≥ 2 days`); increments `dunning_email_count`.
-  - [ ] **Past day 21 + 7, no card** → archive the account (see §I) then call the deletion path.
-    **Not implemented — blocked on §I's `deleted_accounts` migration** (deleting without the
-    archive would make revival impossible). The engine already flags these rows (`deleteDue: true`)
-    and the cron counts + logs them, so wiring in the actual archive+delete is the only
-    remaining step once §I lands.
+  - [x] **Past day 21 + 7, no card** → archive the account (see §I) then call the deletion path.
+    **Implemented 2026-07-06** (§I item unblocked — the `deleted_accounts` table already existed
+    in migration 017): the cron now acts on `deleteDue` rows via `archiveAndDeleteAccount()` —
+    snapshot → cancel any lingering Stripe sub → tombstone upsert → hard delete. Takes
+    precedence over the same-run deletion-warning email. See the §I archive bullet for details.
   - [x] **Card on file / active** → no lifecycle emails; resets `dunning_email_count` +
     `last_dunning_email_at` so a future lapse starts a fresh cycle.
 - [x] **Idempotency / safety** — safe to run any number of times a day: every send keys off the
@@ -531,7 +531,9 @@ both deliberately parked for the final pre-launch pass: §B's Customer Portal da
 non-payment, the user should still be able to come back — but coming back must require a real,
 successful charge, not just re-entering the same info. This section defines that recovery path.
 Depends on §G's deletion cron writing an archive record instead of a bare hard-delete — since §G
-hasn't been built yet either, nothing here is actionable until that lands first.*
+hasn't been built yet either, nothing here is actionable until that lands first. **(Update
+2026-07-06: §G is live and the archive-then-delete step below is now wired in — the remaining
+§I bullets, revival detection/screen/checkout/restore, are actionable.)***
 
 **Core distinction:** the existing `api/delete-account.js` flow (user types "DELETE" in
 ProfilePanel) stays a **true, unrecoverable hard delete** — that's an explicit user choice and
@@ -539,7 +541,7 @@ gets no archive. The **cron-driven non-payment deletion** (§G, day 21+7) is the
 archives first, specifically so revival is possible. Both still delete the live `auth.users` row
 and `user_data` row — the difference is only whether a recoverable snapshot was taken first.
 
-- [ ] **Archive-then-delete in the lifecycle cron** — before `api/cron-subscription-lifecycle.js`
+- [x] **Archive-then-delete in the lifecycle cron** — before `api/cron-subscription-lifecycle.js`
   hard-deletes a non-payment account, it upserts a snapshot into `deleted_accounts` (migration
   017, added below) keyed by email: `config`, `expenses`, `goals`, `logs`, `show_extra`,
   `week_confirmations`, `pto_goal`, `stripe_customer_id`, `plan`, `display_name`, `avatar_url`,
@@ -547,6 +549,20 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
   a password field). `deletion_reason = 'non_payment_dunning_expired'`. Upsert-on-email so a
   second deletion cycle (revive → cancel again) overwrites the same tombstone rather than piling
   up duplicates.
+  **Implemented 2026-07-06** — `archiveAndDeleteAccount()` in the cron, ordered for retry
+  safety (any step failing leaves the account intact for the next daily run): resolve auth
+  user → snapshot full row → cancel any lingering Stripe sub (shared `cancelStripeSubscription`
+  helper, now exported from `_stripeClient.js` and reused by `delete-account.js`) → tombstone
+  upsert (`onConflict: "email"`, explicitly resetting `revived_at`/attempt/decline fields so a
+  second cycle reopens the tombstone fresh) → delete `user_data` → delete auth user. Supabase
+  reports `provider: "email"` for password accounts, so only real OAuth providers are recorded.
+  7 tests in `src/test/api/cronLifecycleDelete.test.js` (first coverage of the cron route
+  itself) drive the real engine with day-30 fixtures: full tombstone mapping, OAuth provider,
+  sub cancel, cancel-failure and archive-failure both blocking deletion, day-23 still emailing
+  instead of deleting. ⚠️ **Verify in Supabase that migration 017's `deleted_accounts` table
+  actually exists** (`select count(*) from deleted_accounts;`) — the §A note that 017 was
+  unrun proved stale for the subscription columns, but the table half of that file hasn't been
+  independently confirmed.
 - [ ] **Login-time detection** — `LoginScreen.jsx` needs to distinguish "wrong password" from
   "this email belongs to an archived, revivable account":
   - **Email/password:** Supabase Auth intentionally returns the same generic "Invalid login

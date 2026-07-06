@@ -31,8 +31,9 @@ export const DELETION_BUFFER_DAYS = 7;
  *   - "none"  — nothing to do for this user this run
  *   - "reset" — user is carded/active/exempt but has stale dunning state to clear
  *   - "email" — send `template`, then stamp last_dunning_email_at + count
- *   - deleteDue — day 21+7 has passed with no card; §I archive-then-delete
- *     is not built yet, so the cron only logs these (never acts).
+ *   - deleteDue — day 21+7 has passed with no card; the cron archives the
+ *     account into deleted_accounts and hard-deletes it (§17.I), which takes
+ *     precedence over any same-run deletion_warning email.
  */
 export function decideLifecycleAction(row, now = new Date()) {
   // Admins and investors bypass the paywall entirely (§17.E) — they must

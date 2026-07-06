@@ -44,6 +44,29 @@ export const PLAN_BY_PRICE_ID = {
 // this deployment's own mode first.
 export const STRIPE_CLIENTS = (MODE === "live" ? [stripeLive, stripeTest] : [stripeTest, stripeLive]).filter(Boolean);
 
+// Cancels a subscription immediately (not at period end) across modes.
+// Shared by api/delete-account.js (user-initiated hard delete) and the §17.I
+// non-payment archive-then-delete in the lifecycle cron. "resource_missing"
+// means wrong mode or already gone — both safe to move past; anything else
+// throws so the caller can abort rather than leave a still-billed user.
+// `clients` is a parameter (defaulting to STRIPE_CLIENTS) so callers pass the
+// imported binding — which keeps the mode-fallback logic testable under a
+// module mock that substitutes the client list.
+export async function cancelStripeSubscription(subscriptionId, clients = STRIPE_CLIENTS) {
+  for (const client of clients) {
+    try {
+      const subscription = await client.subscriptions.retrieve(subscriptionId);
+      if (subscription.status !== "canceled") {
+        await client.subscriptions.cancel(subscriptionId);
+      }
+      return;
+    } catch (err) {
+      if (err?.code === "resource_missing") continue;
+      throw err;
+    }
+  }
+}
+
 // Webhook signature verification tries live first, then test, since incoming
 // events carry no mode indicator besides "which secret validates the
 // signature." Returns the event plus which client (live or test) issued it,

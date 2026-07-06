@@ -1,29 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-import { STRIPE_CLIENTS } from "./_stripeClient.js";
+import { STRIPE_CLIENTS, cancelStripeSubscription } from "./_stripeClient.js";
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
 const anonKey = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
 const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-
-// The stored subscription id doesn't say which Stripe mode created it, so try
-// each configured client in turn. "resource_missing" means either wrong mode
-// or the subscription is already gone — both fine to move past; anything else
-// must abort the deletion, or the user would keep being billed.
-async function cancelStripeSubscription(subscriptionId) {
-  for (const client of STRIPE_CLIENTS) {
-    try {
-      const subscription = await client.subscriptions.retrieve(subscriptionId);
-      if (subscription.status !== "canceled") {
-        await client.subscriptions.cancel(subscriptionId);
-      }
-      return;
-    } catch (err) {
-      if (err?.code === "resource_missing") continue;
-      throw err;
-    }
-  }
-}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -80,7 +61,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Server configuration is missing" });
     }
     try {
-      await cancelStripeSubscription(subRow.stripe_subscription_id);
+      await cancelStripeSubscription(subRow.stripe_subscription_id, STRIPE_CLIENTS);
     } catch (err) {
       console.error("delete-account failed to cancel Stripe subscription:", err.message);
       return res.status(500).json({ error: "Failed to cancel subscription" });

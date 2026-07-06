@@ -4,31 +4,6 @@
 
 ---
 
-## 16. Priority Sprint — UX Polish & Cleanup
-
-*Active. Remaining open items from the 2026-06-07 brain dump.*
-
-- [ ] **Mobile PWA install tutorial** — Add a hamburger-menu option shown **only in the mobile
-  browser** (not the installed PWA) that opens a tutorial teaching users how to install the PWA.
-  The iOS flow already exists on our website (user will provide it); reuse that and place the
-  button somewhere clean.
-
-- [ ] **Financial alert feature — copy + AI tuneup** — Revisit the Net Worth Health
-  "Financial Breakthrough" tips copy (`NetWorthHealthTips.jsx`) and upgrade it from static text to
-  Coach-generated responses tied to real net worth trends. Full spec → **§18.C**.
-
-- [ ] **Purge grey text** — Replace remaining dark-grey text across the app with the standard
-  white/primary text color. Profile panel and panel headers were purged in two prior rounds;
-  a final app-wide verification pass is still needed to catch any missed surfaces.
-
-- [ ] **Verify change email + password (live round-trip)** — Code audit confirmed both flows are
-  implemented in `ProfilePanel.jsx`. Still needs live Supabase + real inbox test: change email
-  and confirm via the link (Secure email change dual-confirm + whitelisted redirect); change
-  password then sign out and confirm old password rejected / new works; wrong-current-password
-  path. Cannot be exercised from the remote dev environment.
-
----
-
 ## 17. Monetization — Stripe Subscriptions + 2-Week Free Trial
 
 *New workstream. Authority Finance is currently free with no billing layer (`CLAUDE.md`: "No

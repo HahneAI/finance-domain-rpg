@@ -5,6 +5,15 @@
  *   "signin"   — email + password sign-in (default)
  *   "signup"   — create account
  *   "forgot"   — email-only form → sends password reset email
+ *   "revive"   — §17.I: the email matches an archived (non-payment-deleted)
+ *                account. Supabase returns the same generic error for
+ *                wrong-password and no-such-user, so every failed sign-in is
+ *                checked against api/revival-lookup; a match routes here
+ *                instead of the generic error. Email accounts set a NEW
+ *                password (deliberately no restriction on reusing the old
+ *                one); OAuth accounts just Continue with Google again. Either
+ *                way the resulting SIGNED_IN lands on App's ReviveScreen —
+ *                access itself only returns after a successful charge.
  *
  * Props:
  *   recoveryMode      — true when App.jsx detects PASSWORD_RECOVERY event (user clicked reset link)
@@ -90,7 +99,8 @@ export function Shell({ title, subtitle, children }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVerified, oauthCallbackFailed = false, onOauthRetry }) {
-  const [mode, setMode]         = useState("signin"); // "signin" | "signup" | "forgot"
+  const [mode, setMode]         = useState("signin"); // "signin" | "signup" | "forgot" | "revive"
+  const [reviveProvider, setReviveProvider] = useState(null); // oauth provider from revival-lookup, e.g. "google"
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword]     = useState("");
@@ -195,9 +205,58 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
       }
     } else {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) { setError(signInError.message); setLoading(false); return; }
+      if (signInError) {
+        // §17.I — a deleted-for-non-payment account fails sign-in exactly like
+        // a wrong password (the auth user row is gone). Check the tombstone
+        // before surfacing the generic error; lookup failures fall through to
+        // the normal error so this can never block a regular login.
+        const revival = await lookupRevivable(email);
+        if (revival) {
+          setReviveProvider(revival.oauthProvider ?? null);
+          setMode("revive");
+          setError(null);
+          setLoading(false);
+          return;
+        }
+        setError(signInError.message);
+        setLoading(false);
+        return;
+      }
     }
 
+    setLoading(false);
+  }
+
+  // ── §17.I Revive: create the replacement auth account ─────────────────────
+  // New password only — the old auth user was hard-deleted. On success the
+  // SIGNED_IN event fires and App.jsx's revival check routes to ReviveScreen
+  // (payment + data restore). If email confirmation is required there's no
+  // session yet; after confirming and signing in, the same SIGNED_IN path
+  // still lands on ReviveScreen — nothing is lost.
+  async function handleReviveSignUp(e) {
+    e.preventDefault();
+    setError(null);
+    if (newPassword !== confirmPassword) {
+      setError("Passwords don't match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    setLoading(true);
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password: newPassword,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    if (signUpError) { setError(signUpError.message); setLoading(false); return; }
+    if (data.user) {
+      await supabase.from("user_data").insert({ user_id: data.user.id });
+    }
+    if (!data.session) {
+      setInfo(`Confirmation sent to ${email}. Click the link, then sign in to continue restoring your account.`);
+    }
     setLoading(false);
   }
 
@@ -249,6 +308,53 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
           {error && <ErrorBox>{error}</ErrorBox>}
           <SubmitBtn loading={loading}>{loading ? "..." : "Update Password"}</SubmitBtn>
         </form>
+      </Shell>
+    );
+  }
+
+  // ── §17.I Revive an archived account ──────────────────────────────────────
+
+  if (mode === "revive") {
+    return (
+      <Shell
+        title="Welcome back"
+        subtitle="This email belongs to an account that was closed for non-payment — but your data was saved."
+      >
+        {reviveProvider === "google" ? (
+          <>
+            <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "18px" }}>
+              Sign back in with Google to restore your account. You'll pick a
+              plan and re-subscribe — your income setup, budget, goals, and
+              history come back as soon as your payment goes through.
+            </div>
+            <OAuthBtn label="Continue with Google" icon={GoogleIcon} onClick={() => handleOAuth("google")} />
+            {error && <div style={{ marginTop: "14px" }}><ErrorBox>{error}</ErrorBox></div>}
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "18px" }}>
+              Set a new password for <span style={{ color: "var(--color-text-primary)" }}>{email}</span> to
+              continue. You'll then pick a plan and re-subscribe — your income
+              setup, budget, goals, and history come back as soon as your
+              payment goes through.
+            </div>
+            <form onSubmit={handleReviveSignUp} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={lS}>New Password</label>
+                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={lS}>Confirm Password</label>
+                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+              </div>
+              {error && <ErrorBox>{error}</ErrorBox>}
+              <SubmitBtn loading={loading}>{loading ? "..." : "Continue"}</SubmitBtn>
+            </form>
+          </>
+        )}
+        <div style={{ marginTop: "20px", textAlign: "center" }}>
+          <button onClick={() => { setMode("signin"); setError(null); }} style={linkBtnStyle}>← Back to sign in</button>
+        </div>
       </Shell>
     );
   }
@@ -373,6 +479,25 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
 
     </Shell>
   );
+}
+
+// §17.I — unauthenticated tombstone check (deleted_accounts is service-role
+// only, so this goes through api/revival-lookup). Returns { revivable,
+// oauthProvider } or null; any failure resolves null so the normal sign-in
+// error still shows.
+async function lookupRevivable(email) {
+  try {
+    const res = await fetch("/api/revival-lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) return null;
+    const payload = await res.json().catch(() => null);
+    return payload?.revivable ? payload : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Tiny shared atoms (not worth exporting) ───────────────────────────────────

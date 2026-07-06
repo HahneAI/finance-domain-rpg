@@ -73,15 +73,28 @@ function mkRes() {
   };
 }
 
-/** Wire the admin client; returns spies for the event claim and user_data update. */
-function setupAdmin({ claimError = null } = {}) {
+/** Wire the admin client; returns spies for the event claim, user_data writes, and the tombstone. */
+function setupAdmin({ claimError = null, tombstone = null } = {}) {
   const insert = vi.fn().mockResolvedValue({ error: claimError });
   const updateEq = vi.fn().mockResolvedValue({ error: null });
   const update = vi.fn().mockReturnValue({ eq: updateEq });
-  mocks.adminClient.from.mockImplementation((table) =>
-    table === "stripe_webhook_events" ? { insert } : { update, eq: updateEq }
-  );
-  return { insert, update, updateEq };
+  const upsert = vi.fn().mockResolvedValue({ error: null });
+  const tombstoneUpdateEq = vi.fn().mockResolvedValue({ error: null });
+  const tombstoneUpdate = vi.fn().mockReturnValue({ eq: tombstoneUpdateEq });
+  const maybeSingle = vi.fn().mockResolvedValue({ data: tombstone, error: null });
+  mocks.adminClient.from.mockImplementation((table) => {
+    if (table === "stripe_webhook_events") return { insert };
+    if (table === "deleted_accounts") {
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({ is: vi.fn().mockReturnValue({ maybeSingle }) }),
+        }),
+        update: tombstoneUpdate,
+      };
+    }
+    return { update, upsert, eq: updateEq };
+  });
+  return { insert, update, updateEq, upsert, tombstoneUpdate, tombstoneUpdateEq };
 }
 
 beforeEach(() => {
@@ -194,6 +207,94 @@ describe("stripe-webhook — upsert mapping per event type", () => {
     expect(res.statusCode).toBe(200);
     expect(update).toHaveBeenCalledWith({ subscription_status: "past_due" });
     expect(updateEq).toHaveBeenCalledWith("stripe_customer_id", "cus_123");
+  });
+
+  it("a revival checkout (metadata.revival) restores the archived snapshot and consumes the tombstone", async () => {
+    const { upsert, update, tombstoneUpdate, tombstoneUpdateEq } = setupAdmin({
+      tombstone: {
+        email: "gone@example.com",
+        archived_config: { setupComplete: true },
+        archived_expenses: [{ name: "Rent" }],
+        archived_goals: [{ name: "Emergency fund" }],
+        archived_logs: [],
+        archived_show_extra: false,
+        archived_week_confirmations: { 3: { worked: true } },
+        archived_pto_goal: { target: 40 },
+        display_name: "Old Name",
+        avatar_url: null,
+        revived_at: null,
+      },
+    });
+    mocks.stripeSubscriptions.retrieve.mockResolvedValue({
+      id: "sub_rev",
+      status: "active",
+      current_period_end: 1785000000,
+      items: { data: [{ price: { id: "price_month_test" } }] },
+    });
+    const payload = mkEvent("checkout.session.completed", {
+      mode: "subscription",
+      customer: "cus_old",
+      subscription: "sub_rev",
+      client_reference_id: "user-new",
+      metadata: { revival: "true", revival_email: "gone@example.com" },
+    });
+    const res = mkRes();
+    await handler(mkReq(payload, sign(payload)), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "user-new",
+        config: { setupComplete: true },
+        expenses: [{ name: "Rent" }],
+        goals: [{ name: "Emergency fund" }],
+        show_extra: false,
+        week_confirmations: { 3: { worked: true } },
+        pto_goal: { target: 40 },
+        display_name: "Old Name",
+        stripe_customer_id: "cus_old",
+        stripe_subscription_id: "sub_rev",
+        subscription_status: "active",
+        plan: "monthly",
+        card_on_file: true,
+        // Trial window seeded in the past: a lapsed revival must resolve
+        // "expired" (gated), never "none" (ungated free access).
+        trial_started_at: expect.any(String),
+        trial_ends_at: expect.any(String),
+        access_ends_at: expect.any(String),
+      }),
+      { onConflict: "user_id" }
+    );
+    // Tombstone consumed
+    expect(tombstoneUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ revived_at: expect.any(String), revival_attempt_count: 0 })
+    );
+    expect(tombstoneUpdateEq).toHaveBeenCalledWith("email", "gone@example.com");
+    // Plain update path must NOT also run
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("a revival event whose tombstone is already consumed falls through to the plain status update", async () => {
+    const { upsert, update, updateEq } = setupAdmin({ tombstone: null });
+    mocks.stripeSubscriptions.retrieve.mockResolvedValue({
+      id: "sub_rev",
+      status: "active",
+      current_period_end: 1785000000,
+      items: { data: [{ price: { id: "price_month_test" } }] },
+    });
+    const payload = mkEvent("checkout.session.completed", {
+      mode: "subscription",
+      customer: "cus_old",
+      subscription: "sub_rev",
+      client_reference_id: "user-new",
+      metadata: { revival: "true", revival_email: "gone@example.com" },
+    });
+    const res = mkRes();
+    await handler(mkReq(payload, sign(payload)), res);
+    expect(res.statusCode).toBe(200);
+    expect(upsert).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ subscription_status: "active" }));
+    expect(updateEq).toHaveBeenCalledWith("user_id", "user-new");
   });
 
   it("a redelivered event id (unique-constraint claim failure) is acknowledged without reprocessing", async () => {

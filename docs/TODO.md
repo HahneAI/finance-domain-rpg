@@ -563,23 +563,39 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
   actually exists** (`select count(*) from deleted_accounts;`) — the §A note that 017 was
   unrun proved stale for the subscription columns, but the table half of that file hasn't been
   independently confirmed.
-- [ ] **Login-time detection** — `LoginScreen.jsx` needs to distinguish "wrong password" from
+- [x] **Login-time detection** — `LoginScreen.jsx` needs to distinguish "wrong password" from
   "this email belongs to an archived, revivable account":
-  - **Email/password:** Supabase Auth intentionally returns the same generic "Invalid login
+  - [x] **Email/password:** Supabase Auth intentionally returns the same generic "Invalid login
     credentials" for both wrong-password and no-such-user, so the client can't tell them apart
     from the auth error alone. On any login failure, look up the email against
     `deleted_accounts` via a server route (`api/revival-lookup.js`, service-role — never expose
     this table to anon/authenticated SELECT directly, since it holds archived financial data).
     If a match with `revived_at IS NULL` exists, route to the Revive Account screen instead of
-    showing the generic error.
-  - **OAuth (Google):** sign-in with a previously-deleted email transparently creates a **new**
+    showing the generic error. **Implemented 2026-07-06** — `lookupRevivable()` in
+    `LoginScreen.jsx` fires on every failed sign-in; a match switches to the new `"revive"` mode
+    (new-password form, or "Continue with Google" when the tombstone records an OAuth provider).
+    Lookup failures fall back to the generic error so a transient server problem can never block
+    a normal login. Note: the unauthenticated lookup returns ONLY `{revivable, oauthProvider}` —
+    never archived identity — and is deliberately an existence oracle (accepted trade-off,
+    documented in the route).
+  - [x] **OAuth (Google):** sign-in with a previously-deleted email transparently creates a **new**
     `auth.users` row (OAuth signup doesn't fail for "new" emails) before the app ever gets a
     chance to object. The `SIGNED_IN` handler must check `deleted_accounts` for that email
     *before* `syncUserProfile` seeds a fresh trial — if a revivable tombstone exists, short-circuit
     into the Revive Account screen and hold off on trial seeding / normal onboarding entirely.
-- [ ] **Revive Account screen** — reachable only via the redirect above (not a normal nav
+    **Implemented 2026-07-06** — `checkRevival()` (`db.js`) runs first in App.jsx's SIGNED_IN
+    handler; only when it resolves null does `syncUserProfile()` (and thus trial seeding) run.
+    The authenticated lookup keys off the **session's** email (never client input) and returns
+    the archived identity for the Revive screen.
+- [x] **Revive Account screen** — reachable only via the redirect above (not a normal nav
   destination). Shows the archived `display_name`/`avatar_url`/email so the user recognizes their
-  old account, and:
+  old account, and: **Implemented 2026-07-06** as two halves: LoginScreen's `"revive"` mode
+  handles re-authentication (new password → `signUp`, or Google), and
+  `src/components/ReviveScreen.jsx` (rendered by App.jsx whenever `revivalInfo` is set —
+  before the wizard, panels, or anything else) handles identity display + plan choice +
+  revive checkout. App clears the screen only when the post-checkout poll sees
+  `subscription_status = "active"` (the webhook restore landing), then closes any wizard the
+  bare pre-restore row opened and reloads the restored data.
   - Prompts for a **new password** (email/password accounts) — note in the UI copy (and here, for
     the humans building this): **there is no restriction on reusing the exact same password they
     had before cancellation** — that part is intentionally unblocked. For OAuth accounts, this
@@ -590,31 +606,68 @@ and `user_data` row — the difference is only whether a recoverable snapshot wa
     for the selected plan. No free re-entry path.
   - Reuses `stripe_customer_id` from the archive when present (same Stripe customer, new
     subscription) rather than creating a duplicate customer.
-- [ ] **`api/stripe-revive-checkout.js`** — like `stripe-create-checkout.js` but keyed off the
+- [x] **`api/stripe-revive-checkout.js`** — like `stripe-create-checkout.js` but keyed off the
   archived tombstone rather than an existing `user_data` row: verify the new (just-created, empty)
   Supabase session belongs to the matching email, create/reuse the Stripe customer from
   `deleted_accounts.stripe_customer_id`, create a Checkout Session for the chosen plan.
-- [ ] **On successful charge (webhook `checkout.session.completed` for a revival session)** —
+  **Implemented 2026-07-06** — the tombstone is looked up by the verified session's email only
+  (403 when none), so no one can revive or probe another email's archive. Sessions carry
+  `metadata: { revival: "true", revival_email }` for the webhook branch, and every checkout
+  attempt stamps `revival_attempt_count` + `last_revival_attempt_at`. Never touches `user_data`.
+- [x] **On successful charge (webhook `checkout.session.completed` for a revival session)** —
   restore the archived `config`/`expenses`/`goals`/`logs`/`show_extra`/`week_confirmations`/
   `pto_goal` into the new `user_data` row, set `subscription_status = 'active'`, `plan`, and
   `stripe_subscription_id`, stamp `deleted_accounts.revived_at = now()` (tombstone consumed —
   next cancellation cycle starts a fresh one via the same upsert-on-email), and clear
   `revival_attempt_count`.
-- [ ] **Decline handling — the "two-way door"** — a declined charge must never be a dead end:
-  - On decline, increment `deleted_accounts.revival_attempt_count`, stamp
-    `last_revival_attempt_at`, and store Stripe's `decline_code`/message in `last_decline_code` /
-    `last_decline_message`.
-  - Show the user a clear, specific message: **"Your card was declined. Try a different payment
-    method, make sure the card isn't frozen, or add funds to the account, then try again."** The
-    Revive Account screen stays up — the user can immediately retry with a different card or the
-    same one after resolving the issue; nothing about this flow should force them back to square
-    one (re-enter password, re-confirm email, etc.) just because a charge failed.
-  - No attempt cap for now — a struggling card shouldn't lock someone out of ever reviving; revisit
-    if abuse becomes a real concern.
-- [ ] **Tests** — login-failure → revival-lookup routing; OAuth new-signup → tombstone-match
+  **Implemented 2026-07-06** — `restoreRevivedAccount()` in `stripe-webhook.js`, branching on
+  `metadata.revival`. Two deliberate details: (1) the trial window is seeded entirely **in the
+  past** (`trial/access_ends_at = now`) because a revived account must never get a second free
+  window — with null timestamps a later lapse would resolve entitlement `"none"`, which App.jsx
+  doesn't gate, i.e. permanent free access; seeding a spent window makes a lapse resolve
+  `"expired"` like any other non-payer. (2) A revival event whose tombstone was already consumed
+  falls through to the plain status update, so a racing/duplicate session can't wipe restored
+  data.
+- [x] **Decline handling — the "two-way door"** — a declined charge must never be a dead end:
+  **Implemented 2026-07-06, with one honest deviation.** Hosted Stripe Checkout handles card
+  declines entirely on Stripe's page (the user retries different cards there without ever
+  returning to the app), so the app never observes individual declines. What's implemented:
+  attempt tracking stamps on every checkout-session creation (a superset of "on decline");
+  returning with `?checkout=cancel` shows the retry guidance ("try a different payment method,
+  make sure the card isn't frozen, or add funds…" — softened lead since a plain back-button
+  lands on the same return) with the plan buttons immediately usable again; nothing ever routes
+  the user back to re-enter password/email; no attempt cap.
+  - [ ] **(Open, minor) `last_decline_code`/`last_decline_message` capture** — would need
+    `payment_intent.payment_failed` webhook wiring mapped back to the tombstone; deferred until
+    there's a real support need, since hosted Checkout already shows the user Stripe's own
+    decline message in the moment.
+- [x] **Tests** — login-failure → revival-lookup routing; OAuth new-signup → tombstone-match
   short-circuit; successful-charge → full data restore + tombstone consumed; declined-charge →
   attempt count increments and the screen remains usable; second deletion cycle after a revival
   correctly overwrites (not duplicates) the same tombstone row.
+  **Added 2026-07-06 (26 tests):** `revivalLookup.test.js` (disclosure minimalism, session-email
+  keying, `revived_at IS NULL` filter), `stripeReviveCheckout.test.js` (guards, customer reuse,
+  revival metadata, attempt stamping), two signed-fixture revival cases in
+  `stripeWebhook.test.js` (full restore + tombstone consume; consumed-tombstone fall-through),
+  `ReviveScreen.test.jsx` (identity, checkout call, two-way-door retry, disclosure guard), and
+  five LoginScreen revival-routing cases. Tombstone overwrite-on-second-cycle is asserted in
+  `cronLifecycleDelete.test.js` (upsert on email + revival-field reset). **Not covered:** the
+  App.jsx SIGNED_IN short-circuit itself (App has no component test harness — verify live that
+  a Google sign-in with a tombstoned email lands on ReviveScreen, not the wizard).
+
+**Handoff checkpoint #3 (2026-07-06) — §H + §I code-complete; branch
+`claude/stripe-paywall-hardening-audit-1a9s6u`:**
+Everything in checkpoints #1–2 still applies. New since then: §H shipped (delete-account cancels
+the Stripe sub; signed-fixture webhook + checkout-guard tests), the §G/§I archive-then-delete cron
+step is live in code, and the full §I revival flow is built (lookup route, LoginScreen routing,
+App SIGNED_IN short-circuit, ReviveScreen, revive-checkout, webhook restore). 928 tests green.
+Still open / needs the user:
+- **Migration 019 (RLS) is confirmed NOT yet run in Supabase** (user, 2026-07-06). All §17
+  privileged columns are app-layer-protected only until it runs. `deleted_accounts` (017) IS live.
+- Live verification pass on the preview deployment: cancel-on-delete (§H's parked bullet), the
+  §B Customer Portal config, and the full revival loop (backdate an account to day 28+ → run the
+  cron → sign in again → revive with the test card → data restored).
+- §I minor leftover: decline-code capture (open sub-bullet above).
 
 ### J. Env vars (Vercel)
 

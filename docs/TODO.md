@@ -746,6 +746,107 @@ AI layer), §16 (Financial alert copy + Net Worth mental health trigger).*
 
 ---
 
+### §18.0 — Scaffolding pass (2026-07-06): build order, resolved technical decisions, open questions
+
+*Added before any §18 code exists. Model/pricing/caching facts below are from the Claude API
+reference (cached 2026-06-24) — re-verify against platform.claude.com before the first API call
+is written, since model lineups move.*
+
+#### Build order (dependency-driven, four phases)
+
+1. **Phase A — Walking skeleton (§G + minimal §B).** `api/coach.js` streaming proxy +
+   `lib/aiContext.js` serializer + a minimal Ask Coach chat panel with **no persistence** (history
+   lives in component state, lost on close). Smallest end-to-end slice that proves auth → context
+   injection → streamed response → mobile UX. Everything else in §18 layers on this.
+2. **Phase B — Persistence (§H).** `coach_chats` migration + RLS, `db.js` load/save/delete,
+   history list UI, end-of-session summaries. Ship only after Phase A feels right in the hand.
+3. **Phase C — Coach presence (§C + §D).** Net worth trigger tiers + the `NetWorthHealthTips.jsx`
+   rewrite (the §16 close-out's deferred half), then statement summaries. These reuse Phase A's
+   proxy + serializer wholesale.
+4. **Phase D — Job Hunt + Job Scout (§E, §I).** Needs §15.C Job Loss Mode surfaces (partially
+   live already — `JobLossDashboard`/`JobLossEntry` shipped) plus a Google Places key (§I) —
+   the one §18 feature with a second external vendor.
+- **§A (identity) runs in parallel** — mascot mark + personality brief have no code dependency,
+  but Phase A shouldn't ship to non-admin users without at least a placeholder avatar and the
+  agreed voice. **§J (tax interview) stays behind §20's accountant gate** regardless of phase.
+- **Gate everything behind `isAdmin` initially** — Coach ships admin-only until cost telemetry
+  (below) shows per-conversation cost is acceptable, then investors, then everyone.
+
+#### Resolved technical decisions
+
+- **Models.** Haiku tier = `claude-haiku-4-5` ($1/$5 per MTok, 200K context) — chat answers, FAQ,
+  net worth triggers, session summaries, Job Scout term generation. Sonnet tier =
+  `claude-sonnet-5` ($3/$15; intro $2/$10 through 2026-08-31, 1M context) — statement narratives,
+  job-hunt drafts. Two watch-outs on Sonnet 5: **omitting `thinking` runs adaptive thinking by
+  default** (decide per call type — disable for short summaries, keep for narratives), and
+  **non-default `temperature`/`top_p` are rejected** — voice/variety is steered by prompt, which
+  suits the fixed Coach persona anyway. Exact IDs, no date suffixes.
+- **Prompt-caching layout (drives real cost).** Cache is a byte-exact **prefix** match: order is
+  tools → system → messages, so the request must be *frozen persona + feature-guide FAQ block in
+  `system` (with `cache_control` on the last system block)* and the **per-user snapshot + question
+  in `messages`, after the breakpoint** — never interpolate the user's name, date, or any live
+  number into the system prompt or the cache never hits. ⚠️ **Minimum cacheable prefix on Haiku
+  4.5 is 4096 tokens** — the persona + FAQ block must exceed that or caching silently no-ops
+  (`cache_read_input_tokens: 0` is the tell). That's the *floor* for the feature guide, not a
+  nice-to-have. 5-min TTL; writes 1.25×, reads 0.1× — a busy chat session pays for itself on the
+  second message.
+- **`api/coach.js` streams.** SSE pass-through from `@anthropic-ai/sdk`'s `client.messages.stream()`
+  to the browser; same Bearer-token auth as `api/delete-account.js`. **Verify Vercel's
+  function-duration limit on our plan supports streaming responses long enough for Sonnet
+  narratives before building** — if not, statement summaries fall back to non-streaming with a
+  loading state.
+- **`ANTHROPIC_API_KEY` is server-side only** — plain Vercel env var, never `VITE_`-prefixed,
+  never in the client bundle (same rule as `STRIPE_SECRET_KEY`).
+- **`lib/aiContext.js` must exclude subscription internals.** The §17 disclosure rule extends to
+  Coach: the serializer never includes `accessEndsAt`, grace state, dunning fields, or anything
+  that could let Coach mention the hidden week. Enforce with a unit test on the serializer output
+  (deterministic output makes this test trivial — same reason caching and the §21.E eval suite
+  want determinism).
+- **§19 is a Coach context source.** `account_history` (live since 2026-07-06) gives Coach the
+  user's config-change timeline — life-event sequence, raises, employer switches — exactly the
+  personalization hook parked in §19.D2's commented block. Phase A ships without it; wire it into
+  the serializer when a real use case (e.g. "your raise in March changed this") justifies the
+  tokens.
+- **Migration renumbering.** §H1's `017_add_coach_chats.sql` is stale — 017 through 020 are
+  taken; the coach_chats migration lands as **`021_add_coach_chats.sql`** (or whatever is next
+  when Phase B starts).
+- **Cost controls are Phase A scope, not later.** Log call type + `usage` token counts (including
+  cache read/write splits) per request from the first deployed call — §21.E's "AI cost telemetry"
+  starts as a `console.log`/DB row in `api/coach.js`, not a dashboard.
+
+#### Brainstorm additions (scoped to §18, grounded in what exists)
+
+- [ ] **Per-user message budget** — a daily Coach message cap per user (config- or DB-backed,
+  generous, invisible in normal use) so a runaway client loop or abusive user can't turn the
+  Anthropic bill into an incident; return a friendly "Coach needs a breather" at the cap. Cheap
+  insurance that must exist before Coach leaves admin-only.
+- [ ] **Coach cites its sources in-app** — every number Coach references carries a tappable chip
+  deep-linking to the panel that computes it ("weekly net → Income panel"). Turns Coach answers
+  into navigation and enforces the data-grounded voice mechanically, not just by prompt.
+- [ ] **Seed the eval suite from Phase A day one** — every admin-flagged bad answer during the
+  admin-only phase gets saved (snapshot + question + bad answer) into a fixtures folder; §21.E's
+  10 golden conversations assemble themselves before public launch instead of being invented.
+- [ ] **Live State Inspector: Coach line** — admin-only "last Coach call: [type] · [model] ·
+  [tokens in/out] · [cache hit?]" so cost behavior is verifiable from a phone, same pattern as
+  §19's config-history line.
+- [ ] **Reuse the §17 test pattern for Coach copy** — TrialBanner-style forbidden-pattern tests on
+  every hardcoded Coach surface (trigger card templates, empty states): no "grace", no "21", plus
+  the §C guardrails (no catastrophizing words on red-tier cards).
+
+#### Open product questions (need your call, not research)
+
+- [ ] **Entry point** — §B says bottom nav or floating chip; bottom nav is already 5 items (+
+  admin Tools). Floating chip clashes with the admin Live pill's corner. Hamburger item is
+  cheapest but buries the flagship AI feature. Decide before Phase A's UI is built.
+- [ ] **Free vs. paid** — is Coach included in the $14.99 subscription, trial-gated, or a later
+  premium tier? Changes the §17.E gating wiring and the unit economics (a chatty user costs real
+  money; the answer decides how generous the message budget above is).
+- [ ] **Mascot production** — who produces the §A mark (generated, commissioned, or hand-rolled
+  SVG in the Flow palette)? Phase A can ship admin-only with a placeholder, but the public
+  entry point wants the real avatar.
+
+---
+
 ### A. Coach — Character Identity
 
 - [ ] **Name:** Coach

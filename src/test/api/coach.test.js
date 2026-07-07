@@ -4,9 +4,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const { mocks } = vi.hoisted(() => {
-  const userClient = { auth: { getUser: vi.fn() } };
+  const userClient = { auth: { getUser: vi.fn() }, from: vi.fn() };
   return { mocks: { userClient } };
 });
+
+// Chainable stub for `.from("user_data").select("is_admin").eq(...).single()`.
+function stubIsAdmin(isAdmin, { rowError = null } = {}) {
+  mocks.userClient.from.mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: rowError ? null : { is_admin: isAdmin },
+          error: rowError,
+        }),
+      }),
+    }),
+  });
+}
 
 vi.mock("@supabase/supabase-js", () => ({
   createClient: vi.fn(() => mocks.userClient),
@@ -57,6 +71,9 @@ beforeEach(() => {
     data: { user: { id: "user-1" } },
     error: null,
   });
+  // Default to admin so the pre-existing proxy tests exercise the happy path;
+  // the admin-gate describe block below overrides this per-case.
+  stubIsAdmin(true);
 });
 
 afterEach(() => {
@@ -87,6 +104,44 @@ describe("coach — guards", () => {
     const res = mkRes();
     await handler(mkReq({ body: { messages: [] } }), res);
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("coach — standing isAdmin gate (docs/TODO.md §18)", () => {
+  it("rejects a non-admin caller with 403 before calling Anthropic", async () => {
+    stubIsAdmin(false);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(res.statusCode).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the user_data row can't be read (e.g. missing/error)", async () => {
+    stubIsAdmin(false, { rowError: { message: "no rows" } });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(res.statusCode).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("allows an admin caller through to the Anthropic call", async () => {
+    stubIsAdmin(true);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(res.statusCode).toBeNull(); // no explicit .status() call on the streaming success path
   });
 });
 

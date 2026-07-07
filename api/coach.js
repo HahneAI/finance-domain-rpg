@@ -8,7 +8,16 @@ import { createClient } from "@supabase/supabase-js";
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
 const anonKey = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
-const anthropicApiKey = env.ANTHROPIC_API_KEY;
+
+// Same prod/preview split as _stripeClient.js's Stripe MODE — lets a preview
+// deployment burn a separate, disposable Anthropic key/balance during
+// feature-building instead of the production key. Falls back to
+// ANTHROPIC_API_KEY when no test key is configured (e.g. local dev with only
+// one key set) so this never breaks an existing single-key setup.
+const MODE = env.VERCEL_ENV === "production" ? "live" : "test";
+const anthropicApiKey = MODE === "live" ? env.ANTHROPIC_API_KEY : (env.ANTHROPIC_API_KEY_TEST || env.ANTHROPIC_API_KEY);
+
+console.log(`[coach] outbound calls use ${MODE.toUpperCase()} Anthropic key`);
 
 const MODEL_IDS = {
   haiku: "claude-haiku-4-5",
@@ -38,6 +47,17 @@ export default async function handler(req, res) {
   const { data: authData, error: authError } = await userClient.auth.getUser();
   if (authError || !authData?.user?.id) {
     return res.status(401).json({ error: "Invalid or expired session" });
+  }
+
+  // Standing constraint (docs/TODO.md §18 header): every AI feature is
+  // isAdmin-gated for now, client AND server side — this is the server side.
+  const { data: userRow, error: userRowError } = await userClient
+    .from("user_data")
+    .select("is_admin")
+    .eq("user_id", authData.user.id)
+    .single();
+  if (userRowError || !userRow?.is_admin) {
+    return res.status(403).json({ error: "Coach is admin-only for now" });
   }
 
   const { messages, systemPrompt, contextBlock, model } = req.body ?? {};

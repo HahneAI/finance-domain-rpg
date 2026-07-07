@@ -749,13 +749,22 @@ AI layer), §16 (Financial alert copy + Net Worth mental health trigger).*
 ### A. Coach — Character Identity
 
 - [ ] **Name:** Coach
+- [ ] **Open question — optional surname personalization:** explore letting a user opt into a
+  surname for Coach from a small curated, finance-themed list (e.g. "Coach Finn") rather than
+  free-text input — no custom names, just a pre-vetted pick-list so tone/branding stays controlled.
+  Purely opt-in; "Coach" alone stays the default. Not scoped or committed — needs a UX pass (where
+  does the picker live — ProfilePanel? SetupWizard step 0?) and a short-list of candidate surnames
+  before this becomes real work.
 - [ ] **Mascot icon design** — create a recognizable, single-color mark for Coach to use as an
   avatar in chat bubbles, beside insight cards, and in triggered messages; suggestions: a stylized
   chart-and-figure silhouette, an abstract upward-momentum mark, or a minimal shield/compass — keep
   it at home in a teal-on-dark-green palette; must read at 24×24px and 48×48px
-- [ ] **Personality brief** — Coach speaks in the first person; concise and direct; supportive
-  without being patronizing; always grounds a message in the user's actual numbers rather than
-  generic affirmations; one concrete next step per message
+- [ ] **Personality brief** — corner-man persona (seasoned, in-your-corner, not an opponent-fighting
+  hype man); speaks in the first person; concise and direct; supportive without being patronizing;
+  always grounds a message in the user's actual numbers rather than generic affirmations; one
+  concrete next step per message. Full voice brief, boxing-metaphor vocabulary, and the scored
+  tuning rubric live in `docs/coach-personality-rubric.md` — read that before writing any Coach
+  copy or system prompt.
 - [ ] **Visual placement standard** — small Coach avatar chip appears beside every AI-generated
   output (chat, triggered cards, statement summaries); consistent sizing + spacing across all
   surfaces (16px avatar in inline cards; 32px in full chat header)

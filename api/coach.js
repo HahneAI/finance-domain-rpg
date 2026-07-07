@@ -40,6 +40,17 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Invalid or expired session" });
   }
 
+  // Standing constraint (docs/TODO.md §18 header): every AI feature is
+  // isAdmin-gated for now, client AND server side — this is the server side.
+  const { data: userRow, error: userRowError } = await userClient
+    .from("user_data")
+    .select("is_admin")
+    .eq("user_id", authData.user.id)
+    .single();
+  if (userRowError || !userRow?.is_admin) {
+    return res.status(403).json({ error: "Coach is admin-only for now" });
+  }
+
   const { messages, systemPrompt, contextBlock, model } = req.body ?? {};
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: "messages must be a non-empty array" });

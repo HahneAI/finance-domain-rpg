@@ -744,6 +744,13 @@ summaries tied to the user's real data. All AI calls run through the Claude API 
 *Items consolidated here from: §15.E (Job Hunt AI), §15.F (Application Assistant), §9 (Statements
 AI layer), §16 (Financial alert copy + Net Worth mental health trigger).*
 
+**⚠️ Standing constraint — all AI features are `isAdmin`-gated for now.** Every Coach-facing
+surface (chat entry points, triggered insight cards, statement summaries, any future §18/§21
+feature) must check `isAdmin` on both sides: client-side to hide the entry point from non-admin
+users, and server-side in the relevant `api/*.js` route so a non-admin request is rejected even if
+called directly. This is a temporary build-phase gate, not a permanent tier — lift it deliberately
+(and update this note) once Coach is ready for a general rollout.
+
 ---
 
 ### A. Coach — Character Identity

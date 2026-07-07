@@ -75,8 +75,7 @@ gate without hitting Stripe on every load.*
     every-other-day deletion emails and the trial add-card nudges
   - [x] `current_period_end TIMESTAMPTZ` (from Stripe; when the paid period lapses)
   - [x] `plan TEXT` (nullable; `monthly` / `annual`)
-  - **Not yet run in Supabase** — migration file exists in the repo only; must be run in the
-    Supabase SQL editor before this code is deployed (see below).
+  - **Run in Supabase (confirmed 2026-07-07)** — along with every migration through 020.
 - [x] **Seed trial on account creation** — implemented in `src/lib/db.js` `syncUserProfile()`
   (called on every `SIGNED_IN`, same place the OAuth row is seeded, §5). Keyed off
   `trial_started_at IS NULL` rather than row-existence, since email sign-up (`LoginScreen.jsx`)
@@ -324,9 +323,9 @@ return, all confirmed working). Load-bearing context for whatever's next:
   Every surface built so far has a test enforcing this — copy that pattern for anything new
   (see `TrialBanner.test.jsx` / `UpgradeModal.test.jsx` for the shape).
 - Migration `019_enable_user_data_rls.sql` (RLS) is written and both required companion
-  service-role routes (`api/seed-trial.js`, `api/seed-investor.js`) already exist — but
-  **it's unconfirmed whether the user has actually run it in Supabase yet.** Don't assume
-  RLS is live; ask or check first if a task depends on it.
+  service-role routes (`api/seed-trial.js`, `api/seed-investor.js`) already exist.
+  **Resolved 2026-07-07 — confirmed run in Supabase**, along with every migration through
+  020. RLS is live; the column-privilege lockdown is DB-enforced, not just app-layer.
 - `api/_stripeClient.js` exports `resolveAppOrigin(req)` for any redirect URL (success/
   cancel/return) — derives the origin from the request instead of a static `APP_URL`, since
   there are multiple live deployments (preview + production) and a hardcoded URL bounces
@@ -1455,9 +1454,8 @@ license to train.
   as revised by §D2 (new-value `snapshot` + `changed_fields TEXT[]`), RLS own-row
   select/insert only — **append-only from the client**: no update/delete policies exist and
   those privileges are revoked outright, so history can never be rewritten after the fact —
-  plus the per-account `rollout_seed` snapshot. ⚠️ **Not yet run in Supabase** — file exists in
-  the repo only; run it in the SQL editor before expecting rows (the client tolerates the
-  missing table gracefully until then).
+  plus the per-account `rollout_seed` snapshot. **Run in Supabase (confirmed 2026-07-07)** —
+  the seed snapshot has landed for every existing account.
 - [x] **One integration point** — implemented as a **config-transition watcher** in `App.jsx`
   (a `useEffect` diffing `prevConfigRef` vs. `config` via
   `diffSensitiveFields` from the new `src/lib/configHistory.js`, inserting via
@@ -1471,8 +1469,9 @@ license to train.
   everything untagged records as `config_edit` effective today (real wall clock, never the
   admin Lock Date). Investor sandbox accounts are exempt, matching §17.G's precedent.
 - [x] **Admin verification surface** — DB Row Viewer (all three render spots) now shows
-  "config history: N snapshots · latest [date] ([source]) · [changed fields]" after Fetch;
-  shows the error string when migration 020 hasn't been run yet.
+  "config history: N snapshots · latest [date] ([source]) · [changed fields]" after Fetch.
+  Migration 020 is confirmed run (2026-07-07), so this should read real counts, not the
+  error string — worth a live Fetch to double-check on the next admin pass.
 - **§17.I interaction (noted on merge, 2026-07-06):** the non-payment deletion cron
   hard-deletes the `user_data` row, and `account_history`'s FK cascades with it — the
   `deleted_accounts` tombstone does **not** archive history rows, so a revived account

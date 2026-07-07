@@ -13,7 +13,7 @@ Built for individuals who want clarity over their income, spending, and goals in
 - **Life events & adaptive planning** — guided flows for a raise, a new job, or a pay-structure change, including a dedicated mode for navigating a job loss without losing sight of the rest of your finances
 - **Benefits & time-off tracking** — projects retirement contributions and employer matching, and tracks paid-time-off accrual against actual worked history
 - **Event logging & impact tracking** — log real-world changes (missed shifts, bonuses, one-off adjustments) and see the exact ripple effect on take-home pay, taxes, and goal timelines
-- **Account, security & installable experience** — Supabase-backed auth with per-user data isolation, full account control, and a mobile-first installable app experience
+- **Account, security & installable experience** — Supabase-backed auth with per-user data isolation, subscription & billing management, full account control, and a mobile-first installable app experience
 
 ---
 
@@ -24,7 +24,8 @@ Built for individuals who want clarity over their income, spending, and goals in
 | UI | React + Vite |
 | Styling | Tailwind CSS + CSS custom properties |
 | Auth | Supabase Auth |
-| Persistence | localStorage (MVP) → Supabase (multi-user) |
+| Persistence | Supabase (live, multi-user) — localStorage retained as a legacy fallback |
+| Billing | Stripe (subscriptions) |
 | Hosting | Vercel |
 
 ---
@@ -71,4 +72,5 @@ Tests live in `src/test/`. Runner is Vitest 4 with a dedicated `vitest.config.js
 
 ## Status
 
-Active development. Finance pillar in MVP. Additional Authority OS modules planned.
+Active development. Finance pillar in MVP, with live multi-user auth, per-user data isolation,
+and subscription billing. Additional Authority OS modules planned.

@@ -887,6 +887,10 @@ trend, and the static copy is rewritten to match Coach's voice.*
 - [x] **Env vars** — add `ANTHROPIC_API_KEY` to Vercel env + CLAUDE.md env vars section
 - [ ] **`coach_chats` table** — all conversation + search history lives here; schema in **§18.H**;
   load recent chats on auth via `db.js` alongside the main `user_data` fetch
+- [ ] **Context serializer roadmap** — `lib/aiContext.js` keeps a running comment map of context
+  fields future AI features will need (§18.D/E/J, §21.A/B/C, §21 F1–F3); extend `buildCoachContext`
+  and that map together whenever one of those items gets scoped, so context-building stays
+  centralized instead of growing a bespoke builder per feature
 
 ---
 

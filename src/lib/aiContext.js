@@ -46,3 +46,26 @@ export function buildCoachContext({
 
   return lines.join("\n");
 }
+
+// ── Future context extensions ───────────────────────────────────────────
+// None of these fields exist yet — nothing below is built. Listed here so
+// each feature extends buildCoachContext instead of growing its own bespoke
+// context builder. Keep this map in sync with docs/TODO.md as items land.
+//
+// §18.D Statements AI Insights    — period totals: gross, taxes, goal velocity, biggest expense shift
+// §18.E Job Hunt AI Assistant     — target income, application log summary, state/region
+// §18.J Tax Onboarding Interview  — taxedWeeksFed/State split, taxHistoryReliableFrom, account created_at
+// §21.A Paycheck variance forecaster — confirmed-vs-scheduled variance band (last 6 weeks)
+// §21.A Seasonal pattern memory   — prior-year seasonal deltas (OT spikes, utility swings)
+// §21.A Cash-flow crunch warning  — lowest upcoming spendable week + amount
+// §21.A Overtime ROI calculator   — marginal after-tax value of one more OT hour
+// §21.A Goal ETA drift alerts     — per-goal projected-finish drift vs. trend line
+// §21.B Schedule drift detector   — confirmed-vs-configured schedule deviation streak
+// §21.B Bill-creep detector       — expense history creep, annualized
+// §21.C Weekly pre-game briefing  — upcoming bills, goal contributions, one heads-up flag
+// §21.C Raise-negotiation prep    — hours-worked %, OT reliability, attendance streak, tenure
+// §21.C Yearly recap ("Wrapped")  — full-year aggregates: gross, taxes, goals funded, biggest OT week
+// §21.F2 Council of Future Selves — multi-year projection curve (savings velocity, loan payoff, 401k)
+// §21.F2 Burnout Sentinel         — consecutive-worked-days streak, fog index, missed-day corrections
+// §21.F1 The Fog Index           — micro check-in answers, anxious-open frequency, streak breaks
+// §21.F3 Heirloom Letters        — per-goal sealed-letter-pending-delivery flag (not financial data)

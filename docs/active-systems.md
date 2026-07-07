@@ -36,8 +36,8 @@ Last updated: 2026-07-07 | App: Authority Finance (A:Fin)
 | 18 | Investor & Demo Accounts | `DemoAccountTree.jsx`, `InvestorRegister.jsx` | Live, dormant workflow |
 | 19 | PWA / Install | `vite.config.js`, `PwaInstallModal.jsx` | Live |
 | 20 | Subscription Lifecycle Emails | `api/cron-subscription-lifecycle.js`, `api/_lifecycleEngine.js`, `api/_lifecycleEmails.js`, `api/_email.js` | Live (verified 2026-07-05) — dev sender only until domain verified |
-| 21 | Monetization — Trial, Paywall & Account Revival | `subscription.js`, `App.jsx`, `api/stripe-*.js`, `api/revival-lookup.js`, `UpgradeCard.jsx`, `UpgradeModal.jsx`, `UpgradePanel.jsx`, `TrialBanner.jsx`, `ReviveScreen.jsx` | Live — RLS migration 019 not yet run in Supabase |
-| 22 | Master Timeline — Config History | `configHistory.js`, `db.js`, `App.jsx` | Live (write path only — nothing reads it yet) |
+| 21 | Monetization — Trial, Paywall & Account Revival | `subscription.js`, `App.jsx`, `api/stripe-*.js`, `api/revival-lookup.js`, `UpgradeCard.jsx`, `UpgradeModal.jsx`, `UpgradePanel.jsx`, `TrialBanner.jsx`, `ReviveScreen.jsx` | Live — all migrations through 020 confirmed run |
+| 22 | Master Timeline — Config History | `configHistory.js`, `db.js`, `App.jsx` | Live, migration run (write path only — nothing reads it yet) |
 
 ---
 
@@ -346,9 +346,9 @@ no representation here until this pass).
   always real wall-clock time, never the admin Lock Date simulation. `past_due`/`canceled` stay
   entitled until `current_period_end`.
 - **Data model:** Stripe/trial columns on `user_data` (migration 017) kept OUT of the `config`
-  JSON blob — `db.js` maps them to a `subscription` object. RLS (migration 019, written and
-  merged) locks those columns to service-role-only writes. **⚠️ Confirmed NOT yet run in Supabase
-  as of 2026-07-06** — until it runs, the columns are app-layer-protected only, not DB-enforced.
+  JSON blob — `db.js` maps them to a `subscription` object. RLS (migration 019) locks those
+  columns to service-role-only writes. **Confirmed run in Supabase 2026-07-07** — DB-enforced,
+  not just app-layer.
 - **Serverless routes** (`api/`, service-role, same Bearer-token pattern as `delete-account.js`):
   `stripe-create-checkout.js`, `stripe-webhook.js` (signature-verified, idempotent via migration
   018's event-id table), `stripe-portal.js`. `_stripeClient.js`'s `resolveAppOrigin()` derives

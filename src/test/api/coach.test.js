@@ -8,18 +8,23 @@ const { mocks } = vi.hoisted(() => {
   return { mocks: { userClient } };
 });
 
-// Chainable stub for `.from("user_data").select("is_admin").eq(...).single()`.
-function stubIsAdmin(isAdmin, { rowError = null } = {}) {
+// Chainable stub for `.from("user_data").select("is_admin, is_tester").eq(...).single()`.
+function stubAccess({ isAdmin = false, isTester = false, rowError = null } = {}) {
   mocks.userClient.from.mockReturnValue({
     select: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         single: vi.fn().mockResolvedValue({
-          data: rowError ? null : { is_admin: isAdmin },
+          data: rowError ? null : { is_admin: isAdmin, is_tester: isTester },
           error: rowError,
         }),
       }),
     }),
   });
+}
+
+// Back-compat shorthand for the many existing admin-only call sites below.
+function stubIsAdmin(isAdmin, { rowError = null } = {}) {
+  stubAccess({ isAdmin, rowError });
 }
 
 vi.mock("@supabase/supabase-js", () => ({
@@ -107,9 +112,9 @@ describe("coach — guards", () => {
   });
 });
 
-describe("coach — standing isAdmin gate (docs/TODO.md §18)", () => {
-  it("rejects a non-admin caller with 403 before calling Anthropic", async () => {
-    stubIsAdmin(false);
+describe("coach — standing isAdmin/isTester gate (docs/TODO.md §18)", () => {
+  it("rejects a caller who is neither admin nor tester with 403 before calling Anthropic", async () => {
+    stubAccess({ isAdmin: false, isTester: false });
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -121,7 +126,7 @@ describe("coach — standing isAdmin gate (docs/TODO.md §18)", () => {
   });
 
   it("rejects when the user_data row can't be read (e.g. missing/error)", async () => {
-    stubIsAdmin(false, { rowError: { message: "no rows" } });
+    stubAccess({ rowError: { message: "no rows" } });
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -133,7 +138,7 @@ describe("coach — standing isAdmin gate (docs/TODO.md §18)", () => {
   });
 
   it("allows an admin caller through to the Anthropic call", async () => {
-    stubIsAdmin(true);
+    stubAccess({ isAdmin: true });
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -142,6 +147,29 @@ describe("coach — standing isAdmin gate (docs/TODO.md §18)", () => {
 
     expect(fetchMock).toHaveBeenCalled();
     expect(res.statusCode).toBeNull(); // no explicit .status() call on the streaming success path
+  });
+
+  it("allows a beta tester caller through to the Anthropic call, same as an admin", async () => {
+    stubAccess({ isAdmin: false, isTester: true });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(res.statusCode).toBeNull();
+  });
+
+  it("selects is_tester alongside is_admin so the query itself can't silently drop tester access", async () => {
+    stubAccess({ isTester: true });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) }));
+
+    await handler(mkReq(), mkRes());
+
+    const fromCall = mocks.userClient.from.mock.results[0].value;
+    expect(fromCall.select).toHaveBeenCalledWith(expect.stringMatching(/is_admin/));
+    expect(fromCall.select).toHaveBeenCalledWith(expect.stringMatching(/is_tester/));
   });
 });
 

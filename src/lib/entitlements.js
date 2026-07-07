@@ -20,3 +20,20 @@
 export function canAccessTaxPlan({ isAdmin = false, taxProjectionsEnabled = false } = {}) {
   return Boolean(isAdmin || taxProjectionsEnabled);
 }
+
+/**
+ * AI feature visibility (docs/TODO.md §18 standing constraint — every AI
+ * feature stays gated until Coach is ready for general rollout).
+ *
+ * Two paths grant access (logical OR, never AND):
+ *   • isAdmin  — admins always see it.
+ *   • isTester — user_data.is_tester, set manually via SQL for specific beta
+ *                accounts (database/migrations/021_add_is_tester_beta_flag.sql).
+ *
+ * CRUCIAL — beta testers are NOT investors. Do not fold isInvestor into this
+ * OR list: is_tester grants AI features only, never demo-account access or
+ * the investor code path. See docs/active-systems.md "Beta Tester Accounts".
+ */
+export function canAccessAiFeatures({ isAdmin = false, isTester = false } = {}) {
+  return Boolean(isAdmin || isTester);
+}

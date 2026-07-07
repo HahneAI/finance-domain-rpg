@@ -744,11 +744,17 @@ summaries tied to the user's real data. All AI calls run through the Claude API 
 *Items consolidated here from: §15.E (Job Hunt AI), §15.F (Application Assistant), §9 (Statements
 AI layer), §16 (Financial alert copy + Net Worth mental health trigger).*
 
-**⚠️ Standing constraint — all AI features are `isAdmin`-gated for now.** Every Coach-facing
-surface (chat entry points, triggered insight cards, statement summaries, any future §18/§21
-feature) must check `isAdmin` on both sides: client-side to hide the entry point from non-admin
-users, and server-side in the relevant `api/*.js` route so a non-admin request is rejected even if
-called directly. This is a temporary build-phase gate, not a permanent tier — lift it deliberately
+**⚠️ Standing constraint — all AI features are `isAdmin`/`isTester`-gated for now.** Every
+Coach-facing surface (chat entry points, triggered insight cards, statement summaries, any future
+§18/§21 feature) must check `canAccessAiFeatures({ isAdmin, isTester })` (`src/lib/entitlements.js`)
+on both sides: client-side to hide the entry point from ungated users, and server-side in the
+relevant `api/*.js` route so a request is rejected even if called directly. `is_tester`
+(`user_data.is_tester`, migration `021_add_is_tester_beta_flag.sql`) is a manually-granted beta
+flag — set only by Anthony via SQL on an already-existing account, never self-service — that exists
+specifically so AI features can get real usage outside the personal admin account. **Beta testers
+are NOT investors:** this check must never fold in `isInvestor`; see
+`docs/active-systems.md` §21 (Beta Tester Accounts) and §18 (Investor & Demo Accounts) for the
+full division. This is a temporary build-phase gate, not a permanent tier — lift it deliberately
 (and update this note) once Coach is ready for a general rollout.
 
 ---
@@ -922,6 +928,11 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
   fields future AI features will need (§18.D/E/J, §21.A/B/C, §21 F1–F3); extend `buildCoachContext`
   and that map together whenever one of those items gets scoped, so context-building stays
   centralized instead of growing a bespoke builder per feature
+- [x] **Beta tester gate** — `user_data.is_tester` (migration `021_add_is_tester_beta_flag.sql`)
+  + `canAccessAiFeatures({ isAdmin, isTester })` (`src/lib/entitlements.js`), checked in both
+  `api/coach.js` and `HomePanel.jsx`'s Coach card. Manual-grant only, auto-seeds a 6-month
+  app-side trial window, explicitly excluded from `is_investor`/demo-account access and from the
+  lifecycle cron's dunning/deletion. Full writeup: `docs/active-systems.md` §21
 
 ---
 

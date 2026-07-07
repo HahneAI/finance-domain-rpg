@@ -21,6 +21,7 @@ const mkRow = (overrides = {}) => ({
   current_period_end: null,
   is_admin: false,
   is_investor: false,
+  is_tester: false,
   ...overrides,
 });
 
@@ -31,6 +32,18 @@ describe("decideLifecycleAction — exemptions and resets", () => {
 
   it("never emails investors", () => {
     expect(decideLifecycleAction(mkRow({ is_investor: true }), day(25))).toEqual({ type: "none" });
+  });
+
+  // Beta testers get a real 6-month app-side trial (migration
+  // 021_add_is_tester_beta_flag.sql), but must never be dunned or auto-deleted
+  // if Anthony forgets to renew that window — same bypass as admin/investor.
+  it("never emails or deletes beta testers, even deep past their 6-month window", () => {
+    const longLapsedTester = mkRow({
+      is_tester: true,
+      trial_ends_at: day(-200).toISOString(),
+      access_ends_at: day(-200).toISOString(),
+    });
+    expect(decideLifecycleAction(longLapsedTester, day(25))).toEqual({ type: "none" });
   });
 
   it("card on file → no email; resets stale dunning state", () => {

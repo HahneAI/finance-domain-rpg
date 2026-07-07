@@ -33,6 +33,7 @@ Last updated: 2026-07-01 | App: Authority Finance (A:Fin)
 | 18 | Investor & Demo Accounts | `DemoAccountTree.jsx`, `InvestorRegister.jsx` | Live, dormant workflow |
 | 19 | PWA / Install | `vite.config.js`, `PwaInstallModal.jsx` | Live |
 | 20 | Subscription Lifecycle Emails | `api/cron-subscription-lifecycle.js`, `api/_lifecycleEngine.js`, `api/_lifecycleEmails.js`, `api/_email.js` | Live (verified 2026-07-05) — dev sender only until domain verified |
+| 21 | Beta Tester Accounts | `entitlements.js`, `db.js`, `App.jsx`, migration 021 | Live |
 
 ---
 
@@ -291,6 +292,11 @@ Real, but no active roadmap item — dormant/developer-facing. `DemoAccountTree.
 (admin-editable mock accounts), `InvestorRegister.jsx` (signup path), `InvestorAdminPanel.jsx`
 + `createInvestorAccount()` (`db.js`) seed `investor_users` + `user_data` rows.
 
+**Crucial division from §21 Beta Tester Accounts:** these are two separate account tiers
+with zero overlap. `is_investor` unlocks the Demo Account Tree and the investor code
+signup path; `is_tester` unlocks in-progress AI features and nothing else. Neither flag
+should ever imply the other — see §21.
+
 ---
 
 ## 19. PWA / Install
@@ -312,7 +318,8 @@ Server-side only — nothing runs on the client. Full paywall/trial context in
   domain is verified — swap before real users hit day 7 of a trial.
 - **`api/cron-subscription-lifecycle.js`** — daily Vercel cron (`vercel.json`, 15:00 UTC),
   guarded by `Authorization: Bearer <CRON_SECRET>`. Service-role scan of trial-seeded
-  `user_data` rows; skips `is_admin`/`is_investor`.
+  `user_data` rows; skips `is_admin`/`is_investor`/`is_tester` (§21 — testers must never be
+  dunned or auto-deleted if their 6-month window lapses unrenewed).
 - **`api/_lifecycleEngine.js`** — pure per-row decision (phase math delegated to
   `getEntitlement`): trial nudges at day 7 + 12, grace/expired warnings every 2 days,
   `deleteDue` flag at day 21+7 (log-only until §17.I's archive exists). Throttle keys off
@@ -320,3 +327,27 @@ Server-side only — nothing runs on the client. Full paywall/trial context in
 - **`api/_lifecycleEmails.js`** — templates; disclosure rule (14-day copy only, never the
   hidden grace) enforced by `src/test/api/lifecycleEmails.test.js`; schedule/throttle by
   `src/test/api/lifecycleEngine.test.js`.
+
+---
+
+## 21. Beta Tester Accounts
+
+`user_data.is_tester` (migration `021_add_is_tester_beta_flag.sql`) — set manually by
+Anthony via the Supabase SQL editor on an already-existing account. No signup flow, no
+self-service opt-in, no client write path (locked the same way as `is_admin`/`is_investor`
+since migration 019's RLS column grants).
+
+- **What it grants:** `canAccessAiFeatures({ isAdmin, isTester })` (`entitlements.js`) —
+  the single gate every AI feature (`api/coach.js` server-side, `HomePanel.jsx` client-side)
+  checks. Nothing else — no Admin Diagnostic Toolkit, no other admin-only surface.
+- **Auto trial window:** a Postgres trigger on `user_data` seeds `trial_started_at` /
+  `trial_ends_at` / `access_ends_at` to a 6-month window the moment `is_tester` flips
+  false→true — one-time, not renewed on subsequent saves. This routes the account through
+  the real app-side trial state machine (`getEntitlement`, §17.D) instead of a hardcoded
+  bypass, so it "behaves like a free trial account" per spec, just on a 6-month clock with
+  no Stripe billing behind it.
+- **Crucial division:** beta testers are NOT investors — see §18. `is_tester` must never
+  grant Demo Account Tree access or the investor code path, and this gate must never fold
+  in `isInvestor`.
+- **Lifecycle cron:** bypassed the same as admin/investor (§20) — testers are never dunned
+  or auto-deleted if the 6-month window lapses before renewal.

@@ -36,9 +36,12 @@ export const DELETION_BUFFER_DAYS = 7;
  *     precedence over any same-run deletion_warning email.
  */
 export function decideLifecycleAction(row, now = new Date()) {
-  // Admins and investors bypass the paywall entirely (§17.E) — they must
-  // never receive trial/dunning/deletion email regardless of their timestamps.
-  if (row.is_admin || row.is_investor) return { type: "none" };
+  // Admins, investors, and beta testers bypass the paywall entirely (§17.E) —
+  // they must never receive trial/dunning/deletion email regardless of their
+  // timestamps. Testers get a real 6-month app-side trial window (see
+  // database/migrations/021_add_is_tester_beta_flag.sql), but must never be
+  // auto-deleted or dunned if that window lapses before Anthony renews it.
+  if (row.is_admin || row.is_investor || row.is_tester) return { type: "none" };
 
   const entitlement = getEntitlement(
     {

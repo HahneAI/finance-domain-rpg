@@ -98,6 +98,7 @@ export async function loadUserData() {
       weekConfirmations:  {},
       isEmployerDHL:              false,
       isAdmin:            false,
+      isTester:           false,
       taxProjectionsEnabled: false,
       subscription:       DEFAULT_SUBSCRIPTION,
     };
@@ -107,7 +108,7 @@ export async function loadUserData() {
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, pto_goal, is_investor, tax_projections_enabled")
+    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, is_tester, pto_goal, is_investor, tax_projections_enabled")
     .eq("user_id", userId)
     .single();
 
@@ -152,6 +153,7 @@ export async function loadUserData() {
       weekConfirmations:  {},
       isEmployerDHL:              false,
       isAdmin:            false,
+      isTester:           false,
       taxProjectionsEnabled: false,
       subscription:       DEFAULT_SUBSCRIPTION,
     };
@@ -327,6 +329,7 @@ export async function loadUserData() {
     weekConfirmations:    wcData?.week_confirmations ?? {},
     isEmployerDHL:                data.is_employer_dhl      ?? false,
     isAdmin:              data.is_admin    ?? false,
+    isTester:             data.is_tester   ?? false,
     taxProjectionsEnabled: data.tax_projections_enabled ?? false,
     ptoGoal:              data.pto_goal    ?? null,
     isInvestor:           data.is_investor ?? false,

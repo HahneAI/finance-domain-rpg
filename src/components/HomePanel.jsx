@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, fmtFullDate, fmtLoanDate, toLocalIso, netWorthHealthStatus } from "../lib/finance.js";
 import { NetWorthHealthTips } from "./NetWorthHealthTips.jsx";
+import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
@@ -1268,6 +1269,22 @@ export function HomePanel({
 
       {showBreakthroughTips && (
         <NetWorthHealthTips seed={weekNumber ?? 0} />
+      )}
+
+      {/* §18.C — admin-gated per docs/TODO.md §18 standing constraint: every
+          AI feature stays isAdmin-only until Coach is ready for general rollout. */}
+      {isAdmin && (
+        <CoachNetWorthCard
+          config={config}
+          expenses={expenses}
+          goals={goals}
+          weeklyIncome={weeklyIncome}
+          avgWeeklySpend={avgWeeklySpend}
+          fundedGoalSpend={fundedGoalSpend}
+          netWorthHealth={netWorthHealth}
+          currentWeek={currentWeek}
+          today={todayIso}
+        />
       )}
 
       <div style={{ marginTop: "28px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>

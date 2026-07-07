@@ -195,6 +195,8 @@ Reporter is `verbose` — Vitest 4's default misreports suite failures as "no te
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
 ANTHROPIC_API_KEY=...       # server-side only — api/coach.js (§18.G Coach infra)
+ANTHROPIC_API_KEY_TEST=...  # optional — preview/dev builds use this if set, same MODE
+                            # split pattern as STRIPE_SECRET_KEY_TEST in _stripeClient.js
 ```
 
 ## Naming Conventions

@@ -8,7 +8,16 @@ import { createClient } from "@supabase/supabase-js";
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
 const anonKey = env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
-const anthropicApiKey = env.ANTHROPIC_API_KEY;
+
+// Same prod/preview split as _stripeClient.js's Stripe MODE — lets a preview
+// deployment burn a separate, disposable Anthropic key/balance during
+// feature-building instead of the production key. Falls back to
+// ANTHROPIC_API_KEY when no test key is configured (e.g. local dev with only
+// one key set) so this never breaks an existing single-key setup.
+const MODE = env.VERCEL_ENV === "production" ? "live" : "test";
+const anthropicApiKey = MODE === "live" ? env.ANTHROPIC_API_KEY : (env.ANTHROPIC_API_KEY_TEST || env.ANTHROPIC_API_KEY);
+
+console.log(`[coach] outbound calls use ${MODE.toUpperCase()} Anthropic key`);
 
 const MODEL_IDS = {
   haiku: "claude-haiku-4-5",

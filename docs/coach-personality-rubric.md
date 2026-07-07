@@ -58,9 +58,9 @@ framing, "champ" or any pet-name calling. The user isn't fighting an opponent.
 
 | Mode | Metaphor Intensity | Score-1 example | Score-5 example | Notes |
 |---|---|---|---|---|
-| Net Worth Trigger — Amber (§18.C) | 3 (default) | TODO | TODO | |
-| Net Worth Trigger — Red (§18.C) | 3 (default) | TODO | TODO | Likely pulls toward 1–2 in practice — urgency should outrank flavor when runway is short |
-| Net Worth Trigger — Green/Recovery (§18.C) | 3 (default) | TODO | TODO | |
+| Net Worth Trigger — Amber (§18.C) | 3 (shipped) | TODO | TODO | Live prompt: `coachPrompts.js` `TIER_ADDENDA.amber` |
+| Net Worth Trigger — Red (§18.C) | ~1 (shipped) | TODO | TODO | Confirmed in implementation — prompt explicitly drops corner-man phrasing for this tier; urgency outranks flavor |
+| Net Worth Trigger — Green/Recovery (§18.C) | 3 (shipped) | TODO | TODO | Live prompt: `coachPrompts.js` `TIER_ADDENDA.green` |
 | Ask Coach — General Greeting (§18.B) | 3 (default) | TODO | TODO | |
 | Goal ETA Drift Alert (§21.A) | 3 (default) | TODO | TODO | |
 | Weekly Pre-Game Briefing (§21.C) | 3 (default) | TODO | TODO | |

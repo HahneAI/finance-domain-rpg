@@ -813,34 +813,49 @@ financial advisor — Coach answers questions about the app using the user's rea
 upgrades it: Coach generates a short, context-aware message tied to the user's actual net worth
 trend, and the static copy is rewritten to match Coach's voice.*
 
+*Built 2026-07-07 as `src/lib/coachTriggers.js` (pure signal resolution + rate-limiting),
+`src/lib/coachPrompts.js` (per-tier system prompts), and `CoachNetWorthCard.jsx`, wired into
+`HomePanel.jsx` alongside (not replacing) the existing static tips, `isAdmin`-gated per the §18
+standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
+
 - [ ] **Copy audit — static tips rewrite** — rewrite all existing "Financial Breakthrough" tips
   in `NetWorthHealthTips.jsx` to match Coach's voice: direct, supportive, data-grounded; remove
   generic affirmations; every tip should reference a real lever the user can pull inside the app
-  (adjust an expense, fund a goal, run the Budget panel, etc.)
-- [ ] **Trigger conditions (formalize)** — define the exact signal conditions that fire a Coach
-  response; candidates:
-  - Net worth flat or declining for ≥ 3 consecutive weeks
-  - A single-period net worth drop exceeding a configurable threshold (e.g. > 10%)
-  - Runway cliff approaching within 30 days (Job Loss Mode)
-  - A goal falling critically behind schedule (> 4 weeks off projected finish)
-- [ ] **Signal tiers:**
-  - [ ] **Amber (attention)** — net worth flat/down ≤ 3 consecutive weeks; brief check-in from
-    Coach: "Your net worth has been flat for 3 weeks — here's one thing worth looking at."
-  - [ ] **Red (critical)** — runway < 30 days OR net worth down > 10% in one period; urgent but
-    not alarming; message ends with one deep-link action (Triage Expenses, Review Goals, Life
-    Events); never catastrophizes
-  - [ ] **Green (recovery)** — net worth up after a red/amber streak; Coach acknowledges the
-    turnaround with a brief, specific data point: "Up $X since last week — you turned it around."
-- [ ] **Coach API response** — instead of (or alongside) static copy, call the Claude API with
-  the user's actual net worth delta, runway, and goal status; response is 2–3 sentences; Haiku
-  model for cost efficiency
-- [ ] **Mental health framing guardrail** — messages acknowledge the emotional weight of financial
-  stress without dramatizing or lecturing; every message ends with one concrete action the user
-  can take in the app right now
-- [ ] **Rate-limiting** — at most one Coach net worth message per week per signal tier; track
-  `lastCoachTriggerAt` in config or session state; don't fire on every re-render
-- [ ] **Dismissal** — each Coach card has a `✕` dismiss; dismissed cards don't re-fire until the
-  signal condition changes (e.g. a new week's data shifts the trend)
+  (adjust an expense, fund a goal, run the Budget panel, etc.) — **deferred**, copy-only, no API
+  cost, can be done anytime independent of the rest of this section
+- [x] **Trigger conditions (formalize)** — implemented as proxies against data that already
+  exists rather than the literal candidates below, since two of them need a persisted weekly
+  net-worth history this app doesn't store yet (see `src/lib/coachTriggers.js` header comment
+  for the exact substitutions and `src/lib/aiContext.js`'s "Future context extensions" map for
+  what a real implementation would need):
+  - ~~Net worth flat or declining for ≥ 3 consecutive weeks~~ → proxied by
+    `netWorthHealthStatus().belowThreshold` (thin savings cushion), a different signal that's
+    close in spirit but not a trend read — **real version deferred, needs history**
+  - ~~A single-period net worth drop exceeding a configurable threshold (e.g. > 10%)~~ —
+    **not implemented, needs history**
+  - [x] Runway cliff approaching within 30 days (Job Loss Mode) — real implementation,
+    `estimateRunwayDays()` in `coachTriggers.js` (independent of JobLossDashboard's own runway
+    calc, which has a session-only savings override this trigger can't see — assumes $0 extra)
+  - ~~A goal falling critically behind schedule (> 4 weeks off projected finish)~~ —
+    **not implemented, needs history** (§21.A's Goal ETA Drift Alerts is the fuller version)
+- [x] **Signal tiers:**
+  - [x] **Amber (attention)** — fires on the thin-cushion proxy above; see
+    `buildNetWorthSystemPrompt("amber")` in `coachPrompts.js` for the live prompt
+  - [x] **Red (critical)** — fires on `estimateRunwayDays() < 30`; message drops corner-man
+    metaphor entirely per the personality rubric's own note on this tier
+  - [x] **Green (recovery)** — fires when the previously-fired tier was amber/red and neither
+    condition holds anymore (reads this trigger's own fire history, not an independent net-worth
+    delta — see code comment)
+- [x] **Coach API response** — `chatWithCoach` → `api/coach.js` → Haiku, 2–3 sentences per the
+  system prompt's own instruction
+- [x] **Mental health framing guardrail** — encoded directly into `COACH_PERSONA_PROMPT` in
+  `coachPrompts.js`
+- [x] **Rate-limiting** — `shouldFireForTier()` compares fiscal week index (not wall-clock days);
+  state persisted in `localStorage` (`coachNetWorthSignal`) rather than config/Supabase — a
+  session-scoped rate limiter, not a durable one; §18.H's `coach_chats` table would make this
+  durable across devices once it exists
+- [x] **Dismissal** — `✕` button in `CoachNetWorthCard`; dismissal keyed to `(tier, weekIdx)` so
+  a new week or a tier change un-dismisses it
 
 ---
 
@@ -1977,6 +1992,11 @@ insight over raw categorization, and consolidation into fewer, smarter surfaces.
   and propose exactly one action — an answer missing any of the three fails the eval.
 - [ ] **AI cost telemetry** — per-feature token/cost dashboards from day one of §18 (log
   call-type + token counts, per §18.G) so a runaway prompt is a graph, not a surprise invoice.
+  Implementation option worth considering instead of (or alongside) a custom dashboard: split
+  `ANTHROPIC_API_KEY` into one key per feature area (net worth trigger, Ask Coach, Job Scout, …)
+  — Anthropic's Console breaks down usage by API key natively, so this gets per-feature cost
+  visibility with zero custom telemetry code. Premature with only one Coach feature live; revisit
+  once 2–3 features are shipped and cost attribution actually matters.
 - [ ] **Thumbs feedback on Coach messages** — one-tap 👍/👎 on every AI output, stored with the
   chat row (`coach_chats.insights` can hold it); the flagged set feeds the eval suite above.
 - [ ] **Data export + portability** — one-tap full export (JSON + CSV) of config, logs, expenses,

@@ -194,6 +194,7 @@ Reporter is `verbose` — Vitest 4's default misreports suite failures as "no te
 ```
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
+ANTHROPIC_API_KEY=...       # server-side only — api/coach.js (§18.G Coach infra)
 ```
 
 ## Naming Conventions

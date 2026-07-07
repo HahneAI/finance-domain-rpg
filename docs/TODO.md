@@ -972,21 +972,25 @@ trend, and the static copy is rewritten to match Coach's voice.*
 
 ### G. Shared Infrastructure
 
-- [ ] **`lib/claude.js` wrapper** — single client: handles auth, retries, prompt caching headers;
+- [x] **`lib/claude.js` wrapper** — single client: handles auth, retries, prompt caching headers;
   exports `chatWithCoach(messages, systemPrompt, contextBlock, model)` where `model` defaults to
   Haiku and callers can pass Sonnet for richer responses
-- [ ] **`lib/aiContext.js` serializer** — deterministic compressed financial snapshot builder for
+- [x] **`lib/aiContext.js` serializer** — deterministic compressed financial snapshot builder for
   injection into Coach's system prompt; same output shape every call so prompt caching is effective;
   includes: weekly net, net worth delta, goal count/status, expense total, runway (if in job loss
   mode), current week + fiscal context
-- [ ] **`api/coach.js` serverless route** — proxies Claude API calls through a Vercel function so
+- [x] **`api/coach.js` serverless route** — proxies Claude API calls through a Vercel function so
   the API key stays server-side; same auth pattern as `api/delete-account.js` (verify Supabase
   Bearer token, then call Anthropic); returns streamed response for chat UX
-- [ ] **Cost controls** — Haiku for Coach messages, FAQ answers, and net worth triggers; Sonnet
+- [x] **Cost controls** — Haiku for Coach messages, FAQ answers, and net worth triggers; Sonnet
   for statement summaries and job hunt drafts; log token counts per call type in dev
-- [ ] **Env vars** — add `ANTHROPIC_API_KEY` to Vercel env + CLAUDE.md env vars section
+- [x] **Env vars** — add `ANTHROPIC_API_KEY` to Vercel env + CLAUDE.md env vars section
 - [ ] **`coach_chats` table** — all conversation + search history lives here; schema in **§18.H**;
   load recent chats on auth via `db.js` alongside the main `user_data` fetch
+- [ ] **Context serializer roadmap** — `lib/aiContext.js` keeps a running comment map of context
+  fields future AI features will need (§18.D/E/J, §21.A/B/C, §21 F1–F3); extend `buildCoachContext`
+  and that map together whenever one of those items gets scoped, so context-building stays
+  centralized instead of growing a bespoke builder per feature
 
 ---
 

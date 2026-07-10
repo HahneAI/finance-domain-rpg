@@ -6,6 +6,8 @@
 --   Snapshot date: 2026-07-10
 --   Compiled from: 001_initial_schema.sql  →  021_add_is_tester_beta_flag.sql
 --                  (every file in this folder at the time of writing)
+--   Verified: confirmed against a live Supabase schema export on 2026-07-10,
+--             after 021 was run — is_tester is present in production.
 --
 --   WHAT THIS IS
 --   ────────────

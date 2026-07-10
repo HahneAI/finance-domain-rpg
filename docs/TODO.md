@@ -1089,7 +1089,9 @@ CREATE INDEX coach_chats_user_id_created_at
   column — `user_data`'s real PK is `user_id`); and there's no `moddatetime` trigger for
   `updated_at` — no such trigger exists anywhere in this schema today (not even on
   `user_data`, despite CLAUDE.md's mention), every table stamps it client-side instead, and
-  this table matches that actual convention rather than introducing a new one
+  this table matches that actual convention rather than introducing a new one.
+  **Confirmed run in Supabase 2026-07-10** — `coach_chats` exists with RLS enabled
+  (`relrowsecurity = true` verified) and the own-row policies hold.
 - [x] **RLS policies** — full own-row `SELECT`/`INSERT`/`UPDATE`/`DELETE` (`user_id = auth.uid()`),
   closer to `user_data`'s own-row policy set (019) than `account_history`'s insert-only one
   (020) — chat history is user-editable/deletable, unlike an audit log

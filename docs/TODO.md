@@ -819,10 +819,11 @@ is written, since model lineups move.*
   personalization hook parked in §19.D2's commented block. Phase A ships without it; wire it into
   the serializer when a real use case (e.g. "your raise in March changed this") justifies the
   tokens.
-- **Migration renumbering.** §H1's `017_add_coach_chats.sql` is stale — 017 through 021 are now
-  taken (021 went to `021_add_is_tester_beta_flag.sql`, the beta tester flag, 2026-07-07); the
-  coach_chats migration lands as **`022_add_coach_chats.sql`** (or whatever is next when Phase B
-  actually starts — check `database/migrations/` before writing it).
+- **Migration renumbering.** §H1's `017_add_coach_chats.sql` is stale — 017 through 022 are now
+  taken (021 went to `021_add_is_tester_beta_flag.sql`, the beta tester flag, 2026-07-07; 022 was
+  claimed by a concurrent, not-yet-pushed session); the coach_chats migration lands as
+  **`023_add_coach_chats.sql`** (shipped 2026-07-10) — check `database/migrations/` before writing
+  any future migration, since numbering collisions across concurrent sessions keep happening.
 - **Cost controls are Phase A scope, not later.** Log call type + `usage` token counts (including
   cache read/write splits) per request from the first deployed call — §21.E's "AI cost telemetry"
   starts as a `console.log`/DB row in `api/coach.js`, not a dashboard.
@@ -1043,7 +1044,7 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 user by a foreign key. This gives users a persistent record across devices and sessions, and
 gives Coach context to reference past conversations when relevant.*
 
-#### H1. Migration — `022_add_coach_chats.sql` (renumbered — see §18.0's migration-renumbering note; check `database/migrations/` for the actual next-available number before writing this)
+#### H1. Migration — `023_add_coach_chats.sql` (renumbered — see §18.0's migration-renumbering note; check `database/migrations/` for the actual next-available number before writing this)
 
 ```sql
 CREATE TABLE coach_chats (
@@ -1081,23 +1082,37 @@ CREATE INDEX coach_chats_user_id_created_at
   ON coach_chats (user_id, created_at DESC);
 ```
 
-- [ ] **Write migration** `database/migrations/022_add_coach_chats.sql` (verify the number is
-  still free — see §18.0's migration-renumbering note)
-- [ ] **RLS policies** — users may `SELECT`, `INSERT`, `UPDATE`, `DELETE` their own rows
-  (`user_id = auth.uid()`); no public access; service-role bypasses for admin diagnostic
-- [ ] **`updated_at` trigger** — add `moddatetime` trigger so `updated_at` auto-updates on row change
-  (same pattern as `user_data`)
+- [x] **Write migration** `database/migrations/023_add_coach_chats.sql` — built 2026-07-10
+  (renumbered from 022 to 023 after a concurrent, not-yet-pushed session claimed 022 first).
+  Two deliberate deviations from the spec above, documented in the migration's own header:
+  the FK is `references user_data(user_id)`, not `user_data(id)` (the spec named the wrong
+  column — `user_data`'s real PK is `user_id`); and there's no `moddatetime` trigger for
+  `updated_at` — no such trigger exists anywhere in this schema today (not even on
+  `user_data`, despite CLAUDE.md's mention), every table stamps it client-side instead, and
+  this table matches that actual convention rather than introducing a new one
+- [x] **RLS policies** — full own-row `SELECT`/`INSERT`/`UPDATE`/`DELETE` (`user_id = auth.uid()`),
+  closer to `user_data`'s own-row policy set (019) than `account_history`'s insert-only one
+  (020) — chat history is user-editable/deletable, unlike an audit log
+- [x] ~~`updated_at` trigger~~ — see migration deviation note above; handled client-side instead
 
 #### H2. `db.js` integration
 
-- [ ] **`loadCoachChats(userId, limit = 20)`** — fetches the N most recent rows for the user on
-  sign-in; stored in a `coachChats` array alongside the existing in-memory state
-- [ ] **`saveCoachChat(chat)`** — upserts a single row by `id`; called on every message append
-  (debounced 1s) and on session close (immediate)
-- [ ] **`deleteCoachChat(id)`** — hard-deletes a single history row; exposed via swipe-to-delete
-  or long-press in the history list
+- [x] **`loadCoachChats(limit = 20)`** — built 2026-07-10 in `src/lib/db.js`. Signature dropped
+  the spec's `userId` param — every other load/save function in this file derives the user
+  from `getCurrentUserId()` internally rather than accepting it from the caller; matched that
+  existing convention instead of introducing a one-off exception. Maps snake_case columns to
+  camelCase. Tests: `src/test/lib/dbCoachChats.test.js`
+- [x] **`saveCoachChat(chat)`** — built 2026-07-10. Upserts by `id`; omitting `chat.id` lets the
+  DB generate one for a new chat (returned to the caller so it can keep upserting into the same
+  row). `user_id` always comes from the session, never the caller. **Not yet wired to a
+  debounced-on-append / immediate-on-close call site** — that needs the Ask Coach chat UI
+  (§18.B, not built yet) to call it from
+- [ ] **`deleteCoachChat(id)`** — [x] function built (`db.js` + tests), [ ] swipe-to-delete/
+  long-press UI still needs §18.H3's history list to exist
 - [ ] **In-memory shape** — `coachChats` array is a peer of `config`, `logs`, `goals` in App state;
-  passed down only to the Coach panel
+  passed down only to the Coach panel — **deferred**: no Coach panel exists yet to receive it
+  (§18.B); wiring `loadCoachChats()` into `App.jsx`'s auth-load effect now would be dead state
+  with no consumer. Do this alongside §18.B, not before it.
 
 #### H3. Chat history UI
 

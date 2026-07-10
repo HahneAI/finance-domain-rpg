@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { canAccessAiFeatures } from "../src/lib/entitlements.js";
 
 // §18.G — proxies Claude API calls through a Vercel function so
 // ANTHROPIC_API_KEY stays server-side. Same auth pattern as delete-account.js:
@@ -50,14 +51,17 @@ export default async function handler(req, res) {
   }
 
   // Standing constraint (docs/TODO.md §18 header): every AI feature is
-  // isAdmin-gated for now, client AND server side — this is the server side.
+  // isAdmin/isTester-gated for now, client AND server side — this is the
+  // server side. Beta testers (user_data.is_tester) are NOT investors — this
+  // check must never expand to include is_investor. See
+  // docs/active-systems.md "Beta Tester Accounts".
   const { data: userRow, error: userRowError } = await userClient
     .from("user_data")
-    .select("is_admin")
+    .select("is_admin, is_tester")
     .eq("user_id", authData.user.id)
     .single();
-  if (userRowError || !userRow?.is_admin) {
-    return res.status(403).json({ error: "Coach is admin-only for now" });
+  if (userRowError || !canAccessAiFeatures({ isAdmin: userRow?.is_admin, isTester: userRow?.is_tester })) {
+    return res.status(403).json({ error: "Coach is admin/beta-tester-only for now" });
   }
 
   const { messages, systemPrompt, contextBlock, model } = req.body ?? {};

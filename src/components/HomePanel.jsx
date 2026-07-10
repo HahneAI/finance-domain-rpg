@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, fmtFullDate, fmtLoanDate, toLocalIso, netWorthHealthStatus } from "../lib/finance.js";
 import { NetWorthHealthTips } from "./NetWorthHealthTips.jsx";
 import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
+import { canAccessAiFeatures } from "../lib/entitlements.js";
 import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
@@ -53,6 +54,7 @@ export function HomePanel({
   today,
   fundedGoalSpend = 0,
   isAdmin = false,
+  isTester = false,
   readOnly = false,
 }) {
   // Paywall-expired read-only mode (docs/TODO.md §17.E): shadow the mutation
@@ -1271,9 +1273,12 @@ export function HomePanel({
         <NetWorthHealthTips seed={weekNumber ?? 0} />
       )}
 
-      {/* §18.C — admin-gated per docs/TODO.md §18 standing constraint: every
-          AI feature stays isAdmin-only until Coach is ready for general rollout. */}
-      {isAdmin && (
+      {/* §18.C — admin/beta-tester-gated per docs/TODO.md §18 standing
+          constraint: every AI feature stays gated until Coach is ready for
+          general rollout. Beta testers are NOT investors — canAccessAiFeatures
+          must never fold in isInvestor. See docs/active-systems.md
+          "Beta Tester Accounts". */}
+      {canAccessAiFeatures({ isAdmin, isTester }) && (
         <CoachNetWorthCard
           config={config}
           expenses={expenses}

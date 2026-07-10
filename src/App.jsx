@@ -218,6 +218,10 @@ export default function App() {
   // Upgrade modal triggered from the read-only Home/Budget notice (§17.E).
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  // Beta tester flag (docs/active-systems.md "Beta Tester Accounts") — set
+  // manually via SQL, never client-writable. Grants AI features only; NOT an
+  // investor-equivalent (no demo accounts, no investor code path).
+  const [isTester, setIsTester] = useState(false);
   // Per-user unlock for the Tax Plan feature — granted via SQL to select non-admins.
   const [taxProjectionsEnabled, setTaxProjectionsEnabled] = useState(false);
   const [ptoGoal, setPtoGoal] = useState(null);
@@ -429,6 +433,7 @@ export default function App() {
         setWeekConfirmations(data.weekConfirmations ?? {});
         setIsEmployerDHL(data.isEmployerDHL);
         setIsAdmin(data.isAdmin);
+        setIsTester(data.isTester);
         setTaxProjectionsEnabled(data.taxProjectionsEnabled);
         setPtoGoal(data.ptoGoal);
         setSubscription(data.subscription);
@@ -1189,6 +1194,7 @@ export default function App() {
         today={effectiveToday}
         fundedGoalSpend={fundedGoalSpend}
         isAdmin={isAdmin}
+        isTester={isTester}
         readOnly={isExpiredReadOnly}
       />}
       {currentView === "income" && (isExpiredReadOnly ? <UpgradePanel tab="income" /> : <IncomePanel

@@ -79,6 +79,7 @@ describe('loadUserData — no row / error fallback', () => {
     expect(result.weekConfirmations).toEqual({})
     expect(result.isEmployerDHL).toBe(false)
     expect(result.isAdmin).toBe(false)
+    expect(result.isTester).toBe(false)
   })
 })
 
@@ -436,6 +437,18 @@ describe('loadUserData — misc fields', () => {
     setupLoadMock(makeRow({ is_admin: true }))
     const result = await loadUserData()
     expect(result.isAdmin).toBe(true)
+  })
+
+  it('surfaces is_tester flag from row', async () => {
+    setupLoadMock(makeRow({ is_tester: true }))
+    const result = await loadUserData()
+    expect(result.isTester).toBe(true)
+  })
+
+  it('defaults isTester to false when the column is absent from the row', async () => {
+    setupLoadMock(makeRow())
+    const result = await loadUserData()
+    expect(result.isTester).toBe(false)
   })
 
   it('surfaces week_confirmations from second Supabase query', async () => {

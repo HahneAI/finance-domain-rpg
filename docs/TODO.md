@@ -743,11 +743,17 @@ summaries tied to the user's real data. All AI calls run through the Claude API 
 *Items consolidated here from: §15.E (Job Hunt AI), §15.F (Application Assistant), §9 (Statements
 AI layer), §16 (Financial alert copy + Net Worth mental health trigger).*
 
-**⚠️ Standing constraint — all AI features are `isAdmin`-gated for now.** Every Coach-facing
-surface (chat entry points, triggered insight cards, statement summaries, any future §18/§21
-feature) must check `isAdmin` on both sides: client-side to hide the entry point from non-admin
-users, and server-side in the relevant `api/*.js` route so a non-admin request is rejected even if
-called directly. This is a temporary build-phase gate, not a permanent tier — lift it deliberately
+**⚠️ Standing constraint — all AI features are `isAdmin`/`isTester`-gated for now.** Every
+Coach-facing surface (chat entry points, triggered insight cards, statement summaries, any future
+§18/§21 feature) must check `canAccessAiFeatures({ isAdmin, isTester })` (`src/lib/entitlements.js`)
+on both sides: client-side to hide the entry point from ungated users, and server-side in the
+relevant `api/*.js` route so a request is rejected even if called directly. `is_tester`
+(`user_data.is_tester`, migration `021_add_is_tester_beta_flag.sql`) is a manually-granted beta
+flag — set only by Anthony via SQL on an already-existing account, never self-service — that exists
+specifically so AI features can get real usage outside the personal admin account. **Beta testers
+are NOT investors:** this check must never fold in `isInvestor`; see
+`docs/active-systems.md` §23 (Beta Tester Accounts) and §18 (Investor & Demo Accounts) for the
+full division. This is a temporary build-phase gate, not a permanent tier — lift it deliberately
 (and update this note) once Coach is ready for a general rollout.
 
 ---
@@ -813,9 +819,10 @@ is written, since model lineups move.*
   personalization hook parked in §19.D2's commented block. Phase A ships without it; wire it into
   the serializer when a real use case (e.g. "your raise in March changed this") justifies the
   tokens.
-- **Migration renumbering.** §H1's `017_add_coach_chats.sql` is stale — 017 through 020 are
-  taken; the coach_chats migration lands as **`021_add_coach_chats.sql`** (or whatever is next
-  when Phase B starts).
+- **Migration renumbering.** §H1's `017_add_coach_chats.sql` is stale — 017 through 021 are now
+  taken (021 went to `021_add_is_tester_beta_flag.sql`, the beta tester flag, 2026-07-07); the
+  coach_chats migration lands as **`022_add_coach_chats.sql`** (or whatever is next when Phase B
+  actually starts — check `database/migrations/` before writing it).
 - **Cost controls are Phase A scope, not later.** Log call type + `usage` token counts (including
   cache read/write splits) per request from the first deployed call — §21.E's "AI cost telemetry"
   starts as a `console.log`/DB row in `api/coach.js`, not a dashboard.
@@ -1022,6 +1029,11 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
   fields future AI features will need (§18.D/E/J, §21.A/B/C, §21 F1–F3); extend `buildCoachContext`
   and that map together whenever one of those items gets scoped, so context-building stays
   centralized instead of growing a bespoke builder per feature
+- [x] **Beta tester gate** — `user_data.is_tester` (migration `021_add_is_tester_beta_flag.sql`)
+  + `canAccessAiFeatures({ isAdmin, isTester })` (`src/lib/entitlements.js`), checked in both
+  `api/coach.js` and `HomePanel.jsx`'s Coach card. Manual-grant only, auto-seeds a 6-month
+  app-side trial window, explicitly excluded from `is_investor`/demo-account access and from the
+  lifecycle cron's dunning/deletion. Full writeup: `docs/active-systems.md` §23
 
 ---
 
@@ -1031,7 +1043,7 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 user by a foreign key. This gives users a persistent record across devices and sessions, and
 gives Coach context to reference past conversations when relevant.*
 
-#### H1. Migration — `017_add_coach_chats.sql`
+#### H1. Migration — `022_add_coach_chats.sql` (renumbered — see §18.0's migration-renumbering note; check `database/migrations/` for the actual next-available number before writing this)
 
 ```sql
 CREATE TABLE coach_chats (
@@ -1069,7 +1081,8 @@ CREATE INDEX coach_chats_user_id_created_at
   ON coach_chats (user_id, created_at DESC);
 ```
 
-- [ ] **Write migration** `database/migrations/017_add_coach_chats.sql`
+- [ ] **Write migration** `database/migrations/022_add_coach_chats.sql` (verify the number is
+  still free — see §18.0's migration-renumbering note)
 - [ ] **RLS policies** — users may `SELECT`, `INSERT`, `UPDATE`, `DELETE` their own rows
   (`user_id = auth.uid()`); no public access; service-role bypasses for admin diagnostic
 - [ ] **`updated_at` trigger** — add `moddatetime` trigger so `updated_at` auto-updates on row change

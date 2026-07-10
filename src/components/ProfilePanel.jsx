@@ -1911,11 +1911,11 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, subscription }) {
-  // Tax Plan unlock is manual-only for now (admin or the per-user
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, isTester = false, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, subscription }) {
+  // Tax Plan unlock is manual-only for now (admin, beta tester, or the per-user
   // tax_projections_enabled flag). The setup wizard's "Unlock projections" choice
   // intentionally does NOT reveal it — see canAccessTaxPlan for why.
-  const canSeeTaxPlan = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled });
+  const canSeeTaxPlan = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled, isTester });
   const [activeSection, setActiveSection] = useState(null);
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
   const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });

@@ -16,6 +16,10 @@ describe('canAccessTaxPlan', () => {
     expect(canAccessTaxPlan({ taxProjectionsEnabled: true })).toBe(true)
   })
 
+  it('beta testers (user_data.is_tester) see it too', () => {
+    expect(canAccessTaxPlan({ isTester: true })).toBe(true)
+  })
+
   // Liability guard: the setup wizard's tax-exempt opt-in ("Request access")
   // sets config.taxExemptOptIn, which must NOT reveal the tax feature on its own.
   // Even if a caller passes it through, it cannot grant access.
@@ -32,6 +36,7 @@ describe('canAccessTaxPlan', () => {
   it('coerces truthy/falsy inputs to a real boolean', () => {
     expect(canAccessTaxPlan({ taxProjectionsEnabled: undefined })).toBe(false)
     expect(canAccessTaxPlan({ isAdmin: 1 })).toBe(true)
+    expect(canAccessTaxPlan({ isTester: 1 })).toBe(true)
   })
 })
 

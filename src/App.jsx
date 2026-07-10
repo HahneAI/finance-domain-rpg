@@ -1225,6 +1225,7 @@ export default function App() {
         bufferPerWeek={bufferPerWeek}
         isAdmin={isAdmin}
         taxProjectionsEnabled={taxProjectionsEnabled}
+        isTester={isTester}
         readOnly={isExpiredReadOnly}
       />}
       {currentView === "log" && (isExpiredReadOnly ? <UpgradePanel tab="log" /> : <LogPanel
@@ -1260,6 +1261,7 @@ export default function App() {
         setShowExtra={setShowExtra}
         isAdmin={isAdmin}
         taxProjectionsEnabled={taxProjectionsEnabled}
+        isTester={isTester}
         today={effectiveToday}
         weekConfirmations={weekConfirmations}
         onInstallClick={isStandalone ? null : openPwaModal}

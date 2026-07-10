@@ -75,8 +75,7 @@ gate without hitting Stripe on every load.*
     every-other-day deletion emails and the trial add-card nudges
   - [x] `current_period_end TIMESTAMPTZ` (from Stripe; when the paid period lapses)
   - [x] `plan TEXT` (nullable; `monthly` / `annual`)
-  - **Not yet run in Supabase** — migration file exists in the repo only; must be run in the
-    Supabase SQL editor before this code is deployed (see below).
+  - **Run in Supabase (confirmed 2026-07-07)** — along with every migration through 020.
 - [x] **Seed trial on account creation** — implemented in `src/lib/db.js` `syncUserProfile()`
   (called on every `SIGNED_IN`, same place the OAuth row is seeded, §5). Keyed off
   `trial_started_at IS NULL` rather than row-existence, since email sign-up (`LoginScreen.jsx`)
@@ -324,9 +323,9 @@ return, all confirmed working). Load-bearing context for whatever's next:
   Every surface built so far has a test enforcing this — copy that pattern for anything new
   (see `TrialBanner.test.jsx` / `UpgradeModal.test.jsx` for the shape).
 - Migration `019_enable_user_data_rls.sql` (RLS) is written and both required companion
-  service-role routes (`api/seed-trial.js`, `api/seed-investor.js`) already exist — but
-  **it's unconfirmed whether the user has actually run it in Supabase yet.** Don't assume
-  RLS is live; ask or check first if a task depends on it.
+  service-role routes (`api/seed-trial.js`, `api/seed-investor.js`) already exist.
+  **Resolved 2026-07-07 — confirmed run in Supabase**, along with every migration through
+  020. RLS is live; the column-privilege lockdown is DB-enforced, not just app-layer.
 - `api/_stripeClient.js` exports `resolveAppOrigin(req)` for any redirect URL (success/
   cancel/return) — derives the origin from the request instead of a static `APP_URL`, since
   there are multiple live deployments (preview + production) and a hardcoded URL bounces
@@ -744,18 +743,142 @@ summaries tied to the user's real data. All AI calls run through the Claude API 
 *Items consolidated here from: §15.E (Job Hunt AI), §15.F (Application Assistant), §9 (Statements
 AI layer), §16 (Financial alert copy + Net Worth mental health trigger).*
 
+**⚠️ Standing constraint — all AI features are `isAdmin`/`isTester`-gated for now.** Every
+Coach-facing surface (chat entry points, triggered insight cards, statement summaries, any future
+§18/§21 feature) must check `canAccessAiFeatures({ isAdmin, isTester })` (`src/lib/entitlements.js`)
+on both sides: client-side to hide the entry point from ungated users, and server-side in the
+relevant `api/*.js` route so a request is rejected even if called directly. `is_tester`
+(`user_data.is_tester`, migration `021_add_is_tester_beta_flag.sql`) is a manually-granted beta
+flag — set only by Anthony via SQL on an already-existing account, never self-service — that exists
+specifically so AI features can get real usage outside the personal admin account. **Beta testers
+are NOT investors:** this check must never fold in `isInvestor`; see
+`docs/active-systems.md` §23 (Beta Tester Accounts) and §18 (Investor & Demo Accounts) for the
+full division. This is a temporary build-phase gate, not a permanent tier — lift it deliberately
+(and update this note) once Coach is ready for a general rollout.
+
+---
+
+### §18.0 — Scaffolding pass (2026-07-06): build order, resolved technical decisions, open questions
+
+*Added before any §18 code exists. Model/pricing/caching facts below are from the Claude API
+reference (cached 2026-06-24) — re-verify against platform.claude.com before the first API call
+is written, since model lineups move.*
+
+#### Build order (dependency-driven, four phases)
+
+1. **Phase A — Walking skeleton (§G + minimal §B).** `api/coach.js` streaming proxy +
+   `lib/aiContext.js` serializer + a minimal Ask Coach chat panel with **no persistence** (history
+   lives in component state, lost on close). Smallest end-to-end slice that proves auth → context
+   injection → streamed response → mobile UX. Everything else in §18 layers on this.
+2. **Phase B — Persistence (§H).** `coach_chats` migration + RLS, `db.js` load/save/delete,
+   history list UI, end-of-session summaries. Ship only after Phase A feels right in the hand.
+3. **Phase C — Coach presence (§C + §D).** Net worth trigger tiers + the `NetWorthHealthTips.jsx`
+   rewrite (the §16 close-out's deferred half), then statement summaries. These reuse Phase A's
+   proxy + serializer wholesale.
+4. **Phase D — Job Hunt + Job Scout (§E, §I).** Needs §15.C Job Loss Mode surfaces (partially
+   live already — `JobLossDashboard`/`JobLossEntry` shipped) plus a Google Places key (§I) —
+   the one §18 feature with a second external vendor.
+- **§A (identity) runs in parallel** — mascot mark + personality brief have no code dependency,
+  but Phase A shouldn't ship to non-admin users without at least a placeholder avatar and the
+  agreed voice. **§J (tax interview) stays behind §20's accountant gate** regardless of phase.
+- **Gate everything behind `isAdmin` initially** — Coach ships admin-only until cost telemetry
+  (below) shows per-conversation cost is acceptable, then investors, then everyone.
+
+#### Resolved technical decisions
+
+- **Models.** Haiku tier = `claude-haiku-4-5` ($1/$5 per MTok, 200K context) — chat answers, FAQ,
+  net worth triggers, session summaries, Job Scout term generation. Sonnet tier =
+  `claude-sonnet-5` ($3/$15; intro $2/$10 through 2026-08-31, 1M context) — statement narratives,
+  job-hunt drafts. Two watch-outs on Sonnet 5: **omitting `thinking` runs adaptive thinking by
+  default** (decide per call type — disable for short summaries, keep for narratives), and
+  **non-default `temperature`/`top_p` are rejected** — voice/variety is steered by prompt, which
+  suits the fixed Coach persona anyway. Exact IDs, no date suffixes.
+- **Prompt-caching layout (drives real cost).** Cache is a byte-exact **prefix** match: order is
+  tools → system → messages, so the request must be *frozen persona + feature-guide FAQ block in
+  `system` (with `cache_control` on the last system block)* and the **per-user snapshot + question
+  in `messages`, after the breakpoint** — never interpolate the user's name, date, or any live
+  number into the system prompt or the cache never hits. ⚠️ **Minimum cacheable prefix on Haiku
+  4.5 is 4096 tokens** — the persona + FAQ block must exceed that or caching silently no-ops
+  (`cache_read_input_tokens: 0` is the tell). That's the *floor* for the feature guide, not a
+  nice-to-have. 5-min TTL; writes 1.25×, reads 0.1× — a busy chat session pays for itself on the
+  second message.
+- **`api/coach.js` streams.** SSE pass-through from `@anthropic-ai/sdk`'s `client.messages.stream()`
+  to the browser; same Bearer-token auth as `api/delete-account.js`. **Verify Vercel's
+  function-duration limit on our plan supports streaming responses long enough for Sonnet
+  narratives before building** — if not, statement summaries fall back to non-streaming with a
+  loading state.
+- **`ANTHROPIC_API_KEY` is server-side only** — plain Vercel env var, never `VITE_`-prefixed,
+  never in the client bundle (same rule as `STRIPE_SECRET_KEY`).
+- **`lib/aiContext.js` must exclude subscription internals.** The §17 disclosure rule extends to
+  Coach: the serializer never includes `accessEndsAt`, grace state, dunning fields, or anything
+  that could let Coach mention the hidden week. Enforce with a unit test on the serializer output
+  (deterministic output makes this test trivial — same reason caching and the §21.E eval suite
+  want determinism).
+- **§19 is a Coach context source.** `account_history` (live since 2026-07-06) gives Coach the
+  user's config-change timeline — life-event sequence, raises, employer switches — exactly the
+  personalization hook parked in §19.D2's commented block. Phase A ships without it; wire it into
+  the serializer when a real use case (e.g. "your raise in March changed this") justifies the
+  tokens.
+- **Migration renumbering.** §H1's `017_add_coach_chats.sql` is stale — 017 through 021 are now
+  taken (021 went to `021_add_is_tester_beta_flag.sql`, the beta tester flag, 2026-07-07); the
+  coach_chats migration lands as **`022_add_coach_chats.sql`** (or whatever is next when Phase B
+  actually starts — check `database/migrations/` before writing it).
+- **Cost controls are Phase A scope, not later.** Log call type + `usage` token counts (including
+  cache read/write splits) per request from the first deployed call — §21.E's "AI cost telemetry"
+  starts as a `console.log`/DB row in `api/coach.js`, not a dashboard.
+
+#### Brainstorm additions (scoped to §18, grounded in what exists)
+
+- [ ] **Per-user message budget** — a daily Coach message cap per user (config- or DB-backed,
+  generous, invisible in normal use) so a runaway client loop or abusive user can't turn the
+  Anthropic bill into an incident; return a friendly "Coach needs a breather" at the cap. Cheap
+  insurance that must exist before Coach leaves admin-only.
+- [ ] **Coach cites its sources in-app** — every number Coach references carries a tappable chip
+  deep-linking to the panel that computes it ("weekly net → Income panel"). Turns Coach answers
+  into navigation and enforces the data-grounded voice mechanically, not just by prompt.
+- [ ] **Seed the eval suite from Phase A day one** — every admin-flagged bad answer during the
+  admin-only phase gets saved (snapshot + question + bad answer) into a fixtures folder; §21.E's
+  10 golden conversations assemble themselves before public launch instead of being invented.
+- [ ] **Live State Inspector: Coach line** — admin-only "last Coach call: [type] · [model] ·
+  [tokens in/out] · [cache hit?]" so cost behavior is verifiable from a phone, same pattern as
+  §19's config-history line.
+- [ ] **Reuse the §17 test pattern for Coach copy** — TrialBanner-style forbidden-pattern tests on
+  every hardcoded Coach surface (trigger card templates, empty states): no "grace", no "21", plus
+  the §C guardrails (no catastrophizing words on red-tier cards).
+
+#### Open product questions (need your call, not research)
+
+- [ ] **Entry point** — §B says bottom nav or floating chip; bottom nav is already 5 items (+
+  admin Tools). Floating chip clashes with the admin Live pill's corner. Hamburger item is
+  cheapest but buries the flagship AI feature. Decide before Phase A's UI is built.
+- [ ] **Free vs. paid** — is Coach included in the $14.99 subscription, trial-gated, or a later
+  premium tier? Changes the §17.E gating wiring and the unit economics (a chatty user costs real
+  money; the answer decides how generous the message budget above is).
+- [ ] **Mascot production** — who produces the §A mark (generated, commissioned, or hand-rolled
+  SVG in the Flow palette)? Phase A can ship admin-only with a placeholder, but the public
+  entry point wants the real avatar.
+
 ---
 
 ### A. Coach — Character Identity
 
 - [ ] **Name:** Coach
+- [ ] **Open question — optional surname personalization:** explore letting a user opt into a
+  surname for Coach from a small curated, finance-themed list (e.g. "Coach Finn") rather than
+  free-text input — no custom names, just a pre-vetted pick-list so tone/branding stays controlled.
+  Purely opt-in; "Coach" alone stays the default. Not scoped or committed — needs a UX pass (where
+  does the picker live — ProfilePanel? SetupWizard step 0?) and a short-list of candidate surnames
+  before this becomes real work.
 - [ ] **Mascot icon design** — create a recognizable, single-color mark for Coach to use as an
   avatar in chat bubbles, beside insight cards, and in triggered messages; suggestions: a stylized
   chart-and-figure silhouette, an abstract upward-momentum mark, or a minimal shield/compass — keep
   it at home in a teal-on-dark-green palette; must read at 24×24px and 48×48px
-- [ ] **Personality brief** — Coach speaks in the first person; concise and direct; supportive
-  without being patronizing; always grounds a message in the user's actual numbers rather than
-  generic affirmations; one concrete next step per message
+- [ ] **Personality brief** — corner-man persona (seasoned, in-your-corner, not an opponent-fighting
+  hype man); speaks in the first person; concise and direct; supportive without being patronizing;
+  always grounds a message in the user's actual numbers rather than generic affirmations; one
+  concrete next step per message. Full voice brief, boxing-metaphor vocabulary, and the scored
+  tuning rubric live in `docs/coach-personality-rubric.md` — read that before writing any Coach
+  copy or system prompt.
 - [ ] **Visual placement standard** — small Coach avatar chip appears beside every AI-generated
   output (chat, triggered cards, statement summaries); consistent sizing + spacing across all
   surfaces (16px avatar in inline cards; 32px in full chat header)
@@ -797,34 +920,49 @@ financial advisor — Coach answers questions about the app using the user's rea
 upgrades it: Coach generates a short, context-aware message tied to the user's actual net worth
 trend, and the static copy is rewritten to match Coach's voice.*
 
+*Built 2026-07-07 as `src/lib/coachTriggers.js` (pure signal resolution + rate-limiting),
+`src/lib/coachPrompts.js` (per-tier system prompts), and `CoachNetWorthCard.jsx`, wired into
+`HomePanel.jsx` alongside (not replacing) the existing static tips, `isAdmin`-gated per the §18
+standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
+
 - [ ] **Copy audit — static tips rewrite** — rewrite all existing "Financial Breakthrough" tips
   in `NetWorthHealthTips.jsx` to match Coach's voice: direct, supportive, data-grounded; remove
   generic affirmations; every tip should reference a real lever the user can pull inside the app
-  (adjust an expense, fund a goal, run the Budget panel, etc.)
-- [ ] **Trigger conditions (formalize)** — define the exact signal conditions that fire a Coach
-  response; candidates:
-  - Net worth flat or declining for ≥ 3 consecutive weeks
-  - A single-period net worth drop exceeding a configurable threshold (e.g. > 10%)
-  - Runway cliff approaching within 30 days (Job Loss Mode)
-  - A goal falling critically behind schedule (> 4 weeks off projected finish)
-- [ ] **Signal tiers:**
-  - [ ] **Amber (attention)** — net worth flat/down ≤ 3 consecutive weeks; brief check-in from
-    Coach: "Your net worth has been flat for 3 weeks — here's one thing worth looking at."
-  - [ ] **Red (critical)** — runway < 30 days OR net worth down > 10% in one period; urgent but
-    not alarming; message ends with one deep-link action (Triage Expenses, Review Goals, Life
-    Events); never catastrophizes
-  - [ ] **Green (recovery)** — net worth up after a red/amber streak; Coach acknowledges the
-    turnaround with a brief, specific data point: "Up $X since last week — you turned it around."
-- [ ] **Coach API response** — instead of (or alongside) static copy, call the Claude API with
-  the user's actual net worth delta, runway, and goal status; response is 2–3 sentences; Haiku
-  model for cost efficiency
-- [ ] **Mental health framing guardrail** — messages acknowledge the emotional weight of financial
-  stress without dramatizing or lecturing; every message ends with one concrete action the user
-  can take in the app right now
-- [ ] **Rate-limiting** — at most one Coach net worth message per week per signal tier; track
-  `lastCoachTriggerAt` in config or session state; don't fire on every re-render
-- [ ] **Dismissal** — each Coach card has a `✕` dismiss; dismissed cards don't re-fire until the
-  signal condition changes (e.g. a new week's data shifts the trend)
+  (adjust an expense, fund a goal, run the Budget panel, etc.) — **deferred**, copy-only, no API
+  cost, can be done anytime independent of the rest of this section
+- [x] **Trigger conditions (formalize)** — implemented as proxies against data that already
+  exists rather than the literal candidates below, since two of them need a persisted weekly
+  net-worth history this app doesn't store yet (see `src/lib/coachTriggers.js` header comment
+  for the exact substitutions and `src/lib/aiContext.js`'s "Future context extensions" map for
+  what a real implementation would need):
+  - ~~Net worth flat or declining for ≥ 3 consecutive weeks~~ → proxied by
+    `netWorthHealthStatus().belowThreshold` (thin savings cushion), a different signal that's
+    close in spirit but not a trend read — **real version deferred, needs history**
+  - ~~A single-period net worth drop exceeding a configurable threshold (e.g. > 10%)~~ —
+    **not implemented, needs history**
+  - [x] Runway cliff approaching within 30 days (Job Loss Mode) — real implementation,
+    `estimateRunwayDays()` in `coachTriggers.js` (independent of JobLossDashboard's own runway
+    calc, which has a session-only savings override this trigger can't see — assumes $0 extra)
+  - ~~A goal falling critically behind schedule (> 4 weeks off projected finish)~~ —
+    **not implemented, needs history** (§21.A's Goal ETA Drift Alerts is the fuller version)
+- [x] **Signal tiers:**
+  - [x] **Amber (attention)** — fires on the thin-cushion proxy above; see
+    `buildNetWorthSystemPrompt("amber")` in `coachPrompts.js` for the live prompt
+  - [x] **Red (critical)** — fires on `estimateRunwayDays() < 30`; message drops corner-man
+    metaphor entirely per the personality rubric's own note on this tier
+  - [x] **Green (recovery)** — fires when the previously-fired tier was amber/red and neither
+    condition holds anymore (reads this trigger's own fire history, not an independent net-worth
+    delta — see code comment)
+- [x] **Coach API response** — `chatWithCoach` → `api/coach.js` → Haiku, 2–3 sentences per the
+  system prompt's own instruction
+- [x] **Mental health framing guardrail** — encoded directly into `COACH_PERSONA_PROMPT` in
+  `coachPrompts.js`
+- [x] **Rate-limiting** — `shouldFireForTier()` compares fiscal week index (not wall-clock days);
+  state persisted in `localStorage` (`coachNetWorthSignal`) rather than config/Supabase — a
+  session-scoped rate limiter, not a durable one; §18.H's `coach_chats` table would make this
+  durable across devices once it exists
+- [x] **Dismissal** — `✕` button in `CoachNetWorthCard`; dismissal keyed to `(tier, weekIdx)` so
+  a new week or a tier change un-dismisses it
 
 ---
 
@@ -872,21 +1010,30 @@ trend, and the static copy is rewritten to match Coach's voice.*
 
 ### G. Shared Infrastructure
 
-- [ ] **`lib/claude.js` wrapper** — single client: handles auth, retries, prompt caching headers;
+- [x] **`lib/claude.js` wrapper** — single client: handles auth, retries, prompt caching headers;
   exports `chatWithCoach(messages, systemPrompt, contextBlock, model)` where `model` defaults to
   Haiku and callers can pass Sonnet for richer responses
-- [ ] **`lib/aiContext.js` serializer** — deterministic compressed financial snapshot builder for
+- [x] **`lib/aiContext.js` serializer** — deterministic compressed financial snapshot builder for
   injection into Coach's system prompt; same output shape every call so prompt caching is effective;
   includes: weekly net, net worth delta, goal count/status, expense total, runway (if in job loss
   mode), current week + fiscal context
-- [ ] **`api/coach.js` serverless route** — proxies Claude API calls through a Vercel function so
+- [x] **`api/coach.js` serverless route** — proxies Claude API calls through a Vercel function so
   the API key stays server-side; same auth pattern as `api/delete-account.js` (verify Supabase
   Bearer token, then call Anthropic); returns streamed response for chat UX
-- [ ] **Cost controls** — Haiku for Coach messages, FAQ answers, and net worth triggers; Sonnet
+- [x] **Cost controls** — Haiku for Coach messages, FAQ answers, and net worth triggers; Sonnet
   for statement summaries and job hunt drafts; log token counts per call type in dev
-- [ ] **Env vars** — add `ANTHROPIC_API_KEY` to Vercel env + CLAUDE.md env vars section
+- [x] **Env vars** — add `ANTHROPIC_API_KEY` to Vercel env + CLAUDE.md env vars section
 - [ ] **`coach_chats` table** — all conversation + search history lives here; schema in **§18.H**;
   load recent chats on auth via `db.js` alongside the main `user_data` fetch
+- [ ] **Context serializer roadmap** — `lib/aiContext.js` keeps a running comment map of context
+  fields future AI features will need (§18.D/E/J, §21.A/B/C, §21 F1–F3); extend `buildCoachContext`
+  and that map together whenever one of those items gets scoped, so context-building stays
+  centralized instead of growing a bespoke builder per feature
+- [x] **Beta tester gate** — `user_data.is_tester` (migration `021_add_is_tester_beta_flag.sql`)
+  + `canAccessAiFeatures({ isAdmin, isTester })` (`src/lib/entitlements.js`), checked in both
+  `api/coach.js` and `HomePanel.jsx`'s Coach card. Manual-grant only, auto-seeds a 6-month
+  app-side trial window, explicitly excluded from `is_investor`/demo-account access and from the
+  lifecycle cron's dunning/deletion. Full writeup: `docs/active-systems.md` §23
 
 ---
 
@@ -896,7 +1043,7 @@ trend, and the static copy is rewritten to match Coach's voice.*
 user by a foreign key. This gives users a persistent record across devices and sessions, and
 gives Coach context to reference past conversations when relevant.*
 
-#### H1. Migration — `017_add_coach_chats.sql`
+#### H1. Migration — `022_add_coach_chats.sql` (renumbered — see §18.0's migration-renumbering note; check `database/migrations/` for the actual next-available number before writing this)
 
 ```sql
 CREATE TABLE coach_chats (
@@ -934,7 +1081,8 @@ CREATE INDEX coach_chats_user_id_created_at
   ON coach_chats (user_id, created_at DESC);
 ```
 
-- [ ] **Write migration** `database/migrations/017_add_coach_chats.sql`
+- [ ] **Write migration** `database/migrations/022_add_coach_chats.sql` (verify the number is
+  still free — see §18.0's migration-renumbering note)
 - [ ] **RLS policies** — users may `SELECT`, `INSERT`, `UPDATE`, `DELETE` their own rows
   (`user_id = auth.uid()`); no public access; service-role bypasses for admin diagnostic
 - [ ] **`updated_at` trigger** — add `moddatetime` trigger so `updated_at` auto-updates on row change
@@ -1354,9 +1502,8 @@ license to train.
   as revised by §D2 (new-value `snapshot` + `changed_fields TEXT[]`), RLS own-row
   select/insert only — **append-only from the client**: no update/delete policies exist and
   those privileges are revoked outright, so history can never be rewritten after the fact —
-  plus the per-account `rollout_seed` snapshot. ⚠️ **Not yet run in Supabase** — file exists in
-  the repo only; run it in the SQL editor before expecting rows (the client tolerates the
-  missing table gracefully until then).
+  plus the per-account `rollout_seed` snapshot. **Run in Supabase (confirmed 2026-07-07)** —
+  the seed snapshot has landed for every existing account.
 - [x] **One integration point** — implemented as a **config-transition watcher** in `App.jsx`
   (a `useEffect` diffing `prevConfigRef` vs. `config` via
   `diffSensitiveFields` from the new `src/lib/configHistory.js`, inserting via
@@ -1370,8 +1517,9 @@ license to train.
   everything untagged records as `config_edit` effective today (real wall clock, never the
   admin Lock Date). Investor sandbox accounts are exempt, matching §17.G's precedent.
 - [x] **Admin verification surface** — DB Row Viewer (all three render spots) now shows
-  "config history: N snapshots · latest [date] ([source]) · [changed fields]" after Fetch;
-  shows the error string when migration 020 hasn't been run yet.
+  "config history: N snapshots · latest [date] ([source]) · [changed fields]" after Fetch.
+  Migration 020 is confirmed run (2026-07-07), so this should read real counts, not the
+  error string — worth a live Fetch to double-check on the next admin pass.
 - **§17.I interaction (noted on merge, 2026-07-06):** the non-payment deletion cron
   hard-deletes the `user_data` row, and `account_history`'s FK cascades with it — the
   `deleted_accounts` tombstone does **not** archive history rows, so a revived account
@@ -1957,6 +2105,11 @@ insight over raw categorization, and consolidation into fewer, smarter surfaces.
   and propose exactly one action — an answer missing any of the three fails the eval.
 - [ ] **AI cost telemetry** — per-feature token/cost dashboards from day one of §18 (log
   call-type + token counts, per §18.G) so a runaway prompt is a graph, not a surprise invoice.
+  Implementation option worth considering instead of (or alongside) a custom dashboard: split
+  `ANTHROPIC_API_KEY` into one key per feature area (net worth trigger, Ask Coach, Job Scout, …)
+  — Anthropic's Console breaks down usage by API key natively, so this gets per-feature cost
+  visibility with zero custom telemetry code. Premature with only one Coach feature live; revisit
+  once 2–3 features are shipped and cost attribution actually matters.
 - [ ] **Thumbs feedback on Coach messages** — one-tap 👍/👎 on every AI output, stored with the
   chat row (`coach_chats.insights` can hold it); the flagged set feeds the eval suite above.
 - [ ] **Data export + portability** — one-tap full export (JSON + CSV) of config, logs, expenses,

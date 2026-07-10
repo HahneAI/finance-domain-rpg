@@ -4,8 +4,12 @@ Living doc. Describes what is built, how it works, and known gaps — organized 
 **domain/feature**, not by ship date. Renovated 2026-07-01: cross-referenced against
 `docs/past-TODO-tasks.md` and re-verified against the live codebase section by section;
 duplicate/stale entries from the old chronological version were merged or dropped.
-**Guardrail: keep under 300 lines. Summarize; do not transcribe.**
-Last updated: 2026-07-01 | App: Authority Finance (A:Fin)
+Extended 2026-07-07: added §21 (Monetization — the paywall/entitlement/revival system, TODO §17,
+was previously undocumented here despite being almost entirely shipped), §22 (Master Timeline
+config-history write path, TODO §19 phase 1), and §23 (Beta Tester Accounts, TODO §18); refreshed
+the §1/§5 known-gap notes to match.
+**Guardrail: keep under 300 lines — currently over; a trim pass is owed.** Summarize; do not transcribe.
+Last updated: 2026-07-07 | App: Authority Finance (A:Fin)
 
 ---
 
@@ -33,6 +37,9 @@ Last updated: 2026-07-01 | App: Authority Finance (A:Fin)
 | 18 | Investor & Demo Accounts | `DemoAccountTree.jsx`, `InvestorRegister.jsx` | Live, dormant workflow |
 | 19 | PWA / Install | `vite.config.js`, `PwaInstallModal.jsx` | Live |
 | 20 | Subscription Lifecycle Emails | `api/cron-subscription-lifecycle.js`, `api/_lifecycleEngine.js`, `api/_lifecycleEmails.js`, `api/_email.js` | Live (verified 2026-07-05) — dev sender only until domain verified |
+| 21 | Monetization — Trial, Paywall & Account Revival | `subscription.js`, `App.jsx`, `api/stripe-*.js`, `api/revival-lookup.js`, `UpgradeCard.jsx`, `UpgradeModal.jsx`, `UpgradePanel.jsx`, `TrialBanner.jsx`, `ReviveScreen.jsx` | Live — all migrations through 020 confirmed run |
+| 22 | Master Timeline — Config History | `configHistory.js`, `db.js`, `App.jsx` | Live, migration run (write path only — nothing reads it yet) |
+| 23 | Beta Tester Accounts | `entitlements.js`, `db.js`, `App.jsx`, migration 021 | Live |
 
 ---
 
@@ -60,7 +67,9 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
   subtracted" gap noted here is resolved (past-TODO §6).
 - **Known gap:** `cfg` is one flat object applied to every week in `buildYear`, including
   already-elapsed ones — a mid-year pay/employer-preset edit retroactively recomputes
-  past weeks, distorting annual tax totals. Tracked in `TODO.md` §19.
+  past weeks, distorting annual tax totals. The write-path fix now captures every
+  sensitive change to `account_history` (§22), but `buildYear`/`computeNet` don't consult it
+  yet — the engine still applies live config uniformly. Full fix tracked in `TODO.md` §19.
 
 ---
 
@@ -119,7 +128,8 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
   Payoff Date, Term Payment); pre-first-payment loans show a "Saving" badge instead.
 - **Known gap:** `buildLoanHistory()` regenerates a loan's *entire* history from
   `loanMeta` on every load — editing terms retroactively rewrites past weeks, same root
-  cause as the Income Engine gap above (`TODO.md` §19).
+  cause as the Income Engine gap above. Not yet covered by §22's `account_history` write
+  path — loans get their own expense-`history[]`-style follow-up (`TODO.md` §19).
 
 ---
 
@@ -291,6 +301,11 @@ Real, but no active roadmap item — dormant/developer-facing. `DemoAccountTree.
 (admin-editable mock accounts), `InvestorRegister.jsx` (signup path), `InvestorAdminPanel.jsx`
 + `createInvestorAccount()` (`db.js`) seed `investor_users` + `user_data` rows.
 
+**Crucial division from §23 Beta Tester Accounts:** these are two separate account tiers
+with zero overlap. `is_investor` unlocks the Demo Account Tree and the investor code
+signup path; `is_tester` unlocks in-progress AI features and nothing else. Neither flag
+should ever imply the other — see §23.
+
 ---
 
 ## 19. PWA / Install
@@ -312,11 +327,103 @@ Server-side only — nothing runs on the client. Full paywall/trial context in
   domain is verified — swap before real users hit day 7 of a trial.
 - **`api/cron-subscription-lifecycle.js`** — daily Vercel cron (`vercel.json`, 15:00 UTC),
   guarded by `Authorization: Bearer <CRON_SECRET>`. Service-role scan of trial-seeded
-  `user_data` rows; skips `is_admin`/`is_investor`.
+  `user_data` rows; skips `is_admin`/`is_investor`/`is_tester` (§23 — testers must never be
+  dunned or auto-deleted if their 6-month window lapses unrenewed).
 - **`api/_lifecycleEngine.js`** — pure per-row decision (phase math delegated to
   `getEntitlement`): trial nudges at day 7 + 12, grace/expired warnings every 2 days,
-  `deleteDue` flag at day 21+7 (log-only until §17.I's archive exists). Throttle keys off
-  `last_dunning_email_at`, stamped only after a successful send — idempotent, self-retrying.
+  `deleteDue` flag at day 21+7. Throttle keys off `last_dunning_email_at`, stamped only
+  after a successful send — idempotent, self-retrying.
 - **`api/_lifecycleEmails.js`** — templates; disclosure rule (14-day copy only, never the
   hidden grace) enforced by `src/test/api/lifecycleEmails.test.js`; schedule/throttle by
   `src/test/api/lifecycleEngine.test.js`.
+- **On `deleteDue`:** `archiveAndDeleteAccount()` (§21) now actually runs — the archive
+  step was the one piece missing here; it's no longer log-only.
+
+---
+
+## 21. Monetization — Trial, Paywall & Account Revival
+
+Full spec, resolved decisions, and build history live in `docs/TODO.md` §17 — this entry only
+orients where the code lives and what state it's really in (§17 is almost entirely `[x]` but had
+no representation here until this pass).
+
+- **Entitlement engine:** `getEntitlement(subscription, now)` (`lib/subscription.js`) resolves
+  `trial | grace | active | expired | none` from two stored timestamps — `trial_ends_at` (day 14,
+  user-facing countdown) and `access_ends_at` (day 21, internal hard cutoff). The 7-day gap
+  between them is a **hidden grace period, never disclosed** in any user-facing string; `now` is
+  always real wall-clock time, never the admin Lock Date simulation. `past_due`/`canceled` stay
+  entitled until `current_period_end`.
+- **Data model:** Stripe/trial columns on `user_data` (migration 017) kept OUT of the `config`
+  JSON blob — `db.js` maps them to a `subscription` object. RLS (migration 019) locks those
+  columns to service-role-only writes. **Confirmed run in Supabase 2026-07-07** — DB-enforced,
+  not just app-layer.
+- **Serverless routes** (`api/`, service-role, same Bearer-token pattern as `delete-account.js`):
+  `stripe-create-checkout.js`, `stripe-webhook.js` (signature-verified, idempotent via migration
+  018's event-id table), `stripe-portal.js`. `_stripeClient.js`'s `resolveAppOrigin()` derives
+  redirect URLs from the request instead of a static env var (multiple live deployments).
+- **Frontend gating:** `App.jsx` computes `isExpiredReadOnly` from the entitlement. Home/Budget
+  go `readOnly` (values render, mutations no-op via a `setX = readOnly ? noop : setXProp` pattern
+  per panel); Income/Log are fully replaced by `UpgradePanel.jsx`. The shared checkout pitch lives
+  once in `UpgradeCard.jsx` — `UpgradeModal.jsx` wraps it as a dismissible overlay (triggered from
+  Home/Budget), `UpgradePanel.jsx` as a non-dismissible full replacement. `TrialBanner.jsx` is the
+  persistent countdown/warning strip, hidden only where `UpgradePanel` already replaces the view.
+- **Lifecycle emails:** own entry, §20.
+- **Account revival:** a non-payment deletion (cron, day 21+7) tombstones the row into
+  `deleted_accounts` (migration 017) before deleting — the *only* delete path that archives first;
+  the user-initiated "type DELETE" flow stays a true, unrecoverable hard delete. `LoginScreen.jsx`
+  + `api/revival-lookup.js` detect a revivable email on a failed sign-in or a fresh Google
+  sign-up (checked *before* trial seeding); `ReviveScreen.jsx` + `api/stripe-revive-checkout.js`
+  require an actual successful charge (reusing the archived Stripe customer, never a free
+  re-entry) before `stripe-webhook.js` restores the archived config/expenses/goals/logs/
+  weekConfirmations/ptoGoal and stamps `deleted_accounts.revived_at`.
+- **Known gaps:** Stripe Customer Portal dashboard config unconfirmed; two live-verification-only
+  items parked for the pre-launch pass (cancel-on-delete Stripe cleanup, the tombstoned-email
+  Google OAuth sign-in path — neither reachable by unit tests).
+
+---
+
+## 22. Master Timeline — Config History (write path only)
+
+- **What it solves:** `buildYear`/`computeNet` apply the *current* config uniformly to every
+  fiscal week, including already-elapsed ones — a mid-year pay/tax edit silently rewrites past
+  totals (the gap noted in §1 and §5). This system captures the change; it does **not** yet fix
+  the engine's read side.
+- **`account_history` table** (migration 020) — append-only: RLS grants own-row select/insert
+  only, update/delete privileges are revoked outright. Each row is a **full new-value config
+  snapshot** + `changed_fields` (display-only) + `effective_from` (date) + `source`. One
+  `rollout_seed` row exists per pre-existing account as a resolver floor.
+- **Write path:** a config-transition watcher in `App.jsx` (not a call-site wrapper) diffs every
+  `config` change against the whitelist in `lib/configHistory.js`
+  (`HISTORY_SENSITIVE_FIELDS`/`diffSensitiveFields`) and inserts via `saveConfigSnapshot`
+  (`db.js`) whenever a whitelisted field actually changed — so no `setConfig` call site or save
+  path (immediate or debounced) can bypass capture. Wizard/life-event flows tag `source` +
+  `effectiveFrom`; investor sandbox accounts are exempt.
+- **Admin surface:** DB Row Viewer → Fetch shows "config history: N snapshots · latest [date]
+  ([source]) · [changed fields]" (`fetchConfigHistoryMeta`, `db.js`).
+- **Known gap (by design — not yet started):** nothing reads this table. The read-path resolver
+  (an analog of expenses' `getEffectiveAmount`) and the loan-history equivalent fix are explicit,
+  separate follow-ups. Full design record in `docs/TODO.md` §19.
+
+---
+
+## 23. Beta Tester Accounts
+
+`user_data.is_tester` (migration `021_add_is_tester_beta_flag.sql`) — set manually by
+Anthony via the Supabase SQL editor on an already-existing account. No signup flow, no
+self-service opt-in, no client write path (locked the same way as `is_admin`/`is_investor`
+since migration 019's RLS column grants).
+
+- **What it grants:** `canAccessAiFeatures({ isAdmin, isTester })` (`entitlements.js`) —
+  the single gate every AI feature (`api/coach.js` server-side, `HomePanel.jsx` client-side)
+  checks. Nothing else — no Admin Diagnostic Toolkit, no other admin-only surface.
+- **Auto trial window:** a Postgres trigger on `user_data` seeds `trial_started_at` /
+  `trial_ends_at` / `access_ends_at` to a 6-month window the moment `is_tester` flips
+  false→true — one-time, not renewed on subsequent saves. This routes the account through
+  the real app-side trial state machine (`getEntitlement`, §17's Monetization system, §21)
+  instead of a hardcoded bypass, so it "behaves like a free trial account" per spec, just on
+  a 6-month clock with no Stripe billing behind it.
+- **Crucial division:** beta testers are NOT investors — see §18. `is_tester` must never
+  grant Demo Account Tree access or the investor code path, and this gate must never fold
+  in `isInvestor`.
+- **Lifecycle cron:** bypassed the same as admin/investor (§20) — testers are never dunned
+  or auto-deleted if the 6-month window lapses before renewal.

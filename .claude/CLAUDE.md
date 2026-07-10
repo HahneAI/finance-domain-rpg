@@ -194,6 +194,9 @@ Reporter is `verbose` — Vitest 4's default misreports suite failures as "no te
 ```
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
+ANTHROPIC_API_KEY=...       # server-side only — api/coach.js (§18.G Coach infra)
+ANTHROPIC_API_KEY_TEST=...  # optional — preview/dev builds use this if set, same MODE
+                            # split pattern as STRIPE_SECRET_KEY_TEST in _stripeClient.js
 ```
 
 ## Naming Conventions
@@ -201,6 +204,24 @@ Files: kebab-case · Components: PascalCase · Utilities/hooks: camelCase · Dat
 
 ## Known Cleanup
 - `WeekConfirmModal.jsx`, `LoginScreen.jsx`, `ProfilePanel.jsx` — hardcoded hex colors not yet tokenized (tracked in TODO §10)
+
+---
+
+## Account Tiers
+
+Three independent flags on `user_data`, each unlocking a distinct, non-overlapping surface —
+never treat one as implying another:
+
+| Flag | Unlocks | Set via |
+|------|---------|---------|
+| `is_admin` | Full Admin Diagnostic Toolkit (below) + all AI features | Manual SQL |
+| `is_tester` | AI features only (`canAccessAiFeatures` in `entitlements.js`) — no toolkit, no other admin surface | Manual SQL only, on an already-existing account (migration `021_add_is_tester_beta_flag.sql`); auto-seeds a 6-month app-side trial window on the false→true transition |
+| `is_investor` | Demo Account Tree + investor code signup path | `createInvestorAccount()` via the investor code flow |
+
+**Beta testers are NOT investors — this is a crucial, deliberate division.** `is_tester` must
+never grant Demo Account Tree access or the investor code path, and `is_investor` must never
+grant AI features. Full detail: `docs/active-systems.md` §23 (Beta Tester Accounts) and §18
+(Investor & Demo Accounts).
 
 ---
 

@@ -1,0 +1,236 @@
+// §18.G — api/coach.js proxies Claude API calls so ANTHROPIC_API_KEY never
+// reaches the client. Auth guard mirrors delete-account.js; the Anthropic
+// call itself is mocked via a stubbed global fetch.
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+const { mocks } = vi.hoisted(() => {
+  const userClient = { auth: { getUser: vi.fn() }, from: vi.fn() };
+  return { mocks: { userClient } };
+});
+
+// Chainable stub for `.from("user_data").select("is_admin, is_tester").eq(...).single()`.
+function stubAccess({ isAdmin = false, isTester = false, rowError = null } = {}) {
+  mocks.userClient.from.mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({
+          data: rowError ? null : { is_admin: isAdmin, is_tester: isTester },
+          error: rowError,
+        }),
+      }),
+    }),
+  });
+}
+
+// Back-compat shorthand for the many existing admin-only call sites below.
+function stubIsAdmin(isAdmin, { rowError = null } = {}) {
+  stubAccess({ isAdmin, rowError });
+}
+
+vi.mock("@supabase/supabase-js", () => ({
+  createClient: vi.fn(() => mocks.userClient),
+}));
+
+globalThis.process.env.VITE_SUPABASE_URL = "https://test.supabase.co";
+globalThis.process.env.VITE_SUPABASE_ANON_KEY = "anon-key";
+globalThis.process.env.ANTHROPIC_API_KEY = "sk-ant-test";
+
+const { default: handler } = await import("../../../api/coach.js");
+
+function mkReq(overrides = {}) {
+  return {
+    method: "POST",
+    headers: { authorization: "Bearer good-token" },
+    body: { messages: [{ role: "user", content: "hi" }] },
+    ...overrides,
+  };
+}
+
+function mkRes() {
+  return {
+    statusCode: null,
+    body: null,
+    headers: {},
+    writes: [],
+    ended: false,
+    setHeader(k, v) { this.headers[k] = v; },
+    status(code) { this.statusCode = code; return this; },
+    json(obj) { this.body = obj; return this; },
+    write(chunk) { this.writes.push(chunk); },
+    end() { this.ended = true; },
+  };
+}
+
+function sseStreamOf(events) {
+  const chunks = events.map((e) => new TextEncoder().encode(`data: ${JSON.stringify(e)}\n\n`));
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const chunk of chunks) yield chunk;
+    },
+  };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.userClient.auth.getUser.mockResolvedValue({
+    data: { user: { id: "user-1" } },
+    error: null,
+  });
+  // Default to admin so the pre-existing proxy tests exercise the happy path;
+  // the admin-gate describe block below overrides this per-case.
+  stubIsAdmin(true);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("coach — guards", () => {
+  it("rejects a non-POST method", async () => {
+    const res = mkRes();
+    await handler(mkReq({ method: "GET" }), res);
+    expect(res.statusCode).toBe(405);
+  });
+
+  it("rejects a missing token", async () => {
+    const res = mkRes();
+    await handler(mkReq({ headers: {} }), res);
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("rejects an invalid session token", async () => {
+    mocks.userClient.auth.getUser.mockResolvedValue({ data: null, error: { message: "bad" } });
+    const res = mkRes();
+    await handler(mkReq(), res);
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("rejects a request with no messages", async () => {
+    const res = mkRes();
+    await handler(mkReq({ body: { messages: [] } }), res);
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("coach — standing isAdmin/isTester gate (docs/TODO.md §18)", () => {
+  it("rejects a caller who is neither admin nor tester with 403 before calling Anthropic", async () => {
+    stubAccess({ isAdmin: false, isTester: false });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(res.statusCode).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the user_data row can't be read (e.g. missing/error)", async () => {
+    stubAccess({ rowError: { message: "no rows" } });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(res.statusCode).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("allows an admin caller through to the Anthropic call", async () => {
+    stubAccess({ isAdmin: true });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(res.statusCode).toBeNull(); // no explicit .status() call on the streaming success path
+  });
+
+  it("allows a beta tester caller through to the Anthropic call, same as an admin", async () => {
+    stubAccess({ isAdmin: false, isTester: true });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(res.statusCode).toBeNull();
+  });
+
+  it("selects is_tester alongside is_admin so the query itself can't silently drop tester access", async () => {
+    stubAccess({ isTester: true });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) }));
+
+    await handler(mkReq(), mkRes());
+
+    const fromCall = mocks.userClient.from.mock.results[0].value;
+    expect(fromCall.select).toHaveBeenCalledWith(expect.stringMatching(/is_admin/));
+    expect(fromCall.select).toHaveBeenCalledWith(expect.stringMatching(/is_tester/));
+  });
+});
+
+describe("coach — Anthropic proxy", () => {
+  it("streams the Anthropic response through and defaults to Haiku", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      body: sseStreamOf([
+        { type: "message_start", message: { usage: { input_tokens: 10, cache_read_input_tokens: 5 } } },
+        { type: "content_block_delta", delta: { type: "text_delta", text: "hi" } },
+        { type: "message_delta", usage: { output_tokens: 3 } },
+      ]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.anthropic.com/v1/messages",
+      expect.objectContaining({ method: "POST" })
+    );
+    const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sentBody.model).toBe("claude-haiku-4-5");
+    expect(sentBody.stream).toBe(true);
+    expect(res.headers["Content-Type"]).toBe("text/event-stream");
+    expect(res.writes.length).toBe(3);
+    expect(res.ended).toBe(true);
+  });
+
+  it("uses the Sonnet model id and applies cache_control to system blocks", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(
+      mkReq({ body: { messages: [{ role: "user", content: "hi" }], systemPrompt: "sys", contextBlock: "ctx", model: "sonnet" } }),
+      res
+    );
+
+    const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sentBody.model).toBe("claude-sonnet-5");
+    expect(sentBody.system).toEqual([
+      { type: "text", text: "sys", cache_control: { type: "ephemeral" } },
+      { type: "text", text: "ctx", cache_control: { type: "ephemeral" } },
+    ]);
+  });
+
+  it("returns 502 without writing when the Anthropic call fails", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => "boom",
+      body: null,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(mkReq(), res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.writes.length).toBe(0);
+  });
+});

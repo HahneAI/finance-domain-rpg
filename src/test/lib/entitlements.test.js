@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canAccessTaxPlan } from '../../lib/entitlements.js'
+import { canAccessTaxPlan, canAccessAiFeatures } from '../../lib/entitlements.js'
 
 describe('canAccessTaxPlan', () => {
   it('is hidden by default (no admin, no manual flag)', () => {
@@ -32,5 +32,33 @@ describe('canAccessTaxPlan', () => {
   it('coerces truthy/falsy inputs to a real boolean', () => {
     expect(canAccessTaxPlan({ taxProjectionsEnabled: undefined })).toBe(false)
     expect(canAccessTaxPlan({ isAdmin: 1 })).toBe(true)
+  })
+})
+
+describe('canAccessAiFeatures', () => {
+  it('is hidden by default (no admin, no tester)', () => {
+    expect(canAccessAiFeatures({})).toBe(false)
+    expect(canAccessAiFeatures()).toBe(false)
+    expect(canAccessAiFeatures({ isAdmin: false, isTester: false })).toBe(false)
+  })
+
+  it('admins always see it', () => {
+    expect(canAccessAiFeatures({ isAdmin: true })).toBe(true)
+  })
+
+  it('beta testers (user_data.is_tester) see it too', () => {
+    expect(canAccessAiFeatures({ isTester: true })).toBe(true)
+  })
+
+  // Crucial division (docs/active-systems.md "Beta Tester Accounts"): a beta
+  // tester is not an investor. Passing isInvestor must never grant this on
+  // its own — the function doesn't even accept that param.
+  it('does not grant access via isInvestor — beta testers are not investors', () => {
+    expect(canAccessAiFeatures({ isInvestor: true })).toBe(false)
+  })
+
+  it('coerces truthy/falsy inputs to a real boolean', () => {
+    expect(canAccessAiFeatures({ isTester: undefined })).toBe(false)
+    expect(canAccessAiFeatures({ isAdmin: 1 })).toBe(true)
   })
 })

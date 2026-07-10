@@ -419,7 +419,7 @@ export async function fetchConfigHistoryMeta() {
 }
 
 /**
- * §18.H2 — Coach chat & Job Scout search history (migration 022). Fetches the
+ * §18.H2 — Coach chat & Job Scout search history (migration 023). Fetches the
  * N most recent coach_chats rows for the signed-in user; maps snake_case
  * columns to the camelCase shape the rest of the app uses. Returns [] on no
  * session, no rows, or a missing-table error (migration not yet run) — same

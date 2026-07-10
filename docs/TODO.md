@@ -819,10 +819,11 @@ is written, since model lineups move.*
   personalization hook parked in §19.D2's commented block. Phase A ships without it; wire it into
   the serializer when a real use case (e.g. "your raise in March changed this") justifies the
   tokens.
-- **Migration renumbering.** §H1's `017_add_coach_chats.sql` is stale — 017 through 021 are now
-  taken (021 went to `021_add_is_tester_beta_flag.sql`, the beta tester flag, 2026-07-07); the
-  coach_chats migration lands as **`022_add_coach_chats.sql`** (or whatever is next when Phase B
-  actually starts — check `database/migrations/` before writing it).
+- **Migration renumbering.** §H1's `017_add_coach_chats.sql` is stale — 017 through 022 are now
+  taken (021 went to `021_add_is_tester_beta_flag.sql`, the beta tester flag, 2026-07-07; 022 was
+  claimed by a concurrent, not-yet-pushed session); the coach_chats migration lands as
+  **`023_add_coach_chats.sql`** (shipped 2026-07-10) — check `database/migrations/` before writing
+  any future migration, since numbering collisions across concurrent sessions keep happening.
 - **Cost controls are Phase A scope, not later.** Log call type + `usage` token counts (including
   cache read/write splits) per request from the first deployed call — §21.E's "AI cost telemetry"
   starts as a `console.log`/DB row in `api/coach.js`, not a dashboard.
@@ -1043,7 +1044,7 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 user by a foreign key. This gives users a persistent record across devices and sessions, and
 gives Coach context to reference past conversations when relevant.*
 
-#### H1. Migration — `022_add_coach_chats.sql` (renumbered — see §18.0's migration-renumbering note; check `database/migrations/` for the actual next-available number before writing this)
+#### H1. Migration — `023_add_coach_chats.sql` (renumbered — see §18.0's migration-renumbering note; check `database/migrations/` for the actual next-available number before writing this)
 
 ```sql
 CREATE TABLE coach_chats (
@@ -1081,7 +1082,8 @@ CREATE INDEX coach_chats_user_id_created_at
   ON coach_chats (user_id, created_at DESC);
 ```
 
-- [x] **Write migration** `database/migrations/022_add_coach_chats.sql` — built 2026-07-10.
+- [x] **Write migration** `database/migrations/023_add_coach_chats.sql` — built 2026-07-10
+  (renumbered from 022 to 023 after a concurrent, not-yet-pushed session claimed 022 first).
   Two deliberate deviations from the spec above, documented in the migration's own header:
   the FK is `references user_data(user_id)`, not `user_data(id)` (the spec named the wrong
   column — `user_data`'s real PK is `user_id`); and there's no `moddatetime` trigger for

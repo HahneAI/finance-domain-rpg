@@ -1,13 +1,14 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 022_add_coach_chats.sql
+-- 023_add_coach_chats.sql
 --
 -- TODO §18.H — Chat & Search History Persistence. Every Coach conversation and
 -- every Job Scout search becomes a row here, linked to the user, so history
 -- survives across devices/sessions and Coach can reference past conversations.
 --
 -- Renumbered from the TODO spec's original `017_add_coach_chats.sql` — 017
--- through 021 are taken (021 went to is_tester). Verify 022 is still free in
--- this directory before running, in case something else landed first.
+-- through 022 are taken (021 went to is_tester; 022 was claimed by a
+-- concurrent, not-yet-pushed session). Verify 023 is still free in this
+-- directory before running, in case something else landed first.
 --
 -- Deviations from the TODO §18.H spec, both deliberate:
 --   1. `user_id references user_data(user_id)`, not `user_data(id)` — the spec

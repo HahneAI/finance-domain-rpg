@@ -1,4 +1,4 @@
-// §18.H2 — coach_chats persistence (migration 022_add_coach_chats.sql).
+// §18.H2 — coach_chats persistence (migration 023_add_coach_chats.sql).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../lib/supabase.js', () => ({

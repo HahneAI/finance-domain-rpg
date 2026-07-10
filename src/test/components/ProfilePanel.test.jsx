@@ -32,6 +32,7 @@ function renderMainProfile(extraProps = {}) {
       showExtra={false}
       setShowExtra={() => {}}
       isAdmin={false}
+      isTester={false}
       today="2026-06-26"
       weekConfirmations={{}}
       {...extraProps}

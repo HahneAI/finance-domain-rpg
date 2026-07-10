@@ -214,8 +214,8 @@ never treat one as implying another:
 
 | Flag | Unlocks | Set via |
 |------|---------|---------|
-| `is_admin` | Full Admin Diagnostic Toolkit (below) + all AI features | Manual SQL |
-| `is_tester` | AI features only (`canAccessAiFeatures` in `entitlements.js`) — no toolkit, no other admin surface | Manual SQL only, on an already-existing account (migration `021_add_is_tester_beta_flag.sql`); auto-seeds a 6-month app-side trial window on the false→true transition |
+| `is_admin` | Full Admin Diagnostic Toolkit (below) + all AI features + Tax Plan | Manual SQL |
+| `is_tester` | AI features (`canAccessAiFeatures`) + Tax Plan (`canAccessTaxPlan`), both in `entitlements.js` — no toolkit, no other admin surface | Manual SQL only, on an already-existing account (migration `021_add_is_tester_beta_flag.sql`); auto-seeds a 6-month app-side trial window on the false→true transition |
 | `is_investor` | Demo Account Tree + investor code signup path | `createInvestorAccount()` via the investor code flow |
 
 **Beta testers are NOT investors — this is a crucial, deliberate division.** `is_tester` must

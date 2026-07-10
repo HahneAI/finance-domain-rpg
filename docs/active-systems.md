@@ -415,7 +415,11 @@ since migration 019's RLS column grants).
 
 - **What it grants:** `canAccessAiFeatures({ isAdmin, isTester })` (`entitlements.js`) —
   the single gate every AI feature (`api/coach.js` server-side, `HomePanel.jsx` client-side)
-  checks. Nothing else — no Admin Diagnostic Toolkit, no other admin-only surface.
+  checks — and, via the shared `hasTesterAccess` base, `canAccessTaxPlan({ isAdmin,
+  taxProjectionsEnabled, isTester })` (`BudgetPanel.jsx`, `ProfilePanel.jsx`). Nothing else —
+  no Admin Diagnostic Toolkit, no other admin-only surface. Every per-feature gate in
+  `entitlements.js` builds on `hasTesterAccess` so `isAdmin` stays a strict superset of
+  `isTester` by construction as new gates are added.
 - **Auto trial window:** a Postgres trigger on `user_data` seeds `trial_started_at` /
   `trial_ends_at` / `access_ends_at` to a 6-month window the moment `is_tester` flips
   false→true — one-time, not renewed on subsequent saves. This routes the account through

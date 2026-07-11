@@ -2347,3 +2347,185 @@ mature systems), and Stripe §17.C validated end-to-end in test mode. Each shipm
   not. The paywall gates the engine, never the user's own memories. That single sentence of
   policy is a trust differentiator competitors structurally can't match, and it makes F3's
   Chronicle/Heirloom features safe to invest emotion in.
+
+---
+
+## 22. CPA/Tax-Ready Statement Export
+
+*Seeded 2026-07-11. Answers "can a user hand something to their accountant" — today the app has
+no export surface at all (the `[x]` "Statements Tab" entry in `docs/past-TODO-tasks.md` §9 does
+not reflect working code — no component, no PDF/CSV dependency in `package.json`; treat it as
+stale, not shipped). This section is the real plan. Directly depends on **§20** for tax-number
+correctness and gates, and is the missing prerequisite **§18.D (Statements AI Insights)** already
+assumes exists ("when a monthly/quarterly/yearly statement is generated...").*
+
+### A. Scope — what this app can honestly hand a CPA
+
+This is a single-employer, hourly-wage W-2 model with flat/bracket-projected withholding — not a
+payroll system and not a multi-source tax engine. No 1099/Schedule C, no itemized deductions
+beyond the standard deduction, no investment income, no dependents/credits beyond filing status.
+The statement is the user's own modeled projection, cross-checkable against their real paystubs
+and W-2 — not a replacement for either. Every exported document needs a persistent disclaimer
+banner saying exactly that; wording is covered by the same accountant pass as §20.D, not invented
+ad hoc here.
+
+### B. Data already available — reuse, don't rebuild
+
+- `buildYear()` / `computeNet()` (`finance.js`) — per-week gross, taxable gross, net.
+- `deriveWeeklyPayrollDeductions()` (`finance.js`) — itemized 401k + `otherDeductions` per week.
+- `taxDerived` (`App.jsx` ~line 900) — already computes the exact numbers a CPA cares about:
+  `fedAGI`, `fedLiability`, `moLiability` (real bracket math via `fedTax()`/`stateTax()`, not just
+  withheld-rate math), `ficaTotal`, `fedWithheldBase`, `moWithheldBase`, `fedGap`, `moGap`,
+  `totalGap`, `taxedWeekCount`. This is effectively a mini safe-harbor check already — it just
+  never gets rendered as a document.
+- `computeGoalTimeline()`, `computeBucketModel()` (PTO/401k match), `calcEventImpact()` (Log panel
+  event totals) — for the non-tax "annual financial statement" sections (goal funding, PTO
+  accrual, missed/pickup day impact).
+- `config.filingStatus`, `getStateConfig(config.userState)` — filer identity for the header.
+
+### C. Proposed statement contents
+
+1. **Header** — tax year / period, filing status, state, generated-on date, the disclaimer banner
+   from §A.
+2. **Income & withholding summary (period totals)** — gross pay, federal withheld, state withheld,
+   FICA withheld, 401k employee contribution, net pay. Pure arithmetic on money already paid —
+   no liability judgment, no accountant gate needed for this section alone.
+3. **Projected liability vs. withheld (safe-harbor check)** — `fedLiability` vs `fedWithheldBase`,
+   `moLiability` vs `moWithheldBase`, the resulting gap. This is the section that tells a user
+   "you may owe" or "you're on track" — it does NOT ship to any user until **§20.D's accountant
+   audit clears**, full stop, same gate as the rest of the withholding-catch-up mechanism.
+4. **Per-pay-period detail table** — week/pay-period rows of gross, fed, state, FICA, 401k, net —
+   the reconciliation table a CPA actually wants when checking a W-2 against reality.
+5. **Quarterly rollups** — for estimated-payment safe-harbor context, once §B's Excerpt-1 fed/state
+   split lands (until then, one blended timeline like today).
+6. **401k & benefits summary** — employee + employer match, PTO accrual/usage.
+7. **Life-event / log impact summary** — missed days, pickups, one-off gains/losses from the Log
+   panel that materially changed the year's numbers.
+8. **Goals funded from surplus** — not tax content; keep it visually separated from the tax
+   sections so nothing in it reads as a tax claim.
+
+### D. Export mechanics
+
+- **Formats** — PDF as the primary deliverable (what someone actually emails a CPA); CSV for the
+  per-period detail table (importable into a spreadsheet or accounting software).
+- **PDF implementation** — no PDF library exists in `package.json` today. Cheapest path: a
+  print-optimized HTML view + the browser's native "Print to PDF" (zero new dependency, works
+  everywhere, ugly-ish default styling is fixable with print CSS). Alternative: a client-side lib
+  (`jspdf`/`@react-pdf/renderer`) for real typographic control at the cost of bundle size. Decide
+  based on how polished v1 needs to look — don't default to the heavier option without checking.
+- **Period selector** — month / quarter / year-to-date / prior full year. **Real blocker, not a
+  nice-to-have:** once §19's Master Timeline read-path exists, a statement covering a past period
+  must resolve that period's *historical* config (rates, filing status, etc.), not today's — until
+  §19's read side is built, any "prior period" statement is silently wrong the moment a user has
+  edited pay/tax settings mid-year. Gate the period selector to "current period only" until §19
+  lands, or disclose loudly that past periods reuse current settings.
+
+### E. Access gating
+
+- **Base gate:** `canAccessTaxPlan` (`isAdmin` / `isTester` / `taxProjectionsEnabled`) — the same
+  population already trusted with tax numbers elsewhere in the app; no separate flag needed.
+- **Internal split, mirroring the Tax Plan precedent:** §C.2/C.4/C.6/C.7/C.8 (objective totals —
+  money already paid, no liability judgment) can ship to that population without further review.
+  §C.3 (liability vs. withheld / safe-harbor gap) additionally requires §20.D's accountant
+  sign-off before it renders for anyone, admin included — the accountant gate is about the content
+  being shown, not who's allowed to see the feature.
+
+### F. Open dependencies
+
+- **§19** (Master Timeline read-path) — blocks honest past-period statements; see §D.
+- **§20.D** (accountant audit) — blocks §C.3 specifically.
+- **§20.B** (fed/state split withholding) — blocks true quarterly rollups (§C.5) until the single
+  blended timeline is split.
+- **State coverage** — confirm `STATE_TAX_TABLE` covers every tester's state before exposing state
+  liability figures beyond the personal/admin account.
+
+### G. Cash flow statements (modeled, not bank-reconciled)
+
+*Seeded 2026-07-11. The app has no bank connection and no transaction feed — it never sees what a
+user actually spends money on, only what they've configured (scheduled income, budgeted expenses,
+logged variances). Every statement in this section is therefore named and footered as **modeled**,
+never "actual" — the honest promise of this whole feature is realistic planning, not bookkeeping.
+Structure borrows the operating/investing/financing shape of a real cash flow statement because it
+maps cleanly onto data this app already has, not because the numbers are audit-grade.*
+
+**Monthly Cash Flow Statement (Modeled)**
+- **Operating activities** — gross pay → − FICA → − federal/state withholding (including any
+  extra catch-up from `taxDerived.extraPerCheck`) → − 401k employee contribution → − Needs
+  (essential) expenses = **Net Operating Cash Flow**.
+- **Investing activities** — − goal contributions (this period's surplus allocated toward goals)
+  → **+ Goal Funding Milestones** for any goal whose `completedAt` lands inside this period (see
+  §H — this is the callout the whole section exists to support).
+- **Financing activities** — − loan/debt payments (`loanWeeklyAmount`, existing loan data).
+- **Discretionary** — − Lifestyle expenses, kept as its own line rather than force-fit into a
+  GAAP bucket that doesn't really describe personal discretionary spend.
+- **Net Change in Modeled Cash Position** — sum of all of the above.
+- Mandatory footer: *"Modeled from your configured schedule and budget — not verified against a
+  bank account. Log any real variance in the Log panel to keep this accurate."*
+
+**Annual Cash Flow Statement (Modeled)** — same four sections rolled up across the fiscal year,
+with quarterly subtotals (depends on §20.B's fed/state split for the tax line to be trustworthy
+quarter-by-quarter, same dependency as §C.5/§F).
+
+### H. Goal funding as a statement milestone (Authority Finance signature)
+
+*This is the crucial differentiator the feature is really being built for — the app's entire
+purpose is helping a user at any income level understand what a goal will take and hit it
+realistically, so a goal crossing the finish line deserves to be a first-class event in the
+paperwork, not a buried number.*
+
+- **In-statement callout** — in both the Monthly and Annual Cash Flow Statements (§G), any goal
+  whose `goal.completedAt` falls inside the covered period gets an explicit flagged line inside
+  Investing Activities: *"🎯 Goal Funded — [label], $[target], funded [date]"* — the same treatment
+  a real cash flow statement gives a one-time capital event, not just another number in a column.
+  Data already exists for this (`goal.completedAt`, `goal.target`, `getFundedGoalSpend()`
+  `lib/goalFunding.js`) — this is a rendering task, not a new computation.
+- **Goal Funding Ledger** — a standalone, chronological report (separate from the cash flow
+  statements) listing every goal with target, funded date, and time-to-fund — the story of a
+  user's goal progress across the account, not just one period. Full accuracy for goals funded in
+  a *past* period depends on §19's Master Timeline read-path the same way past cash flow periods
+  do (§D); until then this ledger reflects live goal state only, not a true historical record.
+- **Why this belongs to Authority Finance specifically** — no generic bank or budgeting export
+  does this; it's the one document type that's inseparable from the app's stated purpose (helping
+  users "understand what their goals will take and work towards them realistically") rather than a
+  generic personal-finance report format borrowed from accounting.
+
+### I. Bank/lender-facing statement suite
+
+*For a W-2 user who needs something to hand a bank, landlord, or credit-card issuer during an
+application. These must look and read as professional documents (letterhead-style Authority
+Finance branding, not the app's internal UI), and every one of them needs an explicit
+"self-reported, not employer/bank-verified" disclaimer — none of this replaces a real paystub,
+W-2, or bank statement, and claiming otherwise would be actively harmful to a user relying on it
+for a real application.*
+
+- **Income Summary Statement** — annualized gross pay, YTD gross pay, average net pay per period.
+  Positioned as *supplementary* documentation alongside real paystubs/W-2, never a replacement.
+- **Debt Summary Statement** — per loan: original amount, remaining balance, payments remaining,
+  projected payoff date (`computeLoanPayoffDate`, `loanPaymentsRemaining`). **Real gap to flag,
+  not silently paper over:** `loanMeta` today is flat-payment only (`totalAmount`,
+  `paymentAmount`, `paymentFrequency`, `firstPaymentDate`) — there is no interest rate / APR field
+  anywhere in the schema, so this statement can show payoff progress but not a real
+  interest/amortization breakdown. If a lender-grade debt statement is the actual goal, adding an
+  optional `interestRate` to `loanMeta` is a prerequisite, not a detail — track as its own
+  follow-up before promising this section is "bank ready."
+- **Goal & Savings Summary** — funded + in-progress goals with targets and dates. Explicitly **not
+  a net worth statement** — the app tracks configured loans and goals, not bank balances or any
+  other assets/liabilities, so it cannot honestly claim to be a balance sheet. Name it accordingly
+  ("Goal & Savings Summary," not "Net Worth Statement") until/unless real asset/liability tracking
+  is built as its own feature.
+
+### J. Authority Finance staple statement suite (the v1 document menu)
+
+The actual list this section resolves to — every statement above, in one place, as what a v1
+export menu should offer:
+
+1. **Monthly Cash Flow Statement (Modeled)** — §G
+2. **Annual Cash Flow Statement (Modeled)**, with quarterly subtotals — §G
+3. **Goal Funding Ledger** — §H, the signature/differentiated document
+4. **Income & Withholding Summary** — §C.2 (ungated beyond §E's base tax-plan access)
+5. **Projected Liability vs. Withheld (Safe-Harbor Check)** — §C.3 (gated behind §20.D)
+6. **Income Summary Statement** (lender-facing) — §I
+7. **Debt Summary Statement** (lender-facing) — §I, pending the `interestRate` gap above
+
+All seven share §D's export mechanics (PDF/CSV) and §E's access gating split (objective totals
+open to the base tax-plan population; anything liability-flavored stays behind §20.D).

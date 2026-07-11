@@ -849,12 +849,18 @@ is written, since model lineups move.*
 
 #### Open product questions (need your call, not research)
 
-- [ ] **Entry point** — §B says bottom nav or floating chip; bottom nav is already 5 items (+
-  admin Tools). Floating chip clashes with the admin Live pill's corner. Hamburger item is
-  cheapest but buries the flagship AI feature. Decide before Phase A's UI is built.
-- [ ] **Free vs. paid** — is Coach included in the $14.99 subscription, trial-gated, or a later
-  premium tier? Changes the §17.E gating wiring and the unit economics (a chatty user costs real
-  money; the answer decides how generous the message budget above is).
+- [x] **Entry point — resolved 2026-07-11:** gated bottom-nav item, same mechanism as the existing
+  admin-only `__tools__` slot — `effectiveBottomNav` appends a "Coach" tab only when
+  `canAccessAiFeatures({isAdmin, isTester})` is true, so a non-gated user's nav stays unchanged at
+  5 items. Opens `AskCoachPanel.jsx`, a full-screen overlay (built 2026-07-11, Phase A scope: no
+  persistence, no history sidebar yet).
+- [ ] **Free vs. paid — direction set 2026-07-11, not yet built:** the general Ask Coach Q&A (§B)
+  and a baseline insight (Net Worth Trigger, §C) are meant to ship as part of the regular paid
+  subscription (trial included); the deeper, section-specific Coach surfaces (Statements Insights
+  §D, Job Hunt Assistant §E + Job Scout §I, Application Assistant §F, Tax Interview §J) are the
+  planned upsell — reusing the existing §17.E paywall/readOnly gate at trial-conversion rather than
+  inventing a separate Coach-tier flag. Not implemented — today everything is still isAdmin/isTester
+  gated regardless of subscription state; this only matters once Coach leaves admin-only.
 - [ ] **Mascot production** — who produces the §A mark (generated, commissioned, or hand-rolled
   SVG in the Flow palette)? Phase A can ship admin-only with a placeholder, but the public
   entry point wants the real avatar.
@@ -891,12 +897,13 @@ is written, since model lineups move.*
 *An app-scoped chat for users who want to understand how Authority Finance works. Not a general
 financial advisor — Coach answers questions about the app using the user's real config as context.*
 
-- [ ] **Entry point** — "Ask Coach" button accessible from the mobile bottom nav (or a floating
-  action chip); opens a full-screen chat panel (bottom-sheet on mobile, side panel on desktop)
-- [ ] **System prompt scope** — Coach answers questions about Authority Finance features (how the
-  setup wizard works, what a given metric means, how to log an event, what the goals system does,
-  etc.); system prompt includes a compressed snapshot of the user's config + key live metrics so
-  answers are personalized ("Your current weekly net is $X — here's how that's calculated…")
+- [x] **Entry point** — built 2026-07-11: gated bottom-nav "Coach" tab (`canAccessAiFeatures`),
+  opens `AskCoachPanel.jsx` as a full-screen overlay. **Deviation:** desktop side-panel treatment
+  deferred — currently full-screen on every breakpoint; fine for the isAdmin/isTester-only phase,
+  revisit before general rollout.
+- [x] **System prompt scope** — `ASK_COACH_SYSTEM_PROMPT` (`lib/coachPrompts.js`) built 2026-07-11:
+  Coach answers questions about Authority Finance features, grounded in `buildCoachContext()`'s
+  snapshot, explicitly declines general financial/tax/investment advice.
 - [ ] **Feature FAQ context block** — pre-seed Coach's context with a structured feature guide
   covering: setup wizard steps, log event types, goal system, Income panel math, Budget categories,
   Life Events, Admin Tools; prompt-cached so repeat questions are cheap

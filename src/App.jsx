@@ -30,6 +30,8 @@ import { ExpenseTriage } from "./components/ExpenseTriage.jsx";
 import { JobLossDashboard } from "./components/JobLossDashboard.jsx";
 import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
+import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
+import { canAccessAiFeatures } from "./lib/entitlements.js";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -260,6 +262,7 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState(null);
   const [configViewOpen, setConfigViewOpen] = useState(false);
   const [toolSheetOpen, setToolSheetOpen] = useState(false);
+  const [askCoachOpen, setAskCoachOpen] = useState(false);
   const [sheetDragY, setSheetDragY] = useState(0);
   const sheetDragStartY = useRef(null);
   const [rowViewOpen, setRowViewOpen] = useState(false);
@@ -673,17 +676,33 @@ export default function App() {
   );
 
   const effectiveBottomNav = useMemo(() => {
-    if (!isAdmin) return BOTTOM_NAV;
-    return [...BOTTOM_NAV, {
-      key: "__tools__",
-      label: "Tools",
-      icon: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/>
-        </svg>
-      ),
-    }];
-  }, [isAdmin]);
+    const items = [...BOTTOM_NAV];
+    // §18 standing constraint: Ask Coach stays isAdmin/isTester-gated until
+    // Coach leaves admin-only (docs/TODO.md §18.0 build order).
+    if (canAccessAiFeatures({ isAdmin, isTester })) {
+      items.push({
+        key: "__coach__",
+        label: "Coach",
+        icon: (
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM7 9h10v2H7V9zm6 5H7v-2h6v2zm4-6H7V6h10v2z"/>
+          </svg>
+        ),
+      });
+    }
+    if (isAdmin) {
+      items.push({
+        key: "__tools__",
+        label: "Tools",
+        icon: (
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/>
+          </svg>
+        ),
+      });
+    }
+    return items;
+  }, [isAdmin, isTester]);
 
   // Diff between in-memory state and what the last fetched DB row contains.
   // Returns array of column names where values diverge.
@@ -2374,9 +2393,11 @@ export default function App() {
               Contained within the pill via overflow:hidden on LiquidGlass. */}
           {(() => {
             const toolsActive = toolSheetOpen && isAdmin;
+            const coachActive = askCoachOpen;
             const baseIdx = effectiveBottomNav.findIndex(i => i.key === currentView);
             const toolsIdx = effectiveBottomNav.findIndex(i => i.key === "__tools__");
-            const activeIdx = toolsActive ? toolsIdx : Math.max(baseIdx, 0);
+            const coachIdx = effectiveBottomNav.findIndex(i => i.key === "__coach__");
+            const activeIdx = toolsActive ? toolsIdx : coachActive ? coachIdx : Math.max(baseIdx, 0);
             const pct = 100 / effectiveBottomNav.length;
             return (
               <div style={{
@@ -2393,16 +2414,23 @@ export default function App() {
           })()}
           {effectiveBottomNav.map(item => {
             const isToolsBtn = item.key === "__tools__";
-            const active = isToolsBtn ? toolSheetOpen : (currentView === item.key && !toolSheetOpen);
+            const isCoachBtn = item.key === "__coach__";
+            const active = isToolsBtn ? toolSheetOpen : isCoachBtn ? askCoachOpen : (currentView === item.key && !toolSheetOpen && !askCoachOpen);
             return (
               <Pressable
                 key={item.key}
                 onClick={() => {
                   if (isToolsBtn) {
                     setToolSheetOpen(v => !v);
+                    setAskCoachOpen(false);
+                    setDrawerOpen(false);
+                  } else if (isCoachBtn) {
+                    setAskCoachOpen(v => !v);
+                    setToolSheetOpen(false);
                     setDrawerOpen(false);
                   } else {
                     setToolSheetOpen(false);
+                    setAskCoachOpen(false);
                     navigateDirect(item.key);
                   }
                 }}
@@ -2994,6 +3022,21 @@ export default function App() {
       )}
       {/* ── PWA install instructions (§16) — single instance, opened from drawer + Account panel ── */}
       <PwaInstallModal ref={pwaModalRef} />
+
+      {/* ── Ask Coach (§18.B Phase A) — isAdmin/isTester-gated per the §18 standing constraint ── */}
+      {askCoachOpen && canAccessAiFeatures({ isAdmin, isTester }) && (
+        <AskCoachPanel
+          onClose={() => setAskCoachOpen(false)}
+          config={config}
+          expenses={expenses}
+          goals={goals}
+          weeklyIncome={weeklyIncome}
+          avgWeeklySpend={remainingSpend.avgWeeklySpend}
+          fundedGoalSpend={fundedGoalSpend}
+          currentWeek={currentWeek}
+          today={effectiveToday}
+        />
+      )}
 
       {/* ── Life Events menu (entry point modal — TODO §15.A) ── */}
       <LifeEventMenu

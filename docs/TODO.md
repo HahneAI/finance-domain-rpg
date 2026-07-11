@@ -904,9 +904,14 @@ financial advisor — Coach answers questions about the app using the user's rea
 - [x] **System prompt scope** — `ASK_COACH_SYSTEM_PROMPT` (`lib/coachPrompts.js`) built 2026-07-11:
   Coach answers questions about Authority Finance features, grounded in `buildCoachContext()`'s
   snapshot, explicitly declines general financial/tax/investment advice.
-- [ ] **Feature FAQ context block** — pre-seed Coach's context with a structured feature guide
-  covering: setup wizard steps, log event types, goal system, Income panel math, Budget categories,
-  Life Events, Admin Tools; prompt-cached so repeat questions are cheap
+- [x] **Feature FAQ context block** — built 2026-07-11: `lib/coachFeatureGuide.js`'s
+  `COACH_FEATURE_GUIDE`, a hand-written tutorial-breakdown of the 5 main panels (Home, Income,
+  Budget, Log, Account), concatenated into `ASK_COACH_SYSTEM_PROMPT` so it rides in the same
+  cached system prefix as the persona. **Scope note:** covers the 5 bottom-nav panels only, not
+  the setup wizard, Admin Tools, or Life Events flows yet — extend the file when those need
+  covering. **Deliberate non-RAG choice:** static and hand-maintained rather than a vector/retrieval
+  pipeline — the app's feature surface is small enough to hand Coach in full, and a retrieval step
+  would vary the prefix per-query and break the cache the persona block already depends on.
 - [ ] **Guardrail** — Coach does not give tax advice, legal advice, or investment recommendations;
   acknowledges the disclaimer when those topics come up
 - [ ] **Claude API integration** — Haiku for short conversational answers; Sonnet for richer

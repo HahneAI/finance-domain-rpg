@@ -3035,6 +3035,7 @@ export default function App() {
           fundedGoalSpend={fundedGoalSpend}
           currentWeek={currentWeek}
           today={effectiveToday}
+          logs={logs}
         />
       )}
 

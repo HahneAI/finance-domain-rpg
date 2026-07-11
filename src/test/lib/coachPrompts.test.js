@@ -16,6 +16,11 @@ describe("COACH_PERSONA_PROMPT", () => {
     expect(COACH_PERSONA_PROMPT).toMatch(/one concrete action/i);
     expect(COACH_PERSONA_PROMPT).toMatch(/tax, legal, or investment advice/i);
   });
+
+  it("forbids Markdown formatting — every chat surface renders raw text, not HTML/Markdown", () => {
+    expect(COACH_PERSONA_PROMPT).toMatch(/never Markdown/i);
+    expect(COACH_PERSONA_PROMPT).toMatch(/do not use asterisks/i);
+  });
 });
 
 describe("buildNetWorthSystemPrompt", () => {

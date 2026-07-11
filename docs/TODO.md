@@ -2323,3 +2323,94 @@ mature systems), and Stripe §17.C validated end-to-end in test mode. Each shipm
   not. The paywall gates the engine, never the user's own memories. That single sentence of
   policy is a trust differentiator competitors structurally can't match, and it makes F3's
   Chronicle/Heirloom features safe to invest emotion in.
+
+---
+
+## 22. CPA/Tax-Ready Statement Export
+
+*Seeded 2026-07-11. Answers "can a user hand something to their accountant" — today the app has
+no export surface at all (the `[x]` "Statements Tab" entry in `docs/past-TODO-tasks.md` §9 does
+not reflect working code — no component, no PDF/CSV dependency in `package.json`; treat it as
+stale, not shipped). This section is the real plan. Directly depends on **§20** for tax-number
+correctness and gates, and is the missing prerequisite **§18.D (Statements AI Insights)** already
+assumes exists ("when a monthly/quarterly/yearly statement is generated...").*
+
+### A. Scope — what this app can honestly hand a CPA
+
+This is a single-employer, hourly-wage W-2 model with flat/bracket-projected withholding — not a
+payroll system and not a multi-source tax engine. No 1099/Schedule C, no itemized deductions
+beyond the standard deduction, no investment income, no dependents/credits beyond filing status.
+The statement is the user's own modeled projection, cross-checkable against their real paystubs
+and W-2 — not a replacement for either. Every exported document needs a persistent disclaimer
+banner saying exactly that; wording is covered by the same accountant pass as §20.D, not invented
+ad hoc here.
+
+### B. Data already available — reuse, don't rebuild
+
+- `buildYear()` / `computeNet()` (`finance.js`) — per-week gross, taxable gross, net.
+- `deriveWeeklyPayrollDeductions()` (`finance.js`) — itemized 401k + `otherDeductions` per week.
+- `taxDerived` (`App.jsx` ~line 900) — already computes the exact numbers a CPA cares about:
+  `fedAGI`, `fedLiability`, `moLiability` (real bracket math via `fedTax()`/`stateTax()`, not just
+  withheld-rate math), `ficaTotal`, `fedWithheldBase`, `moWithheldBase`, `fedGap`, `moGap`,
+  `totalGap`, `taxedWeekCount`. This is effectively a mini safe-harbor check already — it just
+  never gets rendered as a document.
+- `computeGoalTimeline()`, `computeBucketModel()` (PTO/401k match), `calcEventImpact()` (Log panel
+  event totals) — for the non-tax "annual financial statement" sections (goal funding, PTO
+  accrual, missed/pickup day impact).
+- `config.filingStatus`, `getStateConfig(config.userState)` — filer identity for the header.
+
+### C. Proposed statement contents
+
+1. **Header** — tax year / period, filing status, state, generated-on date, the disclaimer banner
+   from §A.
+2. **Income & withholding summary (period totals)** — gross pay, federal withheld, state withheld,
+   FICA withheld, 401k employee contribution, net pay. Pure arithmetic on money already paid —
+   no liability judgment, no accountant gate needed for this section alone.
+3. **Projected liability vs. withheld (safe-harbor check)** — `fedLiability` vs `fedWithheldBase`,
+   `moLiability` vs `moWithheldBase`, the resulting gap. This is the section that tells a user
+   "you may owe" or "you're on track" — it does NOT ship to any user until **§20.D's accountant
+   audit clears**, full stop, same gate as the rest of the withholding-catch-up mechanism.
+4. **Per-pay-period detail table** — week/pay-period rows of gross, fed, state, FICA, 401k, net —
+   the reconciliation table a CPA actually wants when checking a W-2 against reality.
+5. **Quarterly rollups** — for estimated-payment safe-harbor context, once §B's Excerpt-1 fed/state
+   split lands (until then, one blended timeline like today).
+6. **401k & benefits summary** — employee + employer match, PTO accrual/usage.
+7. **Life-event / log impact summary** — missed days, pickups, one-off gains/losses from the Log
+   panel that materially changed the year's numbers.
+8. **Goals funded from surplus** — not tax content; keep it visually separated from the tax
+   sections so nothing in it reads as a tax claim.
+
+### D. Export mechanics
+
+- **Formats** — PDF as the primary deliverable (what someone actually emails a CPA); CSV for the
+  per-period detail table (importable into a spreadsheet or accounting software).
+- **PDF implementation** — no PDF library exists in `package.json` today. Cheapest path: a
+  print-optimized HTML view + the browser's native "Print to PDF" (zero new dependency, works
+  everywhere, ugly-ish default styling is fixable with print CSS). Alternative: a client-side lib
+  (`jspdf`/`@react-pdf/renderer`) for real typographic control at the cost of bundle size. Decide
+  based on how polished v1 needs to look — don't default to the heavier option without checking.
+- **Period selector** — month / quarter / year-to-date / prior full year. **Real blocker, not a
+  nice-to-have:** once §19's Master Timeline read-path exists, a statement covering a past period
+  must resolve that period's *historical* config (rates, filing status, etc.), not today's — until
+  §19's read side is built, any "prior period" statement is silently wrong the moment a user has
+  edited pay/tax settings mid-year. Gate the period selector to "current period only" until §19
+  lands, or disclose loudly that past periods reuse current settings.
+
+### E. Access gating
+
+- **Base gate:** `canAccessTaxPlan` (`isAdmin` / `isTester` / `taxProjectionsEnabled`) — the same
+  population already trusted with tax numbers elsewhere in the app; no separate flag needed.
+- **Internal split, mirroring the Tax Plan precedent:** §C.2/C.4/C.6/C.7/C.8 (objective totals —
+  money already paid, no liability judgment) can ship to that population without further review.
+  §C.3 (liability vs. withheld / safe-harbor gap) additionally requires §20.D's accountant
+  sign-off before it renders for anyone, admin included — the accountant gate is about the content
+  being shown, not who's allowed to see the feature.
+
+### F. Open dependencies
+
+- **§19** (Master Timeline read-path) — blocks honest past-period statements; see §D.
+- **§20.D** (accountant audit) — blocks §C.3 specifically.
+- **§20.B** (fed/state split withholding) — blocks true quarterly rollups (§C.5) until the single
+  blended timeline is split.
+- **State coverage** — confirm `STATE_TAX_TABLE` covers every tester's state before exposing state
+  liability figures beyond the personal/admin account.

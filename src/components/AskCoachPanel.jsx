@@ -22,6 +22,7 @@ export function AskCoachPanel({
   currentWeek,
   today,
   runwayDays = null,
+  logs = [],
 }) {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
@@ -43,7 +44,7 @@ export function AskCoachPanel({
     setSending(true);
     try {
       const contextBlock = buildCoachContext({
-        config, weeklyIncome, avgWeeklySpend, goals, expenses, fundedGoalSpend, currentWeek, today, runwayDays,
+        config, weeklyIncome, avgWeeklySpend, goals, expenses, fundedGoalSpend, currentWeek, today, runwayDays, logs,
       });
       let accumulated = "";
       for await (const chunk of chatWithCoach(nextMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, "haiku")) {

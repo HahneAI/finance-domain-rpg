@@ -51,6 +51,18 @@ function BackBar({ onBack, title }) {
 }
 
 // Read-only detail row used inside sub-views
+// Small grayed-out padlock — flags a value that's showing a locked default
+// (e.g. "Standard withholding" while the Tax Plan feature is gated) rather
+// than a real user election, without implying the row itself is clickable.
+function LockIcon({ style }) {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-text-disabled)", flexShrink: 0, ...style }}>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+
 function DetailRow({ label, value, valueColor, last }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 16px", borderBottom: last ? "none" : "1px solid #1e1e1e" }}>
@@ -1580,7 +1592,12 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
         )}
         <DetailRow
           label="Tax Exempt"
-          value={showTaxExempt ? "Opted in" : "Standard withholding"}
+          value={showTaxExempt ? "Opted in" : (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              {!taxFeatureUnlocked && <LockIcon />}
+              Standard withholding
+            </span>
+          )}
           valueColor={showTaxExempt ? "var(--color-gold)" : "var(--color-text-secondary)"}
           last
         />

@@ -419,6 +419,102 @@ export async function fetchConfigHistoryMeta() {
 }
 
 /**
+ * §18.H2 — Coach chat & Job Scout search history (migration 023). Fetches the
+ * N most recent coach_chats rows for the signed-in user; maps snake_case
+ * columns to the camelCase shape the rest of the app uses. Returns [] on no
+ * session, no rows, or a missing-table error (migration not yet run) — same
+ * tolerance pattern as loadUserData's isolated queries.
+ */
+export async function loadCoachChats(limit = 20) {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("coach_chats")
+    .select("id, chat_type, title, messages, summary, insights, search_params, search_results, created_at, updated_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.warn("Failed to load coach chats:", error.message);
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    chatType: row.chat_type,
+    title: row.title,
+    messages: row.messages ?? [],
+    summary: row.summary,
+    insights: row.insights,
+    searchParams: row.search_params,
+    searchResults: row.search_results,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+/**
+ * Upserts one coach_chats row (§18.H2). `chat.id` is optional — omit it for a
+ * brand-new chat and the DB generates one (returned so the caller can keep
+ * upserting into the same row on later messages); pass an existing row's id
+ * to update it. `user_id` always comes from the current session, never from
+ * the caller, so a chat can never be silently reassigned to another account.
+ * Returns the row's id on success, null on failure or no session.
+ */
+export async function saveCoachChat(chat) {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const row = {
+    ...(chat.id ? { id: chat.id } : {}),
+    user_id: userId,
+    chat_type: chat.chatType,
+    title: chat.title ?? null,
+    messages: chat.messages ?? [],
+    summary: chat.summary ?? null,
+    insights: chat.insights ?? null,
+    search_params: chat.searchParams ?? null,
+    search_results: chat.searchResults ?? null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from("coach_chats")
+    .upsert(row, { onConflict: "id" })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error("Failed to save coach chat:", error.message);
+    return null;
+  }
+  return data?.id ?? null;
+}
+
+/**
+ * Hard-deletes a single coach_chats row by id (§18.H2 — swipe-to-delete /
+ * long-press in the future history list). The extra `user_id` filter is
+ * defense-in-depth on top of RLS's own-row policy — same double-check pattern
+ * already used for the investor_users delete below.
+ */
+export async function deleteCoachChat(id) {
+  const userId = await getCurrentUserId();
+  if (!userId) return;
+
+  const { error } = await supabase
+    .from("coach_chats")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("Failed to delete coach chat:", error.message);
+  }
+}
+
+/**
  * Creates a full investor account in three atomic steps:
  *   1. Supabase auth user (email + password)
  *   2. investor_users profile row

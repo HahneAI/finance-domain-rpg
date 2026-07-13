@@ -159,6 +159,7 @@ describe('BudgetPanel', () => {
       bufferPerWeek={0}
       isAdmin={false}
       taxProjectionsEnabled={false}
+      isTester={false}
       {...extra}
     />
   )

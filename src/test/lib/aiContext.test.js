@@ -22,6 +22,33 @@ describe("buildCoachContext", () => {
     expect(block).toContain("Today: 2026-07-07");
   });
 
+  it("reports zero log entries plainly rather than omitting the line", () => {
+    const block = buildCoachContext({ weeklyIncome: 800, avgWeeklySpend: 300 });
+    expect(block).toContain("Log entries: 0 logged");
+    expect(block).not.toContain("most recent");
+  });
+
+  it("names the most recent log entry by weekEnd, not insertion order", () => {
+    const block = buildCoachContext({
+      weeklyIncome: 800,
+      avgWeeklySpend: 300,
+      logs: [
+        { type: "bonus", weekEnd: "2026-03-01" },
+        { type: "missed_unpaid", weekEnd: "2026-06-01" },
+      ],
+    });
+    expect(block).toContain("Log entries: 2 logged, most recent: Missed Shift (Unpaid/Approved) (week ending 2026-06-01)");
+  });
+
+  it("falls back to the raw type string for an unrecognized log type", () => {
+    const block = buildCoachContext({
+      weeklyIncome: 800,
+      avgWeeklySpend: 300,
+      logs: [{ type: "mystery_event", weekEnd: "2026-01-01" }],
+    });
+    expect(block).toContain("most recent: mystery_event (week ending 2026-01-01)");
+  });
+
   it("omits the job-loss line when jobLossMode is off", () => {
     const block = buildCoachContext({ weeklyIncome: 800, avgWeeklySpend: 300 });
     expect(block).not.toContain("Job Loss Mode");

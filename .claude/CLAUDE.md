@@ -51,7 +51,7 @@ src/
 │   └── supabase.js          — Supabase client
 └── test/                    — Vitest tests
 docs/                        — project documentation
-database/migrations/         — Supabase SQL migrations
+database/migrations/         — Supabase SQL migrations (see BOOKMARK note below)
 ```
 
 ---
@@ -164,6 +164,13 @@ database/migrations/         — Supabase SQL migrations
 - `docs/past-TODO-tasks.md` — completed work log (one-liner per shipped item, for historical context)
 - `docs/account-reference.json` — Anthony's primary account ground truth
 
+**Schema bookmarks:** `database/migrations/0NN_BOOKMARK_schema_snapshot_<date>.sql` files are
+periodic full-schema recaps, not real migrations — never assign one the actual next migration
+number in sequence expecting it to run. They exist purely so a session can read one file instead
+of the entire migrations folder to understand current DB shape. The `BOOKMARK` tag and all-caps
+make them impossible to mistake for a pending migration. Latest: `022_BOOKMARK_schema_snapshot_2026-07-10.sql`
+(schema state through migration 021). The next real migration should still be numbered 023.
+
 ---
 
 ## Account Reference (`docs/account-reference.json`)
@@ -214,8 +221,8 @@ never treat one as implying another:
 
 | Flag | Unlocks | Set via |
 |------|---------|---------|
-| `is_admin` | Full Admin Diagnostic Toolkit (below) + all AI features | Manual SQL |
-| `is_tester` | AI features only (`canAccessAiFeatures` in `entitlements.js`) — no toolkit, no other admin surface | Manual SQL only, on an already-existing account (migration `021_add_is_tester_beta_flag.sql`); auto-seeds a 6-month app-side trial window on the false→true transition |
+| `is_admin` | Full Admin Diagnostic Toolkit (below) + all AI features + Tax Plan | Manual SQL |
+| `is_tester` | AI features (`canAccessAiFeatures`) + Tax Plan (`canAccessTaxPlan`), both in `entitlements.js` — no toolkit, no other admin surface | Manual SQL only, on an already-existing account (migration `021_add_is_tester_beta_flag.sql`); auto-seeds a 6-month app-side trial window on the false→true transition |
 | `is_investor` | Demo Account Tree + investor code signup path | `createInvestorAccount()` via the investor code flow |
 
 **Beta testers are NOT investors — this is a crucial, deliberate division.** `is_tester` must

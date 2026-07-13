@@ -98,6 +98,7 @@ describe('BudgetPanel — readOnly paywall mode', () => {
       bufferPerWeek={0}
       isAdmin={false}
       taxProjectionsEnabled={false}
+      isTester={false}
       {...extra}
     />
   )

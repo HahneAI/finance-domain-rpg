@@ -819,10 +819,11 @@ is written, since model lineups move.*
   personalization hook parked in §19.D2's commented block. Phase A ships without it; wire it into
   the serializer when a real use case (e.g. "your raise in March changed this") justifies the
   tokens.
-- **Migration renumbering.** §H1's `017_add_coach_chats.sql` is stale — 017 through 021 are now
-  taken (021 went to `021_add_is_tester_beta_flag.sql`, the beta tester flag, 2026-07-07); the
-  coach_chats migration lands as **`022_add_coach_chats.sql`** (or whatever is next when Phase B
-  actually starts — check `database/migrations/` before writing it).
+- **Migration renumbering.** §H1's `017_add_coach_chats.sql` is stale — 017 through 022 are now
+  taken (021 went to `021_add_is_tester_beta_flag.sql`, the beta tester flag, 2026-07-07; 022 was
+  claimed by a concurrent, not-yet-pushed session); the coach_chats migration lands as
+  **`023_add_coach_chats.sql`** (shipped 2026-07-10) — check `database/migrations/` before writing
+  any future migration, since numbering collisions across concurrent sessions keep happening.
 - **Cost controls are Phase A scope, not later.** Log call type + `usage` token counts (including
   cache read/write splits) per request from the first deployed call — §21.E's "AI cost telemetry"
   starts as a `console.log`/DB row in `api/coach.js`, not a dashboard.
@@ -848,12 +849,18 @@ is written, since model lineups move.*
 
 #### Open product questions (need your call, not research)
 
-- [ ] **Entry point** — §B says bottom nav or floating chip; bottom nav is already 5 items (+
-  admin Tools). Floating chip clashes with the admin Live pill's corner. Hamburger item is
-  cheapest but buries the flagship AI feature. Decide before Phase A's UI is built.
-- [ ] **Free vs. paid** — is Coach included in the $14.99 subscription, trial-gated, or a later
-  premium tier? Changes the §17.E gating wiring and the unit economics (a chatty user costs real
-  money; the answer decides how generous the message budget above is).
+- [x] **Entry point — resolved 2026-07-11:** gated bottom-nav item, same mechanism as the existing
+  admin-only `__tools__` slot — `effectiveBottomNav` appends a "Coach" tab only when
+  `canAccessAiFeatures({isAdmin, isTester})` is true, so a non-gated user's nav stays unchanged at
+  5 items. Opens `AskCoachPanel.jsx`, a full-screen overlay (built 2026-07-11, Phase A scope: no
+  persistence, no history sidebar yet).
+- [ ] **Free vs. paid — direction set 2026-07-11, not yet built:** the general Ask Coach Q&A (§B)
+  and a baseline insight (Net Worth Trigger, §C) are meant to ship as part of the regular paid
+  subscription (trial included); the deeper, section-specific Coach surfaces (Statements Insights
+  §D, Job Hunt Assistant §E + Job Scout §I, Application Assistant §F, Tax Interview §J) are the
+  planned upsell — reusing the existing §17.E paywall/readOnly gate at trial-conversion rather than
+  inventing a separate Coach-tier flag. Not implemented — today everything is still isAdmin/isTester
+  gated regardless of subscription state; this only matters once Coach leaves admin-only.
 - [ ] **Mascot production** — who produces the §A mark (generated, commissioned, or hand-rolled
   SVG in the Flow palette)? Phase A can ship admin-only with a placeholder, but the public
   entry point wants the real avatar.
@@ -890,15 +897,21 @@ is written, since model lineups move.*
 *An app-scoped chat for users who want to understand how Authority Finance works. Not a general
 financial advisor — Coach answers questions about the app using the user's real config as context.*
 
-- [ ] **Entry point** — "Ask Coach" button accessible from the mobile bottom nav (or a floating
-  action chip); opens a full-screen chat panel (bottom-sheet on mobile, side panel on desktop)
-- [ ] **System prompt scope** — Coach answers questions about Authority Finance features (how the
-  setup wizard works, what a given metric means, how to log an event, what the goals system does,
-  etc.); system prompt includes a compressed snapshot of the user's config + key live metrics so
-  answers are personalized ("Your current weekly net is $X — here's how that's calculated…")
-- [ ] **Feature FAQ context block** — pre-seed Coach's context with a structured feature guide
-  covering: setup wizard steps, log event types, goal system, Income panel math, Budget categories,
-  Life Events, Admin Tools; prompt-cached so repeat questions are cheap
+- [x] **Entry point** — built 2026-07-11: gated bottom-nav "Coach" tab (`canAccessAiFeatures`),
+  opens `AskCoachPanel.jsx` as a full-screen overlay. **Deviation:** desktop side-panel treatment
+  deferred — currently full-screen on every breakpoint; fine for the isAdmin/isTester-only phase,
+  revisit before general rollout.
+- [x] **System prompt scope** — `ASK_COACH_SYSTEM_PROMPT` (`lib/coachPrompts.js`) built 2026-07-11:
+  Coach answers questions about Authority Finance features, grounded in `buildCoachContext()`'s
+  snapshot, explicitly declines general financial/tax/investment advice.
+- [x] **Feature FAQ context block** — built 2026-07-11: `lib/coachFeatureGuide.js`'s
+  `COACH_FEATURE_GUIDE`, a hand-written tutorial-breakdown of the 5 main panels (Home, Income,
+  Budget, Log, Account), concatenated into `ASK_COACH_SYSTEM_PROMPT` so it rides in the same
+  cached system prefix as the persona. **Scope note:** covers the 5 bottom-nav panels only, not
+  the setup wizard, Admin Tools, or Life Events flows yet — extend the file when those need
+  covering. **Deliberate non-RAG choice:** static and hand-maintained rather than a vector/retrieval
+  pipeline — the app's feature surface is small enough to hand Coach in full, and a retrieval step
+  would vary the prefix per-query and break the cache the persona block already depends on.
 - [ ] **Guardrail** — Coach does not give tax advice, legal advice, or investment recommendations;
   acknowledges the disclaimer when those topics come up
 - [ ] **Claude API integration** — Haiku for short conversational answers; Sonnet for richer
@@ -1043,7 +1056,7 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 user by a foreign key. This gives users a persistent record across devices and sessions, and
 gives Coach context to reference past conversations when relevant.*
 
-#### H1. Migration — `022_add_coach_chats.sql` (renumbered — see §18.0's migration-renumbering note; check `database/migrations/` for the actual next-available number before writing this)
+#### H1. Migration — `023_add_coach_chats.sql` (renumbered — see §18.0's migration-renumbering note; check `database/migrations/` for the actual next-available number before writing this)
 
 ```sql
 CREATE TABLE coach_chats (
@@ -1081,23 +1094,39 @@ CREATE INDEX coach_chats_user_id_created_at
   ON coach_chats (user_id, created_at DESC);
 ```
 
-- [ ] **Write migration** `database/migrations/022_add_coach_chats.sql` (verify the number is
-  still free — see §18.0's migration-renumbering note)
-- [ ] **RLS policies** — users may `SELECT`, `INSERT`, `UPDATE`, `DELETE` their own rows
-  (`user_id = auth.uid()`); no public access; service-role bypasses for admin diagnostic
-- [ ] **`updated_at` trigger** — add `moddatetime` trigger so `updated_at` auto-updates on row change
-  (same pattern as `user_data`)
+- [x] **Write migration** `database/migrations/023_add_coach_chats.sql` — built 2026-07-10
+  (renumbered from 022 to 023 after a concurrent, not-yet-pushed session claimed 022 first).
+  Two deliberate deviations from the spec above, documented in the migration's own header:
+  the FK is `references user_data(user_id)`, not `user_data(id)` (the spec named the wrong
+  column — `user_data`'s real PK is `user_id`); and there's no `moddatetime` trigger for
+  `updated_at` — no such trigger exists anywhere in this schema today (not even on
+  `user_data`, despite CLAUDE.md's mention), every table stamps it client-side instead, and
+  this table matches that actual convention rather than introducing a new one.
+  **Confirmed run in Supabase 2026-07-10** — `coach_chats` exists with RLS enabled
+  (`relrowsecurity = true` verified) and the own-row policies hold.
+- [x] **RLS policies** — full own-row `SELECT`/`INSERT`/`UPDATE`/`DELETE` (`user_id = auth.uid()`),
+  closer to `user_data`'s own-row policy set (019) than `account_history`'s insert-only one
+  (020) — chat history is user-editable/deletable, unlike an audit log
+- [x] ~~`updated_at` trigger~~ — see migration deviation note above; handled client-side instead
 
 #### H2. `db.js` integration
 
-- [ ] **`loadCoachChats(userId, limit = 20)`** — fetches the N most recent rows for the user on
-  sign-in; stored in a `coachChats` array alongside the existing in-memory state
-- [ ] **`saveCoachChat(chat)`** — upserts a single row by `id`; called on every message append
-  (debounced 1s) and on session close (immediate)
-- [ ] **`deleteCoachChat(id)`** — hard-deletes a single history row; exposed via swipe-to-delete
-  or long-press in the history list
+- [x] **`loadCoachChats(limit = 20)`** — built 2026-07-10 in `src/lib/db.js`. Signature dropped
+  the spec's `userId` param — every other load/save function in this file derives the user
+  from `getCurrentUserId()` internally rather than accepting it from the caller; matched that
+  existing convention instead of introducing a one-off exception. Maps snake_case columns to
+  camelCase. Tests: `src/test/lib/dbCoachChats.test.js`
+- [x] **`saveCoachChat(chat)`** — built 2026-07-10. Upserts by `id`; omitting `chat.id` lets the
+  DB generate one for a new chat (returned to the caller so it can keep upserting into the same
+  row). `user_id` always comes from the session, never the caller. **Not yet wired to a
+  debounced-on-append / immediate-on-close call site** — that needs the Ask Coach chat UI
+  (§18.B, not built yet) to call it from
+- [ ] **`deleteCoachChat(id)`** — [x] function built (`db.js` + tests), [ ] swipe-to-delete/
+  long-press UI still needs §18.H3's history list to exist
 - [ ] **In-memory shape** — `coachChats` array is a peer of `config`, `logs`, `goals` in App state;
-  passed down only to the Coach panel
+  passed down only to the Coach panel — **deferred**: no Coach panel exists yet to receive it
+  (§18.B); wiring `loadCoachChats()` into `App.jsx`'s auth-load effect now would be dead state
+  with no consumer. Do this alongside §18.B, not before it.
 
 #### H3. Chat history UI
 
@@ -2323,3 +2352,185 @@ mature systems), and Stripe §17.C validated end-to-end in test mode. Each shipm
   not. The paywall gates the engine, never the user's own memories. That single sentence of
   policy is a trust differentiator competitors structurally can't match, and it makes F3's
   Chronicle/Heirloom features safe to invest emotion in.
+
+---
+
+## 22. CPA/Tax-Ready Statement Export
+
+*Seeded 2026-07-11. Answers "can a user hand something to their accountant" — today the app has
+no export surface at all (the `[x]` "Statements Tab" entry in `docs/past-TODO-tasks.md` §9 does
+not reflect working code — no component, no PDF/CSV dependency in `package.json`; treat it as
+stale, not shipped). This section is the real plan. Directly depends on **§20** for tax-number
+correctness and gates, and is the missing prerequisite **§18.D (Statements AI Insights)** already
+assumes exists ("when a monthly/quarterly/yearly statement is generated...").*
+
+### A. Scope — what this app can honestly hand a CPA
+
+This is a single-employer, hourly-wage W-2 model with flat/bracket-projected withholding — not a
+payroll system and not a multi-source tax engine. No 1099/Schedule C, no itemized deductions
+beyond the standard deduction, no investment income, no dependents/credits beyond filing status.
+The statement is the user's own modeled projection, cross-checkable against their real paystubs
+and W-2 — not a replacement for either. Every exported document needs a persistent disclaimer
+banner saying exactly that; wording is covered by the same accountant pass as §20.D, not invented
+ad hoc here.
+
+### B. Data already available — reuse, don't rebuild
+
+- `buildYear()` / `computeNet()` (`finance.js`) — per-week gross, taxable gross, net.
+- `deriveWeeklyPayrollDeductions()` (`finance.js`) — itemized 401k + `otherDeductions` per week.
+- `taxDerived` (`App.jsx` ~line 900) — already computes the exact numbers a CPA cares about:
+  `fedAGI`, `fedLiability`, `moLiability` (real bracket math via `fedTax()`/`stateTax()`, not just
+  withheld-rate math), `ficaTotal`, `fedWithheldBase`, `moWithheldBase`, `fedGap`, `moGap`,
+  `totalGap`, `taxedWeekCount`. This is effectively a mini safe-harbor check already — it just
+  never gets rendered as a document.
+- `computeGoalTimeline()`, `computeBucketModel()` (PTO/401k match), `calcEventImpact()` (Log panel
+  event totals) — for the non-tax "annual financial statement" sections (goal funding, PTO
+  accrual, missed/pickup day impact).
+- `config.filingStatus`, `getStateConfig(config.userState)` — filer identity for the header.
+
+### C. Proposed statement contents
+
+1. **Header** — tax year / period, filing status, state, generated-on date, the disclaimer banner
+   from §A.
+2. **Income & withholding summary (period totals)** — gross pay, federal withheld, state withheld,
+   FICA withheld, 401k employee contribution, net pay. Pure arithmetic on money already paid —
+   no liability judgment, no accountant gate needed for this section alone.
+3. **Projected liability vs. withheld (safe-harbor check)** — `fedLiability` vs `fedWithheldBase`,
+   `moLiability` vs `moWithheldBase`, the resulting gap. This is the section that tells a user
+   "you may owe" or "you're on track" — it does NOT ship to any user until **§20.D's accountant
+   audit clears**, full stop, same gate as the rest of the withholding-catch-up mechanism.
+4. **Per-pay-period detail table** — week/pay-period rows of gross, fed, state, FICA, 401k, net —
+   the reconciliation table a CPA actually wants when checking a W-2 against reality.
+5. **Quarterly rollups** — for estimated-payment safe-harbor context, once §B's Excerpt-1 fed/state
+   split lands (until then, one blended timeline like today).
+6. **401k & benefits summary** — employee + employer match, PTO accrual/usage.
+7. **Life-event / log impact summary** — missed days, pickups, one-off gains/losses from the Log
+   panel that materially changed the year's numbers.
+8. **Goals funded from surplus** — not tax content; keep it visually separated from the tax
+   sections so nothing in it reads as a tax claim.
+
+### D. Export mechanics
+
+- **Formats** — PDF as the primary deliverable (what someone actually emails a CPA); CSV for the
+  per-period detail table (importable into a spreadsheet or accounting software).
+- **PDF implementation** — no PDF library exists in `package.json` today. Cheapest path: a
+  print-optimized HTML view + the browser's native "Print to PDF" (zero new dependency, works
+  everywhere, ugly-ish default styling is fixable with print CSS). Alternative: a client-side lib
+  (`jspdf`/`@react-pdf/renderer`) for real typographic control at the cost of bundle size. Decide
+  based on how polished v1 needs to look — don't default to the heavier option without checking.
+- **Period selector** — month / quarter / year-to-date / prior full year. **Real blocker, not a
+  nice-to-have:** once §19's Master Timeline read-path exists, a statement covering a past period
+  must resolve that period's *historical* config (rates, filing status, etc.), not today's — until
+  §19's read side is built, any "prior period" statement is silently wrong the moment a user has
+  edited pay/tax settings mid-year. Gate the period selector to "current period only" until §19
+  lands, or disclose loudly that past periods reuse current settings.
+
+### E. Access gating
+
+- **Base gate:** `canAccessTaxPlan` (`isAdmin` / `isTester` / `taxProjectionsEnabled`) — the same
+  population already trusted with tax numbers elsewhere in the app; no separate flag needed.
+- **Internal split, mirroring the Tax Plan precedent:** §C.2/C.4/C.6/C.7/C.8 (objective totals —
+  money already paid, no liability judgment) can ship to that population without further review.
+  §C.3 (liability vs. withheld / safe-harbor gap) additionally requires §20.D's accountant
+  sign-off before it renders for anyone, admin included — the accountant gate is about the content
+  being shown, not who's allowed to see the feature.
+
+### F. Open dependencies
+
+- **§19** (Master Timeline read-path) — blocks honest past-period statements; see §D.
+- **§20.D** (accountant audit) — blocks §C.3 specifically.
+- **§20.B** (fed/state split withholding) — blocks true quarterly rollups (§C.5) until the single
+  blended timeline is split.
+- **State coverage** — confirm `STATE_TAX_TABLE` covers every tester's state before exposing state
+  liability figures beyond the personal/admin account.
+
+### G. Cash flow statements (modeled, not bank-reconciled)
+
+*Seeded 2026-07-11. The app has no bank connection and no transaction feed — it never sees what a
+user actually spends money on, only what they've configured (scheduled income, budgeted expenses,
+logged variances). Every statement in this section is therefore named and footered as **modeled**,
+never "actual" — the honest promise of this whole feature is realistic planning, not bookkeeping.
+Structure borrows the operating/investing/financing shape of a real cash flow statement because it
+maps cleanly onto data this app already has, not because the numbers are audit-grade.*
+
+**Monthly Cash Flow Statement (Modeled)**
+- **Operating activities** — gross pay → − FICA → − federal/state withholding (including any
+  extra catch-up from `taxDerived.extraPerCheck`) → − 401k employee contribution → − Needs
+  (essential) expenses = **Net Operating Cash Flow**.
+- **Investing activities** — − goal contributions (this period's surplus allocated toward goals)
+  → **+ Goal Funding Milestones** for any goal whose `completedAt` lands inside this period (see
+  §H — this is the callout the whole section exists to support).
+- **Financing activities** — − loan/debt payments (`loanWeeklyAmount`, existing loan data).
+- **Discretionary** — − Lifestyle expenses, kept as its own line rather than force-fit into a
+  GAAP bucket that doesn't really describe personal discretionary spend.
+- **Net Change in Modeled Cash Position** — sum of all of the above.
+- Mandatory footer: *"Modeled from your configured schedule and budget — not verified against a
+  bank account. Log any real variance in the Log panel to keep this accurate."*
+
+**Annual Cash Flow Statement (Modeled)** — same four sections rolled up across the fiscal year,
+with quarterly subtotals (depends on §20.B's fed/state split for the tax line to be trustworthy
+quarter-by-quarter, same dependency as §C.5/§F).
+
+### H. Goal funding as a statement milestone (Authority Finance signature)
+
+*This is the crucial differentiator the feature is really being built for — the app's entire
+purpose is helping a user at any income level understand what a goal will take and hit it
+realistically, so a goal crossing the finish line deserves to be a first-class event in the
+paperwork, not a buried number.*
+
+- **In-statement callout** — in both the Monthly and Annual Cash Flow Statements (§G), any goal
+  whose `goal.completedAt` falls inside the covered period gets an explicit flagged line inside
+  Investing Activities: *"🎯 Goal Funded — [label], $[target], funded [date]"* — the same treatment
+  a real cash flow statement gives a one-time capital event, not just another number in a column.
+  Data already exists for this (`goal.completedAt`, `goal.target`, `getFundedGoalSpend()`
+  `lib/goalFunding.js`) — this is a rendering task, not a new computation.
+- **Goal Funding Ledger** — a standalone, chronological report (separate from the cash flow
+  statements) listing every goal with target, funded date, and time-to-fund — the story of a
+  user's goal progress across the account, not just one period. Full accuracy for goals funded in
+  a *past* period depends on §19's Master Timeline read-path the same way past cash flow periods
+  do (§D); until then this ledger reflects live goal state only, not a true historical record.
+- **Why this belongs to Authority Finance specifically** — no generic bank or budgeting export
+  does this; it's the one document type that's inseparable from the app's stated purpose (helping
+  users "understand what their goals will take and work towards them realistically") rather than a
+  generic personal-finance report format borrowed from accounting.
+
+### I. Bank/lender-facing statement suite
+
+*For a W-2 user who needs something to hand a bank, landlord, or credit-card issuer during an
+application. These must look and read as professional documents (letterhead-style Authority
+Finance branding, not the app's internal UI), and every one of them needs an explicit
+"self-reported, not employer/bank-verified" disclaimer — none of this replaces a real paystub,
+W-2, or bank statement, and claiming otherwise would be actively harmful to a user relying on it
+for a real application.*
+
+- **Income Summary Statement** — annualized gross pay, YTD gross pay, average net pay per period.
+  Positioned as *supplementary* documentation alongside real paystubs/W-2, never a replacement.
+- **Debt Summary Statement** — per loan: original amount, remaining balance, payments remaining,
+  projected payoff date (`computeLoanPayoffDate`, `loanPaymentsRemaining`). **Real gap to flag,
+  not silently paper over:** `loanMeta` today is flat-payment only (`totalAmount`,
+  `paymentAmount`, `paymentFrequency`, `firstPaymentDate`) — there is no interest rate / APR field
+  anywhere in the schema, so this statement can show payoff progress but not a real
+  interest/amortization breakdown. If a lender-grade debt statement is the actual goal, adding an
+  optional `interestRate` to `loanMeta` is a prerequisite, not a detail — track as its own
+  follow-up before promising this section is "bank ready."
+- **Goal & Savings Summary** — funded + in-progress goals with targets and dates. Explicitly **not
+  a net worth statement** — the app tracks configured loans and goals, not bank balances or any
+  other assets/liabilities, so it cannot honestly claim to be a balance sheet. Name it accordingly
+  ("Goal & Savings Summary," not "Net Worth Statement") until/unless real asset/liability tracking
+  is built as its own feature.
+
+### J. Authority Finance staple statement suite (the v1 document menu)
+
+The actual list this section resolves to — every statement above, in one place, as what a v1
+export menu should offer:
+
+1. **Monthly Cash Flow Statement (Modeled)** — §G
+2. **Annual Cash Flow Statement (Modeled)**, with quarterly subtotals — §G
+3. **Goal Funding Ledger** — §H, the signature/differentiated document
+4. **Income & Withholding Summary** — §C.2 (ungated beyond §E's base tax-plan access)
+5. **Projected Liability vs. Withheld (Safe-Harbor Check)** — §C.3 (gated behind §20.D)
+6. **Income Summary Statement** (lender-facing) — §I
+7. **Debt Summary Statement** (lender-facing) — §I, pending the `interestRate` gap above
+
+All seven share §D's export mechanics (PDF/CSV) and §E's access gating split (objective totals
+open to the base tax-plan population; anything liability-flavored stays behind §20.D).

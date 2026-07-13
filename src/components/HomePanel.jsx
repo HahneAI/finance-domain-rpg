@@ -385,6 +385,18 @@ export function HomePanel({
   const nowIdx = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : 1;
   const weeksLeft = futureWeeks?.length ?? Math.max(FISCAL_WEEKS_PER_YEAR - nowIdx, 0);
   const totalActiveGoals = activeGoals.reduce((s, g) => s + (Number(g.target) || 0), 0);
+  // Year-end-projected goal draw: unlike totalActiveGoals (full remaining target across
+  // every active goal), this is scoped to only the portion each goal is actually projected
+  // to be funded by fiscal year end — a goal that starts in September and doesn't finish
+  // until next spring should only subtract its September-through-Dec-31 slice from this
+  // year's outlook, not its full target. tl (computeGoalTimeline) already simulates this
+  // per goal; remainingAtEnd is the unfunded leftover once the year-end simulation stops
+  // (falls back to the full target when tl's early-return shape omits it, i.e. no time
+  // left in the year to fund anything further).
+  const yearEndGoalDraw = tl.reduce((s, g) => {
+    const remaining = Number(g.remainingAtEnd ?? g.target) || 0;
+    return s + Math.max((Number(g.target) || 0) - remaining, 0);
+  }, 0);
 
   const ordinalSuffix = (day) => {
     if (day >= 11 && day <= 13) return "th";
@@ -1328,8 +1340,8 @@ export function HomePanel({
           <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
-            <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - totalActiveGoals >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
-              {fmt$(annualSavings - totalActiveGoals)}
+            <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - yearEndGoalDraw >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
+              {fmt$(annualSavings - yearEndGoalDraw)}
             </div>
           </div>
         </div>

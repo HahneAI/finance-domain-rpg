@@ -319,3 +319,58 @@ describe('Attendance History — day pattern', () => {
     expect(screen.getByText(/1 total missed day logged/i)).toBeTruthy()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pay Week dropdown — rolling order (previous week forward, then a Past group)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const mkDate = (y, m, d) => new Date(y, m - 1, d)
+
+const mkWeek = (idx, startYmd, endYmd) => ({
+  idx,
+  active: true,
+  rotation: '6-Day',
+  weekStart: mkDate(...startYmd),
+  weekEnd: mkDate(...endYmd),
+  workedDayNames: [],
+  k401kEmployee: 0,
+  k401kEmployer: 0,
+  totalHours: 40,
+  grossPay: 0,
+  taxedBySchedule: true,
+})
+
+describe('Pay Week dropdown — rolling order', () => {
+  // idx0/1 → older past · idx2 → "previous week" (last completed before today)
+  // idx3 → current week (contains today) · idx4/5 → future, through year-end
+  const allWeeks = [
+    mkWeek(0, [2025, 12, 29], [2026, 1, 4]),
+    mkWeek(1, [2026, 1, 5], [2026, 1, 11]),
+    mkWeek(2, [2026, 1, 12], [2026, 1, 18]),
+    mkWeek(3, [2026, 1, 19], [2026, 1, 25]),
+    mkWeek(4, [2026, 1, 26], [2026, 2, 1]),
+    mkWeek(5, [2026, 2, 2], [2026, 2, 8]),
+  ]
+
+  function openAddForm() {
+    const { container } = render(<LogPanel {...BASE_PROPS} logs={[]} allWeeks={allWeeks} effectiveToday="2026-01-20" />)
+    fireEvent.click(screen.getByText('+ LOG EVENT'))
+    return container.querySelector('select')
+  }
+
+  it('lists the previous completed week forward through year-end before any Past group', () => {
+    const select = openAddForm()
+    const options = Array.from(select.querySelectorAll('option'))
+    // Skip the leading "— select pay week —" placeholder.
+    const values = options.slice(1).map(o => o.value)
+    expect(values.slice(0, 4)).toEqual(['2026-01-18', '2026-01-25', '2026-02-01', '2026-02-08'])
+  })
+
+  it('groups older weeks under a "Past" optgroup, most-recent-past first', () => {
+    const select = openAddForm()
+    const pastGroup = select.querySelector('optgroup[label="Past"]')
+    expect(pastGroup).toBeTruthy()
+    const pastValues = Array.from(pastGroup.querySelectorAll('option')).map(o => o.value)
+    expect(pastValues).toEqual(['2026-01-11', '2026-01-04'])
+  })
+})

@@ -276,6 +276,18 @@ verify with an anon client `getUser()`, then use the service-role client for pri
 
 ### F. Trial + subscription UI
 
+- [x] **Free trial explainer screen** — `src/components/TrialExplainerScreen.jsx`, shown once by
+  `App.jsx` right after a fresh signup, ahead of first-run `SetupWizard` entry (gated on
+  `wizardEntry === false` — never on a life-event re-entry string — plus `!config.isInvestor` and
+  `entitlement.state === "trial"`). Breaks down the trial (full access for `trialDaysLeft` days —
+  dynamic, not hardcoded, so it also reads correctly for a beta tester's longer seeded window; no
+  card required; day-7 add-card reminder; the real `trial_ends_at` date when known; post-trial
+  pricing) behind a required "I understand" checkbox that gates the Continue button. Reuses
+  `LoginScreen.jsx`'s exported `Shell` for the standalone full-screen layout, same pattern as
+  `ReviveScreen`. Not persisted server-side — local `trialExplainerAcknowledged` state only, so it
+  re-prompts on a later session the same way `wizardEntry` itself does until `setupComplete` flips
+  true. Disclosure-guard tested (`TrialExplainerScreen.test.jsx`) — never mentions "grace,"
+  "21-day," "extra week," or "access ends."
 - [x] **Trial/dunning banner** — `src/components/TrialBanner.jsx`, wired into `App.jsx` in place of
   the §E minimal read-only notice it was always meant to be replaced by. Phase-aware copy: **trial**
   → "N days left in your free trial" (amber/warning tone once `trialDaysLeft ≤ 3`, otherwise a

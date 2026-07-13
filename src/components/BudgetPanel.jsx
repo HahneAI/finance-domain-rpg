@@ -1305,7 +1305,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
       />
     )}
     {/* Summary cards */}
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "16px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px", marginBottom: "16px" }}>
       <Card
         label={checksPerYear === 52 ? "This Week’s Check" : checksPerYear === 26 ? "This Paycheck" : "This Check"}
         val={f2((prevWeekNet ?? weeklyIncome) * perCheckFactor)}

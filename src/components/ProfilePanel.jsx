@@ -1046,7 +1046,9 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
 
   const startEditing = () => {
     setDraft({
-      standardWeeklyHours: config.standardWeeklyHours != null ? String(config.standardWeeklyHours) : "",
+      standardWeeklyHours: config.maxWeeklyHours != null
+        ? String(config.maxWeeklyHours)
+        : (config.standardWeeklyHours != null ? String(config.standardWeeklyHours) : ""),
       customScheduleEnabled: config.customWeeklyHours != null,
       customWeeklyHours: config.customWeeklyHours != null ? String(config.customWeeklyHours) : "",
       customWeeklyHoursLong: config.customWeeklyHoursLong != null ? String(config.customWeeklyHoursLong) : "",
@@ -1065,11 +1067,15 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
 
     if (!config.scheduleIsVariable) {
       const rawWeekly = draft.standardWeeklyHours;
-      const weeklyValue = rawWeekly === "" ? config.standardWeeklyHours : parseFloat(rawWeekly);
+      const weeklyValue = rawWeekly === "" ? (config.maxWeeklyHours ?? config.standardWeeklyHours) : parseFloat(rawWeekly);
       if (!Number.isFinite(weeklyValue) || weeklyValue <= 0) {
         setError("Enter weekly hours for your schedule.");
         return;
       }
+      // maxWeeklyHours is the field the finance engine and display label actually
+      // read first (see config.js); standardWeeklyHours is kept in sync only for
+      // legacy back-compat reads.
+      updates.maxWeeklyHours = parseFloat(weeklyValue.toFixed(1));
       updates.standardWeeklyHours = parseFloat(weeklyValue.toFixed(1));
     }
 
@@ -1134,7 +1140,7 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
           <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
             {!config.scheduleIsVariable && (
               <div>
-                <label style={lSp}>Standard Weekly Hours</label>
+                <label style={lSp}>Max Weekly Hours</label>
                 <input
                   type="number"
                   step="1"

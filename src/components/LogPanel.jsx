@@ -3,6 +3,7 @@ import { useState } from "react";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { calcEventImpact, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getPayPeriodBounds } from "../lib/fiscalWeek.js";
+import { deriveRollingIncomeWeeks } from "../lib/rollingTimeline.js";
 import { Card, iS, lS, SmBtn, Pressable, PanelHero, SectionHeader } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 
@@ -190,8 +191,16 @@ export function LogPanel({
     setFormOpen(false);
   }
 
-  // Active weeks for the dropdown (all active, sorted chronologically)
-  const activeWeeks = allWeeks.filter(w => w.active);
+  // Weeks for the "Pay Week" dropdown, split into a rolling window:
+  //   upcoming — the most recently completed pay week forward through the last week of the fiscal
+  //              year (completedWeeksToKeep: 1 keeps just that one prior week alongside current/future)
+  //   past     — everything older, most-recent-first, grouped under a "Past" optgroup below
+  // As each pay week completes, it becomes the new "previous week" at the top of upcoming, and the
+  // week that used to hold that spot rolls down into past — mirroring the rolling monthly/weekly view.
+  const weekSelectTodayIso = effectiveToday || toLocalIso(new Date());
+  const rollingSelectWeeks = deriveRollingIncomeWeeks(allWeeks, weekSelectTodayIso, 1);
+  const upcomingSelectWeeks = rollingSelectWeeks.visibleWeeks;
+  const pastSelectWeeks = [...rollingSelectWeeks.hiddenWeeks].reverse();
 
   // ── Attendance History ──
   // Only absence-type events feed the history view; bonus/other_loss are irrelevant here.
@@ -332,21 +341,27 @@ export function LogPanel({
   };
 
   // ── Week select dropdown ──
+  const weekSelectOption = (w) => {
+    const endStr = toLocalIso(w.weekEnd);
+    const startFmt = w.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const endFmt   = w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return (
+      <option key={endStr} value={endStr}>
+        {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(w.idx), checksPerYear) ?? "—"} · {startFmt} – {endFmt} ({formatRotationDisplay(w, { isAdmin })})
+      </option>
+    );
+  };
   const WeekSelect = ({ vals, onWeekEndChange }) => (
     <div style={{ gridColumn: "1 / -1" }}>
       <label style={lS}>Pay Week</label>
       <select value={vals.weekEnd} onChange={e => onWeekEndChange(e.target.value)} style={iS}>
         <option value="">— select pay week —</option>
-        {activeWeeks.map(w => {
-          const endStr = toLocalIso(w.weekEnd);
-          const startFmt = w.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-          const endFmt   = w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-          return (
-            <option key={endStr} value={endStr}>
-              {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(w.idx), checksPerYear) ?? "—"} · {startFmt} – {endFmt} ({formatRotationDisplay(w, { isAdmin })})
-            </option>
-          );
-        })}
+        {upcomingSelectWeeks.map(weekSelectOption)}
+        {pastSelectWeeks.length > 0 && (
+          <optgroup label="Past">
+            {pastSelectWeeks.map(weekSelectOption)}
+          </optgroup>
+        )}
       </select>
       {vals.weekEnd && (() => {
         const inlineWeekNumber = getFiscalWeekNumber(Number(vals.weekIdx));

@@ -23,7 +23,7 @@ import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { TrialBanner } from "./components/TrialBanner.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
-import { Pressable } from "./components/ui.jsx";
+import { Pressable, FoldSwitch } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
 import { JobLossEntry } from "./components/JobLossEntry.jsx";
 import { ExpenseTriage } from "./components/ExpenseTriage.jsx";
@@ -1996,7 +1996,7 @@ export default function App() {
                   activeTabOverride={currentView}
                   onNavigate={navigate}
                 />
-              : activePanel
+              : <FoldSwitch activeKey={currentView}>{activePanel}</FoldSwitch>
           }
         </div>
       </div>

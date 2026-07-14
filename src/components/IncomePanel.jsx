@@ -6,12 +6,15 @@ import { computeNet, toLocalIso } from "../lib/finance.js";
 import { deriveRollingIncomeWeeks, progressiveScale } from "../lib/rollingTimeline.js";
 import { getFiscalWeekNumber, weekNumToPaycheckNum, payPeriodUnit } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { Card, Pressable, iS, lS, ScrollSnapRow } from "./ui.jsx";
+import { Card, Pressable, useFoldTransition, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {}, onWeekInspect = null }) {
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
+  // Fold-up transition prototype (modal): keeps the modal mounted through its
+  // fold-out so open + close both animate. See useFoldTransition / index.css.
+  const eventLossFold = useFoldTransition(showEventLossInfo, { ms: 280 });
 
   // ── Sharpen Rates modal state ──────────────────────────────────────────────
   const [sg1, setSg1] = useState("");
@@ -222,14 +225,14 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
     )}
 
     {/* ── Missed event day take-home modal ───────────────────────────────────── */}
-    {showEventLossInfo && createPortal(
-      <div style={{
+    {eventLossFold.mounted && createPortal(
+      <div className="fold-backdrop" data-fold={eventLossFold.fold} style={{
         position: "fixed", inset: 0, zIndex: 210,
         background: "rgba(0,0,0,0.75)",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: "24px 16px",
       }} onClick={() => setShowEventLossInfo(false)}>
-        <div style={{
+        <div className="fold-scale" data-fold={eventLossFold.fold} style={{
           width: "100%", maxWidth: "420px",
           background: "var(--color-bg-surface)",
           border: "1px solid var(--color-border-subtle)",

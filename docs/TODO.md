@@ -2703,3 +2703,125 @@ No option is chosen yet — this needs a decision session before any implementat
 - Actual tax-rate/bracket changes year-to-year (a §20 concern, not a fiscal-week-engine one).
 - Demo fixture regeneration (`src/fixtures/demo-account-*.js`) — cosmetic, do last, after a real
   design is chosen.
+
+---
+
+## 24. Needs-Expense Shortfall Redistribution — "a missed check still owes rent"
+
+*New workstream (2026-07-13), scoped from a user brain-dump, not yet started. Core-finance-engine
+change — touches `computeGoalTimeline`, `App.jsx`'s `eventImpact`, and several downstream displays —
+not a quick pass. Do not start build without re-reading this section; the surplus math it touches
+feeds goal ETAs and savings projections directly.*
+
+**The gap.** Today, when a missed-shift event (`missed_unpaid`/`missed_unapproved`) logs a
+`netLost`, that loss is **smeared evenly across every remaining week of the fiscal year**, in two
+places:
+- `App.jsx` `eventImpact.adjustedWeeklyDelta = totalNetAdjustment / futureWeekCount` (feeds
+  `logTotals.adjustedWeeklyAvg`, shown in LogPanel's Log Effect Summary card).
+- `computeGoalTimeline()` (`finance.js:919`): `perWeekLost = (logNetLost - futureDeductionTotal) /
+  n` — spread across all `n` future weeks before goal funding is simulated. The existing code
+  comment at `App.jsx:1081-1084` calls this out explicitly: *"the money is already gone; a uniform
+  budget reduction across the rest of the year is the right model."*
+
+That's a reasonable simplification for "how much did this cost me on average," but it understates
+what actually happens in a real budget: **Needs expenses (rent, utilities, insurance — the
+`category: "Needs"` bucket already distinguished from `Lifestyle`/`Loans` in `BudgetPanel.jsx`)
+don't get pro-rated down when a check is short — they still come due in full.** If a user misses
+two days on one check in a month, the Needs dollars that check was supposed to cover don't just
+quietly average away over the next 12 months; they have to come out of the *other* checks in that
+*same month*, which means those other checks have measurably less real surplus to put toward goals
+and savings than the current flat-average model shows.
+
+**Explicitly not changing:** BudgetPanel's per-week "left" display. The user confirmed this is
+about the *forward-looking* engine (goal timing, savings/surplus math) — not about rewriting what
+already renders as this week's budget.
+
+### A. Proposed mechanism
+
+A new pure function, likely `computeNeedsShortfall()` in `finance.js`, run alongside (not
+replacing) the existing per-week event pipeline:
+
+1. **Group by calendar month** — reuse the existing `monthKey` bucketing already used by
+   `computeRemainingSpend()`/`getEffectiveAmountForMonth()` for Needs-expense amounts, rather than
+   inventing a new grouping unit. This is also schedule-agnostic (works the same whether the user
+   is weekly/biweekly/monthly-paid), since Needs bills are monthly obligations regardless of pay
+   frequency.
+2. **Per month, compute:**
+   - `monthNeedsTotal` — sum of `getEffectiveAmountForMonth(exp, monthKey, pi)` over **Needs-category
+     expenses only** (Lifestyle/Loans excluded — discretionary spend doesn't force a redistribution;
+     loans have their own payoff math already).
+   - Each week's own actual net pay for that month, including *that week's own* directly-logged
+     event impact only (not smeared) — i.e., what that specific check really paid out.
+3. **Redistribute within the month first:** a week's shortfall against its Needs share is covered
+   by surplus from *other, not-yet-elapsed* weeks in the same month (an already-received/spent
+   check can't retroactively give more — only future-relative-to-`effectiveToday` weeks in that
+   month are eligible donors).
+4. **Overflow — resolved 2026-07-13:** whatever the month's remaining weeks can't absorb falls back
+   to the **existing flat full-year smear**, scoped down to just the unabsorbed remainder (not the
+   whole original loss). Chosen over cascading the leftover into next month's Needs obligation —
+   simpler to reason about and build; a genuinely catastrophic month still gets *some* sharper
+   representation (whatever the month itself could absorb) without opening a multi-month deficit-
+   chain that has to be tracked and unwound as future paychecks land.
+5. **Output shape:** a per-week dollar map, same shape as the existing `futureEventDeductionsByWeek`
+   (`{ [weekIdx]: dollarsRedirectedToCoverAnotherWeeksNeeds }`), so it plugs into
+   `computeGoalTimeline`'s per-week `surplus` calc as an additional term alongside the existing
+   `weekDeduction`, rather than requiring a rewrite of the simulation loop.
+
+### B. Build order
+
+- [ ] **A — pure function + tests.** `computeNeedsShortfall()` in `finance.js`: month grouping,
+  per-week donor/recipient resolution, overflow spillover into the residual smear pool. Unit-test
+  in `src/test/lib/finance.test.js` (existing `computeGoalTimeline` describe block is the pattern
+  to extend) — at minimum: single missed week fully absorbed by the same month; shortfall bigger
+  than the month can cover (confirms overflow spills to the residual smear, not silently dropped or
+  double-counted); a miss in the last week of the fiscal year with no future weeks left to smear
+  into; multiple missed weeks competing for the same month's remaining donor surplus.
+- [ ] **B — wire into the engine.** Replace the flat `perWeekLost` term in `computeGoalTimeline`
+  with (shortfall-adjusted surplus) + (residual smear on whatever overflow remains). Update
+  `App.jsx`'s `eventImpact`/`logTotals.adjustedWeeklyAvg` to reflect the same redistributed model
+  so the Log Effect Summary card and the goal timeline never disagree with each other.
+- [ ] **C — surface it.** See the ripple list below — at minimum LogPanel's Log Effect Summary
+  should say *something* more intuitive than an abstract "$X/week average" once the redistribution
+  exists (e.g. "this pushes $47 of this month's Needs onto your other checks" is a much more
+  honest sentence than diluting it into a weekly average).
+- [ ] **D — regression check.** Full `npm run test:run` pass plus a manual walk-through in the
+  running app: log a `missed_unpaid` event mid-month, confirm the Active Goals timeline (HomePanel)
+  and Log Effect Summary shift together, then log a second one big enough to blow through the whole
+  month's remaining checks and confirm the overflow lands in the fallback smear instead of vanishing.
+
+### C. Other places this ripples (brainstormed 2026-07-13, not yet triaged into build tasks)
+
+- **HomePanel — Active Goals timeline.** The direct target; goal `sW`/`eW`/`wN` (start week, end
+  week, weeks-needed) all derive from `computeGoalTimeline`'s surplus sequence.
+- **LogPanel — Log Effect Summary card** (`adjWA`/`adjTH` in `LogPanel.jsx:73-75`, `logTotals` in
+  `App.jsx`). Same surplus math, different presentation — needs the same fix, and probably new
+  copy (see Build order §C above).
+- **BudgetPanel — `budgetHealth` ratio** (`monthlyExpenses / monthlyNetTakeHome` in
+  `computeRemainingSpend()`). Currently schedule-wide; a month with a needs shortfall arguably
+  deserves a visibly worse health score for *that* month specifically, not just a diluted
+  year-average nudge.
+- **Admin Diagnostic Toolkit.** Every new derived model in this app gets an admin-visible
+  diagnostic (see CLAUDE.md's Admin Toolkit table) — Live State Inspector and/or Config Raw View
+  would want a new field surfacing "Needs shortfall this month" so it's debuggable without reading
+  source. Follows the same pattern as the existing `totalGap`/`extraPerCheck` diagnostics.
+- **WeekConfirmModal / event logging itself.** Right now a user finds out the downstream effect of
+  a missed shift only by later checking Home/Log. A same-month cascade preview at the moment of
+  logging ("this will need $47 more from your other checks this month to cover Needs") would be a
+  much more honest and immediate feedback loop than the current after-the-fact averaging — worth
+  considering as a v2 of this feature once the underlying engine change is stable.
+- **PTO / attendance bucket math** (`computeBucketModel`, §7 in `active-systems.md`) is a
+  structurally similar "targeted, not smeared" deduction that already exists for PTO accrual and
+  bucket hours — good precedent to crib from for how a targeted (vs. averaged) deduction gets
+  threaded through existing code, but not itself in scope here.
+- **Already-funded goals in a month that gets revised.** If a missed-shift event is logged *late*
+  for a week in a month that's already fully elapsed, that month has no remaining checks left to
+  redistribute onto by construction — the shortfall falls straight into the residual smear (no
+  special-casing needed, this resolves itself structurally rather than needing a decision). Genuine
+  open question: should a goal that was already marked `completed`/funded *during* that now-revised
+  month ever be reconsidered? Recommend **no** — unwinding a completed goal after the fact would be
+  a much bigger, more disruptive feature (retroactive goal-completion reversal) than this section is
+  scoped for; flag it here so it isn't silently assumed rather than deciding it now.
+- **Job Loss Mode expense triage** (`config.jobLossMode`, `projectableExpenses` filter in
+  `App.jsx:1047`). Paused/cancelled expenses already drop out of the Needs total during job loss —
+  confirm `computeNeedsShortfall()` reads the same `projectableExpenses` list so it doesn't count a
+  paused bill as still owed.

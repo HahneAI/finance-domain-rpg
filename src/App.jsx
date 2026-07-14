@@ -442,36 +442,57 @@ export default function App() {
   // that would overwrite unsaved in-memory edits with stale Supabase data.
   useEffect(() => {
     if (!authedUser) return;
+    let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
+
+    const applyLoadedData = (data) => {
+      setConfig(data.config);
+      setShowExtra(data.showExtra);
+      setLogs(data.logs);
+      setExpenses(data.expenses);
+      setGoals(data.goals);
+      setWeekConfirmations(data.weekConfirmations ?? {});
+      setIsEmployerDHL(data.isEmployerDHL);
+      setIsAdmin(data.isAdmin);
+      setIsTester(data.isTester);
+      setTaxProjectionsEnabled(data.taxProjectionsEnabled);
+      setPtoGoal(data.ptoGoal);
+      setSubscription(data.subscription);
+      if (data.isInvestor) {
+        setInvestorProfile(data.investorProfile ?? null);
+        setActiveInvestorAccount(data.activeInvestorAccount ?? 1);
+      }
+      // Investors reach the wizard via account 3 selection — not on login.
+      // Guard against the race where onAuthStateChange fires before createInvestorAccount
+      // has finished writing investor config — investorSession still non-null at that point.
+      if (!data.config.setupComplete && !data.config.isInvestor && !investorSession) setWizardEntry(false);
+      setLoading(false);
+    };
+
+    // A rejected loadUserData() means a genuine query failure (not a confirmed
+    // zero-row account — db.js only resolves defaults for that case), which on
+    // a PWA is most often a momentary network blip from resuming after
+    // backgrounding. Retry once before giving up, so a cold-start reload isn't
+    // left showing a blank/default dashboard over a failure that clears itself
+    // a moment later. Never fall back to defaults here — that reintroduces the
+    // "existing account mistaken for brand new" bug this retry exists to avoid.
     loadUserData()
+      .catch((err) => {
+        console.warn("[App] loadUserData failed, retrying once:", err);
+        return new Promise((resolve) => setTimeout(resolve, 1500)).then(() => loadUserData());
+      })
       .then((data) => {
-        setConfig(data.config);
-        setShowExtra(data.showExtra);
-        setLogs(data.logs);
-        setExpenses(data.expenses);
-        setGoals(data.goals);
-        setWeekConfirmations(data.weekConfirmations ?? {});
-        setIsEmployerDHL(data.isEmployerDHL);
-        setIsAdmin(data.isAdmin);
-        setIsTester(data.isTester);
-        setTaxProjectionsEnabled(data.taxProjectionsEnabled);
-        setPtoGoal(data.ptoGoal);
-        setSubscription(data.subscription);
-        if (data.isInvestor) {
-          setInvestorProfile(data.investorProfile ?? null);
-          setActiveInvestorAccount(data.activeInvestorAccount ?? 1);
-        }
-        // Investors reach the wizard via account 3 selection — not on login.
-        // Guard against the race where onAuthStateChange fires before createInvestorAccount
-        // has finished writing investor config — investorSession still non-null at that point.
-        if (!data.config.setupComplete && !data.config.isInvestor && !investorSession) setWizardEntry(false);
-        setLoading(false);
+        if (cancelled) return;
+        applyLoadedData(data);
       })
       .catch((err) => {
-        console.error("[App] loadUserData failed:", err);
+        if (cancelled) return;
+        console.error("[App] loadUserData failed after retry:", err);
         setLoading(false);
       });
+
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authedUser?.id, reloadTrigger]);
 

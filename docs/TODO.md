@@ -276,6 +276,18 @@ verify with an anon client `getUser()`, then use the service-role client for pri
 
 ### F. Trial + subscription UI
 
+- [x] **Free trial explainer screen** — `src/components/TrialExplainerScreen.jsx`, shown once by
+  `App.jsx` right after a fresh signup, ahead of first-run `SetupWizard` entry (gated on
+  `wizardEntry === false` — never on a life-event re-entry string — plus `!config.isInvestor` and
+  `entitlement.state === "trial"`). Breaks down the trial (full access for `trialDaysLeft` days —
+  dynamic, not hardcoded, so it also reads correctly for a beta tester's longer seeded window; no
+  card required; day-7 add-card reminder; the real `trial_ends_at` date when known; post-trial
+  pricing) behind a required "I understand" checkbox that gates the Continue button. Reuses
+  `LoginScreen.jsx`'s exported `Shell` for the standalone full-screen layout, same pattern as
+  `ReviveScreen`. Not persisted server-side — local `trialExplainerAcknowledged` state only, so it
+  re-prompts on a later session the same way `wizardEntry` itself does until `setupComplete` flips
+  true. Disclosure-guard tested (`TrialExplainerScreen.test.jsx`) — never mentions "grace,"
+  "21-day," "extra week," or "access ends."
 - [x] **Trial/dunning banner** — `src/components/TrialBanner.jsx`, wired into `App.jsx` in place of
   the §E minimal read-only notice it was always meant to be replaced by. Phase-aware copy: **trial**
   → "N days left in your free trial" (amber/warning tone once `trialDaysLeft ≤ 3`, otherwise a
@@ -2537,7 +2549,164 @@ open to the base tax-plan population; anything liability-flavored stays behind �
 
 ---
 
-## 23. Needs-Expense Shortfall Redistribution — "a missed check still owes rent"
+## 23. Multi-Year Fiscal Rollover — Beyond FY2026
+
+*Structural/data-model workstream, not yet scoped to a sprint. Seeded 2026-07-13, surfaced while
+fixing the Year-End Outlook card's date scoping (`HomePanel.jsx`, branch
+`claude/year-end-outlook-scoping-v013r8`): that fix correctly bounded the outlook window to
+`[max(Jan 1 of the fiscal year, job start date), Dec 31]` and stopped hardcoding "Fiscal Year
+2026" as literal text, but it deliberately did **not** attempt cross-year rollover — the app's
+entire fiscal-week engine is built around one hardcoded `FISCAL_YEAR_START = "2026-01-05"`
+(`config.js:190`), and nothing regenerates or re-namespaces that engine when the calendar actually
+crosses into a new year. `docs/FEATURE_monthly-budget-view.md`'s own "Deferred" list already flags
+one narrow instance of this (`monthlyOverrides` keys); this section is the full inventory and the
+open design question, not a fix.*
+
+### A. Problem statement
+
+`buildYear(cfg)` (`finance.js` ~406–410, 561) generates exactly one 52-week array by walking from
+`FISCAL_YEAR_START` forward 52×7 days. Every week's `idx` (0–51) is a **global, absolute** index
+into that one array — not a `(fiscalYear, weekOfYear)` pair. Every other config field that stores
+an idx — `firstActiveIdx`, `accountCreatedIdx`, `taxedWeeks`, `goalTimelineEpochIdx`,
+`week_confirmations`/`archived_week_confirmations` dictionary keys — inherits that same
+single-year assumption. There is no schema-level fiscal-year identifier anywhere: `config`,
+`expenses`, `goals`, `logs`, `week_confirmations`, `archived_week_confirmations` are all JSONB
+blobs (confirmed against the latest schema snapshot,
+`database/migrations/022_BOOKMARK_schema_snapshot_2026-07-10.sql`). If the app simply started a
+"year 2" grid on top of the same idx space, year-2 week 7 would collide with year-1 week 7 in
+every one of those dictionaries.
+
+### B. Full inventory of single-fiscal-year hardcoding (file:line)
+
+**Core engine:**
+- `FISCAL_YEAR_START = "2026-01-05"` — `config.js:190`, the sole source of truth `buildYear()`
+  loops from.
+- `_FY_YEAR = parseInt(FISCAL_YEAR_START.split('-')[0])` — `finance.js:41`, a module-load-time
+  capture used by `fiscalMonthLabel()`'s `'27` cross-year-label logic; goes stale the moment weeks
+  roll past Dec 31 even without any rollover *feature* change, since it's evaluated once at
+  import time against a constant that itself never changes today.
+- `dateToWeekIdx()` — `SetupWizard.jsx:688–693` — converts any `startDate` into a week index
+  relative to `FISCAL_YEAR_START`, clamped to `[0, FISCAL_WEEKS_PER_YEAR-1]` (line 692). A start
+  date in 2027+ doesn't error — it silently clamps to week 51 of the 2026 grid, i.e. **data
+  corruption** (the stored start week is simply wrong), not a crash. `docs/non-dhl-wizard-audit.md`
+  documents the *earlier* unclamped version of this bug (empty `active` weeks → `-$50`
+  `weeklyIncome` on Home); the clamp added since then fixed that crash but only by masking the
+  underlying gap — flag any future audit of that doc's "fix" as "masked, not solved."
+
+**Quarter/month boundaries (all 2026-literal):**
+- `QUARTER_BOUNDARIES` — `config.js:194`, three of four boundaries hardcoded 2026 dates (the
+  Q4→Q1 boundary is implicit/unlisted).
+- `Q_REP_DATES`, `Q_REP_MONTH_KEYS`, `QUARTER_FIRST_MONTHS` — `BudgetPanel.jsx:206–211`; two more
+  inline `` `2026-${...}` `` template builders at `BudgetPanel.jsx:241, 253, 815, 2386`.
+- `fiscalYearEnd` fallback `"2027-01-04"` — `BudgetPanel.jsx:552`, used only when `futureWeeks` is
+  empty, but still a baked-in literal.
+- `isBackdated = historyStart <= "2026-01-06"` — `BudgetPanel.jsx:2380` — a magic-string heuristic
+  for "was this expense-history entry backdated to fiscal-year start."
+- `MONTH_KEYS` — `MonthQuarterSelector.jsx:5–9` — a fully hardcoded 12-entry `"2026-MM"` array
+  driving the entire month/quarter picker UI.
+- `quarterRepresentativeDates` — `finance.js:857–860` — a second, independently hardcoded
+  duplicate of `BudgetPanel`'s `Q_REP_DATES`, inside the math-audit helper.
+- `estimateGoalNextYear()`'s `futureMonths` loop — `finance.js:1142` — hardcoded
+  `nextMonth <= "2026-12"`, i.e. "the fiscal year ends in Dec 2026" baked directly into a goal
+  projection.
+- `"2026 Dashboard"` — `HomePanel.jsx:135` — fallback subtitle string, separate from (and not
+  touched by) the Year-End Outlook fix that just shipped.
+
+**Idx-space fields with no rollover path:**
+- `taxedWeeks` — `config.js:163` — a hand-picked flat array of week indices
+  (`[7, 8, 19, 20, 21, 22, 37...52]`) chosen against the actual 2026 tax calendar. Meaningless
+  outside the exact 52-week grid they were derived for; nothing regenerates them for a new year.
+- `accountCreatedIdx` — `config.js:106`, stamped once at setup completion as
+  `dateToWeekIdx(todayIso)` (`SetupWizard.jsx:2154`) — a single scalar idx used purely as a
+  "weeks before this are auto-assumed worked" floor (`App.jsx:780, 821`). Nothing recalculates it
+  at a year boundary.
+- `goalTimelineEpochIdx` — `config.js:187` — same single-scalar-idx shape, same gap.
+- `week_confirmations` / `archived_week_confirmations` — keyed by idx with no year disambiguation.
+
+**Lower-priority / cosmetic:**
+- `INITIAL_EXPENSES` baseline dates — `config.js:314–315`.
+- `docs/account-reference.json:7` — static `"fiscal_year_start": "2026-01-05"` mirror; goes stale
+  as documentation, not code.
+- `src/fixtures/demo-account-1.js`, `demo-account-2.js` — every date field is a literal 2026
+  value; needs regenerating for a demo year rollover, but affects only the demo/investor surface.
+
+### C. Why this is a data-model change, not a constant swap
+
+`idx` today is a **global, absolute** index into one 52-week array. Simply changing
+`FISCAL_YEAR_START` to a new year would not "roll over" anything — it would regenerate a
+*different* single 52-week grid, silently reinterpreting every already-stored idx (in
+`taxedWeeks`, `accountCreatedIdx`, `goalTimelineEpochIdx`, `week_confirmations` keys, any logged
+event's `weekIdx`) against the new grid's dates. That's worse than doing nothing: existing users'
+data would resolve to the wrong calendar weeks the moment the constant changed. Real support needs
+either a `(fiscalYear, weekIdx)` pair everywhere an idx is stored, or an explicit year-boundary
+migration step that snapshots and resets the idx-space fields — this is schema and multi-file
+surgery, not a one-line config edit.
+
+### D. Design options (undecided — needs a decision before further scoping)
+
+1. **`(fiscalYear, weekIdx)` tuple everywhere.** Most correct long-term, but touches every
+   consumer of a raw `idx` across `finance.js`, `fiscalWeek.js`, `App.jsx`, `HomePanel.jsx`,
+   `BudgetPanel.jsx`, `IncomePanel.jsx`, `LogPanel.jsx`, and the DB JSONB shapes. Largest blast
+   radius; highest confidence of correctness.
+2. **Monotonically increasing global idx that never resets** (week 53, 54, ... continuing past
+   52 indefinitely instead of wrapping). Avoids the collision problem without a tuple, but breaks
+   every place that currently assumes a fixed 52-week modulus: `idx % 2` parity checks (biweekly
+   pay-week parity, DHL rotation long/short alternation), `weeksToChecksRemaining`,
+   `getFiscalWeekNumber`'s clamp to `FISCAL_WEEKS_PER_YEAR`, and `formatPayPeriodLabel`'s
+   week-of-52 display. Every one of those would need an explicit "week-of-current-year" derivation
+   layered on top of the raw ever-growing idx.
+3. **Keep the one-fiscal-year-at-a-time architecture, add an explicit "Roll to New Fiscal Year"
+   step** (user-triggered or automatic on Jan 1) that archives the prior year's
+   `week_confirmations`/`taxedWeeks`/log-linked idx data (mirroring the existing
+   `archived_week_confirmations` precedent) and regenerates a fresh `buildYear()` grid + a
+   fresh `taxedWeeks` for the new year, carrying forward pay structure/tax rates/benefits but
+   resetting `accountCreatedIdx`/`goalTimelineEpochIdx`/`week_confirmations`. Closest to a real
+   rollover without an idx-space rearchitecture, but still needs a real design pass on exactly
+   what carries forward vs. resets, and how "look back at last year's data" would work afterward
+   (Option 1's tuple gives that for free; Option 3 needs its own archive-read path, likely sharing
+   infrastructure with §19 below).
+
+No option is chosen yet — this needs a decision session before any implementation starts.
+
+### E. Immediate low-risk mitigations (could ship independently of the full redesign)
+
+- [ ] **Stop silently corrupting 2027+ start dates** — `dateToWeekIdx()`'s clamp
+  (`SetupWizard.jsx:692`) should surface a wizard-level warning/error for a start date beyond the
+  current fiscal year instead of silently misfiling it to week 51. Doesn't fix rollover, but stops
+  the data-corruption symptom `docs/non-dhl-wizard-audit.md` already found once.
+- [ ] **Derive `estimateGoalNextYear()`'s month cap from `FISCAL_YEAR_START`** (`finance.js:1142`)
+  instead of the literal `"2026-12"`, same pattern `buildYear()` already uses.
+- [ ] **Replace the remaining `"2026 Dashboard"` fallback string** (`HomePanel.jsx:135`) with the
+  same `FY_YEAR`-derived pattern the Year-End Outlook fix just used for its header, so this one
+  spot doesn't go stale independently.
+
+### F. Related / prior art in this codebase
+
+- **Year-End Outlook scoping fix** (2026-07-13, `claude/year-end-outlook-scoping-v013r8`) —
+  bounded `HomePanel.jsx`'s `annualSavings`/outlook window to the job-start-aware single-year
+  window and dropped the literal "Fiscal Year 2026" text; explicitly did not touch cross-year
+  rollover. This section is the deferred follow-up that surfaced from it.
+- **§19 Master Timeline** — a related but distinct gap: `buildYear`/`computeNet` apply the
+  *current* config uniformly to every week including past ones (point-in-time correctness within
+  a single year), not a cross-year rollover gap. Worth reviewing together before committing to
+  Option 3 above — a Master Timeline redesign aimed at point-in-time correctness might naturally
+  solve the year-boundary archive/read problem too, rather than building two separate
+  versioning schemes.
+- `docs/FEATURE_monthly-budget-view.md`'s "Deferred" list item #1 — same root cause
+  (`monthlyOverrides` keyed by literal `"YYYY-MM"` assuming 2026), narrower scope; its own
+  suggested fix (fiscal-year-relative month keys) should be reconciled with whichever option is
+  chosen here rather than solved separately.
+- `docs/non-dhl-wizard-audit.md` — documents the masked 2027+ start-date symptom referenced in §B.
+
+### G. Out of scope for this section
+
+- Actual tax-rate/bracket changes year-to-year (a §20 concern, not a fiscal-week-engine one).
+- Demo fixture regeneration (`src/fixtures/demo-account-*.js`) — cosmetic, do last, after a real
+  design is chosen.
+
+---
+
+## 24. Needs-Expense Shortfall Redistribution — "a missed check still owes rent"
 
 *New workstream (2026-07-13), scoped from a user brain-dump, not yet started. Core-finance-engine
 change — touches `computeGoalTimeline`, `App.jsx`'s `eventImpact`, and several downstream displays —

@@ -83,14 +83,27 @@ export function HomePanel({
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
   const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
-  const annualSavings = avgWeeklySurplus * 52 - fundedGoalSpend;
+  // Outlook window: Jan 1 → Dec 31 of the fiscal year, clamped forward to the
+  // job's start date when it falls inside the year (never extended backward
+  // past Jan 1 for jobs that predate the fiscal year) — assumes the job
+  // continues through Dec 31. activeWeeksThisYear mirrors the same
+  // firstActiveIdx clamping buildYear() already applies (see
+  // SetupWizard's dateToWeekIdx), so it stays in sync with the rest of the
+  // app's fiscal math instead of a flat 52-week assumption.
+  const activeWeeksThisYear = Math.max(FISCAL_WEEKS_PER_YEAR - (config?.firstActiveIdx ?? 0), 0);
+  const annualSavings = avgWeeklySurplus * activeWeeksThisYear - fundedGoalSpend;
   const startDateDisplay = config?.startDate
-    ? new Date(config.startDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    ? (() => {
+        const jobStart = new Date(config.startDate + "T12:00:00");
+        const yearStart = new Date(FY_YEAR, 0, 1);
+        const scoped = jobStart > yearStart ? jobStart : yearStart;
+        return scoped.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      })()
     : null;
   const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
   // Net worth health: thin-cushion nudge when projected savings rate < 10%.
   // Suppressed in Job Loss Mode, which has its own dedicated runway UI.
-  const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * 52);
+  const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * activeWeeksThisYear);
   const showBreakthroughTips = netWorthHealth.belowThreshold && !config?.jobLossMode;
   const nextWeekNet = futureWeekNets?.[0] ?? null;
   const fallbackSource = nextWeekNet != null ? null : (prevWeekNet != null ? "prev" : "avg");
@@ -151,7 +164,7 @@ export function HomePanel({
 
   const pulseNetWorth = (() => {
     if (!weeklyIncome) return undefined;
-    const rate = annualSavings / (weeklyIncome * 52);
+    const rate = annualSavings / (weeklyIncome * activeWeeksThisYear);
     const pct  = Math.round(rate * 100);
     if (rate >= 0.2) return { arrow: "up",   delta: `${pct}%`, label: "savings rate",         variant: "blue" };
     if (rate < 0.05) return { arrow: "down", delta: `${pct}%`, label: "savings velocity low",  variant: "purple" };
@@ -372,6 +385,18 @@ export function HomePanel({
   const nowIdx = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : 1;
   const weeksLeft = futureWeeks?.length ?? Math.max(FISCAL_WEEKS_PER_YEAR - nowIdx, 0);
   const totalActiveGoals = activeGoals.reduce((s, g) => s + (Number(g.target) || 0), 0);
+  // Year-end-projected goal draw: unlike totalActiveGoals (full remaining target across
+  // every active goal), this is scoped to only the portion each goal is actually projected
+  // to be funded by fiscal year end — a goal that starts in September and doesn't finish
+  // until next spring should only subtract its September-through-Dec-31 slice from this
+  // year's outlook, not its full target. tl (computeGoalTimeline) already simulates this
+  // per goal; remainingAtEnd is the unfunded leftover once the year-end simulation stops
+  // (falls back to the full target when tl's early-return shape omits it, i.e. no time
+  // left in the year to fund anything further).
+  const yearEndGoalDraw = tl.reduce((s, g) => {
+    const remaining = Number(g.remainingAtEnd ?? g.target) || 0;
+    return s + Math.max((Number(g.target) || 0) - remaining, 0);
+  }, 0);
 
   const ordinalSuffix = (day) => {
     if (day >= 11 && day <= 13) return "th";
@@ -1295,7 +1320,7 @@ export function HomePanel({
       <div style={{ marginTop: "28px", background: "var(--color-bg-surface)", border: "1px solid var(--color-border-accent)", borderRadius: "12px", padding: "20px", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: "linear-gradient(90deg, var(--color-accent-primary), transparent)", opacity: 0.5 }} />
         <div style={{ marginBottom: "16px" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "4px" }}>Fiscal Year 2026{startDateDisplay ? ` · from ${startDateDisplay}` : ""}</div>
+          <div style={{ fontSize: "9px", letterSpacing: "3px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "4px" }}>Fiscal Year {FY_YEAR}{startDateDisplay ? ` · ${startDateDisplay} – Dec 31` : ""}</div>
           <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px" }}>Year-End Outlook</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -1315,8 +1340,8 @@ export function HomePanel({
           <div style={{ height: "1px", background: "var(--color-border-subtle)" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>Surplus after all goals</div>
-            <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - totalActiveGoals >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
-              {fmt$(annualSavings - totalActiveGoals)}
+            <div style={{ fontSize: "19px", fontWeight: 800, fontFamily: "var(--font-display)", color: annualSavings - yearEndGoalDraw >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>
+              {fmt$(annualSavings - yearEndGoalDraw)}
             </div>
           </div>
         </div>

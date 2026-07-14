@@ -16,6 +16,7 @@ import { HomePanel } from "./components/HomePanel.jsx";
 import { SetupWizard } from "./components/SetupWizard.jsx";
 import { LoginScreen } from "./components/LoginScreen.jsx";
 import { ReviveScreen } from "./components/ReviveScreen.jsx";
+import { TrialExplainerScreen } from "./components/TrialExplainerScreen.jsx";
 import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
 import { ProfilePanel } from "./components/ProfilePanel.jsx";
@@ -279,6 +280,10 @@ export default function App() {
   const [weekConfirmations, setWeekConfirmations] = useState({});
   // wizardEntry: null=closed, false=first-run, string=re-entry life event
   const [wizardEntry, setWizardEntry] = useState(null);
+  // Gates TrialExplainerScreen ahead of first-run SetupWizard entry (docs/TODO.md
+  // §17). Not persisted — re-prompts on a later session same as wizardEntry
+  // itself does until setupComplete flips true.
+  const [trialExplainerAcknowledged, setTrialExplainerAcknowledged] = useState(false);
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
   const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
   const [expenseTriageOpen, setExpenseTriageOpen] = useState(false);
@@ -383,13 +388,26 @@ export default function App() {
       // matches an open tombstone, route to ReviveScreen and hold off trial
       // seeding entirely; a lookup failure falls back to the normal flow so a
       // transient server error can't lock a regular user out.
+      // The loadUserData() effect below fires in parallel off the same
+      // authedUser?.id change, racing this chain's checkRevival→syncUserProfile
+      // (which upserts trial_started_at/trial_ends_at/access_ends_at via
+      // /api/seed-trial). On a brand-new signup the row doesn't exist yet, so
+      // loadUserData() usually wins the race and reads DEFAULT_SUBSCRIPTION
+      // (all-null trial fields) — getEntitlement() then permanently reports
+      // state "none" ("No subscription required for this account") since
+      // nothing else re-triggers a reload for a normal, non-revival, non-
+      // checkout-return sign-in. Bump reloadTrigger once seeding has actually
+      // settled so loadUserData() re-runs and picks up the real trial window.
       if (event === "SIGNED_IN" && user) {
         checkRevival()
           .then((revival) => {
-            if (revival) setRevivalInfo(revival);
-            else syncUserProfile(user);
+            if (revival) {
+              setRevivalInfo(revival);
+              return;
+            }
+            return syncUserProfile(user).then(() => setReloadTrigger((n) => n + 1));
           })
-          .catch(() => syncUserProfile(user));
+          .catch(() => syncUserProfile(user).then(() => setReloadTrigger((n) => n + 1)));
       }
       setAuthedUser(user);
       // INITIAL_SESSION fires once on startup (after OAuth code exchange if applicable).
@@ -1187,6 +1205,20 @@ export default function App() {
   // support other users (admins).
   const paywallBypassed = isAdmin || config.isInvestor;
   const isExpiredReadOnly = !paywallBypassed && entitlement.state === "expired";
+
+  // Free trial breakdown — shown once ahead of first-run SetupWizard entry,
+  // only for a fresh signup (wizardEntry===false, never a life-event
+  // re-entry) with a real trial window seeded. Required "I understand"
+  // checkbox gates entry into setup.
+  if (wizardEntry === false && !config.isInvestor && entitlement.state === "trial" && !trialExplainerAcknowledged) {
+    return (
+      <TrialExplainerScreen
+        trialDaysLeft={entitlement.trialDaysLeft}
+        trialEndsAt={subscription?.trialEndsAt}
+        onContinue={() => setTrialExplainerAcknowledged(true)}
+      />
+    );
+  }
 
   const activePanel = (
     <>

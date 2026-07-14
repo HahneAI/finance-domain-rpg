@@ -51,6 +51,18 @@ function BackBar({ onBack, title }) {
 }
 
 // Read-only detail row used inside sub-views
+// Small grayed-out padlock — flags a value that's showing a locked default
+// (e.g. "Standard withholding" while the Tax Plan feature is gated) rather
+// than a real user election, without implying the row itself is clickable.
+function LockIcon({ style }) {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-text-disabled)", flexShrink: 0, ...style }}>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+
 function DetailRow({ label, value, valueColor, last }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 16px", borderBottom: last ? "none" : "1px solid #1e1e1e" }}>
@@ -1046,7 +1058,9 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
 
   const startEditing = () => {
     setDraft({
-      standardWeeklyHours: config.standardWeeklyHours != null ? String(config.standardWeeklyHours) : "",
+      standardWeeklyHours: config.maxWeeklyHours != null
+        ? String(config.maxWeeklyHours)
+        : (config.standardWeeklyHours != null ? String(config.standardWeeklyHours) : ""),
       customScheduleEnabled: config.customWeeklyHours != null,
       customWeeklyHours: config.customWeeklyHours != null ? String(config.customWeeklyHours) : "",
       customWeeklyHoursLong: config.customWeeklyHoursLong != null ? String(config.customWeeklyHoursLong) : "",
@@ -1065,11 +1079,15 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
 
     if (!config.scheduleIsVariable) {
       const rawWeekly = draft.standardWeeklyHours;
-      const weeklyValue = rawWeekly === "" ? config.standardWeeklyHours : parseFloat(rawWeekly);
+      const weeklyValue = rawWeekly === "" ? (config.maxWeeklyHours ?? config.standardWeeklyHours) : parseFloat(rawWeekly);
       if (!Number.isFinite(weeklyValue) || weeklyValue <= 0) {
         setError("Enter weekly hours for your schedule.");
         return;
       }
+      // maxWeeklyHours is the field the finance engine and display label actually
+      // read first (see config.js); standardWeeklyHours is kept in sync only for
+      // legacy back-compat reads.
+      updates.maxWeeklyHours = parseFloat(weeklyValue.toFixed(1));
       updates.standardWeeklyHours = parseFloat(weeklyValue.toFixed(1));
     }
 
@@ -1134,7 +1152,7 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
           <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
             {!config.scheduleIsVariable && (
               <div>
-                <label style={lSp}>Standard Weekly Hours</label>
+                <label style={lSp}>Max Weekly Hours</label>
                 <input
                   type="number"
                   step="1"
@@ -1146,138 +1164,88 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
               </div>
             )}
 
-            <div>
-              <SH color="var(--color-gold)" right={null}>Schedule Override</SH>
-              {isEmployerDHL ? (
-                <>
-                  <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "8px" }}>
-                    {`${config.dhlTeam ?? "B"}-Team · Long/Short alternating (DHL preset rotation)`}
-                  </div>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    <Pressable
-                      type="button"
-                      onClick={() => change("customScheduleEnabled", false)}
-                      style={{
-                        padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
-                        border: !draft.customScheduleEnabled ? "1px solid var(--color-gold)" : "1px solid var(--color-border-subtle)",
-                        background: !draft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
-                        color: !draft.customScheduleEnabled ? "var(--color-gold)" : "var(--color-text-secondary)",
-                        fontWeight: !draft.customScheduleEnabled ? "bold" : "normal",
-                      }}
-                    >
-                      Use rotation hours
-                    </Pressable>
-                    <Pressable
-                      type="button"
-                      onClick={() => change("customScheduleEnabled", true)}
-                      style={{
-                        padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
-                        border: draft.customScheduleEnabled ? "1px solid var(--color-gold)" : "1px solid var(--color-border-subtle)",
-                        background: draft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
-                        color: draft.customScheduleEnabled ? "var(--color-gold)" : "var(--color-text-secondary)",
-                        fontWeight: draft.customScheduleEnabled ? "bold" : "normal",
-                      }}
-                    >
-                      Set custom weekly hours
-                    </Pressable>
-                  </div>
-                  {draft.customScheduleEnabled && (
-                    <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                      <label style={lSp}>Hours per week</label>
-                      <div>
-                        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "4px" }}>Long week</div>
-                        <input
-                          type="number"
-                          step="1"
-                          min="1"
-                          max="168"
-                          value={draft.customWeeklyHoursLong}
-                          onChange={e => change("customWeeklyHoursLong", e.target.value)}
-                          style={iS}
-                        />
-                        {(() => {
-                          const h = parseFloat(draft.customWeeklyHoursLong);
-                          const sh = config.shiftHours || 12;
-                          if (!Number.isFinite(h) || h <= 0) return null;
-                          const ot = Math.max(0, Math.round((h - DHL_PRESET.rotation.long.baseHours) / sh));
-                          return <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-primary)" }}>OT pickups required: {ot}</div>;
-                        })()}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "4px" }}>Short week</div>
-                        <input
-                          type="number"
-                          step="1"
-                          min="1"
-                          max="168"
-                          value={draft.customWeeklyHoursShort}
-                          onChange={e => change("customWeeklyHoursShort", e.target.value)}
-                          style={iS}
-                        />
-                        {(() => {
-                          const h = parseFloat(draft.customWeeklyHoursShort);
-                          const sh = config.shiftHours || 12;
-                          if (!Number.isFinite(h) || h <= 0) return null;
-                          const ot = Math.max(0, Math.round((h - DHL_PRESET.rotation.short.baseHours) / sh));
-                          return <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-primary)" }}>OT pickups required: {ot}</div>;
-                        })()}
-                      </div>
-                      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
-                        Projections use long/short targets by week type. DHL rotation still shows scheduled days in weekly confirmation.
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    <Pressable
-                      type="button"
-                      onClick={() => change("customScheduleEnabled", false)}
-                      style={{
-                        padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
-                        border: !draft.customScheduleEnabled ? "1px solid var(--color-gold)" : "1px solid var(--color-border-subtle)",
-                        background: !draft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
-                        color: !draft.customScheduleEnabled ? "var(--color-gold)" : "var(--color-text-secondary)",
-                        fontWeight: !draft.customScheduleEnabled ? "bold" : "normal",
-                      }}
-                    >
-                      Standard hours
-                    </Pressable>
-                    <Pressable
-                      type="button"
-                      onClick={() => change("customScheduleEnabled", true)}
-                      style={{
-                        padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
-                        border: draft.customScheduleEnabled ? "1px solid var(--color-gold)" : "1px solid var(--color-border-subtle)",
-                        background: draft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
-                        color: draft.customScheduleEnabled ? "var(--color-gold)" : "var(--color-text-secondary)",
-                        fontWeight: draft.customScheduleEnabled ? "bold" : "normal",
-                      }}
-                    >
-                      Custom hours
-                    </Pressable>
-                  </div>
-                  {draft.customScheduleEnabled && (
-                    <div style={{ marginTop: "10px" }}>
-                      <label style={lSp}>Hours per week</label>
+            {isEmployerDHL && (
+              <div>
+                <SH color="var(--color-gold)" right={null}>Schedule Override</SH>
+                <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "8px" }}>
+                  {`${config.dhlTeam ?? "B"}-Team · Long/Short alternating (DHL preset rotation)`}
+                </div>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <Pressable
+                    type="button"
+                    onClick={() => change("customScheduleEnabled", false)}
+                    style={{
+                      padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
+                      border: !draft.customScheduleEnabled ? "1px solid var(--color-gold)" : "1px solid var(--color-border-subtle)",
+                      background: !draft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
+                      color: !draft.customScheduleEnabled ? "var(--color-gold)" : "var(--color-text-secondary)",
+                      fontWeight: !draft.customScheduleEnabled ? "bold" : "normal",
+                    }}
+                  >
+                    Use rotation hours
+                  </Pressable>
+                  <Pressable
+                    type="button"
+                    onClick={() => change("customScheduleEnabled", true)}
+                    style={{
+                      padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
+                      border: draft.customScheduleEnabled ? "1px solid var(--color-gold)" : "1px solid var(--color-border-subtle)",
+                      background: draft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
+                      color: draft.customScheduleEnabled ? "var(--color-gold)" : "var(--color-text-secondary)",
+                      fontWeight: draft.customScheduleEnabled ? "bold" : "normal",
+                    }}
+                  >
+                    Set custom weekly hours
+                  </Pressable>
+                </div>
+                {draft.customScheduleEnabled && (
+                  <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <label style={lSp}>Hours per week</label>
+                    <div>
+                      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "4px" }}>Long week</div>
                       <input
                         type="number"
                         step="1"
                         min="1"
                         max="168"
-                        value={draft.customWeeklyHours}
-                        onChange={e => change("customWeeklyHours", e.target.value)}
-                        style={{ ...iS, marginTop: "4px" }}
+                        value={draft.customWeeklyHoursLong}
+                        onChange={e => change("customWeeklyHoursLong", e.target.value)}
+                        style={iS}
                       />
-                      <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
-                        Used for all income projections and goal timelines. Enter your typical hours per week.
-                      </div>
+                      {(() => {
+                        const h = parseFloat(draft.customWeeklyHoursLong);
+                        const sh = config.shiftHours || 12;
+                        if (!Number.isFinite(h) || h <= 0) return null;
+                        const ot = Math.max(0, Math.round((h - DHL_PRESET.rotation.long.baseHours) / sh));
+                        return <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-primary)" }}>OT pickups required: {ot}</div>;
+                      })()}
                     </div>
-                  )}
-                </>
-              )}
-            </div>
+                    <div>
+                      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "4px" }}>Short week</div>
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        max="168"
+                        value={draft.customWeeklyHoursShort}
+                        onChange={e => change("customWeeklyHoursShort", e.target.value)}
+                        style={iS}
+                      />
+                      {(() => {
+                        const h = parseFloat(draft.customWeeklyHoursShort);
+                        const sh = config.shiftHours || 12;
+                        if (!Number.isFinite(h) || h <= 0) return null;
+                        const ot = Math.max(0, Math.round((h - DHL_PRESET.rotation.short.baseHours) / sh));
+                        return <div style={{ marginTop: "4px", fontSize: "11px", color: "var(--color-text-primary)" }}>OT pickups required: {ot}</div>;
+                      })()}
+                    </div>
+                    <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
+                      Projections use long/short targets by week type. DHL rotation still shows scheduled days in weekly confirmation.
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <PaySectionActions error={error} onSave={handleSave} onCancel={cancelEditing} />
           </div>
         </DetailCard>
@@ -1580,7 +1548,12 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
         )}
         <DetailRow
           label="Tax Exempt"
-          value={showTaxExempt ? "Opted in" : "Standard withholding"}
+          value={showTaxExempt ? "Opted in" : (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              {!taxFeatureUnlocked && <LockIcon />}
+              Standard withholding
+            </span>
+          )}
           valueColor={showTaxExempt ? "var(--color-gold)" : "var(--color-text-secondary)"}
           last
         />

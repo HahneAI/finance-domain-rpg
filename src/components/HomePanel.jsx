@@ -8,7 +8,7 @@ import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { MetricCard, SmBtn, Pressable, iS, lS, ScrollSnapRow } from "./ui.jsx";
+import { MetricCard, SmBtn, Pressable, useFoldTransition, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const GOAL_SYSTEM_COLOR = "var(--color-accent-primary)";
@@ -253,6 +253,9 @@ export function HomePanel({
   const [delGoalId, setDelGoalId] = useState(null);
   const [celebrating, setCelebrating] = useState(null);
   const [showCompleted, setShowCompleted] = useState(false);
+  // Fold-up transition prototype (dropdown, always reachable on Home): the funded-history
+  // list folds down from the top on open and up on close.
+  const fundedFold = useFoldTransition(showCompleted, { ms: 280 });
   const [showReorderModal, setShowReorderModal] = useState(false);
   const [showResetTimeline, setShowResetTimeline] = useState(false);
   const [draggingReorderId, setDraggingReorderId] = useState(null);
@@ -1243,15 +1246,19 @@ export function HomePanel({
               <span style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Funded History ({completedGoals.length})</span>
               <span style={{ fontSize: "11px", color: "var(--color-text-primary)" }}>{showCompleted ? "Hide" : "Show"}</span>
             </Pressable>
-            {showCompleted && completedGoals.map((g) => (
-              <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ color: "var(--color-text-primary)", textDecoration: "line-through" }}>{g.label}</div>
-                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                  <div style={{ color: "var(--color-text-primary)" }}>{fmt$(g.target)}</div>
-                  <SmBtn onClick={() => toggleComplete(g.id)} c="#555">UNDO</SmBtn>
-                </div>
+            {fundedFold.mounted && (
+              <div className="fold-scale" data-fold={fundedFold.fold}>
+                {completedGoals.map((g) => (
+                  <div key={g.id} style={{ borderTop: "1px solid #1a1a1a", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ color: "var(--color-text-primary)", textDecoration: "line-through" }}>{g.label}</div>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <div style={{ color: "var(--color-text-primary)" }}>{fmt$(g.target)}</div>
+                      <SmBtn onClick={() => toggleComplete(g.id)} c="#555">UNDO</SmBtn>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
 

@@ -4,7 +4,7 @@ import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { calcEventImpact, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getPayPeriodBounds } from "../lib/fiscalWeek.js";
 import { deriveRollingIncomeWeeks } from "../lib/rollingTimeline.js";
-import { Card, iS, lS, SmBtn, Pressable, PanelHero, SectionHeader } from "./ui.jsx";
+import { Card, iS, lS, SmBtn, Pressable, useFoldTransition, PanelHero, SectionHeader } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 
 import { formatRotationDisplay } from "../lib/rotation.js";
@@ -54,6 +54,7 @@ export function LogPanel({
   const [editVals, setEditVals] = useState({});
   const [cdel, setCdel] = useState(null);
   const [histOpen, setHistOpen] = useState(false);
+  const histFold = useFoldTransition(histOpen, { ms: 280 });
   const [addConfirming, setAddConfirming] = useState(false);
   const [editConfirming, setEditConfirming] = useState(false);
   const [expandedImpact, setExpandedImpact] = useState(new Set());
@@ -893,8 +894,8 @@ export function LogPanel({
             <span style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{histOpen ? "▲" : "▼"}</span>
           </span>
         </Pressable>
-        {histOpen && (
-          <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderTop: "none", borderRadius: "0 0 6px 6px", padding: "14px" }}>
+        {histFold.mounted && (
+          <div className="fold-scale" data-fold={histFold.fold} style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderTop: "none", borderRadius: "0 0 6px 6px", padding: "14px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "8px", marginBottom: "14px" }}>
               <div style={{ textAlign: "center", padding: "8px", background: "var(--color-bg-raised)", borderRadius: "4px" }}>
                 <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-deduction)", fontFamily: "var(--font-mono)" }}>{ytdUnpaid}</div>

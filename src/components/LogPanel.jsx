@@ -16,6 +16,11 @@ const normalizeDays = (v) =>
   Array.isArray(v) ? v : (v ? v.split(",").map(s => s.trim()).filter(Boolean) : []);
 
 const LOG_MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const ordinalSuffix = d => {
+  const v = d % 100;
+  return (v >= 11 && v <= 13) ? "th" : (["th","st","nd","rd"][d % 10] ?? "th");
+};
+const fmtShortOrdinal = date => `${LOG_MONTH_SHORT[date.getMonth()]} ${date.getDate()}${ordinalSuffix(date.getDate())}`;
 const fmtMonth = yyyyMM => {
   if (!yyyyMM || !yyyyMM.includes("-")) return "—";
   const [y, m] = yyyyMM.split("-").map(Number);
@@ -343,11 +348,9 @@ export function LogPanel({
   // ── Week select dropdown ──
   const weekSelectOption = (w) => {
     const endStr = toLocalIso(w.weekEnd);
-    const startFmt = w.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    const endFmt   = w.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     return (
       <option key={endStr} value={endStr}>
-        {payPeriodUnit(checksPerYear, 'abbrev')} {weekNumToPaycheckNum(getFiscalWeekNumber(w.idx), checksPerYear) ?? "—"} · {startFmt} – {endFmt} ({formatRotationDisplay(w, { isAdmin })})
+        Week of {fmtShortOrdinal(w.weekStart)} – {fmtShortOrdinal(w.weekEnd)}
       </option>
     );
   };

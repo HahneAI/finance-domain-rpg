@@ -16,10 +16,48 @@ describe("buildCoachContext", () => {
     expect(block).toContain("Weekly net income: $1,000");
     expect(block).toContain("Weekly spend: $400");
     expect(block).toContain("Weekly surplus: $600");
-    expect(block).toContain("Goals: 1/2 completed, $500 funded");
+    expect(block).toContain("Goals: 2 goals set (1 completed), $500 funded so far");
     expect(block).toContain("Expenses: 1 active line, $400/week");
     expect(block).toContain("Fiscal week: 28 of 52 (24 left)");
     expect(block).toContain("Today: 2026-07-07");
+  });
+
+  it("disambiguates the goals line so 0 completed never reads as 0 goals set", () => {
+    const block = buildCoachContext({
+      weeklyIncome: 800,
+      avgWeeklySpend: 300,
+      goals: [{ completed: false, target: 1000 }],
+      fundedGoalSpend: 0,
+    });
+    expect(block).toContain("Goals: 1 goal set (0 completed), $0 funded so far");
+  });
+
+  it("names each active expense by label, category, and an approximate weekly cost", () => {
+    const block = buildCoachContext({
+      weeklyIncome: 800,
+      avgWeeklySpend: 300,
+      expenses: [
+        { label: "Rent", category: "Needs", billingMeta: { amount: 1200, cycle: "every30days" }, jobLossStatus: "active" },
+        { label: "Netflix", category: "Lifestyle", billingMeta: { amount: 15, cycle: "every30days" }, jobLossStatus: "active" },
+        { label: "Old Gym", category: "Lifestyle", billingMeta: { amount: 40, cycle: "every30days" }, jobLossStatus: "paused" },
+      ],
+    });
+    expect(block).toContain("Expense breakdown: Rent (Needs): ~$280/wk; Netflix (Lifestyle): ~$4/wk");
+    expect(block).not.toContain("Old Gym");
+  });
+
+  it("falls back to a Loan category for loan-type expenses missing a category", () => {
+    const block = buildCoachContext({
+      weeklyIncome: 800,
+      avgWeeklySpend: 300,
+      expenses: [{ label: "Car Loan", type: "loan", billingMeta: { amount: 300, cycle: "every30days" }, jobLossStatus: "active" }],
+    });
+    expect(block).toContain("Car Loan (Loan):");
+  });
+
+  it("omits the expense breakdown line entirely when there are no active expenses", () => {
+    const block = buildCoachContext({ weeklyIncome: 800, avgWeeklySpend: 0, expenses: [] });
+    expect(block).not.toContain("Expense breakdown");
   });
 
   it("reports zero log entries plainly rather than omitting the line", () => {

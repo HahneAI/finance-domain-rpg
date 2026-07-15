@@ -1,6 +1,18 @@
 import { netWorthHealthStatus } from "./finance.js";
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR } from "./fiscalWeek.js";
 import { EVENT_TYPES } from "../constants/config.js";
+import { EXPENSE_CYCLE_OPTIONS } from "./expense.js";
+
+// Rough weekly-equivalent for context purposes only — not the precise
+// phase/override-aware engine in expense.js. The exact total is already
+// covered by the "Weekly spend" line; this is just enough for Coach to know
+// what a line item roughly costs when it names it.
+function approxWeeklyCost(expense) {
+  const amount = expense.billingMeta?.amount ?? 0;
+  const cycle = expense.billingMeta?.cycle;
+  const days = EXPENSE_CYCLE_OPTIONS.find((o) => o.value === cycle)?.days ?? 30;
+  return days > 0 ? (amount / days) * 7 : 0;
+}
 
 const fmt$ = (n) => (Number.isFinite(n) ? `$${Math.round(n).toLocaleString("en-US")}` : "—");
 
@@ -39,12 +51,19 @@ export function buildCoachContext({
     `Weekly spend: ${fmt$(avgWeeklySpend)}`,
     `Weekly surplus: ${fmt$(avgWeeklySurplus)}`,
     `Savings rate: ${netWorthHealth.rate != null ? `${Math.round(netWorthHealth.rate * 100)}%` : "—"}${netWorthHealth.belowThreshold ? " (below 10% target)" : ""}`,
-    `Goals: ${completedGoals.length}/${goals.length} completed, ${fmt$(fundedGoalSpend)} funded`,
+    `Goals: ${goals.length} goal${goals.length === 1 ? "" : "s"} set (${completedGoals.length} completed), ${fmt$(fundedGoalSpend)} funded so far`,
     `Expenses: ${activeExpenses.length} active line${activeExpenses.length === 1 ? "" : "s"}, ${fmt$(avgWeeklySpend)}/week`,
     `Log entries: ${logs.length} logged${mostRecentLog ? `, most recent: ${EVENT_TYPES[mostRecentLog.type]?.label ?? mostRecentLog.type} (week ending ${mostRecentLog.weekEnd ?? "—"})` : ""}`,
     `Fiscal week: ${weekNumber ?? "—"} of ${FISCAL_WEEKS_PER_YEAR}${weeksLeft != null ? ` (${weeksLeft} left)` : ""}`,
     `Today: ${today ?? "—"}`,
   ];
+
+  if (activeExpenses.length) {
+    const items = activeExpenses
+      .map((exp) => `${exp.label ?? "Unnamed"} (${exp.category ?? (exp.type === "loan" ? "Loan" : "Needs")}): ~${fmt$(approxWeeklyCost(exp))}/wk`)
+      .join("; ");
+    lines.push(`Expense breakdown: ${items}`);
+  }
 
   if (config?.jobLossMode) {
     lines.push(`Job Loss Mode: active${runwayDays != null ? `, ~${runwayDays} days of runway` : ""}`);

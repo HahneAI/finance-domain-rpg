@@ -12,7 +12,14 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] }),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' (not 'autoUpdate'): with skipWaiting/clientsClaim below, an
+      // 'autoUpdate' registration force-reloads every open tab the instant a new
+      // deploy's service worker activates — no warning, no coordination with
+      // in-flight app state. On a frequently-redeploying preview branch that fired
+      // mid-session, wiping unsaved goal/expense edits and unconfirmed weekly
+      // check-ins. 'prompt' leaves the reload to an explicit user action
+      // (main.jsx's onNeedRefresh → UpdateAvailableBanner) instead.
+      registerType: 'prompt',
       includeAssets: ['favicon.svg', 'icons/*.png'],
       manifest: {
         name: 'Authority Finance',

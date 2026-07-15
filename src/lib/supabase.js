@@ -52,6 +52,24 @@ export async function getCurrentUserId() {
   return data.user?.id ?? null;
 }
 
+// Kept in sync via onAuthStateChange so db.js's unload-time save
+// (flushUserDataKeepalive) can read the current access token + user id
+// synchronously — no await. That matters because pagehide/visibilitychange
+// fire in a context where the page can be torn down before an async
+// getSession() promise would resolve; the flush has to dispatch its fetch()
+// immediately for the keepalive flag to have any chance of helping.
+let cachedAuthSnapshot = { accessToken: null, userId: null };
+supabase.auth.onAuthStateChange((_event, session) => {
+  cachedAuthSnapshot = {
+    accessToken: session?.access_token ?? null,
+    userId: session?.user?.id ?? null,
+  };
+});
+
+export function getCachedAuthSnapshot() {
+  return cachedAuthSnapshot;
+}
+
 /**
  * Subscribe to auth state changes (SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED,
  * PASSWORD_RECOVERY, etc.). Callback receives (event, user).

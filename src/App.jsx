@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive } from "./lib/db.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -23,6 +23,7 @@ import { ProfilePanel } from "./components/ProfilePanel.jsx";
 import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { TrialBanner } from "./components/TrialBanner.jsx";
+import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { Pressable, FoldSwitch } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
@@ -291,6 +292,17 @@ export default function App() {
   // matching the §15.C1 spec ("dismissible but re-shows on reload").
   const [jobLossBannerDismissed, setJobLossBannerDismissed] = useState(false);
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
+
+  // main.jsx dispatches this once the new service worker is installed and
+  // waiting — reload only happens when the user taps Refresh in the banner
+  // below, never automatically (see vite.config.js registerType comment).
+  useEffect(() => {
+    const onUpdateAvailable = () => setUpdateAvailable(true);
+    window.addEventListener("pwa-update-available", onUpdateAvailable);
+    return () => window.removeEventListener("pwa-update-available", onUpdateAvailable);
+  }, []);
 
   const currentView = viewStack[viewStack.length - 1];
   const mainContentRef = useRef(null);
@@ -601,7 +613,11 @@ export default function App() {
       if (loading || !pendingSaveRef.current) return;
       pendingSaveRef.current = false;
       clearTimeout(saveTimer.current);
-      saveUserData(latestPersistedStateRef.current);
+      // keepalive save (not the normal saveUserData) — a plain fetch is liable
+      // to be aborted mid-flight the instant the page actually unloads or a
+      // backgrounded mobile tab gets reclaimed, silently dropping whatever
+      // hadn't saved yet. See flushUserDataKeepalive's doc comment in db.js.
+      flushUserDataKeepalive(latestPersistedStateRef.current);
     };
 
     const onBeforeUnload = () => flushPendingSave();
@@ -1902,6 +1918,12 @@ export default function App() {
             />
           )}
           {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
+          {updateAvailable && !updateBannerDismissed && (
+            <UpdateAvailableBanner
+              onUpdate={() => window.__pwaUpdateSW?.()}
+              onDismiss={() => setUpdateBannerDismissed(true)}
+            />
+          )}
           {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
           {config.jobLossMode && !jobLossBannerDismissed && (() => {
             // Compute benefits-end date when duration is set, so the banner can

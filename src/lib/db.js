@@ -1,4 +1,4 @@
-import { supabase, getCurrentUserId } from "./supabase.js";
+import { supabase, getCurrentUserId, getCachedAuthSnapshot } from "./supabase.js";
 import {
   DEFAULT_CONFIG,
   INITIAL_EXPENSES,
@@ -383,6 +383,65 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
 
   if (error) {
     console.error("Failed to save user data:", error.message);
+  }
+}
+
+/**
+ * Best-effort save for page unload / backgrounding (App.jsx's beforeunload/
+ * pagehide/visibilitychange flush). A normal fetch — what saveUserData()
+ * issues via supabase-js — is liable to be aborted by the browser mid-flight
+ * the instant the page actually unloads or the OS reclaims a backgrounded
+ * mobile tab, silently dropping whatever hadn't saved yet (a just-completed
+ * weekly check-in, in-progress goal edits). keepalive:true is the browser's
+ * documented mechanism for letting a request finish after the page is gone,
+ * but it isn't available through the supabase-js query builder, so this
+ * bypasses it and calls the PostgREST upsert endpoint directly — same
+ * onConflict:user_id upsert saveUserData() performs.
+ *
+ * Deliberately synchronous up to the fetch() call (no top-level await):
+ * getCachedAuthSnapshot() reads a value kept current by an onAuthStateChange
+ * listener rather than awaiting supabase.auth.getSession(), because unload
+ * handlers get no guaranteed time to wait on a promise before the page tears
+ * down — the fetch has to be dispatched immediately for keepalive to help.
+ */
+export function flushUserDataKeepalive({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal }) {
+  const { accessToken, userId } = getCachedAuthSnapshot();
+  if (!accessToken || !userId) return; // unauthenticated / snapshot not yet populated — never write
+
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/user_data?on_conflict=user_id`;
+  const body = JSON.stringify({
+    user_id:             userId,
+    config,
+    expenses,
+    goals,
+    logs,
+    show_extra:          showExtra,
+    week_confirmations:  weekConfirmations,
+    is_employer_dhl:     config.employerPreset === "DHL",
+    pto_goal:            ptoGoal ?? null,
+    updated_at:          new Date().toISOString(),
+  });
+
+  try {
+    fetch(url, {
+      method: "POST",
+      keepalive: true,
+      headers: {
+        "Content-Type": "application/json",
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${accessToken}`,
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body,
+    }).catch((err) => {
+      console.warn("[db] keepalive flush request failed:", err.message);
+    });
+  } catch (err) {
+    // Synchronous throw — most likely the browser's ~64KB keepalive body-size
+    // limit. Fall back to the normal (non-keepalive) upsert; same best-effort
+    // risk profile the app already had before this hardening, not a regression.
+    console.warn("[db] keepalive flush could not be dispatched, falling back:", err.message);
+    saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
   }
 }
 

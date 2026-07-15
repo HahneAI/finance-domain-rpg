@@ -142,6 +142,19 @@ export async function loadUserData() {
     investorRow = invData ?? null;
   }
 
+  // PGRST116 = .single() genuinely matched zero rows — the only case that means
+  // "this account has no user_data row yet," which is the sole legitimate trigger
+  // for falling back to DEFAULT_CONFIG (setupComplete:false) and re-showing the
+  // wizard. Any other error (network blip, timeout, RLS hiccup) must NOT be treated
+  // the same way: on a PWA, resuming from background is exactly when a transient
+  // fetch failure is likely, and conflating it with "brand-new account" was
+  // silently re-opening the setup wizard for existing users mid-session — and
+  // overwriting their real saved data if they completed it. Propagate instead so
+  // the caller's error handling kicks in without touching config/wizard state.
+  if (error && error.code !== "PGRST116") {
+    throw new Error(`loadUserData query failed: ${error.message}`);
+  }
+
   if (error || !data) {
     console.warn("No user_data row found, using defaults.", error?.message);
     return {

@@ -35,9 +35,19 @@ function setupLoadMock(mainRowData, wcRowData = { week_confirmations: {} }, subR
   })
 }
 
-/** Wire up loadUserData to simulate a missing row (error path). */
-function setupLoadError() {
-  const single = vi.fn().mockResolvedValue({ data: null, error: { message: 'no rows' } })
+/** Wire up loadUserData to simulate a genuinely missing row (PGRST116 — .single() matched 0 rows). */
+function setupLoadNoRow() {
+  const single = vi.fn().mockResolvedValue({ data: null, error: { message: 'no rows', code: 'PGRST116' } })
+  supabase.from.mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({ single }),
+    }),
+  })
+}
+
+/** Wire up loadUserData to simulate a transient/non-missing-row query failure. */
+function setupLoadTransientError() {
+  const single = vi.fn().mockResolvedValue({ data: null, error: { message: 'Connection refused' } })
   supabase.from.mockReturnValue({
     select: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({ single }),
@@ -68,8 +78,8 @@ beforeEach(() => {
 })
 
 describe('loadUserData — no row / error fallback', () => {
-  it('returns all defaults when Supabase returns an error', async () => {
-    setupLoadError()
+  it('returns all defaults when Supabase genuinely finds no row (PGRST116)', async () => {
+    setupLoadNoRow()
     const result = await loadUserData()
     expect(result.config).toEqual(DEFAULT_CONFIG)
     expect(result.expenses).toEqual(INITIAL_EXPENSES)
@@ -80,6 +90,16 @@ describe('loadUserData — no row / error fallback', () => {
     expect(result.isEmployerDHL).toBe(false)
     expect(result.isAdmin).toBe(false)
     expect(result.isTester).toBe(false)
+  })
+
+  // Regression: a transient failure (network blip, timeout, RLS hiccup — anything
+  // that isn't a confirmed zero-row result) must NOT be treated as "brand new
+  // account." Doing so silently reset config to DEFAULT_CONFIG (setupComplete:false)
+  // and re-opened the setup wizard for existing users — most visibly on a PWA
+  // resuming from background, where a momentary fetch failure is common.
+  it('throws instead of falling back to defaults on a non-missing-row error', async () => {
+    setupLoadTransientError()
+    await expect(loadUserData()).rejects.toThrow(/loadUserData query failed/)
   })
 })
 

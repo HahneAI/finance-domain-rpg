@@ -237,6 +237,78 @@ export function Pressable({
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// FOLD-UP TRANSITION SYSTEM — page moves · modals · dropdowns
+// Companion to index.css (@keyframes foldLift*/foldScale*/foldBackdrop*).
+// Because exit animates, the element must stay mounted through the out-tween.
+// ─────────────────────────────────────────────────────────────
+
+// useFoldTransition — drive enter/exit for a conditionally-shown surface.
+// `open` is the desired visibility; returns { mounted, fold } where fold is
+// "entering" | "entered" | "exiting". Spread data-fold={fold} onto the .fold-*
+// element (and any .fold-backdrop), and gate rendering on `mounted`.
+// eslint-disable-next-line react-refresh/only-export-components
+export function useFoldTransition(open, { ms = 280 } = {}) {
+  const [mounted, setMounted] = useState(open);
+  const [fold, setFold] = useState(open ? "entered" : "exited");
+  const timer = useRef(null);
+
+  useEffect(() => {
+    clearTimeout(timer.current);
+    if (open) {
+      // Mount + mark entering in one commit so the enter keyframe plays on first paint.
+      setMounted(true);
+      setFold("entering");
+      timer.current = setTimeout(() => setFold("entered"), ms);
+    } else if (mounted) {
+      setFold("exiting");
+      timer.current = setTimeout(() => { setFold("exited"); setMounted(false); }, ms);
+    }
+    return () => clearTimeout(timer.current);
+    // `mounted` is read but intentionally omitted: including it would re-fire the
+    // exit branch after unmount. Only `open`/`ms` should drive transitions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, ms]);
+
+  return { mounted, fold };
+}
+
+// FoldSwitch — cross-fade page moves. Keeps the outgoing view mounted (absolutely
+// positioned, inert) through its exit while the incoming view lifts in. Keyed on
+// `activeKey`; when it changes, the old children exit and the new children enter.
+export function FoldSwitch({ activeKey, children, ms = 300, className = "fold-lift" }) {
+  const [cur, setCur] = useState({ key: activeKey, node: children });
+  const [prev, setPrev] = useState(null);
+  const timer = useRef(null);
+
+  useEffect(() => {
+    if (activeKey !== cur.key) {
+      setPrev(cur);
+      setCur({ key: activeKey, node: children });
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setPrev(null), ms);
+    } else if (children !== cur.node) {
+      setCur({ key: activeKey, node: children }); // same view, refreshed props — no replay
+    }
+    return () => clearTimeout(timer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey, children]);
+
+  return (
+    <div style={{ position: "relative" }}>
+      {prev && (
+        <div key={prev.key} className={className} data-fold="exiting" aria-hidden="true"
+             style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+          {prev.node}
+        </div>
+      )}
+      <div key={cur.key} className={className} data-fold="entering">
+        {cur.node}
+      </div>
+    </div>
+  );
+}
+
 // NT — nav tab. Uses the default tap feedback via Pressable.
 export function NT({ label, active, onClick }) {
   return (

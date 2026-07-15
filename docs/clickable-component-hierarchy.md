@@ -218,3 +218,92 @@ Ranked by how cleanly they isolate the flash+bounce work:
 Once a section is chosen, we prototype the flash+bounce there, confirm it stays within the
 ≤500ms / `scale(0.97)` press budget from CLAUDE.md, then promote it into the shared `ui.jsx`
 primitives for global rollout.
+
+---
+
+# Fold-Up Transition System (page moves · modals · dropdowns)
+
+Second motion system layered on top of the press-feedback rollout. A shared "fold"
+entrance/exit for **page moves**, **modal open/close**, and **dropdown open/close** so
+navigation across the app moves as one language. Tuned live in the Motion Lab.
+
+## Locked decisions
+
+| Surface | Variant | Enter direction | Exit direction | Duration | Easing |
+|---------|---------|-----------------|----------------|----------|--------|
+| **Page moves** | Lift + fade (translateY + opacity, subtle scale — no squish) | Up from bottom | Reverse (fade + settle back down) | **300 ms** | Smooth `cubic-bezier(0.2, 0.7, 0.2, 1)` |
+| **Modals & dropdowns** | ScaleY fold (`transform-origin` edge, `scaleY`) | Down from top | Up toward top (reverse of enter) | **280 ms** | Slight overshoot `cubic-bezier(0.34, 1.32, 0.64, 1)` |
+
+- **Enter AND exit are both required** (this release).
+- Proposed easing tokens for `index.css`: `--ease-fold-smooth: cubic-bezier(0.2,0.7,0.2,1)` ·
+  `--ease-fold-overshoot: cubic-bezier(0.34,1.32,0.64,1)`.
+- **Open question (flag on implement):** overshoot on *close* can read as a bounce-out. If it
+  feels off, swap modal/dropdown exit to a clean ease-in and keep overshoot on enter only.
+- Reduced-motion: all folds collapse to instant (`prefers-reduced-motion: reduce`).
+
+## Implementation approach
+
+Exit animation means the element can't unmount immediately — it must stay mounted through the
+close tween. So this is **not** pure CSS; it needs a small React helper:
+
+- `useFoldTransition(open, { ms })` → returns `{ mounted, state }` where `state` is
+  `entering | entered | exiting`; keeps `mounted` true until the exit tween finishes, then
+  drops it. Drives a `data-fold` attribute the CSS keys off.
+- Keyframes/classes in `index.css`: `foldScaleYIn/Out` (modals+dropdowns), `foldLiftIn/Out`
+  (pages). Reuse the existing `.wc-modal-in` learnings.
+- **Page moves** are the hardest: today `activePanel` swaps instantly on `currentView`
+  (`App.jsx`). To cross-fade, the outgoing panel must persist during its exit — a
+  `<FoldSwitch>` wrapper keyed on `currentView` that renders outgoing+incoming briefly.
+
+## Surface catalog — everything to convert
+
+### A. Page moves  (`App.jsx`)
+- `activePanel` conditional renders — `currentView === "home"|"income"|"budget"|"log"|"profile"` (~L1191–1289).
+- Navigation drivers: `navigate()` / `navigateDirect()` (L353, L362), `viewStack` push/pop.
+- Panel-level swaps that also count as "page moves": `DemoAccountTree` replacing `activePanel` (~L1999, investor/admin demo); `UpgradePanel` swap for expired read-only (L1219, L1250).
+
+### B. Modals & full overlays  (open → fold down from top · close → fold up to top)
+| Surface | File:line | Notes |
+|---------|-----------|-------|
+| Week confirm | `WeekConfirmModal.jsx:652` (z60) | already has `.wc-modal-in` enter — replace with shared fold |
+| Sharpen rates | `IncomePanel.jsx:123` (z200, portal) | |
+| Missed-event info | `IncomePanel.jsx:227` (z210, portal) | |
+| Week detail | `IncomePanel.jsx:495` (z1000, portal) | |
+| Restore-deleted sheet | `BudgetPanel.jsx:2063` (z60) + `slideUpSheet` L2191 | currently bottom-sheet slide |
+| Check-info | `BudgetPanel.jsx:2174` (z200) | |
+| Delete-account dialog | `ProfilePanel.jsx:535` (z240) | |
+| Local sign-out confirm | `ProfilePanel.jsx:2050` (z240) | |
+| Week Inspector | `App.jsx:2575` (z300) | admin |
+| Admin tools sheet | `App.jsx:2682` (z24, slide-up) | keep drag-to-dismiss |
+| Mobile drawer | `App.jsx` `.drawer-slide` | slides on X — likely leave as-is (not a fold) |
+| Life Events menu | `LifeEventMenu.jsx:72` (z70) | |
+| Expense triage | `ExpenseTriage.jsx:115` (z80) | |
+| Job-loss entry | `JobLossEntry.jsx:78` (z80) | |
+| Upgrade modal | `UpgradeModal.jsx:11` (z1000, portal) | VC feature |
+| Reorder goals | `HomePanel.jsx` (portal) | |
+| Reset timeline | `HomePanel.jsx` (portal) | |
+| PWA install | `PwaInstallModal.jsx` | opens via ref imperative handle |
+| Setup wizard | `SetupWizard.jsx` | full-screen — evaluate (may want its own step transitions) |
+| Ask Coach panel | `AskCoachPanel.jsx` (`askCoachOpen`) | VC §18.B chat panel |
+| Bulk edit | `BulkEditPanel.jsx` (`bulkEditOpen`) | |
+
+### C. Dropdowns & expand/collapse reveal panels
+The app has almost no native-popover dropdowns; its "dropdowns" are inline reveal panels
+toggled by a trigger. These get the ScaleY fold (down from top / up to top).
+- Admin sidebar/drawer/sheet: `configViewOpen`, `rowViewOpen`, `taxGridOpen` (`App.jsx`).
+- `LogPanel`: `histOpen` (attendance history), `expandedImpact` (per-entry breakdown).
+- `BudgetPanel`: `expandedCats`, `expandedExpId`, `showCalc`.
+- `ProfilePanel`: `showEmailForm`, `showPwForm`, `showAddForm`, `showCalc`.
+- `HomePanel`: `showCompleted` (funded history).
+- `NetWorthHealthTips`: `open` (tips) — currently `fadeSlideUp`, migrate to shared fold.
+
+### Out of scope
+- **Native `<select>`** (BudgetPanel ×5, BulkEditPanel ×3, LogPanel ×2, ProfilePanel, others) —
+  OS-rendered, cannot be animated.
+- `MonthQuarterSelector` — a segmented selector bar, not an open/close surface.
+- Mobile drawer X-slide — already has its own slide; fold would fight it.
+
+## Rollout order (proposed)
+1. ⬜ Build the system: `useFoldTransition` hook + `foldScaleY*`/`foldLift*` keyframes + easing tokens.
+2. ⬜ Prototype on **one modal** (e.g. Sharpen-rates or Week Inspector) to confirm the ScaleY feel + exit.
+3. ⬜ Roll modals, then dropdowns/expanders, then page moves (`FoldSwitch`) — one group at a time.

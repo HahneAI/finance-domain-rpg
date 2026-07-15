@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable } from "./ui.jsx";
+import { Pressable, useFoldTransition } from "./ui.jsx";
 
 // Net Worth Health — Financial Breakthrough Tips
 // ---------------------------------------------------------------------------
@@ -53,6 +53,8 @@ function pickTips(seed, count = 3) {
 
 export function NetWorthHealthTips({ seed = 0, aiTip = null }) {
   const [open, setOpen] = useState(false);
+  // Fold-up transition prototype (dropdown): open + close both fold from the top edge.
+  const tipsFold = useFoldTransition(open, { ms: 280 });
   const tips = pickTips(seed);
 
   return (
@@ -127,8 +129,8 @@ export function NetWorthHealthTips({ seed = 0, aiTip = null }) {
         </span>
       </Pressable>
 
-      {open && (
-        <div style={{ padding: "0 16px 18px", animation: "fadeSlideUp 300ms ease both" }}>
+      {tipsFold.mounted && (
+        <div className="fold-scale" data-fold={tipsFold.fold} style={{ padding: "0 16px 18px" }}>
           <div style={{ height: "1px", background: "var(--color-border-subtle)", margin: "0 0 14px" }} />
 
           {/* Reassuring framing — validate first, nudge second */}

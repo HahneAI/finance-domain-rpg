@@ -21,6 +21,10 @@ describe("COACH_PERSONA_PROMPT", () => {
     expect(COACH_PERSONA_PROMPT).toMatch(/never Markdown/i);
     expect(COACH_PERSONA_PROMPT).toMatch(/do not use asterisks/i);
   });
+
+  it("instructs neutral, non-judgmental handling of named expenses", () => {
+    expect(COACH_PERSONA_PROMPT).toMatch(/never call an individual cost wasteful, excessive, or embarrassing/i);
+  });
 });
 
 describe("ASK_COACH_SYSTEM_PROMPT", () => {

@@ -274,25 +274,34 @@ export function useFoldTransition(open, { ms = 280 } = {}) {
 }
 
 // FoldSwitch — cross-fade page moves. Keeps the outgoing view mounted (absolutely
-// positioned, inert) through its exit while the incoming view lifts in. Keyed on
-// `activeKey`; when it changes, the old children exit and the new children enter.
-export function FoldSwitch({ activeKey, children, ms = 300, className = "fold-lift" }) {
+// positioned, inert) through its faster exit while the incoming view lifts in.
+// Keyed on `activeKey`; when it changes, old children exit and new children enter.
+// Once the enter finishes it flips the live view to data-fold="entered" so NO
+// transform / will-change lingers — a settled panel must not hold a stacking
+// context or containing block (that traps the fixed bottom nav + portaled modals).
+export function FoldSwitch({ activeKey, children, enterMs = 300, exitMs = 180, className = "fold-lift" }) {
   const [cur, setCur] = useState({ key: activeKey, node: children });
+  const [curFold, setCurFold] = useState("entered"); // first mount is already settled — no entrance
   const [prev, setPrev] = useState(null);
-  const timer = useRef(null);
+  const enterTimer = useRef(null);
+  const exitTimer = useRef(null);
 
   useEffect(() => {
     if (activeKey !== cur.key) {
       setPrev(cur);
       setCur({ key: activeKey, node: children });
-      clearTimeout(timer.current);
-      timer.current = setTimeout(() => setPrev(null), ms);
+      setCurFold("entering");
+      clearTimeout(enterTimer.current);
+      enterTimer.current = setTimeout(() => setCurFold("entered"), enterMs);
+      clearTimeout(exitTimer.current);
+      exitTimer.current = setTimeout(() => setPrev(null), exitMs);
     } else if (children !== cur.node) {
       setCur({ key: activeKey, node: children }); // same view, refreshed props — no replay
     }
-    return () => clearTimeout(timer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey, children]);
+
+  useEffect(() => () => { clearTimeout(enterTimer.current); clearTimeout(exitTimer.current); }, []);
 
   return (
     <div style={{ position: "relative" }}>
@@ -302,7 +311,7 @@ export function FoldSwitch({ activeKey, children, ms = 300, className = "fold-li
           {prev.node}
         </div>
       )}
-      <div key={cur.key} className={className} data-fold="entering">
+      <div key={cur.key} className={className} data-fold={curFold}>
         {cur.node}
       </div>
     </div>

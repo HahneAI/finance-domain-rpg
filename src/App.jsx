@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive } from "./lib/db.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -613,7 +613,11 @@ export default function App() {
       if (loading || !pendingSaveRef.current) return;
       pendingSaveRef.current = false;
       clearTimeout(saveTimer.current);
-      saveUserData(latestPersistedStateRef.current);
+      // keepalive save (not the normal saveUserData) — a plain fetch is liable
+      // to be aborted mid-flight the instant the page actually unloads or a
+      // backgrounded mobile tab gets reclaimed, silently dropping whatever
+      // hadn't saved yet. See flushUserDataKeepalive's doc comment in db.js.
+      flushUserDataKeepalive(latestPersistedStateRef.current);
     };
 
     const onBeforeUnload = () => flushPendingSave();

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { COACH_PERSONA_PROMPT, buildNetWorthSystemPrompt } from "../../lib/coachPrompts.js";
+import { COACH_PERSONA_PROMPT, ASK_COACH_SYSTEM_PROMPT, buildNetWorthSystemPrompt } from "../../lib/coachPrompts.js";
 
 describe("COACH_PERSONA_PROMPT", () => {
   it("explicitly instructs against combative language, per docs/coach-personality-rubric.md", () => {
@@ -20,6 +20,18 @@ describe("COACH_PERSONA_PROMPT", () => {
   it("forbids Markdown formatting — every chat surface renders raw text, not HTML/Markdown", () => {
     expect(COACH_PERSONA_PROMPT).toMatch(/never Markdown/i);
     expect(COACH_PERSONA_PROMPT).toMatch(/do not use asterisks/i);
+  });
+});
+
+describe("ASK_COACH_SYSTEM_PROMPT", () => {
+  it("includes the shared persona and the feature guide", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toContain(COACH_PERSONA_PROMPT);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/FEATURE REFERENCE/);
+  });
+
+  it("instructs leading with real personal data over restating the guide, across all panels", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/applies across all five panels/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/not a script to repeat near-verbatim/i);
   });
 });
 

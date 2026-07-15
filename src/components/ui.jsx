@@ -279,7 +279,7 @@ export function useFoldTransition(open, { ms = 280 } = {}) {
 // Once the enter finishes it flips the live view to data-fold="entered" so NO
 // transform / will-change lingers — a settled panel must not hold a stacking
 // context or containing block (that traps the fixed bottom nav + portaled modals).
-export function FoldSwitch({ activeKey, children, enterMs = 300, exitMs = 180, className = "fold-lift" }) {
+export function FoldSwitch({ activeKey, children, enterMs = 340, exitMs = 180, className = "fold-lift" }) {
   const [cur, setCur] = useState({ key: activeKey, node: children });
   const [curFold, setCurFold] = useState("entered"); // first mount is already settled — no entrance
   const [prev, setPrev] = useState(null);

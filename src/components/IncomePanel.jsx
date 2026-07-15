@@ -14,7 +14,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
   // Fold-up transition prototype (modal): keeps the modal mounted through its
   // fold-out so open + close both animate. See useFoldTransition / index.css.
-  const eventLossFold = useFoldTransition(showEventLossInfo, { ms: 280 });
+  const eventLossFold = useFoldTransition(showEventLossInfo, { ms: 340 });
 
   // ── Sharpen Rates modal state ──────────────────────────────────────────────
   const [sg1, setSg1] = useState("");
@@ -232,7 +232,7 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: "24px 16px",
       }} onClick={() => setShowEventLossInfo(false)}>
-        <div className="fold-scale" data-fold={eventLossFold.fold} style={{
+        <div className="fold-modal" data-fold={eventLossFold.fold} style={{
           width: "100%", maxWidth: "420px",
           background: "var(--color-bg-surface)",
           border: "1px solid var(--color-border-subtle)",

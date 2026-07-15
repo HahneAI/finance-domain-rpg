@@ -336,7 +336,9 @@ code {
   --fold-ms-page:      340ms;  /* page enter — a touch slower so the slide-up reads */
   --fold-ms-page-out:  180ms;  /* page exit — clears fast so the incoming isn't ghosted */
   --fold-ms-modal:     280ms;  /* modal/dropdown enter */
-  --fold-ms-modal-out: 240ms;  /* modal/dropdown close */
+  --fold-ms-modal-out: 240ms;  /* inline-dropdown close */
+  --ease-fold-modal-exit:   cubic-bezier(0.45, 0, 0.55, 1); /* modal card close — visible throughout, no bounce */
+  --fold-ms-modal-card-out: 300ms; /* modal card close — long enough to watch the fold-up travel */
 }
 
 /* Pages — lift + fade, up from bottom (enter) / settle back down (exit). No squish. */
@@ -365,6 +367,15 @@ code {
 .fold-backdrop[data-fold="entering"] { animation: foldBackdropIn  var(--fold-ms-modal)     ease both; }
 .fold-backdrop[data-fold="exiting"]  { animation: foldBackdropOut var(--fold-ms-modal-out) ease both; }
 
+/* Modal card — shares the loved fold-scale ENTER, but a centered floating card that
+   just scaled+faded read as a "pop" against the fading backdrop. Give the CLOSE real
+   upward travel so the fold-up is legible (motion > opacity for perception). Dropdowns
+   keep .fold-scale unchanged. */
+@keyframes foldModalOut { from { opacity:1; transform:translateY(0) scaleY(1); } to { opacity:0; transform:translateY(-30px) scaleY(0.72); } }
+.fold-modal { transform-origin:top center; }
+.fold-modal[data-fold="entering"] { will-change:transform,opacity; animation: foldScaleIn  var(--fold-ms-modal)          var(--ease-fold-overshoot)   both; }
+.fold-modal[data-fold="exiting"]  { will-change:transform,opacity; animation: foldModalOut  var(--fold-ms-modal-card-out) var(--ease-fold-modal-exit)  both; }
+
 @media (prefers-reduced-motion: reduce) {
-  .fold-lift[data-fold], .fold-scale[data-fold], .fold-backdrop[data-fold] { animation:none; }
+  .fold-lift[data-fold], .fold-scale[data-fold], .fold-modal[data-fold], .fold-backdrop[data-fold] { animation:none; }
 }

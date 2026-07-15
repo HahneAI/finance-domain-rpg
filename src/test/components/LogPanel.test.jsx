@@ -373,4 +373,13 @@ describe('Pay Week dropdown — rolling order', () => {
     const pastValues = Array.from(pastGroup.querySelectorAll('option')).map(o => o.value)
     expect(pastValues).toEqual(['2026-01-11', '2026-01-04'])
   })
+
+  it('labels each option as "Week of <start> – <end>" with ordinal day suffixes', () => {
+    const select = openAddForm()
+    const options = Array.from(select.querySelectorAll('option'))
+    const forWeek3 = options.find(o => o.value === '2026-01-25')
+    expect(forWeek3.textContent).toBe('Week of Jan 19th – Jan 25th')
+    const forWeek0 = select.querySelector('optgroup[label="Past"] option[value="2026-01-04"]')
+    expect(forWeek0.textContent).toBe('Week of Dec 29th – Jan 4th')
+  })
 })

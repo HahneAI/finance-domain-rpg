@@ -2825,3 +2825,81 @@ replacing) the existing per-week event pipeline:
   `App.jsx:1047`). Paused/cancelled expenses already drop out of the Needs total during job loss —
   confirm `computeNeedsShortfall()` reads the same `projectableExpenses` list so it doesn't count a
   paused bill as still owed.
+
+---
+
+## 25. Expense Input/Editor Revamp — Mandatory Rent + Preset Categories
+
+*Seeded 2026-07-16, not yet started. Two related but distinct threads: (A) add Rent as a second
+mandatory, pinned expense alongside Food; (B/C) a broader editor revamp — quick-select preset
+categories with icons for the expenses people most commonly carry. **§B is explicitly a
+brainstorm-first workstream — do not design the preset category list, schema, or icon set until
+that session happens.** Nothing in this section should be built ahead of that decision pass.*
+
+### A. Mandatory Rent Expense (parallel to Food)
+
+Today `INITIAL_EXPENSES` (`constants/config.js:306`) seeds exactly one pinned, non-deletable-feeling
+expense: Food (`isFoodPrimary: true`, `isFoodHighlighted: true`, a flat `$400/mo` default via
+`DEFAULT_FOOD_WEEKLY`). `BudgetPanel.jsx` reads those two flags in several places (`isFoodSheet`,
+the pinned-card filter at line 1509, the "other same-category expenses" exclusion at line 1147) to
+give Food special visual/behavioral treatment. Rent should get the same treatment as a second
+"everyone basically has this" mandatory Needs expense — the premise being that anyone paying for a
+subscription app is very likely covering at least a rent/mortgage share, roommates or not.
+
+- [ ] **Decide the seeding default** — Food's flat `$400/mo` guess works because grocery spend is a
+  fairly narrow band; rent is not (varies enormously by market, and a roommate split isn't
+  guessable at all). Options: seed at `$0` and require the user to fill it in during setup/first
+  visit to Budget; prompt for it explicitly as a SetupWizard question; or seed unset and just rely
+  on the "mandatory, pinned, can't fully delete" treatment to draw the eye. Needs a decision, not
+  an assumption.
+- [ ] **`isRentPrimary` / `isRentHighlighted` flags** — mirror the Food flag pair exactly (naming
+  TBD — could also be a single generalized `isPinnedPrimary` + a `pinnedKind: "food" | "rent"` if
+  a third mandatory expense is ever added later; decide during implementation, not here).
+- [ ] **Wire into every spot Food's flags currently gate** — `BudgetPanel.jsx`'s pinned-card
+  rendering, the food-sheet detection, and the "exclude Food from this category's regular list"
+  filters all need the Rent equivalent added alongside, not a parallel code path.
+- [ ] **SetupWizard touchpoint** — decide whether Rent gets asked directly in the wizard (Step 3
+  Deductions currently only covers benefits/other-deductions) or is left to be filled in on first
+  Budget visit like Food effectively is today.
+- [ ] **Copy/UI distinction from Food** — Food's visual emphasis language currently just says
+  "food" implicitly via icon-free styling; Rent needs its own label/copy so the two pinned cards
+  read as clearly different mandatory items, not two of the same thing.
+
+### B. Preset Category Brainstorm — do this first, before any schema/UI work below
+
+*Explicitly gated: §C's editor build should not start until this brainstorm has actually
+happened and produced a settled list. This bullet exists so a future session doesn't skip straight
+to building from an assumed category list.*
+
+- [ ] **Hold a dedicated brainstorm pass** to collect a strong, common preset category list —
+  the kind of expense lines most users actually carry beyond Food/Rent: Utilities, Car Insurance,
+  Lawyer Fees, Court Fees, and others in that same "frequently-needed, non-obvious-to-type-from-
+  scratch" vein. (These are ordinary expense categories, separate from — not a variant of — the
+  Rent/Food mandatory-expense mechanism in §A.)
+- [ ] **Resolve where presets sit in the existing schema** — today there are exactly two top-level
+  `category` values (`Needs` / `Lifestyle`, `constants/config.js:333`), plus the separate `Loans`
+  concept. Decide whether presets are a new sub-category/tag layer on top of `Needs`/`Lifestyle`
+  (each preset still resolves to one of the two for all the existing category-driven math/UI) or
+  something else — this is a real schema question, not just a UI dropdown question, and belongs in
+  the brainstorm session.
+- [ ] **Decide the preset's scope** — is this a fixed, curated list (simplest, matches "most
+  common" framing) or does it need a user-added-custom-category escape hatch too? Settle during
+  the brainstorm, not by default.
+
+### C. Editor UI Tuneup + Icons
+
+*Depends on §B landing first.*
+
+- [ ] **More intuitive "add expense" editor** — today `+ ADD EXPENSE LINE` (`BudgetPanel.jsx:1755`)
+  opens a bare free-text label input with a Needs/Lifestyle category toggle; no quick-select, no
+  suggestions. Replace/augment with quick-select category chips seeded from §B's finalized list —
+  picking one pre-fills the label (and category, if presets map to one) rather than the user typing
+  a category name from scratch every time.
+- [ ] **Icon set for the "most commonly had" categories** — small single-color marks (matching the
+  existing icon style already used elsewhere, e.g. `EVENT_TYPES`' icon glyphs in
+  `constants/config.js:324`) for whichever presets the brainstorm settles on, shown on both the
+  quick-select chips and the resulting expense row so common categories are visually scannable at a
+  glance rather than every row looking like an identical text line.
+- [ ] **Keep the existing free-text path** — quick-select is additive; a user with an expense
+  outside the preset list must still be able to type a custom label the way the editor already
+  works today.

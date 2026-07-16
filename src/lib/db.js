@@ -354,14 +354,19 @@ export async function loadUserData() {
 
 /**
  * Upsert all state blobs atomically.
- * Called from a debounced useEffect in App.jsx on any state change.
+ * Called from a debounced useEffect in App.jsx on any state change, and from
+ * App.jsx's eager-save helper (savePersistedStateNow) for actions that need
+ * guaranteed persistence before the debounce would otherwise fire.
  * Intentionally destructures only these fields — subscription/trial columns
  * (migration 017) are never accepted here; only the service-role webhook/
  * checkout/portal routes may write them.
+ * Returns true on success, false on failure — callers that need to know
+ * whether the write actually landed (see savePersistedStateNow) check this;
+ * the plain debounced path ignores it, same as before.
  */
 export async function saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal }) {
   const userId = await getCurrentUserId();
-  if (!userId) return; // unauthenticated — never write
+  if (!userId) return false; // unauthenticated — never write
 
   const { error } = await supabase
     .from("user_data")
@@ -383,7 +388,9 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
 
   if (error) {
     console.error("Failed to save user data:", error.message);
+    return false;
   }
+  return true;
 }
 
 /**

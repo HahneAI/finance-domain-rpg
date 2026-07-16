@@ -1,13 +1,20 @@
-import { netWorthHealthStatus } from "./finance.js";
+import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex } from "./finance.js";
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR } from "./fiscalWeek.js";
 import { EVENT_TYPES } from "../constants/config.js";
 import { EXPENSE_CYCLE_OPTIONS } from "./expense.js";
 
-// Rough weekly-equivalent for context purposes only — not the precise
-// phase/override-aware engine in expense.js. The exact total is already
-// covered by the "Weekly spend" line; this is just enough for Coach to know
-// what a line item roughly costs when it names it.
-function approxWeeklyCost(expense) {
+// Per-expense weekly cost, resolved the same way computeRemainingSpend()
+// resolves it for the real "Weekly spend" aggregate — monthlyOverrides first,
+// else the phase-indexed history[].weekly entry. billingMeta.amount is only
+// the value entered on the add-expense form; it's never the authoritative
+// current figure, so it must NOT be used here (it previously was, and
+// disagreed with the real number by double digits on a live test).
+function resolveWeeklyCost(expense, monthKey, phaseIdx) {
+  if (monthKey != null && phaseIdx != null) {
+    return getEffectiveAmountForMonth(expense, monthKey, phaseIdx);
+  }
+  // No date context to resolve history/overrides against (defensive only —
+  // the app always passes `today`) — fall back to a rough billingMeta estimate.
   const amount = expense.billingMeta?.amount ?? 0;
   const cycle = expense.billingMeta?.cycle;
   const days = EXPENSE_CYCLE_OPTIONS.find((o) => o.value === cycle)?.days ?? 30;
@@ -59,8 +66,10 @@ export function buildCoachContext({
   ];
 
   if (activeExpenses.length) {
+    const monthKey = today ? today.slice(0, 7) : null;
+    const phaseIdx = today ? getPhaseIndex(new Date(`${today}T12:00:00`)) : null;
     const items = activeExpenses
-      .map((exp) => `${exp.label ?? "Unnamed"} (${exp.category ?? (exp.type === "loan" ? "Loan" : "Needs")}): ~${fmt$(approxWeeklyCost(exp))}/wk`)
+      .map((exp) => `${exp.label ?? "Unnamed"} (${exp.category ?? (exp.type === "loan" ? "Loan" : "Needs")}): ~${fmt$(resolveWeeklyCost(exp, monthKey, phaseIdx))}/wk`)
       .join("; ");
     lines.push(`Expense breakdown: ${items}`);
   }

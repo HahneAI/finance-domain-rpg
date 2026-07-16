@@ -7,7 +7,10 @@ describe("buildCoachContext", () => {
       weeklyIncome: 1000,
       avgWeeklySpend: 400,
       goals: [{ completed: true, target: 500 }, { completed: false, target: 1000 }],
-      expenses: [{ jobLossStatus: "active" }, { jobLossStatus: "paused" }],
+      expenses: [
+        { label: "Food", category: "Needs", history: [{ effectiveFrom: "2026-01-01", weekly: [400, 400, 400, 400] }], jobLossStatus: "active" },
+        { label: "Old Gym", category: "Lifestyle", history: [{ effectiveFrom: "2026-01-01", weekly: [40, 40, 40, 40] }], jobLossStatus: "paused" },
+      ],
       fundedGoalSpend: 500,
       currentWeek: { idx: 27 },
       today: "2026-07-07",
@@ -18,6 +21,7 @@ describe("buildCoachContext", () => {
     expect(block).toContain("Weekly surplus: $600");
     expect(block).toContain("Goals: 2 goals set (1 completed), $500 funded so far");
     expect(block).toContain("Expenses: 1 active line, $400/week");
+    expect(block).toContain("Expense breakdown: Food (Needs): ~$400/wk");
     expect(block).toContain("Fiscal week: 28 of 52 (24 left)");
     expect(block).toContain("Today: 2026-07-07");
   });
@@ -32,27 +36,77 @@ describe("buildCoachContext", () => {
     expect(block).toContain("Goals: 1 goal set (0 completed), $0 funded so far");
   });
 
-  it("names each active expense by label, category, and an approximate weekly cost", () => {
+  it("names each active expense by label, category, and its real history-resolved weekly cost", () => {
     const block = buildCoachContext({
       weeklyIncome: 800,
       avgWeeklySpend: 300,
+      today: "2026-07-07",
       expenses: [
-        { label: "Rent", category: "Needs", billingMeta: { amount: 1200, cycle: "every30days" }, jobLossStatus: "active" },
-        { label: "Netflix", category: "Lifestyle", billingMeta: { amount: 15, cycle: "every30days" }, jobLossStatus: "active" },
-        { label: "Old Gym", category: "Lifestyle", billingMeta: { amount: 40, cycle: "every30days" }, jobLossStatus: "paused" },
+        { label: "Rent", category: "Needs", history: [{ effectiveFrom: "2026-01-01", weekly: [280, 280, 280, 280] }], jobLossStatus: "active" },
+        { label: "Netflix", category: "Lifestyle", history: [{ effectiveFrom: "2026-01-01", weekly: [4, 4, 4, 4] }], jobLossStatus: "active" },
+        { label: "Old Gym", category: "Lifestyle", history: [{ effectiveFrom: "2026-01-01", weekly: [40, 40, 40, 40] }], jobLossStatus: "paused" },
       ],
     });
     expect(block).toContain("Expense breakdown: Rent (Needs): ~$280/wk; Netflix (Lifestyle): ~$4/wk");
     expect(block).not.toContain("Old Gym");
   });
 
+  // Regression: a live test showed Coach citing $93/wk for an expense the app
+  // itself displays (and uses in all its real math) as $100/wk. The bug was
+  // computing the per-item figure from billingMeta.amount/cycle — the value
+  // entered on the add-expense form — instead of the phase-indexed
+  // history[].weekly entry that computeRemainingSpend() actually uses for
+  // the real "Weekly spend" aggregate.
+  it("uses the real history-resolved amount, not billingMeta, when the two disagree", () => {
+    const block = buildCoachContext({
+      weeklyIncome: 800,
+      avgWeeklySpend: 100,
+      today: "2026-07-07",
+      expenses: [{
+        label: "Food",
+        category: "Needs",
+        billingMeta: { amount: 400, cycle: "every30days" }, // naive amount/days*7 ≈ $93 — wrong
+        history: [{ effectiveFrom: "2026-01-01", weekly: [100, 100, 100, 100] }], // real, authoritative
+        jobLossStatus: "active",
+      }],
+    });
+    expect(block).toContain("Food (Needs): ~$100/wk");
+    expect(block).not.toContain("$93");
+  });
+
+  it("prefers a monthlyOverrides entry over history for the current month, matching getEffectiveAmountForMonth", () => {
+    const block = buildCoachContext({
+      weeklyIncome: 800,
+      avgWeeklySpend: 150,
+      today: "2026-07-07",
+      expenses: [{
+        label: "Utilities",
+        category: "Needs",
+        history: [{ effectiveFrom: "2026-01-01", weekly: [100, 100, 100, 100] }],
+        monthlyOverrides: { "2026-07": { perPaycheck: 150 } },
+        jobLossStatus: "active",
+      }],
+    });
+    expect(block).toContain("Utilities (Needs): ~$150/wk");
+  });
+
+  it("falls back to a rough billingMeta estimate only when there's no `today` to resolve history against", () => {
+    const block = buildCoachContext({
+      weeklyIncome: 800,
+      avgWeeklySpend: 300,
+      expenses: [{ label: "Netflix", category: "Lifestyle", billingMeta: { amount: 15, cycle: "every30days" }, jobLossStatus: "active" }],
+    });
+    expect(block).toContain("Netflix (Lifestyle): ~$4/wk");
+  });
+
   it("falls back to a Loan category for loan-type expenses missing a category", () => {
     const block = buildCoachContext({
       weeklyIncome: 800,
       avgWeeklySpend: 300,
-      expenses: [{ label: "Car Loan", type: "loan", billingMeta: { amount: 300, cycle: "every30days" }, jobLossStatus: "active" }],
+      today: "2026-07-07",
+      expenses: [{ label: "Car Loan", type: "loan", history: [{ effectiveFrom: "2026-01-01", weekly: [300, 300, 300, 300] }], jobLossStatus: "active" }],
     });
-    expect(block).toContain("Car Loan (Loan):");
+    expect(block).toContain("Car Loan (Loan): ~$300/wk");
   });
 
   it("omits the expense breakdown line entirely when there are no active expenses", () => {

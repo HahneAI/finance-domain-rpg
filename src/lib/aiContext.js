@@ -45,6 +45,11 @@ export function buildCoachContext({
   const annualSavings = avgWeeklySurplus * 52 - fundedGoalSpend;
   const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * 52);
 
+  // Matches HomePanel.jsx's "Budget Health" tile exactly: spendRatio =
+  // avgWeeklySpend / weeklyIncome, same <50%/<75% thresholds and labels.
+  const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
+  const budgetHealthLabel = spendRatio < 0.5 ? "well-managed" : spendRatio < 0.75 ? "healthy range" : "watch spend";
+
   const completedGoals = goals.filter((g) => g.completed);
   const activeExpenses = expenses.filter((e) => (e.jobLossStatus ?? "active") === "active");
   const weekNumber = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : null;
@@ -58,6 +63,8 @@ export function buildCoachContext({
     `Weekly spend: ${fmt$(avgWeeklySpend)}`,
     `Weekly surplus: ${fmt$(avgWeeklySurplus)}`,
     `Savings rate: ${netWorthHealth.rate != null ? `${Math.round(netWorthHealth.rate * 100)}%` : "—"}${netWorthHealth.belowThreshold ? " (below 10% target)" : ""}`,
+    `Net worth trend (Home tile — projected annual savings): ${fmt$(annualSavings)}`,
+    `Budget Health (Home tile): ${Math.round(spendRatio * 100)}% spend ratio (${budgetHealthLabel})`,
     `Goals: ${goals.length} goal${goals.length === 1 ? "" : "s"} set (${completedGoals.length} completed), ${fmt$(fundedGoalSpend)} funded so far`,
     `Expenses: ${activeExpenses.length} active line${activeExpenses.length === 1 ? "" : "s"}, ${fmt$(avgWeeklySpend)}/week`,
     `Log entries: ${logs.length} logged${mostRecentLog ? `, most recent: ${EVENT_TYPES[mostRecentLog.type]?.label ?? mostRecentLog.type} (week ending ${mostRecentLog.weekEnd ?? "—"})` : ""}`,

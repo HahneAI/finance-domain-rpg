@@ -19,11 +19,27 @@ describe("buildCoachContext", () => {
     expect(block).toContain("Weekly net income: $1,000");
     expect(block).toContain("Weekly spend: $400");
     expect(block).toContain("Weekly surplus: $600");
+    expect(block).toContain("Net worth trend (Home tile — projected annual savings): $30,700");
+    expect(block).toContain("Budget Health (Home tile): 40% spend ratio (well-managed)");
     expect(block).toContain("Goals: 2 goals set (1 completed), $500 funded so far");
     expect(block).toContain("Expenses: 1 active line, $400/week");
     expect(block).toContain("Expense breakdown: Food (Needs): ~$400/wk");
     expect(block).toContain("Fiscal week: 28 of 52 (24 left)");
     expect(block).toContain("Today: 2026-07-07");
+  });
+
+  // Regression: a live test showed Coach flatly denying it had any "budget
+  // health score" data, even though it's a real, prominent Home tile — the
+  // context block simply never carried it. These three cases match
+  // HomePanel.jsx's exact spendRatio thresholds/labels so the two can never
+  // disagree.
+  it.each([
+    [0.3, "30% spend ratio (well-managed)"],
+    [0.6, "60% spend ratio (healthy range)"],
+    [0.9, "90% spend ratio (watch spend)"],
+  ])("labels Budget Health at spend ratio %s as %s", (ratio, expected) => {
+    const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 1000 * ratio });
+    expect(block).toContain(`Budget Health (Home tile): ${expected}`);
   });
 
   it("disambiguates the goals line so 0 completed never reads as 0 goals set", () => {

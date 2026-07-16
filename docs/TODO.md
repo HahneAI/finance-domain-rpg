@@ -924,6 +924,16 @@ financial advisor — Coach answers questions about the app using the user's rea
   covering. **Deliberate non-RAG choice:** static and hand-maintained rather than a vector/retrieval
   pipeline — the app's feature surface is small enough to hand Coach in full, and a retrieval step
   would vary the prefix per-query and break the cache the persona block already depends on.
+  **2026-07-16 follow-up:** a live test asked about the Home panel's "Budget Health" tile by name
+  and Coach flatly said it had no such data — the guide never named Home's three actual tile
+  titles, and `buildCoachContext()` didn't carry the Budget Health % or Net Worth Trend $ figures
+  at all (only the derived "Savings rate"). Fixed: the guide now names all three tiles ("Next Week
+  Takehome", "Net Worth Trend", "Budget Health") explicitly, and the context block adds live
+  Budget Health / Net Worth Trend lines computed with the exact same formula/thresholds as
+  `HomePanel.jsx`. **Still not wired:** "Next Week Takehome" has no live figure in Coach's context —
+  it needs `futureWeeks`/`futureWeekNets`/`getNextPayWeek` plumbed through from `App.jsx`, which
+  none of `AskCoachPanel`'s current props carry. Coach can explain the concept from the guide but
+  can't cite the live number yet; wire this in if it comes up again in testing.
 - [ ] **Guardrail** — Coach does not give tax advice, legal advice, or investment recommendations;
   acknowledges the disclaimer when those topics come up
 - [ ] **Claude API integration** — Haiku for short conversational answers; Sonnet for richer

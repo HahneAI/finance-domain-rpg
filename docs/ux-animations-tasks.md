@@ -1,11 +1,13 @@
-# Clickable Component Hierarchy — Authority Finance
+# UX Animations — Tasks & Surface Map (Authority Finance)
 
-**Purpose:** Map every interactive (clickable / pressable) surface in the app so we can
-roll out an Apple-style **flash + bounce** press animation section by section.
+**Purpose:** Track the two motion systems across every interactive surface in the app:
+1. **Press feedback** (tap fill + spring) — *shipped* (see below).
+2. **Fold-up transitions** (page moves · modal open/close · dropdown open/close) — *rolling out*.
+
 **Scope:** The entire authenticated app shell. **Excludes the Login screen only**
 (`LoginScreen.jsx` and its pre-auth siblings — see [Excluded](#excluded)).
 
-**Last updated:** 2026-06-26
+**Last updated:** 2026-07-15
 
 ---
 
@@ -303,7 +305,34 @@ toggled by a trigger. These get the ScaleY fold (down from top / up to top).
 - `MonthQuarterSelector` — a segmented selector bar, not an open/close surface.
 - Mobile drawer X-slide — already has its own slide; fold would fight it.
 
-## Rollout order (proposed)
-1. ⬜ Build the system: `useFoldTransition` hook + `foldScaleY*`/`foldLift*` keyframes + easing tokens.
-2. ⬜ Prototype on **one modal** (e.g. Sharpen-rates or Week Inspector) to confirm the ScaleY feel + exit.
-3. ⬜ Roll modals, then dropdowns/expanders, then page moves (`FoldSwitch`) — one group at a time.
+## Rollout status
+
+**System built** ✅ — `useFoldTransition` + `FoldSwitch` (`ui.jsx`); `foldLift*` (pages),
+`foldScale*` (dropdowns), `fold-modal`/`foldModalOut` (modal cards with visible upward
+travel on close), `foldBackdrop*` + easing/duration tokens (`index.css`). Reduced-motion
+guarded. Tuned live via the Motion Lab.
+
+**Page moves** ✅ — `App.jsx` `activePanel` wrapped in `<FoldSwitch>` (lift+fade, up from
+bottom, 340ms enter w/ gentle overshoot, 180ms exit).
+
+**Modals — converted (`fold-modal` + `fold-backdrop`, open/close both animate):**
+- ✅ IncomePanel: missed-event, Sharpen-rates, Week Detail
+- ✅ BudgetPanel: check-info
+- ✅ ProfilePanel: delete-account, local sign-out confirm
+- ✅ HomePanel: reorder goals, reset timeline
+- ✅ LifeEventMenu · JobLossEntry · ExpenseTriage
+- ⬜ WeekConfirmModal (currently `.wc-modal-in`; migrate) · App Week Inspector · UpgradeModal
+  (parent mounts/unmounts it — needs the toggle to drive `useFoldTransition`) · SetupWizard
+  (full-screen; likely wants its own step transitions) · AskCoachPanel · BulkEditPanel
+- ⏭️ **Skip:** admin tools slide-up sheet (keep its drag-dismiss slide) · mobile drawer
+  (X-slide) · PwaInstallModal (native `<dialog>`, top layer)
+
+**Dropdowns / expanders — converted (`fold-scale`):**
+- ✅ HomePanel funded-history · NetWorthHealthTips · LogPanel attendance history
+- ⬜ LogPanel per-entry impact · Budget expense/category expanders · admin Config/DB-Row/Tax
+  toggles (rendered in 3 places each)
+- ⚠️ ProfilePanel email/password forms are **swaps** (`!show ? trigger : form`), not reveals —
+  need a crossfade, not the fold-reveal pattern.
+
+**Tuning notes (revisit later):** page-enter distance/duration and modal-close travel are
+first-pass values; overhead pass pending per the "cover first, tune later" plan.

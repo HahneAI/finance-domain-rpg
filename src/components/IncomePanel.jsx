@@ -15,6 +15,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
   // Fold-up transition prototype (modal): keeps the modal mounted through its
   // fold-out so open + close both animate. See useFoldTransition / index.css.
   const eventLossFold = useFoldTransition(showEventLossInfo, { ms: 340 });
+  const sharpenerFold = useFoldTransition(showSharpener, { ms: 340 });
+  const weekDetailFold = useFoldTransition(showWeekDetail, { ms: 340 });
 
   // ── Sharpen Rates modal state ──────────────────────────────────────────────
   const [sg1, setSg1] = useState("");
@@ -121,14 +123,14 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
     {/* Portaled to document.body: a position:fixed modal nested in the scrolling
         .main-content container is hit-tested at a scrollTop offset by iOS Safari,
         which left its buttons (Cancel/Confirm/✕) needing multiple taps or dead. */}
-    {showSharpener && createPortal(
-      <div style={{
+    {sharpenerFold.mounted && createPortal(
+      <div className="fold-backdrop" data-fold={sharpenerFold.fold} style={{
         position: "fixed", inset: 0, zIndex: 200,
         background: "rgba(0,0,0,0.75)",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: "24px 16px",
       }}>
-        <div style={{
+        <div className="fold-modal" data-fold={sharpenerFold.fold} style={{
           width: "100%", maxWidth: "440px",
           background: "var(--color-bg-surface)",
           border: "1px solid var(--color-border-subtle)",
@@ -495,8 +497,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
         not the scrolling .main-content ancestor (iOS Safari offset hit-test).
         Capped to 90dvh with its own internal scroll region (header stays fixed)
         so the box always fits the viewport instead of overflowing top/bottom. */}
-    {showWeekDetail && createPortal(<div onClick={() => setShowWeekDetail(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "var(--color-bg-surface)", borderRadius: "8px", maxWidth: "860px", width: "100%", maxHeight: "90dvh", display: "flex", flexDirection: "column", overflow: "hidden", padding: "16px" }}>
+    {weekDetailFold.mounted && createPortal(<div className="fold-backdrop" data-fold={weekDetailFold.fold} onClick={() => setShowWeekDetail(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+      <div className="fold-modal" data-fold={weekDetailFold.fold} onClick={e => e.stopPropagation()} style={{ background: "var(--color-bg-surface)", borderRadius: "8px", maxWidth: "860px", width: "100%", maxHeight: "90dvh", display: "flex", flexDirection: "column", overflow: "hidden", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexShrink: 0 }}>
           <span style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase" }}>{isBiweekly ? "Pay Period Breakdown" : isMonthlyPay ? "Monthly Breakdown" : "Weekly Breakdown"} — Active Window Detail</span>
           <Pressable onClick={() => setShowWeekDetail(false)} style={{ background: "transparent", border: "none", color: "var(--color-text-primary)", fontSize: "16px", cursor: "pointer", padding: "4px 8px" }}>✕</Pressable>

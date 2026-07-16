@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { LogPanel } from '../../components/LogPanel.jsx'
 import { DEFAULT_CONFIG } from '../../constants/config.js'
 
@@ -146,12 +146,14 @@ describe('Attendance History — collapse/expand', () => {
     expect(screen.getByText(/partial shifts/i)).toBeTruthy()
   })
 
-  it('collapses again on a second click', () => {
+  it('collapses again on a second click', async () => {
     renderPanel([mkUnpaid('2026-03-16', 2, ['Mon', 'Tue'])])
     const btn = screen.getByText(/attendance history/i).closest('button')
     fireEvent.click(btn)
     fireEvent.click(btn)
-    expect(screen.queryByText(/unpaid shifts/i)).toBeNull()
+    // The panel now fold-animates out (useFoldTransition keeps it mounted through
+    // the exit tween), so it unmounts a beat after the collapse click.
+    await waitFor(() => expect(screen.queryByText(/unpaid shifts/i)).toBeNull())
   })
 })
 

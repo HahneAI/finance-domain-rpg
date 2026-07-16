@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { Pressable } from "./ui.jsx";
+import { Pressable, useFoldTransition } from "./ui.jsx";
 import { CATEGORY_COLORS } from "../constants/config.js";
 import { getNextDueDate } from "../lib/expense.js";
 
@@ -80,7 +80,8 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses, config, ef
     });
   }, [expenses, needsCoverageIds]);
 
-  if (!open) return null;
+  const fold = useFoldTransition(open, { ms: 340 });
+  if (!fold.mounted) return null;
 
   const setStatus = (id, status) => {
     setExpenses(prev => prev.map(exp => (
@@ -110,6 +111,7 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses, config, ef
 
   return (
     <div
+      className="fold-backdrop" data-fold={fold.fold}
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 80,
@@ -119,6 +121,7 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses, config, ef
       }}
     >
       <div
+        className="fold-modal" data-fold={fold.fold}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--color-bg-surface)",
@@ -126,7 +129,6 @@ export function ExpenseTriage({ open, onClose, expenses, setExpenses, config, ef
           borderRadius: "14px",
           width: "100%", maxWidth: "520px",
           maxHeight: "90vh", display: "flex", flexDirection: "column",
-          animation: "weekCardIn 220ms ease-out",
           overflow: "hidden",
         }}
       >

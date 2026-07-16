@@ -258,6 +258,8 @@ export function HomePanel({
   const fundedFold = useFoldTransition(showCompleted, { ms: 280 });
   const [showReorderModal, setShowReorderModal] = useState(false);
   const [showResetTimeline, setShowResetTimeline] = useState(false);
+  const reorderFold = useFoldTransition(showReorderModal, { ms: 340 });
+  const resetTimelineFold = useFoldTransition(showResetTimeline, { ms: 340 });
   const [draggingReorderId, setDraggingReorderId] = useState(null);
   const [dragOverReorderId, setDragOverReorderId] = useState(null);
   const [enterAnims, setEnterAnims] = useState({});
@@ -911,8 +913,9 @@ export function HomePanel({
             not the scrolling .main-content ancestor — iOS Safari hit-tests a fixed
             element nested in an overflow:auto container at a scrollTop offset, which
             made the modal's controls need repeated taps. */}
-        {showReorderModal && createPortal(
+        {reorderFold.mounted && createPortal(
           <div
+            className="fold-backdrop" data-fold={reorderFold.fold}
             onClick={closeReorderModal}
             style={{
               position: "fixed",
@@ -926,6 +929,7 @@ export function HomePanel({
             }}
           >
             <div
+              className="fold-modal" data-fold={reorderFold.fold}
               onClick={(e) => e.stopPropagation()}
               style={{
                 width: "100%",
@@ -1141,8 +1145,9 @@ export function HomePanel({
           document.body,
         )}
 
-        {showResetTimeline && createPortal(
+        {resetTimelineFold.mounted && createPortal(
           <div
+            className="fold-backdrop" data-fold={resetTimelineFold.fold}
             onClick={() => setShowResetTimeline(false)}
             style={{
               position: "fixed",
@@ -1156,6 +1161,7 @@ export function HomePanel({
             }}
           >
             <div
+              className="fold-modal" data-fold={resetTimelineFold.fold}
               onClick={(e) => e.stopPropagation()}
               style={{
                 width: "100%",

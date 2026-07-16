@@ -7,9 +7,12 @@ duplicate/stale entries from the old chronological version were merged or droppe
 Extended 2026-07-07: added §21 (Monetization — the paywall/entitlement/revival system, TODO §17,
 was previously undocumented here despite being almost entirely shipped), §22 (Master Timeline
 config-history write path, TODO §19 phase 1), and §23 (Beta Tester Accounts, TODO §18); refreshed
-the §1/§5 known-gap notes to match.
+the §1/§5 known-gap notes to match. Extended 2026-07-16: added §24 (AI Layer — Coach, TODO §18) —
+the chat panel, persona/feature-guide prompts, and context builder, plus the grounding pattern a
+live testing pass surfaced (reuse the UI's own authoritative computation, never a parallel
+approximation) that every future context-field addition should follow.
 **Guardrail: keep under 300 lines — currently over; a trim pass is owed.** Summarize; do not transcribe.
-Last updated: 2026-07-07 | App: Authority Finance (A:Fin)
+Last updated: 2026-07-16 | App: Authority Finance (A:Fin)
 
 ---
 
@@ -40,6 +43,7 @@ Last updated: 2026-07-07 | App: Authority Finance (A:Fin)
 | 21 | Monetization — Trial, Paywall & Account Revival | `subscription.js`, `App.jsx`, `api/stripe-*.js`, `api/revival-lookup.js`, `UpgradeCard.jsx`, `UpgradeModal.jsx`, `UpgradePanel.jsx`, `TrialBanner.jsx`, `ReviveScreen.jsx` | Live — all migrations through 020 confirmed run |
 | 22 | Master Timeline — Config History | `configHistory.js`, `db.js`, `App.jsx` | Live, migration run (write path only — nothing reads it yet) |
 | 23 | Beta Tester Accounts | `entitlements.js`, `db.js`, `App.jsx`, migration 021 | Live |
+| 24 | AI Layer — Coach ("Ask Coach") | `api/coach.js`, `lib/claude.js`, `lib/coachPrompts.js`, `lib/coachFeatureGuide.js`, `lib/aiContext.js`, `AskCoachPanel.jsx`, `CoachNetWorthCard.jsx` | Live, admin/tester-gated |
 
 ---
 
@@ -431,3 +435,43 @@ since migration 019's RLS column grants).
   in `isInvestor`.
 - **Lifecycle cron:** bypassed the same as admin/investor (§20) — testers are never dunned
   or auto-deleted if the 6-month window lapses before renewal.
+
+---
+
+## 24. AI Layer — Coach ("Ask Coach")
+
+Coach is an in-app AI companion — corner-man persona, full voice brief and scored tuning rubric
+in `docs/coach-personality-rubric.md` — that answers questions about how Authority Finance works,
+grounded in the user's real data. Gated behind `canAccessAiFeatures({isAdmin, isTester})` (§23)
+client **and** server side; every AI surface stays admin/tester-only until Coach leaves its
+build-out phase (`docs/TODO.md` §18 standing constraint).
+
+- **Pieces:** `api/coach.js` (Vercel function; streams Anthropic SSE through; re-checks the gate
+  server-side; prod/test key split via `ANTHROPIC_API_KEY`/`ANTHROPIC_API_KEY_TEST`, same MODE
+  pattern as Stripe) · `lib/claude.js` (`chatWithCoach()`, thin client) · `lib/coachPrompts.js`
+  (`COACH_PERSONA_PROMPT` shared voice + `buildNetWorthSystemPrompt`/`ASK_COACH_SYSTEM_PROMPT`)
+  · `lib/coachFeatureGuide.js` (`COACH_FEATURE_GUIDE`, hand-written panel tutorial, concatenated
+  into the Ask Coach system prompt) · `lib/aiContext.js` (`buildCoachContext()`, the per-user data
+  snapshot) · `components/AskCoachPanel.jsx` (chat UI; gated bottom-nav entry mirrors the admin
+  `__tools__` pattern; no persistence yet) · `components/CoachNetWorthCard.jsx` (§C's proactive
+  Net Worth Trend trigger, rate-limited to once/tier/fiscal-week).
+- **Grounding pattern — the rule to follow when extending this:** every context field must resolve
+  through the *same* authoritative function the UI itself displays that number with, never a
+  parallel approximation. Concretely: per-expense weekly cost goes through
+  `getEffectiveAmountForMonth()`/`getPhaseIndex()` (what `computeRemainingSpend()` uses), and
+  per-goal timeline data goes through `computeGoalTimeline()` with the same
+  `config.goalTimelineEpochIdx` epoch `HomePanel.jsx` passes. A 2026-07-16 live-testing pass found
+  and fixed three real bugs from skipping this: a per-expense estimate derived from `billingMeta`
+  instead of `history` that disagreed with the real number by double digits; an ambiguous
+  "M/N completed" goals line the model misread as "no goals set"; and a flat "I don't have that
+  data" on the Home "Budget Health" tile, which context simply never carried. Reuse the exported
+  pure function — don't hand-derive a shortcut.
+- **Privacy:** goal labels are deliberately excluded from `buildCoachContext()` — goals are
+  identified only by funding-priority rank ("Goal 1 of N"). Coach may use a name back only if the
+  *user* volunteers it in their own message; it never learns one from data.
+- **Known gaps:** chat history persistence exists at the data layer (`coach_chats` table, migration
+  023 live, `db.js` load/save/delete functions) but isn't wired into `App.jsx`/`AskCoachPanel` yet
+  (§18.H). The "Next Week Takehome" Home tile has no live figure in context (needs
+  `futureWeeks`/`getNextPayWeek` plumbing). Benefits/401k context is intentionally not wired —
+  blocked on a product decision about how base (non-DHL) users onboard other employer comp.
+- Full build log, deviations, and open questions: `docs/TODO.md` §18.

@@ -159,7 +159,11 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 
 ## Development Workflow
 **30-min sprints, 4×/week.** Before: state the task clearly. After: commit + one-sentence summary.
-- `docs/active-systems.md` — how every live system works
+- `docs/active-systems.md` — how every live system works. **Working on Coach/AI context?** Read
+  §24 first — it documents the grounding pattern (every context field must resolve through the
+  same authoritative function the UI itself uses, e.g. `computeGoalTimeline()`,
+  `getEffectiveAmountForMonth()` — never a parallel approximation) that live testing had to
+  rediscover through several real bugs. Skipping it reintroduces those bugs.
 - `docs/TODO.md` — prioritized backlog (open items only)
 - `docs/past-TODO-tasks.md` — completed work log (one-liner per shipped item, for historical context)
 - `docs/account-reference.json` — Anthony's primary account ground truth

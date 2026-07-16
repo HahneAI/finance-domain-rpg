@@ -383,6 +383,9 @@ export default function App() {
   };
 
   // ── Auth: check existing session on mount, subscribe to changes ──
+  // Tracks which user id we've already run the revival/trial-seed/reload chain
+  // for below — see the SIGNED_IN guard for why this exists.
+  const signedInChainRanForRef = useRef(null);
   useEffect(() => {
     // Rely solely on onAuthStateChange rather than calling getSession() first.
     // getSession() resolves before Supabase has exchanged the OAuth code from the URL,
@@ -392,6 +395,7 @@ export default function App() {
     return onAuthChange((event, user) => {
       if (event === "PASSWORD_RECOVERY") setPendingPasswordReset(true);
       else setPendingPasswordReset(false);
+      if (event === "SIGNED_OUT") signedInChainRanForRef.current = null;
       // Seed user_data row + sync OAuth profile metadata on every sign-in.
       // Critical for Google OAuth users who have no row yet; safe no-op for email users.
       // §17.I: the revival check MUST run first — an OAuth sign-in with a
@@ -410,7 +414,19 @@ export default function App() {
       // nothing else re-triggers a reload for a normal, non-revival, non-
       // checkout-return sign-in. Bump reloadTrigger once seeding has actually
       // settled so loadUserData() re-runs and picks up the real trial window.
-      if (event === "SIGNED_IN" && user) {
+      //
+      // Guard: supabase-js's GoTrueClient re-emits SIGNED_IN — with the SAME
+      // already-established session — on every hidden→visible tab transition
+      // (_onVisibilityChanged → _recoverAndRefresh), which fires constantly on
+      // mobile from app switching, screen lock/unlock, notification banners.
+      // Without this guard, each one re-ran the chain below and force-reloaded
+      // loadUserData(), overwriting in-memory config/expenses/goals/logs with
+      // whatever was last saved to the DB and flashing the full-screen loading
+      // state — silently discarding any edit made in the preceding debounce
+      // window. Only the first SIGNED_IN seen for a given user id needs this
+      // chain; later ones for the same id are the visibility-recovery no-op.
+      if (event === "SIGNED_IN" && user && signedInChainRanForRef.current !== user.id) {
+        signedInChainRanForRef.current = user.id;
         checkRevival()
           .then((revival) => {
             if (revival) {
@@ -459,12 +475,21 @@ export default function App() {
     setLoading(true);
 
     const applyLoadedData = (data) => {
-      setConfig(data.config);
-      setShowExtra(data.showExtra);
-      setLogs(data.logs);
-      setExpenses(data.expenses);
-      setGoals(data.goals);
-      setWeekConfirmations(data.weekConfirmations ?? {});
+      // Defense-in-depth alongside the SIGNED_IN dedup guard above: if a debounced
+      // save is still pending (an edit made in roughly the last 800ms hasn't been
+      // written yet), the DB snapshot this load just read is stale relative to
+      // local state for exactly these fields. Applying it anyway would revert the
+      // in-progress edit — the fields below are the only ones the debounced save
+      // writes, so everything else (isAdmin, subscription, etc.) still applies
+      // unconditionally.
+      if (!pendingSaveRef.current) {
+        setConfig(data.config);
+        setShowExtra(data.showExtra);
+        setLogs(data.logs);
+        setExpenses(data.expenses);
+        setGoals(data.goals);
+        setWeekConfirmations(data.weekConfirmations ?? {});
+      }
       setIsEmployerDHL(data.isEmployerDHL);
       setIsAdmin(data.isAdmin);
       setIsTester(data.isTester);

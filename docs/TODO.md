@@ -1617,17 +1617,32 @@ note rather than re-listed here to avoid two competing specs for the same shippe
 
 ---
 
-### D. Quick Rate Update (non-structural raise)
+### D. Quick Rate Update (non-structural raise) — BUILT 2026-07-17
 
 *For when the pay structure stays the same but the rate changed — shouldn't require a full wizard.*
-**Confirmed not built (2026-07-17):** the tile exists in `LifeEventMenu.jsx:53-65` but is
-hardcoded `comingSoon: true` / disabled — no modal component exists anywhere in `src/`. This is
-the one real, self-contained gap left in §A–D; it doesn't block or get blocked by anything else here.
 
-- [ ] **Rate update modal** — single screen: new base rate input + effective date + optional note
-- [ ] **Effective-date handling** — same `firstActiveIdx` logic as structure overwrite, applied
-  only to `baseRate`; all other config fields unchanged
-- [ ] **Confirmation diff** — shows old rate → new rate + estimated weekly net delta before saving
+- [x] **Rate update modal** — `src/components/RateUpdateModal.jsx`: single screen, new hourly
+  rate + effective date. **Dropped the "optional note" field** — there's no schema field or any
+  other place for free-text notes to go on a rate change, so a note input with no destination
+  would've been dead UI; cut rather than half-built.
+- [x] **Effective-date handling** — **not** `firstActiveIdx` (that's the account-wide "when did
+  this account start" scalar, unrelated to a single field edit). Instead uses the account_history
+  mechanism §19 already shipped: the modal's date travels as `effectiveFrom` into
+  `configHistoryMetaRef` exactly like `JobLossEntry`'s `jobLossDate` does, tagging the automatic
+  config-history snapshot with `source: "life_event:rate_update"`. `baseRate` was already on the
+  §19 historically-sensitive whitelist, so no new plumbing was needed there.
+- [x] **Confirmation diff** — shows old rate → new rate + an estimated weekly net delta, computed
+  via a new shared `estimateWeeklyNet()` (`src/lib/finance.js`) extracted from `SetupWizard.jsx`'s
+  `StepWrapUp` live-preview formula (was duplicated logic in the wizard alone; now both callers
+  read the same formula rather than risking drift).
+- [x] **Wired live** — `LifeEventMenu.jsx`'s tile flipped from `comingSoon: true` to
+  `route: "rate_update"`; `App.jsx` opens the modal and applies `{ baseRate }` to config on confirm.
+  7 new tests in `jobLossFlow.test.jsx` (prefill, validation gate, confirm payload, cancel, Escape,
+  menu routing). 1032 tests passing; lint diff-clean vs. baseline; production build green.
+- **Not yet verified live** — same sandbox limitation as everything else in this repo (no
+  Supabase credentials here): unit tests + build only. Needs a real click-through on a deployed
+  preview to confirm the modal opens from the Life Events menu and the account_history snapshot
+  actually lands with the right `effectiveFrom`.
 
 ---
 

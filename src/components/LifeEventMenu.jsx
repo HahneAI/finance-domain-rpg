@@ -8,8 +8,7 @@ import { Pressable } from "./ui.jsx";
  * drawer. Three icon-forward tiles route to the appropriate flow:
  *  - Pay Structure Changed → SetupWizard re-entry (`structure_change`, §15.B)
  *  - Lost My Job          → JobLossEntry modal (§15.C1)
- *  - Quick Rate Update    → dedicated single modal (§15.D — not built yet,
- *    so this tile is disabled with a "Coming soon" badge for now)
+ *  - Quick Rate Update    → RateUpdateModal (§15.D)
  *
  * `onSelect(route)` is called with either a SetupWizard life-event string or
  * the sentinel `"job_loss"`, which the parent interprets as "open the
@@ -54,8 +53,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
       id: "rate_update",
       title: "Quick Rate Update",
       desc: "Just changed your hourly rate? No structure change.",
-      route: null,
-      comingSoon: true,
+      route: "rate_update",
       icon: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2v20" />

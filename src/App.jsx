@@ -281,6 +281,11 @@ export default function App() {
   //                        pickupDays, netShiftDelta, eventId } }
   // Keyed by weekIdx (number) so lookup is O(1) in confirmTriggerWeek.
   const [weekConfirmations, setWeekConfirmations] = useState({});
+  // Point-in-time baseRate lookup (TODO §15.D / §19 narrow slice) — sorted-or-not
+  // list of { effectiveFrom, baseRate } fed to buildYear() so a rate change only
+  // recomputes weeks from its effective date forward. See resolveBaseRateForWeek
+  // in lib/finance.js for the resolution algorithm.
+  const [baseRateHistory, setBaseRateHistory] = useState([]);
   // wizardEntry: null=closed, false=first-run, string=re-entry life event
   const [wizardEntry, setWizardEntry] = useState(null);
   // Gates TrialExplainerScreen ahead of first-run SetupWizard entry (docs/TODO.md
@@ -492,6 +497,7 @@ export default function App() {
         setExpenses(data.expenses);
         setGoals(data.goals);
         setWeekConfirmations(data.weekConfirmations ?? {});
+        setBaseRateHistory(data.baseRateHistory ?? []);
       }
       setIsEmployerDHL(data.isEmployerDHL);
       setIsAdmin(data.isAdmin);
@@ -626,12 +632,22 @@ export default function App() {
     if (config.isInvestor) return; // investor sandboxes are exempt, matching §17.G
     const changedFields = diffSensitiveFields(prev, config);
     if (changedFields.length === 0) return;
+    const effectiveFrom = meta?.effectiveFrom ?? toLocalIso(new Date());
     saveConfigSnapshot({
       config,
       changedFields,
       source: meta?.source ?? "config_edit",
-      effectiveFrom: meta?.effectiveFrom ?? toLocalIso(new Date()),
+      effectiveFrom,
     });
+    // Optimistic local append (TODO §15.D / §19 narrow slice) — the DB insert above
+    // is fire-and-forget, so without this the just-made change wouldn't affect
+    // buildYear()'s point-in-time resolution until the next full reload. Matters
+    // most for a future-dated effective date: without the local entry, weeks
+    // between today and that future date would incorrectly fall back to the new
+    // live baseRate instead of holding the old one until the chosen date arrives.
+    if (changedFields.includes("baseRate")) {
+      setBaseRateHistory(prev => [...prev, { effectiveFrom, baseRate: config.baseRate }]);
+    }
   }, [config, loading]);
 
   useEffect(() => {
@@ -754,13 +770,14 @@ export default function App() {
       setExpenses(data.expenses);
       setGoals(data.goals);
       setWeekConfirmations(data.weekConfirmations ?? {});
+      setBaseRateHistory(data.baseRateHistory ?? []);
       setPtoGoal(data.ptoGoal);
       setSyncStatus({ op: "pull", ok: true, ts: new Date() });
     } catch {
       setSyncStatus({ op: "pull", ok: false });
     }
     setTimeout(() => setSyncStatus(null), 4000);
-  }, [setConfig, setShowExtra, setLogs, setExpenses, setGoals, setWeekConfirmations, setPtoGoal]);
+  }, [setConfig, setShowExtra, setLogs, setExpenses, setGoals, setWeekConfirmations, setBaseRateHistory, setPtoGoal]);
 
   const handleFetchRow = useCallback(async () => {
     setRowFetching(true);
@@ -868,7 +885,7 @@ export default function App() {
   }, [historyMeta]);
 
   // ── Build year reactively from config ──
-  const allWeeks = useMemo(() => buildYear(config), [config]);
+  const allWeeks = useMemo(() => buildYear(config, baseRateHistory), [config, baseRateHistory]);
 
   // ── Pay period past check ──
   // Determines whether a week's pay period has closed, gating the confirmation modal

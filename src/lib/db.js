@@ -360,13 +360,15 @@ export async function loadUserData() {
  * Intentionally destructures only these fields — subscription/trial columns
  * (migration 017) are never accepted here; only the service-role webhook/
  * checkout/portal routes may write them.
- * Returns true on success, false on failure — callers that need to know
- * whether the write actually landed (see savePersistedStateNow) check this;
- * the plain debounced path ignores it, same as before.
+ * Returns { ok, message } rather than a plain boolean — savePersistedStateNow
+ * surfaces `message` verbatim in the SaveFailedBanner so a real failure (RLS
+ * rejection, malformed payload, expired session) is distinguishable from a
+ * generic "offline" guess instead of only ever reaching the console. The
+ * plain debounced path ignores the return value entirely, same as before.
  */
 export async function saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal }) {
   const userId = await getCurrentUserId();
-  if (!userId) return false; // unauthenticated — never write
+  if (!userId) return { ok: false, message: "Not signed in" }; // unauthenticated — never write
 
   const { error } = await supabase
     .from("user_data")
@@ -388,9 +390,9 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
 
   if (error) {
     console.error("Failed to save user data:", error.message);
-    return false;
+    return { ok: false, message: error.message };
   }
-  return true;
+  return { ok: true, message: null };
 }
 
 /**

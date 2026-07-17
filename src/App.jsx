@@ -672,19 +672,20 @@ export default function App() {
   // full state (latestPersistedStateRef, kept current every render) so the
   // write is always a complete, consistent row — same shape the debounce
   // itself writes, just not waiting 800ms to do it.
-  // [saveFailed]: surfaced via SaveFailedBanner so a failed "guaranteed" save
-  // isn't silently invisible — this promise is stronger than the ambient
+  // [saveError]: the real Supabase error message (not a generic guess),
+  // surfaced via SaveFailedBanner so a failed "guaranteed" save isn't
+  // silently invisible — this promise is stronger than the ambient
   // debounce's, so a failure here needs to be user-visible, unlike the
-  // debounce's console-only failure handling.
-  const [saveFailed, setSaveFailed] = useState(false);
+  // debounce's console-only failure handling. null = no failure currently shown.
+  const [saveError, setSaveError] = useState(null);
   const saveRetryTimerRef = useRef(null);
   const lastFailedOverridesRef = useRef(null);
 
   const attemptSave = useCallback((overrides) => {
     const nextState = { ...latestPersistedStateRef.current, ...overrides };
     latestPersistedStateRef.current = nextState;
-    return saveUserData(nextState).then((ok) => {
-      setSaveFailed(!ok);
+    return saveUserData(nextState).then(({ ok, message }) => {
+      setSaveError(ok ? null : (message || "Unknown error"));
       lastFailedOverridesRef.current = ok ? null : overrides;
       return ok;
     });
@@ -709,6 +710,13 @@ export default function App() {
     clearTimeout(saveRetryTimerRef.current);
     attemptSave(lastFailedOverridesRef.current);
   }, [attemptSave]);
+
+  // Dismiss just hides the banner — it does NOT drop the unsaved data. The
+  // edit already landed in React state (and latestPersistedStateRef) before
+  // the failed save fired, so the very next debounced autosave cycle (any
+  // subsequent state change) will naturally re-attempt persisting the same
+  // value. Re-shows automatically the next time any eager save fails.
+  const dismissSaveError = useCallback(() => setSaveError(null), []);
 
   useEffect(() => () => clearTimeout(saveRetryTimerRef.current), []);
 
@@ -1998,7 +2006,7 @@ export default function App() {
               onDismiss={() => setUpdateBannerDismissed(true)}
             />
           )}
-          {saveFailed && <SaveFailedBanner onRetry={retryFailedSave} />}
+          {saveError && <SaveFailedBanner message={saveError} onRetry={retryFailedSave} onDismiss={dismissSaveError} />}
           {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
           {config.jobLossMode && !jobLossBannerDismissed && (() => {
             // Compute benefits-end date when duration is set, so the banner can

@@ -630,32 +630,33 @@ describe('saveUserData', () => {
   })
 
   // App.jsx's eager-save helper (savePersistedStateNow) awaits this return
-  // value to decide whether to surface a SaveFailedBanner and schedule a
-  // retry — must accurately reflect success/failure, not just log-and-swallow.
-  it('resolves true on a successful upsert', async () => {
+  // value to decide whether to surface a SaveFailedBanner (with the real
+  // error text) and schedule a retry — must accurately reflect success/
+  // failure and the real message, not just log-and-swallow.
+  it('resolves { ok: true, message: null } on a successful upsert', async () => {
     supabase.from.mockReturnValue({ upsert: vi.fn().mockResolvedValue({ error: null }) })
     await expect(saveUserData({
       config: DEFAULT_CONFIG,
       expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
-    })).resolves.toBe(true)
+    })).resolves.toEqual({ ok: true, message: null })
   })
 
-  it('resolves false on a failed upsert', async () => {
+  it('resolves { ok: false, message } on a failed upsert', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     supabase.from.mockReturnValue({ upsert: vi.fn().mockResolvedValue({ error: { message: 'Connection refused' } }) })
     await expect(saveUserData({
       config: DEFAULT_CONFIG,
       expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
-    })).resolves.toBe(false)
+    })).resolves.toEqual({ ok: false, message: 'Connection refused' })
     consoleSpy.mockRestore()
   })
 
-  it('resolves false when unauthenticated (no userId)', async () => {
+  it('resolves { ok: false } when unauthenticated (no userId)', async () => {
     getCurrentUserId.mockResolvedValueOnce(null)
     await expect(saveUserData({
       config: DEFAULT_CONFIG,
       expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
-    })).resolves.toBe(false)
+    })).resolves.toEqual({ ok: false, message: 'Not signed in' })
   })
 })
 

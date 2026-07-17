@@ -1,57 +1,70 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 024_fix_user_data_write_permission.sql
 --
--- Fixes "permission denied for table user_data" on saveUserData()'s upsert —
--- reported live in production/preview testing on an admin/tester account.
---
--- ── Diagnosis (best evidence available without a live DB connection — run the
---    two queries below FIRST and read the output before assuming this is the
---    cause; this migration is safe to apply either way, but confirming first
---    means we're not guessing) ──
---
---   select is_tester, trial_started_at, trial_ends_at
---     from user_data where user_id = '<the affected account's user_id>';
---   -- If is_tester is true, the theory below is very likely confirmed.
---
---   select grantee, privilege_type, column_name
---     from information_schema.column_privileges
---     where table_name = 'user_data' and grantee = 'authenticated'
---     order by column_name, privilege_type;
---   -- Shows exactly what the client role can currently write. trial_started_at
---   -- / trial_ends_at / access_ends_at should NOT appear here — if they do,
---   -- something else granted them and this isn't the cause.
+-- Fixes "permission denied for table user_data" on saveUserData()'s upsert.
+-- CONFIRMED root cause (via a live Supabase API log entry showing the exact
+-- SQL PostgREST generated for the failing request — see the addendum in
+-- 022_BOOKMARK_schema_snapshot_2026-07-10.sql for the full investigation
+-- trail, including the theories that were ruled out along the way: is_tester
+-- trigger privileges, RLS policies, key/URL mismatches, custom auth hooks,
+-- and a plain-SQL simulated write that succeeded — all before the real cause
+-- was found).
 --
 -- ── Root cause ──
--- 021_add_is_tester_beta_flag.sql added set_tester_trial_window(), a
--- BEFORE INSERT OR UPDATE trigger on user_data that assigns
--- NEW.trial_started_at / NEW.trial_ends_at / NEW.access_ends_at the moment
--- is_tester transitions to true. Those columns are deliberately excluded from
--- the `authenticated` role's column-level UPDATE grant (019) — same
--- protection as every other Stripe/trial/billing column, so the client can
--- never forge trial state.
+-- saveUserData() (src/lib/db.js) calls supabase-js's
+-- `.upsert(row, { onConflict: "user_id" })`. PostgREST compiles this into:
 --
--- The trigger function was written as plain SECURITY INVOKER (the default —
--- no `security definer` was specified), meaning it executes with the
--- CALLING role's privileges, not elevated ones. So the instant its guarded
--- branch actually assigns those columns — is_tester flipping to true, or an
--- INSERT where it's already true — Postgres enforces the exact same
--- column-privilege check it would for a direct client UPDATE, and rejects
--- the entire statement. Since this is a BEFORE ROW trigger, the rejection
--- kills the whole upsert, not just the trigger's own side effect — so a
--- completely ordinary saveUserData() call (writing only config/expenses/
--- goals/etc., never touching is_tester or the trial columns itself) fails
--- outright for any account where is_tester is already true, every single
--- time, silently (previously only console.error'd — see App.jsx's
--- savePersistedStateNow/SaveFailedBanner for why it's visible now).
+--   INSERT INTO user_data (...) SELECT ... FROM json_to_record(...)
+--   ON CONFLICT (user_id) DO UPDATE SET
+--     "config" = EXCLUDED."config", ...,
+--     "user_id" = EXCLUDED."user_id",   <-- included automatically
+--     "week_confirmations" = EXCLUDED."week_confirmations"
+--
+-- PostgREST's DO UPDATE SET clause includes EVERY column present in the
+-- request payload — including the conflict-target column itself
+-- (`user_id`) — even though its value is definitionally unchanged (it's
+-- the column the conflict was matched on). Postgres checks column-level
+-- UPDATE privilege for every column named in a SET clause regardless of
+-- whether the assigned value differs from the current one, and
+-- 019_enable_user_data_rls.sql only ever granted `authenticated` INSERT on
+-- user_id, never UPDATE (a completely reasonable-looking omission at the
+-- time — nobody should ever need to change their own primary key). Nobody
+-- anticipated that upsert's DO UPDATE SET mechanics would attempt to
+-- "update" it anyway, to the same value, as an unavoidable side effect of
+-- how the SET clause is built from the payload.
+--
+-- Because a single missing column privilege fails the ENTIRE statement, and
+-- saveUserData() always includes user_id in its payload (required for the
+-- insert half of every upsert), this has been failing for every account,
+-- on every save, unconditionally, since 019 went live — not intermittently,
+-- not tied to is_tester, not tied to network conditions. Confirmed by
+-- App.jsx's savePersistedStateNow (previously this only ever hit
+-- console.error, invisible until the SaveFailedBanner surfaced it).
 --
 -- ── Fix ──
--- Run the trigger function as SECURITY DEFINER (owner-level privilege) —
--- exactly the same escalation api/seed-trial.js already uses (service role)
--- for identical columns on the application side; this is the SQL-side
--- equivalent for a DB-side trigger that needs to do the same kind of
--- privileged write as a side effect of an ordinary client action. search_path
--- is pinned to prevent a hostile search_path from shadowing an unqualified
--- identifier inside a SECURITY DEFINER function (standard Postgres guidance).
+-- Grant `authenticated` UPDATE on user_id too. Safe: the existing
+-- "user_data own row update" RLS policy's WITH CHECK (auth.uid() = user_id)
+-- already guarantees a row can never actually end up with a different
+-- user_id after an update — RLS enforces that independent of column grants,
+-- so this doesn't open any new ability to reassign a row to someone else.
+-- It only lets Postgres past the SET-clause privilege check for a column
+-- whose value RLS already guarantees can't meaningfully change.
+--
+-- ── Also included: set_tester_trial_window() → SECURITY DEFINER ──
+-- A second, independent, real bug found during the same investigation (see
+-- the 022 addendum) — not the cause of the failures reported here (both
+-- accounts investigated had is_tester=false, so that trigger's privileged
+-- branch never actually fired for them), but worth fixing in the same
+-- migration since it's the exact same failure class waiting to happen for
+-- any account where is_tester actually is true: the trigger assigns
+-- trial_started_at/trial_ends_at/access_ends_at (deliberately excluded from
+-- authenticated's grant, same protection as every other billing column) as
+-- plain SECURITY INVOKER, so it hits the identical "trying to SET a column
+-- the calling role can't UPDATE" failure the moment its guarded branch
+-- actually runs. Fixed by running it as SECURITY DEFINER instead — the
+-- SQL-side equivalent of the service-role escalation api/seed-trial.js
+-- already uses for the same columns on the application side. search_path is
+-- pinned per Postgres's standard SECURITY DEFINER guidance.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 create or replace function set_tester_trial_window()
@@ -76,11 +89,9 @@ $$ language plpgsql
 security definer
 set search_path = public;
 
--- ── Belt-and-suspenders: re-assert 019's column grants exactly as written,
---    in case they've drifted from the migration's original intent for any
---    other reason. GRANT is additive/idempotent — safe to re-run even if the
---    current state already matches; REVOKE-then-GRANT is the same pattern
---    019 itself already uses, just re-applied.
+-- Re-assert 019's grants, PLUS the one column it was missing: user_id on
+-- UPDATE. GRANT is additive/idempotent — safe to re-run even where already
+-- correct; REVOKE-then-GRANT is the same pattern 019 itself already uses.
 revoke insert, update on user_data from anon, authenticated;
 
 grant insert (
@@ -89,15 +100,22 @@ grant insert (
 ) on user_data to authenticated;
 
 grant update (
-  config, expenses, goals, logs, show_extra, week_confirmations,
+  user_id, config, expenses, goals, logs, show_extra, week_confirmations,
   is_employer_dhl, pto_goal, display_name, avatar_url, updated_at
 ) on user_data to authenticated;
 
 -- ── Verification (run after applying) ────────────────────────────────────────
---   Signed in as the affected account, save any change from the app (or just
---   let the debounced autosave fire) — "permission denied for table
---   user_data" should no longer appear, and the SaveFailedBanner should not
---   reappear on a normal save.
+--   Signed in as any account, save any change from the app (or just let the
+--   debounced autosave fire) — "permission denied for table user_data"
+--   should no longer appear, the SaveFailedBanner should not reappear on a
+--   normal save, and Supabase's API logs should show a 200/201 for the
+--   POST/PATCH to /rest/v1/user_data instead of a 42501 error.
+--
+--   select grantee, privilege_type, column_name
+--     from information_schema.column_privileges
+--     where table_name = 'user_data' and grantee = 'authenticated'
+--       and column_name = 'user_id';
+--     -> should now list INSERT, REFERENCES, SELECT, and UPDATE
 --
 --   select prosecdef from pg_proc where proname = 'set_tester_trial_window';
 --     -> should now be true (SECURITY DEFINER)

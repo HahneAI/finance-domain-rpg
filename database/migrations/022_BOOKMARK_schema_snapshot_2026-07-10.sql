@@ -515,14 +515,53 @@ REVOKE UPDATE, DELETE ON account_history FROM anon, authenticated;
 --       writing — unrelated to this bug since is_admin bypasses the paywall
 --       gate regardless of trial phase, but noted in case it's a surprise).
 --
--- ── Working diagnosis as of this addendum ───────────────────────────────────
---   Not yet fully confirmed. Leading theory: one or more of pto_goal /
---   show_extra / week_confirmations / updated_at is missing its column-level
---   UPDATE grant for `authenticated`, despite being listed in 019's migration
---   file — meaning the LIVE grant state has drifted from what 019 says it
---   should be (consistent with the "some RLS work was run by hand, untracked"
---   context that prompted this whole investigation — see (2)'s orphaned
---   policy for a second, independent piece of the same evidence). If that's
---   confirmed, the fix is a straightforward re-grant of the missing
---   column(s), same pattern as 019 / 024's belt-and-suspenders re-assertion.
+-- ── Working diagnosis, superseded — see CONFIRMED ROOT CAUSE below ─────────
+--   [Original entry, kept for the investigation trail: "Not yet fully
+--   confirmed. Leading theory: one or more of pto_goal / show_extra /
+--   week_confirmations / updated_at is missing its column-level UPDATE grant
+--   for `authenticated`..." — the narrowed follow-up query showed ALL ten
+--   columns saveUserData() writes were in fact correctly granted, ruling
+--   this out. A plain-SQL simulated write (SET ROLE authenticated + the
+--   request.jwt.claims GUC, then an UPDATE ... WHERE user_id = ...) also
+--   succeeded cleanly, which briefly pointed suspicion at the app's session
+--   token / API keys instead (also checked and ruled out — Vercel's
+--   VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY, added 2026-03-18, matched the
+--   values in the SUPABASE_URL/SUPABASE_ANON_KEY variables Vercel's Supabase
+--   marketplace integration auto-injected on 2026-04-03, so no stale/rotated
+--   key was in play either).]
+--
+-- ── CONFIRMED ROOT CAUSE (via a live Supabase API log entry showing the
+--    exact SQL PostgREST generated for a failing request) ──────────────────
+--   supabase-js's `.upsert(row, { onConflict: "user_id" })` compiles, via
+--   PostgREST, to an `INSERT ... ON CONFLICT (user_id) DO UPDATE SET ...`
+--   whose SET clause includes EVERY column present in the request payload —
+--   including user_id itself, the conflict target column, even though its
+--   value is definitionally unchanged by the conflict resolution:
+--
+--     ON CONFLICT("user_id") DO UPDATE SET
+--       "config" = EXCLUDED."config", ...,
+--       "user_id" = EXCLUDED."user_id",   -- included automatically
+--       "week_confirmations" = EXCLUDED."week_confirmations"
+--
+--   Postgres checks column-level UPDATE privilege for every column named in
+--   a SET clause regardless of whether the assigned value differs from the
+--   current one. 019 granted `authenticated` INSERT on user_id but never
+--   UPDATE — a reasonable-looking omission at the time (nobody should ever
+--   need to change their own primary key) that nobody anticipated upsert's
+--   DO UPDATE SET mechanics would trip anyway. A single missing column
+--   privilege fails the ENTIRE statement, and saveUserData() always
+--   includes user_id in its payload (required for the insert half of every
+--   upsert) — so this has been failing for every account, on every save,
+--   unconditionally, since 019 went live. Not intermittent, not tied to
+--   is_tester, not tied to network conditions or key rotation — every
+--   single write. This is why the plain-SQL simulation above succeeded: it
+--   referenced user_id only in a WHERE clause, never replicating upsert's
+--   SET-clause inclusion of the conflict target column.
+--
+--   Fixed in 024_fix_user_data_write_permission.sql: grants `authenticated`
+--   UPDATE on user_id too. Safe — the "user_data own row update" RLS
+--   policy's WITH CHECK (auth.uid() = user_id) already guarantees a row can
+--   never actually end up with a different user_id after an update,
+--   independent of column grants, so this doesn't open any new ability to
+--   reassign a row to someone else.
 -- ═════════════════════════════════════════════════════════════════════════════

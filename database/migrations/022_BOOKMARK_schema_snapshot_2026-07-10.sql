@@ -385,3 +385,144 @@ REVOKE UPDATE, DELETE ON account_history FROM anon, authenticated;
 -- ─────────────────────────────────────────────────────────────────────────────
 -- END OF SNAPSHOT — next real migration should be numbered 023.
 -- ─────────────────────────────────────────────────────────────────────────────
+
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- 🔎 LIVE DIAGNOSTIC ADDENDUM — appended 2026-07-17, does NOT change the
+--    2026-07-10 snapshot above. Filename/date intentionally left as-is per
+--    the file's own "don't edit, add a new bookmark instead" rule — this is
+--    an appendix, not a re-snapshot. Captures what a live `information_schema`
+--    / `pg_catalog` query bundle actually showed on the production/preview
+--    Supabase project during investigation of a "permission denied for table
+--    user_data" error surfacing in App.jsx's SaveFailedBanner (added the same
+--    week — see git log around the eager-save work). Two things prompted
+--    this: (1) confirmation that some RLS work has been applied by hand
+--    directly in the Supabase SQL editor over time, not always as a committed
+--    migration in this folder, so this folder's contents can drift from the
+--    live schema; (2) a real save failure that needed root-causing.
+--
+--    HOW TO USE THIS SECTION
+--    ────────────────────────
+--    If you're debugging another user_data write failure later, re-run the
+--    query bundle below against the live project FIRST — don't trust that
+--    001–024 fully describe current reality. This addendum is a snapshot of
+--    one point in time (2026-07-17), not a guarantee of what's true later.
+-- ═════════════════════════════════════════════════════════════════════════════
+
+-- ── What was run ──────────────────────────────────────────────────────────────
+--   1. select relname, relrowsecurity, relforcerowsecurity, relowner::regrole
+--      as owner from pg_class where relname = 'user_data';
+--   2. select policyname, cmd, roles, qual, with_check from pg_policies
+--      where tablename = 'user_data';
+--   3. select grantee, privilege_type, column_name from
+--      information_schema.column_privileges where table_name = 'user_data'
+--      and grantee in ('authenticated','anon') order by grantee, column_name,
+--      privilege_type;
+--   4. select grantee, privilege_type from information_schema.role_table_grants
+--      where table_name = 'user_data' and grantee in ('authenticated','anon')
+--      order by grantee, privilege_type;
+--   5. select t.tgname, p.proname, p.prosecdef as is_security_definer from
+--      pg_trigger t join pg_proc p on p.oid = t.tgfoid where t.tgrelid =
+--      'user_data'::regclass and not t.tgisinternal;
+--   6. select user_id, is_admin, is_tester, is_investor, subscription_status,
+--      trial_ends_at from user_data where user_id = '<account>';
+--
+-- ── Findings ─────────────────────────────────────────────────────────────────
+--
+--   (1) RLS: relrowsecurity = true, relforcerowsecurity = false, owner =
+--       postgres. As expected — 019 enabled RLS and it's live.
+--
+--   (2) POLICIES — five exist, not four. Alongside 019's own four
+--       (user_data own row select/insert/update/delete, all role
+--       `authenticated`) there's a fifth, older policy:
+--
+--         "own row only"  cmd=ALL  roles={public}  qual=(auth.uid()=user_id)
+--         with_check=null
+--
+--       This is NOT in any migration file in this folder — almost certainly
+--       one of the hand-run RLS pieces mentioned above, likely predating 019.
+--       It's redundant (Postgres OR's multiple permissive policies for the
+--       same command together, so this doesn't restrict anything 019's four
+--       don't already cover) and role `public` is broader than it needs to be
+--       (harmless in practice since `auth.uid()` is null for anon, but sloppy
+--       — worth a future cleanup migration that drops it). NOT the cause of
+--       the permission-denied error: RLS policy violations either silently
+--       filter rows (USING) or raise "new row violates row-level security
+--       policy" (WITH CHECK) — never "permission denied for table X". That
+--       exact wording is Postgres's signature for a missing GRANT, a
+--       different failure class entirely. Ruled out as the cause here.
+--
+--   (3) COLUMN-LEVEL GRANTS for `authenticated` — confirmed present and
+--       correct (INSERT + UPDATE) for every column checked so far: config,
+--       expenses, goals, logs, is_employer_dhl, display_name, avatar_url.
+--       Confirmed correctly ABSENT (no INSERT/UPDATE, as 019 intends) for:
+--       is_admin, is_investor, is_tester, access_ends_at, card_on_file,
+--       current_period_end, dunning_email_count, last_dunning_email_at, plan.
+--       STILL UNCONFIRMED as of this writing: pto_goal, show_extra,
+--       week_confirmations, updated_at, user_id — the result set was cut off
+--       mid-list by the SQL editor's display before reaching them. These are
+--       exactly the remaining columns saveUserData() (src/lib/db.js) writes
+--       on every save — if even one lacks its UPDATE grant, that alone
+--       explains "permission denied for table user_data" on every ordinary
+--       save, since Postgres rejects the whole multi-column UPDATE/UPSERT
+--       statement if any one targeted column lacks privilege. Follow-up
+--       query (narrowed to just these columns, to avoid truncation):
+--
+--         select grantee, privilege_type, column_name
+--         from information_schema.column_privileges
+--         where table_name = 'user_data' and grantee = 'authenticated'
+--           and column_name in ('user_id','config','expenses','goals','logs',
+--             'show_extra','week_confirmations','is_employer_dhl','pto_goal',
+--             'updated_at')
+--         order by column_name, privilege_type;
+--
+--       Update this addendum with the result once run.
+--
+--   (4) TABLE-LEVEL GRANTS for `authenticated`: DELETE, REFERENCES, SELECT,
+--       TRIGGER, TRUNCATE. Notably NO table-level INSERT or UPDATE — confirms
+--       019's `revoke insert, update on user_data from anon, authenticated`
+--       took effect and stuck. All write access for `authenticated` on this
+--       table is governed exclusively by the column-level grants in (3).
+--       This matters for the same reason as (3): there is no broader
+--       table-level fallback, so a single missing column grant is a hard
+--       failure for the entire write, not a partial one.
+--
+--   (5) TRIGGERS: only one non-internal trigger on user_data —
+--       trg_set_tester_trial_window → set_tester_trial_window(), confirmed
+--       `is_security_definer = false` (plain SECURITY INVOKER, the default).
+--       This IS a real, independent latent bug: the function assigns
+--       NEW.trial_started_at / trial_ends_at / access_ends_at, columns
+--       deliberately excluded from `authenticated`'s grant (see (3)) — for
+--       any account where is_tester actually transitions to true, this
+--       trigger would attempt a privileged write under the calling client's
+--       own (insufficient) privileges and fail the whole statement, exactly
+--       like (3)'s failure mode. Fixed regardless in
+--       024_fix_user_data_write_permission.sql (makes the function SECURITY
+--       DEFINER). BUT: traced through the trigger's own logic and confirmed
+--       this specific bug does NOT explain the failures reported during this
+--       investigation — both affected accounts (Anthony's admin account and
+--       a separate base-tier trial account) have is_tester = false, and the
+--       trigger's guarded branches (`if NEW.is_tester = true ...`) never
+--       execute when is_tester stays false, so it never actually touches the
+--       locked columns for either of them. Keep the SECURITY DEFINER fix as
+--       correct hardening for real is_tester accounts, but the root cause of
+--       the currently-reported failures is still (3)'s unconfirmed columns.
+--
+--   (6) Account flags at time of query — Anthony's admin account
+--       (57318ced-60a0-4fdf-9a58-a6409ba8c9db): is_admin=true, is_tester=
+--       false, is_investor=false, subscription_status='trialing',
+--       trial_ends_at='2026-07-17 05:55:28.28+00' (today, at time of
+--       writing — unrelated to this bug since is_admin bypasses the paywall
+--       gate regardless of trial phase, but noted in case it's a surprise).
+--
+-- ── Working diagnosis as of this addendum ───────────────────────────────────
+--   Not yet fully confirmed. Leading theory: one or more of pto_goal /
+--   show_extra / week_confirmations / updated_at is missing its column-level
+--   UPDATE grant for `authenticated`, despite being listed in 019's migration
+--   file — meaning the LIVE grant state has drifted from what 019 says it
+--   should be (consistent with the "some RLS work was run by hand, untracked"
+--   context that prompted this whole investigation — see (2)'s orphaned
+--   policy for a second, independent piece of the same evidence). If that's
+--   confirmed, the fix is a straightforward re-grant of the missing
+--   column(s), same pattern as 019 / 024's belt-and-suspenders re-assertion.
+-- ═════════════════════════════════════════════════════════════════════════════

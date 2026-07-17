@@ -6,7 +6,7 @@ import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonth
 import { formatFiscalWeekLabel, formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan } from "../lib/entitlements.js";
-import { Card, VT, SmBtn, Pressable, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
+import { Card, VT, SmBtn, Pressable, useFoldTransition, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 import { MonthQuarterSelector } from "./MonthQuarterSelector.jsx";
 import { BulkEditPanel } from "./BulkEditPanel.jsx";
@@ -114,6 +114,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
   const [pendingDelete, setPendingDelete] = useState(null); // { id } | null
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [showCheckInfo, setShowCheckInfo] = useState(false);
+  const checkInfoFold = useFoldTransition(showCheckInfo, { ms: 340 });
   const [undoDelete, setUndoDelete] = useState(null); // { expId, monthKey, prevValue } | null — clears after 8s
   const [restoreSheetCat, setRestoreSheetCat] = useState(null); // "Needs" | "Lifestyle" | null
   const [restorePendingExpId, setRestorePendingExpId] = useState(null); // expense id awaiting scope selection
@@ -2056,8 +2057,9 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
         rather than the scrolling .main-content ancestor — iOS Safari hit-tests a
         fixed element nested in an overflow:auto container at a scrollTop offset,
         which left the ✕/Close buttons needing repeated taps. */}
-    {showCheckInfo && checkBreakdown && createPortal(
+    {checkInfoFold.mounted && checkBreakdown && createPortal(
       <div
+        className="fold-backdrop" data-fold={checkInfoFold.fold}
         onClick={() => setShowCheckInfo(false)}
         style={{
           position: "fixed", inset: 0, zIndex: 60,
@@ -2067,6 +2069,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
         }}
       >
         <div
+          className="fold-modal" data-fold={checkInfoFold.fold}
           onClick={e => e.stopPropagation()}
           style={{
             background: "var(--color-bg-surface)",

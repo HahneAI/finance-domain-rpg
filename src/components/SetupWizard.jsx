@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { buildYear, dhlEmployerMatchRate, estimateWeeklyNet } from "../lib/finance.js";
-import { iS, lS, Pressable } from "./ui.jsx";
+import { iS, lS, Pressable, StepSlide } from "./ui.jsx";
 import { FISCAL_YEAR_START, DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR } from "../lib/fiscalWeek.js";
 
@@ -2030,6 +2030,8 @@ function StepStub({ title, sprint }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false }) {
   const [stepIdx,   setStepIdx]   = useState(0);
+  // Slide direction for step transitions: 1 = forward (Next/Skip), -1 = back.
+  const [stepDir,   setStepDir]   = useState(1);
   const [formData,  setFormData]  = useState(() => {
     const base = isInvestor
       ? { ...config, employerPreset: null, otThreshold: config.otThreshold || 40, maxWeeklyHours: config.maxWeeklyHours || config.standardWeeklyHours || 40 }
@@ -2066,18 +2068,18 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   function handleNext() {
     if (!canProceed) { setAttempted(true); return; }
     setAttempted(false);
-    if (!isLast) setStepIdx(i => i + 1);
+    if (!isLast) { setStepDir(1); setStepIdx(i => i + 1); }
     else handleComplete();
   }
 
   function handleBack() {
     setAttempted(false);
-    if (stepIdx > 0) setStepIdx(i => i - 1);
+    if (stepIdx > 0) { setStepDir(-1); setStepIdx(i => i - 1); }
   }
 
   function handleSkip() {
     setAttempted(false);
-    if (!isLast) setStepIdx(i => i + 1);
+    if (!isLast) { setStepDir(1); setStepIdx(i => i + 1); }
     else handleComplete();
   }
 
@@ -2127,6 +2129,8 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
         display: "flex", flexDirection: "column",
         flex: 1, minHeight: 0, maxHeight: "680px",
         overflow: "hidden",
+        // Takeover entrance — the whole wizard card rises + fades in on mount.
+        animation: "foldLiftIn 340ms var(--ease-fold-page-in) both",
       }}>
 
         {/* ── Header: step counter + title + progress bar ── */}
@@ -2163,18 +2167,20 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
           overscrollBehavior: "contain",
           padding: "20px 24px 0",
         }}>
-          {StepComponent
-            ? <StepComponent
-                formData={formData}
-                onChange={update}
-                lifeEvent={lifeEvent}
-                onLifeEventChange={setLifeEvent}
-                attempted={attempted}
-                isInvestor={isInvestor}
-                originalConfig={originalConfigRef.current}
-              />
-            : <StepStub title={current?.title} sprint={current?.sprint} />
-          }
+          <StepSlide stepKey={stepIdx} direction={stepDir}>
+            {StepComponent
+              ? <StepComponent
+                  formData={formData}
+                  onChange={update}
+                  lifeEvent={lifeEvent}
+                  onLifeEventChange={setLifeEvent}
+                  attempted={attempted}
+                  isInvestor={isInvestor}
+                  originalConfig={originalConfigRef.current}
+                />
+              : <StepStub title={current?.title} sprint={current?.sprint} />
+            }
+          </StepSlide>
         </div>
 
         {/* ── Navigation ── */}

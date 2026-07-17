@@ -1,4 +1,4 @@
-import { supabase, getCurrentUserId } from "./supabase.js";
+import { supabase, getCurrentUserId, getCachedAuthSnapshot } from "./supabase.js";
 import {
   DEFAULT_CONFIG,
   INITIAL_EXPENSES,
@@ -354,14 +354,21 @@ export async function loadUserData() {
 
 /**
  * Upsert all state blobs atomically.
- * Called from a debounced useEffect in App.jsx on any state change.
+ * Called from a debounced useEffect in App.jsx on any state change, and from
+ * App.jsx's eager-save helper (savePersistedStateNow) for actions that need
+ * guaranteed persistence before the debounce would otherwise fire.
  * Intentionally destructures only these fields — subscription/trial columns
  * (migration 017) are never accepted here; only the service-role webhook/
  * checkout/portal routes may write them.
+ * Returns { ok, message } rather than a plain boolean — savePersistedStateNow
+ * surfaces `message` verbatim in the SaveFailedBanner so a real failure (RLS
+ * rejection, malformed payload, expired session) is distinguishable from a
+ * generic "offline" guess instead of only ever reaching the console. The
+ * plain debounced path ignores the return value entirely, same as before.
  */
 export async function saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal }) {
   const userId = await getCurrentUserId();
-  if (!userId) return; // unauthenticated — never write
+  if (!userId) return { ok: false, message: "Not signed in" }; // unauthenticated — never write
 
   const { error } = await supabase
     .from("user_data")
@@ -383,6 +390,67 @@ export async function saveUserData({ config, expenses, goals, logs, showExtra, w
 
   if (error) {
     console.error("Failed to save user data:", error.message);
+    return { ok: false, message: error.message };
+  }
+  return { ok: true, message: null };
+}
+
+/**
+ * Best-effort save for page unload / backgrounding (App.jsx's beforeunload/
+ * pagehide/visibilitychange flush). A normal fetch — what saveUserData()
+ * issues via supabase-js — is liable to be aborted by the browser mid-flight
+ * the instant the page actually unloads or the OS reclaims a backgrounded
+ * mobile tab, silently dropping whatever hadn't saved yet (a just-completed
+ * weekly check-in, in-progress goal edits). keepalive:true is the browser's
+ * documented mechanism for letting a request finish after the page is gone,
+ * but it isn't available through the supabase-js query builder, so this
+ * bypasses it and calls the PostgREST upsert endpoint directly — same
+ * onConflict:user_id upsert saveUserData() performs.
+ *
+ * Deliberately synchronous up to the fetch() call (no top-level await):
+ * getCachedAuthSnapshot() reads a value kept current by an onAuthStateChange
+ * listener rather than awaiting supabase.auth.getSession(), because unload
+ * handlers get no guaranteed time to wait on a promise before the page tears
+ * down — the fetch has to be dispatched immediately for keepalive to help.
+ */
+export function flushUserDataKeepalive({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal }) {
+  const { accessToken, userId } = getCachedAuthSnapshot();
+  if (!accessToken || !userId) return; // unauthenticated / snapshot not yet populated — never write
+
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/user_data?on_conflict=user_id`;
+  const body = JSON.stringify({
+    user_id:             userId,
+    config,
+    expenses,
+    goals,
+    logs,
+    show_extra:          showExtra,
+    week_confirmations:  weekConfirmations,
+    is_employer_dhl:     config.employerPreset === "DHL",
+    pto_goal:            ptoGoal ?? null,
+    updated_at:          new Date().toISOString(),
+  });
+
+  try {
+    fetch(url, {
+      method: "POST",
+      keepalive: true,
+      headers: {
+        "Content-Type": "application/json",
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${accessToken}`,
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body,
+    }).catch((err) => {
+      console.warn("[db] keepalive flush request failed:", err.message);
+    });
+  } catch (err) {
+    // Synchronous throw — most likely the browser's ~64KB keepalive body-size
+    // limit. Fall back to the normal (non-keepalive) upsert; same best-effort
+    // risk profile the app already had before this hardening, not a regression.
+    console.warn("[db] keepalive flush could not be dispatched, falling back:", err.message);
+    saveUserData({ config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
   }
 }
 

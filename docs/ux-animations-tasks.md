@@ -322,8 +322,7 @@ bottom, 340ms enter w/ gentle overshoot, 180ms exit).
 - ✅ HomePanel: reorder goals, reset timeline
 - ✅ LifeEventMenu · JobLossEntry · ExpenseTriage
 - ⬜ WeekConfirmModal (currently `.wc-modal-in`; migrate) · App Week Inspector · UpgradeModal
-  (parent mounts/unmounts it — needs the toggle to drive `useFoldTransition`) · SetupWizard
-  (full-screen; likely wants its own step transitions) · AskCoachPanel · BulkEditPanel
+  (parent mounts/unmounts it — needs the toggle to drive `useFoldTransition`) · AskCoachPanel · BulkEditPanel
 - ⏭️ **Skip:** admin tools slide-up sheet (keep its drag-dismiss slide) · mobile drawer
   (X-slide) · PwaInstallModal (native `<dialog>`, top layer)
 
@@ -334,5 +333,20 @@ bottom, 340ms enter w/ gentle overshoot, 180ms exit).
 - ⚠️ ProfilePanel email/password forms are **swaps** (`!show ? trigger : form`), not reveals —
   need a crossfade, not the fold-reveal pattern.
 
-**Tuning notes (revisit later):** page-enter distance/duration and modal-close travel are
-first-pass values; overhead pass pending per the "cover first, tune later" plan.
+## External / full-screen surfaces (own treatment, outside the fold system)
+These are mode takeovers with their own internal navigation — not modal/dropdown/page-move.
+Order: the two large ones first, then the two smaller.
+1. **SetupWizard** — ✅ *step slides done.* `StepSlide` (direction-aware horizontal push/pop,
+   `step-in/out-*` keyframes) driven by `stepDir` (Next/Skip = forward, Back = back); wizard
+   card gets a `foldLiftIn` takeover entrance. ⬜ still to do: takeover **exit** (App unmounts
+   it instantly — needs `useFoldTransition` at the App mount site), and the failed-Next
+   **validation shake** on `attempted`.
+2. **LoginScreen** — ⬜ mode crossfades (sign-in ↔ create ↔ investor-code ↔ recovery), then
+   the login→dashboard handoff (crosses the auth unmount boundary — hardest, do last).
+3. **PwaInstallModal** — ⬜ native `<dialog>`; needs a `<dialog>`-level open/close animation.
+4. **DemoAccountTree / investor account switch** — ⬜ mode swap that bypasses `FoldSwitch`.
+
+**Tuning notes (revisit later):** page-enter distance/duration, modal-close travel, and the
+wizard step-slide distance (38px) / durations are first-pass values; overhead pass pending
+per the "cover first, tune later" plan. Wizard step scroll-reset between steps is a known
+rough edge to revisit.

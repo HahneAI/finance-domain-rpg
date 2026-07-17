@@ -318,6 +318,48 @@ export function FoldSwitch({ activeKey, children, enterMs = 340, exitMs = 180, c
   );
 }
 
+// StepSlide — direction-aware horizontal push/pop for wizard-style step navigation.
+// Keyed on `stepKey`; `direction` (1 = forward/Next, -1 = back) sets the slide way.
+// Keeps the outgoing step mounted (absolute, inert) through its exit like FoldSwitch,
+// so Next slides the new step in from the right while the old exits left (and reverse
+// on Back). Companion CSS: step-in-right/left, step-out-left/right (index.css).
+export function StepSlide({ stepKey, direction = 1, children, ms = 300 }) {
+  const [cur, setCur] = useState({ key: stepKey, node: children });
+  const [prev, setPrev] = useState(null);
+  const [dir, setDir] = useState(1);
+  const timer = useRef(null);
+
+  useEffect(() => {
+    if (stepKey !== cur.key) {
+      setDir(direction);
+      setPrev(cur);
+      setCur({ key: stepKey, node: children });
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setPrev(null), ms);
+    } else if (children !== cur.node) {
+      setCur({ key: stepKey, node: children });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepKey, children]);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const forward = dir >= 0;
+  return (
+    <div style={{ position: "relative", overflow: "hidden" }}>
+      {prev && (
+        <div key={prev.key} className={forward ? "step-out-left" : "step-out-right"} aria-hidden="true"
+             style={{ position: "absolute", top: 0, left: 0, right: 0, pointerEvents: "none" }}>
+          {prev.node}
+        </div>
+      )}
+      <div key={cur.key} className={forward ? "step-in-right" : "step-in-left"}>
+        {cur.node}
+      </div>
+    </div>
+  );
+}
+
 // NT — nav tab. Uses the default tap feedback via Pressable.
 export function NT({ label, active, onClick }) {
   return (

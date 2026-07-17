@@ -16,7 +16,7 @@ vi.mock('../../lib/supabase.js', () => ({
   getCachedAuthSnapshot: vi.fn().mockReturnValue({ accessToken: 'tok-123', userId: 'test-user-id' }),
 }))
 
-import { getCachedAuthSnapshot, supabase } from '../../lib/supabase.js'
+import { getCachedAuthSnapshot, getCurrentUserId, supabase } from '../../lib/supabase.js'
 import { loadUserData, saveUserData, syncUserProfile, saveConfigSnapshot, fetchConfigHistoryMeta, flushUserDataKeepalive } from '../../lib/db.js'
 
 // ─────────────────────────────────────────────────────────────
@@ -627,6 +627,35 @@ describe('saveUserData', () => {
 
     expect(consoleSpy).toHaveBeenCalledWith('Failed to save user data:', 'Connection refused')
     consoleSpy.mockRestore()
+  })
+
+  // App.jsx's eager-save helper (savePersistedStateNow) awaits this return
+  // value to decide whether to surface a SaveFailedBanner and schedule a
+  // retry — must accurately reflect success/failure, not just log-and-swallow.
+  it('resolves true on a successful upsert', async () => {
+    supabase.from.mockReturnValue({ upsert: vi.fn().mockResolvedValue({ error: null }) })
+    await expect(saveUserData({
+      config: DEFAULT_CONFIG,
+      expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
+    })).resolves.toBe(true)
+  })
+
+  it('resolves false on a failed upsert', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    supabase.from.mockReturnValue({ upsert: vi.fn().mockResolvedValue({ error: { message: 'Connection refused' } }) })
+    await expect(saveUserData({
+      config: DEFAULT_CONFIG,
+      expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
+    })).resolves.toBe(false)
+    consoleSpy.mockRestore()
+  })
+
+  it('resolves false when unauthenticated (no userId)', async () => {
+    getCurrentUserId.mockResolvedValueOnce(null)
+    await expect(saveUserData({
+      config: DEFAULT_CONFIG,
+      expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
+    })).resolves.toBe(false)
   })
 })
 

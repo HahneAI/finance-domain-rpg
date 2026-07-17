@@ -24,6 +24,7 @@ import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { TrialBanner } from "./components/TrialBanner.jsx";
 import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner.jsx";
+import { SaveFailedBanner } from "./components/SaveFailedBanner.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { Pressable, FoldSwitch } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
@@ -662,16 +663,60 @@ export default function App() {
     };
   }, [loading]);
 
-  // ── Immediate config save — for ProfilePanel sub-views that need guaranteed persistence ──
-  // Called with the already-computed newConfig so we don't rely on React having flushed setConfig yet.
-  const saveConfigNow = useCallback((newConfig) => {
-    // Attribute the paired setConfig's history snapshot (if any) to a profile
-    // save; ??= keeps a more specific tag (wizard/life event) when one is set.
-    configHistoryMetaRef.current ??= { source: "profile_edit" };
+  // ── Eager save — for actions that represent a completed unit of work
+  // (wizard completion, weekly check-in confirmation, profile edits) rather
+  // than an in-progress edit, so they don't sit exposed in the 800ms debounce
+  // window where a backgrounded/reclaimed mobile tab can lose them.
+  // `overrides` is a partial patch (e.g. { config: newConfig } or
+  // { weekConfirmations: next, logs: newLogs }) merged onto the latest known
+  // full state (latestPersistedStateRef, kept current every render) so the
+  // write is always a complete, consistent row — same shape the debounce
+  // itself writes, just not waiting 800ms to do it.
+  // [saveFailed]: surfaced via SaveFailedBanner so a failed "guaranteed" save
+  // isn't silently invisible — this promise is stronger than the ambient
+  // debounce's, so a failure here needs to be user-visible, unlike the
+  // debounce's console-only failure handling.
+  const [saveFailed, setSaveFailed] = useState(false);
+  const saveRetryTimerRef = useRef(null);
+  const lastFailedOverridesRef = useRef(null);
+
+  const attemptSave = useCallback((overrides) => {
+    const nextState = { ...latestPersistedStateRef.current, ...overrides };
+    latestPersistedStateRef.current = nextState;
+    return saveUserData(nextState).then((ok) => {
+      setSaveFailed(!ok);
+      lastFailedOverridesRef.current = ok ? null : overrides;
+      return ok;
+    });
+  }, []);
+
+  // Called with the already-computed new value(s) so we don't rely on React
+  // having flushed the paired setState yet. `historySource` mirrors the
+  // config-history attribution saveConfigNow always did — ??= keeps a more
+  // specific tag (wizard/life event) a caller may have already set.
+  const savePersistedStateNow = useCallback((overrides, historySource) => {
+    if (historySource) configHistoryMetaRef.current ??= { source: historySource };
     clearTimeout(saveTimer.current);
+    clearTimeout(saveRetryTimerRef.current);
     pendingSaveRef.current = false;
-    saveUserData({ config: newConfig, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
-  }, [expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
+    attemptSave(overrides).then((ok) => {
+      if (!ok) saveRetryTimerRef.current = setTimeout(() => attemptSave(overrides), 3000);
+    });
+  }, [attemptSave]);
+
+  const retryFailedSave = useCallback(() => {
+    if (!lastFailedOverridesRef.current) return;
+    clearTimeout(saveRetryTimerRef.current);
+    attemptSave(lastFailedOverridesRef.current);
+  }, [attemptSave]);
+
+  useEffect(() => () => clearTimeout(saveRetryTimerRef.current), []);
+
+  // Kept as its own name (many ProfilePanel call sites already use it) —
+  // now a thin wrapper over the general eager-save helper above.
+  const saveConfigNow = useCallback((newConfig) => {
+    savePersistedStateNow({ config: newConfig }, "profile_edit");
+  }, [savePersistedStateNow]);
 
   const handleForcePush = useCallback(async () => {
     clearTimeout(saveTimer.current);
@@ -1188,6 +1233,10 @@ export default function App() {
     };
     setConfig(mergedConfig);
     setWizardEntry(null);
+    // Eager save — a completed wizard run is the single most expensive thing
+    // to lose to a backgrounded/reclaimed mobile tab; don't leave it sitting
+    // in the 800ms debounce window. configHistoryMetaRef is already set above.
+    savePersistedStateNow({ config: mergedConfig });
   }
 
   function handleSelectInvestorAccount(n) {
@@ -1949,6 +1998,7 @@ export default function App() {
               onDismiss={() => setUpdateBannerDismissed(true)}
             />
           )}
+          {saveFailed && <SaveFailedBanner onRetry={retryFailedSave} />}
           {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
           {config.jobLossMode && !jobLossBannerDismissed && (() => {
             // Compute benefits-end date when duration is set, so the banner can
@@ -3079,43 +3129,53 @@ export default function App() {
             // record so we don't duplicate the log blob in persistence.
             const firstWeek = confirmation.firstWeek ?? null;
             const { firstWeek: _omitFirstWeek, ...payWeekConfirmation } = confirmation;
-            setWeekConfirmations(c => {
-              const next = { ...c, [confirmTriggerWeek.idx]: payWeekConfirmation };
-              if (firstWeek) {
-                // The modal collected the first week explicitly — store its record.
-                next[firstWeek.idx] = firstWeek.confirmation;
-              } else if ((config.userPaySchedule === "biweekly" || config.userPaySchedule === "salary") && confirmTriggerWeek.idx > 0) {
-                // Salary (and biweekly first-period fallback): auto-confirm the
-                // paired non-paycheck week (the one before) as clean.
-                const priorIdx = confirmTriggerWeek.idx - 1;
-                if (!next[priorIdx]) {
-                  const prior = allWeeks.find(w => w.idx === priorIdx);
-                  if (prior?.active) {
-                    next[priorIdx] = {
-                      confirmedAt, autoConfirmed: true, eventId: null,
-                      dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, prior.workedDayNames?.includes(d) ? true : null])),
-                      scheduledDays: prior.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
-                    };
-                  }
+            // Computed synchronously (not a setState updater) so the exact same
+            // value can go to setState AND the eager save below — same pattern
+            // ProfilePanel's saveConfigNow call sites already use.
+            const next = { ...weekConfirmations, [confirmTriggerWeek.idx]: payWeekConfirmation };
+            if (firstWeek) {
+              // The modal collected the first week explicitly — store its record.
+              next[firstWeek.idx] = firstWeek.confirmation;
+            } else if ((config.userPaySchedule === "biweekly" || config.userPaySchedule === "salary") && confirmTriggerWeek.idx > 0) {
+              // Salary (and biweekly first-period fallback): auto-confirm the
+              // paired non-paycheck week (the one before) as clean.
+              const priorIdx = confirmTriggerWeek.idx - 1;
+              if (!next[priorIdx]) {
+                const prior = allWeeks.find(w => w.idx === priorIdx);
+                if (prior?.active) {
+                  next[priorIdx] = {
+                    confirmedAt, autoConfirmed: true, eventId: null,
+                    dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, prior.workedDayNames?.includes(d) ? true : null])),
+                    scheduledDays: prior.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
+                  };
                 }
               }
-              // Monthly: auto-confirm all other weeks in the same month as clean
-              if (config.userPaySchedule === "monthly") {
-                const m = confirmTriggerWeek.weekEnd.getMonth(), y = confirmTriggerWeek.weekEnd.getFullYear();
-                for (const w of allWeeks) {
-                  if (w.active && w.idx !== confirmTriggerWeek.idx && w.weekEnd.getMonth() === m && w.weekEnd.getFullYear() === y && !next[w.idx]) {
-                    next[w.idx] = {
-                      confirmedAt, autoConfirmed: true, eventId: null,
-                      dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, w.workedDayNames?.includes(d) ? true : null])),
-                      scheduledDays: w.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
-                    };
-                  }
+            }
+            // Monthly: auto-confirm all other weeks in the same month as clean
+            if (config.userPaySchedule === "monthly") {
+              const m = confirmTriggerWeek.weekEnd.getMonth(), y = confirmTriggerWeek.weekEnd.getFullYear();
+              for (const w of allWeeks) {
+                if (w.active && w.idx !== confirmTriggerWeek.idx && w.weekEnd.getMonth() === m && w.weekEnd.getFullYear() === y && !next[w.idx]) {
+                  next[w.idx] = {
+                    confirmedAt, autoConfirmed: true, eventId: null,
+                    dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, w.workedDayNames?.includes(d) ? true : null])),
+                    scheduledDays: w.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
+                  };
                 }
               }
-              return next;
-            });
-            if (logEntry) setLogs(p => [...p, logEntry]);
-            if (firstWeek?.logEntry) setLogs(p => [...p, firstWeek.logEntry]);
+            }
+            const newLogs = [
+              ...logs,
+              ...(logEntry ? [logEntry] : []),
+              ...(firstWeek?.logEntry ? [firstWeek.logEntry] : []),
+            ];
+            setWeekConfirmations(next);
+            setLogs(newLogs);
+            // Eager save — a completed weekly check-in is exactly the kind of
+            // work that shouldn't sit in the 800ms debounce window; a
+            // backgrounded/reclaimed mobile tab before it fires meant the
+            // confirmation was silently lost and the modal popped right back up.
+            savePersistedStateNow({ weekConfirmations: next, logs: newLogs });
           }}
           onDismiss={() => setConfirmDismissed(true)}
         />

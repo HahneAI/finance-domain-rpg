@@ -29,6 +29,7 @@ import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { Pressable, FoldSwitch } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
 import { JobLossEntry } from "./components/JobLossEntry.jsx";
+import { RateUpdateModal } from "./components/RateUpdateModal.jsx";
 import { ExpenseTriage } from "./components/ExpenseTriage.jsx";
 import { JobLossDashboard } from "./components/JobLossDashboard.jsx";
 import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
@@ -288,6 +289,7 @@ export default function App() {
   const [trialExplainerAcknowledged, setTrialExplainerAcknowledged] = useState(false);
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
   const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
+  const [rateUpdateOpen, setRateUpdateOpen] = useState(false);
   const [expenseTriageOpen, setExpenseTriageOpen] = useState(false);
   // Session-only dismissal so the banner re-appears on every page load,
   // matching the §15.C1 spec ("dismissible but re-shows on reload").
@@ -3213,6 +3215,7 @@ export default function App() {
         onClose={() => setLifeEventMenu(false)}
         onSelect={(route) => {
           if (route === "job_loss") setJobLossEntryOpen(true);
+          else if (route === "rate_update") setRateUpdateOpen(true);
           else setWizardEntry(route);
         }}
       />
@@ -3223,6 +3226,16 @@ export default function App() {
         onActivate={(patch) => {
           configHistoryMetaRef.current = { source: "life_event:lost_job", effectiveFrom: patch.jobLossDate ?? undefined };
           setConfig(prev => ({ ...prev, ...patch }));
+        }}
+      />
+      {/* ── Quick Rate Update (TODO §15.D) ── */}
+      <RateUpdateModal
+        open={rateUpdateOpen}
+        onClose={() => setRateUpdateOpen(false)}
+        config={config}
+        onActivate={(patch) => {
+          configHistoryMetaRef.current = { source: "life_event:rate_update", effectiveFrom: patch.effectiveFrom };
+          setConfig(prev => ({ ...prev, baseRate: patch.baseRate }));
         }}
       />
       {/* ── Expense triage (TODO §15.C3 + C5 needs-coverage sort) ── */}

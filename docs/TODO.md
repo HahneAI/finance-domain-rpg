@@ -1588,144 +1588,61 @@ license to train.
 meet users there — not just re-run the setup wizard, but offer purpose-built flows that understand
 the emotional and practical weight of what just happened.*
 
-**Existing infrastructure:** `SetupWizard` already accepts a `lifeEvent` prop (`"lost_job"` |
-`"changed_jobs"` | `"commission_job"`). `App.jsx` has a `lifeEventMenu` dropdown that routes into
-the wizard. These are the trigger points we extend — not replace.
+**Resynced 2026-07-17 — §A/§B/§C were stale.** This whole section sat unchecked while the actual
+feature shipped; verified against source and against `docs/active-systems.md` §10 (which already
+correctly flags itself as "more built than TODO.md §15's checkbox state suggests"). Real gaps are
+§D, the back half of §H, and §I — see those sections below. §A/§B/§C are collapsed to a status
+note rather than re-listed here to avoid two competing specs for the same shipped code.
 
 ---
 
-### A. Entry Point & Life Event Menu
+### A–C. Entry Point, Structure Overwrite Wizard, Job Loss Mode — LIVE, see `active-systems.md` §10
 
-- [ ] **Upgrade the life event menu UI** — the current drawer/mobile dropdown is a plain list; give
-  it weight that matches the gravity of these moments.
-  - [ ] Replace inline dropdown with a bottom sheet modal (mobile) / centered card modal (desktop)
-  - [ ] Two primary tiles: **"Pay Structure Changed"** and **"Lost My Job"** — large, distinct,
-    icon-forward; not a text list
-  - [ ] Each tile shows a one-line description of what the flow covers
-  - [ ] Add a third tile: **"Quick Rate Update"** — for a raise or rate change with no structural
-    change (just new `baseRate` + optional new start week; no wizard needed, single modal)
-  - [ ] Preserve existing `wizardEntry` / `setWizardEntry` wiring in App.jsx — route each tile to
-    the appropriate flow
-
----
-
-### B. Pay Structure Change → Structure Overwrite Wizard
-
-*Triggered by "Pay Structure Changed" tile. Covers promotion to salary, new employer, hourly→salary
-switch, commission add-on. Reuses SetupWizard steps but skips goals/expenses/logs — those carry
-forward untouched.*
-
-- [ ] **Define "structure overwrite" life event type** — add `"structure_change"` to `LIFE_EVENTS`
-  in SetupWizard.jsx; route it through steps 0 (brief re-entry screen), 1 (Pay Structure),
-  2 (Schedule), 3 (Deductions — skippable), 4 (Tax Rates), 7 (Wrap Up)
-- [ ] **Pre-fill from current config** — all wizard fields should open with existing values so the
-  user only edits what actually changed (rate, pay period, employer, etc.)
-- [ ] **Change-date anchor** — Step 2 start date becomes the "effective date" of the change;
-  `firstActiveIdx` is set from this date; weeks before it keep the old income math in history
-- [ ] **Change summary screen** — before `onComplete`, show a diff of key fields that changed
-  (old rate → new rate, old schedule → new schedule, old employer → new); require explicit confirm
-- [ ] **Employer preset change handling** — if user switches from base to DHL (or vice versa),
-  apply full preset defaults and show a callout explaining what was auto-set
-- [ ] **Preserve all history** — goals, expenses, logs, week confirmations before the change date
-  are never touched; only forward-looking finance math recalculates
+- **§A Entry Point** — `LifeEventMenu.jsx` (3-tile modal: Pay Structure Changed / Lost My Job /
+  Quick Rate Update). Wired in `App.jsx`; also reachable from `ProfilePanel`'s "Life Events" row.
+- **§B Structure Overwrite Wizard** — `SetupWizard.jsx`'s `lifeEvent="structure_change"` path:
+  brief re-entry overview at Step 0, every field pre-fills from `originalConfig`, `StructureChangeDiff`
+  renders on Wrap Up, DHL↔base preset switching reuses the normal Step 1 fields.
+  `jobLossFlow.test.jsx` covers the flow.
+- **§C Job Loss Mode (C1–C6, all live)** — `JobLossEntry.jsx` → `JobLossDashboard.jsx`
+  (unemployment benefits gate/amount/duration/waiting-week, runway calculator, bill countdowns,
+  with/without-unemployment scenario toggle), `ExpenseTriage.jsx` (`jobLossStatus:
+  active|paused|cancelled` per expense, auto-reactivate on Back to Work), `ReemploymentTracker.jsx`
+  (target income, return date, application log w/ 6 status states). `config.jobLossMode` /
+  `jobLossDate` zero earned income forward in `buildYear()` (`finance.js`). Persistent amber banner
+  in `App.jsx` while active; "Back to Work" clears job-loss fields and re-enters the wizard as
+  `structure_change`. `jobLossFlow.test.jsx` (20 tests) + `buildYearJobLoss.test.js` cover it.
+- **Don't re-spec this from scratch** — any future work here (tweaks, bugfixes, extensions) should
+  read the actual files above first, not this doc.
 
 ---
 
-### C. Job Loss Mode
-
-*Triggered by "Lost My Job" tile. Enters a dedicated mode that transforms the app's forward
-projections to reflect $0 earned income and surfaces tools to manage the gap.*
-
-#### C1. Job Loss Mode State & Entry/Exit
-
-- [ ] **`jobLossMode` config flag** — boolean stored in config/Supabase; when true, alters how
-  `buildYear` and `computeNet` handle future weeks (earned income = $0 from `jobLossDate` forward)
-- [ ] **Job loss date** — stored as `config.jobLossDate`; weeks on/after this index get $0 gross
-  from employment; unemployment income (if configured) replaces it as a separate income line
-- [ ] **"Back to work" exit flow** — prominent button in Job Loss Dashboard; triggers the
-  Structure Overwrite Wizard pre-loaded with previous pay config as a starting point; clears
-  `jobLossMode` and `jobLossDate` on completion
-- [ ] **App shell indicator** — subtle persistent banner or status pill when `jobLossMode` is
-  active so the user always knows projections are in loss mode; dismissible but re-shows on reload
-
-#### C2. Unemployment Benefits
-
-- [ ] **Unemployment section in Job Loss Dashboard** — collapsible card
-  - [ ] "Did you file for unemployment?" Y/N gate
-  - [ ] If yes: weekly benefit amount (manual entry), benefit duration in weeks, waiting week
-    toggle (first week unpaid in most states)
-  - [ ] Wire benefit amount into forward week net calculations as a non-taxed income line
-    (unemployment is federally taxable but withholding is optional — flag this with a note)
-  - [ ] Benefit expiration: show a "benefits run out on [date]" warning when duration is set
-  - [ ] Future: state-specific benefit estimator — pre-fill estimated weekly benefit based on
-    `config.userState` + prior `baseRate` using each state's benefit formula
-
-#### C3. Expense Triage
-
-*Every loaded expense gets an individual stance: keep it, pause it, or cancel it. Paused expenses
-leave the record intact but drop out of projections until reactivated.*
-
-- [ ] **Per-expense triage status** — add `jobLossStatus: "active" | "paused" | "cancelled"` to
-  each expense object; default `"active"`; persisted to Supabase
-- [ ] **Triage UI** — dedicated sheet in Job Loss Dashboard listing all expenses with:
-  - [ ] Expense name, category icon, monthly amount
-  - [ ] Next due-date countdown ("due in 12 days") derived from expense billing day or history
-  - [ ] Three-state toggle: Active / Paused / Cancelled per expense
-  - [ ] Auto-priority badge: **Essential** (Rent, Utilities, Food, Insurance) vs. **Flexible**
-    (Subscriptions, Entertainment) based on existing expense category
-  - [ ] "Pause all Flexible" bulk action button
-- [ ] **Projection impact** — paused and cancelled expenses are excluded from `computeNet` forward
-  weeks while `jobLossMode` is active; reactivate on "Back to work"
-- [ ] **"Auto-reactivate on income resume"** toggle per expense — resets `jobLossStatus` to
-  `"active"` when the user exits Job Loss Mode via the Back to Work flow
-
-#### C4. Runway Calculator
-
-*The single most important number during job loss: how long can you survive.*
-
-- [ ] **Runway metric** — headline card in Job Loss Dashboard: **"X days of runway"** computed as:
-  `(bufferBalance + projectedUnemploymentTotal) / weeklyEssentialBurn × 7`
-- [ ] **Weekly burn rate** — sum of all `"active"` essential expenses per week; updates live as
-  user pauses/cancels expenses in triage
-- [ ] **Runway cliff date** — calendar date when runway reaches zero at current burn rate; shown
-  as "Runway ends: [Month Day]" in amber/red depending on proximity
-- [ ] **Savings input** — if buffer balance doesn't capture full savings, allow a one-time
-  "additional savings" override field for the runway calculation only (not persisted to main config)
-- [ ] **Scenario toggle** — "With unemployment" vs. "Without unemployment" runway comparison;
-  shows both numbers side by side when benefits are configured
-
-#### C5. Bill Deadline Countdowns
-
-- [ ] **Due-date countdown tiles** — for any expense with a known billing day, surface a
-  countdown tile: "Rent due in 8 days — $1,200"
-- [ ] **30 / 14 / 7-day alert tiers** — tile border/status color shifts gold at 14 days, red at 7
-- [ ] **"Needs coverage" flag** — if due date falls before projected unemployment first payment,
-  mark as needing immediate coverage; surfaces at top of triage list
-
-#### C6. Re-employment Tracker (basic)
-
-- [ ] **Target income goal** — pre-filled from `config.baseRate × maxWeeklyHours × 52`;
-  user can adjust; shown as "target annual" and "target weekly net" using current tax config
-- [ ] **Expected return-to-work date** — date input; when set, projects income resuming from that
-  week in the Income panel's forward timeline
-- [ ] **Application log** — simple list stored in Supabase:
-  - [ ] Fields: company, role title, date applied, status (Applied / Screening / Interview /
-    Offer / Rejected / Withdrawn)
-  - [ ] Add / edit / delete entries inline
-  - [ ] Status badge colors: gray (Applied), gold (Screening/Interview), green (Offer), red
-    (Rejected)
-  - [ ] Count summary: "X active, Y offers" shown in dashboard header
-
----
-
-### D. Quick Rate Update (non-structural raise)
+### D. Quick Rate Update (non-structural raise) — BUILT 2026-07-17
 
 *For when the pay structure stays the same but the rate changed — shouldn't require a full wizard.*
 
-- [ ] **Rate update modal** — single screen: new base rate input + effective date + optional note
-- [ ] **Effective-date handling** — same `firstActiveIdx` logic as structure overwrite, applied
-  only to `baseRate`; all other config fields unchanged
-- [ ] **Confirmation diff** — shows old rate → new rate + estimated weekly net delta before saving
+- [x] **Rate update modal** — `src/components/RateUpdateModal.jsx`: single screen, new hourly
+  rate + effective date. **Dropped the "optional note" field** — there's no schema field or any
+  other place for free-text notes to go on a rate change, so a note input with no destination
+  would've been dead UI; cut rather than half-built.
+- [x] **Effective-date handling** — **not** `firstActiveIdx` (that's the account-wide "when did
+  this account start" scalar, unrelated to a single field edit). Instead uses the account_history
+  mechanism §19 already shipped: the modal's date travels as `effectiveFrom` into
+  `configHistoryMetaRef` exactly like `JobLossEntry`'s `jobLossDate` does, tagging the automatic
+  config-history snapshot with `source: "life_event:rate_update"`. `baseRate` was already on the
+  §19 historically-sensitive whitelist, so no new plumbing was needed there.
+- [x] **Confirmation diff** — shows old rate → new rate + an estimated weekly net delta, computed
+  via a new shared `estimateWeeklyNet()` (`src/lib/finance.js`) extracted from `SetupWizard.jsx`'s
+  `StepWrapUp` live-preview formula (was duplicated logic in the wizard alone; now both callers
+  read the same formula rather than risking drift).
+- [x] **Wired live** — `LifeEventMenu.jsx`'s tile flipped from `comingSoon: true` to
+  `route: "rate_update"`; `App.jsx` opens the modal and applies `{ baseRate }` to config on confirm.
+  7 new tests in `jobLossFlow.test.jsx` (prefill, validation gate, confirm payload, cancel, Escape,
+  menu routing). 1032 tests passing; lint diff-clean vs. baseline; production build green.
+- **Not yet verified live** — same sandbox limitation as everything else in this repo (no
+  Supabase credentials here): unit tests + build only. Needs a real click-through on a deployed
+  preview to confirm the modal opens from the Life Events menu and the account_history snapshot
+  actually lands with the right `effectiveFrom`.
 
 ---
 
@@ -1771,6 +1688,13 @@ leave the record intact but drop out of projections until reactivated.*
 Today both Yes and No route through the standard pay-structure steps (DHL question next),
 and the answer is stored on `config.startedUnemployed`. The plan below builds that seed into
 a true branched onboarding so jobless users land in a usable app from day one.*
+
+**Confirmed status (2026-07-17): still just the seed.** `SetupWizard.jsx` captures
+`startedUnemployed` (Y/N pills) with copy that explicitly says "we're seeding a future onboarding
+path" — but the flag has exactly two read-sites in the whole codebase (the capture itself, and the
+`isValid` gate that lets Next proceed). Nothing below — routing, the mini-flow, the completion
+path, Back to Work's first-time wizard, or the banner copy — exists yet. Unlike §A–C, this really
+is all still open.
 
 #### H1. Branched Step 0 routing
 
@@ -1840,7 +1764,11 @@ a true branched onboarding so jobless users land in a usable app from day one.*
 
 ### J. Visual Testing Checklist — foundation phase (§15.A–C5 + H seed)
 
-*Manual smoke pass. Run before merging the foundation phase branch.*
+*Manual smoke pass, originally scoped to run before merging the foundation phase branch — that
+branch already merged and shipped (§A–C). `jobLossFlow.test.jsx` (20 tests across LifeEventMenu,
+JobLossEntry, JobLossDashboard, ReemploymentTracker, ExpenseTriage) + `buildYearJobLoss.test.js`
+give equivalent automated coverage of the flows below. Kept here as an optional manual pass, not a
+blocking item — no reason to re-run this by hand unless something in §A–C regresses.*
 
 #### Entry points
 - [ ] Life Events trigger opens modal with three tiles: Pay Structure Changed, Lost My Job,
@@ -2825,3 +2753,81 @@ replacing) the existing per-week event pipeline:
   `App.jsx:1047`). Paused/cancelled expenses already drop out of the Needs total during job loss —
   confirm `computeNeedsShortfall()` reads the same `projectableExpenses` list so it doesn't count a
   paused bill as still owed.
+
+---
+
+## 25. Expense Input/Editor Revamp — Mandatory Rent + Preset Categories
+
+*Seeded 2026-07-16, not yet started. Two related but distinct threads: (A) add Rent as a second
+mandatory, pinned expense alongside Food; (B/C) a broader editor revamp — quick-select preset
+categories with icons for the expenses people most commonly carry. **§B is explicitly a
+brainstorm-first workstream — do not design the preset category list, schema, or icon set until
+that session happens.** Nothing in this section should be built ahead of that decision pass.*
+
+### A. Mandatory Rent Expense (parallel to Food)
+
+Today `INITIAL_EXPENSES` (`constants/config.js:306`) seeds exactly one pinned, non-deletable-feeling
+expense: Food (`isFoodPrimary: true`, `isFoodHighlighted: true`, a flat `$400/mo` default via
+`DEFAULT_FOOD_WEEKLY`). `BudgetPanel.jsx` reads those two flags in several places (`isFoodSheet`,
+the pinned-card filter at line 1509, the "other same-category expenses" exclusion at line 1147) to
+give Food special visual/behavioral treatment. Rent should get the same treatment as a second
+"everyone basically has this" mandatory Needs expense — the premise being that anyone paying for a
+subscription app is very likely covering at least a rent/mortgage share, roommates or not.
+
+- [ ] **Decide the seeding default** — Food's flat `$400/mo` guess works because grocery spend is a
+  fairly narrow band; rent is not (varies enormously by market, and a roommate split isn't
+  guessable at all). Options: seed at `$0` and require the user to fill it in during setup/first
+  visit to Budget; prompt for it explicitly as a SetupWizard question; or seed unset and just rely
+  on the "mandatory, pinned, can't fully delete" treatment to draw the eye. Needs a decision, not
+  an assumption.
+- [ ] **`isRentPrimary` / `isRentHighlighted` flags** — mirror the Food flag pair exactly (naming
+  TBD — could also be a single generalized `isPinnedPrimary` + a `pinnedKind: "food" | "rent"` if
+  a third mandatory expense is ever added later; decide during implementation, not here).
+- [ ] **Wire into every spot Food's flags currently gate** — `BudgetPanel.jsx`'s pinned-card
+  rendering, the food-sheet detection, and the "exclude Food from this category's regular list"
+  filters all need the Rent equivalent added alongside, not a parallel code path.
+- [ ] **SetupWizard touchpoint** — decide whether Rent gets asked directly in the wizard (Step 3
+  Deductions currently only covers benefits/other-deductions) or is left to be filled in on first
+  Budget visit like Food effectively is today.
+- [ ] **Copy/UI distinction from Food** — Food's visual emphasis language currently just says
+  "food" implicitly via icon-free styling; Rent needs its own label/copy so the two pinned cards
+  read as clearly different mandatory items, not two of the same thing.
+
+### B. Preset Category Brainstorm — do this first, before any schema/UI work below
+
+*Explicitly gated: §C's editor build should not start until this brainstorm has actually
+happened and produced a settled list. This bullet exists so a future session doesn't skip straight
+to building from an assumed category list.*
+
+- [ ] **Hold a dedicated brainstorm pass** to collect a strong, common preset category list —
+  the kind of expense lines most users actually carry beyond Food/Rent: Utilities, Car Insurance,
+  Lawyer Fees, Court Fees, and others in that same "frequently-needed, non-obvious-to-type-from-
+  scratch" vein. (These are ordinary expense categories, separate from — not a variant of — the
+  Rent/Food mandatory-expense mechanism in §A.)
+- [ ] **Resolve where presets sit in the existing schema** — today there are exactly two top-level
+  `category` values (`Needs` / `Lifestyle`, `constants/config.js:333`), plus the separate `Loans`
+  concept. Decide whether presets are a new sub-category/tag layer on top of `Needs`/`Lifestyle`
+  (each preset still resolves to one of the two for all the existing category-driven math/UI) or
+  something else — this is a real schema question, not just a UI dropdown question, and belongs in
+  the brainstorm session.
+- [ ] **Decide the preset's scope** — is this a fixed, curated list (simplest, matches "most
+  common" framing) or does it need a user-added-custom-category escape hatch too? Settle during
+  the brainstorm, not by default.
+
+### C. Editor UI Tuneup + Icons
+
+*Depends on §B landing first.*
+
+- [ ] **More intuitive "add expense" editor** — today `+ ADD EXPENSE LINE` (`BudgetPanel.jsx:1755`)
+  opens a bare free-text label input with a Needs/Lifestyle category toggle; no quick-select, no
+  suggestions. Replace/augment with quick-select category chips seeded from §B's finalized list —
+  picking one pre-fills the label (and category, if presets map to one) rather than the user typing
+  a category name from scratch every time.
+- [ ] **Icon set for the "most commonly had" categories** — small single-color marks (matching the
+  existing icon style already used elsewhere, e.g. `EVENT_TYPES`' icon glyphs in
+  `constants/config.js:324`) for whichever presets the brainstorm settles on, shown on both the
+  quick-select chips and the resulting expense row so common categories are visually scannable at a
+  glance rather than every row looking like an identical text line.
+- [ ] **Keep the existing free-text path** — quick-select is additive; a user with an expense
+  outside the preset list must still be able to type a custom label the way the editor already
+  works today.

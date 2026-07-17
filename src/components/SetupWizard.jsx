@@ -15,7 +15,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef } from "react";
-import { buildYear, dhlEmployerMatchRate } from "../lib/finance.js";
+import { buildYear, dhlEmployerMatchRate, estimateWeeklyNet } from "../lib/finance.js";
 import { iS, lS, Pressable, StepSlide } from "./ui.jsx";
 import { FISCAL_YEAR_START, DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR } from "../lib/fiscalWeek.js";
@@ -1629,48 +1629,12 @@ function Step4({ formData, onChange, attempted }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STEP 7 — Paycheck Buffer (estimateWeeklyGross helper defined above)
+// STEP 7 — Paycheck Buffer (estimateWeeklyNet imported from lib/finance.js)
 //
 // Shows a live net-per-check preview, then lets the user toggle the buffer on/off
 // and set an amount (default $50, max $200). See App.jsx bufferPerWeek comment for
 // how the buffer is excluded from all downstream spendable math at runtime.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Estimate a typical weekly gross from formData — does not require a week object.
-function estimateWeeklyGross(d) {
-  const isEmployerDHL = d.employerPreset === "DHL";
-  if (isEmployerDHL) {
-    const gross = (h) => {
-      const base = d.baseRate || 0;
-      const reg = Math.min(h, d.otThreshold || 40);
-      const ot = Math.max(h - (d.otThreshold || 40), 0);
-      return reg * base + ot * base * (d.otMultiplier || 1.5);
-    };
-    const longCustom = d.customWeeklyHoursLong;
-    const shortCustom = d.customWeeklyHoursShort;
-    if (longCustom != null || shortCustom != null) {
-      const fallback = d.customWeeklyHours ?? 60;
-      const longHours = longCustom ?? fallback;
-      const shortHours = shortCustom ?? fallback;
-      return (gross(shortHours) + gross(longHours)) / 2;
-    }
-    if (d.customWeeklyHours != null) {
-      // Flat custom hours — same projected total every week
-      return gross(d.customWeeklyHours);
-    }
-    // Standard DHL rotation: weighted average of long (5-shift) and short (4-shift) weeks
-    const hoursPerShift = d.shiftHours || 12;
-    return (gross(4 * hoursPerShift) + gross(5 * hoursPerShift)) / 2;
-  }
-  // Base user: flat ceiling. customWeeklyHours overrides maxWeeklyHours; standardWeeklyHours is legacy fallback.
-  const h = d.customWeeklyHours ?? d.maxWeeklyHours ?? d.standardWeeklyHours ?? 40;
-  const base = d.baseRate || 0;
-  const nightDiff = d.nightDiffEnabled === true ? (d.nightDiffRate ?? 0) : 0;
-  const effectiveOtThreshold = d.otThreshold ?? h;
-  const reg = Math.min(h, effectiveOtThreshold);
-  const ot = Math.max(h - effectiveOtThreshold, 0);
-  return reg * (base + nightDiff) + ot * (base + nightDiff) * (d.otMultiplier || 1.5);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 8 — Tax Exempt Gate
@@ -1809,25 +1773,11 @@ function StructureChangeDiff({ originalConfig, formData }) {
 }
 
 function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
-  const gross = estimateWeeklyGross(formData);
-  const fica     = gross * (formData.ficaRate || 0.0765);
-  const k401k    = gross * (formData.k401Rate || 0);
-  const baseBenefits =
-    (formData.healthPremium || 0) + (formData.dentalPremium || 0) +
-    (formData.visionPremium || 0) + (formData.stdWeekly || 0) +
-    (formData.lifePremium || 0)   + (formData.hsaWeekly || 0) +
-    (formData.fsaWeekly || 0)     + (formData.ltd || 0);
+  const { gross, fica, k401k, benefits, other, fed, state, net } = estimateWeeklyNet(formData);
+  const checksPerYear = PAYCHECKS_PER_YEAR[formData.userPaySchedule ?? "weekly"] ?? 52;
+  const perCheckFactor = 52 / checksPerYear; // display scale: weekly → per-paycheck (e.g. 2 for biweekly)
   const benefitsStart = formData.benefitsStartDate ? new Date(formData.benefitsStartDate) : null;
   const benefitsActive = !benefitsStart || Number.isNaN(benefitsStart.getTime()) || benefitsStart <= new Date();
-  const checksPerYear = PAYCHECKS_PER_YEAR[formData.userPaySchedule ?? "weekly"] ?? 52;
-  const perWeekFactor = checksPerYear / 52;  // weekly deduction factor (e.g. 0.5 for biweekly)
-  const perCheckFactor = 52 / checksPerYear; // display scale: weekly → per-paycheck (e.g. 2 for biweekly)
-  const benefits = benefitsActive ? baseBenefits * perWeekFactor : 0;
-  const otherPerCheck = (formData.otherDeductions || []).reduce((s, r) => s + (r.perCheckAmount ?? r.weeklyAmount ?? 0), 0);
-  const other = otherPerCheck * perWeekFactor;
-  const fed   = gross * (formData.fedRateLow || 0);
-  const state = gross * (formData.stateRateLow || 0);
-  const net   = gross - fica - k401k - benefits - other - fed - state;
 
   const bufferOn = formData.bufferEnabled ?? true;
   const buf      = formData.paycheckBuffer ?? 50;

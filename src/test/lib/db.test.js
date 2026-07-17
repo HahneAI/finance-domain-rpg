@@ -13,10 +13,11 @@ import {
 vi.mock('../../lib/supabase.js', () => ({
   supabase: { from: vi.fn(), auth: { getSession: vi.fn() } },
   getCurrentUserId: vi.fn().mockResolvedValue('test-user-id'),
+  getCachedAuthSnapshot: vi.fn().mockReturnValue({ accessToken: 'tok-123', userId: 'test-user-id' }),
 }))
 
-import { supabase } from '../../lib/supabase.js'
-import { loadUserData, saveUserData, syncUserProfile, saveConfigSnapshot, fetchConfigHistoryMeta } from '../../lib/db.js'
+import { getCachedAuthSnapshot, getCurrentUserId, supabase } from '../../lib/supabase.js'
+import { loadUserData, saveUserData, syncUserProfile, saveConfigSnapshot, fetchConfigHistoryMeta, flushUserDataKeepalive } from '../../lib/db.js'
 
 // ─────────────────────────────────────────────────────────────
 // Mock helpers
@@ -625,6 +626,109 @@ describe('saveUserData', () => {
     })
 
     expect(consoleSpy).toHaveBeenCalledWith('Failed to save user data:', 'Connection refused')
+    consoleSpy.mockRestore()
+  })
+
+  // App.jsx's eager-save helper (savePersistedStateNow) awaits this return
+  // value to decide whether to surface a SaveFailedBanner (with the real
+  // error text) and schedule a retry — must accurately reflect success/
+  // failure and the real message, not just log-and-swallow.
+  it('resolves { ok: true, message: null } on a successful upsert', async () => {
+    supabase.from.mockReturnValue({ upsert: vi.fn().mockResolvedValue({ error: null }) })
+    await expect(saveUserData({
+      config: DEFAULT_CONFIG,
+      expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
+    })).resolves.toEqual({ ok: true, message: null })
+  })
+
+  it('resolves { ok: false, message } on a failed upsert', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    supabase.from.mockReturnValue({ upsert: vi.fn().mockResolvedValue({ error: { message: 'Connection refused' } }) })
+    await expect(saveUserData({
+      config: DEFAULT_CONFIG,
+      expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
+    })).resolves.toEqual({ ok: false, message: 'Connection refused' })
+    consoleSpy.mockRestore()
+  })
+
+  it('resolves { ok: false } when unauthenticated (no userId)', async () => {
+    getCurrentUserId.mockResolvedValueOnce(null)
+    await expect(saveUserData({
+      config: DEFAULT_CONFIG,
+      expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
+    })).resolves.toEqual({ ok: false, message: 'Not signed in' })
+  })
+})
+
+// Regression coverage for the unload-time hardening: a plain fetch (what
+// saveUserData issues via supabase-js) can be aborted mid-flight when the page
+// actually unloads or a backgrounded mobile tab gets reclaimed, silently
+// dropping whatever hadn't saved yet. flushUserDataKeepalive bypasses
+// supabase-js and issues a raw keepalive:true fetch so the browser can finish
+// the request after the page is gone.
+describe('flushUserDataKeepalive', () => {
+  const payload = {
+    config: { ...DEFAULT_CONFIG, employerPreset: 'DHL' },
+    expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: { 5: { confirmedAt: 'x' } },
+    ptoGoal: 40,
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    getCachedAuthSnapshot.mockReturnValue({ accessToken: 'tok-123', userId: 'test-user-id' })
+  })
+
+  it('issues a keepalive fetch directly to the PostgREST upsert endpoint', () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', mockFetch)
+
+    flushUserDataKeepalive(payload)
+
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    const [url, options] = mockFetch.mock.calls[0]
+    expect(url).toMatch(/\/rest\/v1\/user_data\?on_conflict=user_id$/)
+    expect(options.method).toBe('POST')
+    expect(options.keepalive).toBe(true)
+    expect(options.headers.Authorization).toBe('Bearer tok-123')
+    expect(options.headers.Prefer).toBe('resolution=merge-duplicates,return=minimal')
+
+    const body = JSON.parse(options.body)
+    expect(body.user_id).toBe('test-user-id')
+    expect(body.is_employer_dhl).toBe(true)
+    expect(body.pto_goal).toBe(40)
+    expect(body.week_confirmations).toEqual({ 5: { confirmedAt: 'x' } })
+  })
+
+  it('writes null to pto_goal when ptoGoal is undefined', () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', mockFetch)
+
+    flushUserDataKeepalive({ ...payload, ptoGoal: undefined })
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(body.pto_goal).toBeNull()
+  })
+
+  it('does not fetch when there is no cached access token or user id', () => {
+    const mockFetch = vi.fn()
+    vi.stubGlobal('fetch', mockFetch)
+    getCachedAuthSnapshot.mockReturnValue({ accessToken: null, userId: null })
+
+    flushUserDataKeepalive(payload)
+
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the normal supabase upsert when fetch throws synchronously (e.g. keepalive body-size limit)', async () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(() => { throw new TypeError('keepalive body exceeds limit') }))
+    const mockUpsert = vi.fn().mockResolvedValue({ error: null })
+    supabase.from.mockReturnValue({ upsert: mockUpsert })
+
+    flushUserDataKeepalive(payload)
+    // saveUserData's fallback path awaits getCurrentUserId() before upserting —
+    // let that microtask settle before asserting.
+    await vi.waitFor(() => expect(mockUpsert).toHaveBeenCalledTimes(1))
     consoleSpy.mockRestore()
   })
 })

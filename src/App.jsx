@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive } from "./lib/db.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -23,6 +23,8 @@ import { ProfilePanel } from "./components/ProfilePanel.jsx";
 import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { TrialBanner } from "./components/TrialBanner.jsx";
+import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner.jsx";
+import { SaveFailedBanner } from "./components/SaveFailedBanner.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { Pressable, FoldSwitch } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
@@ -293,6 +295,17 @@ export default function App() {
   // matching the §15.C1 spec ("dismissible but re-shows on reload").
   const [jobLossBannerDismissed, setJobLossBannerDismissed] = useState(false);
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
+
+  // main.jsx dispatches this once the new service worker is installed and
+  // waiting — reload only happens when the user taps Refresh in the banner
+  // below, never automatically (see vite.config.js registerType comment).
+  useEffect(() => {
+    const onUpdateAvailable = () => setUpdateAvailable(true);
+    window.addEventListener("pwa-update-available", onUpdateAvailable);
+    return () => window.removeEventListener("pwa-update-available", onUpdateAvailable);
+  }, []);
 
   const currentView = viewStack[viewStack.length - 1];
   const mainContentRef = useRef(null);
@@ -373,6 +386,9 @@ export default function App() {
   };
 
   // ── Auth: check existing session on mount, subscribe to changes ──
+  // Tracks which user id we've already run the revival/trial-seed/reload chain
+  // for below — see the SIGNED_IN guard for why this exists.
+  const signedInChainRanForRef = useRef(null);
   useEffect(() => {
     // Rely solely on onAuthStateChange rather than calling getSession() first.
     // getSession() resolves before Supabase has exchanged the OAuth code from the URL,
@@ -382,6 +398,7 @@ export default function App() {
     return onAuthChange((event, user) => {
       if (event === "PASSWORD_RECOVERY") setPendingPasswordReset(true);
       else setPendingPasswordReset(false);
+      if (event === "SIGNED_OUT") signedInChainRanForRef.current = null;
       // Seed user_data row + sync OAuth profile metadata on every sign-in.
       // Critical for Google OAuth users who have no row yet; safe no-op for email users.
       // §17.I: the revival check MUST run first — an OAuth sign-in with a
@@ -400,7 +417,19 @@ export default function App() {
       // nothing else re-triggers a reload for a normal, non-revival, non-
       // checkout-return sign-in. Bump reloadTrigger once seeding has actually
       // settled so loadUserData() re-runs and picks up the real trial window.
-      if (event === "SIGNED_IN" && user) {
+      //
+      // Guard: supabase-js's GoTrueClient re-emits SIGNED_IN — with the SAME
+      // already-established session — on every hidden→visible tab transition
+      // (_onVisibilityChanged → _recoverAndRefresh), which fires constantly on
+      // mobile from app switching, screen lock/unlock, notification banners.
+      // Without this guard, each one re-ran the chain below and force-reloaded
+      // loadUserData(), overwriting in-memory config/expenses/goals/logs with
+      // whatever was last saved to the DB and flashing the full-screen loading
+      // state — silently discarding any edit made in the preceding debounce
+      // window. Only the first SIGNED_IN seen for a given user id needs this
+      // chain; later ones for the same id are the visibility-recovery no-op.
+      if (event === "SIGNED_IN" && user && signedInChainRanForRef.current !== user.id) {
+        signedInChainRanForRef.current = user.id;
         checkRevival()
           .then((revival) => {
             if (revival) {
@@ -449,12 +478,21 @@ export default function App() {
     setLoading(true);
 
     const applyLoadedData = (data) => {
-      setConfig(data.config);
-      setShowExtra(data.showExtra);
-      setLogs(data.logs);
-      setExpenses(data.expenses);
-      setGoals(data.goals);
-      setWeekConfirmations(data.weekConfirmations ?? {});
+      // Defense-in-depth alongside the SIGNED_IN dedup guard above: if a debounced
+      // save is still pending (an edit made in roughly the last 800ms hasn't been
+      // written yet), the DB snapshot this load just read is stale relative to
+      // local state for exactly these fields. Applying it anyway would revert the
+      // in-progress edit — the fields below are the only ones the debounced save
+      // writes, so everything else (isAdmin, subscription, etc.) still applies
+      // unconditionally.
+      if (!pendingSaveRef.current) {
+        setConfig(data.config);
+        setShowExtra(data.showExtra);
+        setLogs(data.logs);
+        setExpenses(data.expenses);
+        setGoals(data.goals);
+        setWeekConfirmations(data.weekConfirmations ?? {});
+      }
       setIsEmployerDHL(data.isEmployerDHL);
       setIsAdmin(data.isAdmin);
       setIsTester(data.isTester);
@@ -603,7 +641,11 @@ export default function App() {
       if (loading || !pendingSaveRef.current) return;
       pendingSaveRef.current = false;
       clearTimeout(saveTimer.current);
-      saveUserData(latestPersistedStateRef.current);
+      // keepalive save (not the normal saveUserData) — a plain fetch is liable
+      // to be aborted mid-flight the instant the page actually unloads or a
+      // backgrounded mobile tab gets reclaimed, silently dropping whatever
+      // hadn't saved yet. See flushUserDataKeepalive's doc comment in db.js.
+      flushUserDataKeepalive(latestPersistedStateRef.current);
     };
 
     const onBeforeUnload = () => flushPendingSave();
@@ -623,16 +665,68 @@ export default function App() {
     };
   }, [loading]);
 
-  // ── Immediate config save — for ProfilePanel sub-views that need guaranteed persistence ──
-  // Called with the already-computed newConfig so we don't rely on React having flushed setConfig yet.
-  const saveConfigNow = useCallback((newConfig) => {
-    // Attribute the paired setConfig's history snapshot (if any) to a profile
-    // save; ??= keeps a more specific tag (wizard/life event) when one is set.
-    configHistoryMetaRef.current ??= { source: "profile_edit" };
+  // ── Eager save — for actions that represent a completed unit of work
+  // (wizard completion, weekly check-in confirmation, profile edits) rather
+  // than an in-progress edit, so they don't sit exposed in the 800ms debounce
+  // window where a backgrounded/reclaimed mobile tab can lose them.
+  // `overrides` is a partial patch (e.g. { config: newConfig } or
+  // { weekConfirmations: next, logs: newLogs }) merged onto the latest known
+  // full state (latestPersistedStateRef, kept current every render) so the
+  // write is always a complete, consistent row — same shape the debounce
+  // itself writes, just not waiting 800ms to do it.
+  // [saveError]: the real Supabase error message (not a generic guess),
+  // surfaced via SaveFailedBanner so a failed "guaranteed" save isn't
+  // silently invisible — this promise is stronger than the ambient
+  // debounce's, so a failure here needs to be user-visible, unlike the
+  // debounce's console-only failure handling. null = no failure currently shown.
+  const [saveError, setSaveError] = useState(null);
+  const saveRetryTimerRef = useRef(null);
+  const lastFailedOverridesRef = useRef(null);
+
+  const attemptSave = useCallback((overrides) => {
+    const nextState = { ...latestPersistedStateRef.current, ...overrides };
+    latestPersistedStateRef.current = nextState;
+    return saveUserData(nextState).then(({ ok, message }) => {
+      setSaveError(ok ? null : (message || "Unknown error"));
+      lastFailedOverridesRef.current = ok ? null : overrides;
+      return ok;
+    });
+  }, []);
+
+  // Called with the already-computed new value(s) so we don't rely on React
+  // having flushed the paired setState yet. `historySource` mirrors the
+  // config-history attribution saveConfigNow always did — ??= keeps a more
+  // specific tag (wizard/life event) a caller may have already set.
+  const savePersistedStateNow = useCallback((overrides, historySource) => {
+    if (historySource) configHistoryMetaRef.current ??= { source: historySource };
     clearTimeout(saveTimer.current);
+    clearTimeout(saveRetryTimerRef.current);
     pendingSaveRef.current = false;
-    saveUserData({ config: newConfig, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
-  }, [expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
+    attemptSave(overrides).then((ok) => {
+      if (!ok) saveRetryTimerRef.current = setTimeout(() => attemptSave(overrides), 3000);
+    });
+  }, [attemptSave]);
+
+  const retryFailedSave = useCallback(() => {
+    if (!lastFailedOverridesRef.current) return;
+    clearTimeout(saveRetryTimerRef.current);
+    attemptSave(lastFailedOverridesRef.current);
+  }, [attemptSave]);
+
+  // Dismiss just hides the banner — it does NOT drop the unsaved data. The
+  // edit already landed in React state (and latestPersistedStateRef) before
+  // the failed save fired, so the very next debounced autosave cycle (any
+  // subsequent state change) will naturally re-attempt persisting the same
+  // value. Re-shows automatically the next time any eager save fails.
+  const dismissSaveError = useCallback(() => setSaveError(null), []);
+
+  useEffect(() => () => clearTimeout(saveRetryTimerRef.current), []);
+
+  // Kept as its own name (many ProfilePanel call sites already use it) —
+  // now a thin wrapper over the general eager-save helper above.
+  const saveConfigNow = useCallback((newConfig) => {
+    savePersistedStateNow({ config: newConfig }, "profile_edit");
+  }, [savePersistedStateNow]);
 
   const handleForcePush = useCallback(async () => {
     clearTimeout(saveTimer.current);
@@ -1149,6 +1243,10 @@ export default function App() {
     };
     setConfig(mergedConfig);
     setWizardEntry(null);
+    // Eager save — a completed wizard run is the single most expensive thing
+    // to lose to a backgrounded/reclaimed mobile tab; don't leave it sitting
+    // in the 800ms debounce window. configHistoryMetaRef is already set above.
+    savePersistedStateNow({ config: mergedConfig });
   }
 
   function handleSelectInvestorAccount(n) {
@@ -1904,6 +2002,13 @@ export default function App() {
             />
           )}
           {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
+          {updateAvailable && !updateBannerDismissed && (
+            <UpdateAvailableBanner
+              onUpdate={() => window.__pwaUpdateSW?.()}
+              onDismiss={() => setUpdateBannerDismissed(true)}
+            />
+          )}
+          {saveError && <SaveFailedBanner message={saveError} onRetry={retryFailedSave} onDismiss={dismissSaveError} />}
           {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
           {config.jobLossMode && !jobLossBannerDismissed && (() => {
             // Compute benefits-end date when duration is set, so the banner can
@@ -3034,43 +3139,53 @@ export default function App() {
             // record so we don't duplicate the log blob in persistence.
             const firstWeek = confirmation.firstWeek ?? null;
             const { firstWeek: _omitFirstWeek, ...payWeekConfirmation } = confirmation;
-            setWeekConfirmations(c => {
-              const next = { ...c, [confirmTriggerWeek.idx]: payWeekConfirmation };
-              if (firstWeek) {
-                // The modal collected the first week explicitly — store its record.
-                next[firstWeek.idx] = firstWeek.confirmation;
-              } else if ((config.userPaySchedule === "biweekly" || config.userPaySchedule === "salary") && confirmTriggerWeek.idx > 0) {
-                // Salary (and biweekly first-period fallback): auto-confirm the
-                // paired non-paycheck week (the one before) as clean.
-                const priorIdx = confirmTriggerWeek.idx - 1;
-                if (!next[priorIdx]) {
-                  const prior = allWeeks.find(w => w.idx === priorIdx);
-                  if (prior?.active) {
-                    next[priorIdx] = {
-                      confirmedAt, autoConfirmed: true, eventId: null,
-                      dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, prior.workedDayNames?.includes(d) ? true : null])),
-                      scheduledDays: prior.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
-                    };
-                  }
+            // Computed synchronously (not a setState updater) so the exact same
+            // value can go to setState AND the eager save below — same pattern
+            // ProfilePanel's saveConfigNow call sites already use.
+            const next = { ...weekConfirmations, [confirmTriggerWeek.idx]: payWeekConfirmation };
+            if (firstWeek) {
+              // The modal collected the first week explicitly — store its record.
+              next[firstWeek.idx] = firstWeek.confirmation;
+            } else if ((config.userPaySchedule === "biweekly" || config.userPaySchedule === "salary") && confirmTriggerWeek.idx > 0) {
+              // Salary (and biweekly first-period fallback): auto-confirm the
+              // paired non-paycheck week (the one before) as clean.
+              const priorIdx = confirmTriggerWeek.idx - 1;
+              if (!next[priorIdx]) {
+                const prior = allWeeks.find(w => w.idx === priorIdx);
+                if (prior?.active) {
+                  next[priorIdx] = {
+                    confirmedAt, autoConfirmed: true, eventId: null,
+                    dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, prior.workedDayNames?.includes(d) ? true : null])),
+                    scheduledDays: prior.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
+                  };
                 }
               }
-              // Monthly: auto-confirm all other weeks in the same month as clean
-              if (config.userPaySchedule === "monthly") {
-                const m = confirmTriggerWeek.weekEnd.getMonth(), y = confirmTriggerWeek.weekEnd.getFullYear();
-                for (const w of allWeeks) {
-                  if (w.active && w.idx !== confirmTriggerWeek.idx && w.weekEnd.getMonth() === m && w.weekEnd.getFullYear() === y && !next[w.idx]) {
-                    next[w.idx] = {
-                      confirmedAt, autoConfirmed: true, eventId: null,
-                      dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, w.workedDayNames?.includes(d) ? true : null])),
-                      scheduledDays: w.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
-                    };
-                  }
+            }
+            // Monthly: auto-confirm all other weeks in the same month as clean
+            if (config.userPaySchedule === "monthly") {
+              const m = confirmTriggerWeek.weekEnd.getMonth(), y = confirmTriggerWeek.weekEnd.getFullYear();
+              for (const w of allWeeks) {
+                if (w.active && w.idx !== confirmTriggerWeek.idx && w.weekEnd.getMonth() === m && w.weekEnd.getFullYear() === y && !next[w.idx]) {
+                  next[w.idx] = {
+                    confirmedAt, autoConfirmed: true, eventId: null,
+                    dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, w.workedDayNames?.includes(d) ? true : null])),
+                    scheduledDays: w.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
+                  };
                 }
               }
-              return next;
-            });
-            if (logEntry) setLogs(p => [...p, logEntry]);
-            if (firstWeek?.logEntry) setLogs(p => [...p, firstWeek.logEntry]);
+            }
+            const newLogs = [
+              ...logs,
+              ...(logEntry ? [logEntry] : []),
+              ...(firstWeek?.logEntry ? [firstWeek.logEntry] : []),
+            ];
+            setWeekConfirmations(next);
+            setLogs(newLogs);
+            // Eager save — a completed weekly check-in is exactly the kind of
+            // work that shouldn't sit in the 800ms debounce window; a
+            // backgrounded/reclaimed mobile tab before it fires meant the
+            // confirmation was silently lost and the modal popped right back up.
+            savePersistedStateNow({ weekConfirmations: next, logs: newLogs });
           }}
           onDismiss={() => setConfirmDismissed(true)}
         />

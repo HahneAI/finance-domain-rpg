@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
-import { iS, lS, Card, Pressable, PanelHero, SH } from "./ui.jsx";
+import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan } from "../lib/entitlements.js";
 import { getEntitlement } from "../lib/subscription.js";
@@ -104,6 +104,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
   const [globalSignoutState, setGlobalSignoutState] = useState({ error: null, success: null, loading: false });
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const deleteFold = useFoldTransition(showDeleteDialog, { ms: 340 });
   const [deleteText, setDeleteText] = useState("");
   const [deleteState, setDeleteState] = useState({ error: null, loading: false });
 
@@ -543,9 +544,9 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
       {/* Portaled to document.body so position:fixed resolves against the viewport,
           not the scrolling .main-content ancestor — iOS Safari hit-tests a fixed
           element nested in an overflow:auto container at a scrollTop offset. */}
-      {showDeleteDialog && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
-          <div style={{ width: "100%", maxWidth: "430px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
+      {deleteFold.mounted && createPortal(
+        <div className="fold-backdrop" data-fold={deleteFold.fold} style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
+          <div className="fold-modal" data-fold={deleteFold.fold} style={{ width: "100%", maxWidth: "430px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.4)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
             <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-deduction)" }}>Delete Account</div>
             <div style={{ fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.55" }}>
               This action is irreversible. Your account, profile, and stored dashboard data will be permanently deleted.
@@ -1891,6 +1892,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   const canSeeTaxPlan = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled, isTester });
   const [activeSection, setActiveSection] = useState(null);
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
+  const signOutFold = useFoldTransition(showLocalSignOutConfirm, { ms: 340 });
   const [localSignOutState, setLocalSignOutState] = useState({ loading: false, error: null });
 
   const isEmployerDHL     = config.employerPreset === "DHL";
@@ -2019,9 +2021,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
 
       {/* Portaled to document.body so position:fixed resolves against the viewport,
           not the scrolling .main-content ancestor (iOS Safari scrollTop hit-test bug). */}
-      {showLocalSignOutConfirm && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
-          <div style={{ width: "100%", maxWidth: "420px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+      {signOutFold.mounted && createPortal(
+        <div className="fold-backdrop" data-fold={signOutFold.fold} style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
+          <div className="fold-modal" data-fold={signOutFold.fold} style={{ width: "100%", maxWidth: "420px", background: "var(--color-bg-surface)", border: "1px solid rgba(224,92,92,0.35)", borderRadius: "16px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ fontSize: "16px", fontFamily: "var(--font-display)", color: "var(--color-text-primary)" }}>Sign Out</div>
             <div style={{ fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.55" }}>
               Sign out from this device now?

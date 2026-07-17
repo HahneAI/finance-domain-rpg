@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Pressable } from "./ui.jsx";
+import { Pressable, useFoldTransition } from "./ui.jsx";
 
 /**
  * LifeEventMenu — modal launcher for the Life Events flow (TODO §15.A).
@@ -22,7 +22,8 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
+  const fold = useFoldTransition(open, { ms: 340 });
+  if (!fold.mounted) return null;
 
   const tiles = [
     {
@@ -65,6 +66,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
 
   return (
     <div
+      className="fold-backdrop" data-fold={fold.fold}
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 70,
@@ -74,6 +76,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
       }}
     >
       <div
+        className="fold-modal" data-fold={fold.fold}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--color-bg-surface)",
@@ -81,7 +84,6 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
           borderRadius: "14px",
           width: "100%", maxWidth: "440px",
           maxHeight: "90vh", display: "flex", flexDirection: "column",
-          animation: "weekCardIn 220ms ease-out",
           overflow: "hidden",
         }}
       >

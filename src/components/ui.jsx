@@ -274,25 +274,34 @@ export function useFoldTransition(open, { ms = 280 } = {}) {
 }
 
 // FoldSwitch — cross-fade page moves. Keeps the outgoing view mounted (absolutely
-// positioned, inert) through its exit while the incoming view lifts in. Keyed on
-// `activeKey`; when it changes, the old children exit and the new children enter.
-export function FoldSwitch({ activeKey, children, ms = 300, className = "fold-lift" }) {
+// positioned, inert) through its faster exit while the incoming view lifts in.
+// Keyed on `activeKey`; when it changes, old children exit and new children enter.
+// Once the enter finishes it flips the live view to data-fold="entered" so NO
+// transform / will-change lingers — a settled panel must not hold a stacking
+// context or containing block (that traps the fixed bottom nav + portaled modals).
+export function FoldSwitch({ activeKey, children, enterMs = 340, exitMs = 180, className = "fold-lift" }) {
   const [cur, setCur] = useState({ key: activeKey, node: children });
+  const [curFold, setCurFold] = useState("entered"); // first mount is already settled — no entrance
   const [prev, setPrev] = useState(null);
-  const timer = useRef(null);
+  const enterTimer = useRef(null);
+  const exitTimer = useRef(null);
 
   useEffect(() => {
     if (activeKey !== cur.key) {
       setPrev(cur);
       setCur({ key: activeKey, node: children });
-      clearTimeout(timer.current);
-      timer.current = setTimeout(() => setPrev(null), ms);
+      setCurFold("entering");
+      clearTimeout(enterTimer.current);
+      enterTimer.current = setTimeout(() => setCurFold("entered"), enterMs);
+      clearTimeout(exitTimer.current);
+      exitTimer.current = setTimeout(() => setPrev(null), exitMs);
     } else if (children !== cur.node) {
       setCur({ key: activeKey, node: children }); // same view, refreshed props — no replay
     }
-    return () => clearTimeout(timer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeKey, children]);
+
+  useEffect(() => () => { clearTimeout(enterTimer.current); clearTimeout(exitTimer.current); }, []);
 
   return (
     <div style={{ position: "relative" }}>
@@ -302,7 +311,49 @@ export function FoldSwitch({ activeKey, children, ms = 300, className = "fold-li
           {prev.node}
         </div>
       )}
-      <div key={cur.key} className={className} data-fold="entering">
+      <div key={cur.key} className={className} data-fold={curFold}>
+        {cur.node}
+      </div>
+    </div>
+  );
+}
+
+// StepSlide — direction-aware horizontal push/pop for wizard-style step navigation.
+// Keyed on `stepKey`; `direction` (1 = forward/Next, -1 = back) sets the slide way.
+// Keeps the outgoing step mounted (absolute, inert) through its exit like FoldSwitch,
+// so Next slides the new step in from the right while the old exits left (and reverse
+// on Back). Companion CSS: step-in-right/left, step-out-left/right (index.css).
+export function StepSlide({ stepKey, direction = 1, children, ms = 300 }) {
+  const [cur, setCur] = useState({ key: stepKey, node: children });
+  const [prev, setPrev] = useState(null);
+  const [dir, setDir] = useState(1);
+  const timer = useRef(null);
+
+  useEffect(() => {
+    if (stepKey !== cur.key) {
+      setDir(direction);
+      setPrev(cur);
+      setCur({ key: stepKey, node: children });
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setPrev(null), ms);
+    } else if (children !== cur.node) {
+      setCur({ key: stepKey, node: children });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepKey, children]);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const forward = dir >= 0;
+  return (
+    <div style={{ position: "relative", overflow: "hidden" }}>
+      {prev && (
+        <div key={prev.key} className={forward ? "step-out-left" : "step-out-right"} aria-hidden="true"
+             style={{ position: "absolute", top: 0, left: 0, right: 0, pointerEvents: "none" }}>
+          {prev.node}
+        </div>
+      )}
+      <div key={cur.key} className={forward ? "step-in-right" : "step-in-left"}>
         {cur.node}
       </div>
     </div>

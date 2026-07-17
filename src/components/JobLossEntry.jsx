@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pressable } from "./ui.jsx";
+import { Pressable, useFoldTransition } from "./ui.jsx";
 
 /**
  * JobLossEntry — modal launched from the LifeEventMenu "Lost My Job" tile.
@@ -37,7 +37,8 @@ export function JobLossEntry({ open, onClose, onActivate }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose, today]);
 
-  if (!open) return null;
+  const fold = useFoldTransition(open, { ms: 340 });
+  if (!fold.mounted) return null;
 
   const hasUnemployment = unemploymentAnswered === true;
   const weeklyVal   = weeklyDraft   === "" ? null : Math.max(0, parseFloat(weeklyDraft)  || 0);
@@ -73,6 +74,7 @@ export function JobLossEntry({ open, onClose, onActivate }) {
 
   return (
     <div
+      className="fold-backdrop" data-fold={fold.fold}
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 80,
@@ -82,6 +84,7 @@ export function JobLossEntry({ open, onClose, onActivate }) {
       }}
     >
       <div
+        className="fold-modal" data-fold={fold.fold}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--color-bg-surface)",
@@ -89,7 +92,6 @@ export function JobLossEntry({ open, onClose, onActivate }) {
           borderRadius: "14px",
           width: "100%", maxWidth: "440px",
           maxHeight: "90vh", display: "flex", flexDirection: "column",
-          animation: "weekCardIn 220ms ease-out",
           overflow: "hidden",
         }}
       >

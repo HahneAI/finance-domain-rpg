@@ -1,6 +1,25 @@
-import { netWorthHealthStatus } from "./finance.js";
+import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex } from "./finance.js";
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR } from "./fiscalWeek.js";
 import { EVENT_TYPES } from "../constants/config.js";
+import { EXPENSE_CYCLE_OPTIONS } from "./expense.js";
+
+// Per-expense weekly cost, resolved the same way computeRemainingSpend()
+// resolves it for the real "Weekly spend" aggregate — monthlyOverrides first,
+// else the phase-indexed history[].weekly entry. billingMeta.amount is only
+// the value entered on the add-expense form; it's never the authoritative
+// current figure, so it must NOT be used here (it previously was, and
+// disagreed with the real number by double digits on a live test).
+function resolveWeeklyCost(expense, monthKey, phaseIdx) {
+  if (monthKey != null && phaseIdx != null) {
+    return getEffectiveAmountForMonth(expense, monthKey, phaseIdx);
+  }
+  // No date context to resolve history/overrides against (defensive only —
+  // the app always passes `today`) — fall back to a rough billingMeta estimate.
+  const amount = expense.billingMeta?.amount ?? 0;
+  const cycle = expense.billingMeta?.cycle;
+  const days = EXPENSE_CYCLE_OPTIONS.find((o) => o.value === cycle)?.days ?? 30;
+  return days > 0 ? (amount / days) * 7 : 0;
+}
 
 const fmt$ = (n) => (Number.isFinite(n) ? `$${Math.round(n).toLocaleString("en-US")}` : "—");
 
@@ -39,12 +58,21 @@ export function buildCoachContext({
     `Weekly spend: ${fmt$(avgWeeklySpend)}`,
     `Weekly surplus: ${fmt$(avgWeeklySurplus)}`,
     `Savings rate: ${netWorthHealth.rate != null ? `${Math.round(netWorthHealth.rate * 100)}%` : "—"}${netWorthHealth.belowThreshold ? " (below 10% target)" : ""}`,
-    `Goals: ${completedGoals.length}/${goals.length} completed, ${fmt$(fundedGoalSpend)} funded`,
+    `Goals: ${goals.length} goal${goals.length === 1 ? "" : "s"} set (${completedGoals.length} completed), ${fmt$(fundedGoalSpend)} funded so far`,
     `Expenses: ${activeExpenses.length} active line${activeExpenses.length === 1 ? "" : "s"}, ${fmt$(avgWeeklySpend)}/week`,
     `Log entries: ${logs.length} logged${mostRecentLog ? `, most recent: ${EVENT_TYPES[mostRecentLog.type]?.label ?? mostRecentLog.type} (week ending ${mostRecentLog.weekEnd ?? "—"})` : ""}`,
     `Fiscal week: ${weekNumber ?? "—"} of ${FISCAL_WEEKS_PER_YEAR}${weeksLeft != null ? ` (${weeksLeft} left)` : ""}`,
     `Today: ${today ?? "—"}`,
   ];
+
+  if (activeExpenses.length) {
+    const monthKey = today ? today.slice(0, 7) : null;
+    const phaseIdx = today ? getPhaseIndex(new Date(`${today}T12:00:00`)) : null;
+    const items = activeExpenses
+      .map((exp) => `${exp.label ?? "Unnamed"} (${exp.category ?? (exp.type === "loan" ? "Loan" : "Needs")}): ~${fmt$(resolveWeeklyCost(exp, monthKey, phaseIdx))}/wk`)
+      .join("; ");
+    lines.push(`Expense breakdown: ${items}`);
+  }
 
   if (config?.jobLossMode) {
     lines.push(`Job Loss Mode: active${runwayDays != null ? `, ~${runwayDays} days of runway` : ""}`);

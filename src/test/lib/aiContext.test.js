@@ -19,11 +19,81 @@ describe("buildCoachContext", () => {
     expect(block).toContain("Weekly net income: $1,000");
     expect(block).toContain("Weekly spend: $400");
     expect(block).toContain("Weekly surplus: $600");
-    expect(block).toContain("Goals: 2 goals set (1 completed), $500 funded so far");
+    expect(block).toContain("Left this week (Home tile): $600");
+    expect(block).toContain("Net worth trend (Home tile — projected annual savings): $30,700");
+    expect(block).toContain("Budget Health (Home tile): 40% spend ratio (well-managed)");
+    expect(block).toContain("Goals: 2 goals set (1 completed), $500 funded so far, $1,500 total target");
+    expect(block).toContain("Active goals total (Home tile — unfunded target sum): $1,000");
     expect(block).toContain("Expenses: 1 active line, $400/week");
     expect(block).toContain("Expense breakdown: Food (Needs): ~$400/wk");
     expect(block).toContain("Fiscal week: 28 of 52 (24 left)");
     expect(block).toContain("Today: 2026-07-07");
+  });
+
+  it("uses prevWeekNet for Left This Week when a confirmed week exists, not just weeklyIncome", () => {
+    const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 400, prevWeekNet: 850 });
+    expect(block).toContain("Left this week (Home tile): $450");
+  });
+
+  // Regression: a live test showed Coach unable to speak to the goal-focused
+  // tile row (Active Goals Total, Weeks to Complete All, per-goal projected
+  // rate/finish week) at all — none of it was in context. Goal LABELS are
+  // deliberately withheld for privacy; only funding-priority rank is given.
+  it("gives a real per-goal projected rate and finish week from computeGoalTimeline, never the goal's label", () => {
+    const futureWeeks = Array.from({ length: 10 }, (_, i) => ({ idx: i, weekEnd: new Date(2026, 0, (i + 1) * 7) }));
+    const timelineWeekNets = Array(10).fill(700);
+    const block = buildCoachContext({
+      weeklyIncome: 700,
+      avgWeeklySpend: 0,
+      currentWeek: { idx: 0 },
+      goals: [{ id: "g1", label: "Car", target: 2800, completed: false }],
+      futureWeeks,
+      timelineWeekNets,
+    });
+    expect(block).toContain("Active goals total (Home tile — unfunded target sum): $2,800");
+    expect(block).toContain("Weeks to complete all active goals (Home tile): ~4 weeks");
+    expect(block).toContain("Goal breakdown (ranked by funding priority — goal names withheld for privacy): Goal 1 of 1: $2,800 target, ~$700/wk projected, ~4.0 wks to fund, on track for fiscal week 5");
+    expect(block).not.toContain("Car");
+  });
+
+  it("reports a goal as not on track rather than a bogus finish week when it can't fund within the fiscal year", () => {
+    const futureWeeks = Array.from({ length: 2 }, (_, i) => ({ idx: i, weekEnd: new Date(2026, 0, (i + 1) * 7) }));
+    const timelineWeekNets = Array(2).fill(10);
+    const block = buildCoachContext({
+      weeklyIncome: 10,
+      avgWeeklySpend: 0,
+      currentWeek: { idx: 0 },
+      goals: [{ id: "g1", label: "Dream Vacation", target: 10000, completed: false }],
+      futureWeeks,
+      timelineWeekNets,
+    });
+    expect(block).toContain("Goal 1 of 1: $10,000 target, not on track to finish within this fiscal year at the current pace");
+    expect(block).not.toContain("Dream Vacation");
+  });
+
+  it("omits the active-goals/weeks-to-complete/goal-breakdown lines entirely when every goal is completed", () => {
+    const block = buildCoachContext({
+      weeklyIncome: 800,
+      avgWeeklySpend: 300,
+      goals: [{ id: "g1", target: 500, completed: true }],
+    });
+    expect(block).not.toContain("Active goals total");
+    expect(block).not.toContain("Weeks to complete all active goals");
+    expect(block).not.toContain("Goal breakdown");
+  });
+
+  // Regression: a live test showed Coach flatly denying it had any "budget
+  // health score" data, even though it's a real, prominent Home tile — the
+  // context block simply never carried it. These three cases match
+  // HomePanel.jsx's exact spendRatio thresholds/labels so the two can never
+  // disagree.
+  it.each([
+    [0.3, "30% spend ratio (well-managed)"],
+    [0.6, "60% spend ratio (healthy range)"],
+    [0.9, "90% spend ratio (watch spend)"],
+  ])("labels Budget Health at spend ratio %s as %s", (ratio, expected) => {
+    const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 1000 * ratio });
+    expect(block).toContain(`Budget Health (Home tile): ${expected}`);
   });
 
   it("disambiguates the goals line so 0 completed never reads as 0 goals set", () => {

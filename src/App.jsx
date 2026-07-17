@@ -3206,6 +3206,12 @@ export default function App() {
           currentWeek={currentWeek}
           today={effectiveToday}
           logs={logs}
+          futureWeeks={futureWeeks}
+          timelineWeekNets={futureWeekNetsRaw}
+          logNetLost={logTotals.netLost}
+          logNetGained={logTotals.netGained}
+          futureEventDeductions={futureEventDeductions}
+          prevWeekNet={prevWeekNet}
         />
       )}
 

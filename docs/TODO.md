@@ -924,6 +924,29 @@ financial advisor — Coach answers questions about the app using the user's rea
   covering. **Deliberate non-RAG choice:** static and hand-maintained rather than a vector/retrieval
   pipeline — the app's feature surface is small enough to hand Coach in full, and a retrieval step
   would vary the prefix per-query and break the cache the persona block already depends on.
+  **2026-07-16 follow-up:** a live test asked about the Home panel's "Budget Health" tile by name
+  and Coach flatly said it had no such data — the guide never named Home's three actual tile
+  titles, and `buildCoachContext()` didn't carry the Budget Health % or Net Worth Trend $ figures
+  at all (only the derived "Savings rate"). Fixed: the guide now names all three tiles ("Next Week
+  Takehome", "Net Worth Trend", "Budget Health") explicitly, and the context block adds live
+  Budget Health / Net Worth Trend lines computed with the exact same formula/thresholds as
+  `HomePanel.jsx`. **Still not wired:** "Next Week Takehome" has no live figure in Coach's context —
+  it needs `futureWeeks`/`futureWeekNets`/`getNextPayWeek` plumbed through from `App.jsx`, which
+  none of `AskCoachPanel`'s current props carry. Coach can explain the concept from the guide but
+  can't cite the live number yet; wire this in if it comes up again in testing.
+  **2026-07-16, second follow-up:** wired in the goal-focused tile row too — "Left This Week",
+  "Active Goals Total", "Weeks to Complete All", and a per-goal breakdown (target, projected
+  weekly rate, estimated finish fiscal week) computed via the same `computeGoalTimeline()` call
+  `HomePanel.jsx` makes, with the same `config.goalTimelineEpochIdx` epoch. **Per explicit
+  instruction, goal names/labels are deliberately withheld from context for user privacy** — goals
+  are identified only by funding-priority rank ("Goal 1 of N"); the guide tells Coach it can use a
+  name back if the *user* volunteers it in their own message, but never learns it from data.
+- [ ] **Benefits / 401k context — deferred, not built.** Per explicit instruction: hold off wiring
+  `BenefitsPanel` (401k contribution/match, PTO accrual/usage) into Coach's context until we've
+  looked closer at how a **base (non-DHL) user** onboards other forms of employer compensation —
+  signing bonuses, non-DHL 401k match structures/vesting, other benefit shapes DHL's preset doesn't
+  cover. Wiring benefits context in now would bake in DHL-shaped assumptions before that product
+  question is settled; revisit once the base-user benefits onboarding story is clearer.
 - [ ] **Guardrail** — Coach does not give tax advice, legal advice, or investment recommendations;
   acknowledges the disclaimer when those topics come up
 - [ ] **Claude API integration** — Haiku for short conversational answers; Sonnet for richer

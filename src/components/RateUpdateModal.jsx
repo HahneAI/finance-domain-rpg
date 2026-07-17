@@ -1,0 +1,189 @@
+import { useEffect, useState } from "react";
+import { Pressable } from "./ui.jsx";
+import { estimateWeeklyNet } from "../lib/finance.js";
+
+/**
+ * RateUpdateModal — modal launched from the LifeEventMenu "Quick Rate Update" tile
+ * (TODO §15.D). For a raise/rate change with no structural change — no wizard, just
+ * a new `baseRate` + an effective date shown against a before/after net preview.
+ *
+ * `onActivate({ baseRate, effectiveFrom })` — App.jsx applies `baseRate` to config
+ * and tags the account_history snapshot (TODO §19) with `effectiveFrom` as the
+ * change's `source: "life_event:rate_update"` date, the same pattern JobLossEntry
+ * uses for `jobLossDate`.
+ */
+export function RateUpdateModal({ open, onClose, config, onActivate }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [rateDraft, setRateDraft] = useState("");
+  const [date, setDate] = useState(today);
+
+  useEffect(() => {
+    if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRateDraft(config?.baseRate != null ? String(config.baseRate) : "");
+    setDate(today);
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose, today, config?.baseRate]);
+
+  if (!open) return null;
+
+  const oldRate = config?.baseRate ?? 0;
+  const newRate = rateDraft === "" ? null : Math.max(0, parseFloat(rateDraft) || 0);
+  const canActivate = !!date && newRate != null && newRate > 0;
+
+  const oldNet = estimateWeeklyNet(config ?? {}).net;
+  const newNet = canActivate ? estimateWeeklyNet({ ...config, baseRate: newRate }).net : oldNet;
+  const netDelta = newNet - oldNet;
+
+  const confirm = () => {
+    if (!canActivate) return;
+    onActivate({ baseRate: newRate, effectiveFrom: date });
+    onClose();
+  };
+
+  const labelStyle = { fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", display: "block", marginBottom: "6px" };
+  const inputStyle = {
+    width: "100%",
+    background: "var(--color-bg-base)",
+    border: "1px solid var(--color-border-subtle)",
+    borderRadius: "10px",
+    color: "var(--color-text-primary)",
+    fontSize: "16px",
+    fontFamily: "var(--font-mono)",
+    padding: "10px 12px",
+    colorScheme: "dark",
+  };
+  const fmt = n => `$${Math.abs(n).toFixed(2)}`;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 80,
+        background: "rgba(0,0,0,0.78)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "16px",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border-subtle)",
+          borderRadius: "14px",
+          width: "100%", maxWidth: "440px",
+          maxHeight: "90vh", display: "flex", flexDirection: "column",
+          animation: "weekCardIn 220ms ease-out",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)" }}>
+          <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "5px" }}>
+            Life Event
+          </div>
+          <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
+            Quick Rate Update
+          </div>
+        </div>
+
+        <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: "18px", overflowY: "auto" }}>
+          <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
+            For a raise or rate change with everything else the same — schedule, employer, and
+            benefits are untouched. Use Pay Structure Changed instead for anything bigger.
+          </p>
+
+          <div>
+            <label style={labelStyle}>New hourly rate</label>
+            <input
+              type="number" min="0" step="0.01" inputMode="decimal"
+              value={rateDraft}
+              onChange={(e) => setRateDraft(e.target.value)}
+              placeholder="e.g. 24.50"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Effective date</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+
+          <div style={{
+            background: "var(--color-bg-raised)",
+            border: "1px solid var(--color-border-subtle)",
+            borderRadius: "12px",
+            padding: "14px",
+            display: "flex", flexDirection: "column", gap: "8px",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--color-text-primary)" }}>
+              <span>Base rate</span>
+              <span style={{ fontFamily: "var(--font-mono)" }}>
+                ${oldRate.toFixed(2)}/hr {canActivate && <span style={{ color: "var(--color-text-secondary)" }}>→</span>} {canActivate && <strong style={{ color: "var(--color-gold)" }}>${newRate.toFixed(2)}/hr</strong>}
+              </span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "8px", marginTop: "2px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>Est. weekly net change</span>
+              <span style={{
+                fontFamily: "var(--font-mono)", fontSize: "16px", fontWeight: 700,
+                color: netDelta >= 0 ? "var(--color-green)" : "var(--color-deduction)",
+              }}>
+                {canActivate ? `${netDelta >= 0 ? "+" : "−"}${fmt(netDelta)}` : "—"}
+              </span>
+            </div>
+          </div>
+
+          <div style={{
+            background: "rgba(245,158,11,0.08)",
+            border: "1px solid rgba(245,158,11,0.28)",
+            borderRadius: "10px",
+            padding: "10px 12px",
+            fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: 1.5,
+          }}>
+            Goals, expenses, and logs are untouched — only forward-looking projections use the new rate.
+          </div>
+        </div>
+
+        <div style={{
+          padding: "14px 20px",
+          borderTop: "1px solid var(--color-border-subtle)",
+          display: "flex", gap: "10px", justifyContent: "flex-end",
+        }}>
+          <Pressable
+            onClick={onClose}
+            style={{
+              background: "var(--color-bg-raised)",
+              color: "var(--color-text-secondary)",
+              border: "1px solid var(--color-border-subtle)",
+              borderRadius: "12px", padding: "7px 14px",
+              fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </Pressable>
+          <Pressable
+            onClick={confirm}
+            disabled={!canActivate}
+            style={{
+              background: canActivate ? "var(--color-gold)" : "var(--color-bg-raised)",
+              color: canActivate ? "var(--color-bg-base)" : "var(--color-text-disabled)",
+              border: "none", borderRadius: "12px", padding: "8px 16px",
+              fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",
+              fontWeight: "bold",
+              cursor: canActivate ? "pointer" : "not-allowed",
+            }}
+          >
+            Confirm
+          </Pressable>
+        </div>
+      </div>
+    </div>
+  );
+}

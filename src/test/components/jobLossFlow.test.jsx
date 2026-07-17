@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { JobLossEntry } from '../../components/JobLossEntry.jsx'
 import { LifeEventMenu } from '../../components/LifeEventMenu.jsx'
+import { RateUpdateModal } from '../../components/RateUpdateModal.jsx'
 import { JobLossDashboard } from '../../components/JobLossDashboard.jsx'
 import { ReemploymentTracker } from '../../components/ReemploymentTracker.jsx'
 import { ExpenseTriage } from '../../components/ExpenseTriage.jsx'
@@ -47,6 +48,15 @@ describe('LifeEventMenu', () => {
     render(<LifeEventMenu open onClose={() => {}} onSelect={onSelect} />)
     fireEvent.click(screen.getByText('Pay Structure Changed'))
     expect(onSelect).toHaveBeenCalledWith('structure_change')
+  })
+
+  it('routes "Quick Rate Update" to the rate_update modal (TODO §15.D, no longer Coming Soon)', () => {
+    const onSelect = vi.fn()
+    const onClose = vi.fn()
+    render(<LifeEventMenu open onClose={onClose} onSelect={onSelect} />)
+    fireEvent.click(screen.getByText('Quick Rate Update'))
+    expect(onSelect).toHaveBeenCalledWith('rate_update')
+    expect(onClose).toHaveBeenCalled()
   })
 
   it('closes on Escape', () => {
@@ -116,6 +126,60 @@ describe('JobLossEntry', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onClose).toHaveBeenCalled()
     expect(onActivate).not.toHaveBeenCalled()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// RateUpdateModal (TODO §15.D)
+// ─────────────────────────────────────────────────────────────
+
+describe('RateUpdateModal', () => {
+  const RATE_CONFIG = { ...DEFAULT_CONFIG, baseRate: 20, maxWeeklyHours: 40 }
+
+  it('renders nothing when closed', () => {
+    const { container } = render(<RateUpdateModal open={false} onClose={() => {}} config={RATE_CONFIG} onActivate={() => {}} />)
+    expect(container.firstChild).toBeNull()
+  })
+
+  it('prefills the new-rate input from the current baseRate', () => {
+    render(<RateUpdateModal open config={RATE_CONFIG} onClose={() => {}} onActivate={() => {}} />)
+    expect(screen.getByPlaceholderText('e.g. 24.50')).toHaveValue(20)
+  })
+
+  it('disables Confirm until a positive rate is entered', () => {
+    const onActivate = vi.fn()
+    render(<RateUpdateModal open config={RATE_CONFIG} onClose={() => {}} onActivate={onActivate} />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. 24.50'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    expect(onActivate).not.toHaveBeenCalled()
+  })
+
+  it('activates with the new baseRate and the chosen effective date', () => {
+    const onActivate = vi.fn()
+    const onClose = vi.fn()
+    render(<RateUpdateModal open config={RATE_CONFIG} onClose={onClose} onActivate={onActivate} />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. 24.50'), { target: { value: '24.50' } })
+    const dateInput = document.querySelector('input[type="date"]')
+    fireEvent.change(dateInput, { target: { value: '2026-07-20' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    expect(onActivate).toHaveBeenCalledWith({ baseRate: 24.5, effectiveFrom: '2026-07-20' })
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('cancels without activating', () => {
+    const onActivate = vi.fn()
+    const onClose = vi.fn()
+    render(<RateUpdateModal open config={RATE_CONFIG} onClose={onClose} onActivate={onActivate} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onClose).toHaveBeenCalled()
+    expect(onActivate).not.toHaveBeenCalled()
+  })
+
+  it('closes on Escape', () => {
+    const onClose = vi.fn()
+    render(<RateUpdateModal open config={RATE_CONFIG} onClose={onClose} onActivate={() => {}} />)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalled()
   })
 })
 

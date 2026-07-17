@@ -129,6 +129,72 @@ function parseIsoDate(value) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+// Estimate a typical weekly gross from a config-shaped object — does not
+// require a built week object. Used by SetupWizard's live net preview (before
+// buildYear() has anything to read) and the Quick Rate Update modal's
+// before/after diff (TODO §15.D).
+export function estimateWeeklyGross(d) {
+  const isEmployerDHL = d.employerPreset === "DHL";
+  if (isEmployerDHL) {
+    const gross = (h) => {
+      const base = d.baseRate || 0;
+      const reg = Math.min(h, d.otThreshold || 40);
+      const ot = Math.max(h - (d.otThreshold || 40), 0);
+      return reg * base + ot * base * (d.otMultiplier || 1.5);
+    };
+    const longCustom = d.customWeeklyHoursLong;
+    const shortCustom = d.customWeeklyHoursShort;
+    if (longCustom != null || shortCustom != null) {
+      const fallback = d.customWeeklyHours ?? 60;
+      const longHours = longCustom ?? fallback;
+      const shortHours = shortCustom ?? fallback;
+      return (gross(shortHours) + gross(longHours)) / 2;
+    }
+    if (d.customWeeklyHours != null) {
+      // Flat custom hours — same projected total every week
+      return gross(d.customWeeklyHours);
+    }
+    // Standard DHL rotation: weighted average of long (5-shift) and short (4-shift) weeks
+    const hoursPerShift = d.shiftHours || 12;
+    return (gross(4 * hoursPerShift) + gross(5 * hoursPerShift)) / 2;
+  }
+  // Base user: flat ceiling. customWeeklyHours overrides maxWeeklyHours; standardWeeklyHours is legacy fallback.
+  const h = d.customWeeklyHours ?? d.maxWeeklyHours ?? d.standardWeeklyHours ?? 40;
+  const base = d.baseRate || 0;
+  const nightDiff = d.nightDiffEnabled === true ? (d.nightDiffRate ?? 0) : 0;
+  const effectiveOtThreshold = d.otThreshold ?? h;
+  const reg = Math.min(h, effectiveOtThreshold);
+  const ot = Math.max(h - effectiveOtThreshold, 0);
+  return reg * (base + nightDiff) + ot * (base + nightDiff) * (d.otMultiplier || 1.5);
+}
+
+// Estimate a typical weekly net (+ the deduction breakdown) from a config-shaped
+// object. Shared by SetupWizard's StepWrapUp live preview and the Quick Rate
+// Update modal's before/after diff (TODO §15.D) — keep both callers reading
+// the same formula rather than letting two independent "estimated net"
+// implementations drift.
+export function estimateWeeklyNet(cfg) {
+  const gross = estimateWeeklyGross(cfg);
+  const fica     = gross * (cfg.ficaRate || 0.0765);
+  const k401k    = gross * (cfg.k401Rate || 0);
+  const baseBenefits =
+    (cfg.healthPremium || 0) + (cfg.dentalPremium || 0) +
+    (cfg.visionPremium || 0) + (cfg.stdWeekly || 0) +
+    (cfg.lifePremium || 0)   + (cfg.hsaWeekly || 0) +
+    (cfg.fsaWeekly || 0)     + (cfg.ltd || 0);
+  const benefitsStart = cfg.benefitsStartDate ? new Date(cfg.benefitsStartDate) : null;
+  const benefitsActive = !benefitsStart || Number.isNaN(benefitsStart.getTime()) || benefitsStart <= new Date();
+  const checksPerYear = PAYCHECKS_PER_YEAR[cfg.userPaySchedule ?? "weekly"] ?? 52;
+  const perWeekFactor = checksPerYear / 52; // weekly deduction factor (e.g. 0.5 for biweekly)
+  const benefits = benefitsActive ? baseBenefits * perWeekFactor : 0;
+  const otherPerCheck = (cfg.otherDeductions || []).reduce((s, r) => s + (r.perCheckAmount ?? r.weeklyAmount ?? 0), 0);
+  const other = otherPerCheck * perWeekFactor;
+  const fed   = gross * (cfg.fedRateLow || 0);
+  const state = gross * (cfg.stateRateLow || 0);
+  const net   = gross - fica - k401k - benefits - other - fed - state;
+  return { gross, fica, k401k, benefits, other, fed, state, net };
+}
+
 // ─── DHL 401k tiered employer match ─────────────────────────────────────────
 // DHL matches 100% up to 4%, then 50¢ per $1 from 4%→6%, capped at 5% match.
 //   Contribute 4% → DHL matches 4.0%

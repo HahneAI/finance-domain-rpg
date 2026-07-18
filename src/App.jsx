@@ -30,8 +30,8 @@ import { Pressable, FoldSwitch } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
 import { JobLossEntry } from "./components/JobLossEntry.jsx";
 import { RateUpdateModal } from "./components/RateUpdateModal.jsx";
-import { ExpenseTriage } from "./components/ExpenseTriage.jsx";
-import { JobLossDashboard } from "./components/JobLossDashboard.jsx";
+import { JobLossHomePanel } from "./components/JobLossHomePanel.jsx";
+import { JobLossBudgetPanel } from "./components/JobLossBudgetPanel.jsx";
 import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
@@ -295,7 +295,13 @@ export default function App() {
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
   const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
   const [rateUpdateOpen, setRateUpdateOpen] = useState(false);
-  const [expenseTriageOpen, setExpenseTriageOpen] = useState(false);
+  // TODO §15 mode rebuild — Job Loss Mode's savings input + benefit scenario
+  // toggle now live on JobLossBudgetPanel, but JobLossHomePanel's runway
+  // headline needs the same values — lifted here (session-only, never
+  // persisted, matching the original "not saved to your account" spec) so
+  // both panels agree without either owning the other's state.
+  const [jobLossSavingsDraft, setJobLossSavingsDraft] = useState("");
+  const [jobLossIncludeBenefits, setJobLossIncludeBenefits] = useState(true);
   // Session-only dismissal so the banner re-appears on every page load,
   // matching the §15.C1 spec ("dismissible but re-shows on reload").
   const [jobLossBannerDismissed, setJobLossBannerDismissed] = useState(false);
@@ -1444,34 +1450,45 @@ export default function App() {
 
   const activePanel = (
     <>
-      {currentView === "home" && <HomePanel
-        navigate={navigate}
-        onLocalSignOut={handleLocalSignOut}
-        weeklyIncome={weeklyIncome}
-        adjustedTakeHome={logTotals.adjustedTakeHome}
-        remainingSpend={remainingSpend}
-        goals={goals}
-        setGoals={setGoals}
-        onSaveGoalsNow={(newGoals) => savePersistedStateNow({ goals: newGoals })}
-        setConfig={setConfig}
-        saveConfigNow={saveConfigNow}
-        futureWeeks={futureWeeks}
-        futureWeekNets={futureWeekNets}
-        timelineWeekNets={futureWeekNetsRaw}
-        expenses={expenses}
-        config={config}
-        logNetLost={logTotals.netLost}
-        logNetGained={logTotals.netGained}
-        futureEventDeductions={futureEventDeductions}
-        prevWeekNet={prevWeekNet}
-        currentWeek={currentWeek}
-        fiscalWeekInfo={currentWeekNumber}
-        today={effectiveToday}
-        fundedGoalSpend={fundedGoalSpend}
-        isAdmin={isAdmin}
-        isTester={isTester}
-        readOnly={isExpiredReadOnly}
-      />}
+      {currentView === "home" && (config.jobLossMode ? (
+        <JobLossHomePanel
+          config={config}
+          setConfig={setConfig}
+          expenses={expenses}
+          effectiveToday={effectiveToday}
+          savingsDraft={jobLossSavingsDraft}
+          includeBenefits={jobLossIncludeBenefits}
+        />
+      ) : (
+        <HomePanel
+          navigate={navigate}
+          onLocalSignOut={handleLocalSignOut}
+          weeklyIncome={weeklyIncome}
+          adjustedTakeHome={logTotals.adjustedTakeHome}
+          remainingSpend={remainingSpend}
+          goals={goals}
+          setGoals={setGoals}
+          onSaveGoalsNow={(newGoals) => savePersistedStateNow({ goals: newGoals })}
+          setConfig={setConfig}
+          saveConfigNow={saveConfigNow}
+          futureWeeks={futureWeeks}
+          futureWeekNets={futureWeekNets}
+          timelineWeekNets={futureWeekNetsRaw}
+          expenses={expenses}
+          config={config}
+          logNetLost={logTotals.netLost}
+          logNetGained={logTotals.netGained}
+          futureEventDeductions={futureEventDeductions}
+          prevWeekNet={prevWeekNet}
+          currentWeek={currentWeek}
+          fiscalWeekInfo={currentWeekNumber}
+          today={effectiveToday}
+          fundedGoalSpend={fundedGoalSpend}
+          isAdmin={isAdmin}
+          isTester={isTester}
+          readOnly={isExpiredReadOnly}
+        />
+      ))}
       {currentView === "income" && (isExpiredReadOnly ? <UpgradePanel tab="income" /> : <IncomePanel
         allWeeks={allWeeks} config={config} setConfig={setConfig}
         showExtra={showExtra} setShowExtra={setShowExtra}
@@ -1486,25 +1503,38 @@ export default function App() {
         onWeekInspect={isAdmin ? setInspectedWeek : null}
         saveConfigNow={saveConfigNow}
       />)}
-      {currentView === "budget" && <BudgetPanel
-        expenses={expenses} setExpenses={setExpenses}
-        onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
-        weeklyIncome={weeklyIncome}
-        prevWeekNet={prevWeekNet}
-        futureWeeks={futureWeeks}
-        futureWeekNets={futureWeekNets}
-        currentWeek={currentWeek}
-        fiscalWeekInfo={currentWeekNumber}
-        today={effectiveToday}
-        userPaySchedule={config.userPaySchedule ?? "weekly"}
-        fundedGoalSpend={fundedGoalSpend}
-        config={config}
-        bufferPerWeek={bufferPerWeek}
-        isAdmin={isAdmin}
-        taxProjectionsEnabled={taxProjectionsEnabled}
-        isTester={isTester}
-        readOnly={isExpiredReadOnly}
-      />}
+      {currentView === "budget" && (config.jobLossMode ? (
+        <JobLossBudgetPanel
+          config={config}
+          expenses={expenses}
+          setExpenses={setExpenses}
+          effectiveToday={effectiveToday}
+          savingsDraft={jobLossSavingsDraft}
+          setSavingsDraft={setJobLossSavingsDraft}
+          includeBenefits={jobLossIncludeBenefits}
+          setIncludeBenefits={setJobLossIncludeBenefits}
+        />
+      ) : (
+        <BudgetPanel
+          expenses={expenses} setExpenses={setExpenses}
+          onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
+          weeklyIncome={weeklyIncome}
+          prevWeekNet={prevWeekNet}
+          futureWeeks={futureWeeks}
+          futureWeekNets={futureWeekNets}
+          currentWeek={currentWeek}
+          fiscalWeekInfo={currentWeekNumber}
+          today={effectiveToday}
+          userPaySchedule={config.userPaySchedule ?? "weekly"}
+          fundedGoalSpend={fundedGoalSpend}
+          config={config}
+          bufferPerWeek={bufferPerWeek}
+          isAdmin={isAdmin}
+          taxProjectionsEnabled={taxProjectionsEnabled}
+          isTester={isTester}
+          readOnly={isExpiredReadOnly}
+        />
+      ))}
       {currentView === "log" && (isExpiredReadOnly ? <UpgradePanel tab="log" /> : <LogPanel
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
         onSaveLogsNow={(newLogs) => savePersistedStateNow({ logs: newLogs })}
@@ -2175,8 +2205,11 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {/* TODO §15 mode rebuild — triage now lives inline on Budget
+                    itself (JobLossBudgetPanel), not a separate modal, so this
+                    button just jumps there instead of opening one. */}
                 <Pressable
-                  onClick={() => setExpenseTriageOpen(true)}
+                  onClick={() => navigateDirect("budget")}
                   style={{
                     background: "transparent",
                     color: "var(--color-warning)",
@@ -2187,7 +2220,7 @@ export default function App() {
                     fontWeight: 700, cursor: "pointer",
                   }}
                 >
-                  Triage Expenses
+                  Go to Budget
                 </Pressable>
                 <Pressable
                   onClick={handleBackToWork}
@@ -2223,16 +2256,10 @@ export default function App() {
             </div>
             );
           })()}
-          {/* ── Job Loss Dashboard (TODO §15.C4 + C6) ── */}
-          {config.jobLossMode && (
-            <JobLossDashboard
-              config={config}
-              setConfig={setConfig}
-              expenses={expenses}
-              effectiveToday={effectiveToday}
-              onOpenTriage={() => setExpenseTriageOpen(true)}
-            />
-          )}
+          {/* TODO §15 mode rebuild (2026-07-18) — the standalone pinned dashboard
+              card is gone; its content now lives in JobLossHomePanel/
+              JobLossBudgetPanel, which render in place of the normal Home/Budget
+              panels above instead of being layered on top of them. */}
           {isAdmin && adminDemoView !== null
             ? <DemoAccountTree
                 key={adminDemoView}
@@ -3335,15 +3362,6 @@ export default function App() {
           configHistoryMetaRef.current = { source: "life_event:rate_update", effectiveFrom: patch.effectiveFrom };
           setConfig(prev => ({ ...prev, baseRate: patch.baseRate }));
         }}
-      />
-      {/* ── Expense triage (TODO §15.C3 + C5 needs-coverage sort) ── */}
-      <ExpenseTriage
-        open={expenseTriageOpen}
-        onClose={() => setExpenseTriageOpen(false)}
-        expenses={expenses}
-        setExpenses={setExpenses}
-        config={config}
-        effectiveToday={effectiveToday}
       />
       {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}
       {wizardEntry !== null && (

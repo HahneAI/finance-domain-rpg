@@ -1831,54 +1831,95 @@ for the SIGNED_IN short-circuit in §15.I's parked live-verification bullet; nee
 click-through (start signup → answer Yes → finish → confirm empty expenses + Job Loss Dashboard
 → Back to Work → confirm diff empty-state + `startedUnemployed` cleared) on a deployed preview.
 
-#### H6. Job Loss Mode nav & panel scoping — DONE 2026-07-18 *(found during live testing)*
+#### H6. Job Loss Mode nav & panel scoping — SUPERSEDED by H7 (see below), 2026-07-18
 
 *Live click-through of H1–H5 surfaced two real gaps not in the original spec: (1) Back to Work
 left the account with zero expenses permanently — H3's Food-seed skip has no counterpart restore;
 (2) the full 5-tab nav (Home/Income/Budget/Log/Account) stayed up throughout Job Loss Mode, so
 Income and Log — both built entirely around an active pay structure — sat there showing
-meaningless or stale figures. Scoped and fixed in the same pass since both are direct consequences
-of H3's own design.*
+meaningless or stale figures.*
 
-- [x] **Back to Work restores the mandatory Food expense** — `db.js`'s existing
-  `ensureInitialFoodExpense()` (previously module-private, used only by `loadUserData`'s
-  pre-wizard-migration path) is now exported and called from `handleWizardComplete` whenever
-  `wizardEntry === "structure_change" && mergedConfig.startedUnemployed === true` — the exact
-  mirror of H3's skip condition. No-op if the user already added a Food-labeled expense manually
-  via Triage. **Scope note:** only Food, since it's the only *real* mandatory expense that exists
-  today — §25's planned Rent expense is explicitly brainstorm-gated and not built yet; re-seeding
-  it here would be scope creep ahead of that session.
+*Original fix (shipped, then explicitly rejected by the user the same day): hide the "Financial
+Health" tiles inside the normal `HomePanel` and pin `JobLossDashboard` above it as a standalone
+card, with expense triage in a separate `ExpenseTriage` modal. User feedback: "I believe we are
+coding this in a direction away from my vision... job loss mode is seeming to be a singular
+'pinned to top' component. We need to think of this as an entirely different mode the app enters."
+The nav-reduction bullet (bottom nav/sidebar → Home/Budget/Account) and the Food re-seed fix were
+correct and are unaffected — both carried forward as-is. The Home/Budget-panel approach itself
+was replaced; see H7.*
+
+- [x] **Back to Work restores the mandatory Food expense** — still current; see H7 for the file
+  this now lives next to.
 - [x] **Bottom nav (mobile) + sidebar (desktop) drop to Home/Budget/Account while `jobLossMode`
-  is true** — `effectiveBottomNav`/new `effectiveNavItems` memos in `App.jsx` filter out Income
-  and Log. A new redirect effect bounces `currentView` to `"home"` if the user happens to be on
-  either tab the instant `jobLossMode` flips true (e.g. activating Job Loss Mode while already
-  viewing Income), so nothing strands the user on a tab with no way back to it via nav.
-- [x] **HomePanel** — the "Financial Health" block (Next Week Takehome / Net Worth Trend / Budget
-  Health tiles) is hidden while `jobLossMode` is true. All three assume active income;
-  `JobLossDashboard` (rendered separately, already covers "how am I doing right now" via
-  runway/burn) makes them redundant at best, misleading at worst — Budget Health's spend/take-home
-  ratio against $0 take-home being the sharpest example. Goals section is untouched — goals stay
-  meaningful independent of employment status. Mirrors the precedent already set for
-  `NetWorthHealthTips` (`docs/active-systems.md` §14: "Suppressed entirely in Job Loss Mode").
-- [x] **BudgetPanel — no changes.** Investigated first: Budget has no top-level metric/health
-  tiles of its own (that's a Home-only concept) — it's fundamentally the expense list/editor,
-  which is exactly the tool needed for triage right now. Nothing to trim.
-- [x] **ProfilePanel (Account) tuned** — "Job & Pay" and "Retirement & Benefits" (both show
-  figures — rate, 401k match — that are stale or actively misleading without real income) and
-  "Tax Plan" (nothing to withhold against) are all hidden while `jobLossMode` is true. Replaced
-  with a new "Job Search" group containing a **Back to Work** row — a second entry point into the
-  same `structure_change` flow the Job Loss banner's button already uses. Extracted that flow into
-  one shared `handleBackToWork()` in `App.jsx` (previously inlined only in the banner's `onClick`)
-  so both entry points stay in sync by construction rather than duplicating the reset logic.
-  "Account" and "App Preferences" rows are untouched — settings, not income-dependent metrics.
-- **Verification:** 9 new tests (2 in `HomePanel.test.jsx`, 4 in `ProfilePanel.test.jsx`, plus the
-  Back-to-Work Food-restore path is covered indirectly by existing db.js export surface — no
-  direct test for `handleWizardComplete`'s own conditional, same App.jsx test-harness gap as H3).
-  1090 tests total passing; lint diff-clean; build green. **Not covered:** the nav-collapse
-  `useMemo`s and the redirect-away-from-Income/Log effect both live in `App.jsx` — needs a live
-  click-through (enter Job Loss Mode while on Income → confirm bounce to Home; check the bottom
-  nav only shows 3 tabs; open Account → confirm Back to Work row works) same as everything else
-  in this file.
+  is true** — still current, unchanged by H7.
+- ~~HomePanel tile-hiding~~ / ~~ExpenseTriage modal~~ / ~~pinned JobLossDashboard card~~ — all
+  **removed** in H7 in favor of dedicated mode components.
+
+---
+
+#### H7. Job Loss Mode as a genuinely distinct app mode (Home + Budget rebuild) — DONE 2026-07-18
+
+*Direct response to the course-correction quoted in H6. The ask: Job Loss Mode is not the normal
+Home/Budget panels with things hidden or a card slapped on top — it's a different mode the app
+enters, with its own Home view and its own Budget view (savings/unemployment numbers + inline
+expense triage), plus a small "log extra income" widget on the new Home feeding the runway's
+savings figure. Explicitly framed by the user as phase 1 of an iterative process, not a final
+design.*
+
+- [x] **`lib/jobLossRunway.js` (new)** — pure shared calc extracted from the old
+  `JobLossDashboard`'s internal logic, so Home and Budget can't drift from each other:
+  `firstUnemploymentPaymentDate(cfg)`, `sumJobHuntIncome(cfg)`, and
+  `computeJobLossRunway({ config, expenses, effectiveToday, savings })` →
+  `{ weeklyBurn, essentialCount, benefitsRemainingWeeks, projectedUnemploymentTotal, withBenefits,
+  withoutBenefits }`. Takes `savings` as a plain argument rather than owning input state, since
+  both panels need to read the same number without one owning the other's UI.
+- [x] **`components/JobLossHomePanel.jsx` (new)** — the mode's actual Home view, rendered by
+  `App.jsx` **instead of** `HomePanel` (not layered on top of it) whenever `config.jobLossMode`.
+  Runway/weekly-burn/extra-income metric cards, a "Log Extra Income" widget (amount + note,
+  disabled until a positive amount is entered, recent-entries list with per-entry delete), and the
+  existing `ReemploymentTracker` embedded at the bottom.
+- [x] **`components/JobLossBudgetPanel.jsx` (new)** — the mode's actual Budget view, rendered
+  instead of `BudgetPanel`. Savings input + benefit-scenario toggle (the numbers this mode is
+  actually about), an upcoming-bills countdown, and the full expense triage list — active/paused/
+  cancelled, essential/flexible, needs-coverage flag, auto-reactivate, delete, plus a bulk "Pause
+  all Flexible" — all inline, no modal. Add-expense form is deliberately simpler than normal
+  `BudgetPanel`'s (label/category/flat monthly amount, no quarter-scoping or history editing) —
+  **scope decision:** job-loss expense management is "what do I actually owe every week right now,"
+  not fine-grained budget planning, so a flat weekly-forward amount is the honest fit for this mode
+  rather than a lesser version of the normal flow.
+- [x] **New config field `jobHuntIncomeLog: []`** (`constants/config.js`) — `{ id, amount, note,
+  loggedAt }` entries logged from the Home widget, summed by `sumJobHuntIncome` into the runway's
+  savings side. Chosen over reusing the existing `logs`/event-log mechanism because that mechanism
+  carries payroll-tax semantics (gross/net, 401k, fiscal-week indexing) that don't fit informal gig
+  cash — a dedicated field is more honest than forcing a fit.
+- [x] **Deleted `components/JobLossDashboard.jsx` and `components/ExpenseTriage.jsx`** — logic
+  fully absorbed into the two new panels and the shared runway lib above; confirmed via grep no
+  other file referenced either before removing.
+- [x] **`App.jsx` rewiring** — new imports; `jobLossSavingsDraft`/`jobLossIncludeBenefits` state
+  lifted here (session-only, matches the original "not saved to your account" behavior) so both
+  new panels agree without either owning the other's state; Home/Budget render blocks now branch
+  `config.jobLossMode ? <JobLoss*Panel .../> : <*Panel .../>`; the standalone pinned dashboard
+  render and the `ExpenseTriage` modal render are both gone; the banner's action button is now
+  "Go to Budget" (`navigateDirect("budget")`) since triage lives on the Budget panel itself, not a
+  modal the banner needs to open.
+- [x] **`HomePanel.jsx` tile-hiding conditional reverted** — no longer needed or accurate:
+  `HomePanel` doesn't render at all during Job Loss Mode anymore (App.jsx routes to
+  `JobLossHomePanel` instead), so a dead `!config?.jobLossMode` guard around the Financial Health
+  tiles would misdescribe the actual control flow.
+- **Not changed this round (flagged, not decided):** `ProfilePanel`'s Job Loss handling (H6's
+  "Job Search" group + Back to Work row) stays as a conditional branch inside the normal
+  `ProfilePanel` rather than a fully separate component — the user's correction named Home and
+  Budget specifically, not Account; left as-is pending confirmation this should also split out.
+- **Verification:** `jobLossFlow.test.jsx` rewritten — old `JobLossDashboard`/`ExpenseTriage`
+  describe blocks replaced with `JobLossHomePanel` (6 tests) and `JobLossBudgetPanel` (6 tests)
+  blocks; `HomePanel.test.jsx` trimmed back to its original 2 tests (the tile-hiding tests removed
+  along with the reverted conditional). Full suite: 1091 tests passing (including the
+  `DEFAULT_CONFIG` snapshot updated for `jobHuntIncomeLog`). Lint diff-clean vs. session baseline
+  (one pre-existing "memoization could not be preserved" line simply moved from the deleted
+  `JobLossDashboard.jsx` to `JobLossBudgetPanel.jsx`, same underlying pattern, not a new problem).
+  Production build green. **Not covered by tests:** no live click-through yet on a deployed
+  preview — same category of gap noted throughout this file for `App.jsx`-level wiring that has no
+  component test harness.
 
 ---
 
@@ -1904,10 +1945,12 @@ of H3's own design.*
 ### J. Visual Testing Checklist — foundation phase (§15.A–C5 + H seed)
 
 *Manual smoke pass, originally scoped to run before merging the foundation phase branch — that
-branch already merged and shipped (§A–C). `jobLossFlow.test.jsx` (20 tests across LifeEventMenu,
-JobLossEntry, JobLossDashboard, ReemploymentTracker, ExpenseTriage) + `buildYearJobLoss.test.js`
-give equivalent automated coverage of the flows below. Kept here as an optional manual pass, not a
-blocking item — no reason to re-run this by hand unless something in §A–C regresses.*
+branch already merged and shipped (§A–C). `jobLossFlow.test.jsx` (30 tests across LifeEventMenu,
+JobLossEntry, RateUpdateModal, JobLossHomePanel, JobLossBudgetPanel, ReemploymentTracker — the
+latter two replaced the now-deleted `JobLossDashboard`/`ExpenseTriage` per §H7) +
+`buildYearJobLoss.test.js` give equivalent automated coverage of the flows below. Kept here as an
+optional manual pass, not a blocking item — no reason to re-run this by hand unless something in
+§A–C regresses.*
 
 #### Entry points
 - [ ] Life Events trigger opens modal with three tiles: Pay Structure Changed, Lost My Job,

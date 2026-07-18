@@ -45,6 +45,7 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
   "investorName": null,
   "isInvestor": false,
   "jobApplications": [],
+  "jobHuntIncomeLog": [],
   "jobLossDate": null,
   "jobLossMode": false,
   "k401MatchRate": 0,

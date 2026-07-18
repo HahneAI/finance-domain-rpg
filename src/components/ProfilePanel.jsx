@@ -1580,21 +1580,29 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
   const pastOverrides = config.pastWeekTaxStatusOverrides ?? {};
   const hasPastOverride = (idx) => Object.prototype.hasOwnProperty.call(pastOverrides, idx);
   const getPastStatus = (idx) => hasPastOverride(idx) ? Boolean(pastOverrides[idx]) : config.taxedWeeks.includes(idx);
+  // Computed synchronously (not a setState updater) so the same value can go
+  // to setConfig AND onSaveConfig — same pattern every other card in this
+  // file uses. Each tap here is a complete, discrete action (set this one
+  // week's status, done) that shouldn't sit in the ambient debounce window.
   const setPastStatus = (idx, taxed) => {
-    setConfig(prev => ({
-      ...prev,
+    const newConfig = {
+      ...config,
       pastWeekTaxStatusOverrides: {
-        ...(prev.pastWeekTaxStatusOverrides ?? {}),
+        ...(config.pastWeekTaxStatusOverrides ?? {}),
         [idx]: taxed,
       },
-    }));
+    };
+    setConfig(newConfig);
+    onSaveConfig?.(newConfig);
   };
 
-  const toggleWeek = (idx) => setConfig(prev => {
-    const s = new Set(prev.taxedWeeks);
+  const toggleWeek = (idx) => {
+    const s = new Set(config.taxedWeeks);
     s.has(idx) ? s.delete(idx) : s.add(idx);
-    return { ...prev, taxedWeeks: [...s].sort((a, b) => a - b) };
-  });
+    const newConfig = { ...config, taxedWeeks: [...s].sort((a, b) => a - b) };
+    setConfig(newConfig);
+    onSaveConfig?.(newConfig);
+  };
 
   // A week belongs in the "past" section if it's been confirmed via WeekConfirmModal
   // OR its end date is before today. Using confirmation lets a week slide over the

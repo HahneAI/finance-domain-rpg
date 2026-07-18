@@ -37,8 +37,8 @@ const fmtDate  = iso => {
 const EMPTY_FORM = { label: "", hoursNeeded: "", targetDate: "", negativeBalanceCap: "40" };
 
 export function LogPanel({
-  logs, setLogs, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals,
-  fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isEmployerDHL = false, isAdmin = false, effectiveToday = null, setConfig,
+  logs, setLogs, onSaveLogsNow, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals,
+  fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isEmployerDHL = false, isAdmin = false, effectiveToday = null, setConfig, saveConfigNow,
   logK401kLost = 0, logK401kMatchLost = 0, logK401kGained = 0, logK401kMatchGained = 0, logPTOHoursLost = 0,
   ptoGoal, setPtoGoal, weekConfirmations = {},
 }) {
@@ -272,7 +272,7 @@ export function LogPanel({
   // ── Add handlers ──
   const handleWeekEndChange = (dateStr) => setNEv(v => ({ ...v, weekEnd: dateStr, ...resolveWeek(dateStr), missedDays: [], shiftsLost: 0, weekendShifts: 0, hoursLost: 0 }));
   const addLog = () => {
-    setLogs(p => [...p, {
+    const next = [...logs, {
       ...nEv, id: Date.now(),
       shiftsLost: parseInt(nEv.shiftsLost) || 0,
       weekendShifts: parseInt(nEv.weekendShifts) || 0,
@@ -282,7 +282,9 @@ export function LogPanel({
       shiftsGained: parseInt(nEv.shiftsGained) || 0,
       hoursGained: parseFloat(nEv.hoursGained) || 0,
       extraDay: !!nEv.extraDay,
-    }]);
+    }];
+    setLogs(next);
+    onSaveLogsNow?.(next);
     setAdding(false); setNEv(blank); setAddConfirming(false);
     setPulseKey(k => k + 1);
   };
@@ -295,7 +297,7 @@ export function LogPanel({
   };
   const handleEditWeekEndChange = (dateStr) => setEditVals(v => ({ ...v, weekEnd: dateStr, ...resolveWeek(dateStr), missedDays: [], shiftsLost: 0, weekendShifts: 0, hoursLost: 0 }));
   const saveEdit = () => {
-    setLogs(p => p.map(e => e.id !== editId ? e : {
+    const next = logs.map(e => e.id !== editId ? e : {
       ...editVals, id: editId,
       shiftsLost: parseInt(editVals.shiftsLost) || 0,
       weekendShifts: parseInt(editVals.weekendShifts) || 0,
@@ -305,7 +307,9 @@ export function LogPanel({
       shiftsGained: parseInt(editVals.shiftsGained) || 0,
       hoursGained: parseFloat(editVals.hoursGained) || 0,
       extraDay: !!editVals.extraDay,
-    }));
+    });
+    setLogs(next);
+    onSaveLogsNow?.(next);
     setEditId(null); setEditConfirming(false);
     setPulseKey(k => k + 1);
   };
@@ -746,7 +750,7 @@ export function LogPanel({
                 <Pressable onClick={() => startEdit(entry)} style={{ background: "transparent", border: "1px solid #444", color: "var(--color-text-primary)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>EDIT</Pressable>
                 {cdel === entry.id
                   ? <>
-                      <Pressable onClick={() => { setLogs(p => p.filter(e => e.id !== entry.id)); setCdel(null); }} style={{ background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CONFIRM</Pressable>
+                      <Pressable onClick={() => { const next = logs.filter(e => e.id !== entry.id); setLogs(next); onSaveLogsNow?.(next); setCdel(null); }} style={{ background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CONFIRM</Pressable>
                       <Pressable onClick={() => setCdel(null)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>CANCEL</Pressable>
                     </>
                   : <Pressable onClick={() => setCdel(entry.id)} style={{ background: "transparent", border: "1px solid #333", color: "var(--color-text-disabled)", borderRadius: "12px", padding: "4px 10px", fontSize: "10px", cursor: "pointer", }}>DELETE</Pressable>
@@ -1036,7 +1040,7 @@ export function LogPanel({
           {editingPto ? (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <input {...iS} style={{ ...iS, width: "100px", padding: "6px 10px" }} type="number" min="0" step="0.5" value={ptoInput} onChange={e => setPtoInput(e.target.value)} placeholder="hours" autoFocus />
-              <SmBtn onClick={() => { const val = parseFloat(ptoInput); if (setConfig && Number.isFinite(val) && val >= 0) setConfig(c => ({ ...c, ptoHoursOverride: val, ptoOverrideWeekIdx: currentWeek?.idx ?? 0 })); setEditingPto(false); }} c="var(--color-bg-base)" bg="var(--color-gold)">Save</SmBtn>
+              <SmBtn onClick={() => { const val = parseFloat(ptoInput); if (setConfig && Number.isFinite(val) && val >= 0) { const newConfig = { ...config, ptoHoursOverride: val, ptoOverrideWeekIdx: currentWeek?.idx ?? 0 }; setConfig(newConfig); saveConfigNow?.(newConfig); } setEditingPto(false); }} c="var(--color-bg-base)" bg="var(--color-gold)">Save</SmBtn>
               <SmBtn onClick={() => setEditingPto(false)} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Cancel</SmBtn>
             </div>
           ) : (
@@ -1185,7 +1189,9 @@ export function LogPanel({
                   onClick={() => {
                     const val = parseFloat(bucketInput);
                     if (setConfig && Number.isFinite(val) && val >= 0) {
-                      setConfig(c => ({ ...c, bucketBalanceOverride: val, bucketOverrideMonth: currentMonthStr }));
+                      const newConfig = { ...config, bucketBalanceOverride: val, bucketOverrideMonth: currentMonthStr };
+                      setConfig(newConfig);
+                      saveConfigNow?.(newConfig);
                     }
                     setEditingBucket(false);
                   }}
@@ -1201,7 +1207,7 @@ export function LogPanel({
                 >Set Balance</SmBtn>
                 {config.bucketBalanceOverride != null && (
                   <SmBtn
-                    onClick={() => setConfig?.(c => ({ ...c, bucketBalanceOverride: null, bucketOverrideMonth: null }))}
+                    onClick={() => { const newConfig = { ...config, bucketBalanceOverride: null, bucketOverrideMonth: null }; setConfig?.(newConfig); saveConfigNow?.(newConfig); }}
                     c="var(--color-text-disabled)" bg="var(--color-bg-raised)"
                   >Clear Override</SmBtn>
                 )}

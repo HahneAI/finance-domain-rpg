@@ -1885,7 +1885,7 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, isTester = false, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, subscription }) {
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, isTester = false, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription }) {
   // Tax Plan unlock is manual-only for now (admin, beta tester, or the per-user
   // tax_projections_enabled flag). The setup wizard's "Unlock projections" choice
   // intentionally does NOT reveal it — see canAccessTaxPlan for why.
@@ -1942,25 +1942,47 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
     <div style={{ maxWidth: "520px" }}>
       <PanelHero eyebrow="Authority Finance">Account</PanelHero>
 
-      {/* Work & Pay group. Employment lives inside the Job & Pay detail view
-          (below the pay cards) rather than as its own row — it's a small,
-          low-churn set of fields. Life Events is reachable from the bottom of
-          that same detail view, plus the always-present sidebar/drawer nav, so
-          it isn't duplicated here as a standalone card. */}
-      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Work & Pay</div>
-      <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", overflow: "hidden", marginBottom: "20px" }}>
-        <ListRow
-          label="Job & Pay"
-          summary={`${employer} · $${config.baseRate}/hr${config.shiftHours ? ` · ${config.shiftHours}h shifts` : ""}`}
-          onPress={() => setActiveSection("pay")}
-        />
-        <ListRow
-          label="Retirement & Benefits"
-          summary={has401k ? `401k ${(config.k401Rate * 100).toFixed(0)}% + ${(matchRate * 100).toFixed(1)}% match${enrolled.length ? ` · ${enrolled.length} benefit${enrolled.length !== 1 ? "s" : ""}` : ""}` : "No 401k enrolled"}
-          onPress={() => setActiveSection("retirement")}
-          last
-        />
-      </div>
+      {/* TODO §15 nav/panel restructuring — Job & Pay and Retirement & Benefits
+          both show figures (rate, 401k contribution/match) that are either
+          stale or actively misleading while there's no real income to speak
+          of. Swapped for a single "Back to Work" entry point instead — the
+          same structure_change flow the Job Loss banner's button already
+          uses (§15.H4) — as a second route to it beyond the banner. */}
+      {config?.jobLossMode ? (
+        <>
+          <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Job Search</div>
+          <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid rgba(245,158,11,0.28)", overflow: "hidden", marginBottom: "20px" }}>
+            <ListRow
+              label="Back to Work"
+              summary="Fill in your new pay structure and exit Job Loss Mode"
+              onPress={onBackToWork}
+              last
+            />
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Work & Pay group. Employment lives inside the Job & Pay detail view
+              (below the pay cards) rather than as its own row — it's a small,
+              low-churn set of fields. Life Events is reachable from the bottom of
+              that same detail view, plus the always-present sidebar/drawer nav, so
+              it isn't duplicated here as a standalone card. */}
+          <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Work & Pay</div>
+          <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", overflow: "hidden", marginBottom: "20px" }}>
+            <ListRow
+              label="Job & Pay"
+              summary={`${employer} · $${config.baseRate}/hr${config.shiftHours ? ` · ${config.shiftHours}h shifts` : ""}`}
+              onPress={() => setActiveSection("pay")}
+            />
+            <ListRow
+              label="Retirement & Benefits"
+              summary={has401k ? `401k ${(config.k401Rate * 100).toFixed(0)}% + ${(matchRate * 100).toFixed(1)}% match${enrolled.length ? ` · ${enrolled.length} benefit${enrolled.length !== 1 ? "s" : ""}` : ""}` : "No 401k enrolled"}
+              onPress={() => setActiveSection("retirement")}
+              last
+            />
+          </div>
+        </>
+      )}
 
       {/* App group */}
       <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>App</div>
@@ -1974,9 +1996,11 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           label="App Preferences"
           summary={`${config.bufferEnabled ? `Buffer $${config.paycheckBuffer}/check` : "Buffer off"} · ${canSeeTaxPlan && config.taxExemptOptIn ? "Tax exempt on" : "Standard tax"}`}
           onPress={() => setActiveSection("preferences")}
-          last={!canSeeTaxPlan && !isAdmin}
+          last={!(canSeeTaxPlan && !config?.jobLossMode) && !isAdmin}
         />
-        {canSeeTaxPlan && (
+        {/* Tax Plan assumes real withholding against real pay — nothing to plan
+            around while jobLossMode is true. */}
+        {canSeeTaxPlan && !config?.jobLossMode && (
           <ListRow
             label="Tax Plan"
             summary={`${config.taxedWeeks?.length ?? 0} taxed weeks · target $${config.targetOwedAtFiling} owed`}

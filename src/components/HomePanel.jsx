@@ -1270,42 +1270,52 @@ export function HomePanel({
 
       </div>
 
-      <div style={{ marginTop: "28px", marginBottom: "28px", textAlign: "center", padding: "6px 0" }}>
-        <div style={{
-          fontSize: "32px",
-          fontWeight: 800,
-          fontFamily: "var(--font-display)",
-          color: "var(--color-accent-primary)",
-          letterSpacing: "-1px",
-          lineHeight: 1,
-          marginBottom: "14px",
-        }}>
-          Financial Health
-        </div>
-        <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto 14px", borderRadius: "1px", opacity: 0.45 }} />
-        <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
-          {subtitle}
-        </div>
-      </div>
+      {/* TODO §15 nav/panel restructuring — Next Week Takehome, Net Worth Trend,
+          and Budget Health all assume an active income stream. JobLossDashboard
+          (rendered separately, above every panel, whenever jobLossMode is true)
+          already owns the "how am I doing right now" role during job loss —
+          surfacing these too would be redundant at best, misleading at worst
+          (e.g. Budget Health's spend/take-home ratio against $0 take-home). */}
+      {!config?.jobLossMode && (
+        <>
+          <div style={{ marginTop: "28px", marginBottom: "28px", textAlign: "center", padding: "6px 0" }}>
+            <div style={{
+              fontSize: "32px",
+              fontWeight: 800,
+              fontFamily: "var(--font-display)",
+              color: "var(--color-accent-primary)",
+              letterSpacing: "-1px",
+              lineHeight: 1,
+              marginBottom: "14px",
+            }}>
+              Financial Health
+            </div>
+            <div style={{ width: "28px", height: "2px", background: "var(--color-accent-primary)", margin: "0 auto 14px", borderRadius: "1px", opacity: 0.45 }} />
+            <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", letterSpacing: "0.3px", lineHeight: 1.75 }}>
+              {subtitle}
+            </div>
+          </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-        {tiles.map((tile, i) => (
-          <MetricCard
-            key={tile.title}
-            label={tile.title}
-            val={tile.value}
-            rawVal={tile.rawVal ?? undefined}
-            sub={tile.sub}
-            status={tile.status}
-            span={tile.span}
-            size="30px"
-            centered
-            onClick={tile.onClick}
-            entranceIndex={i}
-            insight={tile.insight}
-          />
-        ))}
-      </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            {tiles.map((tile, i) => (
+              <MetricCard
+                key={tile.title}
+                label={tile.title}
+                val={tile.value}
+                rawVal={tile.rawVal ?? undefined}
+                sub={tile.sub}
+                status={tile.status}
+                span={tile.span}
+                size="30px"
+                centered
+                onClick={tile.onClick}
+                entranceIndex={i}
+                insight={tile.insight}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
       {showBreakthroughTips && (
         <NetWorthHealthTips seed={weekNumber ?? 0} />

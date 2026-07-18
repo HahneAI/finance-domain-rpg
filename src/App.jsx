@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense } from "./lib/db.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -313,6 +313,19 @@ export default function App() {
   }, []);
 
   const currentView = viewStack[viewStack.length - 1];
+
+  // TODO §15 nav restructuring — Income/Log are dropped from the nav entirely
+  // in Job Loss Mode (effectiveBottomNav/effectiveNavItems above), but a user
+  // could already be sitting on one of those tabs the instant jobLossMode
+  // flips true (Back to Work's counterpart already reuses whatever tab was
+  // active, so no redirect needed on exit). Bounce to Home rather than
+  // stranding them on a tab with no way back to it via the nav.
+  useEffect(() => {
+    if (config.jobLossMode && (currentView === "income" || currentView === "log")) {
+      navigateDirect("home");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.jobLossMode]);
   const mainContentRef = useRef(null);
   // Track the actual DOM element in state so useScrollDirection's effect
   // re-runs when the element mounts (first render hits auth gate, so the
@@ -828,7 +841,13 @@ export default function App() {
   );
 
   const effectiveBottomNav = useMemo(() => {
-    const items = [...BOTTOM_NAV];
+    // TODO §15 nav restructuring — Income and Log both assume an active pay
+    // structure (projected income, per-paycheck event log) that a Job Loss
+    // Mode account doesn't have. Drop to Home/Budget/Account so nothing in the
+    // nav points at a screen that's misleading or meaningless right now.
+    const items = config.jobLossMode
+      ? BOTTOM_NAV.filter(i => i.key === "home" || i.key === "budget" || i.key === "profile")
+      : [...BOTTOM_NAV];
     // §18 standing constraint: Ask Coach stays isAdmin/isTester-gated until
     // Coach leaves admin-only (docs/TODO.md §18.0 build order).
     if (canAccessAiFeatures({ isAdmin, isTester })) {
@@ -854,7 +873,14 @@ export default function App() {
       });
     }
     return items;
-  }, [isAdmin, isTester]);
+  }, [isAdmin, isTester, config.jobLossMode]);
+
+  // Desktop sidebar counterpart to effectiveBottomNav's Job Loss Mode trim —
+  // same Income/Log exclusion, kept as a separate memo since NAV_ITEMS (unlike
+  // BOTTOM_NAV) never includes "home" as one of its entries.
+  const effectiveNavItems = useMemo(() => (
+    config.jobLossMode ? NAV_ITEMS.filter(i => i.key === "budget" || i.key === "profile") : NAV_ITEMS
+  ), [config.jobLossMode]);
 
   // Diff between in-memory state and what the last fetched DB row contains.
   // Returns array of column names where values diverge.
@@ -1276,10 +1302,52 @@ export default function App() {
     // savePersistedStateNow's own doc comment calls out.
     const skipFoodSeed = wizardEntry === false && finalConfig.jobLossMode === true;
     if (skipFoodSeed) setExpenses([]);
+    // §15.H4: the reverse of the skip above — Back to Work is exactly when a
+    // jobless-started account gets real income again, so the mandatory Food
+    // expense (the only real mandatory expense that exists today — §25's planned
+    // Rent expense isn't built yet) needs to come back. ensureInitialFoodExpense
+    // is a no-op if the user already has one (e.g. added manually via Triage).
+    const restoredExpenses = (wizardEntry === "structure_change" && mergedConfig.startedUnemployed === true)
+      ? ensureInitialFoodExpense(expenses)
+      : null;
+    if (restoredExpenses) setExpenses(restoredExpenses);
     // Eager save — a completed wizard run is the single most expensive thing
     // to lose to a backgrounded/reclaimed mobile tab; don't leave it sitting
     // in the 800ms debounce window. configHistoryMetaRef is already set above.
-    savePersistedStateNow({ config: finalConfig, ...(skipFoodSeed ? { expenses: [] } : {}) });
+    savePersistedStateNow({
+      config: finalConfig,
+      ...(skipFoodSeed ? { expenses: [] } : {}),
+      ...(restoredExpenses ? { expenses: restoredExpenses } : {}),
+    });
+  }
+
+  // TODO §15 nav/panel restructuring — shared by the Job Loss banner's "Back to
+  // Work" button and the new Account panel entry point (setup wizard rewrite,
+  // 2026-07-18), so there's exactly one place that resets the job-loss fields.
+  function handleBackToWork() {
+    // Auto-reactivate flagged expenses on exit (§15.C3).
+    setExpenses(prev => prev.map(exp => {
+      const status = exp.jobLossStatus ?? "active";
+      const auto = exp.autoReactivateOnIncome ?? true;
+      if (status !== "active" && auto) {
+        return { ...exp, jobLossStatus: "active" };
+      }
+      return exp;
+    }));
+    setConfig(prev => ({
+      ...prev,
+      jobLossMode: false,
+      jobLossDate: null,
+      unemploymentEnabled: null,
+      unemploymentWeekly: null,
+      unemploymentDurationWeeks: null,
+      unemploymentWaitingWeek: false,
+      // §15.C6: projected return date is moot once they're actually
+      // re-employed via the wizard. Job application log stays as
+      // user history.
+      returnToWorkDate: null,
+    }));
+    setWizardEntry("structure_change");
   }
 
   function handleSelectInvestorAccount(n) {
@@ -1471,6 +1539,7 @@ export default function App() {
         weekConfirmations={weekConfirmations}
         onInstallClick={isStandalone ? null : openPwaModal}
         onOpenLifeEvents={() => setLifeEventMenu(true)}
+        onBackToWork={handleBackToWork}
         subscription={subscription}
       />}
     </>
@@ -1662,7 +1731,7 @@ export default function App() {
         </div>
         <nav style={{ marginTop: "8px", flex: 1 }}>
           <SidebarNavItem item={{ key: "home", label: "Home" }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
-          {NAV_ITEMS.map(item => (
+          {effectiveNavItems.map(item => (
             <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
           {/* ── Life Events (re-entry wizard) ── */}
@@ -2116,31 +2185,7 @@ export default function App() {
                   Triage Expenses
                 </Pressable>
                 <Pressable
-                  onClick={() => {
-                    // Auto-reactivate flagged expenses on exit (§15.C3).
-                    setExpenses(prev => prev.map(exp => {
-                      const status = exp.jobLossStatus ?? "active";
-                      const auto = exp.autoReactivateOnIncome ?? true;
-                      if (status !== "active" && auto) {
-                        return { ...exp, jobLossStatus: "active" };
-                      }
-                      return exp;
-                    }));
-                    setConfig(prev => ({
-                      ...prev,
-                      jobLossMode: false,
-                      jobLossDate: null,
-                      unemploymentEnabled: null,
-                      unemploymentWeekly: null,
-                      unemploymentDurationWeeks: null,
-                      unemploymentWaitingWeek: false,
-                      // §15.C6: projected return date is moot once they're actually
-                      // re-employed via the wizard. Job application log stays as
-                      // user history.
-                      returnToWorkDate: null,
-                    }));
-                    setWizardEntry("structure_change");
-                  }}
+                  onClick={handleBackToWork}
                   style={{
                     background: "var(--color-warning)",
                     color: "var(--color-bg-base)",
@@ -2262,7 +2307,7 @@ export default function App() {
         {/* Drawer nav items */}
         <nav style={{ marginTop: "12px", flex: 1 }}>
           <SidebarNavItem item={{ key: "home", label: "Home" }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
-          {NAV_ITEMS.map(item => (
+          {effectiveNavItems.map(item => (
             <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
           {/* ── Life Events (re-entry wizard) ── */}

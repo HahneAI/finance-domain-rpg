@@ -15,35 +15,63 @@ export const CHECKS_PER_MONTH = { weekly: 4, biweekly: 2, monthly: 1, salary: 2 
 export const normalizeCycle = (cycle) =>
   EXPENSE_CYCLE_OPTIONS.find(o => o.value === cycle) ? cycle : "every30days";
 
-// Returns the next calendar date this expense is due, or null if the expense
-// has no billingMeta amount / no anchor date. Used by §15.C5 countdown tiles.
-//
-// Cycle math: from the anchor date, advance by `cycleDays` until we land on
-// or after `todayDate`. If today === anchor, that IS the next due day. We
+// Shared cycle math: from `anchorIso`, advance by `cycleDays` until we land
+// on or after `todayDate`. If today === anchor, that IS the next due day. We
 // never return a date in the past.
-//
-// Anchor resolution: prefers `expense.dueDateAnchor` (a real bill due-date,
-// set explicitly via the Job Loss expense review flow or the DueDatePicker)
-// over `billingMeta.effectiveFrom`, which is really an "amount last edited"
-// timestamp (BudgetPanel stamps it to today on every edit) — using it as a
-// due-date anchor made every recently-touched bill appear due "today." Falls
-// back to it for expenses that predate dueDateAnchor so old data keeps working.
-export function getNextDueDate(expense, todayDate) {
-  const meta = expense?.billingMeta;
-  if (!meta || (meta.amount ?? 0) <= 0) return null;
-  const anchorIso = expense?.dueDateAnchor ?? meta.effectiveFrom;
+function advanceAnchorToNextDue(anchorIso, todayDate, cycleDays) {
   if (!anchorIso) return null;
-  const cycle = EXPENSE_CYCLE_OPTIONS.find(o => o.value === normalizeCycle(meta.cycle));
-  if (!cycle) return null;
   const anchor = new Date(anchorIso + "T12:00:00");
   if (Number.isNaN(anchor.getTime())) return null;
   const today = todayDate instanceof Date ? todayDate : new Date(todayDate);
   const msPerDay = 86400000;
   if (today <= anchor) return anchor;
-  const cyclesElapsed = Math.ceil((today - anchor) / (cycle.days * msPerDay));
+  const cyclesElapsed = Math.ceil((today - anchor) / (cycleDays * msPerDay));
   const next = new Date(anchor);
-  next.setDate(next.getDate() + cyclesElapsed * cycle.days);
+  next.setDate(next.getDate() + cyclesElapsed * cycleDays);
   return next;
+}
+
+// Loans (expense.type === "loan") carry their own recurrence in `loanMeta`
+// (paymentAmount/paymentFrequency/firstPaymentDate) instead of billingMeta —
+// mapped to the same day-counts as EXPENSE_CYCLE_OPTIONS so a loan's due date
+// advances the same way a regular bill's does.
+const LOAN_FREQUENCY_DAYS = { weekly: 7, biweekly: 14, monthly: 30 };
+
+// Returns the next calendar date this expense (or loan) is due, or null when
+// there's nothing to anchor on. Used by §15.C5 countdown tiles.
+//
+// Anchor resolution for regular expenses: prefers `expense.dueDateAnchor` (a
+// real bill due-date, set explicitly via the Job Loss expense review flow or
+// the DueDatePicker) over `billingMeta.effectiveFrom`, which is really an
+// "amount last edited" timestamp (BudgetPanel stamps it to today on every
+// edit) — using it as a due-date anchor made every recently-touched bill
+// appear due "today." Falls back to it for expenses that predate
+// dueDateAnchor so old data keeps working.
+//
+// Loans use `loanMeta.firstPaymentDate` directly (or `dueDateAnchor` if the
+// Job Loss review flow explicitly attached it) — there's already a real
+// payment date on file, so there's nothing to fall back to or re-derive.
+export function getNextDueDate(expense, todayDate) {
+  if (expense?.type === "loan") {
+    const loan = expense.loanMeta;
+    if (!loan || (loan.paymentAmount ?? 0) <= 0) return null;
+    const anchorIso = expense.dueDateAnchor ?? loan.firstPaymentDate;
+    const cycleDays = LOAN_FREQUENCY_DAYS[loan.paymentFrequency] ?? LOAN_FREQUENCY_DAYS.monthly;
+    return advanceAnchorToNextDue(anchorIso, todayDate, cycleDays);
+  }
+  const meta = expense?.billingMeta;
+  if (!meta || (meta.amount ?? 0) <= 0) return null;
+  const anchorIso = expense?.dueDateAnchor ?? meta.effectiveFrom;
+  const cycle = EXPENSE_CYCLE_OPTIONS.find(o => o.value === normalizeCycle(meta.cycle));
+  if (!cycle) return null;
+  return advanceAnchorToNextDue(anchorIso, todayDate, cycle.days);
+}
+
+// The display amount for an expense card regardless of type — loans keep
+// their payment amount in loanMeta, not billingMeta.
+export function getExpenseDisplayAmount(expense) {
+  if (expense?.type === "loan") return expense.loanMeta?.paymentAmount ?? 0;
+  return expense?.billingMeta?.amount ?? 0;
 }
 
 // ─── Job Loss due-date assignment (TODO §15 expense review) ─────────────────

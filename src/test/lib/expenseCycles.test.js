@@ -73,6 +73,28 @@ describe('getNextDueDate', () => {
     const e = expense({ amount: 50, cycle: 'every30days', effectiveFrom: '2026-05-10' })
     expect(iso(getNextDueDate(e, new Date(2026, 4, 10, 12)))).toBe('2026-05-10')
   })
+
+  it('computes a loan\'s next due date from loanMeta.firstPaymentDate, not billingMeta (TODO §15 loan fix)', () => {
+    const loan = { type: 'loan', loanMeta: { totalAmount: 2400, paymentAmount: 200, paymentFrequency: 'monthly', firstPaymentDate: '2026-05-10' } }
+    expect(iso(getNextDueDate(loan, new Date(2026, 4, 1)))).toBe('2026-05-10')
+    // Past the anchor — advances by the monthly (30-day) cadence, same as a regular bill.
+    expect(iso(getNextDueDate(loan, new Date(2026, 4, 15)))).toBe('2026-06-09')
+  })
+
+  it('advances a weekly/biweekly loan using the same day-counts as regular expense cycles', () => {
+    const weeklyLoan = { type: 'loan', loanMeta: { totalAmount: 500, paymentAmount: 50, paymentFrequency: 'weekly', firstPaymentDate: '2026-05-01' } }
+    expect(iso(getNextDueDate(weeklyLoan, new Date(2026, 4, 10)))).toBe('2026-05-15')
+  })
+
+  it('prefers a Job-Loss-attached dueDateAnchor over loanMeta.firstPaymentDate for a loan', () => {
+    const loan = { type: 'loan', dueDateAnchor: '2026-05-20', loanMeta: { totalAmount: 2400, paymentAmount: 200, paymentFrequency: 'monthly', firstPaymentDate: '2026-05-10' } }
+    expect(iso(getNextDueDate(loan, new Date(2026, 4, 15)))).toBe('2026-05-20')
+  })
+
+  it('returns null for a loan with no loanMeta or a non-positive payment amount', () => {
+    expect(getNextDueDate({ type: 'loan' }, new Date())).toBeNull()
+    expect(getNextDueDate({ type: 'loan', loanMeta: { paymentAmount: 0, firstPaymentDate: '2026-05-01' } }, new Date())).toBeNull()
+  })
 })
 
 // ─────────────────────────────────────────────────────────────

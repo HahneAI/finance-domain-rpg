@@ -1979,6 +1979,50 @@ add-expense form already had a working amount field before this pass.)*
 
 ---
 
+#### H9. Loans weren't grabbed into the H8 flow at all — DONE 2026-07-18
+
+*User caught a real gap in H8: loans live in the same `expenses` array as regular bills
+(`type: "loan"`, `category: "Loans"`, a `loanMeta: { totalAmount, paymentAmount, paymentFrequency,
+firstPaymentDate }` object instead of `billingMeta`) — the checklist step already listed them (it
+iterates `expenses` with no type filter), but `getNextDueDate` required `billingMeta` to exist at
+all, so it silently returned `null` for every loan. Loans never showed up in Upcoming Bills, never
+got a "Needs Coverage" flag, and displayed no amount in the JobLossBudgetPanel card list.*
+
+- [x] **`getNextDueDate` (`lib/expense.js`) now has a loan branch** — for `type === "loan"`,
+  anchors on `loanMeta.firstPaymentDate` (or a Job-Loss-attached `dueDateAnchor` if present) and
+  advances using `paymentFrequency` mapped to the same day-counts as `EXPENSE_CYCLE_OPTIONS`
+  (weekly=7, biweekly=14, monthly=30). The date-advancing math itself was extracted into a shared
+  `advanceAnchorToNextDue` helper so the regular-expense and loan branches can't drift.
+- [x] **New `getExpenseDisplayAmount(expense)` helper** — `loanMeta.paymentAmount` for loans,
+  `billingMeta.amount` otherwise. Used everywhere `JobLossBudgetPanel` and `JobLossEntry` show a
+  dollar figure so loans stop rendering as "$0" or blank.
+- [x] **`JobLossEntry`'s Step 2 (payment date) skips loans entirely** — a loan already has a real
+  payment date on file, so re-asking would be redundant. On confirm, tracked loans get
+  `dueDateAnchor: loanMeta.firstPaymentDate` attached automatically (the "date that's already been
+  selected" carried forward, per the request) instead of going through the `DueDatePicker`. A new
+  `keptPickableExpenses` (kept, non-loan) list drives Step 2's UI/validation/skip-logic separately
+  from `keptExpenses` (kept, everything) — so a loan-only selection skips Step 2 outright, same as
+  an empty one.
+- [x] **"Loan" badge added** in both the Step 1 checklist row and the `JobLossBudgetPanel` expense
+  card list — small gold badge matching the existing "Essential"/"Flexible"/"Needs Coverage" badge
+  language already in that list. Amount display for loans shows `$X/<frequency>` (e.g. `$200/
+  monthly`) instead of the regular bills' `$X/mo`, since a loan's cadence is meaningful (matches
+  what normal `BudgetPanel` already does for its own loan rows).
+- **Not changed:** loan burn/runway math itself — `computeJobLossRunway` already included loans
+  correctly before this fix, since it sums via `getEffectiveAmount(exp, ...)` which reads
+  `exp.history` (populated by `buildLoanHistory` regardless of expense type), not `billingMeta`.
+  Only the due-date/display-amount layer was blind to loans.
+- **Verification:** `expenseCycles.test.js` — 4 new tests for the loan branch of `getNextDueDate`
+  (monthly + weekly cadence, an attached `dueDateAnchor` taking precedence over
+  `loanMeta.firstPaymentDate`, and the null cases). `jobLossFlow.test.jsx` — 1 new `JobLossEntry`
+  test (loan shows the badge in Step 1, is absent from Step 2's picker list with an explanatory
+  line, and lands with `dueDateAnchor` set to its own `firstPaymentDate` on activate) and 1 new
+  `JobLossBudgetPanel` test (badge + `$200/monthly` display). Full suite: 1108 tests passing. Lint
+  diff-clean vs. session baseline. Production build green. **Not covered:** a live click-through
+  with a real loan on a deployed preview, same category of gap as H7/H8.
+
+---
+
 ### I. Admin Toolkit updates for §15 work
 
 - [ ] **Live State Inspector — Job Loss Mode pill**

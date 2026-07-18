@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Pressable, PanelHero, SectionHeader, iS, lS } from "./ui.jsx";
 import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CATEGORY_COLORS, FISCAL_YEAR_START } from "../constants/config.js";
-import { perPaycheckFromCycle, getNextDueDate, resolveDueDateAnchor } from "../lib/expense.js";
+import { perPaycheckFromCycle, getNextDueDate, resolveDueDateAnchor, getExpenseDisplayAmount } from "../lib/expense.js";
 import { computeJobLossRunway, firstUnemploymentPaymentDate, sumJobHuntIncome } from "../lib/jobLossRunway.js";
 
 const STATUS_OPTIONS = [
@@ -78,7 +78,7 @@ export function JobLossBudgetPanel({
         const days = Math.ceil((nextDue - todayDate) / 86400000);
         if (days > horizonDays) return null;
         return {
-          id: exp.id, label: exp.label ?? "Untitled", amount: exp.billingMeta?.amount ?? 0,
+          id: exp.id, label: exp.label ?? "Untitled", amount: getExpenseDisplayAmount(exp),
           dueDate: nextDue, daysUntil: Math.max(0, days),
           needsCoverage: firstPaymentDate ? nextDue < firstPaymentDate : false,
         };
@@ -283,8 +283,9 @@ export function JobLossBudgetPanel({
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {sortedExpenses.map(exp => {
             const status = exp.jobLossStatus ?? "active";
+            const isLoan = exp.type === "loan";
             const flexible = isFlexibleCategory(exp.category);
-            const monthly = exp.billingMeta?.amount ?? null;
+            const monthly = getExpenseDisplayAmount(exp) || null;
             const autoReactivate = exp.autoReactivateOnIncome ?? true;
             const catColor = CATEGORY_COLORS[exp.category] ?? "var(--color-text-secondary)";
             return (
@@ -296,6 +297,15 @@ export function JobLossBudgetPanel({
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "3px" }}>
                       <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{exp.label ?? "Untitled"}</span>
+                      {isLoan && (
+                        <span style={{
+                          fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
+                          color: "var(--color-bg-base)", background: "var(--color-gold)",
+                          padding: "2px 6px", borderRadius: "3px", fontWeight: "bold",
+                        }}>
+                          Loan
+                        </span>
+                      )}
                       <span style={{
                         fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
                         color: flexible ? "var(--color-bg-base)" : "var(--color-text-primary)",
@@ -315,7 +325,7 @@ export function JobLossBudgetPanel({
                       )}
                     </div>
                     <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
-                      {exp.category ?? "—"}{monthly != null ? ` · $${Number(monthly).toLocaleString()}/mo` : ""}
+                      {exp.category ?? "—"}{monthly != null ? ` · $${Number(monthly).toLocaleString()}${isLoan ? `/${exp.loanMeta?.paymentFrequency ?? "mo"}` : "/mo"}` : ""}
                     </div>
                   </div>
                   <Pressable

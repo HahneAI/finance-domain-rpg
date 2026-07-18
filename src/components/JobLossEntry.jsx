@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Pressable, useFoldTransition } from "./ui.jsx";
 import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CATEGORY_COLORS } from "../constants/config.js";
-import { resolveDueDateAnchor } from "../lib/expense.js";
+import { resolveDueDateAnchor, getExpenseDisplayAmount } from "../lib/expense.js";
 
 /**
  * JobLossEntry — modal launched from the LifeEventMenu "Lost My Job" tile.
@@ -21,7 +21,10 @@ import { resolveDueDateAnchor } from "../lib/expense.js";
  * Step 2 (new): for whichever expenses stayed checked, assign a payment
  * date via quick "week of month" presets or a manual date — written to the
  * new `dueDateAnchor` field so the Upcoming Bills countdown and runway don't
- * fall back to the "amount last edited" bug (see lib/expense.js).
+ * fall back to the "amount last edited" bug (see lib/expense.js). Loans
+ * (expense.type === "loan") skip this picker entirely — they already carry a
+ * real due date in `loanMeta.firstPaymentDate`, which gets attached to
+ * `dueDateAnchor` automatically on confirm instead of asking again.
  *
  * Steps 1–2 are skipped entirely when there are no expenses to review, so
  * the original single-step flow (and its "Activate" button/behavior) is
@@ -79,7 +82,11 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
 
   const hasExpenses = expenses.length > 0;
   const keptExpenses = expenses.filter(e => trackedIds.has(e.id));
-  const step2Valid = keptExpenses.every(e => {
+  // Loans already carry a real payment date (loanMeta.firstPaymentDate) —
+  // no need to make the user re-pick one, so the due-date step only lists
+  // (and only requires a pick for) the non-loan bills that stayed checked.
+  const keptPickableExpenses = keptExpenses.filter(e => e.type !== "loan");
+  const step2Valid = keptPickableExpenses.every(e => {
     const v = dueDateChoices[e.id];
     return v?.mode === "custom" ? !!v.date : v?.mode === "week" ? !!v.week : false;
   });
@@ -109,6 +116,10 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
     if (!step2Valid) { setAttempted(true); return; }
     const updatedExpenses = expenses.map(exp => {
       if (!trackedIds.has(exp.id)) return { ...exp, trackDuringJobLoss: false };
+      if (exp.type === "loan") {
+        // Attach the loan's own known payment date rather than asking again.
+        return { ...exp, trackDuringJobLoss: true, dueDateAnchor: exp.loanMeta?.firstPaymentDate ?? exp.dueDateAnchor };
+      }
       const anchor = resolveDueDateAnchor(dueDateChoices[exp.id], today);
       return { ...exp, trackDuringJobLoss: true, dueDateAnchor: anchor ?? exp.dueDateAnchor };
     });
@@ -124,7 +135,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
       return;
     }
     if (step === 1) {
-      if (keptExpenses.length === 0) { confirm(); return; }
+      if (keptPickableExpenses.length === 0) { confirm(); return; }
       setStep(2);
       return;
     }
@@ -132,7 +143,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
   };
 
   const nextLabel = step === 0 ? (hasExpenses ? "Next" : "Activate")
-    : step === 1 ? (keptExpenses.length > 0 ? "Next" : "Activate")
+    : step === 1 ? (keptPickableExpenses.length > 0 ? "Next" : "Activate")
     : "Activate";
   const nextDisabled = step === 0 ? !step0Valid : step === 2 ? !step2Valid : false;
 
@@ -319,7 +330,9 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 {expenses.map(exp => {
                   const checked = trackedIds.has(exp.id);
+                  const isLoan = exp.type === "loan";
                   const catColor = CATEGORY_COLORS[exp.category] ?? "var(--color-text-secondary)";
+                  const amount = getExpenseDisplayAmount(exp);
                   return (
                     <label
                       key={exp.id}
@@ -338,10 +351,21 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
                         style={{ accentColor: "var(--color-accent-primary)", width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 }}
                       />
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{exp.label ?? "Untitled"}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{exp.label ?? "Untitled"}</span>
+                          {isLoan && (
+                            <span style={{
+                              fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
+                              color: "var(--color-bg-base)", background: "var(--color-gold)",
+                              padding: "2px 6px", borderRadius: "3px", fontWeight: "bold",
+                            }}>
+                              Loan
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
                           <span style={{ color: catColor }}>{exp.category ?? "—"}</span>
-                          {exp.billingMeta?.amount != null ? ` · $${Number(exp.billingMeta.amount).toLocaleString()}/mo` : ""}
+                          {amount > 0 ? ` · $${Number(amount).toLocaleString()}${isLoan ? `/${exp.loanMeta?.paymentFrequency ?? "mo"}` : "/mo"}` : ""}
                         </div>
                       </div>
                     </label>
@@ -356,9 +380,12 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
               <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
                 Pick when each bill is due so the Upcoming Bills countdown and runway line up
                 with your real due dates.
+                {keptExpenses.length > keptPickableExpenses.length && (
+                  " Loans use the payment date already on file — nothing to pick for those."
+                )}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                {keptExpenses.map(exp => (
+                {keptPickableExpenses.map(exp => (
                   <div key={exp.id}>
                     <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)", marginBottom: "8px" }}>
                       {exp.label ?? "Untitled"}

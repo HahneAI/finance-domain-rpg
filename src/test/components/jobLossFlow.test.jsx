@@ -175,6 +175,34 @@ describe('JobLossEntry', () => {
     expect(screen.getByText('Enter Job Loss Mode')).toBeTruthy()
     expect(screen.getByText('✓ No')).toBeTruthy() // step 0's answer persisted across the Back navigation
   })
+
+  const LOAN_EXPENSE = {
+    id: 'exp_loan1', type: 'loan', category: 'Loans', label: 'Car Note',
+    loanMeta: { totalAmount: 2400, paymentAmount: 200, paymentFrequency: 'monthly', firstPaymentDate: '2026-05-10' },
+  }
+
+  it('shows a Loan badge in the review checklist and attaches the loan\'s own payment date automatically', () => {
+    const onActivate = vi.fn()
+    render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} expenses={[...REVIEW_EXPENSES, LOAN_EXPENSE]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('Car Note')).toBeTruthy()
+    expect(screen.getByText('Loan')).toBeTruthy() // badge in the checklist row
+
+    // Advance to Step 2 — the loan should NOT appear in the due-date picker list.
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('When are these due?')).toBeTruthy()
+    expect(screen.queryByText('Car Note')).toBeNull()
+    expect(screen.getByText(/Loans use the payment date already on file/i)).toBeTruthy()
+
+    // Two non-loan bills (Rent, Gym) are both still kept — pick a due date for each.
+    screen.getAllByText('3rd week of month').forEach(btn => fireEvent.click(btn))
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+
+    const [, updatedExpenses] = onActivate.mock.calls[0]
+    const loanResult = updatedExpenses.find(e => e.id === 'exp_loan1')
+    expect(loanResult).toMatchObject({ trackDuringJobLoss: true, dueDateAnchor: '2026-05-10' })
+  })
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -316,6 +344,17 @@ describe('JobLossBudgetPanel', () => {
     renderBudget()
     expect(screen.getByText('Savings & Benefits')).toBeTruthy()
     expect(screen.getAllByText('Food').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('badges a loan expense and shows its payment amount from loanMeta, not billingMeta', () => {
+    const loan = {
+      id: 'exp_loan1', type: 'loan', category: 'Loans', label: 'Car Note',
+      loanMeta: { totalAmount: 2400, paymentAmount: 200, paymentFrequency: 'monthly', firstPaymentDate: '2026-06-01' },
+    }
+    renderBudget({ expenses: [...INITIAL_EXPENSES, loan] })
+    expect(screen.getAllByText('Car Note').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Loan')).toBeTruthy()
+    expect(screen.getByText(/\$200\/monthly/)).toBeTruthy()
   })
 
   it('shows the empty state when there are no expenses', () => {

@@ -35,20 +35,4 @@ describe('HomePanel', () => {
     render(<HomePanel {...baseProps} />)
     expect(screen.queryByRole('button', { name: /sign out/i })).toBeNull()
   })
-
-  // TODO §15 nav/panel restructuring — these three tiles assume active income;
-  // JobLossDashboard (rendered separately in App.jsx) owns this role instead.
-  it('hides Next Week Takehome, Net Worth Trend, and Budget Health when jobLossMode is true', () => {
-    render(<HomePanel {...baseProps} futureWeekNets={[1234]} config={{ jobLossMode: true }} />)
-    expect(screen.queryByText('Next Week Takehome')).toBeNull()
-    expect(screen.queryByText('Net Worth Trend')).toBeNull()
-    expect(screen.queryByText('Budget Health')).toBeNull()
-  })
-
-  it('shows the three tiles again once jobLossMode is false', () => {
-    render(<HomePanel {...baseProps} futureWeekNets={[1234]} config={{ jobLossMode: false }} />)
-    expect(screen.getAllByText('Next Week Takehome').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Net Worth Trend').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Budget Health').length).toBeGreaterThanOrEqual(1)
-  })
 })

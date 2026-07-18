@@ -3,9 +3,9 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { JobLossEntry } from '../../components/JobLossEntry.jsx'
 import { LifeEventMenu } from '../../components/LifeEventMenu.jsx'
 import { RateUpdateModal } from '../../components/RateUpdateModal.jsx'
-import { JobLossDashboard } from '../../components/JobLossDashboard.jsx'
+import { JobLossHomePanel } from '../../components/JobLossHomePanel.jsx'
+import { JobLossBudgetPanel } from '../../components/JobLossBudgetPanel.jsx'
 import { ReemploymentTracker } from '../../components/ReemploymentTracker.jsx'
-import { ExpenseTriage } from '../../components/ExpenseTriage.jsx'
 import { DEFAULT_CONFIG, INITIAL_EXPENSES } from '../../constants/config.js'
 
 const JOB_LOSS_CONFIG = {
@@ -184,47 +184,124 @@ describe('RateUpdateModal', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// JobLossDashboard + ReemploymentTracker (render smoke)
+// JobLossHomePanel + JobLossBudgetPanel (TODO §15 mode rebuild, 2026-07-18)
+// — replace JobLossDashboard/ExpenseTriage as Job Loss Mode's own dedicated
+// Home/Budget views instead of a pinned card layered over the normal panels.
 // ─────────────────────────────────────────────────────────────
 
-describe('JobLossDashboard', () => {
-  it('renders the runway tiles for a job-loss config', () => {
+describe('JobLossHomePanel', () => {
+  it('renders the runway metrics for a job-loss config', () => {
     render(
-      <JobLossDashboard
+      <JobLossHomePanel
         config={JOB_LOSS_CONFIG}
         setConfig={() => {}}
         expenses={INITIAL_EXPENSES}
         effectiveToday="2026-06-15"
+        savingsDraft=""
+        includeBenefits
       />
     )
-    expect(screen.getByText('Job Loss Dashboard')).toBeTruthy()
     expect(screen.getByText('Runway')).toBeTruthy()
-    expect(screen.getByText('Weekly burn')).toBeTruthy()
+    expect(screen.getByText('Weekly Burn')).toBeTruthy()
   })
 
   it('renders with empty expenses and no unemployment', () => {
     const cfg = { ...JOB_LOSS_CONFIG, unemploymentEnabled: false, unemploymentWeekly: null }
-    render(<JobLossDashboard config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" />)
-    expect(screen.getByText('Job Loss Dashboard')).toBeTruthy()
+    render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
+    expect(screen.getByText('Runway')).toBeTruthy()
   })
 
-  // TODO §15.H5 — first-paint prompt for a jobless-first-run signup with no
-  // expenses yet (Food seeding skipped, §15.H3).
-  it('shows the "Set up essential expenses" prompt when expenses is empty and onOpenTriage is provided', () => {
-    render(<JobLossDashboard config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" onOpenTriage={() => {}} />)
-    expect(screen.getByText('Set up essential expenses')).toBeTruthy()
+  it('logs extra income and reflects it in the "Extra Income Logged" tile', () => {
+    const configs = []
+    const setConfig = vi.fn(updater => configs.push(typeof updater === 'function' ? updater(JOB_LOSS_CONFIG) : updater))
+    render(<JobLossHomePanel config={JOB_LOSS_CONFIG} setConfig={setConfig} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. 150'), { target: { value: '200' } })
+    fireEvent.change(screen.getByPlaceholderText('e.g. Weekend gig'), { target: { value: 'Yard work' } })
+    fireEvent.click(screen.getByText('+ Log Income'))
+    expect(setConfig).toHaveBeenCalled()
+    const result = configs[0]
+    expect(result.jobHuntIncomeLog).toHaveLength(1)
+    expect(result.jobHuntIncomeLog[0]).toMatchObject({ amount: 200, note: 'Yard work' })
   })
 
-  it('calls onOpenTriage when the prompt is clicked', () => {
-    const onOpenTriage = vi.fn()
-    render(<JobLossDashboard config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" onOpenTriage={onOpenTriage} />)
-    fireEvent.click(screen.getByText('Set up essential expenses'))
-    expect(onOpenTriage).toHaveBeenCalled()
+  it('disables Log Income until a positive amount is entered', () => {
+    render(<JobLossHomePanel config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
+    expect(screen.getByText('+ Log Income').closest('button')).toBeDisabled()
   })
 
-  it('hides the prompt once real expenses exist', () => {
-    render(<JobLossDashboard config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" onOpenTriage={() => {}} />)
-    expect(screen.queryByText('Set up essential expenses')).toBeNull()
+  it('removes a logged income entry', () => {
+    const cfg = { ...JOB_LOSS_CONFIG, jobHuntIncomeLog: [{ id: 'jhi_1', amount: 100, note: 'Gig', loggedAt: '2026-06-10T00:00:00.000Z' }] }
+    const setConfig = vi.fn()
+    render(<JobLossHomePanel config={cfg} setConfig={setConfig} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
+    fireEvent.click(screen.getByLabelText('Remove entry'))
+    expect(setConfig).toHaveBeenCalled()
+    const result = setConfig.mock.calls[0][0](cfg)
+    expect(result.jobHuntIncomeLog).toHaveLength(0)
+  })
+
+  it('embeds the Re-employment Tracker', () => {
+    render(<JobLossHomePanel config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
+    expect(screen.getByText('Re-employment')).toBeTruthy()
+    expect(screen.getByText('Target annual')).toBeTruthy()
+  })
+})
+
+describe('JobLossBudgetPanel', () => {
+  function renderBudget(overrides = {}) {
+    return render(
+      <JobLossBudgetPanel
+        config={JOB_LOSS_CONFIG}
+        setConfig={() => {}}
+        expenses={INITIAL_EXPENSES}
+        setExpenses={() => {}}
+        effectiveToday="2026-06-15"
+        savingsDraft=""
+        setSavingsDraft={() => {}}
+        includeBenefits
+        setIncludeBenefits={() => {}}
+        {...overrides}
+      />
+    )
+  }
+
+  it('renders the savings input and expense list', () => {
+    renderBudget()
+    expect(screen.getByText('Savings & Benefits')).toBeTruthy()
+    expect(screen.getAllByText('Food').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows the empty state when there are no expenses', () => {
+    renderBudget({ expenses: [] })
+    expect(screen.getByText(/No expenses yet/i)).toBeTruthy()
+  })
+
+  it('adds a new expense', () => {
+    const setExpenses = vi.fn()
+    renderBudget({ expenses: [], setExpenses })
+    fireEvent.change(screen.getByPlaceholderText('e.g. Rent'), { target: { value: 'Rent' } })
+    fireEvent.change(screen.getByPlaceholderText('e.g. 1200'), { target: { value: '1200' } })
+    fireEvent.click(screen.getByText('+ Add Expense'))
+    expect(setExpenses).toHaveBeenCalled()
+    const result = setExpenses.mock.calls[0][0]([])
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({ label: 'Rent', category: 'Needs' })
+    expect(result[0].billingMeta.amount).toBe(1200)
+  })
+
+  it('changes an expense triage status', () => {
+    const setExpenses = vi.fn()
+    renderBudget({ setExpenses })
+    fireEvent.click(screen.getByText('Paused'))
+    expect(setExpenses).toHaveBeenCalled()
+  })
+
+  it('removes an expense', () => {
+    const setExpenses = vi.fn()
+    renderBudget({ setExpenses })
+    fireEvent.click(screen.getByLabelText('Remove expense'))
+    expect(setExpenses).toHaveBeenCalled()
+    const result = setExpenses.mock.calls[0][0](INITIAL_EXPENSES)
+    expect(result).toHaveLength(0)
   })
 })
 
@@ -242,41 +319,5 @@ describe('ReemploymentTracker', () => {
     }
     const { container } = render(<ReemploymentTracker config={cfg} setConfig={() => {}} />)
     expect(container.textContent).toContain('Acme Logistics')
-  })
-})
-
-// ─────────────────────────────────────────────────────────────
-// ExpenseTriage
-// ─────────────────────────────────────────────────────────────
-
-describe('ExpenseTriage', () => {
-  it('renders nothing when closed', () => {
-    const { container } = render(
-      <ExpenseTriage open={false} onClose={() => {}} expenses={[]} setExpenses={() => {}} config={JOB_LOSS_CONFIG} effectiveToday="2026-06-15" />
-    )
-    expect(container.firstChild).toBeNull()
-  })
-
-  it('lists expenses when open', () => {
-    render(
-      <ExpenseTriage
-        open
-        onClose={() => {}}
-        expenses={INITIAL_EXPENSES}
-        setExpenses={() => {}}
-        config={JOB_LOSS_CONFIG}
-        effectiveToday="2026-06-15"
-      />
-    )
-    expect(screen.getByText('Food')).toBeTruthy()
-  })
-
-  it('closes on Escape', () => {
-    const onClose = vi.fn()
-    render(
-      <ExpenseTriage open onClose={onClose} expenses={[]} setExpenses={() => {}} config={JOB_LOSS_CONFIG} effectiveToday="2026-06-15" />
-    )
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(onClose).toHaveBeenCalled()
   })
 })

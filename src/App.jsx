@@ -1468,7 +1468,9 @@ export default function App() {
           remainingSpend={remainingSpend}
           goals={goals}
           setGoals={setGoals}
+          onSaveGoalsNow={(newGoals) => savePersistedStateNow({ goals: newGoals })}
           setConfig={setConfig}
+          saveConfigNow={saveConfigNow}
           futureWeeks={futureWeeks}
           futureWeekNets={futureWeekNets}
           timelineWeekNets={futureWeekNetsRaw}
@@ -1499,6 +1501,7 @@ export default function App() {
         today={effectiveToday}
         weekNetLookup={weekNetLookup}
         onWeekInspect={isAdmin ? setInspectedWeek : null}
+        saveConfigNow={saveConfigNow}
       />)}
       {currentView === "budget" && (config.jobLossMode ? (
         <JobLossBudgetPanel
@@ -1514,6 +1517,7 @@ export default function App() {
       ) : (
         <BudgetPanel
           expenses={expenses} setExpenses={setExpenses}
+          onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
           weeklyIncome={weeklyIncome}
           prevWeekNet={prevWeekNet}
           futureWeeks={futureWeeks}
@@ -1533,8 +1537,9 @@ export default function App() {
       ))}
       {currentView === "log" && (isExpiredReadOnly ? <UpgradePanel tab="log" /> : <LogPanel
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
+        onSaveLogsNow={(newLogs) => savePersistedStateNow({ logs: newLogs })}
         effectiveToday={effectiveToday}
-        setConfig={setConfig} weekConfirmations={weekConfirmations}
+        setConfig={setConfig} saveConfigNow={saveConfigNow} weekConfirmations={weekConfirmations}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}

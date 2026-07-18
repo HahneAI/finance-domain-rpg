@@ -207,6 +207,25 @@ describe('JobLossDashboard', () => {
     render(<JobLossDashboard config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" />)
     expect(screen.getByText('Job Loss Dashboard')).toBeTruthy()
   })
+
+  // TODO §15.H5 — first-paint prompt for a jobless-first-run signup with no
+  // expenses yet (Food seeding skipped, §15.H3).
+  it('shows the "Set up essential expenses" prompt when expenses is empty and onOpenTriage is provided', () => {
+    render(<JobLossDashboard config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" onOpenTriage={() => {}} />)
+    expect(screen.getByText('Set up essential expenses')).toBeTruthy()
+  })
+
+  it('calls onOpenTriage when the prompt is clicked', () => {
+    const onOpenTriage = vi.fn()
+    render(<JobLossDashboard config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" onOpenTriage={onOpenTriage} />)
+    fireEvent.click(screen.getByText('Set up essential expenses'))
+    expect(onOpenTriage).toHaveBeenCalled()
+  })
+
+  it('hides the prompt once real expenses exist', () => {
+    render(<JobLossDashboard config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" onOpenTriage={() => {}} />)
+    expect(screen.queryByText('Set up essential expenses')).toBeNull()
+  })
 })
 
 describe('ReemploymentTracker', () => {

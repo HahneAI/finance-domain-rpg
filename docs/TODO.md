@@ -1738,64 +1738,98 @@ note rather than re-listed here to avoid two competing specs for the same shippe
 
 ---
 
-### H. Jobless Onboarding Path *(seeded 2026-05-15)*
+### H. Jobless Onboarding Path — BUILT 2026-07-18 *(seeded 2026-05-15)*
 
 *A new first-run wizard question — "Are you currently unemployed?" — was planted in Step 0.
 Today both Yes and No route through the standard pay-structure steps (DHL question next),
 and the answer is stored on `config.startedUnemployed`. The plan below builds that seed into
 a true branched onboarding so jobless users land in a usable app from day one.*
 
-**Confirmed status (2026-07-17): still just the seed.** `SetupWizard.jsx` captures
-`startedUnemployed` (Y/N pills) with copy that explicitly says "we're seeding a future onboarding
-path" — but the flag has exactly two read-sites in the whole codebase (the capture itself, and the
-`isValid` gate that lets Next proceed). Nothing below — routing, the mini-flow, the completion
-path, Back to Work's first-time wizard, or the banner copy — exists yet. Unlike §A–C, this really
-is all still open.
+#### H1. Branched Step 0 routing — DONE
 
-#### H1. Branched Step 0 routing
+- [x] **Persist `startedUnemployed` to Supabase** — no new plumbing needed; it was already a
+  plain `DEFAULT_CONFIG` field, round-trips via the normal `config` JSONB merge same as every
+  other scalar config value.
+- [x] **Wizard routing** — `SetupWizard.jsx`'s `STEP_DEFS` gained a shared `isFirstRunJobless(d,
+  ev) = ev === null && d.startedUnemployed === true` predicate. Steps 1–4 and the normal Wrap Up
+  all now `showIf: (d, ev) => !isFirstRunJobless(d, ev)` — genuinely skipped from `activeSteps`,
+  not just hidden — and three new steps (ids 10–12) show only when `isFirstRunJobless` is true.
+- [x] **Re-entry guard** — `isFirstRunJobless` requires `ev === null`; any life-event re-entry
+  (including `structure_change`) always gets the full normal step set regardless of
+  `startedUnemployed`, confirmed by a dedicated test.
 
-- [ ] **Persist `startedUnemployed` to Supabase** — confirm it round-trips on reload and add
-  an explicit projection in `loadUserData` / `saveUserData` if it doesn't
-- [ ] **Wizard routing** — when `startedUnemployed === true`:
-  - [ ] Skip Step 1 (Pay Structure), Step 2 (Schedule), Step 3 (Deductions), Step 4 (Tax Rates)
-  - [ ] Route directly into a new "Jobless Setup" mini-flow (H2)
-- [ ] **Re-entry guard** — `startedUnemployed === true` users who later run Life Events get
-  full access to the structure_change wizard; that's how they first fill in pay-structure
-  fields when they exit Job Loss Mode (see H4)
+#### H2. Jobless Setup mini-flow — DONE, consolidated to 3 screens
 
-#### H2. Jobless Setup mini-flow
+*Built as 3 actual wizard steps rather than 5 separate screens — 0a+0b share one screen (same
+fields as the already-existing `JobLossEntry.jsx` modal for the same data), 0c+0d share one
+screen, 0e is its own confirm screen. Fewer taps for a "quick" onboarding without dropping any
+required field.*
 
-- [ ] **Step 0a — Confirm unemployment benefits Y/N**
-- [ ] **Step 0b — If Yes** — weekly amount, duration in weeks, waiting-week toggle
-- [ ] **Step 0c — Stand-in `jobLossDate`** — default to today; allow override
-- [ ] **Step 0d — Optional prior pay context** — prior employer name + prior base rate,
-  used as the default Target Income in the re-employment tracker (§15.C6)
-- [ ] **Step 0e — Wrap Up** — confirm and finish
+- [x] **Screen 1 — `StepJoblessBenefits`** (0a+0b): unemployment Y/N gate; if Yes, weekly amount,
+  duration in weeks, waiting-week toggle. `isValid` requires an explicit answer (mirrors
+  `JobLossEntry`'s `canActivate`).
+- [x] **Screen 2 — `StepJoblessDetails`** (0c+0d): job-loss effective date, defaulted to today
+  the moment "Yes" is answered at Step 0 (overridable here) — **not** deferred to this screen,
+  since `firstActiveIdx`/`startDate` also need a same-instant default and there's no other step
+  left to set them. Optional prior hourly rate, assumed a 40hr week, computed straight into
+  `targetIncomeAnnual` (the exact field `ReemploymentTracker` already reads with priority) —
+  **dropped "prior employer name"** from the original spec: there's no schema field or any
+  consumer for free-text employer identity anywhere in the app (confirmed against §19's own
+  parked "future fields" list), so it would've been a UI input with nowhere to go. Same
+  no-dead-inputs call as Quick Rate Update's dropped "note" field.
+- [x] **Screen 3 — `StepJoblessWrapUp`** (0e): plain confirm/finish summary (job loss date,
+  benefits, target income if set) — no live net preview, since there's no pay structure to
+  preview yet.
 
-#### H3. Wizard completion path for jobless users
+#### H3. Wizard completion path for jobless users — DONE
 
-- [ ] **`onComplete` payload** — sets `jobLossMode: true`, `jobLossDate`, and all four
-  unemployment fields; marks `setupComplete: true`
-- [ ] **Land on Job Loss Dashboard** — first paint goes to the Job Loss Dashboard view (§15.C4)
-  for as long as `jobLossMode` is true
-- [ ] **Skip default Food expense seeding** — defer expense seeding to the user's first triage
-  pass (§15.C3)
+- [x] **`onComplete` payload** — no special-casing needed in `handleComplete()`: every jobless
+  step writes directly into `formData` via the wizard's normal `onChange`, so `jobLossMode`,
+  `jobLossDate`, and the four unemployment fields are already present by the time the generic
+  `{...finalData, taxedWeeks, accountCreatedIdx, setupComplete: true}` spread runs.
+  Test-verified via the full payload from a completed run.
+- [x] **Land on Job Loss Dashboard** — turned out to already be free: `App.jsx` renders
+  `JobLossDashboard` unconditionally whenever `config.jobLossMode` is true, above the normal
+  panel switch, regardless of which nav tab is active — first paint after any jobless
+  completion already shows it with zero new code.
+- [x] **Skip default Food expense seeding** — `App.jsx`'s `handleWizardComplete` now sets
+  `expenses: []` (passed directly into the eager-save overrides, not a separate `setExpenses`
+  call, to avoid racing React's not-yet-flushed state) when `wizardEntry === false &&
+  finalConfig.jobLossMode === true`.
 
-#### H4. "Back to Work" exit for users who started jobless
+#### H4. "Back to Work" exit for users who started jobless — DONE
 
-- [ ] **First-time pay-structure wizard** — Back to Work runs the FULL pay-structure wizard
-  (steps 1–4 + Wrap Up) since they never filled it in
-- [ ] **Diff view degrades gracefully** — "What's Changing" diff renders an empty-state message
-  when there's no prior config to compare against
-- [ ] **Clear `startedUnemployed` on success** — flag reset so future Life Events flows behave
-  normally
+- [x] **First-time pay-structure wizard** — the existing "Back to Work" button already routed
+  into `structure_change`, which already walks steps 1–4 + Wrap Up in full — this bullet turned
+  out to already be satisfied by reusing that flow rather than needing a separate one.
+- [x] **Diff view degrades gracefully** — `StructureChangeDiff` now checks
+  `originalConfig?.startedUnemployed === true` first and renders a dedicated "filling in a real
+  pay structure for the first time" message instead of the field-by-field diff. Necessary
+  because `DEFAULT_CONFIG`'s pay fields are real-looking non-null placeholders (e.g.
+  `baseRate: 19.65`, not `null`) — without this, the diff would have shown a fabricated "before:
+  $19.65/hr" as if it were the user's actual old job.
+- [x] **Clear `startedUnemployed` on success** — `App.jsx`'s `handleWizardComplete` clears it to
+  `false` specifically when `wizardEntry === "structure_change" && mergedConfig.startedUnemployed
+  === true`, so a later real job loss doesn't incorrectly trigger the H5 "no prior pay history"
+  copy once the user actually has pay history.
 
-#### H5. App shell signals
+#### H5. App shell signals — DONE
 
-- [ ] **Banner copy** — when `jobLossMode && startedUnemployed`, banner reads "Started in Job
-  Loss Mode — no prior pay history"
-- [ ] **"Set up essential expenses" prompt** — first-paint Job Loss Dashboard tile that routes
-  into the triage list (§15.C3) so expenses are populated before they're needed
+- [x] **Banner copy** — the Job Loss Mode banner in `App.jsx` now branches on
+  `config.startedUnemployed === true` to show "Started in Job Loss Mode — no prior pay history"
+  instead of the normal "$0 earned income from [date] forward" copy.
+- [x] **"Set up essential expenses" prompt** — new tile in `JobLossDashboard.jsx`, shown whenever
+  `expenses` is empty (the exact state H3's Food-seed skip leaves a fresh jobless account in),
+  routing via a new `onOpenTriage` prop `App.jsx` wires to `setExpenseTriageOpen(true)`.
+
+**Verification:** 14 new tests (11 in `SetupWizard.test.jsx` covering step routing/collapse,
+validation gates, full payload contents, and the diff empty-state; 3 in `jobLossFlow.test.jsx`
+for the new dashboard prompt). 1084 tests total passing; lint diff-clean vs. baseline; production
+build green. **Not covered by tests:** `App.jsx`'s `handleWizardComplete` conditionals
+(Food-seed skip, `startedUnemployed` clear) — same "no component test harness" gap already noted
+for the SIGNED_IN short-circuit in §15.I's parked live-verification bullet; needs a real
+click-through (start signup → answer Yes → finish → confirm empty expenses + Job Loss Dashboard
+→ Back to Work → confirm diff empty-state + `startedUnemployed` cleared) on a deployed preview.
 
 ---
 

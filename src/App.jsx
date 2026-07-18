@@ -1258,12 +1258,28 @@ export default function App() {
       source: wizardEntry === false ? "setup_wizard" : `life_event:${wizardEntry}`,
       effectiveFrom: mergedConfig.startDate ?? undefined,
     };
-    setConfig(mergedConfig);
+    // §15.H4: Back to Work's structure_change flow is how a jobless-started user
+    // first fills in real pay structure. Clear the flag on success so future Life
+    // Events (and the §15.H5 banner copy) stop treating this as a no-prior-history
+    // account — otherwise a later job loss would incorrectly show the "no prior pay
+    // history" banner even though real pay data exists now.
+    const finalConfig = (wizardEntry === "structure_change" && mergedConfig.startedUnemployed === true)
+      ? { ...mergedConfig, startedUnemployed: false }
+      : mergedConfig;
+    setConfig(finalConfig);
     setWizardEntry(null);
+    // §15.H3: a first-run signup that ended in Job Loss Mode skipped the Deductions/
+    // Tax steps entirely and has no real income yet — defer the pinned Food default
+    // to the user's first expense-triage pass instead of seeding it unseen. Passed
+    // into the save overrides directly (not a separate setExpenses call) so the
+    // eager save below doesn't race React's not-yet-flushed state — same pattern
+    // savePersistedStateNow's own doc comment calls out.
+    const skipFoodSeed = wizardEntry === false && finalConfig.jobLossMode === true;
+    if (skipFoodSeed) setExpenses([]);
     // Eager save — a completed wizard run is the single most expensive thing
     // to lose to a backgrounded/reclaimed mobile tab; don't leave it sitting
     // in the 800ms debounce window. configHistoryMetaRef is already set above.
-    savePersistedStateNow({ config: mergedConfig });
+    savePersistedStateNow({ config: finalConfig, ...(skipFoodSeed ? { expenses: [] } : {}) });
   }
 
   function handleSelectInvestorAccount(n) {
@@ -2065,11 +2081,19 @@ export default function App() {
                   Job Loss Mode
                 </div>
                 <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
-                  Projections show $0 earned income from{" "}
-                  <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>
-                    {config.jobLossDate ?? "—"}
-                  </span>{" "}
-                  forward.
+                  {/* §15.H5: users who started jobless have no real pay history to compare
+                      against — say so plainly instead of implying a job was actually lost. */}
+                  {config.startedUnemployed === true ? (
+                    "Started in Job Loss Mode — no prior pay history."
+                  ) : (
+                    <>
+                      Projections show $0 earned income from{" "}
+                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>
+                        {config.jobLossDate ?? "—"}
+                      </span>{" "}
+                      forward.
+                    </>
+                  )}
                   {benefitsEndDate && (
                     <>
                       {" "}Unemployment runs out on{" "}
@@ -2161,6 +2185,7 @@ export default function App() {
               setConfig={setConfig}
               expenses={expenses}
               effectiveToday={effectiveToday}
+              onOpenTriage={() => setExpenseTriageOpen(true)}
             />
           )}
           {isAdmin && adminDemoView !== null

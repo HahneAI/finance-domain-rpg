@@ -38,7 +38,7 @@ function firstUnemploymentPaymentDate(cfg) {
  * excluded from the burn. Unemployment math respects waiting-week offset
  * and remaining duration.
  */
-export function JobLossDashboard({ config, setConfig, expenses, effectiveToday }) {
+export function JobLossDashboard({ config, setConfig, expenses, effectiveToday, onOpenTriage }) {
   const [savingsDraft, setSavingsDraft]   = useState("");
   const [includeBenefits, setIncludeBenefits] = useState(true);
 
@@ -185,6 +185,31 @@ export function JobLossDashboard({ config, setConfig, expenses, effectiveToday }
           </div>
         </div>
       </div>
+
+      {/* TODO §15.H5 — first-paint prompt for accounts with nothing to triage yet
+          (e.g. a jobless-first-run signup that skipped Food seeding, §15.H3).
+          Runway/burn below is $0 and meaningless until real expenses exist. */}
+      {(expenses ?? []).length === 0 && onOpenTriage && (
+        <Pressable
+          onClick={onOpenTriage}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
+            width: "100%", textAlign: "left",
+            background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.28)",
+            borderRadius: "10px", padding: "12px 14px", marginBottom: "16px", cursor: "pointer",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--color-warning)" }}>
+              Set up essential expenses
+            </div>
+            <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
+              Runway and burn rate need your rent, utilities, and other bills to mean anything.
+            </div>
+          </div>
+          <span style={{ fontSize: "18px", color: "var(--color-warning)" }}>→</span>
+        </Pressable>
+      )}
 
       {/* Three headline metrics */}
       <div style={{

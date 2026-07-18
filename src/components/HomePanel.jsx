@@ -39,7 +39,9 @@ export function HomePanel({
   remainingSpend,
   goals = [],
   setGoals: setGoalsProp,
+  onSaveGoalsNow: onSaveGoalsNowProp,
   setConfig: setConfigProp,
+  saveConfigNow: saveConfigNowProp,
   futureWeeks = [],
   timelineWeekNets = [],
   expenses = [],
@@ -64,6 +66,8 @@ export function HomePanel({
   const noop = useCallback(() => {}, []);
   const setGoals = readOnly ? noop : setGoalsProp;
   const setConfig = readOnly ? noop : setConfigProp;
+  const onSaveGoalsNow = readOnly ? noop : onSaveGoalsNowProp;
+  const saveConfigNow = readOnly ? noop : saveConfigNowProp;
   // Scale factor: weekly → per-paycheck (1 for weekly, 2 for biweekly/salary, ~4.33 for monthly).
   // All card values shown to the user are scaled by this factor so the amount matches
   // what lands in their bank account each paycheck cycle.
@@ -438,59 +442,87 @@ export function HomePanel({
   };
 
   const startEditGoal = (g) => { setEditGoalId(g.id); setEditGoalVals({ label: g.label, target: g.target, note: g.note }); };
+  // Every handler below computes `next` synchronously from the `goals` prop
+  // (not a setState updater) so the same value can go to setGoals AND
+  // onSaveGoalsNow — same eager-save pattern used throughout ProfilePanel.
+  // Each is a complete, discrete action (add/edit/delete/reorder one goal)
+  // that shouldn't sit in the ambient debounce window.
   const saveEditGoal = (id) => {
     if (!setGoals) return;
-    setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, ...editGoalVals, target: parseFloat(editGoalVals.target) || 0 } : g)));
+    const next = goals.map((g) => (g.id === id ? { ...g, ...editGoalVals, target: parseFloat(editGoalVals.target) || 0 } : g));
+    setGoals(next);
+    onSaveGoalsNow?.(next);
     setEditGoalId(null);
   };
   const addGoal = () => {
     if (!setGoals) return;
-    setGoals((prev) => [...prev, {
+    const next = [...goals, {
       id: `g_${Date.now()}`,
       label: newGoal.label,
       target: parseFloat(newGoal.target) || 0,
       color: GOAL_SYSTEM_COLOR,
       note: newGoal.note,
       completed: false,
-    }]);
+    }];
+    setGoals(next);
+    onSaveGoalsNow?.(next);
     setAddingGoal(false);
     setNewGoal({ label: "", target: "", note: "" });
   };
   const deleteGoal = (id) => {
     if (!setGoals) return;
-    setGoals((prev) => prev.filter((g) => g.id !== id));
+    const next = goals.filter((g) => g.id !== id);
+    setGoals(next);
+    onSaveGoalsNow?.(next);
     setDelGoalId(null);
   };
-  const toggleComplete = (id) => setGoals?.((prev) => prev.map((g) => (g.id === id ? { ...g, completed: !g.completed } : g)));
+  const toggleComplete = (id) => {
+    const next = goals.map((g) => (g.id === id ? { ...g, completed: !g.completed } : g));
+    setGoals?.(next);
+    onSaveGoalsNow?.(next);
+  };
   // Re-anchor the active-goal funding sequence to the user's next paycheck. Weekly
   // users have no isPayWeek flags (getNextPayWeek → null), so fall back to the next
   // future week. Persists to config so computeGoalTimeline recomputes from the new
   // anchor and the change survives reload / Force Sync.
   const resetGoalTimeline = () => {
     const epochIdx = nextPayWeek?.idx ?? futureWeeks?.[0]?.idx ?? null;
-    setConfig?.((prev) => ({ ...prev, goalTimelineEpochIdx: epochIdx }));
+    const newConfig = { ...config, goalTimelineEpochIdx: epochIdx };
+    setConfig?.(newConfig);
+    saveConfigNow?.(newConfig);
     // Drop stale projected due weeks on active goals so they recompute from the anchor.
-    setGoals?.((prev) => prev.map((g) => (g.completed ? g : { ...g, dueWeek: undefined })));
+    const nextGoals = goals.map((g) => (g.completed ? g : { ...g, dueWeek: undefined }));
+    setGoals?.(nextGoals);
+    onSaveGoalsNow?.(nextGoals);
     setShowResetTimeline(false);
   };
   const handleMarkDone = (id) => {
     setCelebrating(id);
     setTimeout(() => {
-      setGoals?.((prev) => prev.map((g) => (g.id === id ? { ...g, completed: true, completedAt: new Date().toISOString() } : g)));
+      // Captured via the setGoals updater (not the outer `goals` closure) so
+      // this reflects state as of when the timeout actually fires, not when
+      // it was scheduled 900ms earlier — same freshness guarantee a plain
+      // functional updater gives, just also exposing the computed value for
+      // the eager save.
+      let nextGoals;
+      setGoals?.((prev) => {
+        nextGoals = prev.map((g) => (g.id === id ? { ...g, completed: true, completedAt: new Date().toISOString() } : g));
+        return nextGoals;
+      });
+      onSaveGoalsNow?.(nextGoals);
       setCelebrating(null);
       setShowCompleted(true);
     }, 900);
   };
   const moveGoal = (id, dir) => {
-    setGoals?.((prev) => {
-      const idx = prev.findIndex((g) => g.id === id);
-      if (idx === -1) return prev;
-      const arr = [...prev];
-      const swap = idx + dir;
-      if (swap < 0 || swap >= arr.length) return prev;
-      [arr[idx], arr[swap]] = [arr[swap], arr[idx]];
-      return arr;
-    });
+    const idx = goals.findIndex((g) => g.id === id);
+    if (idx === -1) return;
+    const arr = [...goals];
+    const swap = idx + dir;
+    if (swap < 0 || swap >= arr.length) return;
+    [arr[idx], arr[swap]] = [arr[swap], arr[idx]];
+    setGoals?.(arr);
+    onSaveGoalsNow?.(arr);
   };
   const moveGoalInActiveList = (id, dir) => {
     const idx = activeGoals.findIndex((g) => g.id === id);
@@ -500,26 +532,26 @@ export function HomePanel({
     moveGoal(id, dir);
   };
   const reorderGoalByDrag = (draggedId, overId, insertIndexOverride = null) => {
-    setGoals?.((prev) => {
-      const active = prev.filter((g) => !g.completed);
-      const completed = prev.filter((g) => g.completed);
-      const dragged = active.find((g) => g.id === draggedId);
-      if (!dragged) return prev;
-      const activeWithoutDragged = active.filter((g) => g.id !== draggedId);
-      const explicitIndex = typeof insertIndexOverride === "number" && !Number.isNaN(insertIndexOverride)
-        ? Math.max(0, Math.min(insertIndexOverride, activeWithoutDragged.length))
-        : null;
-      let insertIndex = activeWithoutDragged.length;
-      if (explicitIndex !== null) {
-        insertIndex = explicitIndex;
-      } else if (overId) {
-        const overIndex = activeWithoutDragged.findIndex((g) => g.id === overId);
-        if (overIndex !== -1) insertIndex = overIndex;
-      }
-      const reordered = [...activeWithoutDragged];
-      reordered.splice(insertIndex, 0, dragged);
-      return [...reordered, ...completed];
-    });
+    const active = goals.filter((g) => !g.completed);
+    const completed = goals.filter((g) => g.completed);
+    const dragged = active.find((g) => g.id === draggedId);
+    if (!dragged) return;
+    const activeWithoutDragged = active.filter((g) => g.id !== draggedId);
+    const explicitIndex = typeof insertIndexOverride === "number" && !Number.isNaN(insertIndexOverride)
+      ? Math.max(0, Math.min(insertIndexOverride, activeWithoutDragged.length))
+      : null;
+    let insertIndex = activeWithoutDragged.length;
+    if (explicitIndex !== null) {
+      insertIndex = explicitIndex;
+    } else if (overId) {
+      const overIndex = activeWithoutDragged.findIndex((g) => g.id === overId);
+      if (overIndex !== -1) insertIndex = overIndex;
+    }
+    const reordered = [...activeWithoutDragged];
+    reordered.splice(insertIndex, 0, dragged);
+    const next = [...reordered, ...completed];
+    setGoals?.(next);
+    onSaveGoalsNow?.(next);
   };
   const canShowReorder = activeGoals.length > 1 && typeof moveGoal === "function" && typeof reorderGoalByDrag === "function";
   const closeReorderModal = () => {

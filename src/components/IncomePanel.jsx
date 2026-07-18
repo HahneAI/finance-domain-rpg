@@ -8,7 +8,7 @@ import { getFiscalWeekNumber, weekNumToPaycheckNum, payPeriodUnit } from "../lib
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { Card, Pressable, iS, lS, ScrollSnapRow } from "./ui.jsx";
 
-export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {}, onWeekInspect = null }) {
+export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showExtra, taxDerived, missedEventDayNetLost = 0, adjustedTakeHome, projectedAnnualNet, currentWeek, isAdmin, today, weekNetLookup = {}, onWeekInspect = null }) {
   const [showSharpener, setShowSharpener] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState(false);
   const [showEventLossInfo, setShowEventLossInfo] = useState(false);
@@ -35,8 +35,8 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
   const canSharpenerApply = sFed1 !== null;
   function applySharpener() {
     if (!canSharpenerApply) return;
-    setConfig(prev => ({
-      ...prev,
+    const newConfig = {
+      ...config,
       fedRateLow:    sFed1,
       stateRateLow:  sSta1 ?? 0,
       fedRateHigh:   isVariable && sFed2 != null ? sFed2 : sFed1,
@@ -46,7 +46,9 @@ export function IncomePanel({ allWeeks, config, setConfig, showExtra, taxDerived
       w2FedRate: isVariable && sFed2 != null ? sFed2 : sFed1,
       w2StateRate: isVariable && sSta2 != null ? sSta2 : (sSta1 ?? 0),
       taxRatesEstimated: false,
-    }));
+    };
+    setConfig(newConfig);
+    saveConfigNow?.(newConfig);
     setShowSharpener(false);
     setSg1(""); setSf1(""); setSs1("");
     setSg2(""); setSf2(""); setSs2("");

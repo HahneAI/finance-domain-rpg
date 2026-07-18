@@ -75,7 +75,7 @@ function scrollCategoryHeaderNearTop(cat) {
 }
 
 
-export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false, taxProjectionsEnabled = false, isTester = false, readOnly = false }) {
+export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false, taxProjectionsEnabled = false, isTester = false, readOnly = false }) {
   // Tax-exempt projection UI (e.g. the TAXED/EXEMPT badge) is gated behind the
   // manual feature unlock, not config.taxExemptOptIn alone — so clicking "Unlock
   // projections" in setup never surfaces it to a normal user. See canAccessTaxPlan.
@@ -86,6 +86,18 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
   // and gate each individual call site.
   const noop = useCallback(() => {}, []);
   const setExpenses = readOnly ? noop : setExpensesProp;
+  const onSaveExpensesNow = readOnly ? noop : onSaveExpensesNowProp;
+  // Wraps setExpenses to also eager-save the computed value, so every
+  // mutation below (add/edit/delete/reorder an expense or loan) doesn't sit
+  // in the ambient debounce window. `updater` has the exact same signature
+  // as a setState functional updater (receives prev, returns next) — every
+  // call site below is unchanged internally, only the outer function name
+  // changes from setExpenses to this.
+  const applyExpenseUpdate = (updater) => {
+    let next;
+    setExpenses(prev => { next = updater(prev); return next; });
+    onSaveExpensesNow?.(next);
+  };
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;
   const cpm = CHECKS_PER_MONTH[userPaySchedule ?? "weekly"] ?? 4;
@@ -592,7 +604,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
     const cycle = normalizeCycle(editVals.cycle ?? "every30days");
     const amount = parseFloat(editVals.amount) || 0;
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    setExpenses(prev => prev.map(e => {
+    applyExpenseUpdate(prev => prev.map(e => {
       if (e.id !== id) return e;
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
       const latest = latestPastEntry(existing);
@@ -621,7 +633,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
   };
 
   const saveAdvancedEdit = ({ patches = [], additions = [] }) => {
-    setExpenses(prev => {
+    applyExpenseUpdate(prev => {
       // Group patches by expId so multiple patches per expense are all applied
       const patchMap = {};
       for (const p of patches) {
@@ -676,7 +688,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
     const amount = parseFloat(newExp.amount) || 0;
     const cycle = newExp.cycle ?? "every30days";
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    setExpenses(prev => [...prev, {
+    applyExpenseUpdate(prev => [...prev, {
       id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
       label: newExp.label,
@@ -702,7 +714,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
     }
     const effectiveFrom = `${anchor}-01`;
     const weekly = [0, 1, 2, 3].map(q => q < ap ? 0 : perPaycheck);
-    setExpenses(prev => [...prev, {
+    applyExpenseUpdate(prev => [...prev, {
       id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
       label: newExp.label,
@@ -721,7 +733,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
     const weekly = [0, 1, 2, 3].map(q => q < ap ? 0 : perPaycheck);
     const qStartIso = QUARTER_FIRST_MONTHS[ap] + "-01";
-    setExpenses(prev => [...prev, {
+    applyExpenseUpdate(prev => [...prev, {
       id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
       label: newExp.label,
@@ -733,7 +745,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
   };
 
   const deleteExp = (id) => {
-    setExpenses(prev => prev.map(e => {
+    applyExpenseUpdate(prev => prev.map(e => {
       if (e.id !== id) return e;
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
       const latest = latestPastEntry(existing);
@@ -767,7 +779,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
   const saveThisMonth = (expId) => {
     const { cycle, amount } = _editParsed();
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
-    setExpenses(prev => prev.map(e =>
+    applyExpenseUpdate(prev => prev.map(e =>
       e.id !== expId ? e : applyMonthEdit(e, activeMonth, perPaycheck, amount, cycle)
     ));
     setEditId(null);
@@ -779,7 +791,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
     const { cycle, amount } = _editParsed();
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
     const [year, startMon] = activeMonth.split("-").map(Number);
-    setExpenses(prev => prev.map(e => {
+    applyExpenseUpdate(prev => prev.map(e => {
       if (e.id !== expId) return e;
       const overrides = { ...(e.monthlyOverrides ?? {}) };
       for (let m = startMon; m <= 12; m++) {
@@ -808,7 +820,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
     const { cycle, amount } = _editParsed();
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
     const qStartMonth = ap * 3 + 1; // Q1→1, Q2→4, Q3→7, Q4→10
-    setExpenses(prev => prev.map(e => {
+    applyExpenseUpdate(prev => prev.map(e => {
       if (e.id !== expId) return e;
       const overrides = { ...(e.monthlyOverrides ?? {}) };
       for (let m = qStartMonth; m < qStartMonth + 3; m++) {
@@ -834,7 +846,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
     const startKey = onwardStartMonthKey(QUARTER_FIRST_MONTHS[ap], currentMonthKey);
     const effectiveFrom = `${startKey}-01`;
-    setExpenses(prev => prev.map(e => {
+    applyExpenseUpdate(prev => prev.map(e => {
       if (e.id !== expId) return e;
       const { monthlyOverrides } = applyQuarterForward(e, startKey, perPaycheck, amount, cycle);
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
@@ -858,7 +870,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
     const { cycle, amount } = _editParsed();
     const perPaycheck = perPaycheckFromCycle(amount, cycle, cpm);
     const fy = Number(FISCAL_YEAR_START.slice(0, 4));
-    setExpenses(prev => prev.map(e => {
+    applyExpenseUpdate(prev => prev.map(e => {
       if (e.id !== expId) return e;
       const { monthlyOverrides } = applyAllQuarters(e, perPaycheck, amount, cycle, fy);
       const existing = e.history ?? [{ effectiveFrom: FISCAL_YEAR_START, weekly: e.weekly ?? [0, 0, 0, 0] }];
@@ -876,7 +888,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
     const target = expenses.find(e => e.id === expId);
     // Store previous override value so user can UNDO within 8s
     const prevValue = target?.monthlyOverrides?.[monthKey] ?? null;
-    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonth(e, monthKey)));
+    applyExpenseUpdate(prev => prev.map(e => e.id !== expId ? e : clearMonth(e, monthKey)));
     setUndoDelete({ expId, monthKey, prevValue });
     setPendingDelete(null);
   };
@@ -885,7 +897,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
     // Always use clearMonthForward so monthlyOverrides are properly zeroed.
     // In quarter mode activeMonth is null, so fall back to the first month of the active quarter.
     const startKey = activeMonth ?? QUARTER_FIRST_MONTHS[ap];
-    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearMonthForward(e, startKey)));
+    applyExpenseUpdate(prev => prev.map(e => e.id !== expId ? e : clearMonthForward(e, startKey)));
     setUndoDelete(null);
     setPendingDelete(null);
   };
@@ -893,7 +905,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
   const executeUndo = () => {
     if (!undoDelete) return;
     const { expId, monthKey, prevValue } = undoDelete;
-    setExpenses(prev => prev.map(e => {
+    applyExpenseUpdate(prev => prev.map(e => {
       if (e.id !== expId) return e;
       const overrides = { ...(e.monthlyOverrides ?? {}) };
       if (prevValue === null) {
@@ -907,7 +919,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
   };
 
   const deleteQuarterOnly = (expId) => {
-    setExpenses(prev => prev.map(e => e.id !== expId ? e : clearQuarterMonths(e, ap)));
+    applyExpenseUpdate(prev => prev.map(e => e.id !== expId ? e : clearQuarterMonths(e, ap)));
     setPendingDelete(null);
   };
 
@@ -937,7 +949,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
 
   const restoreExpense = (expId, scope) => {
     const monthKeys = getRestoreMonthKeys(scope);
-    setExpenses(prev => prev.map(e => {
+    applyExpenseUpdate(prev => prev.map(e => {
       if (e.id !== expId) return e;
       const overrides = { ...(e.monthlyOverrides ?? {}) };
       for (const key of monthKeys) delete overrides[key];
@@ -1031,7 +1043,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
   // with the marker regardless of pinned (food) cards, hidden cards, or loans
   // interleaved in the array.
   const reorderExpenseByInsert = (draggedId, lane, beforeId = null) => {
-    setExpenses(prev => {
+    applyExpenseUpdate(prev => {
       const dragged = prev.find(e => e.id === draggedId);
       if (!dragged) return prev;
       const targetLane = lane ?? dragged.category;
@@ -1256,7 +1268,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
       paymentFrequency: editLoanVals.paymentFrequency || "monthly",
       firstPaymentDate: editLoanVals.firstPaymentDate || TODAY_ISO,
     };
-    setExpenses(prev => prev.map(e => {
+    applyExpenseUpdate(prev => prev.map(e => {
       if (e.id !== id) return e;
       return { ...e, label: editLoanVals.label, note: [editLoanVals.note, editLoanVals.note, editLoanVals.note], loanMeta: meta, history: buildLoanHistory(meta) };
     }));
@@ -1269,7 +1281,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
       paymentFrequency: newLoan.paymentFrequency || "monthly",
       firstPaymentDate: newLoan.firstPaymentDate || TODAY_ISO,
     };
-    setExpenses(prev => [...prev, {
+    applyExpenseUpdate(prev => [...prev, {
       id: `loan_${crypto.randomUUID()}`, type: "loan", category: "Loans",
       label: newLoan.label, note: [newLoan.note, newLoan.note, newLoan.note],
       loanMeta: meta, history: buildLoanHistory(meta)
@@ -1277,7 +1289,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, weeklyInco
     setAddingLoan(false);
     setNewLoan({ label: "", totalAmount: "", paymentAmount: "", paymentFrequency: "monthly", firstPaymentDate: TODAY_ISO, note: "" });
   };
-  const deleteLoan = (id) => { setExpenses(p => p.filter(e => e.id !== id)); setDelLoanId(null); };
+  const deleteLoan = (id) => { applyExpenseUpdate(p => p.filter(e => e.id !== id)); setDelLoanId(null); };
 
 
 

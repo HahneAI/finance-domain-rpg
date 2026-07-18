@@ -3096,6 +3096,7 @@ export default function App() {
           logNetGained={logTotals.netGained}
           futureEventDeductions={futureEventDeductions}
           prevWeekNet={prevWeekNet}
+          allWeeks={allWeeks}
         />
       )}
 

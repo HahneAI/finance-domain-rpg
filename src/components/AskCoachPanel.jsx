@@ -30,6 +30,7 @@ export function AskCoachPanel({
   logNetGained = 0,
   futureEventDeductions = {},
   prevWeekNet = null,
+  allWeeks = [],
 }) {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
@@ -52,7 +53,7 @@ export function AskCoachPanel({
     try {
       const contextBlock = buildCoachContext({
         config, weeklyIncome, avgWeeklySpend, goals, expenses, fundedGoalSpend, currentWeek, today, runwayDays, logs,
-        futureWeeks, timelineWeekNets, futureWeekNets, logNetLost, logNetGained, futureEventDeductions, prevWeekNet,
+        futureWeeks, timelineWeekNets, futureWeekNets, logNetLost, logNetGained, futureEventDeductions, prevWeekNet, allWeeks,
       });
       let accumulated = "";
       for await (const chunk of chatWithCoach(nextMessages, ASK_COACH_SYSTEM_PROMPT, contextBlock, "haiku")) {

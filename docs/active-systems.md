@@ -471,7 +471,6 @@ build-out phase (`docs/TODO.md` §18 standing constraint).
   *user* volunteers it in their own message; it never learns one from data.
 - **Known gaps:** chat history persistence exists at the data layer (`coach_chats` table, migration
   023 live, `db.js` load/save/delete functions) but isn't wired into `App.jsx`/`AskCoachPanel` yet
-  (§18.H). The "Next Week Takehome" Home tile has no live figure in context (needs
-  `futureWeeks`/`getNextPayWeek` plumbing). Benefits/401k context is intentionally not wired —
-  blocked on a product decision about how base (non-DHL) users onboard other employer comp.
+  (§18.H). Benefits/401k context is intentionally not wired — blocked on a product decision about
+  how base (non-DHL) users onboard other employer comp.
 - Full build log, deviations, and open questions: `docs/TODO.md` §18.

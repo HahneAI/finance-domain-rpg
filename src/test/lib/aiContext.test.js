@@ -19,6 +19,7 @@ describe("buildCoachContext", () => {
     expect(block).toContain("Weekly net income: $1,000");
     expect(block).toContain("Weekly spend: $400");
     expect(block).toContain("Weekly surplus: $600");
+    expect(block).toContain("Next week takehome (Home tile): $1,000 (projected average — no confirmed weeks yet)");
     expect(block).toContain("Left this week (Home tile): $600");
     expect(block).toContain("Net worth trend (Home tile — projected annual savings): $30,700");
     expect(block).toContain("Budget Health (Home tile): 40% spend ratio (well-managed)");
@@ -28,6 +29,32 @@ describe("buildCoachContext", () => {
     expect(block).toContain("Expense breakdown: Food (Needs): ~$400/wk");
     expect(block).toContain("Fiscal week: 28 of 52 (24 left)");
     expect(block).toContain("Today: 2026-07-07");
+  });
+
+  // Regression: a live test asked "What's my Next Week Takehome?" and Coach
+  // had to hedge with "isn't showing in the data" — buildCoachContext never
+  // carried futureWeekNets (distinct from timelineWeekNets, which only feeds
+  // computeGoalTimeline). These match HomePanel.jsx's exact fallback chain,
+  // status thresholds, and perCheckFactor scaling for the same tile.
+  it("cites the real Next Week Takehome figure and status when futureWeekNets has a real entry", () => {
+    const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 400, futureWeekNets: [900] });
+    expect(block).toContain("Next week takehome (Home tile): $900 (slightly below average), -$100 vs your average");
+  });
+
+  it("flags Next Week Takehome as below average and adds the vs-average delta past the 3% flat band", () => {
+    const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 400, futureWeekNets: [700] });
+    expect(block).toContain("Next week takehome (Home tile): $700 (below average — check Log), -$300 vs your average");
+  });
+
+  it("reads Next Week Takehome as on track and omits the delta within the 3% flat band", () => {
+    const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 400, futureWeekNets: [1010] });
+    expect(block).toContain("Next week takehome (Home tile): $1,010 (on track)");
+    expect(block).not.toContain("vs your average");
+  });
+
+  it("falls back to the last confirmed week for Next Week Takehome when no scheduled week exists yet", () => {
+    const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 400, prevWeekNet: 900 });
+    expect(block).toContain("Next week takehome (Home tile): $900 (projected from your last confirmed pay)");
   });
 
   it("uses prevWeekNet for Left This Week when a confirmed week exists, not just weeklyIncome", () => {

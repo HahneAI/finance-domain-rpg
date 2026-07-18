@@ -58,6 +58,7 @@ export function buildCoachContext({
   logs = [],
   futureWeeks = [],
   timelineWeekNets = [],
+  futureWeekNets = [],
   logNetLost = 0,
   logNetGained = 0,
   futureEventDeductions = {},
@@ -96,11 +97,34 @@ export function buildCoachContext({
   );
   const lastGoalEW = goalTimeline.length ? Math.max(...goalTimeline.map((g) => (Number.isFinite(g.eW) ? g.eW : 0))) : 0;
   const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
+  const perCheckFactor = 52 / checksPerYear;
+
+  // Matches HomePanel.jsx's "Next Week Takehome" tile exactly: the first
+  // entry of futureWeekNets (a real confirmed/scheduled figure) if one
+  // exists, else the last confirmed week, else the plain weekly average —
+  // same fallback order, same status thresholds, same perCheckFactor scaling.
+  const nextWeekNet = futureWeekNets?.[0] ?? null;
+  const nextWeekFallbackSource = nextWeekNet != null ? null : (prevWeekNet != null ? "prev" : "avg");
+  const nextWeekFallbackNet = nextWeekFallbackSource === "prev" ? prevWeekNet : weeklyIncome;
+  const nextWeekDisplay = nextWeekNet ?? nextWeekFallbackNet;
+  const nextWeekStatus = nextWeekNet != null
+    ? (nextWeekNet < weeklyIncome * 0.8 ? "below average — check Log"
+      : nextWeekNet < weeklyIncome * 0.95 ? "slightly below average"
+        : "on track")
+    : (nextWeekFallbackSource === "prev" ? "projected from your last confirmed pay" : "projected average — no confirmed weeks yet");
+  let nextWeekLine = `Next week takehome (Home tile): ${fmt$(nextWeekDisplay * perCheckFactor)} (${nextWeekStatus})`;
+  if (nextWeekNet != null) {
+    const diff = nextWeekNet - weeklyIncome;
+    if (Math.abs(diff) >= weeklyIncome * 0.03) {
+      nextWeekLine += `, ${diff > 0 ? "+" : "-"}${fmt$(Math.abs(diff) * perCheckFactor)} vs your average`;
+    }
+  }
 
   const lines = [
     `Weekly net income: ${fmt$(weeklyIncome)}`,
     `Weekly spend: ${fmt$(avgWeeklySpend)}`,
     `Weekly surplus: ${fmt$(avgWeeklySurplus)}`,
+    nextWeekLine,
     `Left this week (Home tile): ${fmt$(leftThisWeek)}`,
     `Savings rate: ${netWorthHealth.rate != null ? `${Math.round(netWorthHealth.rate * 100)}%` : "—"}${netWorthHealth.belowThreshold ? " (below 10% target)" : ""}`,
     `Net worth trend (Home tile — projected annual savings): ${fmt$(annualSavings)}`,

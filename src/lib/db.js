@@ -85,7 +85,7 @@ const createDefaultFoodExpense = () => ({
   history: [{ effectiveFrom: FISCAL_YEAR_START, weekly: [FOOD_DEFAULT_WEEKLY, FOOD_DEFAULT_WEEKLY, FOOD_DEFAULT_WEEKLY, FOOD_DEFAULT_WEEKLY] }],
 });
 
-const ensureInitialFoodExpense = (expenses) => {
+export const ensureInitialFoodExpense = (expenses) => {
   const normalized = (Array.isArray(expenses) ? expenses : []).map(normalizeExpenseFoodFlags);
   if (normalized.some(isFoodPrimaryExpense)) return normalized;
   return [...normalized, createDefaultFoodExpense()];

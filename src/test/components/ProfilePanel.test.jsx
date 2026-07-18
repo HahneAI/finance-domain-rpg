@@ -58,6 +58,40 @@ describe('ProfilePanel — main Account list renders', () => {
   })
 })
 
+// TODO §15 nav/panel restructuring — Job & Pay/Retirement & Benefits/Tax Plan
+// all show figures that don't apply without real income; a "Back to Work" row
+// replaces them as a second route into the same structure_change flow the Job
+// Loss banner's button already uses.
+describe('ProfilePanel — Job Loss Mode swaps Work & Pay for Back to Work', () => {
+  it('hides Job & Pay / Retirement & Benefits and shows a Back to Work row instead', () => {
+    renderMainProfile({ config: { ...DEFAULT_CONFIG, jobLossMode: true }, onBackToWork: () => {} })
+    expect(screen.queryByText('Work & Pay')).not.toBeInTheDocument()
+    expect(screen.queryByText('Job & Pay')).not.toBeInTheDocument()
+    expect(screen.queryByText('Retirement & Benefits')).not.toBeInTheDocument()
+    expect(screen.getByText('Job Search')).toBeInTheDocument()
+    expect(screen.getByText('Back to Work')).toBeInTheDocument()
+  })
+
+  it('calls onBackToWork when the row is pressed', () => {
+    const onBackToWork = vi.fn()
+    renderMainProfile({ config: { ...DEFAULT_CONFIG, jobLossMode: true }, onBackToWork })
+    fireEvent.click(screen.getByText('Back to Work'))
+    expect(onBackToWork).toHaveBeenCalled()
+  })
+
+  it('hides Tax Plan even for a tax-plan-eligible admin while jobLossMode is true', () => {
+    renderMainProfile({ config: { ...DEFAULT_CONFIG, jobLossMode: true }, isAdmin: true, onBackToWork: () => {} })
+    expect(screen.queryByText('Tax Plan')).not.toBeInTheDocument()
+  })
+
+  it('restores the normal Work & Pay group once jobLossMode is false', () => {
+    renderMainProfile({ config: { ...DEFAULT_CONFIG, jobLossMode: false } })
+    expect(screen.getByText('Work & Pay')).toBeInTheDocument()
+    expect(screen.getByText('Job & Pay')).toBeInTheDocument()
+    expect(screen.queryByText('Job Search')).not.toBeInTheDocument()
+  })
+})
+
 // ProfilePanel is mounted without expenses/goals/logs props at all (see App.jsx),
 // so its Pay Structure sections structurally cannot touch them. These tests lock
 // in the other half of that guarantee: the config object each section hands to

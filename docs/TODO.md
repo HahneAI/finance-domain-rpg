@@ -1831,6 +1831,55 @@ for the SIGNED_IN short-circuit in §15.I's parked live-verification bullet; nee
 click-through (start signup → answer Yes → finish → confirm empty expenses + Job Loss Dashboard
 → Back to Work → confirm diff empty-state + `startedUnemployed` cleared) on a deployed preview.
 
+#### H6. Job Loss Mode nav & panel scoping — DONE 2026-07-18 *(found during live testing)*
+
+*Live click-through of H1–H5 surfaced two real gaps not in the original spec: (1) Back to Work
+left the account with zero expenses permanently — H3's Food-seed skip has no counterpart restore;
+(2) the full 5-tab nav (Home/Income/Budget/Log/Account) stayed up throughout Job Loss Mode, so
+Income and Log — both built entirely around an active pay structure — sat there showing
+meaningless or stale figures. Scoped and fixed in the same pass since both are direct consequences
+of H3's own design.*
+
+- [x] **Back to Work restores the mandatory Food expense** — `db.js`'s existing
+  `ensureInitialFoodExpense()` (previously module-private, used only by `loadUserData`'s
+  pre-wizard-migration path) is now exported and called from `handleWizardComplete` whenever
+  `wizardEntry === "structure_change" && mergedConfig.startedUnemployed === true` — the exact
+  mirror of H3's skip condition. No-op if the user already added a Food-labeled expense manually
+  via Triage. **Scope note:** only Food, since it's the only *real* mandatory expense that exists
+  today — §25's planned Rent expense is explicitly brainstorm-gated and not built yet; re-seeding
+  it here would be scope creep ahead of that session.
+- [x] **Bottom nav (mobile) + sidebar (desktop) drop to Home/Budget/Account while `jobLossMode`
+  is true** — `effectiveBottomNav`/new `effectiveNavItems` memos in `App.jsx` filter out Income
+  and Log. A new redirect effect bounces `currentView` to `"home"` if the user happens to be on
+  either tab the instant `jobLossMode` flips true (e.g. activating Job Loss Mode while already
+  viewing Income), so nothing strands the user on a tab with no way back to it via nav.
+- [x] **HomePanel** — the "Financial Health" block (Next Week Takehome / Net Worth Trend / Budget
+  Health tiles) is hidden while `jobLossMode` is true. All three assume active income;
+  `JobLossDashboard` (rendered separately, already covers "how am I doing right now" via
+  runway/burn) makes them redundant at best, misleading at worst — Budget Health's spend/take-home
+  ratio against $0 take-home being the sharpest example. Goals section is untouched — goals stay
+  meaningful independent of employment status. Mirrors the precedent already set for
+  `NetWorthHealthTips` (`docs/active-systems.md` §14: "Suppressed entirely in Job Loss Mode").
+- [x] **BudgetPanel — no changes.** Investigated first: Budget has no top-level metric/health
+  tiles of its own (that's a Home-only concept) — it's fundamentally the expense list/editor,
+  which is exactly the tool needed for triage right now. Nothing to trim.
+- [x] **ProfilePanel (Account) tuned** — "Job & Pay" and "Retirement & Benefits" (both show
+  figures — rate, 401k match — that are stale or actively misleading without real income) and
+  "Tax Plan" (nothing to withhold against) are all hidden while `jobLossMode` is true. Replaced
+  with a new "Job Search" group containing a **Back to Work** row — a second entry point into the
+  same `structure_change` flow the Job Loss banner's button already uses. Extracted that flow into
+  one shared `handleBackToWork()` in `App.jsx` (previously inlined only in the banner's `onClick`)
+  so both entry points stay in sync by construction rather than duplicating the reset logic.
+  "Account" and "App Preferences" rows are untouched — settings, not income-dependent metrics.
+- **Verification:** 9 new tests (2 in `HomePanel.test.jsx`, 4 in `ProfilePanel.test.jsx`, plus the
+  Back-to-Work Food-restore path is covered indirectly by existing db.js export surface — no
+  direct test for `handleWizardComplete`'s own conditional, same App.jsx test-harness gap as H3).
+  1090 tests total passing; lint diff-clean; build green. **Not covered:** the nav-collapse
+  `useMemo`s and the redirect-away-from-Income/Log effect both live in `App.jsx` — needs a live
+  click-through (enter Job Loss Mode while on Income → confirm bounce to Home; check the bottom
+  nav only shows 3 tabs; open Account → confirm Back to Work row works) same as everything else
+  in this file.
+
 ---
 
 ### I. Admin Toolkit updates for §15 work

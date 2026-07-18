@@ -1434,6 +1434,11 @@ create index account_history_user_id_effective_from on account_history (user_id,
   that fall before the most recent relevant `account_history` boundary. **This does not need to
   ship in the same pass as the write path** — capturing history correctly first, then wiring
   the engine to actually consult it for past weeks, is an explicit two-phase plan (see F).
+  **A first narrow slice shipped 2026-07-17** — `resolveBaseRateForWeek()` / `buildYear(cfg,
+  baseRateHistory)` (§15.D), covering `baseRate` only, added because Quick Rate Update's live QA
+  caught the exact bug this bullet describes (a rate edit was retroactively rewriting elapsed
+  weeks). The general resolver for every other whitelisted field is still unbuilt — treat this as
+  proof of the pattern, not the read path being done.
 
 ### D2. Resolved decisions (2026-07-06 design discussion)
 
@@ -1666,6 +1671,34 @@ note rather than re-listed here to avoid two competing specs for the same shippe
   Supabase credentials here): unit tests + build only. Needs a real click-through on a deployed
   preview to confirm the modal opens from the Life Events menu and the account_history snapshot
   actually lands with the right `effectiveFrom`.
+- [x] **Point-in-time correctness fix (2026-07-17) — the effective date now actually gates the
+  math.** Live-QA caught that the original ship of this feature had the effective date do nothing
+  but tag the audit-trail snapshot — `buildYear()` applied the new `baseRate` uniformly to every
+  week including already-elapsed ones the moment Confirm was hit, silently rewriting past months'
+  reported income and every annual total (Tax Plan, goal timeline) that sums across the whole
+  year. Fixed as a deliberately narrow slice of §19's deferred Master Timeline read-path — **just
+  `baseRate`**, not a general point-in-time config resolver:
+  - `resolveBaseRateForWeek(rateHistory, weekEnd, liveBaseRate)` (`lib/finance.js`) — mirrors
+    `getEffectiveAmount`'s exact algorithm (latest entry with `effectiveFrom <= weekEnd`, else
+    fall back to the live rate). `buildYear(cfg, baseRateHistory = null)` takes an optional new
+    param; omitted (every call site except App.jsx's live one — SetupWizard, DemoAccountTree, the
+    math-audit trace helper) behaves byte-identical to before.
+  - `db.js`'s `loadUserData()` fetches `account_history` rows filtered to `baseRate` changes as an
+    isolated query (same missing-table tolerance pattern as `week_confirmations`) and maps them to
+    `{ effectiveFrom, baseRate }` via new `extractBaseRateHistory()`.
+  - `App.jsx` threads `baseRateHistory` state through `applyLoadedData`/`handleForcePull`, passes
+    it into the one live `buildYear(config, baseRateHistory)` call, and optimistically appends a
+    local entry the instant a `baseRate` edit's `saveConfigSnapshot` fires — closes the gap where,
+    without it, a **future-dated** effective date would misapply the new rate too early to weeks
+    between today and that date, since the just-inserted DB row hasn't round-tripped into memory yet.
+  - **Deliberately out of scope**: every other historically-sensitive field (schedule, tax rates,
+    benefits, ...) still applies uniformly to every week as before — this is not §19's read path
+    being "done," just the one field this feature surfaced. `calcEventImpact`'s own `cfg.baseRate`
+    reads (Log panel per-event math) and the bucket-payout-rate fallback are untouched — those
+    price a specific already-logged event against *current* config by design, not an annual grid.
+  - 13 new tests (`resolveBaseRateForWeek` + `buildYear` point-in-time cases in `finance.test.js`;
+    `loadUserData` baseRate-history mapping/fallback cases in `db.test.js`). 1063 tests passing;
+    lint diff-clean; production build green.
 
 ---
 

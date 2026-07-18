@@ -28,6 +28,7 @@ import {
   getWeeklyBudgetBreakdownPayrollDeductions,
   isFutureWeek,
   traceExpenseCalculationSteps,
+  resolveBaseRateForWeek,
 } from '../../lib/finance.js'
 import { STATE_TAX_TABLE } from '../../constants/stateTaxTable.js'
 import { DEFAULT_CONFIG, DHL_PRESET } from '../../constants/config.js'
@@ -329,6 +330,96 @@ describe('buildYear', () => {
     expect(shortWeek.rotationLabel).toBe('Short Week')
     expect(longWeek.adminRotationTag).toBe('6-Day')
     expect(shortWeek.adminRotationTag).toBe('4-Day')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// resolveBaseRateForWeek + buildYear point-in-time baseRate (TODO §15.D / §19 slice)
+// ─────────────────────────────────────────────────────────────
+
+describe('resolveBaseRateForWeek', () => {
+  it('falls back to the live baseRate when no history is provided', () => {
+    expect(resolveBaseRateForWeek(null, new Date('2026-06-01'), 20)).toBe(20)
+    expect(resolveBaseRateForWeek([], new Date('2026-06-01'), 20)).toBe(20)
+  })
+
+  it('falls back to the live baseRate when no entry covers the target date', () => {
+    const history = [{ effectiveFrom: '2026-08-01', baseRate: 24.5 }]
+    expect(resolveBaseRateForWeek(history, new Date('2026-06-01'), 20)).toBe(20)
+  })
+
+  it('picks the latest entry with effectiveFrom <= the target date', () => {
+    const history = [
+      { effectiveFrom: '2026-01-05', baseRate: 20 },
+      { effectiveFrom: '2026-07-20', baseRate: 24.5 },
+    ]
+    expect(resolveBaseRateForWeek(history, new Date('2026-07-19'), 24.5)).toBe(20)
+    expect(resolveBaseRateForWeek(history, new Date('2026-07-20'), 24.5)).toBe(24.5)
+    expect(resolveBaseRateForWeek(history, new Date('2026-12-01'), 24.5)).toBe(24.5)
+  })
+
+  it('is unaffected by history entries out of chronological order', () => {
+    const history = [
+      { effectiveFrom: '2026-07-20', baseRate: 24.5 },
+      { effectiveFrom: '2026-01-05', baseRate: 20 },
+    ]
+    expect(resolveBaseRateForWeek(history, new Date('2026-03-01'), 24.5)).toBe(20)
+  })
+})
+
+describe('buildYear — point-in-time baseRate (TODO §15.D)', () => {
+  const BASE_CONFIG = {
+    ...DEFAULT_CONFIG,
+    employerPreset: null,
+    maxWeeklyHours: 40,
+    otThreshold: 40,
+    baseRate: 20,
+    firstActiveIdx: 0,
+    nightDiffEnabled: false,
+  }
+
+  it('with no rate history passed, every active week uses the live baseRate (back-compat: identical to calling buildYear(cfg) alone)', () => {
+    const weeks = buildYear(BASE_CONFIG)
+    weeks.filter(w => w.active).forEach(w => expect(w.grossPay).toBe(40 * 20))
+  })
+
+  it('a rate change only recomputes weeks from its effective date forward — past weeks keep the old rate', () => {
+    // Mirrors the real app: the account's original rate is itself a history row
+    // (stamped at signup) alongside the later change — see App.jsx's config-history
+    // watcher, which creates one for the very first wizard-set baseRate too.
+    const rateHistory = [
+      { effectiveFrom: '2026-01-05', baseRate: 20 },
+      { effectiveFrom: '2026-07-20', baseRate: 24.5 },
+    ]
+    const weeks = buildYear(BASE_CONFIG, rateHistory)
+    const before = weeks.find(w => w.active && w.weekEnd < new Date('2026-07-20'))
+    const after = weeks.find(w => w.active && w.weekEnd >= new Date('2026-07-20'))
+    expect(before.grossPay).toBe(40 * 20)
+    expect(after.grossPay).toBe(40 * 24.5)
+  })
+
+  it('a future-dated effective change does not apply early to weeks between today and that date', () => {
+    // No entry covers weeks between the original rate and the future one — the
+    // resolver's latest-entry-<=-date rule means they correctly still resolve to
+    // the OLD rate (20), not fall through to the new live cfg.baseRate.
+    const rateHistory = [
+      { effectiveFrom: '2026-01-05', baseRate: 20 },
+      { effectiveFrom: '2026-12-01', baseRate: 24.5 },
+    ]
+    const weeks = buildYear({ ...BASE_CONFIG, baseRate: 24.5 }, rateHistory)
+    const gapWeek = weeks.find(w => w.active && w.weekEnd >= new Date('2026-06-01') && w.weekEnd < new Date('2026-12-01'))
+    expect(gapWeek.grossPay).toBe(40 * 20)
+  })
+
+  it('with only the new rate recorded (no original-rate row), weeks before it fall back to the live rate', () => {
+    // Documents the accepted edge case: immediately after a fresh edit, before its
+    // own history row round-trips, there's nothing yet to distinguish "before" from
+    // "after" — the live config IS the newest truth at that point (see
+    // resolveBaseRateForWeek's doc comment).
+    const rateHistory = [{ effectiveFrom: '2026-07-20', baseRate: 24.5 }]
+    const weeks = buildYear({ ...BASE_CONFIG, baseRate: 24.5 }, rateHistory)
+    const before = weeks.find(w => w.active && w.weekEnd < new Date('2026-07-20'))
+    expect(before.grossPay).toBe(40 * 24.5)
   })
 })
 

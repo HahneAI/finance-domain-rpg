@@ -11,6 +11,18 @@ import { buildLoanHistory } from "./finance.js";
 const FOOD_DEFAULT_MONTHLY = 400;
 const FOOD_DEFAULT_WEEKLY = FOOD_DEFAULT_MONTHLY / 4;
 
+// Maps raw account_history rows (TODO §19) down to the { effectiveFrom, baseRate }
+// shape finance.js's resolveBaseRateForWeek expects — narrow §15.D read-path slice,
+// baseRate only. Filters to rows that actually changed baseRate and have a real
+// numeric value in their snapshot (schema drift tolerance: an old/malformed
+// snapshot missing baseRate is silently skipped rather than injecting a bad entry).
+function extractBaseRateHistory(rows) {
+  return (rows ?? [])
+    .filter(row => Array.isArray(row.changed_fields) && row.changed_fields.includes("baseRate"))
+    .map(row => ({ effectiveFrom: row.effective_from, baseRate: row.snapshot?.baseRate }))
+    .filter(row => typeof row.baseRate === "number" && !Number.isNaN(row.baseRate));
+}
+
 // Stripe/trial lifecycle fields (docs/TODO.md §17.A) — kept OUT of the config JSON
 // blob since they're authoritative billing columns, not user prefs. Never written
 // by saveUserData(); only the service-role webhook/checkout/portal routes touch them.
@@ -96,6 +108,7 @@ export async function loadUserData() {
       logs:               INITIAL_LOGS,
       showExtra:          true,
       weekConfirmations:  {},
+      baseRateHistory:    [],
       isEmployerDHL:              false,
       isAdmin:            false,
       isTester:           false,
@@ -131,6 +144,18 @@ export async function loadUserData() {
     .eq("user_id", userId)
     .single();
 
+  // Fetch baseRate history independently (account_history, migration 020) — same
+  // isolation pattern as week_confirmations: a not-yet-migrated DB or a fetch error
+  // falls back to [] (buildYear's resolver then behaves exactly as it did before
+  // this existed) instead of blowing up the whole load. TODO §15.D / §19 narrow
+  // read-path slice — baseRate only, see resolveBaseRateForWeek in finance.js.
+  const { data: historyRows } = await supabase
+    .from("account_history")
+    .select("effective_from, changed_fields, snapshot")
+    .eq("user_id", userId)
+    .order("effective_from", { ascending: true });
+  const baseRateHistory = extractBaseRateHistory(historyRows);
+
   // Fetch investor profile when this is an investor account — needed to restore active_account.
   let investorRow = null;
   if (data?.is_investor) {
@@ -164,6 +189,7 @@ export async function loadUserData() {
       logs:               INITIAL_LOGS,
       showExtra:          true,
       weekConfirmations:  {},
+      baseRateHistory:    [],
       isEmployerDHL:              false,
       isAdmin:            false,
       isTester:           false,
@@ -340,6 +366,7 @@ export async function loadUserData() {
     logs:                 Array.isArray(data.logs)  ? data.logs  : [],
     showExtra:            data.show_extra,
     weekConfirmations:    wcData?.week_confirmations ?? {},
+    baseRateHistory,
     isEmployerDHL:                data.is_employer_dhl      ?? false,
     isAdmin:              data.is_admin    ?? false,
     isTester:             data.is_tester   ?? false,

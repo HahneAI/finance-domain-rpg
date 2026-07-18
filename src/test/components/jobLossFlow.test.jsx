@@ -127,6 +127,54 @@ describe('JobLossEntry', () => {
     expect(onClose).toHaveBeenCalled()
     expect(onActivate).not.toHaveBeenCalled()
   })
+
+  const REVIEW_EXPENSES = [
+    { id: 'exp_rent', category: 'Needs', label: 'Rent', billingMeta: { amount: 1200, cycle: 'every30days', effectiveFrom: '2026-01-01' } },
+    { id: 'exp_gym', category: 'Lifestyle', label: 'Gym', billingMeta: { amount: 40, cycle: 'every30days', effectiveFrom: '2026-01-01' } },
+  ]
+
+  it('walks through the expense review + due-date steps and activates with the result', () => {
+    const onActivate = vi.fn()
+    const onClose = vi.fn()
+    render(<JobLossEntry open onClose={onClose} onActivate={onActivate} expenses={REVIEW_EXPENSES} />)
+
+    // Step 0 — same date/benefits gate as before, now advances to Step 1 instead of activating.
+    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(onActivate).not.toHaveBeenCalled()
+    expect(screen.getByText('Which bills do you want to track?')).toBeTruthy()
+
+    // Step 1 — both start checked; uncheck Gym.
+    fireEvent.click(screen.getByText('Gym').closest('label').querySelector('input[type="checkbox"]'))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('When are these due?')).toBeTruthy()
+    expect(screen.queryByText('Gym')).toBeNull() // unchecked, so not shown in the due-date step
+
+    // Step 2 — pick a due date for the one kept bill (Rent).
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+    expect(onActivate).not.toHaveBeenCalled() // no due date picked yet
+    fireEvent.click(screen.getByText('3rd week of month'))
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+
+    expect(onActivate).toHaveBeenCalledTimes(1)
+    const [configPatch, updatedExpenses] = onActivate.mock.calls[0]
+    expect(configPatch).toMatchObject({ jobLossMode: true, unemploymentEnabled: false })
+    expect(updatedExpenses.find(e => e.id === 'exp_rent')).toMatchObject({ trackDuringJobLoss: true })
+    expect(updatedExpenses.find(e => e.id === 'exp_rent').dueDateAnchor).toMatch(/-15$/)
+    expect(updatedExpenses.find(e => e.id === 'exp_gym')).toMatchObject({ trackDuringJobLoss: false })
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('supports going Back from the expense review step without losing Step 0 answers', () => {
+    const onActivate = vi.fn()
+    render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} expenses={REVIEW_EXPENSES} />)
+    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('Which bills do you want to track?')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByText('Enter Job Loss Mode')).toBeTruthy()
+    expect(screen.getByText('✓ No')).toBeTruthy() // step 0's answer persisted across the Back navigation
+  })
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -275,17 +323,29 @@ describe('JobLossBudgetPanel', () => {
     expect(screen.getByText(/No expenses yet/i)).toBeTruthy()
   })
 
-  it('adds a new expense', () => {
+  it('does not add an expense until a due date is picked', () => {
     const setExpenses = vi.fn()
     renderBudget({ expenses: [], setExpenses })
     fireEvent.change(screen.getByPlaceholderText('e.g. Rent'), { target: { value: 'Rent' } })
     fireEvent.change(screen.getByPlaceholderText('e.g. 1200'), { target: { value: '1200' } })
     fireEvent.click(screen.getByText('+ Add Expense'))
+    expect(setExpenses).not.toHaveBeenCalled()
+    expect(screen.getByText(/Pick a due date/i)).toBeTruthy()
+  })
+
+  it('adds a new expense with a due date anchor, not defaulted to today', () => {
+    const setExpenses = vi.fn()
+    renderBudget({ expenses: [], setExpenses })
+    fireEvent.change(screen.getByPlaceholderText('e.g. Rent'), { target: { value: 'Rent' } })
+    fireEvent.change(screen.getByPlaceholderText('e.g. 1200'), { target: { value: '1200' } })
+    fireEvent.click(screen.getByText('2nd week of month'))
+    fireEvent.click(screen.getByText('+ Add Expense'))
     expect(setExpenses).toHaveBeenCalled()
     const result = setExpenses.mock.calls[0][0]([])
     expect(result).toHaveLength(1)
-    expect(result[0]).toMatchObject({ label: 'Rent', category: 'Needs' })
+    expect(result[0]).toMatchObject({ label: 'Rent', category: 'Needs', trackDuringJobLoss: true })
     expect(result[0].billingMeta.amount).toBe(1200)
+    expect(result[0].dueDateAnchor).toBe('2026-06-08')
   })
 
   it('changes an expense triage status', () => {

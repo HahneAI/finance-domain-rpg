@@ -1923,6 +1923,62 @@ design.*
 
 ---
 
+#### H8. Expense review + payment-date steps, and a real due-date bug fix — DONE 2026-07-18
+
+*User feedback on H7: entering Job Loss Mode should walk the user through which bills to keep
+tracking (not silently track everything from normal mode), and each kept bill needs a real payment
+date — "when you create an expense in job loss budget mode it auto assumes it's due that creation
+date." Root cause: `getNextDueDate` anchored on `billingMeta.effectiveFrom`, which normal
+`BudgetPanel` stamps to today on every amount edit — it's an "amount last edited" timestamp, not a
+bill due date, so any recently-touched or newly-created bill always showed due "today." (The
+"can't put in an amount" half of the report turned out to already be fixed — `JobLossBudgetPanel`'s
+add-expense form already had a working amount field before this pass.)*
+
+- [x] **New `dueDateAnchor` field on expenses** (`lib/expense.js`) — a dedicated due-date anchor,
+  separate from `billingMeta.effectiveFrom`. `getNextDueDate` now prefers it, falling back to
+  `billingMeta.effectiveFrom` for expenses that predate it so old data keeps working unchanged.
+- [x] **New `trackDuringJobLoss` field on expenses** (default `true` when absent) — set by the new
+  review step below. `computeJobLossRunway` (`lib/jobLossRunway.js`) and `JobLossBudgetPanel`'s
+  expense list/upcoming-bills/needs-coverage logic all filter on it. Untracked expenses vanish
+  from Job Loss Home/Budget entirely — normal-mode `BudgetPanel` ignores the flag completely, so
+  nothing is deleted, edited, or otherwise disturbed for when the user goes Back to Work.
+  **Scope decision (not re-confirmed with the user after a tool-permission timeout):** went with
+  the simpler of two options — untracked bills disappear outright rather than staying listed in a
+  muted "re-enable inline" state. Flagging this in case the muted/re-enable version is actually
+  wanted; it's a straightforward follow-up if so.
+- [x] **`WEEK_OF_MONTH_OPTIONS` + `resolveWeekOfMonthAnchor` + `resolveDueDateAnchor`**
+  (`lib/expense.js`) — "1st/2nd/3rd/4th week of month" quick-picks (days 1/8/15/22, clamped for
+  short months) plus a manual date fallback, resolved to a concrete ISO anchor.
+- [x] **New shared `DueDatePicker` component** (`components/DueDatePicker.jsx`) — the week pills +
+  custom-date input, used by both new surfaces below so they can't drift.
+- [x] **`JobLossEntry` (the "Lost My Job" modal — this app's closest thing to a job-loss setup
+  wizard) extended into a 3-step flow:** Step 0 is the original date/benefits form, unchanged.
+  Step 1 is a new expense-review checklist — every current expense listed, all checked by default,
+  unchecking sets `trackDuringJobLoss: false` without touching anything else about the expense.
+  Step 2 is a new payment-date step — one `DueDatePicker` per bill that's still checked, required
+  before the final Activate. **Steps 1–2 are skipped entirely when there are no expenses to
+  review**, so the original single-step "Activate" flow (and every existing test for it) is
+  unchanged for that case. `onActivate(configPatch, updatedExpenses?)` now takes an optional second
+  argument — only passed when there were expenses to review — that `App.jsx` uses to replace
+  `expenses` alongside the existing config merge.
+- [x] **`JobLossBudgetPanel`'s add-expense form fixed** — now includes a required `DueDatePicker`
+  instead of silently anchoring to today; new expenses get `trackDuringJobLoss: true` and a real
+  `dueDateAnchor` from the picker.
+- **Verification:** `jobLossFlow.test.jsx` — 2 new `JobLossEntry` tests (full checklist → due-date
+  → activate walkthrough asserting `trackDuringJobLoss`/`dueDateAnchor` on the result; Back
+  navigation preserves Step 0 answers) plus the existing single-step tests all still pass
+  unmodified per the skip-when-empty design; `JobLossBudgetPanel`'s add-expense test split into
+  "blocked without a due date" + "adds with a real anchor, not today." `expenseCycles.test.js` —
+  7 new tests for `dueDateAnchor` precedence/fallback, `resolveWeekOfMonthAnchor` (including short-
+  month clamping), and `resolveDueDateAnchor`. Full suite: 1102 tests passing. Lint diff-clean vs.
+  session baseline (caught and fixed a genuine rules-of-hooks violation — a `useMemo` placed after
+  `JobLossEntry`'s early `return null` — during this pass, simplified away rather than hoisted,
+  since the memoized array is cheap and small). Production build green. **Not covered by tests:**
+  no live click-through on a deployed preview, same gap as H7; the review step's copy/UX (labels,
+  scroll behavior with many bills) hasn't been eyeballed in a real browser either.
+
+---
+
 ### I. Admin Toolkit updates for §15 work
 
 - [ ] **Live State Inspector — Job Loss Mode pill**

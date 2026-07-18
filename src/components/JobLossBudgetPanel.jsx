@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Pressable, PanelHero, SectionHeader, iS, lS } from "./ui.jsx";
+import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CATEGORY_COLORS, FISCAL_YEAR_START } from "../constants/config.js";
-import { EXPENSE_CYCLE_OPTIONS, perPaycheckFromCycle, getNextDueDate } from "../lib/expense.js";
+import { perPaycheckFromCycle, getNextDueDate, resolveDueDateAnchor } from "../lib/expense.js";
 import { computeJobLossRunway, firstUnemploymentPaymentDate, sumJobHuntIncome } from "../lib/jobLossRunway.js";
 
 const STATUS_OPTIONS = [
@@ -33,6 +34,8 @@ export function JobLossBudgetPanel({
   savingsDraft, setSavingsDraft, includeBenefits, setIncludeBenefits,
 }) {
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "" });
+  const [newExpDueDate, setNewExpDueDate] = useState(null);
+  const [addAttempted, setAddAttempted] = useState(false);
 
   const manualSavings = savingsDraft === "" ? 0 : Math.max(0, parseFloat(savingsDraft) || 0);
   const huntIncome = sumJobHuntIncome(config);
@@ -41,25 +44,33 @@ export function JobLossBudgetPanel({
     config, expenses, effectiveToday, savings: manualSavings + huntIncome,
   }), [config, expenses, effectiveToday, manualSavings, huntIncome]);
 
+  // Only expenses the user chose to track during Job Loss Mode (TODO §15
+  // expense review step) show up anywhere on this panel — untracked ones
+  // stay untouched for normal-mode Budget, just invisible here.
+  const trackedExpenses = useMemo(
+    () => (expenses ?? []).filter(exp => exp.trackDuringJobLoss !== false),
+    [expenses],
+  );
+
   const needsCoverageIds = useMemo(() => {
     const ids = new Set();
     const firstPaymentDate = firstUnemploymentPaymentDate(config);
     if (!firstPaymentDate || !effectiveToday) return ids;
     const todayDate = new Date(effectiveToday + "T12:00:00");
-    (expenses ?? []).forEach(exp => {
+    trackedExpenses.forEach(exp => {
       if ((exp.jobLossStatus ?? "active") !== "active") return;
       const due = getNextDueDate(exp, todayDate);
       if (due && due < firstPaymentDate) ids.add(exp.id);
     });
     return ids;
-  }, [expenses, config, effectiveToday]);
+  }, [trackedExpenses, config, effectiveToday]);
 
   const upcomingBills = useMemo(() => {
     if (!effectiveToday) return [];
     const todayDate = new Date(effectiveToday + "T12:00:00");
     const firstPaymentDate = firstUnemploymentPaymentDate(config);
     const horizonDays = 35;
-    return (expenses ?? [])
+    return trackedExpenses
       .filter(exp => (exp.jobLossStatus ?? "active") === "active")
       .map(exp => {
         const nextDue = getNextDueDate(exp, todayDate);
@@ -74,19 +85,19 @@ export function JobLossBudgetPanel({
       })
       .filter(Boolean)
       .sort((a, b) => a.daysUntil - b.daysUntil);
-  }, [expenses, config, effectiveToday]);
+  }, [trackedExpenses, config, effectiveToday]);
 
   const sortedExpenses = useMemo(() => {
-    return [...(expenses ?? [])].sort((a, b) => {
+    return [...trackedExpenses].sort((a, b) => {
       const aCov = needsCoverageIds.has(a.id), bCov = needsCoverageIds.has(b.id);
       if (aCov !== bCov) return aCov ? -1 : 1;
       const aEss = !isFlexibleCategory(a.category), bEss = !isFlexibleCategory(b.category);
       if (aEss !== bEss) return aEss ? -1 : 1;
       return (a.label ?? "").localeCompare(b.label ?? "");
     });
-  }, [expenses, needsCoverageIds]);
+  }, [trackedExpenses, needsCoverageIds]);
 
-  const flexibleActiveCount = (expenses ?? []).filter(exp => (
+  const flexibleActiveCount = trackedExpenses.filter(exp => (
     isFlexibleCategory(exp.category) && (exp.jobLossStatus ?? "active") === "active"
   )).length;
 
@@ -99,18 +110,28 @@ export function JobLossBudgetPanel({
   )));
   const removeExpense = (id) => setExpenses(prev => prev.filter(e => e.id !== id));
 
+  const newExpDueDateValid = newExpDueDate?.mode === "custom" ? !!newExpDueDate.date
+    : newExpDueDate?.mode === "week" ? !!newExpDueDate.week
+    : false;
+  const canAddExpense = !!newExp.label && (parseFloat(newExp.amount) || 0) > 0 && newExpDueDateValid;
+
   const addExpense = () => {
-    if (!newExp.label || !((parseFloat(newExp.amount) || 0) > 0)) return;
+    if (!canAddExpense) { setAddAttempted(true); return; }
     const amount = parseFloat(newExp.amount) || 0;
     const perPaycheck = perPaycheckFromCycle(amount, "every30days");
+    const anchor = resolveDueDateAnchor(newExpDueDate, effectiveToday) ?? effectiveToday ?? FISCAL_YEAR_START;
     setExpenses(prev => [...prev, {
       id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
       label: newExp.label,
+      trackDuringJobLoss: true,
+      dueDateAnchor: anchor,
       history: [{ effectiveFrom: effectiveToday ?? FISCAL_YEAR_START, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }],
       billingMeta: { amount, cycle: "every30days", effectiveFrom: effectiveToday ?? FISCAL_YEAR_START },
     }]);
     setNewExp({ label: "", category: "Needs", amount: "" });
+    setNewExpDueDate(null);
+    setAddAttempted(false);
   };
 
   const hasBenefits = dash && config.unemploymentEnabled && dash.projectedUnemploymentTotal > 0;
@@ -224,12 +245,15 @@ export function JobLossBudgetPanel({
             <input type="number" min="0" step="0.01" style={iS} value={newExp.amount} onChange={e => setNewExp(v => ({ ...v, amount: e.target.value }))} placeholder="e.g. 1200" />
           </div>
         </div>
+        <div style={{ marginBottom: "10px" }}>
+          <label style={lS}>Due date</label>
+          <DueDatePicker value={newExpDueDate} onChange={setNewExpDueDate} attempted={addAttempted} />
+        </div>
         <Pressable
           onClick={addExpense}
-          disabled={!newExp.label || !((parseFloat(newExp.amount) || 0) > 0)}
           style={{
-            width: "100%", background: newExp.label && (parseFloat(newExp.amount) || 0) > 0 ? "var(--color-green)" : "var(--color-bg-raised)",
-            color: newExp.label && (parseFloat(newExp.amount) || 0) > 0 ? "var(--color-bg-base)" : "var(--color-text-disabled)",
+            width: "100%", background: canAddExpense ? "var(--color-green)" : "var(--color-bg-raised)",
+            color: canAddExpense ? "var(--color-bg-base)" : "var(--color-text-disabled)",
             border: "none", borderRadius: "10px", padding: "10px",
             fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer",
           }}

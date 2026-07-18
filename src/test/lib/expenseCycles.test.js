@@ -7,6 +7,8 @@ import {
   monthlyFromPerPaycheck,
   perPaycheckFromCycle,
   buildAdvancedEditPayload,
+  resolveWeekOfMonthAnchor,
+  resolveDueDateAnchor,
 } from '../../lib/expense.js'
 import { toLocalIso } from '../../lib/finance.js'
 
@@ -58,6 +60,59 @@ describe('getNextDueDate', () => {
   it('returns null for an unparseable anchor date', () => {
     const e = expense({ amount: 50, cycle: 'weekly', effectiveFrom: 'not-a-date' })
     expect(getNextDueDate(e, new Date())).toBeNull()
+  })
+
+  it('prefers dueDateAnchor over billingMeta.effectiveFrom (TODO §15 Job Loss due-date fix)', () => {
+    // effectiveFrom gets stamped to "today" on every BudgetPanel amount edit, so it's
+    // an amount-edit timestamp, not a real bill due date — dueDateAnchor is the honest one.
+    const e = { dueDateAnchor: '2026-05-20', billingMeta: { amount: 50, cycle: 'every30days', effectiveFrom: '2026-07-01' } }
+    expect(iso(getNextDueDate(e, new Date(2026, 4, 15)))).toBe('2026-05-20')
+  })
+
+  it('falls back to billingMeta.effectiveFrom when dueDateAnchor is absent', () => {
+    const e = expense({ amount: 50, cycle: 'every30days', effectiveFrom: '2026-05-10' })
+    expect(iso(getNextDueDate(e, new Date(2026, 4, 10, 12)))).toBe('2026-05-10')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// resolveWeekOfMonthAnchor / resolveDueDateAnchor — TODO §15 Job Loss
+// expense review's payment-date step + JobLossBudgetPanel's add-expense fix
+// ─────────────────────────────────────────────────────────────
+
+describe('resolveWeekOfMonthAnchor', () => {
+  it('maps each week option to its representative day in the reference month', () => {
+    expect(resolveWeekOfMonthAnchor('week1', '2026-06-15')).toBe('2026-06-01')
+    expect(resolveWeekOfMonthAnchor('week2', '2026-06-15')).toBe('2026-06-08')
+    expect(resolveWeekOfMonthAnchor('week3', '2026-06-15')).toBe('2026-06-15')
+    expect(resolveWeekOfMonthAnchor('week4', '2026-06-15')).toBe('2026-06-22')
+  })
+
+  it('clamps to the last day of a short month', () => {
+    // February 2026 has 28 days — week4's day-22 pick is still valid, but a
+    // hypothetical day beyond the month length must clamp, not overflow into March.
+    expect(resolveWeekOfMonthAnchor('week4', '2026-02-10')).toBe('2026-02-22')
+  })
+
+  it('returns null for an unknown week value or missing reference date', () => {
+    expect(resolveWeekOfMonthAnchor('week9', '2026-06-15')).toBeNull()
+    expect(resolveWeekOfMonthAnchor('week1', null)).toBeNull()
+  })
+})
+
+describe('resolveDueDateAnchor', () => {
+  it('resolves a week-mode pick via resolveWeekOfMonthAnchor', () => {
+    expect(resolveDueDateAnchor({ mode: 'week', week: 'week2' }, '2026-06-15')).toBe('2026-06-08')
+  })
+
+  it('resolves a custom-mode pick to its raw date', () => {
+    expect(resolveDueDateAnchor({ mode: 'custom', date: '2026-08-03' }, '2026-06-15')).toBe('2026-08-03')
+  })
+
+  it('returns null for an empty custom date, an unset value, or a missing mode', () => {
+    expect(resolveDueDateAnchor({ mode: 'custom', date: '' }, '2026-06-15')).toBeNull()
+    expect(resolveDueDateAnchor(null, '2026-06-15')).toBeNull()
+    expect(resolveDueDateAnchor({}, '2026-06-15')).toBeNull()
   })
 })
 

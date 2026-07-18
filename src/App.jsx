@@ -3348,9 +3348,11 @@ export default function App() {
       <JobLossEntry
         open={jobLossEntryOpen}
         onClose={() => setJobLossEntryOpen(false)}
-        onActivate={(patch) => {
+        expenses={expenses}
+        onActivate={(patch, updatedExpenses) => {
           configHistoryMetaRef.current = { source: "life_event:lost_job", effectiveFrom: patch.jobLossDate ?? undefined };
           setConfig(prev => ({ ...prev, ...patch }));
+          if (updatedExpenses) setExpenses(updatedExpenses);
         }}
       />
       {/* ── Quick Rate Update (TODO §15.D) ── */}

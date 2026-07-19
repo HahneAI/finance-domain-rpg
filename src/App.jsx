@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
+import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
-import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel } from "./lib/fiscalWeek.js";
+import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense } from "./lib/db.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
@@ -208,6 +208,11 @@ export default function App() {
   // to LoginScreen so the user sees why they're back at the sign-in form instead of
   // silently landing there with no explanation.
   const [oauthCallbackFailed, setOauthCallbackFailed] = useState(false);
+  // Post-login transition: true for 340ms after a successful sign-in to animate
+  // LoginScreen out and authenticated shell in. During this window, both screens
+  // are rendered with opacity transitions.
+  const [postLoginFade, setPostLoginFade] = useState(false);
+  const prevAuthedUserRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -288,6 +293,9 @@ export default function App() {
   const [baseRateHistory, setBaseRateHistory] = useState([]);
   // wizardEntry: null=closed, false=first-run, string=re-entry life event
   const [wizardEntry, setWizardEntry] = useState(null);
+  // wizardExiting: true while the wizard card is animating out (180ms foldLiftOut).
+  // Allows the wizard to stay mounted during exit animation, then unmount after.
+  const [wizardExiting, setWizardExiting] = useState(false);
   // Gates TrialExplainerScreen ahead of first-run SetupWizard entry (docs/TODO.md
   // §17). Not persisted — re-prompts on a later session same as wizardEntry
   // itself does until setupComplete flips true.
@@ -295,12 +303,11 @@ export default function App() {
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
   const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
   const [rateUpdateOpen, setRateUpdateOpen] = useState(false);
-  // TODO §15 mode rebuild — Job Loss Mode's savings input + benefit scenario
-  // toggle now live on JobLossBudgetPanel, but JobLossHomePanel's runway
-  // headline needs the same values — lifted here (session-only, never
-  // persisted, matching the original "not saved to your account" spec) so
-  // both panels agree without either owning the other's state.
-  const [jobLossSavingsDraft, setJobLossSavingsDraft] = useState("");
+  // TODO §15 mode rebuild — the benefit-scenario toggle (unlike cash on hand,
+  // which is now a real persisted config.jobLossCashOnHand field edited
+  // directly by JobLossHomePanel/JobLossBudgetPanel) stays session-only by
+  // design — lifted here so both panels agree without either owning the
+  // other's state.
   const [jobLossIncludeBenefits, setJobLossIncludeBenefits] = useState(true);
   // Session-only dismissal so the banner re-appears on every page load,
   // matching the §15.C1 spec ("dismissible but re-shows on reload").
@@ -470,6 +477,18 @@ export default function App() {
       setAuthChecked(true);
     });
   }, []);
+
+  // ── Post-login fade animation: detect successful sign-in and animate transition ──
+  // Triggers a 340ms crossfade when authedUser transitions from null to non-null.
+  useEffect(() => {
+    if (prevAuthedUserRef.current === null && authedUser) {
+      // User just signed in: LoginScreen → authenticated shell crossfade
+      setPostLoginFade(true);
+      const timer = setTimeout(() => setPostLoginFade(false), 340);
+      return () => clearTimeout(timer);
+    }
+    prevAuthedUserRef.current = authedUser;
+  }, [authedUser]);
 
   // ── Detect a Google OAuth callback that reached the app but produced no session ──
   // supabase-js only strips `?code=` from the URL after a *successful* PKCE exchange
@@ -1174,27 +1193,26 @@ export default function App() {
   const bufferPerWeek = (config.bufferEnabled ?? true)
     ? (config.paycheckBuffer ?? 50) * (checksPerYear / 52)
     : 0;
-  const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
+  // weeklyIncome is meant to read as "what a typical active week nets you" —
+  // dividing by a flat 52 instead of the weeks actually active this fiscal
+  // year silently diluted it by every inactive week before firstActiveIdx.
+  // For a brand-new or just-reactivated (Back to Work) account that's most
+  // of the year, so the "typical week" figure came out a fraction of a real
+  // paycheck (TODO §15 Job Loss Mode investigation, 2026-07-19). For a
+  // full-year account (firstActiveIdx 0) this is byte-identical to /52.
+  const activeWeeksThisYear = resolveActiveWeeksThisYear(config.firstActiveIdx);
+  const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - bufferPerWeek;
 
   // ── Previous week's actual paycheck (what you'll receive this payday) ──
   // Shows the specific prior week's computeNet (high vs low week), not an annual
   // average. Adjusted for any event log entries confirmed for that week
-  // (e.g. missed shifts logged via WeekConfirmModal). Falls back to weeklyIncome
-  // average when no past weeks exist (first week of fiscal year).
-  const prevWeekNet = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
-    if (!pastWeeks.length) return weeklyIncome;
-    const prevWeek = pastWeeks[pastWeeks.length - 1];
-    const baseNet = computeNet(prevWeek, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek;
-    // Apply any confirmed event log adjustments specific to this week
-    const weekAdjustment = logs
-      .filter(e => e.weekIdx === prevWeek.idx)
-      .reduce((sum, e) => {
-        const impact = calcEventImpact(e, config, prevWeek);
-        return sum + impact.netGained - impact.netLost;
-      }, 0);
-    return baseNet + weekAdjustment;
-  }, [allWeeks, effectiveToday, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs]);
+  // (e.g. missed shifts logged via WeekConfirmModal). Falls back to the current
+  // active week's real net (not the diluted weeklyIncome average) when there's
+  // no past active week yet — see resolvePrevWeekNet's doc comment.
+  const prevWeekNet = useMemo(() => resolvePrevWeekNet({
+    allWeeks, todayIso: effectiveToday, config, extraPerCheck: taxDerived.extraPerCheck,
+    showExtra, bufferPerWeek, weeklyIncome, logs, currentWeek,
+  }), [allWeeks, effectiveToday, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs, currentWeek]);
 
   const weekNetLookup = useMemo(() => {
     const adjustments = eventImpact.weeklyNetAdjustments || {};
@@ -1283,6 +1301,17 @@ export default function App() {
   // ─────────────────────────────────────────────────────────────────────────────────
   const futureEventDeductions = eventImpact.futureEventDeductionsByWeek;
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SetupWizard exit animation — triggers fold-lift exit, waits 180ms, then unmounts
+  // ─────────────────────────────────────────────────────────────────────────────
+  function closeWizardWithAnimation() {
+    setWizardExiting(true);
+    setTimeout(() => {
+      setWizardEntry(null);
+      setWizardExiting(false);
+    }, 180);
+  }
+
   function handleWizardComplete(mergedConfig) {
     // §19: wizard flows are the one path that passes an explicit effective date
     // (the job start / change date anchor); plain edits default to today.
@@ -1299,7 +1328,7 @@ export default function App() {
       ? { ...mergedConfig, startedUnemployed: false }
       : mergedConfig;
     setConfig(finalConfig);
-    setWizardEntry(null);
+    closeWizardWithAnimation();
     // §15.H3: a first-run signup that ended in Job Loss Mode skipped the Deductions/
     // Tax steps entirely and has no real income yet — defer the pinned Food default
     // to the user's first expense-triage pass instead of seeding it unseen. Passed
@@ -1397,17 +1426,6 @@ export default function App() {
     );
   }
 
-  // No valid session — show login / create account screen.
-  if (!authedUser) {
-    return (
-      <LoginScreen
-        onInvestorVerified={code => setInvestorSession({ code })}
-        oauthCallbackFailed={oauthCallbackFailed}
-        onOauthRetry={() => setOauthCallbackFailed(false)}
-      />
-    );
-  }
-
   // Supabase PASSWORD_RECOVERY event — user clicked a reset link, show set-new-password form.
   if (pendingPasswordReset) {
     return <LoginScreen recoveryMode onRecoveryDone={() => setPendingPasswordReset(false)} />;
@@ -1417,6 +1435,17 @@ export default function App() {
   // successful revival charge (subscription active → effect above) clears this.
   if (revivalInfo) {
     return <ReviveScreen revival={revivalInfo} checkoutReturn={checkoutReturn} />;
+  }
+
+  // No valid session — show login / create account screen (unless in post-login fade).
+  if (!authedUser && !postLoginFade) {
+    return (
+      <LoginScreen
+        onInvestorVerified={code => setInvestorSession({ code })}
+        oauthCallbackFailed={oauthCallbackFailed}
+        onOauthRetry={() => setOauthCallbackFailed(false)}
+      />
+    );
   }
 
   if (loading) {
@@ -1457,7 +1486,6 @@ export default function App() {
           saveConfigNow={saveConfigNow}
           expenses={expenses}
           effectiveToday={effectiveToday}
-          savingsDraft={jobLossSavingsDraft}
           includeBenefits={jobLossIncludeBenefits}
           readOnly={isExpiredReadOnly}
         />
@@ -1508,12 +1536,12 @@ export default function App() {
       {currentView === "budget" && (config.jobLossMode ? (
         <JobLossBudgetPanel
           config={config}
+          setConfig={setConfig}
+          saveConfigNow={saveConfigNow}
           expenses={expenses}
           setExpenses={setExpenses}
           onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
           effectiveToday={effectiveToday}
-          savingsDraft={jobLossSavingsDraft}
-          setSavingsDraft={setJobLossSavingsDraft}
           includeBenefits={jobLossIncludeBenefits}
           setIncludeBenefits={setJobLossIncludeBenefits}
           readOnly={isExpiredReadOnly}
@@ -1584,7 +1612,9 @@ export default function App() {
     </>
   );
 
-  return (
+  // Post-login fade animation: render both LoginScreen (fading out) and App shell
+  // (fading in) during the 340ms transition. After fade completes, render only shell.
+  const shellContent = (
       <div className="app-shell" style={{ background: "var(--color-bg-gradient)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
         <style>{`
           /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
@@ -3377,21 +3407,55 @@ export default function App() {
         }}
       />
       {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}
-      {wizardEntry !== null && (
+      {(wizardEntry !== null || wizardExiting) && (
         <SetupWizard
           config={config}
           onComplete={handleWizardComplete}
           onCancel={
             wizardEntry !== false
-              ? () => setWizardEntry(null)
+              ? () => closeWizardWithAnimation()
               : config.isInvestor
-                ? () => { setWizardEntry(null); setActiveInvestorAccount(1); }
+                ? () => { closeWizardWithAnimation(); setActiveInvestorAccount(1); }
                 : undefined
           }
           lifeEvent={wizardEntry === false ? null : wizardEntry}
           isInvestor={config.isInvestor}
+          isExiting={wizardExiting}
         />
       )}
     </div>
   );
+
+  // During post-login fade (340ms after sign-in), render both LoginScreen (fading out)
+  // and authenticated shell (fading in) at the same time for a smooth crossfade.
+  if (postLoginFade) {
+    return (
+      <div style={{ position: "relative" }}>
+        {/* LoginScreen fading out (absolute, behind) */}
+        <div
+          className="fold-lift"
+          data-fold="exiting"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        >
+          <LoginScreen
+            onInvestorVerified={code => setInvestorSession({ code })}
+            oauthCallbackFailed={oauthCallbackFailed}
+            onOauthRetry={() => setOauthCallbackFailed(false)}
+          />
+        </div>
+        {/* Authenticated shell fading in (relative, in front) */}
+        <div className="fold-lift" data-fold="entering" style={{ position: "relative", zIndex: 1 }}>
+          {shellContent}
+        </div>
+      </div>
+    );
+  }
+
+  // Normal render: either LoginScreen (if not authed) or authenticated shell
+  return shellContent;
 }

@@ -6,6 +6,7 @@ import {
   getFiscalWeekInfo,
   formatFiscalWeekLabel,
   getPayPeriodBounds,
+  resolveActiveWeeksThisYear,
 } from '../../lib/fiscalWeek.js'
 
 const makeWeek = (idx, dateIso, active = true) => ({
@@ -31,6 +32,25 @@ describe('getCurrentFiscalWeek', () => {
     const weeks = [makeWeek(0, '2025-12-25', false)]
     expect(getCurrentFiscalWeek(weeks, '2026-01-01')).toBeNull()
     expect(getCurrentFiscalWeek(undefined, '2026-01-01')).toBeNull()
+  })
+})
+
+describe('resolveActiveWeeksThisYear (TODO §15 — weeklyIncome/annualSavings dilution fix, 2026-07-19)', () => {
+  it('returns the full 52 weeks for a firstActiveIdx of 0', () => {
+    expect(resolveActiveWeeksThisYear(0)).toBe(52)
+  })
+
+  it('subtracts firstActiveIdx from the fiscal year length', () => {
+    expect(resolveActiveWeeksThisYear(28)).toBe(24)
+  })
+
+  it('defaults to 0 (full year) when firstActiveIdx is null/undefined', () => {
+    expect(resolveActiveWeeksThisYear(null)).toBe(52)
+    expect(resolveActiveWeeksThisYear(undefined)).toBe(52)
+  })
+
+  it('clamps to 0 rather than going negative for an out-of-range firstActiveIdx', () => {
+    expect(resolveActiveWeeksThisYear(60)).toBe(0)
   })
 })
 

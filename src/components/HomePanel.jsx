@@ -5,7 +5,7 @@ import { NetWorthHealthTips } from "./NetWorthHealthTips.jsx";
 import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { canAccessAiFeatures } from "../lib/entitlements.js";
 import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek } from "../lib/fiscalWeek.js";
+import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek, resolveActiveWeeksThisYear } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { MetricCard, SmBtn, Pressable, useFoldTransition, iS, lS, ScrollSnapRow } from "./ui.jsx";
@@ -35,6 +35,12 @@ const safeDate = (raw) => {
 export function HomePanel({
   navigate,
   weeklyIncome,
+  // Every real caller (App.jsx, DemoAccountTree.jsx) computes and passes this —
+  // it's the correct full-year net (projectedAnnualNet + event adjustments -
+  // fundedGoalSpend). Do NOT default this to weeklyIncome*FISCAL_WEEKS_PER_YEAR
+  // if a new caller omits it — that reintroduces the §15.H11 dilution bug
+  // (weeklyIncome is a per-ACTIVE-week average; multiplying it back out by a
+  // flat 52 overstates the year for any account that wasn't active all 52).
   adjustedTakeHome,
   remainingSpend,
   goals = [],
@@ -82,7 +88,7 @@ export function HomePanel({
 
   const avgWeeklySpend = remainingSpend?.avgWeeklySpend ?? 0;
   const monthlyExpenses = avgWeeklySpend * (FISCAL_WEEKS_PER_YEAR / 12);
-  const monthlyTakehome = (adjustedTakeHome ?? (weeklyIncome * FISCAL_WEEKS_PER_YEAR)) / 12;
+  const monthlyTakehome = (adjustedTakeHome ?? 0) / 12;
   const projectedWeeklyLeft = (futureWeekNets?.[0] ?? weeklyIncome) - avgWeeklySpend;
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;
@@ -90,11 +96,12 @@ export function HomePanel({
   // Outlook window: Jan 1 → Dec 31 of the fiscal year, clamped forward to the
   // job's start date when it falls inside the year (never extended backward
   // past Jan 1 for jobs that predate the fiscal year) — assumes the job
-  // continues through Dec 31. activeWeeksThisYear mirrors the same
-  // firstActiveIdx clamping buildYear() already applies (see
-  // SetupWizard's dateToWeekIdx), so it stays in sync with the rest of the
-  // app's fiscal math instead of a flat 52-week assumption.
-  const activeWeeksThisYear = Math.max(FISCAL_WEEKS_PER_YEAR - (config?.firstActiveIdx ?? 0), 0);
+  // continues through Dec 31. activeWeeksThisYear is the same shared helper
+  // App.jsx's weeklyIncome and aiContext.js's annualSavings key off, so the
+  // Home tile, weeklyIncome, and the Coach's stated figures can't drift
+  // apart on how many weeks of the year are actually active (TODO §15,
+  // 2026-07-19).
+  const activeWeeksThisYear = resolveActiveWeeksThisYear(config?.firstActiveIdx);
   const annualSavings = avgWeeklySurplus * activeWeeksThisYear - fundedGoalSpend;
   const startDateDisplay = config?.startDate
     ? (() => {

@@ -29,7 +29,7 @@ Last updated: 2026-07-16 | App: Authority Finance (A:Fin)
 | 7 | Attendance Bucket Model (DHL) | `finance.js` | Live |
 | 8 | Log Panel — Event Log & Effect Summary | `LogPanel.jsx` | Live |
 | 9 | Setup Wizard | `SetupWizard.jsx` | Live |
-| 10 | Life Events & Job Loss Mode | `LifeEventMenu.jsx`, `JobLossDashboard.jsx`, `JobLossEntry.jsx`, `ExpenseTriage.jsx` | Live |
+| 10 | Life Events & Job Loss Mode | `LifeEventMenu.jsx`, `JobLossEntry.jsx`, `JobLossHomePanel.jsx`, `JobLossBudgetPanel.jsx`, `jobLossRunway.js` | Live, known gaps |
 | 11 | Employer Preset Convention | all panels (architectural rule) | Live |
 | 12 | Biweekly Two-Week Check-In | `WeekConfirmModal.jsx` | Live |
 | 13 | Admin Diagnostic Toolkit | `App.jsx`, `LogPanel.jsx` | Live (Phase 1, 8 tools) |
@@ -202,19 +202,44 @@ Wrap Up):
 
 ## 10. Life Events & Job Loss Mode
 
-Live, not scaffolding — more built than `docs/TODO.md` §15's checkbox state suggests.
+Live, not scaffolding — more built than `docs/TODO.md` §15's checkbox state suggests. As of the
+§15.H7 rebuild (2026-07-18), Job Loss Mode is a genuinely distinct app mode, not a card layered on
+the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` **instead of**
+`HomePanel`/`BudgetPanel` while `config.jobLossMode` is true. `JobLossDashboard.jsx`/
+`ExpenseTriage.jsx` (the pre-H7 architecture) are deleted — don't resurrect that pattern.
 
 - **`LifeEventMenu.jsx`** — modal, 3 tiles: Pay Structure Changed →
-  `SetupWizard(lifeEvent="structure_change")`; Lost My Job → `JobLossEntry.jsx`; Quick
-  Rate Update (disabled, "Coming Soon").
-- **`JobLossEntry.jsx` → `JobLossDashboard.jsx`** — runway calculator, unemployment
-  benefits config, re-employment tracker. `config.jobLossMode` zeroes earned income from
-  `jobLossDate` forward in `buildYear()`.
-- **`ExpenseTriage.jsx`** — per-expense `jobLossStatus: active|paused|cancelled`,
-  excluded from projections while paused/cancelled; auto-reactivate on "Back to Work".
-- **App shell:** persistent amber banner while `jobLossMode` is true; "Back to Work"
-  re-enters the wizard as `structure_change`. Entry point also lives in the Account panel
-  (`ProfilePanel` "Life Events" row → same `LifeEventMenu`).
+  `SetupWizard(lifeEvent="structure_change")`; Lost My Job → `JobLossEntry.jsx`; Quick Rate
+  Update → `RateUpdateModal.jsx`.
+- **`JobLossEntry.jsx`** — 3-step modal: (1) date + mandatory `jobLossCashOnHand` (§15.H13,
+  persisted, accepts 0) + unemployment benefits; (2) expense review checklist, all bills checked
+  by default, unchecking sets `trackDuringJobLoss: false` without touching anything else about the
+  expense; (3) due-date assignment (`DueDatePicker`) for kept non-loan bills — loans auto-attach
+  `loanMeta.firstPaymentDate`. Steps 2–3 skip entirely when there are no expenses. `config.jobLossMode`
+  zeroes earned income from `jobLossDate` forward in `buildYear()` — **not prorated**: the entire
+  fiscal week containing `jobLossDate` zeroes out, including days already worked that week.
+- **`lib/jobLossRunway.js`** — `computeJobLossRunway()` is the one authoritative runway/burn
+  function; both panels read it, nothing else should compute a second one (see Known gaps —
+  `coachTriggers.js` already does). `weeklyBurn` only sums **Needs** (and loan) expenses —
+  Lifestyle-category bills are tracked and shown but deliberately excluded from the burn number.
+  `savings` = `jobLossCashOnHand` (persisted, editable from both panels) + `sumJobHuntIncome()`
+  (gig income logged via Home's "Log Extra Income" widget) — no concept of a pending/not-yet-paid
+  final paycheck exists in this calc.
+- **`JobLossHomePanel.jsx`** — runway headline, cash-on-hand input, Log Extra Income widget,
+  embeds `ReemploymentTracker` (target income, return-to-work date, application CRUD with 6
+  statuses). **`JobLossBudgetPanel.jsx`** — savings + benefit-scenario toggle, upcoming-bills
+  countdown, full expense triage (active/paused/cancelled) inline, simplified add-expense form.
+  Both eager-save every mutation (§15.H10).
+- **App shell:** persistent amber banner while `jobLossMode` is true; "Back to Work" re-enters the
+  wizard as `structure_change` and restores the mandatory Food expense if it was skipped at
+  first-run. Entry point also lives in the Account panel (`ProfilePanel` "Life Events" row → same
+  `LifeEventMenu`).
+- **Known gaps** (full write-up: `docs/TODO.md` §15.H14): no pending/final-paycheck concept in the
+  runway calc; Lifestyle spend excluded from `weeklyBurn` with no UI callout; `coachTriggers.js`'s
+  `estimateRunwayDays` is a second, drifted runway calc (doesn't know about `trackDuringJobLoss` or
+  `jobLossCashOnHand`); Coach's Job Loss context line never actually receives `runwayDays` from
+  `App.jsx` (renders as bare `"Job Loss Mode: active"`); AI features (Coach, Job Hunt Assistant,
+  Job Scout) are `is_admin`/`is_tester`-gated, so most real Job Loss Mode users can't reach them.
 
 ---
 

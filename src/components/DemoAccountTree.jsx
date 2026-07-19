@@ -29,12 +29,14 @@ import {
   fedTax,
   stateTax,
   getStateConfig,
+  resolvePrevWeekNet,
 } from "../lib/finance.js";
 import { getFundedGoalSpend } from "../lib/goalFunding.js";
 import {
   getCurrentFiscalWeek,
   getFiscalWeekInfo,
   formatFiscalWeekLabel,
+  resolveActiveWeeksThisYear,
 } from "../lib/fiscalWeek.js";
 
 const FIXTURES = { 1: DEMO_ACCOUNT_1, 2: DEMO_ACCOUNT_2 };
@@ -273,21 +275,16 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
   );
 
   const bufferPerWeek = config.bufferEnabled ? (config.paycheckBuffer ?? 50) : 0;
-  const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
+  // Mirrors App.jsx's weeklyIncome fix (TODO §15, 2026-07-19) — divide by the
+  // weeks actually active this fiscal year, not a flat 52, so a mid-year-start
+  // demo config doesn't dilute "a typical week" down to a fraction of itself.
+  const activeWeeksThisYear = resolveActiveWeeksThisYear(config.firstActiveIdx);
+  const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - bufferPerWeek;
 
-  const prevWeekNet = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < today);
-    if (!pastWeeks.length) return weeklyIncome;
-    const prevWeek = pastWeeks[pastWeeks.length - 1];
-    const baseNet = computeNet(prevWeek, config, taxDerived.extraPerCheck, true) - bufferPerWeek;
-    const weekAdj = logs
-      .filter(e => e.weekIdx === prevWeek.idx)
-      .reduce((sum, e) => {
-        const i = calcEventImpact(e, config, prevWeek);
-        return sum + i.netGained - i.netLost;
-      }, 0);
-    return baseNet + weekAdj;
-  }, [allWeeks, today, config, taxDerived, bufferPerWeek, weeklyIncome, logs]);
+  const prevWeekNet = useMemo(() => resolvePrevWeekNet({
+    allWeeks, todayIso: today, config, extraPerCheck: taxDerived.extraPerCheck,
+    showExtra: true, bufferPerWeek, weeklyIncome, logs, currentWeek,
+  }), [allWeeks, today, config, taxDerived, bufferPerWeek, weeklyIncome, logs, currentWeek]);
 
   const weekNetLookup = useMemo(() => {
     const adjustments = eventImpact.weeklyNetAdjustments || {};

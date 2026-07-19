@@ -1054,14 +1054,22 @@ have to re-derive them or, worse, write a fourth parallel runway calc:*
   user is actually tracking/paying during the search, and real due dates via `getNextDueDate(exp,
   today)` (loan-aware — see `getExpenseDisplayAmount` for the matching amount getter). Useful for
   "how long can I be selective" framing (what's actually due before benefits run out).
-- **Known drift to fix before/while building this:** `lib/coachTriggers.js`'s `estimateRunwayDays`
+- **Known drift to fix before/while building this — worse than originally flagged, re-confirmed
+  during the §15.H14 birdseye review (2026-07-19):** `lib/coachTriggers.js`'s `estimateRunwayDays`
   (used by `CoachNetWorthCard.jsx` for the §18.C Red-tier trigger) is a **second, independent**
-  runway calc — its own doc comment already flags this as deliberate (it can't see the session-only
-  "additional savings" input `JobLossBudgetPanel` owns). It predates the `trackDuringJobLoss` flag
-  added in §15.H8/H9, so it still counts bills the user unchecked from tracking — a real,
-  already-live discrepancy between the number Coach's trigger reasons about and the one Job Loss
-  Home/Budget display. Either retrofit the same `trackDuringJobLoss` filter into it, or (cleaner)
-  have it call `computeJobLossRunway` directly once this feature gives a reason to touch that file.
+  runway calc. Its own doc comment says it "assumes $0 extra savings, the conservative floor" —
+  that comment predates `jobLossCashOnHand` existing as a real persisted field (§15.H13); the
+  "additional savings" input it's talking about used to be a session-only draft `JobLossBudgetPanel`
+  owned, which no longer describes the current architecture at all. It also still predates the
+  `trackDuringJobLoss` flag added in §15.H8/H9, so it counts bills the user unchecked from tracking.
+  Two independent sources of drift on the same function now, both confirmed live: it disagrees with
+  Job Loss Home/Budget on both *which bills count* and *how much cash the user actually has*. Either
+  retrofit both (`trackDuringJobLoss` filter + `jobLossCashOnHand`) into it, or (cleaner) have it
+  call `computeJobLossRunway` directly once this feature gives a reason to touch that file. Separate
+  and worth fixing regardless of whether this feature gets built: `App.jsx` never actually passes
+  `runwayDays` into `buildCoachContext` at all (`lib/aiContext.js:199-201` has the parameter and the
+  context line ready, just never wired) — Coach's Job Loss Mode context today is the bare string
+  `"Job Loss Mode: active"`, no numbers. Full write-up: `docs/TODO.md` §15.H14.
 
 - [ ] **Job Hunt Chat panel** — dedicated sub-view in Job Loss Dashboard; powered by Coach (Claude
   API) with a system prompt including: current role title, prior income, runway days, target income,
@@ -1749,7 +1757,10 @@ note rather than re-listed here to avoid two competing specs for the same shippe
 - [ ] **Application assistant** — for saved listings, "Draft application" launches Coach
   pre-loaded with the specific job description for cover letter / prep mode → **§18.F**
 - [ ] **Profile store for auto-fill** — stored work history summary, skills list, and resume text
-  (user-entered) used to pre-fill application fields and feed the AI assistant context
+  (user-entered) used to pre-fill application fields and feed the AI assistant context. This is the
+  only reference to résumé data anywhere in this doc, and it's scoped as plain user-entered text for
+  auto-fill, not a file upload or an AI-analyzed résumé. An actual résumé-upload / skill-gap-analysis
+  feature is not scoped anywhere — see `docs/TODO.md` §15.H14's dedicated bullet before starting one.
 
 ---
 
@@ -2094,6 +2105,292 @@ panel; the Job Loss rebuild in H7 never picked them up.*
   `RateUpdateModal`'s `onActivate` handler (`App.jsx`) has the identical missing-eager-save
   pattern — same "Life Event" one-shot-activation shape as `JobLossEntry`'s `onActivate`, just for
   Quick Rate Update instead of Job Loss Mode. Worth a follow-up pass.
+
+---
+
+#### H11. "This Week's Check" showing a fraction of a real paycheck after Back to Work — DONE 2026-07-19
+
+*User report: fresh live-tested account, Back to Work into a $22/hr weekly job, 40hr/wk — Income
+panel and the Budget breakdown modal both correctly showed ~$714 net for the current week, but
+BudgetPanel's "This Week's Check" / "Left This Week" tiles showed $293 / $75. Diagnosed live
+against the user's actual Supabase `user_data.config` + `account_history` rows (no admin-tool
+access on the test account, so raw table rows were pulled instead — same data Config Raw View and
+the account_history baseRate ledger would show). Root cause was NOT a stale job-loss rate leaking
+forward (the first hypothesis, ruled out by the actual `account_history` rows) — it's a plain unit
+mismatch that hits any account that hasn't been active all 52 weeks of the fiscal year, which is
+nearly every real account.*
+
+- [x] **Root cause #1 — `prevWeekNet`'s empty-history fallback.** `App.jsx`'s `prevWeekNet` (read by
+  "This Week's Check"/"Left This Week" in both `HomePanel.jsx` and `BudgetPanel.jsx`, and by
+  `aiContext.js`'s "Left this week"/Coach line) is supposed to show last week's real, finalized
+  paycheck. When there's no prior active week yet — day one after Back to Work, or any brand-new
+  account — it fell back to `weeklyIncome`, which is `projectedAnnualNet / 52`. For an account
+  active only 24 of 52 weeks, that's the year's real income diluted by 28 weeks of $0 that haven't
+  happened yet, not a paycheck. Fixed by falling back to the **current** active week's real
+  computed net (already-correct math, just not what the fallback read) instead, only falling back
+  to `weeklyIncome` when there's no active week to read at all (e.g. indefinite Job Loss Mode).
+  New shared `resolvePrevWeekNet()` (`lib/finance.js`) replaces the duplicated inline version in
+  `App.jsx` **and** `DemoAccountTree.jsx` (same bug, same copy-pasted logic, would've hit demo/
+  investor accounts too).
+- [x] **Root cause #2 — `weeklyIncome` itself divides by a flat 52.** Broader and more serious than
+  the tile bug: `weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek` assumes the account was
+  active the whole fiscal year. `HomePanel.jsx`'s "Net Worth Trend" tile already tried to correct
+  for this on the *annual savings* side — `annualSavings = avgWeeklySurplus * activeWeeksThisYear`
+  — but `avgWeeklySurplus` is built from the still-diluted `weeklyIncome`, so the two didn't agree:
+  for a 24-active-week account, `annualSavings` came out roughly diluted by another 24/52 on top of
+  itself (confirmed: a synthetic 24-active-week case priced `annualSavings` at $12,000 vs. the
+  mathematically correct answer — the old formula gave a materially different, wrong number, not a
+  rounding difference). Separately, `aiContext.js`'s own `annualSavings`/`netWorthHealth` used a
+  **hardcoded** `* 52` (not `activeWeeksThisYear` at all) — a straight-up drift from the Home tile
+  it's labeled as matching, the exact anti-pattern `docs/active-systems.md` §24's grounding
+  discipline exists to prevent. Fixed by scaling `weeklyIncome` by the real active-week count
+  instead of a flat 52 in `App.jsx` and `DemoAccountTree.jsx` (byte-identical output for any
+  `firstActiveIdx: 0` account — i.e. every existing test fixture — since 52 active weeks ÷ 52 is
+  unchanged), and by giving `aiContext.js` the same `activeWeeksThisYear` derivation so the Coach
+  can't state a "Home tile" figure the Home tile doesn't actually show.
+- [x] **New shared `resolveActiveWeeksThisYear(firstActiveIdx)`** (`lib/fiscalWeek.js`) — one
+  formula (`FISCAL_WEEKS_PER_YEAR - firstActiveIdx`, clamped to 0) now backs `App.jsx`'s
+  `weeklyIncome`, `DemoAccountTree.jsx`'s `weeklyIncome`, `aiContext.js`'s `annualSavings`, and
+  `HomePanel.jsx`'s own `annualSavings` (swapped from its local inline copy to the same helper) —
+  four previously-independent copies of the same expression down to one, so this can't re-drift.
+  `traceExpenseCalculationSteps`'s own diagnostic `weeklyIncome` mirror (`lib/finance.js`) also
+  switched from `/52` to its own already-computed `activeWeeks.length`, so the audit trace explains
+  the real formula instead of the one it replaced.
+- [x] **Dead fallback purged, not just left inert.** `HomePanel.jsx`'s `monthlyTakehome` used to
+  read `adjustedTakeHome ?? (weeklyIncome * FISCAL_WEEKS_PER_YEAR)` — the same flat-52 shape as the
+  bug just fixed, confirmed dead (both live callers, `App.jsx` and `DemoAccountTree.jsx`, always
+  pass a real `adjustedTakeHome`) but left in place initially. Removed outright rather than left as
+  inert-but-present: dead code shaped exactly like a bug that was JUST fixed elsewhere reads as a
+  pattern to copy to a future session with no memory of this investigation. Now
+  `(adjustedTakeHome ?? 0) / 12`, with a comment on the `adjustedTakeHome` prop itself
+  (`HomePanel.jsx` ~line 38) spelling out why re-adding that fallback would reintroduce the bug.
+  Re-verified: 1128 tests passing, lint diff-clean, build green.
+- **Not fixed here — real scope, deliberately deferred, not urgent (flagged 2026-07-19):** see
+  §15.H12 below for the full write-up. Short version: none of H11's fix accounts for mid-year gaps
+  *within* an otherwise-active year (Job Loss Mode weeks sitting inside the active range) — only
+  for an account that started the year late.
+- **Verification:** 9 new tests — 4 in `finance.test.js` (`resolvePrevWeekNet`: current-week
+  fallback vs. the old diluted average, real-past-week case unchanged, indefinite-Job-Loss-Mode
+  fallback to `weeklyIncome`, log-adjustment applied on the new fallback path too), 4 in
+  `fiscalWeek.test.js` (`resolveActiveWeeksThisYear` full-year/partial-year/null/clamp cases), 1 in
+  `aiContext.test.js` (Coach's `annualSavings` now scales by `activeWeeksThisYear` from
+  `config.firstActiveIdx`, not a flat 52 — asserts the old drifted $26,000 does NOT appear). Full
+  suite: 1128 tests passing. Lint diff-clean vs. a true `git stash`-verified baseline (not just the
+  session-start snapshot — re-ran eslint against unstashed HEAD to confirm the diff is only line-
+  number shifts from added code, zero new problems). Production build green. **Not covered:** no
+  live click-through on a deployed preview — same category of gap as everything else in this file;
+  the original report came from a real device, but confirming the *fix* still needs a redeploy.
+
+---
+
+#### H12. Annual pace figures don't yet exclude mid-year Job Loss gaps — SCOPED, not started
+
+*Flagged during H11, deliberately not attempted in the same pass — H11 fixed "account started the
+year late," this is the different, harder problem of "account had a gap in the middle of an
+otherwise-active year." User's own framing of the target: score $20k over 4 months, 6 weeks
+unemployed with no draw, score $28k over the next 2 months, then a clean job change with two
+weeks' notice (no gap), finishing the year at a third job pulling $50k. The week-by-week numbers
+already handle this correctly today — this gap is specifically in the *annual rollup* figures.*
+
+**What already works (no change needed):** `buildYear()`'s own `active` flag
+(`lib/finance.js:620`, `const active = idx >= cfg.firstActiveIdx && !inJobLoss;`) already zeroes
+out Job Loss Mode weeks correctly, wherever they fall in the year — this is not a per-week bug.
+`lib/jobLossRunway.js`'s `computeJobLossRunway()` (line 43) is the existing model for gap-aware
+math done right: it takes the real week array and sums only what's actually earned, not a
+count-based average. Any fix here should read the same way — derived from `allWeeks`, not from a
+second `firstActiveIdx`-vs-`today` range computation.
+
+**What doesn't yet work:** every annual-pace figure introduced or touched in H11 —
+`activeWeeksThisYear` itself (`resolveActiveWeeksThisYear()`, `lib/fiscalWeek.js:15`) — is
+`FISCAL_WEEKS_PER_YEAR - firstActiveIdx`, a plain range from account start to year-end. It has no
+idea a chunk of that range was actually a Job Loss Mode gap with $0 real earnings. Four call sites
+inherit this blind spot because they all key off the same helper:
+- `App.jsx:1184-1185` — `weeklyIncome`'s divisor
+- `components/DemoAccountTree.jsx:281-282` — same, demo/investor accounts
+- `components/HomePanel.jsx:104` — `annualSavings`'s multiplier (Net Worth Trend tile)
+- `lib/aiContext.js:98` — Coach's `annualSavings`/`netWorthHealth` copy
+
+Concretely, for the user's own example: an account active weeks 0–51 with a 6-week Job Loss gap
+mid-year currently computes `activeWeeksThisYear = 52 - 0 = 52` (job "started" week 0, so the range
+looks full-year) even though only 46 weeks actually earned anything. `projectedAnnualNet` (the
+numerator, from `buildYear`) is already correct — it's genuinely the sum of the 46 real weeks — but
+dividing/multiplying by 52 instead of 46 means `weeklyIncome`, `annualSavings`, and the Coach's
+narration of both would all be **diluted low** by exactly the size of the gap, the same shape of
+bug H11 fixed, just triggered by a different condition (a gap inside the range, not a late start).
+
+**Why this wasn't just folded into H11:** the fix isn't "swap `resolveActiveWeeksThisYear`'s
+formula" — it needs `allWeeks.filter(w => w.active).length` (a value that isn't uniformly available
+at every H11 call site without also threading `allWeeks` there — `aiContext.js` already receives
+`allWeeks` as a prop, but `HomePanel.jsx` and `DemoAccountTree.jsx` would need it added). It also
+raises a real product question H11 didn't have to answer: should a *closed* gap (the person is
+back to work now, this is retrospective) pull the annual pace down permanently, or should the
+Job-Loss weeks be excluded from the numerator's week-count but the *post-return* pace get its own
+forward-looking read (closer to what `computeJobLossRunway`/the Coach's runway math already do
+during an *active* Job Loss Mode)? That's a design call, not a bug-fix call, and worth its own
+scoped pass rather than a rushed answer bolted onto H11's commit.
+
+**Suggested shape of a future pass (not a commitment, just an entry point):** replace
+`resolveActiveWeeksThisYear(firstActiveIdx)`'s four call sites with something keyed off
+`allWeeks.filter(w => w.active).length` directly (thread `allWeeks` to `HomePanel.jsx`/
+`DemoAccountTree.jsx` where it's missing), decide the retrospective-vs-forward-pace question above
+with the user first, then re-verify `annualSavings`/`weeklyIncome` against a synthetic multi-job,
+mid-year-gap fixture (`buildYear` + a `jobLossMode`/`jobLossDate`/`returnToWorkDate` window,
+similar to the existing `finance.test.js` `buildYear — point-in-time baseRate` fixtures) before
+touching `App.jsx`/`HomePanel.jsx`/`aiContext.js` again.
+
+---
+
+#### H13. Cash on hand — from session-only draft to a persisted, mandatory field — DONE 2026-07-19
+
+*User framing: the runway calc's "accessible cash on hand" figure needed to actually stick —
+persisted and eager-saved, not a draft that evaporates on reload — and needed to be *the* input
+that kicks off Job Loss Mode's runway math, not an easy-to-miss optional field discovered only on
+Budget. Explicitly the first of a two-part ask: get the number to persist and be prominent first;
+richer uses of it (the "more interesting and useful things") are a deliberate follow-up, not
+attempted here.*
+
+- [x] **New persisted config field `jobLossCashOnHand`** (`constants/config.js`) — `null` = never
+  set (pre-existing accounts only; the wizard makes it mandatory going forward), any number
+  including `0` = a real answer. Replaces the old `jobLossSavingsDraft` React state that lived in
+  `App.jsx` and was explicitly documented as "not saved to your account."
+- [x] **Mandatory in `JobLossEntry.jsx`'s Step 0** — new "Cash on hand right now" field between the
+  date and the unemployment Y/N gate. Validation (`cashOnHandValid`) accepts any finite number ≥ 0
+  including 0, rejects empty — folded into `step0Valid` alongside the existing date/unemployment
+  checks. Ghost placeholder is `"e.g. 1,023"` (deliberately specific, not a round number, so it
+  reads as an example rather than a suggested default).
+- [x] **Real red-border feedback, not just a blocked button — required fixing a click-through bug
+  along the way.** The Next/Activate button already visually greys out when a step is invalid
+  (`nextDisabled`), and was *also* passed as the literal `disabled` prop on the underlying
+  `<button>`. A native disabled button never dispatches `onClick` at all — so the existing
+  `attempted`/red-border mechanism (used for the Step 2 due-date picker too) could never actually
+  fire from a click on that button; tapping it while invalid did visibly nothing, no red border, no
+  message, just silence. Confirmed by writing the intended test first and watching it fail for the
+  right reason. Fixed by splitting the single `nextDisabled` variable into two: `nextDisabled`
+  (unchanged, still drives the grey/gold styling) and a new `nextNativeDisabled` that's `false` for
+  Step 0 specifically — the button now stays genuinely clickable there, so a tap while empty
+  reaches `goNext()`'s `setAttempted(true)` branch and the red border/`"↑ Required — 0 is a fine
+  answer, just not empty"` message actually shows. Steps 1–2 keep the prior native-disabled
+  behavior unchanged (same latent gap likely exists there too — e.g. Step 2's due-date picker error
+  state — but that's pre-existing, untouched, and out of scope here; flagged, not fixed).
+- [x] **Editable from both `JobLossHomePanel.jsx` (new) and `JobLossBudgetPanel.jsx` (existing input
+  repointed)** — neither "owns" the field; both hold a local string draft (Numeric Input Standard:
+  never coerce on `onChange`, only `parseFloat` at commit) and commit via `onBlur`, not per
+  keystroke. Draft re-sync from the persisted value (e.g. edited on the other panel, then navigated
+  back) uses React's documented "adjust state during render" pattern — comparing against a
+  `lastSyncedCash` ref-like state and calling `setCashDraft` directly in the render body — instead
+  of a `useEffect`, which would have tripped `react-hooks/set-state-in-effect` (caught by the lint
+  diff check, not guessed at). `JobLossHomePanel`'s placement is directly below the Runway/Weekly
+  Burn/Extra Income metric row, above Log Extra Income — the most prominent surface on the mode's
+  own Home view, per the ask to make this "more present and more important than it currently is."
+- [x] **Eager-saved on blur** (docs/TODO.md "Persistence — Eager Save Pattern") — both panels
+  compute the parsed number synchronously and call `setConfig`/`saveConfigNow` together, skip the
+  write entirely when the blurred value matches what's already persisted (no-op saves avoided).
+  `JobLossBudgetPanel` didn't receive `setConfig`/`saveConfigNow` props before this pass (it only
+  ever touched expenses) — threaded in from `App.jsx` for the first time, with the same `readOnly`
+  no-op shadow `JobLossHomePanel` already had from §15.H10, plus `disabled={readOnly}` on the input
+  itself so a paywall-expired account can't edit even though the write path is already a no-op
+  (defense in depth, matching the existing convention documented in CLAUDE.md's eager-save section).
+- [x] **`App.jsx` simplified** — the lifted `jobLossSavingsDraft`/`setJobLossSavingsDraft` session
+  state is gone entirely; both panels independently derive their own draft from the same
+  `config.jobLossCashOnHand` prop they already receive, with no cross-panel state to keep in sync
+  (they're never mounted simultaneously — Home and Budget are mutually exclusive tab renders).
+  `jobLossIncludeBenefits` (the benefit-scenario toggle) is untouched, still session-only by design.
+- **Not attempted here (explicitly deferred by the user's own framing):** no new runway/display
+  logic built on top of the persisted number beyond what already reads `manualSavings` — the ask
+  was to get it to stick and be prominent *first*. Also unaddressed: Step 1/2's own pre-existing
+  native-disabled click-through gap (see above), and pre-existing accounts that entered Job Loss
+  Mode before this field existed will read `jobLossCashOnHand: null` → `manualSavings` treats that
+  as `0`, same as an explicit zero — quietly correct behavior, not a migration, but worth knowing
+  if a real account's runway looks off after this ships.
+- **Verification:** 15 new/updated tests in `jobLossFlow.test.jsx` — 6 for `JobLossEntry`'s Step 0
+  gate (blocks Next while empty with no red border before the first attempt, shows the red border/
+  required message after a failed attempt, clears it once a valid value is entered, accepts `0`,
+  persists across Back navigation, included in every existing activation test's expected payload)
+  plus 4 existing tests updated to fill the now-mandatory field; 4 for `JobLossHomePanel`'s Cash On
+  Hand input (pre-fills from config, eager-saves on blur only — not on every keystroke — skips the
+  save when unchanged, disabled when `readOnly`); 3 equivalent for `JobLossBudgetPanel`'s existing
+  input repointed to the persisted field. `DEFAULT_CONFIG` snapshot updated for the new field. Full
+  suite: 1138 tests passing. Lint diff-clean vs. a true `git stash` baseline (caught and fixed two
+  real new issues before landing: a `react-hooks/set-state-in-effect` error from the first draft's
+  `useEffect`-based re-sync, and a `react-hooks/preserve-manual-memoization` error the render-time-
+  sync rewrite exposed on `JobLossHomePanel`'s pre-existing `entries` memo — an inconsistent
+  `config?.jobHuntIncomeLog` optional-chain that didn't match the rest of the file's non-optional
+  `config.jobHuntIncomeLog` access; normalized to match). Production build green. **Not covered:**
+  no live click-through on a deployed preview — same category of gap as everything else in this
+  file; the red-border fix in particular deserves an eyeball on a real device given how it was found.
+
+---
+
+#### H14. Birdseye review — a full walk-through edge case, 2026-07-19 — SCOPED, nothing started
+
+*User exercise: walk one concrete character through the whole mode — loses job with $400 cash and
+a half paycheck still owed (biweekly, job loss lands mid-period), 4 Needs bills ($1,500/mo, staggered
+due dates), 3 Lifestyle bills ($60/mo), keeps every bill tracked (stubborn), starts logging
+applications same-day. Purpose was to find where the architecture actually falls short of "spot-on
+runway, best help finding work" rather than trusting the checkbox state. Everything below is a
+documentation-only pass — research and scoping, explicitly not implementation. Ordered roughly by
+how directly each one touches "is the runway number on screen actually correct."*
+
+- [ ] **No pending/final-paycheck concept in the runway calc.** `buildYear()`'s job-loss zeroing
+  (`lib/finance.js:592-602`, `inJobLoss`) zeroes the *entire* fiscal week containing `jobLossDate`
+  — not prorated, so days already worked that week vanish from every projection (Income panel,
+  Budget breakdown, Home/Budget runway) the instant the mode activates. `computeJobLossRunway`'s
+  `savings` parameter (`lib/jobLossRunway.js:43`) is only `jobLossCashOnHand + sumJobHuntIncome()`
+  — there's no field, no date, no concept anywhere for "I'm still owed a paycheck that hasn't
+  posted yet." For a biweekly user whose job loss lands mid-period, that's real, expected money the
+  runway cliff date doesn't know about until the user manually bumps their cash-on-hand number
+  after it actually lands — and nothing prompts them to do that.
+  **Sketch of a minimal fix** (not committed to, needs user sign-off first): a single optional
+  `jobLossPendingPaycheck: { amount, expectedDate }` pair, asked once in `JobLossEntry` Step 0
+  right after cash-on-hand ("Any paycheck still coming that you haven't been paid yet?" — skippable,
+  unlike cash-on-hand which stays mandatory). `computeJobLossRunway` adds `amount` to the cash pool
+  only once `effectiveToday >= expectedDate` — it's a scheduled inflow, not present-day cash, so it
+  shouldn't extend the runway number until it's actually landed. Deliberately **not** a general
+  point-in-time proration of the job-loss week itself (way bigger, touches DHL/base scheduling core,
+  and the wizard has no "which days did you actually work" input to drive it) — a bolt-on amount +
+  date is the honest, small version of this.
+- [ ] **Lifestyle spend is invisible in the headline runway number, with no UI callout.**
+  `weeklyBurn` (`lib/jobLossRunway.js:56-65`) explicitly excludes `category === "Lifestyle"` —
+  a deliberate, reasonable design choice ("focuses on survival spend," per its own code comment)
+  but nothing in `JobLossBudgetPanel`/`JobLossHomePanel` tells the user this. A user who keeps every
+  bill active (the "stubborn" case) sees their 3 Lifestyle bills in the tracked list, due-date
+  countdown, and "Needs Coverage" flag — but the $60/mo they're still actually paying never touches
+  the "Weekly Burn" tile or the runway-days countdown. Their real runway is shorter than the number
+  on screen, silently. **Sketch of a minimal fix:** a one-line "+ $X/wk Lifestyle spend (not counted
+  in runway above)" caption under the Weekly Burn tile — no calc change, pure transparency.
+- [ ] **`coachTriggers.js`'s `estimateRunwayDays` drift, now worse than when §18.E flagged it.**
+  Already documented as a known second runway calc that doesn't respect `trackDuringJobLoss`
+  (§18.E, "Known drift to fix"). Confirmed during this pass: it's *also* completely blind to
+  `jobLossCashOnHand` (§15.H13) — its own doc comment says it "assumes $0 extra savings, the
+  conservative floor," which predates cash-on-hand existing as a real field at all. For a user with
+  real cash on hand (this scenario: $400), Coach's background Red-tier "you're running low" trigger
+  computes a bleaker runway than what the user's own Home/Budget screens show them. Two drift
+  sources stacked on the same function now, not one.
+- [ ] **Coach never actually receives Job Loss Mode's numbers, even when Coach is reachable.**
+  `lib/aiContext.js:199-201` has a `runwayDays` parameter and a "Job Loss Mode: active, ~N days of
+  runway" line ready to use it — but `App.jsx` never passes `runwayDays` into `buildCoachContext` at
+  any call site. Grepped to confirm: zero matches. So today the line always renders as the bare
+  string `"Job Loss Mode: active"` — no runway, no burn, no benefits, no cash-on-hand reach Coach's
+  system prompt at all. This is a live wiring gap on an existing parameter, not a "not built yet"
+  item — the cheapest of everything in this list to close once someone's in that file.
+- [ ] **AI features (Coach, and by extension the unbuilt Job Hunt Assistant/Job Scout) are
+  `is_admin`/`is_tester`-gated** (`canAccessAiFeatures`, `entitlements.js`). A real user living this
+  exact scenario likely cannot reach any of "getting the best help" today regardless of what gets
+  built — worth keeping in view as a business/rollout question, not just an engineering one, before
+  investing further in §18.E/§18.I.
+- [ ] **Résumé upload / skill tips / skill-gap analysis — not scoped anywhere, not a "not started"
+  TODO item, genuinely absent as an idea.** The only trace in the entire doc is one unbuilt chat
+  prompt ("Help me with my resume," §18.E) and a passing mention of "resume text (user-entered)" as
+  a future auto-fill field for job applications (§15.F) — no file upload, no parsing, no structured
+  skill-gap comparison against a target role. If this is wanted, it needs a first scoping pass from
+  scratch (storage: Supabase Storage bucket vs. inline text? parsing: client-side vs. a Claude call
+  reading extracted text? tied to `ReemploymentTracker`'s target income/company data or standalone?)
+  before it's a buildable item — flagging its absence here so it doesn't quietly stay unconsidered.
+- **Not fixed, not scoped further, deliberately left as a list — user's own framing: "pick this
+  apart... but maybe not immediately."** Recommend picking off the wiring-only items first
+  (`runwayDays` into Coach, the Lifestyle-spend caption) since they're small and don't require a
+  design decision, before touching the pending-paycheck field or the two-runway-calc unification,
+  which both need the user's input on scope/design first.
 
 ---
 

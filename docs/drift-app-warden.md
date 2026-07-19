@@ -143,9 +143,9 @@ nothing is orphaned).
 | # | Top Section | Cat | Primary files | Absorbs active-systems | Spines consumed |
 |---|------------|-----|---------------|------------------------|-----------------|
 | T1 | **Setup Wizard** | G | `SetupWizard.jsx`, `LifeEventMenu.jsx`, `JobLossEntry.jsx`, `RateUpdateModal.jsx`, `constants/config.js` | §9 · §10 (entry flows) · §11 (employer preset convention — born here, enforced everywhere) | A, B, F |
-| T2 | **Home Panel** | G | `HomePanel.jsx`, `JobLossHomePanel.jsx`, `NetWorthHealthTips.jsx`, `CoachNetWorthCard.jsx`, `ReemploymentTracker.jsx` | §14 · §10 (Job Loss home surface) · §4 (goal display/reorder) · §16 (sprints 3/5) | A, B, C, D, E |
+| T2 | **Home Panel** | G | `HomePanel.jsx`, `JobLossHomePanel.jsx`, `NetWorthHealthTips.jsx`, `CoachNetWorthCard.jsx`, `ReemploymentTracker.jsx` | §14 · §10 (Job Loss home surface) · §4 (the *entire* goals surface — cards, CRUD, reorder, timeline bar; moved off Budget 2026-05-12) · §16 (sprints 3/5) | A, B, C, D, E |
 | T3 | **Income Panel** | L | `IncomePanel.jsx`, `WeekConfirmModal.jsx` | §1 (display surface) · §2 · §12 · §16 (sprint 2, unshipped) | A, B, E, F |
-| T4 | **Budget Panel** | L | `BudgetPanel.jsx`, `JobLossBudgetPanel.jsx`, `BulkEditPanel.jsx`, `MonthQuarterSelector.jsx`, `DueDatePicker.jsx` | §3 · §4 · §5 · §10 (Job Loss budget surface) · Tax Plan gate (§23 consumer) | A, B, C |
+| T4 | **Budget Panel** | L | `BudgetPanel.jsx`, `JobLossBudgetPanel.jsx`, `BulkEditPanel.jsx`, `MonthQuarterSelector.jsx`, `DueDatePicker.jsx` | §3 · §5 · §10 (Job Loss budget surface) · Tax Plan gate (§23 consumer; §4 goals moved to T2 — corrected in T4 pass) | A, B, C |
 | T5 | **Benefits Panel** | L | `BenefitsPanel.jsx` | §6 | A, B |
 | T6 | **Log Panel** | L | `LogPanel.jsx` | §8 · §7 (attendance surfaces) · §13 (per-entry admin breakdown) | A, B, F |
 | T7 | **Auth System** | G | `ProfilePanel.jsx`, `lib/supabase.js`, `db.js` (account mapping), migrations (RLS, tier columns), `DemoAccountTree.jsx`, `InvestorRegister.jsx`, `InvestorAdminPanel.jsx` | §17 (account management) · §18 · §23 | B, C |
@@ -246,7 +246,7 @@ for that section):
 - [x] **T1 — Setup Wizard** — §7 below (surgical pass 2026-07-19)
 - [x] **T2 — Home Panel** — §8 below (surgical pass 2026-07-19)
 - [x] **T3 — Income Panel** — §9 below (surgical pass 2026-07-19)
-- [ ] **T4 — Budget Panel**
+- [x] **T4 — Budget Panel** — §10 below (surgical pass 2026-07-19)
 - [ ] **T5 — Benefits Panel**
 - [ ] **T6 — Log Panel**
 - [ ] **T7 — Auth System**
@@ -898,3 +898,188 @@ same patch, clears `taxRatesEstimated`, compute-then-eager-saves (compliant).
    mild (admin-only; a lost delete resurrects a valid confirmation), but it's the only
    confirmed rule exception on this surface. Cheap fix: compute both next values
    synchronously and pass through one `savePersistedStateNow`.
+
+---
+
+## 10. T4 — Budget Panel Drift Map
+
+**Pass date:** 2026-07-19. Same anchor + method rules as §7; numbering continues (F35+).
+**Git-history note:** the governing intentions here are the June-16 trilogy (`d8c475a`,
+`d42c118`, `6fb0619`) that implemented the **locked Decisions 1–3** on expense-save
+semantics (decision record preserved in `docs/BUG_FIX_TODO.md`'s archived section — do
+not re-litigate without sign-off), the `764da5b` eager-save wrapper, and the July
+Job Loss rebuild (`7375c36`, `cd0480f`, `6a3e406`). Goals are *not* on this surface —
+they moved wholly to Home 2026-05-12 (`50c1243`); this pass corrected active-systems §4
+and the §4.1 hierarchy rows accordingly.
+
+**Scope:** `BudgetPanel.jsx` (2,579 lines), `JobLossBudgetPanel.jsx`, `BulkEditPanel.jsx`,
+`MonthQuarterSelector.jsx`, `DueDatePicker.jsx`, and the `expense.js` helper layer
+(Spine A) they consume.
+
+### 10.1 Block 1 — Critical inventory (function by function)
+
+**F35 · `applyExpenseUpdate(updater)`** — `BudgetPanel.jsx:96–100`, twin at
+`JobLossBudgetPanel.jsx:53–56` (and `ReemploymentTracker`'s `applyConfigUpdate`, §8 F22) — **[L]**
+The canonical eager-save wrapper: captures the functional updater's result and passes
+the same value to `setExpenses` **and** `onSaveExpensesNow`. Every expense/loan mutation
+in both files routes through it — that's what makes the whole surface D3-safe with ~30
+call sites unchanged internally.
+> **IF** any new mutation calls `setExpenses` directly instead of `applyExpenseUpdate`,
+> **THEN** that one action silently rides the debounce — D3 reopened on exactly one
+> button. Check: grep `setExpenses(` in both files — only the wrapper (and the readOnly
+> shadow declaration) may reference it.
+
+**F36 · `displayMonthKey` + `displayEffective`** — `BudgetPanel.jsx:241–242` — **[L]**
+The display anchor: `activeMonth ?? (current quarter ? currentMonthKey :
+QUARTER_FIRST_MONTHS[ap])`. The current-quarter clamp to *current month* is the Bug-2
+fix (`d42c118`) — quarter cards once read elapsed April and showed $0 for June-onward
+adds. Every card total and the headline flow through `displayEffective` →
+`getEffectiveAmountForMonth`.
+> **IF** the anchor logic changes (or any display surface reads `history` directly
+> again), **THEN** the same expense shows different numbers across cards vs. projections
+> — the exact incident class Decisions 1–3 closed. Check: fresh account, quarter view,
+> add an expense "Month+ Onward" — card must show the amount, not $0; `expense.test.js`.
+
+**F37 · The save-scope writer family** — adds `addExpFromMonthForward:704` /
+`addExpAllQuarters:730`; saves `saveThisMonth:780` / `saveFromMonthForward:791` /
+`saveThisQuarterOnly:820` / `saveAllQuarters:845` / `saveAllQuartersFull:870`; clears
+`:892–930`; `restoreExpense:951–960` — all via pure helpers in `expense.js`
+(`applyMonthEdit*`, `applyQuarterForward`, `applyAllQuarters`, `clearMonth*`,
+`onwardStartMonthKey`) — **[L]**
+Governed by the locked decisions: **(1)** broad saves overwrite finer overrides in
+range; **(2)** "Onward" = current month → Dec, elapsed months untouched; **(3)**
+`monthlyOverrides` is the authoritative layer, `history` the baseline. Every button
+writes the *precise* month-key set its label promises.
+> **IF** a new save scope is added or a helper's month-window changes, **THEN** re-walk
+> the decision table in `BUG_FIX_TODO.md` (archived section) — the failure mode is a
+> save that silently loses to a shadowing override, or one that back-dates
+> `effectiveFrom` into elapsed months. Check: `expense.test.js`'s scope-precision cases
+> (each button's exact month set) must be extended, not just pass.
+
+**F38 · `getEffectiveAmountForMonth` resolution contract** — `finance.js:749` (Spine A),
+consumed by F36, `computeRemainingSpend`, budget health, Coach context — **[L]**
+Override-first, `history` fallback. The single resolver for "what does this bill cost in
+month M" — Coach context and the panel must both resolve through it (§24 grounding
+case law: a `billingMeta`-derived estimate once disagreed by double digits).
+> **IF** resolution order or fallback rules change, **THEN** every consumer moves:
+> panel cards, `computeRemainingSpend` (spend/goal projections), budget health, Coach's
+> per-expense lines. Check: one expense with both an override and a history entry —
+> all four surfaces quote the same number.
+
+**F39 · Mandatory Food floor** — `MIN_FOOD_WEEKLY` `BudgetPanel.jsx:106–107`,
+`belowFloor` gate `:2470–2471` (disables all five save buttons) — **[G]**
+$75/week scaled by `perCheckFactor`. The Food expense is the app's only mandatory
+expense; the floor blocks edits below it. Couples to §7 F8: jobless first-runs skip the
+Food seed; Back to Work restores it (`ensureInitialFoodExpense`).
+> **IF** the floor value, the mandatory-expense set, or the seed/restore pair changes,
+> **THEN** all three places move together (wizard seed logic, this floor gate, restore
+> path) — a Food expense deleted through a gap here breaks the "budget always has food"
+> product invariant. Check: `jobLossFlow.test.jsx` + attempt to save Food below floor.
+
+**F40 · Drag-and-drop reorder** — `reorderExpenseByInsert` `BudgetPanel.jsx:1046+`,
+drop sites `:1427`/`:1569` — **[L/G]**
+Mouse + touch (450ms hold) reorder with cross-lane (Needs↔Lifestyle) support. Persists
+via F35 **once, on drop** — deliberately not on `dragover`.
+> **IF** reorder persistence is ever attached to a continuous event (dragover, live
+> preview), **THEN** it fires a network write per pixel — the exact anti-pattern
+> CLAUDE.md's eager-save section forbids. Check: one drag = exactly one save call.
+> Cross-lane moves also rewrite `category` — verify Lifestyle↔Needs affects
+> `weeklyBurn` in Job Loss Mode (F44) and budget-health splits.
+
+**F41 · Loans cluster** — `editLoan` `:1272–1274`, `addLoan` `:1285–1288`, `deleteLoan`
+`:1293`; math: `computeLoanPayoffDate` `finance.js:1119`, quarter-safe
+`buildLoanHistory` `finance.js:1129`, `loanPaymentsRemaining`, `loanWeeklyAmount` — **[L]**
+Loans are expenses with `loanMeta`; **every edit regenerates the entire `history` from
+`loanMeta`** (`history: buildLoanHistory(meta)`) — the documented D2 exemplar (§5 known
+gap: editing terms retroactively rewrites past weeks). Quarter-safe payoff: the runway
+entry ends the day *after* the quarter-end containing the payoff date.
+> **IF** touching loan math, **THEN** know you are inside the app's standing D2 zone:
+> do not add new consumers of regenerated history that assume it's point-in-time
+> truthful for past weeks. The planned fix is an expense-style `history[]` follow-up
+> (TODO §19) — extend that, not the regeneration. Check: a mid-quarter payoff keeps
+> paying through quarter close; past-week spend totals unchanged after a term edit is
+> the *aspiration*, currently violated by design.
+
+**F42 · Bulk edit (ADV. EDIT)** — `BulkEditPanel.jsx:16` (pure collector), wired at
+`BudgetPanel.jsx:1310–1318`, commits through `saveAdvancedEdit` →
+`buildAdvancedEditPayload` (`expense.js:316`) → F35 — **[L]**
+Multi-expense edit/delete/add in one pass, anchored to `displayMonthKey`'s month.
+> **IF** the payload builder's scope semantics diverge from the single-expense buttons
+> (F37), **THEN** the same edit made two ways produces different override sets. Check:
+> edit one expense via sheet and via bulk with identical inputs — identical stored shape.
+
+**F43 · Tax Plan gate (consumer)** — `taxFeatureUnlocked` `BudgetPanel.jsx:82`, used
+`:2103` — **[G]**
+`canAccessTaxPlan({isAdmin, taxProjectionsEnabled, isTester})` — display-only here
+(tax-exempt week info). The *writers* (per-week taxed/exempt toggles →
+`pastWeekTaxStatusOverrides`) live in **ProfilePanel** (T7, eager-saved since
+`debc0cb`); the math consumer is F28 (T3). `a430fbf`: the unlock is manual-only
+(liability hold) — setup's tax-exempt opt-in alone never surfaces it to a normal user.
+> **IF** this gate's inputs change, **THEN** BudgetPanel and ProfilePanel must gate
+> identically (same function, same args) and `isAdmin` must remain a structural
+> superset of `isTester` (`a643153`, built on `hasTesterAccess`). Check: tester
+> account sees Tax Plan in both places; plain user with `taxExemptOptIn` sees neither.
+
+**F44 · Job Loss budget surface** — `JobLossBudgetPanel.jsx`: triage `setStatus:152`,
+`toggleAutoReactivate:153`, `pauseAllFlexible:156`, `removeExpense:159`, inline add
+`:171–176` (stamps `trackDuringJobLoss: true` + `dueDateAnchor`); `upcomingBills`
+`:116–130` (due-date countdowns, active bills only); runway via `computeJobLossRunway`
+`:91`; benefit-scenario toggle `includeBenefits` lifted to App state (**session-only,
+deliberately unpersisted**, shared with JobLossHomePanel so both quote one scenario) — **[G→L]**
+> **IF** triage status values (`active`/`paused`/`cancelled`) or `trackDuringJobLoss`
+> semantics change, **THEN** check every reader: `weeklyBurn` (Needs-only, active-only —
+> `jobLossRunway.js`), `upcomingBills` filter, Back to Work auto-reactivation (§7 F11),
+> and the F24 quarantine's filter drift. **IF** `includeBenefits` is ever persisted,
+> **THEN** that's a product decision reversal — its session-only nature is documented
+> intent (`:23` comment), not an oversight. Check: toggling the scenario on one panel
+> changes the other; kill-tab keeps triage states but resets the scenario toggle.
+
+### 10.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `expense.js` cycle/conversion helpers (`toMonthlyCost`, `perPaycheckFromCycle`, `CHECKS_PER_MONTH`, `normalizeCycle`) | Every card amount, `minFoodPerCheck` scaling, breakdown displays (`bddeb04`/`8e669e3` fixed over-counting here once), Coach per-expense lines | `expense.test.js`; a monthly-cycle bill shows the same cost on card, breakdown, and Ask Coach | D1 |
+| `getEffectiveAmountForMonth` / `getPhaseIndex` (Spine A) | F36/F38 consumers + `computeRemainingSpend` + budget health month boundary + Coach grounding | One expense with override + history: all surfaces agree | D1 |
+| `monthlyOverrides`/`history` storage shape | F37's five writers + F42 bulk payload + restore sheet + DB `expenses` column shape | `expense.test.js` round-trip case; DB Row drift badge clean after each save scope | D2/D3 |
+| Expense `category` values (Needs/Lifestyle) | F40 cross-lane rewrite, Job Loss `weeklyBurn` (Needs-only), budget-health splits, `pauseAllFlexible`'s flexible-category filter | Move a bill across lanes; runway + health both shift accordingly | D1 |
+| `loanMeta` fields / `buildLoanHistory` regeneration | F41 zone — payoff cards, Job Loss due-date attach (`loanMeta.firstPaymentDate`, §7 F12), quarter-close behavior | `finance.test.js` loan cases; mid-quarter payoff manual check | D2 |
+| `jobLossStatus`/`trackDuringJobLoss` flags | F44 readers + JobLossEntry's review step (§7 F12) + Back to Work reactivation (§7 F11) | `jobLossFlow.test.jsx` | D1/D4 |
+| `canAccessTaxPlan` inputs (Spine C) | F43 here + ProfilePanel's Tax Plan section — identical gating | Tester/admin/plain × opt-in matrix | D4 |
+| A new mutation-capable prop into either panel | readOnly noop shadows (`:87–89`, JLBP `:43–47`) | Prop in shadow list; expired-account no-op test | D4 |
+
+### 10.3 Block 3 — Gate matrix
+
+| Dimension | Cells | Expected behavior |
+|---|---|---|
+| `readOnly` (paywall-expired) | false / true | true: F35 wrapper noop'd in both panels; categories force-collapsed and headers inert (`:1415`/`:1455`); add/edit UI hidden (`:1744`, `:1995`) |
+| `config.jobLossMode` | false / true | true: `JobLossBudgetPanel` replaces BudgetPanel (`App.jsx:1536`); triage inline; simplified add form stamps `trackDuringJobLoss` |
+| View mode | overview / month (`activeMonth`) / quarter (`ap`) | Save-button sets differ (month buttons vs Q buttons, `:2494–2506`); `displayMonthKey` anchor per F36; current quarter clamps to current month |
+| `taxFeatureUnlocked` | false / true | true (admin, tester, or manual `taxProjectionsEnabled`): tax-exempt week info at `:2103`; false: invisible even with `taxExemptOptIn` (`a430fbf`) |
+| Expense kind | regular / mandatory Food / loan | Food: floor-gated saves, cannot delete (restored on Back to Work); loan: separate CRUD, history regenerated from `loanMeta`, excluded from regular breakdown rows |
+| Pay schedule | weekly / biweekly / salary / monthly | `cpm` (4/2/2/1) drives per-check math; `perCheckFactor` scales floor + displays; "/wk" vs "/check" labels |
+
+### 10.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *Bugs 1–2 + Decisions 1–3* (June 16 trilogy `d8c475a`/`d42c118`/`6fb0619`) — the
+  fullest decision record in the repo, archived in `BUG_FIX_TODO.md`. Quarter saves once
+  wrote only `history` and lost to shadowing overrides; display anchored to elapsed
+  months showed $0. The locked decisions govern every future F37 change.
+- *Breakdown over-counting* (`8e669e3`, `bddeb04`, 2026-06-23) — monthly/yearly bills
+  double-counted in the budget breakdown until displays were rooted on 30-day cost.
+- *Per-week storage normalization* (`6e9fbda`, 2026-05-15) — expense weekly amounts are
+  stored per-week for **all** pay schedules; display scales by `cpm`/`perCheckFactor`.
+  Any writer storing a per-check amount raw re-breaks biweekly accounts.
+- *iOS sheet/drag fixes* (`95c449c`, `4f23df8`, `c0224ce`) — bottom-sheet buttons and
+  drag auto-scroll needed portal + hit-test work; regressions here resurface as
+  "buttons don't respond on iPhone".
+- *Tester gate + structural superset* (`a643153`) and *manual-unlock liability hold*
+  (`a430fbf`) — F43's two governing commits.
+
+**Standing findings from this pass:** none new — every mutation site on this surface
+verified through F35's wrapper (the `764da5b`/`cd0480f` audits hold), and the readOnly
+shadows cover all threaded mutation props. The D5 corrections (goals location in
+active-systems §4 + this doc's §4.1 hierarchy rows) were applied in-pass per protocol.
+The F41 loan D2 zone remains the surface's known open debt, already tracked as
+TODO §19's loan follow-up — not re-filed as a DW item since it's a designed-in gap with
+an owned roadmap entry, not a discovered defect.

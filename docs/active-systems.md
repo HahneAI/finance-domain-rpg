@@ -23,7 +23,7 @@ Last updated: 2026-07-16 | App: Authority Finance (A:Fin)
 | 1 | Income & Pay Engine | `finance.js`, `App.jsx` | Live |
 | 2 | Rolling Views & Progressive Scaling | `rollingTimeline.js` | Live |
 | 3 | Budget — Expenses | `BudgetPanel.jsx`, `finance.js` | Live |
-| 4 | Budget — Goals | `BudgetPanel.jsx`, `HomePanel.jsx`, `goalFunding.js` | Live |
+| 4 | Budget — Goals | `HomePanel.jsx`, `goalFunding.js` | Live |
 | 5 | Budget — Loans | `BudgetPanel.jsx`, `finance.js` | Live |
 | 6 | Benefits — 401k & PTO | `BenefitsPanel.jsx` | Live |
 | 7 | Attendance Bucket Model (DHL) | `finance.js` | Live |
@@ -111,7 +111,9 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
 ## 4. Budget — Goals
 
 - **Timeline grid:** `computeGoalTimeline()` (`finance.js`) runs week-by-week surplus
-  sequencing against `futureWeeks`; renders as a month-labeled bar in `BudgetPanel.jsx`.
+  sequencing against `futureWeeks`; renders as a month-labeled bar in `HomePanel.jsx`
+  (the whole goals surface — cards, CRUD, reorder, timeline — moved to Home 2026-05-12;
+  `BudgetPanel.jsx` no longer receives `goals` at all).
 - **Reset Timeline:** `config.goalTimelineEpochIdx` — weeks before it contribute no
   surplus. The button (HomePanel Active Goals header) writes the next pay week's idx
   here, behind a confirmation modal; persists normally.

@@ -1,7 +1,28 @@
-import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, computeGoalTimeline } from "./finance.js";
-import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR } from "./fiscalWeek.js";
+import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, computeGoalTimeline, fmtFullDate } from "./finance.js";
+import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining } from "./fiscalWeek.js";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { EXPENSE_CYCLE_OPTIONS } from "./expense.js";
+
+// Pairs a fiscal week index with its real calendar date — full month name,
+// never abbreviated — and the period number in the unit this account's pay
+// schedule actually uses ("week" only for weekly pay; "paycheck"/"month"
+// otherwise), per explicit instruction: date mentions get wider for larger
+// pay periods, and Coach must mirror the app's own week-vs-check convention
+// (payPeriodUnit/weekNumToPaycheckNum, lib/fiscalWeek.js) rather than
+// defaulting to "week" out of habit. Reuses getPayPeriodBounds() — the same
+// resolver HomePanel/IncomePanel use — instead of hand-deriving a date range.
+function formatPeriodWithDate(weekIdx, allWeeks, checksPerYear) {
+  const weekNumber = getFiscalWeekNumber(weekIdx);
+  if (weekNumber == null) return "—";
+  const periodNum = weekNumToPaycheckNum(weekNumber, checksPerYear) ?? weekNumber;
+  const unit = payPeriodUnit(checksPerYear, "lower");
+  const bounds = getPayPeriodBounds(weekIdx, allWeeks);
+  if (!bounds) return `${unit} ${periodNum}`;
+  const dateLabel = checksPerYear === 52
+    ? `the week of ${fmtFullDate(bounds.start)}`
+    : `${fmtFullDate(bounds.start)}–${fmtFullDate(bounds.end)}`;
+  return `${dateLabel} (${unit} ${periodNum})`;
+}
 
 // Per-expense weekly cost, resolved the same way computeRemainingSpend()
 // resolves it for the real "Weekly spend" aggregate — monthlyOverrides first,
@@ -29,14 +50,17 @@ const fmt$ = (n) => (Number.isFinite(n) ? `$${Math.round(n).toLocaleString("en-U
 // deliberately withheld here for user privacy — goals are identified only by
 // funding-priority rank ("Goal 1 of N"), which is itself real, useful
 // information (goals fund top to bottom in this order).
-function formatGoalTimelineEntry(g, rank, total, checksPerYear, currentWeekIdx) {
+function formatGoalTimelineEntry(g, rank, total, checksPerYear, currentWeekIdx, allWeeks) {
   if (!Number.isFinite(g.eW)) {
     return `Goal ${rank} of ${total}: ${fmt$(g.target)} target, not on track to finish within this fiscal year at the current pace`;
   }
   const pN = checksPerYear === 52 ? g.wN : g.wN / (FISCAL_WEEKS_PER_YEAR / checksPerYear);
   const rate = pN > 0 ? g.target / pN : 0;
-  const doneWeekNumber = currentWeekIdx != null ? getFiscalWeekNumber(currentWeekIdx + Math.ceil(g.eW)) : null;
-  return `Goal ${rank} of ${total}: ${fmt$(g.target)} target, ~${fmt$(rate)}/wk projected, ~${Number.isFinite(pN) ? pN.toFixed(1) : "0.0"} wks to fund${doneWeekNumber != null ? `, on track for fiscal week ${doneWeekNumber}` : ""}`;
+  const periodAbbrev = payPeriodUnit(checksPerYear, "abbrev").toLowerCase();
+  const doneLabel = currentWeekIdx != null
+    ? formatPeriodWithDate(currentWeekIdx + Math.ceil(g.eW), allWeeks, checksPerYear)
+    : null;
+  return `Goal ${rank} of ${total}: ${fmt$(g.target)} target, ~${fmt$(rate)}/${periodAbbrev} projected, ~${Number.isFinite(pN) ? pN.toFixed(1) : "0.0"} ${periodAbbrev}s to fund${doneLabel != null ? `, on track for ${doneLabel}` : ""}`;
 }
 
 /**
@@ -58,10 +82,12 @@ export function buildCoachContext({
   logs = [],
   futureWeeks = [],
   timelineWeekNets = [],
+  futureWeekNets = [],
   logNetLost = 0,
   logNetGained = 0,
   futureEventDeductions = {},
   prevWeekNet = null,
+  allWeeks = [],
 } = {}) {
   const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
   const annualSavings = avgWeeklySurplus * 52 - fundedGoalSpend;
@@ -96,11 +122,43 @@ export function buildCoachContext({
   );
   const lastGoalEW = goalTimeline.length ? Math.max(...goalTimeline.map((g) => (Number.isFinite(g.eW) ? g.eW : 0))) : 0;
   const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
+  const perCheckFactor = 52 / checksPerYear;
+
+  // Matches HomePanel.jsx's "Next Week Takehome" tile exactly: the first
+  // entry of futureWeekNets (a real confirmed/scheduled figure) if one
+  // exists, else the last confirmed week, else the plain weekly average —
+  // same fallback order, same status thresholds, same perCheckFactor scaling.
+  const nextWeekNet = futureWeekNets?.[0] ?? null;
+  const nextWeekFallbackSource = nextWeekNet != null ? null : (prevWeekNet != null ? "prev" : "avg");
+  const nextWeekFallbackNet = nextWeekFallbackSource === "prev" ? prevWeekNet : weeklyIncome;
+  const nextWeekDisplay = nextWeekNet ?? nextWeekFallbackNet;
+  const nextWeekStatus = nextWeekNet != null
+    ? (nextWeekNet < weeklyIncome * 0.8 ? "below average — check Log"
+      : nextWeekNet < weeklyIncome * 0.95 ? "slightly below average"
+        : "on track")
+    : (nextWeekFallbackSource === "prev" ? "projected from your last confirmed pay" : "projected average — no confirmed weeks yet");
+  let nextWeekLine = `Next week takehome (Home tile): ${fmt$(nextWeekDisplay * perCheckFactor)} (${nextWeekStatus})`;
+  if (nextWeekNet != null) {
+    const diff = nextWeekNet - weeklyIncome;
+    if (Math.abs(diff) >= weeklyIncome * 0.03) {
+      nextWeekLine += `, ${diff > 0 ? "+" : "-"}${fmt$(Math.abs(diff) * perCheckFactor)} vs your average`;
+    }
+  }
+
+  // Matches the app's own week-vs-check convention exactly (payPeriodUnit,
+  // weeksToChecksRemaining, lib/fiscalWeek.js): weekly-pay accounts see
+  // "week", every other schedule sees "paycheck"/"month" with a wider date
+  // range — never hardcode "week" regardless of pay schedule.
+  const periodUnitPlural = payPeriodUnit(checksPerYear, "lowerPlural");
+  const currentPeriodLabel = currentWeek ? formatPeriodWithDate(currentWeek.idx, allWeeks, checksPerYear) : "—";
+  const periodsLeft = weeksLeft != null ? weeksToChecksRemaining(weeksLeft, checksPerYear) : null;
+  const lastGoalPeriods = checksPerYear === 52 ? lastGoalEW : lastGoalEW / (FISCAL_WEEKS_PER_YEAR / checksPerYear);
 
   const lines = [
     `Weekly net income: ${fmt$(weeklyIncome)}`,
     `Weekly spend: ${fmt$(avgWeeklySpend)}`,
     `Weekly surplus: ${fmt$(avgWeeklySurplus)}`,
+    nextWeekLine,
     `Left this week (Home tile): ${fmt$(leftThisWeek)}`,
     `Savings rate: ${netWorthHealth.rate != null ? `${Math.round(netWorthHealth.rate * 100)}%` : "—"}${netWorthHealth.belowThreshold ? " (below 10% target)" : ""}`,
     `Net worth trend (Home tile — projected annual savings): ${fmt$(annualSavings)}`,
@@ -109,11 +167,11 @@ export function buildCoachContext({
     `Expenses: ${activeExpenses.length} active line${activeExpenses.length === 1 ? "" : "s"}, ${fmt$(avgWeeklySpend)}/week`,
     ...(activeGoals.length ? [
       `Active goals total (Home tile — unfunded target sum): ${fmt$(totalActiveGoalsTarget)}`,
-      `Weeks to complete all active goals (Home tile): ~${Math.ceil(lastGoalEW)} weeks`,
+      `Weeks to complete all active goals (Home tile): ~${Math.ceil(lastGoalPeriods)} ${periodUnitPlural}`,
     ] : []),
-    `Log entries: ${logs.length} logged${mostRecentLog ? `, most recent: ${EVENT_TYPES[mostRecentLog.type]?.label ?? mostRecentLog.type} (week ending ${mostRecentLog.weekEnd ?? "—"})` : ""}`,
-    `Fiscal week: ${weekNumber ?? "—"} of ${FISCAL_WEEKS_PER_YEAR}${weeksLeft != null ? ` (${weeksLeft} left)` : ""}`,
-    `Today: ${today ?? "—"}`,
+    `Log entries: ${logs.length} logged${mostRecentLog ? `, most recent: ${EVENT_TYPES[mostRecentLog.type]?.label ?? mostRecentLog.type} (week ending ${fmtFullDate(mostRecentLog.weekEnd)})` : ""}`,
+    `Current period: ${currentPeriodLabel}${periodsLeft != null ? `, ${periodsLeft} ${periodUnitPlural} left in the fiscal year` : ""}`,
+    `Today: ${today ? fmtFullDate(today) : "—"}`,
   ];
 
   if (activeExpenses.length) {
@@ -127,7 +185,7 @@ export function buildCoachContext({
 
   if (goalTimeline.length) {
     const items = goalTimeline
-      .map((g, i) => formatGoalTimelineEntry(g, i + 1, goalTimeline.length, checksPerYear, currentWeek?.idx ?? null))
+      .map((g, i) => formatGoalTimelineEntry(g, i + 1, goalTimeline.length, checksPerYear, currentWeek?.idx ?? null, allWeeks))
       .join("; ");
     lines.push(`Goal breakdown (ranked by funding priority — goal names withheld for privacy): ${items}`);
   }

@@ -381,14 +381,14 @@ code {
 }
 
 /* ── Wizard step slides — direction-aware push/pop (StepSlide in ui.jsx) ── */
-@keyframes stepInRight { from { opacity:0; transform:translateX(38px);  } to { opacity:1; transform:translateX(0); } }
-@keyframes stepInLeft  { from { opacity:0; transform:translateX(-38px); } to { opacity:1; transform:translateX(0); } }
-@keyframes stepOutLeft { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(-38px); } }
-@keyframes stepOutRight{ from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(38px);  } }
-.step-in-right  { animation: stepInRight  300ms var(--ease-fold-smooth) both; }
-.step-in-left   { animation: stepInLeft   300ms var(--ease-fold-smooth) both; }
-.step-out-left  { animation: stepOutLeft  220ms var(--ease-fold-smooth) both; }
-.step-out-right { animation: stepOutRight  220ms var(--ease-fold-smooth) both; }
+@keyframes stepInRight { from { opacity:0; transform:translateX(90px);  } to { opacity:1; transform:translateX(0); } }
+@keyframes stepInLeft  { from { opacity:0; transform:translateX(-90px); } to { opacity:1; transform:translateX(0); } }
+@keyframes stepOutLeft { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(-90px); } }
+@keyframes stepOutRight{ from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(90px);  } }
+.step-in-right  { animation: stepInRight  340ms var(--ease-fold-smooth) both; }
+.step-in-left   { animation: stepInLeft   340ms var(--ease-fold-smooth) both; }
+.step-out-left  { animation: stepOutLeft  240ms var(--ease-fold-smooth) both; }
+.step-out-right { animation: stepOutRight  240ms var(--ease-fold-smooth) both; }
 
 @media (prefers-reduced-motion: reduce) {
   .step-in-right, .step-in-left, .step-out-left, .step-out-right { animation:none; }

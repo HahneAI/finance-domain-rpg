@@ -3331,10 +3331,12 @@ export default function App() {
           logs={logs}
           futureWeeks={futureWeeks}
           timelineWeekNets={futureWeekNetsRaw}
+          futureWeekNets={futureWeekNets}
           logNetLost={logTotals.netLost}
           logNetGained={logTotals.netGained}
           futureEventDeductions={futureEventDeductions}
           prevWeekNet={prevWeekNet}
+          allWeeks={allWeeks}
         />
       )}
 

@@ -127,6 +127,82 @@ describe('JobLossEntry', () => {
     expect(onClose).toHaveBeenCalled()
     expect(onActivate).not.toHaveBeenCalled()
   })
+
+  const REVIEW_EXPENSES = [
+    { id: 'exp_rent', category: 'Needs', label: 'Rent', billingMeta: { amount: 1200, cycle: 'every30days', effectiveFrom: '2026-01-01' } },
+    { id: 'exp_gym', category: 'Lifestyle', label: 'Gym', billingMeta: { amount: 40, cycle: 'every30days', effectiveFrom: '2026-01-01' } },
+  ]
+
+  it('walks through the expense review + due-date steps and activates with the result', () => {
+    const onActivate = vi.fn()
+    const onClose = vi.fn()
+    render(<JobLossEntry open onClose={onClose} onActivate={onActivate} expenses={REVIEW_EXPENSES} />)
+
+    // Step 0 — same date/benefits gate as before, now advances to Step 1 instead of activating.
+    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(onActivate).not.toHaveBeenCalled()
+    expect(screen.getByText('Which bills do you want to track?')).toBeTruthy()
+
+    // Step 1 — both start checked; uncheck Gym.
+    fireEvent.click(screen.getByText('Gym').closest('label').querySelector('input[type="checkbox"]'))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('When are these due?')).toBeTruthy()
+    expect(screen.queryByText('Gym')).toBeNull() // unchecked, so not shown in the due-date step
+
+    // Step 2 — pick a due date for the one kept bill (Rent).
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+    expect(onActivate).not.toHaveBeenCalled() // no due date picked yet
+    fireEvent.click(screen.getByText('3rd week of month'))
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+
+    expect(onActivate).toHaveBeenCalledTimes(1)
+    const [configPatch, updatedExpenses] = onActivate.mock.calls[0]
+    expect(configPatch).toMatchObject({ jobLossMode: true, unemploymentEnabled: false })
+    expect(updatedExpenses.find(e => e.id === 'exp_rent')).toMatchObject({ trackDuringJobLoss: true })
+    expect(updatedExpenses.find(e => e.id === 'exp_rent').dueDateAnchor).toMatch(/-15$/)
+    expect(updatedExpenses.find(e => e.id === 'exp_gym')).toMatchObject({ trackDuringJobLoss: false })
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('supports going Back from the expense review step without losing Step 0 answers', () => {
+    const onActivate = vi.fn()
+    render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} expenses={REVIEW_EXPENSES} />)
+    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('Which bills do you want to track?')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByText('Enter Job Loss Mode')).toBeTruthy()
+    expect(screen.getByText('✓ No')).toBeTruthy() // step 0's answer persisted across the Back navigation
+  })
+
+  const LOAN_EXPENSE = {
+    id: 'exp_loan1', type: 'loan', category: 'Loans', label: 'Car Note',
+    loanMeta: { totalAmount: 2400, paymentAmount: 200, paymentFrequency: 'monthly', firstPaymentDate: '2026-05-10' },
+  }
+
+  it('shows a Loan badge in the review checklist and attaches the loan\'s own payment date automatically', () => {
+    const onActivate = vi.fn()
+    render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} expenses={[...REVIEW_EXPENSES, LOAN_EXPENSE]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('Car Note')).toBeTruthy()
+    expect(screen.getByText('Loan')).toBeTruthy() // badge in the checklist row
+
+    // Advance to Step 2 — the loan should NOT appear in the due-date picker list.
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText('When are these due?')).toBeTruthy()
+    expect(screen.queryByText('Car Note')).toBeNull()
+    expect(screen.getByText(/Loans use the payment date already on file/i)).toBeTruthy()
+
+    // Two non-loan bills (Rent, Gym) are both still kept — pick a due date for each.
+    screen.getAllByText('3rd week of month').forEach(btn => fireEvent.click(btn))
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+
+    const [, updatedExpenses] = onActivate.mock.calls[0]
+    const loanResult = updatedExpenses.find(e => e.id === 'exp_loan1')
+    expect(loanResult).toMatchObject({ trackDuringJobLoss: true, dueDateAnchor: '2026-05-10' })
+  })
 })
 
 // ─────────────────────────────────────────────────────────────
@@ -229,14 +305,24 @@ describe('JobLossHomePanel', () => {
     expect(screen.getByText('+ Log Income').closest('button')).toBeDisabled()
   })
 
-  it('removes a logged income entry', () => {
+  it('removes a logged income entry and eager-saves the result', () => {
     const cfg = { ...JOB_LOSS_CONFIG, jobHuntIncomeLog: [{ id: 'jhi_1', amount: 100, note: 'Gig', loggedAt: '2026-06-10T00:00:00.000Z' }] }
     const setConfig = vi.fn()
-    render(<JobLossHomePanel config={cfg} setConfig={setConfig} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
+    const saveConfigNow = vi.fn()
+    render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
     fireEvent.click(screen.getByLabelText('Remove entry'))
-    expect(setConfig).toHaveBeenCalled()
-    const result = setConfig.mock.calls[0][0](cfg)
-    expect(result.jobHuntIncomeLog).toHaveLength(0)
+    expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ jobHuntIncomeLog: [] }))
+    expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ jobHuntIncomeLog: [] }))
+  })
+
+  it('shadows setConfig and saveConfigNow with no-ops when readOnly', () => {
+    const cfg = { ...JOB_LOSS_CONFIG, jobHuntIncomeLog: [{ id: 'jhi_1', amount: 100, note: 'Gig', loggedAt: '2026-06-10T00:00:00.000Z' }] }
+    const setConfig = vi.fn()
+    const saveConfigNow = vi.fn()
+    render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits readOnly />)
+    fireEvent.click(screen.getByLabelText('Remove entry'))
+    expect(setConfig).not.toHaveBeenCalled()
+    expect(saveConfigNow).not.toHaveBeenCalled()
   })
 
   it('embeds the Re-employment Tracker', () => {
@@ -270,38 +356,74 @@ describe('JobLossBudgetPanel', () => {
     expect(screen.getAllByText('Food').length).toBeGreaterThanOrEqual(1)
   })
 
+  it('badges a loan expense and shows its payment amount from loanMeta, not billingMeta', () => {
+    const loan = {
+      id: 'exp_loan1', type: 'loan', category: 'Loans', label: 'Car Note',
+      loanMeta: { totalAmount: 2400, paymentAmount: 200, paymentFrequency: 'monthly', firstPaymentDate: '2026-06-01' },
+    }
+    renderBudget({ expenses: [...INITIAL_EXPENSES, loan] })
+    expect(screen.getAllByText('Car Note').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Loan')).toBeTruthy()
+    expect(screen.getByText(/\$200\/monthly/)).toBeTruthy()
+  })
+
   it('shows the empty state when there are no expenses', () => {
     renderBudget({ expenses: [] })
     expect(screen.getByText(/No expenses yet/i)).toBeTruthy()
   })
 
-  it('adds a new expense', () => {
+  it('does not add an expense until a due date is picked', () => {
     const setExpenses = vi.fn()
     renderBudget({ expenses: [], setExpenses })
     fireEvent.change(screen.getByPlaceholderText('e.g. Rent'), { target: { value: 'Rent' } })
     fireEvent.change(screen.getByPlaceholderText('e.g. 1200'), { target: { value: '1200' } })
     fireEvent.click(screen.getByText('+ Add Expense'))
+    expect(setExpenses).not.toHaveBeenCalled()
+    expect(screen.getByText(/Pick a due date/i)).toBeTruthy()
+  })
+
+  it('adds a new expense with a due date anchor, not defaulted to today', () => {
+    const setExpenses = vi.fn()
+    renderBudget({ expenses: [], setExpenses })
+    fireEvent.change(screen.getByPlaceholderText('e.g. Rent'), { target: { value: 'Rent' } })
+    fireEvent.change(screen.getByPlaceholderText('e.g. 1200'), { target: { value: '1200' } })
+    fireEvent.click(screen.getByText('2nd week of month'))
+    fireEvent.click(screen.getByText('+ Add Expense'))
     expect(setExpenses).toHaveBeenCalled()
     const result = setExpenses.mock.calls[0][0]([])
     expect(result).toHaveLength(1)
-    expect(result[0]).toMatchObject({ label: 'Rent', category: 'Needs' })
+    expect(result[0]).toMatchObject({ label: 'Rent', category: 'Needs', trackDuringJobLoss: true })
     expect(result[0].billingMeta.amount).toBe(1200)
+    expect(result[0].dueDateAnchor).toBe('2026-06-08')
   })
 
-  it('changes an expense triage status', () => {
-    const setExpenses = vi.fn()
-    renderBudget({ setExpenses })
+  it('changes an expense triage status and eager-saves the result', () => {
+    const setExpenses = vi.fn(updater => updater(INITIAL_EXPENSES))
+    const onSaveExpensesNow = vi.fn()
+    renderBudget({ setExpenses, onSaveExpensesNow })
     fireEvent.click(screen.getByText('Paused'))
     expect(setExpenses).toHaveBeenCalled()
+    expect(onSaveExpensesNow).toHaveBeenCalled()
+    const saved = onSaveExpensesNow.mock.calls[0][0]
+    expect(saved.find(e => e.id === INITIAL_EXPENSES[0].id).jobLossStatus).toBe('paused')
   })
 
-  it('removes an expense', () => {
-    const setExpenses = vi.fn()
-    renderBudget({ setExpenses })
+  it('removes an expense and eager-saves the result', () => {
+    const setExpenses = vi.fn(updater => updater(INITIAL_EXPENSES))
+    const onSaveExpensesNow = vi.fn()
+    renderBudget({ setExpenses, onSaveExpensesNow })
     fireEvent.click(screen.getByLabelText('Remove expense'))
     expect(setExpenses).toHaveBeenCalled()
-    const result = setExpenses.mock.calls[0][0](INITIAL_EXPENSES)
-    expect(result).toHaveLength(0)
+    expect(onSaveExpensesNow).toHaveBeenCalledWith([])
+  })
+
+  it('shadows setExpenses/onSaveExpensesNow with no-ops and hides mutation controls when readOnly', () => {
+    const setExpenses = vi.fn()
+    const onSaveExpensesNow = vi.fn()
+    renderBudget({ setExpenses, onSaveExpensesNow, readOnly: true })
+    expect(screen.queryByText('+ Add Expense')).toBeNull()
+    expect(screen.queryByLabelText('Remove expense')).toBeNull()
+    expect(screen.queryByText('Paused')).toBeNull()
   })
 })
 
@@ -319,5 +441,15 @@ describe('ReemploymentTracker', () => {
     }
     const { container } = render(<ReemploymentTracker config={cfg} setConfig={() => {}} />)
     expect(container.textContent).toContain('Acme Logistics')
+  })
+
+  it('eager-saves the computed config when setting the target income', () => {
+    const setConfig = vi.fn(v => v)
+    const saveConfigNow = vi.fn()
+    render(<ReemploymentTracker config={JOB_LOSS_CONFIG} setConfig={setConfig} saveConfigNow={saveConfigNow} />)
+    fireEvent.change(screen.getByPlaceholderText('41600'), { target: { value: '50000' } })
+    fireEvent.click(screen.getByText('Set'))
+    expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ targetIncomeAnnual: 50000 }))
+    expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ targetIncomeAnnual: 50000 }))
   })
 })

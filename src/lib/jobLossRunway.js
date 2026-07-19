@@ -46,12 +46,18 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, savings
   const todayDate = new Date(effectiveToday + "T12:00:00");
   const phaseIdx = getPhaseIndex(todayDate);
 
-  // Essential = Needs / non-Lifestyle. Lifestyle rows still drag on burn when
-  // active, but are excluded here so the runway focuses on survival spend.
+  // Essential = Needs / non-Lifestyle, tracked during Job Loss Mode (the
+  // expense review step's checklist — TODO §15 mode rebuild). Untracked
+  // expenses (trackDuringJobLoss === false) are excluded from the runway
+  // entirely, same as they're excluded from the Job Loss Budget list — they
+  // stay untouched for normal-mode Budget, just not part of this math.
+  // Lifestyle rows still drag on burn when active, but are excluded here so
+  // the runway focuses on survival spend.
   const essentialActive = (expenses ?? []).filter(exp => {
     const status = exp.jobLossStatus ?? "active";
     const flexible = exp.category === "Lifestyle";
-    return status === "active" && !flexible;
+    const tracked = exp.trackDuringJobLoss !== false;
+    return status === "active" && !flexible && tracked;
   });
   const weeklyBurn = essentialActive.reduce(
     (sum, exp) => sum + getEffectiveAmount(exp, todayDate, phaseIdx),

@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, PanelHero, SectionHeader, iS, lS } from "./ui.jsx";
+import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CATEGORY_COLORS, FISCAL_YEAR_START } from "../constants/config.js";
-import { EXPENSE_CYCLE_OPTIONS, perPaycheckFromCycle, getNextDueDate } from "../lib/expense.js";
+import { perPaycheckFromCycle, getNextDueDate, resolveDueDateAnchor, getExpenseDisplayAmount } from "../lib/expense.js";
 import { computeJobLossRunway, firstUnemploymentPaymentDate, sumJobHuntIncome } from "../lib/jobLossRunway.js";
 
 const STATUS_OPTIONS = [
@@ -29,10 +30,29 @@ const isFlexibleCategory = (cat) => cat === "Lifestyle";
  * for this mode, not a lesser version of the normal flow.
  */
 export function JobLossBudgetPanel({
-  config, expenses, setExpenses, effectiveToday,
-  savingsDraft, setSavingsDraft, includeBenefits, setIncludeBenefits,
+  config, expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp,
+  effectiveToday, savingsDraft, setSavingsDraft, includeBenefits, setIncludeBenefits,
+  readOnly = false,
 }) {
+  // Paywall-expired read-only mode, same shadow pattern as HomePanel/BudgetPanel
+  // (docs/TODO.md §17.E): every mutation below becomes a no-op.
+  const noop = useCallback(() => {}, []);
+  const setExpenses = readOnly ? noop : setExpensesProp;
+  const onSaveExpensesNow = readOnly ? noop : onSaveExpensesNowProp;
+  // Eager-save wrapper (docs/TODO.md "Persistence — Eager Save Pattern"), same
+  // shape as BudgetPanel.jsx's applyExpenseUpdate — every mutation below
+  // (triage status, auto-reactivate, pause-all, add/remove expense) computes
+  // its next expenses array synchronously and saves immediately instead of
+  // sitting in the ambient 800ms debounce.
+  const applyExpenseUpdate = (updater) => {
+    let next;
+    setExpenses(prev => { next = updater(prev); return next; });
+    onSaveExpensesNow?.(next);
+  };
+
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "" });
+  const [newExpDueDate, setNewExpDueDate] = useState(null);
+  const [addAttempted, setAddAttempted] = useState(false);
 
   const manualSavings = savingsDraft === "" ? 0 : Math.max(0, parseFloat(savingsDraft) || 0);
   const huntIncome = sumJobHuntIncome(config);
@@ -41,25 +61,33 @@ export function JobLossBudgetPanel({
     config, expenses, effectiveToday, savings: manualSavings + huntIncome,
   }), [config, expenses, effectiveToday, manualSavings, huntIncome]);
 
+  // Only expenses the user chose to track during Job Loss Mode (TODO §15
+  // expense review step) show up anywhere on this panel — untracked ones
+  // stay untouched for normal-mode Budget, just invisible here.
+  const trackedExpenses = useMemo(
+    () => (expenses ?? []).filter(exp => exp.trackDuringJobLoss !== false),
+    [expenses],
+  );
+
   const needsCoverageIds = useMemo(() => {
     const ids = new Set();
     const firstPaymentDate = firstUnemploymentPaymentDate(config);
     if (!firstPaymentDate || !effectiveToday) return ids;
     const todayDate = new Date(effectiveToday + "T12:00:00");
-    (expenses ?? []).forEach(exp => {
+    trackedExpenses.forEach(exp => {
       if ((exp.jobLossStatus ?? "active") !== "active") return;
       const due = getNextDueDate(exp, todayDate);
       if (due && due < firstPaymentDate) ids.add(exp.id);
     });
     return ids;
-  }, [expenses, config, effectiveToday]);
+  }, [trackedExpenses, config, effectiveToday]);
 
   const upcomingBills = useMemo(() => {
     if (!effectiveToday) return [];
     const todayDate = new Date(effectiveToday + "T12:00:00");
     const firstPaymentDate = firstUnemploymentPaymentDate(config);
     const horizonDays = 35;
-    return (expenses ?? [])
+    return trackedExpenses
       .filter(exp => (exp.jobLossStatus ?? "active") === "active")
       .map(exp => {
         const nextDue = getNextDueDate(exp, todayDate);
@@ -67,50 +95,60 @@ export function JobLossBudgetPanel({
         const days = Math.ceil((nextDue - todayDate) / 86400000);
         if (days > horizonDays) return null;
         return {
-          id: exp.id, label: exp.label ?? "Untitled", amount: exp.billingMeta?.amount ?? 0,
+          id: exp.id, label: exp.label ?? "Untitled", amount: getExpenseDisplayAmount(exp),
           dueDate: nextDue, daysUntil: Math.max(0, days),
           needsCoverage: firstPaymentDate ? nextDue < firstPaymentDate : false,
         };
       })
       .filter(Boolean)
       .sort((a, b) => a.daysUntil - b.daysUntil);
-  }, [expenses, config, effectiveToday]);
+  }, [trackedExpenses, config, effectiveToday]);
 
   const sortedExpenses = useMemo(() => {
-    return [...(expenses ?? [])].sort((a, b) => {
+    return [...trackedExpenses].sort((a, b) => {
       const aCov = needsCoverageIds.has(a.id), bCov = needsCoverageIds.has(b.id);
       if (aCov !== bCov) return aCov ? -1 : 1;
       const aEss = !isFlexibleCategory(a.category), bEss = !isFlexibleCategory(b.category);
       if (aEss !== bEss) return aEss ? -1 : 1;
       return (a.label ?? "").localeCompare(b.label ?? "");
     });
-  }, [expenses, needsCoverageIds]);
+  }, [trackedExpenses, needsCoverageIds]);
 
-  const flexibleActiveCount = (expenses ?? []).filter(exp => (
+  const flexibleActiveCount = trackedExpenses.filter(exp => (
     isFlexibleCategory(exp.category) && (exp.jobLossStatus ?? "active") === "active"
   )).length;
 
-  const setStatus = (id, status) => setExpenses(prev => prev.map(e => e.id === id ? { ...e, jobLossStatus: status } : e));
-  const toggleAutoReactivate = (id) => setExpenses(prev => prev.map(e => (
+  const setStatus = (id, status) => applyExpenseUpdate(prev => prev.map(e => e.id === id ? { ...e, jobLossStatus: status } : e));
+  const toggleAutoReactivate = (id) => applyExpenseUpdate(prev => prev.map(e => (
     e.id === id ? { ...e, autoReactivateOnIncome: !(e.autoReactivateOnIncome ?? true) } : e
   )));
-  const pauseAllFlexible = () => setExpenses(prev => prev.map(e => (
+  const pauseAllFlexible = () => applyExpenseUpdate(prev => prev.map(e => (
     isFlexibleCategory(e.category) && (e.jobLossStatus ?? "active") === "active" ? { ...e, jobLossStatus: "paused" } : e
   )));
-  const removeExpense = (id) => setExpenses(prev => prev.filter(e => e.id !== id));
+  const removeExpense = (id) => applyExpenseUpdate(prev => prev.filter(e => e.id !== id));
+
+  const newExpDueDateValid = newExpDueDate?.mode === "custom" ? !!newExpDueDate.date
+    : newExpDueDate?.mode === "week" ? !!newExpDueDate.week
+    : false;
+  const canAddExpense = !!newExp.label && (parseFloat(newExp.amount) || 0) > 0 && newExpDueDateValid;
 
   const addExpense = () => {
-    if (!newExp.label || !((parseFloat(newExp.amount) || 0) > 0)) return;
+    if (!canAddExpense) { setAddAttempted(true); return; }
     const amount = parseFloat(newExp.amount) || 0;
     const perPaycheck = perPaycheckFromCycle(amount, "every30days");
-    setExpenses(prev => [...prev, {
+    const anchor = resolveDueDateAnchor(newExpDueDate, effectiveToday) ?? effectiveToday ?? FISCAL_YEAR_START;
+    applyExpenseUpdate(prev => [...prev, {
       id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
       label: newExp.label,
+      trackDuringJobLoss: true,
+      dueDateAnchor: anchor,
       history: [{ effectiveFrom: effectiveToday ?? FISCAL_YEAR_START, weekly: [perPaycheck, perPaycheck, perPaycheck, perPaycheck] }],
       billingMeta: { amount, cycle: "every30days", effectiveFrom: effectiveToday ?? FISCAL_YEAR_START },
     }]);
     setNewExp({ label: "", category: "Needs", amount: "" });
+    setNewExpDueDate(null);
+    setAddAttempted(false);
   };
 
   const hasBenefits = dash && config.unemploymentEnabled && dash.projectedUnemploymentTotal > 0;
@@ -203,42 +241,47 @@ export function JobLossBudgetPanel({
 
       {/* ── Add expense ── */}
       <SectionHeader>Expenses</SectionHeader>
-      <div style={{
-        background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.22)",
-        borderRadius: "12px", padding: "14px", marginBottom: "14px",
-      }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
-          <div>
-            <label style={lS}>Label</label>
-            <input type="text" style={iS} value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} placeholder="e.g. Rent" />
+      {!readOnly && (
+        <div style={{
+          background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.22)",
+          borderRadius: "12px", padding: "14px", marginBottom: "14px",
+        }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+            <div>
+              <label style={lS}>Label</label>
+              <input type="text" style={iS} value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} placeholder="e.g. Rent" />
+            </div>
+            <div>
+              <label style={lS}>Category</label>
+              <select style={iS} value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))}>
+                <option>Needs</option>
+                <option>Lifestyle</option>
+              </select>
+            </div>
+            <div style={{ gridColumn: "1/-1" }}>
+              <label style={lS}>Monthly amount ($)</label>
+              <input type="number" min="0" step="0.01" style={iS} value={newExp.amount} onChange={e => setNewExp(v => ({ ...v, amount: e.target.value }))} placeholder="e.g. 1200" />
+            </div>
           </div>
-          <div>
-            <label style={lS}>Category</label>
-            <select style={iS} value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))}>
-              <option>Needs</option>
-              <option>Lifestyle</option>
-            </select>
+          <div style={{ marginBottom: "10px" }}>
+            <label style={lS}>Due date</label>
+            <DueDatePicker value={newExpDueDate} onChange={setNewExpDueDate} attempted={addAttempted} />
           </div>
-          <div style={{ gridColumn: "1/-1" }}>
-            <label style={lS}>Monthly amount ($)</label>
-            <input type="number" min="0" step="0.01" style={iS} value={newExp.amount} onChange={e => setNewExp(v => ({ ...v, amount: e.target.value }))} placeholder="e.g. 1200" />
-          </div>
+          <Pressable
+            onClick={addExpense}
+            style={{
+              width: "100%", background: canAddExpense ? "var(--color-green)" : "var(--color-bg-raised)",
+              color: canAddExpense ? "var(--color-bg-base)" : "var(--color-text-disabled)",
+              border: "none", borderRadius: "10px", padding: "10px",
+              fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer",
+            }}
+          >
+            + Add Expense
+          </Pressable>
         </div>
-        <Pressable
-          onClick={addExpense}
-          disabled={!newExp.label || !((parseFloat(newExp.amount) || 0) > 0)}
-          style={{
-            width: "100%", background: newExp.label && (parseFloat(newExp.amount) || 0) > 0 ? "var(--color-green)" : "var(--color-bg-raised)",
-            color: newExp.label && (parseFloat(newExp.amount) || 0) > 0 ? "var(--color-bg-base)" : "var(--color-text-disabled)",
-            border: "none", borderRadius: "10px", padding: "10px",
-            fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer",
-          }}
-        >
-          + Add Expense
-        </Pressable>
-      </div>
+      )}
 
-      {flexibleActiveCount > 0 && (
+      {!readOnly && flexibleActiveCount > 0 && (
         <Pressable
           onClick={pauseAllFlexible}
           style={{
@@ -259,8 +302,9 @@ export function JobLossBudgetPanel({
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {sortedExpenses.map(exp => {
             const status = exp.jobLossStatus ?? "active";
+            const isLoan = exp.type === "loan";
             const flexible = isFlexibleCategory(exp.category);
-            const monthly = exp.billingMeta?.amount ?? null;
+            const monthly = getExpenseDisplayAmount(exp) || null;
             const autoReactivate = exp.autoReactivateOnIncome ?? true;
             const catColor = CATEGORY_COLORS[exp.category] ?? "var(--color-text-secondary)";
             return (
@@ -272,6 +316,15 @@ export function JobLossBudgetPanel({
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "3px" }}>
                       <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{exp.label ?? "Untitled"}</span>
+                      {isLoan && (
+                        <span style={{
+                          fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
+                          color: "var(--color-bg-base)", background: "var(--color-gold)",
+                          padding: "2px 6px", borderRadius: "3px", fontWeight: "bold",
+                        }}>
+                          Loan
+                        </span>
+                      )}
                       <span style={{
                         fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
                         color: flexible ? "var(--color-bg-base)" : "var(--color-text-primary)",
@@ -291,40 +344,44 @@ export function JobLossBudgetPanel({
                       )}
                     </div>
                     <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
-                      {exp.category ?? "—"}{monthly != null ? ` · $${Number(monthly).toLocaleString()}/mo` : ""}
+                      {exp.category ?? "—"}{monthly != null ? ` · $${Number(monthly).toLocaleString()}${isLoan ? `/${exp.loanMeta?.paymentFrequency ?? "mo"}` : "/mo"}` : ""}
                     </div>
                   </div>
-                  <Pressable
-                    onClick={() => removeExpense(exp.id)}
-                    aria-label="Remove expense"
-                    style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}
-                  >
-                    ✕
-                  </Pressable>
+                  {!readOnly && (
+                    <Pressable
+                      onClick={() => removeExpense(exp.id)}
+                      aria-label="Remove expense"
+                      style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}
+                    >
+                      ✕
+                    </Pressable>
+                  )}
                 </div>
 
-                <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
-                  {STATUS_OPTIONS.map(opt => {
-                    const active = status === opt.v;
-                    return (
-                      <Pressable
-                        key={opt.v}
-                        onClick={() => setStatus(exp.id, opt.v)}
-                        style={{
-                          flex: 1, padding: "7px 10px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
-                          background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)",
-                          color: active ? opt.color : "var(--color-text-secondary)",
-                          border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
-                          borderRadius: "10px", cursor: "pointer", fontWeight: active ? 700 : 500,
-                        }}
-                      >
-                        {opt.label}
-                      </Pressable>
-                    );
-                  })}
-                </div>
+                {!readOnly && (
+                  <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
+                    {STATUS_OPTIONS.map(opt => {
+                      const active = status === opt.v;
+                      return (
+                        <Pressable
+                          key={opt.v}
+                          onClick={() => setStatus(exp.id, opt.v)}
+                          style={{
+                            flex: 1, padding: "7px 10px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                            background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)",
+                            color: active ? opt.color : "var(--color-text-secondary)",
+                            border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
+                            borderRadius: "10px", cursor: "pointer", fontWeight: active ? 700 : 500,
+                          }}
+                        >
+                          {opt.label}
+                        </Pressable>
+                      );
+                    })}
+                  </div>
+                )}
 
-                {status !== "active" && (
+                {!readOnly && status !== "active" && (
                   <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "10px", fontSize: "11px", color: "var(--color-text-secondary)", cursor: "pointer" }}>
                     <input
                       type="checkbox" checked={autoReactivate} onChange={() => toggleAutoReactivate(exp.id)}

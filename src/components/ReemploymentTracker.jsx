@@ -67,7 +67,7 @@ const inputStyle = {
   boxSizing: "border-box",
 };
 
-export function ReemploymentTracker({ config, setConfig }) {
+export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
   // Pre-fill target annual when not yet user-set.
   const defaultTargetAnnual = useMemo(() => {
     const rate  = config?.baseRate ?? 0;
@@ -96,6 +96,17 @@ export function ReemploymentTracker({ config, setConfig }) {
 
   const apps = Array.isArray(config?.jobApplications) ? config.jobApplications : [];
 
+  // Eager-save wrapper (docs/TODO.md "Persistence — Eager Save Pattern") — every
+  // mutation below (target income, return-to-work date, application CRUD/status)
+  // computes its next config synchronously and saves immediately, same shape as
+  // BudgetPanel.jsx's applyExpenseUpdate. `updater` matches setState's own
+  // functional-updater signature so every call site below only needed renaming.
+  const applyConfigUpdate = (updater) => {
+    const next = updater(config);
+    setConfig(next);
+    saveConfigNow?.(next);
+  };
+
   const counts = useMemo(() => {
     let active = 0, offers = 0;
     for (const a of apps) {
@@ -108,12 +119,12 @@ export function ReemploymentTracker({ config, setConfig }) {
   function commitTarget() {
     const v = parseInt(targetDraft, 10);
     if (!Number.isFinite(v) || v <= 0) { setTargetDraft(""); return; }
-    setConfig(prev => ({ ...prev, targetIncomeAnnual: v }));
+    applyConfigUpdate(prev => ({ ...prev, targetIncomeAnnual: v }));
     setTargetDraft("");
   }
 
   function setReturnDate(iso) {
-    setConfig(prev => ({ ...prev, returnToWorkDate: iso || null }));
+    applyConfigUpdate(prev => ({ ...prev, returnToWorkDate: iso || null }));
   }
 
   function saveDraft() {
@@ -126,7 +137,7 @@ export function ReemploymentTracker({ config, setConfig }) {
       dateApplied: draft.dateApplied,
       status: draft.status || "applied",
     };
-    setConfig(prev => {
+    applyConfigUpdate(prev => {
       const list = Array.isArray(prev.jobApplications) ? prev.jobApplications : [];
       const next = editingId
         ? list.map(a => (a.id === editingId ? entry : a))
@@ -139,7 +150,7 @@ export function ReemploymentTracker({ config, setConfig }) {
   }
 
   function deleteApp(id) {
-    setConfig(prev => ({
+    applyConfigUpdate(prev => ({
       ...prev,
       jobApplications: (prev.jobApplications ?? []).filter(a => a.id !== id),
     }));
@@ -160,7 +171,7 @@ export function ReemploymentTracker({ config, setConfig }) {
   }
 
   function setAppStatus(id, status) {
-    setConfig(prev => ({
+    applyConfigUpdate(prev => ({
       ...prev,
       jobApplications: (prev.jobApplications ?? []).map(a => (
         a.id === id ? { ...a, status } : a
@@ -222,7 +233,7 @@ export function ReemploymentTracker({ config, setConfig }) {
             </Pressable>
             {config?.targetIncomeAnnual != null && (
               <Pressable
-                onClick={() => setConfig(prev => ({ ...prev, targetIncomeAnnual: null }))}
+                onClick={() => applyConfigUpdate(prev => ({ ...prev, targetIncomeAnnual: null }))}
                 style={{
                   background: "transparent",
                   color: "var(--color-text-secondary)",

@@ -15,26 +15,94 @@ export const CHECKS_PER_MONTH = { weekly: 4, biweekly: 2, monthly: 1, salary: 2 
 export const normalizeCycle = (cycle) =>
   EXPENSE_CYCLE_OPTIONS.find(o => o.value === cycle) ? cycle : "every30days";
 
-// Returns the next calendar date this expense is due, or null if the expense
-// has no billingMeta amount / no anchor date. Used by §15.C5 countdown tiles.
-//
-// Cycle math: from billingMeta.effectiveFrom (anchor), advance by `cycleDays`
-// until we land on or after `todayDate`. If today === anchor, that IS the
-// next due day. We never return a date in the past.
-export function getNextDueDate(expense, todayDate) {
-  const meta = expense?.billingMeta;
-  if (!meta || !meta.effectiveFrom || (meta.amount ?? 0) <= 0) return null;
-  const cycle = EXPENSE_CYCLE_OPTIONS.find(o => o.value === normalizeCycle(meta.cycle));
-  if (!cycle) return null;
-  const anchor = new Date(meta.effectiveFrom + "T12:00:00");
+// Shared cycle math: from `anchorIso`, advance by `cycleDays` until we land
+// on or after `todayDate`. If today === anchor, that IS the next due day. We
+// never return a date in the past.
+function advanceAnchorToNextDue(anchorIso, todayDate, cycleDays) {
+  if (!anchorIso) return null;
+  const anchor = new Date(anchorIso + "T12:00:00");
   if (Number.isNaN(anchor.getTime())) return null;
   const today = todayDate instanceof Date ? todayDate : new Date(todayDate);
   const msPerDay = 86400000;
   if (today <= anchor) return anchor;
-  const cyclesElapsed = Math.ceil((today - anchor) / (cycle.days * msPerDay));
+  const cyclesElapsed = Math.ceil((today - anchor) / (cycleDays * msPerDay));
   const next = new Date(anchor);
-  next.setDate(next.getDate() + cyclesElapsed * cycle.days);
+  next.setDate(next.getDate() + cyclesElapsed * cycleDays);
   return next;
+}
+
+// Loans (expense.type === "loan") carry their own recurrence in `loanMeta`
+// (paymentAmount/paymentFrequency/firstPaymentDate) instead of billingMeta —
+// mapped to the same day-counts as EXPENSE_CYCLE_OPTIONS so a loan's due date
+// advances the same way a regular bill's does.
+const LOAN_FREQUENCY_DAYS = { weekly: 7, biweekly: 14, monthly: 30 };
+
+// Returns the next calendar date this expense (or loan) is due, or null when
+// there's nothing to anchor on. Used by §15.C5 countdown tiles.
+//
+// Anchor resolution for regular expenses: prefers `expense.dueDateAnchor` (a
+// real bill due-date, set explicitly via the Job Loss expense review flow or
+// the DueDatePicker) over `billingMeta.effectiveFrom`, which is really an
+// "amount last edited" timestamp (BudgetPanel stamps it to today on every
+// edit) — using it as a due-date anchor made every recently-touched bill
+// appear due "today." Falls back to it for expenses that predate
+// dueDateAnchor so old data keeps working.
+//
+// Loans use `loanMeta.firstPaymentDate` directly (or `dueDateAnchor` if the
+// Job Loss review flow explicitly attached it) — there's already a real
+// payment date on file, so there's nothing to fall back to or re-derive.
+export function getNextDueDate(expense, todayDate) {
+  if (expense?.type === "loan") {
+    const loan = expense.loanMeta;
+    if (!loan || (loan.paymentAmount ?? 0) <= 0) return null;
+    const anchorIso = expense.dueDateAnchor ?? loan.firstPaymentDate;
+    const cycleDays = LOAN_FREQUENCY_DAYS[loan.paymentFrequency] ?? LOAN_FREQUENCY_DAYS.monthly;
+    return advanceAnchorToNextDue(anchorIso, todayDate, cycleDays);
+  }
+  const meta = expense?.billingMeta;
+  if (!meta || (meta.amount ?? 0) <= 0) return null;
+  const anchorIso = expense?.dueDateAnchor ?? meta.effectiveFrom;
+  const cycle = EXPENSE_CYCLE_OPTIONS.find(o => o.value === normalizeCycle(meta.cycle));
+  if (!cycle) return null;
+  return advanceAnchorToNextDue(anchorIso, todayDate, cycle.days);
+}
+
+// The display amount for an expense card regardless of type — loans keep
+// their payment amount in loanMeta, not billingMeta.
+export function getExpenseDisplayAmount(expense) {
+  if (expense?.type === "loan") return expense.loanMeta?.paymentAmount ?? 0;
+  return expense?.billingMeta?.amount ?? 0;
+}
+
+// ─── Job Loss due-date assignment (TODO §15 expense review) ─────────────────
+// Quick "week of month" presets for the payment-date step, plus a resolver
+// that turns a pick into a concrete anchor date. The day picks (1/8/15/22)
+// split the month into four roughly-even chunks. getNextDueDate's cycle math
+// works the same whether the anchor lands in the past or future relative to
+// today, so there's no need to roll a same-month future pick into next month.
+export const WEEK_OF_MONTH_OPTIONS = [
+  { value: "week1", label: "1st week of month", day: 1 },
+  { value: "week2", label: "2nd week of month", day: 8 },
+  { value: "week3", label: "3rd week of month", day: 15 },
+  { value: "week4", label: "4th week of month", day: 22 },
+];
+
+export function resolveWeekOfMonthAnchor(weekValue, referenceIso) {
+  const opt = WEEK_OF_MONTH_OPTIONS.find(o => o.value === weekValue);
+  if (!opt || !referenceIso) return null;
+  const [y, m] = referenceIso.split("-").map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const day = Math.min(opt.day, daysInMonth);
+  return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+// Resolves a DueDatePicker `value` ({ mode: "week"|"custom", week?, date? })
+// into a concrete ISO anchor date, or null if incomplete.
+export function resolveDueDateAnchor(value, referenceIso) {
+  if (!value) return null;
+  if (value.mode === "custom") return value.date || null;
+  if (value.mode === "week") return resolveWeekOfMonthAnchor(value.week, referenceIso);
+  return null;
 }
 
 export const roundToQuarter = (n) => Math.round(n * 4) / 4;

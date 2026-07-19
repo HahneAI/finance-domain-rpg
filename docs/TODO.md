@@ -1032,6 +1032,34 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 
 *Requires Job Loss Mode (§15.C) to be live first.*
 
+*Job Loss Mode's §15.H/H7-H9 rebuild (2026-07-18) already produces most of the outputs this
+feature will need to read — noting the exact files/functions now so whoever builds this doesn't
+have to re-derive them or, worse, write a fourth parallel runway calc:*
+- **`lib/jobLossRunway.js`** — `computeJobLossRunway({ config, expenses, effectiveToday, savings })`
+  is the authoritative runway/burn function (weeklyBurn, essentialCount, benefitsRemainingWeeks,
+  projectedUnemploymentTotal, withBenefits/withoutBenefits cash+days+cliff). Both `JobLossHomePanel`
+  and `JobLossBudgetPanel` already read from this — grounding any Coach context in it (not a new
+  calc) keeps the number Coach quotes identical to what the user sees on screen, per §24's rule.
+  Also exports `firstUnemploymentPaymentDate(cfg)` and `sumJobHuntIncome(cfg)`.
+- **`config.jobHuntIncomeLog`** (`{ id, amount, note, loggedAt }[]`) — gig/odd-job cash logged from
+  the Home widget, already summed into runway via `sumJobHuntIncome`. Good context for "how much
+  extra income have I brought in while searching."
+- **`config.jobApplications`** (from the existing `ReemploymentTracker`) — target income + logged
+  applications (company/role/date/status); likely direct input to prompt modes like "prep me for
+  [company] interview" and "salary negotiation coaching."
+- **Expense fields `trackDuringJobLoss` and `dueDateAnchor`** (`lib/expense.js`) — which bills the
+  user is actually tracking/paying during the search, and real due dates via `getNextDueDate(exp,
+  today)` (loan-aware — see `getExpenseDisplayAmount` for the matching amount getter). Useful for
+  "how long can I be selective" framing (what's actually due before benefits run out).
+- **Known drift to fix before/while building this:** `lib/coachTriggers.js`'s `estimateRunwayDays`
+  (used by `CoachNetWorthCard.jsx` for the §18.C Red-tier trigger) is a **second, independent**
+  runway calc — its own doc comment already flags this as deliberate (it can't see the session-only
+  "additional savings" input `JobLossBudgetPanel` owns). It predates the `trackDuringJobLoss` flag
+  added in §15.H8/H9, so it still counts bills the user unchecked from tracking — a real,
+  already-live discrepancy between the number Coach's trigger reasons about and the one Job Loss
+  Home/Budget display. Either retrofit the same `trackDuringJobLoss` filter into it, or (cleaner)
+  have it call `computeJobLossRunway` directly once this feature gives a reason to touch that file.
+
 - [ ] **Job Hunt Chat panel** — dedicated sub-view in Job Loss Dashboard; powered by Coach (Claude
   API) with a system prompt including: current role title, prior income, runway days, target income,
   state/region, application log summary

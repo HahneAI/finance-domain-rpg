@@ -924,6 +924,29 @@ financial advisor — Coach answers questions about the app using the user's rea
   covering. **Deliberate non-RAG choice:** static and hand-maintained rather than a vector/retrieval
   pipeline — the app's feature surface is small enough to hand Coach in full, and a retrieval step
   would vary the prefix per-query and break the cache the persona block already depends on.
+  **2026-07-16 follow-up:** a live test asked about the Home panel's "Budget Health" tile by name
+  and Coach flatly said it had no such data — the guide never named Home's three actual tile
+  titles, and `buildCoachContext()` didn't carry the Budget Health % or Net Worth Trend $ figures
+  at all (only the derived "Savings rate"). Fixed: the guide now names all three tiles ("Next Week
+  Takehome", "Net Worth Trend", "Budget Health") explicitly, and the context block adds live
+  Budget Health / Net Worth Trend lines computed with the exact same formula/thresholds as
+  `HomePanel.jsx`. **Still not wired:** "Next Week Takehome" has no live figure in Coach's context —
+  it needs `futureWeeks`/`futureWeekNets`/`getNextPayWeek` plumbed through from `App.jsx`, which
+  none of `AskCoachPanel`'s current props carry. Coach can explain the concept from the guide but
+  can't cite the live number yet; wire this in if it comes up again in testing.
+  **2026-07-16, second follow-up:** wired in the goal-focused tile row too — "Left This Week",
+  "Active Goals Total", "Weeks to Complete All", and a per-goal breakdown (target, projected
+  weekly rate, estimated finish fiscal week) computed via the same `computeGoalTimeline()` call
+  `HomePanel.jsx` makes, with the same `config.goalTimelineEpochIdx` epoch. **Per explicit
+  instruction, goal names/labels are deliberately withheld from context for user privacy** — goals
+  are identified only by funding-priority rank ("Goal 1 of N"); the guide tells Coach it can use a
+  name back if the *user* volunteers it in their own message, but never learns it from data.
+- [ ] **Benefits / 401k context — deferred, not built.** Per explicit instruction: hold off wiring
+  `BenefitsPanel` (401k contribution/match, PTO accrual/usage) into Coach's context until we've
+  looked closer at how a **base (non-DHL) user** onboards other forms of employer compensation —
+  signing bonuses, non-DHL 401k match structures/vesting, other benefit shapes DHL's preset doesn't
+  cover. Wiring benefits context in now would bake in DHL-shaped assumptions before that product
+  question is settled; revisit once the base-user benefits onboarding story is clearer.
 - [ ] **Guardrail** — Coach does not give tax advice, legal advice, or investment recommendations;
   acknowledges the disclaimer when those topics come up
 - [ ] **Claude API integration** — Haiku for short conversational answers; Sonnet for richer
@@ -1008,6 +1031,34 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 ### E. Job Hunt AI Assistant *(extracted from §15.E — Phase 3)*
 
 *Requires Job Loss Mode (§15.C) to be live first.*
+
+*Job Loss Mode's §15.H/H7-H9 rebuild (2026-07-18) already produces most of the outputs this
+feature will need to read — noting the exact files/functions now so whoever builds this doesn't
+have to re-derive them or, worse, write a fourth parallel runway calc:*
+- **`lib/jobLossRunway.js`** — `computeJobLossRunway({ config, expenses, effectiveToday, savings })`
+  is the authoritative runway/burn function (weeklyBurn, essentialCount, benefitsRemainingWeeks,
+  projectedUnemploymentTotal, withBenefits/withoutBenefits cash+days+cliff). Both `JobLossHomePanel`
+  and `JobLossBudgetPanel` already read from this — grounding any Coach context in it (not a new
+  calc) keeps the number Coach quotes identical to what the user sees on screen, per §24's rule.
+  Also exports `firstUnemploymentPaymentDate(cfg)` and `sumJobHuntIncome(cfg)`.
+- **`config.jobHuntIncomeLog`** (`{ id, amount, note, loggedAt }[]`) — gig/odd-job cash logged from
+  the Home widget, already summed into runway via `sumJobHuntIncome`. Good context for "how much
+  extra income have I brought in while searching."
+- **`config.jobApplications`** (from the existing `ReemploymentTracker`) — target income + logged
+  applications (company/role/date/status); likely direct input to prompt modes like "prep me for
+  [company] interview" and "salary negotiation coaching."
+- **Expense fields `trackDuringJobLoss` and `dueDateAnchor`** (`lib/expense.js`) — which bills the
+  user is actually tracking/paying during the search, and real due dates via `getNextDueDate(exp,
+  today)` (loan-aware — see `getExpenseDisplayAmount` for the matching amount getter). Useful for
+  "how long can I be selective" framing (what's actually due before benefits run out).
+- **Known drift to fix before/while building this:** `lib/coachTriggers.js`'s `estimateRunwayDays`
+  (used by `CoachNetWorthCard.jsx` for the §18.C Red-tier trigger) is a **second, independent**
+  runway calc — its own doc comment already flags this as deliberate (it can't see the session-only
+  "additional savings" input `JobLossBudgetPanel` owns). It predates the `trackDuringJobLoss` flag
+  added in §15.H8/H9, so it still counts bills the user unchecked from tracking — a real,
+  already-live discrepancy between the number Coach's trigger reasons about and the one Job Loss
+  Home/Budget display. Either retrofit the same `trackDuringJobLoss` filter into it, or (cleaner)
+  have it call `computeJobLossRunway` directly once this feature gives a reason to touch that file.
 
 - [ ] **Job Hunt Chat panel** — dedicated sub-view in Job Loss Dashboard; powered by Coach (Claude
   API) with a system prompt including: current role title, prior income, runway days, target income,
@@ -1411,6 +1462,11 @@ create index account_history_user_id_effective_from on account_history (user_id,
   that fall before the most recent relevant `account_history` boundary. **This does not need to
   ship in the same pass as the write path** — capturing history correctly first, then wiring
   the engine to actually consult it for past weeks, is an explicit two-phase plan (see F).
+  **A first narrow slice shipped 2026-07-17** — `resolveBaseRateForWeek()` / `buildYear(cfg,
+  baseRateHistory)` (§15.D), covering `baseRate` only, added because Quick Rate Update's live QA
+  caught the exact bug this bullet describes (a rate edit was retroactively rewriting elapsed
+  weeks). The general resolver for every other whitelisted field is still unbuilt — treat this as
+  proof of the pattern, not the read path being done.
 
 ### D2. Resolved decisions (2026-07-06 design discussion)
 
@@ -1643,6 +1699,34 @@ note rather than re-listed here to avoid two competing specs for the same shippe
   Supabase credentials here): unit tests + build only. Needs a real click-through on a deployed
   preview to confirm the modal opens from the Life Events menu and the account_history snapshot
   actually lands with the right `effectiveFrom`.
+- [x] **Point-in-time correctness fix (2026-07-17) — the effective date now actually gates the
+  math.** Live-QA caught that the original ship of this feature had the effective date do nothing
+  but tag the audit-trail snapshot — `buildYear()` applied the new `baseRate` uniformly to every
+  week including already-elapsed ones the moment Confirm was hit, silently rewriting past months'
+  reported income and every annual total (Tax Plan, goal timeline) that sums across the whole
+  year. Fixed as a deliberately narrow slice of §19's deferred Master Timeline read-path — **just
+  `baseRate`**, not a general point-in-time config resolver:
+  - `resolveBaseRateForWeek(rateHistory, weekEnd, liveBaseRate)` (`lib/finance.js`) — mirrors
+    `getEffectiveAmount`'s exact algorithm (latest entry with `effectiveFrom <= weekEnd`, else
+    fall back to the live rate). `buildYear(cfg, baseRateHistory = null)` takes an optional new
+    param; omitted (every call site except App.jsx's live one — SetupWizard, DemoAccountTree, the
+    math-audit trace helper) behaves byte-identical to before.
+  - `db.js`'s `loadUserData()` fetches `account_history` rows filtered to `baseRate` changes as an
+    isolated query (same missing-table tolerance pattern as `week_confirmations`) and maps them to
+    `{ effectiveFrom, baseRate }` via new `extractBaseRateHistory()`.
+  - `App.jsx` threads `baseRateHistory` state through `applyLoadedData`/`handleForcePull`, passes
+    it into the one live `buildYear(config, baseRateHistory)` call, and optimistically appends a
+    local entry the instant a `baseRate` edit's `saveConfigSnapshot` fires — closes the gap where,
+    without it, a **future-dated** effective date would misapply the new rate too early to weeks
+    between today and that date, since the just-inserted DB row hasn't round-tripped into memory yet.
+  - **Deliberately out of scope**: every other historically-sensitive field (schedule, tax rates,
+    benefits, ...) still applies uniformly to every week as before — this is not §19's read path
+    being "done," just the one field this feature surfaced. `calcEventImpact`'s own `cfg.baseRate`
+    reads (Log panel per-event math) and the bucket-payout-rate fallback are untouched — those
+    price a specific already-logged event against *current* config by design, not an annual grid.
+  - 13 new tests (`resolveBaseRateForWeek` + `buildYear` point-in-time cases in `finance.test.js`;
+    `loadUserData` baseRate-history mapping/fallback cases in `db.test.js`). 1063 tests passing;
+    lint diff-clean; production build green.
 
 ---
 
@@ -1682,64 +1766,331 @@ note rather than re-listed here to avoid two competing specs for the same shippe
 
 ---
 
-### H. Jobless Onboarding Path *(seeded 2026-05-15)*
+### H. Jobless Onboarding Path — BUILT 2026-07-18 *(seeded 2026-05-15)*
 
 *A new first-run wizard question — "Are you currently unemployed?" — was planted in Step 0.
 Today both Yes and No route through the standard pay-structure steps (DHL question next),
 and the answer is stored on `config.startedUnemployed`. The plan below builds that seed into
 a true branched onboarding so jobless users land in a usable app from day one.*
 
-**Confirmed status (2026-07-17): still just the seed.** `SetupWizard.jsx` captures
-`startedUnemployed` (Y/N pills) with copy that explicitly says "we're seeding a future onboarding
-path" — but the flag has exactly two read-sites in the whole codebase (the capture itself, and the
-`isValid` gate that lets Next proceed). Nothing below — routing, the mini-flow, the completion
-path, Back to Work's first-time wizard, or the banner copy — exists yet. Unlike §A–C, this really
-is all still open.
+#### H1. Branched Step 0 routing — DONE
 
-#### H1. Branched Step 0 routing
+- [x] **Persist `startedUnemployed` to Supabase** — no new plumbing needed; it was already a
+  plain `DEFAULT_CONFIG` field, round-trips via the normal `config` JSONB merge same as every
+  other scalar config value.
+- [x] **Wizard routing** — `SetupWizard.jsx`'s `STEP_DEFS` gained a shared `isFirstRunJobless(d,
+  ev) = ev === null && d.startedUnemployed === true` predicate. Steps 1–4 and the normal Wrap Up
+  all now `showIf: (d, ev) => !isFirstRunJobless(d, ev)` — genuinely skipped from `activeSteps`,
+  not just hidden — and three new steps (ids 10–12) show only when `isFirstRunJobless` is true.
+- [x] **Re-entry guard** — `isFirstRunJobless` requires `ev === null`; any life-event re-entry
+  (including `structure_change`) always gets the full normal step set regardless of
+  `startedUnemployed`, confirmed by a dedicated test.
 
-- [ ] **Persist `startedUnemployed` to Supabase** — confirm it round-trips on reload and add
-  an explicit projection in `loadUserData` / `saveUserData` if it doesn't
-- [ ] **Wizard routing** — when `startedUnemployed === true`:
-  - [ ] Skip Step 1 (Pay Structure), Step 2 (Schedule), Step 3 (Deductions), Step 4 (Tax Rates)
-  - [ ] Route directly into a new "Jobless Setup" mini-flow (H2)
-- [ ] **Re-entry guard** — `startedUnemployed === true` users who later run Life Events get
-  full access to the structure_change wizard; that's how they first fill in pay-structure
-  fields when they exit Job Loss Mode (see H4)
+#### H2. Jobless Setup mini-flow — DONE, consolidated to 3 screens
 
-#### H2. Jobless Setup mini-flow
+*Built as 3 actual wizard steps rather than 5 separate screens — 0a+0b share one screen (same
+fields as the already-existing `JobLossEntry.jsx` modal for the same data), 0c+0d share one
+screen, 0e is its own confirm screen. Fewer taps for a "quick" onboarding without dropping any
+required field.*
 
-- [ ] **Step 0a — Confirm unemployment benefits Y/N**
-- [ ] **Step 0b — If Yes** — weekly amount, duration in weeks, waiting-week toggle
-- [ ] **Step 0c — Stand-in `jobLossDate`** — default to today; allow override
-- [ ] **Step 0d — Optional prior pay context** — prior employer name + prior base rate,
-  used as the default Target Income in the re-employment tracker (§15.C6)
-- [ ] **Step 0e — Wrap Up** — confirm and finish
+- [x] **Screen 1 — `StepJoblessBenefits`** (0a+0b): unemployment Y/N gate; if Yes, weekly amount,
+  duration in weeks, waiting-week toggle. `isValid` requires an explicit answer (mirrors
+  `JobLossEntry`'s `canActivate`).
+- [x] **Screen 2 — `StepJoblessDetails`** (0c+0d): job-loss effective date, defaulted to today
+  the moment "Yes" is answered at Step 0 (overridable here) — **not** deferred to this screen,
+  since `firstActiveIdx`/`startDate` also need a same-instant default and there's no other step
+  left to set them. Optional prior hourly rate, assumed a 40hr week, computed straight into
+  `targetIncomeAnnual` (the exact field `ReemploymentTracker` already reads with priority) —
+  **dropped "prior employer name"** from the original spec: there's no schema field or any
+  consumer for free-text employer identity anywhere in the app (confirmed against §19's own
+  parked "future fields" list), so it would've been a UI input with nowhere to go. Same
+  no-dead-inputs call as Quick Rate Update's dropped "note" field.
+- [x] **Screen 3 — `StepJoblessWrapUp`** (0e): plain confirm/finish summary (job loss date,
+  benefits, target income if set) — no live net preview, since there's no pay structure to
+  preview yet.
 
-#### H3. Wizard completion path for jobless users
+#### H3. Wizard completion path for jobless users — DONE
 
-- [ ] **`onComplete` payload** — sets `jobLossMode: true`, `jobLossDate`, and all four
-  unemployment fields; marks `setupComplete: true`
-- [ ] **Land on Job Loss Dashboard** — first paint goes to the Job Loss Dashboard view (§15.C4)
-  for as long as `jobLossMode` is true
-- [ ] **Skip default Food expense seeding** — defer expense seeding to the user's first triage
-  pass (§15.C3)
+- [x] **`onComplete` payload** — no special-casing needed in `handleComplete()`: every jobless
+  step writes directly into `formData` via the wizard's normal `onChange`, so `jobLossMode`,
+  `jobLossDate`, and the four unemployment fields are already present by the time the generic
+  `{...finalData, taxedWeeks, accountCreatedIdx, setupComplete: true}` spread runs.
+  Test-verified via the full payload from a completed run.
+- [x] **Land on Job Loss Dashboard** — turned out to already be free: `App.jsx` renders
+  `JobLossDashboard` unconditionally whenever `config.jobLossMode` is true, above the normal
+  panel switch, regardless of which nav tab is active — first paint after any jobless
+  completion already shows it with zero new code.
+- [x] **Skip default Food expense seeding** — `App.jsx`'s `handleWizardComplete` now sets
+  `expenses: []` (passed directly into the eager-save overrides, not a separate `setExpenses`
+  call, to avoid racing React's not-yet-flushed state) when `wizardEntry === false &&
+  finalConfig.jobLossMode === true`.
 
-#### H4. "Back to Work" exit for users who started jobless
+#### H4. "Back to Work" exit for users who started jobless — DONE
 
-- [ ] **First-time pay-structure wizard** — Back to Work runs the FULL pay-structure wizard
-  (steps 1–4 + Wrap Up) since they never filled it in
-- [ ] **Diff view degrades gracefully** — "What's Changing" diff renders an empty-state message
-  when there's no prior config to compare against
-- [ ] **Clear `startedUnemployed` on success** — flag reset so future Life Events flows behave
-  normally
+- [x] **First-time pay-structure wizard** — the existing "Back to Work" button already routed
+  into `structure_change`, which already walks steps 1–4 + Wrap Up in full — this bullet turned
+  out to already be satisfied by reusing that flow rather than needing a separate one.
+- [x] **Diff view degrades gracefully** — `StructureChangeDiff` now checks
+  `originalConfig?.startedUnemployed === true` first and renders a dedicated "filling in a real
+  pay structure for the first time" message instead of the field-by-field diff. Necessary
+  because `DEFAULT_CONFIG`'s pay fields are real-looking non-null placeholders (e.g.
+  `baseRate: 19.65`, not `null`) — without this, the diff would have shown a fabricated "before:
+  $19.65/hr" as if it were the user's actual old job.
+- [x] **Clear `startedUnemployed` on success** — `App.jsx`'s `handleWizardComplete` clears it to
+  `false` specifically when `wizardEntry === "structure_change" && mergedConfig.startedUnemployed
+  === true`, so a later real job loss doesn't incorrectly trigger the H5 "no prior pay history"
+  copy once the user actually has pay history.
 
-#### H5. App shell signals
+#### H5. App shell signals — DONE
 
-- [ ] **Banner copy** — when `jobLossMode && startedUnemployed`, banner reads "Started in Job
-  Loss Mode — no prior pay history"
-- [ ] **"Set up essential expenses" prompt** — first-paint Job Loss Dashboard tile that routes
-  into the triage list (§15.C3) so expenses are populated before they're needed
+- [x] **Banner copy** — the Job Loss Mode banner in `App.jsx` now branches on
+  `config.startedUnemployed === true` to show "Started in Job Loss Mode — no prior pay history"
+  instead of the normal "$0 earned income from [date] forward" copy.
+- [x] **"Set up essential expenses" prompt** — new tile in `JobLossDashboard.jsx`, shown whenever
+  `expenses` is empty (the exact state H3's Food-seed skip leaves a fresh jobless account in),
+  routing via a new `onOpenTriage` prop `App.jsx` wires to `setExpenseTriageOpen(true)`.
+
+**Verification:** 14 new tests (11 in `SetupWizard.test.jsx` covering step routing/collapse,
+validation gates, full payload contents, and the diff empty-state; 3 in `jobLossFlow.test.jsx`
+for the new dashboard prompt). 1084 tests total passing; lint diff-clean vs. baseline; production
+build green. **Not covered by tests:** `App.jsx`'s `handleWizardComplete` conditionals
+(Food-seed skip, `startedUnemployed` clear) — same "no component test harness" gap already noted
+for the SIGNED_IN short-circuit in §15.I's parked live-verification bullet; needs a real
+click-through (start signup → answer Yes → finish → confirm empty expenses + Job Loss Dashboard
+→ Back to Work → confirm diff empty-state + `startedUnemployed` cleared) on a deployed preview.
+
+#### H6. Job Loss Mode nav & panel scoping — SUPERSEDED by H7 (see below), 2026-07-18
+
+*Live click-through of H1–H5 surfaced two real gaps not in the original spec: (1) Back to Work
+left the account with zero expenses permanently — H3's Food-seed skip has no counterpart restore;
+(2) the full 5-tab nav (Home/Income/Budget/Log/Account) stayed up throughout Job Loss Mode, so
+Income and Log — both built entirely around an active pay structure — sat there showing
+meaningless or stale figures.*
+
+*Original fix (shipped, then explicitly rejected by the user the same day): hide the "Financial
+Health" tiles inside the normal `HomePanel` and pin `JobLossDashboard` above it as a standalone
+card, with expense triage in a separate `ExpenseTriage` modal. User feedback: "I believe we are
+coding this in a direction away from my vision... job loss mode is seeming to be a singular
+'pinned to top' component. We need to think of this as an entirely different mode the app enters."
+The nav-reduction bullet (bottom nav/sidebar → Home/Budget/Account) and the Food re-seed fix were
+correct and are unaffected — both carried forward as-is. The Home/Budget-panel approach itself
+was replaced; see H7.*
+
+- [x] **Back to Work restores the mandatory Food expense** — still current; see H7 for the file
+  this now lives next to.
+- [x] **Bottom nav (mobile) + sidebar (desktop) drop to Home/Budget/Account while `jobLossMode`
+  is true** — still current, unchanged by H7.
+- ~~HomePanel tile-hiding~~ / ~~ExpenseTriage modal~~ / ~~pinned JobLossDashboard card~~ — all
+  **removed** in H7 in favor of dedicated mode components.
+
+---
+
+#### H7. Job Loss Mode as a genuinely distinct app mode (Home + Budget rebuild) — DONE 2026-07-18
+
+*Direct response to the course-correction quoted in H6. The ask: Job Loss Mode is not the normal
+Home/Budget panels with things hidden or a card slapped on top — it's a different mode the app
+enters, with its own Home view and its own Budget view (savings/unemployment numbers + inline
+expense triage), plus a small "log extra income" widget on the new Home feeding the runway's
+savings figure. Explicitly framed by the user as phase 1 of an iterative process, not a final
+design.*
+
+- [x] **`lib/jobLossRunway.js` (new)** — pure shared calc extracted from the old
+  `JobLossDashboard`'s internal logic, so Home and Budget can't drift from each other:
+  `firstUnemploymentPaymentDate(cfg)`, `sumJobHuntIncome(cfg)`, and
+  `computeJobLossRunway({ config, expenses, effectiveToday, savings })` →
+  `{ weeklyBurn, essentialCount, benefitsRemainingWeeks, projectedUnemploymentTotal, withBenefits,
+  withoutBenefits }`. Takes `savings` as a plain argument rather than owning input state, since
+  both panels need to read the same number without one owning the other's UI.
+- [x] **`components/JobLossHomePanel.jsx` (new)** — the mode's actual Home view, rendered by
+  `App.jsx` **instead of** `HomePanel` (not layered on top of it) whenever `config.jobLossMode`.
+  Runway/weekly-burn/extra-income metric cards, a "Log Extra Income" widget (amount + note,
+  disabled until a positive amount is entered, recent-entries list with per-entry delete), and the
+  existing `ReemploymentTracker` embedded at the bottom.
+- [x] **`components/JobLossBudgetPanel.jsx` (new)** — the mode's actual Budget view, rendered
+  instead of `BudgetPanel`. Savings input + benefit-scenario toggle (the numbers this mode is
+  actually about), an upcoming-bills countdown, and the full expense triage list — active/paused/
+  cancelled, essential/flexible, needs-coverage flag, auto-reactivate, delete, plus a bulk "Pause
+  all Flexible" — all inline, no modal. Add-expense form is deliberately simpler than normal
+  `BudgetPanel`'s (label/category/flat monthly amount, no quarter-scoping or history editing) —
+  **scope decision:** job-loss expense management is "what do I actually owe every week right now,"
+  not fine-grained budget planning, so a flat weekly-forward amount is the honest fit for this mode
+  rather than a lesser version of the normal flow.
+- [x] **New config field `jobHuntIncomeLog: []`** (`constants/config.js`) — `{ id, amount, note,
+  loggedAt }` entries logged from the Home widget, summed by `sumJobHuntIncome` into the runway's
+  savings side. Chosen over reusing the existing `logs`/event-log mechanism because that mechanism
+  carries payroll-tax semantics (gross/net, 401k, fiscal-week indexing) that don't fit informal gig
+  cash — a dedicated field is more honest than forcing a fit.
+- [x] **Deleted `components/JobLossDashboard.jsx` and `components/ExpenseTriage.jsx`** — logic
+  fully absorbed into the two new panels and the shared runway lib above; confirmed via grep no
+  other file referenced either before removing.
+- [x] **`App.jsx` rewiring** — new imports; `jobLossSavingsDraft`/`jobLossIncludeBenefits` state
+  lifted here (session-only, matches the original "not saved to your account" behavior) so both
+  new panels agree without either owning the other's state; Home/Budget render blocks now branch
+  `config.jobLossMode ? <JobLoss*Panel .../> : <*Panel .../>`; the standalone pinned dashboard
+  render and the `ExpenseTriage` modal render are both gone; the banner's action button is now
+  "Go to Budget" (`navigateDirect("budget")`) since triage lives on the Budget panel itself, not a
+  modal the banner needs to open.
+- [x] **`HomePanel.jsx` tile-hiding conditional reverted** — no longer needed or accurate:
+  `HomePanel` doesn't render at all during Job Loss Mode anymore (App.jsx routes to
+  `JobLossHomePanel` instead), so a dead `!config?.jobLossMode` guard around the Financial Health
+  tiles would misdescribe the actual control flow.
+- **Not changed this round (flagged, not decided):** `ProfilePanel`'s Job Loss handling (H6's
+  "Job Search" group + Back to Work row) stays as a conditional branch inside the normal
+  `ProfilePanel` rather than a fully separate component — the user's correction named Home and
+  Budget specifically, not Account; left as-is pending confirmation this should also split out.
+- **Verification:** `jobLossFlow.test.jsx` rewritten — old `JobLossDashboard`/`ExpenseTriage`
+  describe blocks replaced with `JobLossHomePanel` (6 tests) and `JobLossBudgetPanel` (6 tests)
+  blocks; `HomePanel.test.jsx` trimmed back to its original 2 tests (the tile-hiding tests removed
+  along with the reverted conditional). Full suite: 1091 tests passing (including the
+  `DEFAULT_CONFIG` snapshot updated for `jobHuntIncomeLog`). Lint diff-clean vs. session baseline
+  (one pre-existing "memoization could not be preserved" line simply moved from the deleted
+  `JobLossDashboard.jsx` to `JobLossBudgetPanel.jsx`, same underlying pattern, not a new problem).
+  Production build green. **Not covered by tests:** no live click-through yet on a deployed
+  preview — same category of gap noted throughout this file for `App.jsx`-level wiring that has no
+  component test harness.
+
+---
+
+#### H8. Expense review + payment-date steps, and a real due-date bug fix — DONE 2026-07-18
+
+*User feedback on H7: entering Job Loss Mode should walk the user through which bills to keep
+tracking (not silently track everything from normal mode), and each kept bill needs a real payment
+date — "when you create an expense in job loss budget mode it auto assumes it's due that creation
+date." Root cause: `getNextDueDate` anchored on `billingMeta.effectiveFrom`, which normal
+`BudgetPanel` stamps to today on every amount edit — it's an "amount last edited" timestamp, not a
+bill due date, so any recently-touched or newly-created bill always showed due "today." (The
+"can't put in an amount" half of the report turned out to already be fixed — `JobLossBudgetPanel`'s
+add-expense form already had a working amount field before this pass.)*
+
+- [x] **New `dueDateAnchor` field on expenses** (`lib/expense.js`) — a dedicated due-date anchor,
+  separate from `billingMeta.effectiveFrom`. `getNextDueDate` now prefers it, falling back to
+  `billingMeta.effectiveFrom` for expenses that predate it so old data keeps working unchanged.
+- [x] **New `trackDuringJobLoss` field on expenses** (default `true` when absent) — set by the new
+  review step below. `computeJobLossRunway` (`lib/jobLossRunway.js`) and `JobLossBudgetPanel`'s
+  expense list/upcoming-bills/needs-coverage logic all filter on it. Untracked expenses vanish
+  from Job Loss Home/Budget entirely — normal-mode `BudgetPanel` ignores the flag completely, so
+  nothing is deleted, edited, or otherwise disturbed for when the user goes Back to Work.
+  **Scope decision (not re-confirmed with the user after a tool-permission timeout):** went with
+  the simpler of two options — untracked bills disappear outright rather than staying listed in a
+  muted "re-enable inline" state. Flagging this in case the muted/re-enable version is actually
+  wanted; it's a straightforward follow-up if so.
+- [x] **`WEEK_OF_MONTH_OPTIONS` + `resolveWeekOfMonthAnchor` + `resolveDueDateAnchor`**
+  (`lib/expense.js`) — "1st/2nd/3rd/4th week of month" quick-picks (days 1/8/15/22, clamped for
+  short months) plus a manual date fallback, resolved to a concrete ISO anchor.
+- [x] **New shared `DueDatePicker` component** (`components/DueDatePicker.jsx`) — the week pills +
+  custom-date input, used by both new surfaces below so they can't drift.
+- [x] **`JobLossEntry` (the "Lost My Job" modal — this app's closest thing to a job-loss setup
+  wizard) extended into a 3-step flow:** Step 0 is the original date/benefits form, unchanged.
+  Step 1 is a new expense-review checklist — every current expense listed, all checked by default,
+  unchecking sets `trackDuringJobLoss: false` without touching anything else about the expense.
+  Step 2 is a new payment-date step — one `DueDatePicker` per bill that's still checked, required
+  before the final Activate. **Steps 1–2 are skipped entirely when there are no expenses to
+  review**, so the original single-step "Activate" flow (and every existing test for it) is
+  unchanged for that case. `onActivate(configPatch, updatedExpenses?)` now takes an optional second
+  argument — only passed when there were expenses to review — that `App.jsx` uses to replace
+  `expenses` alongside the existing config merge.
+- [x] **`JobLossBudgetPanel`'s add-expense form fixed** — now includes a required `DueDatePicker`
+  instead of silently anchoring to today; new expenses get `trackDuringJobLoss: true` and a real
+  `dueDateAnchor` from the picker.
+- **Verification:** `jobLossFlow.test.jsx` — 2 new `JobLossEntry` tests (full checklist → due-date
+  → activate walkthrough asserting `trackDuringJobLoss`/`dueDateAnchor` on the result; Back
+  navigation preserves Step 0 answers) plus the existing single-step tests all still pass
+  unmodified per the skip-when-empty design; `JobLossBudgetPanel`'s add-expense test split into
+  "blocked without a due date" + "adds with a real anchor, not today." `expenseCycles.test.js` —
+  7 new tests for `dueDateAnchor` precedence/fallback, `resolveWeekOfMonthAnchor` (including short-
+  month clamping), and `resolveDueDateAnchor`. Full suite: 1102 tests passing. Lint diff-clean vs.
+  session baseline (caught and fixed a genuine rules-of-hooks violation — a `useMemo` placed after
+  `JobLossEntry`'s early `return null` — during this pass, simplified away rather than hoisted,
+  since the memoized array is cheap and small). Production build green. **Not covered by tests:**
+  no live click-through on a deployed preview, same gap as H7; the review step's copy/UX (labels,
+  scroll behavior with many bills) hasn't been eyeballed in a real browser either.
+
+---
+
+#### H9. Loans weren't grabbed into the H8 flow at all — DONE 2026-07-18
+
+*User caught a real gap in H8: loans live in the same `expenses` array as regular bills
+(`type: "loan"`, `category: "Loans"`, a `loanMeta: { totalAmount, paymentAmount, paymentFrequency,
+firstPaymentDate }` object instead of `billingMeta`) — the checklist step already listed them (it
+iterates `expenses` with no type filter), but `getNextDueDate` required `billingMeta` to exist at
+all, so it silently returned `null` for every loan. Loans never showed up in Upcoming Bills, never
+got a "Needs Coverage" flag, and displayed no amount in the JobLossBudgetPanel card list.*
+
+- [x] **`getNextDueDate` (`lib/expense.js`) now has a loan branch** — for `type === "loan"`,
+  anchors on `loanMeta.firstPaymentDate` (or a Job-Loss-attached `dueDateAnchor` if present) and
+  advances using `paymentFrequency` mapped to the same day-counts as `EXPENSE_CYCLE_OPTIONS`
+  (weekly=7, biweekly=14, monthly=30). The date-advancing math itself was extracted into a shared
+  `advanceAnchorToNextDue` helper so the regular-expense and loan branches can't drift.
+- [x] **New `getExpenseDisplayAmount(expense)` helper** — `loanMeta.paymentAmount` for loans,
+  `billingMeta.amount` otherwise. Used everywhere `JobLossBudgetPanel` and `JobLossEntry` show a
+  dollar figure so loans stop rendering as "$0" or blank.
+- [x] **`JobLossEntry`'s Step 2 (payment date) skips loans entirely** — a loan already has a real
+  payment date on file, so re-asking would be redundant. On confirm, tracked loans get
+  `dueDateAnchor: loanMeta.firstPaymentDate` attached automatically (the "date that's already been
+  selected" carried forward, per the request) instead of going through the `DueDatePicker`. A new
+  `keptPickableExpenses` (kept, non-loan) list drives Step 2's UI/validation/skip-logic separately
+  from `keptExpenses` (kept, everything) — so a loan-only selection skips Step 2 outright, same as
+  an empty one.
+- [x] **"Loan" badge added** in both the Step 1 checklist row and the `JobLossBudgetPanel` expense
+  card list — small gold badge matching the existing "Essential"/"Flexible"/"Needs Coverage" badge
+  language already in that list. Amount display for loans shows `$X/<frequency>` (e.g. `$200/
+  monthly`) instead of the regular bills' `$X/mo`, since a loan's cadence is meaningful (matches
+  what normal `BudgetPanel` already does for its own loan rows).
+- **Not changed:** loan burn/runway math itself — `computeJobLossRunway` already included loans
+  correctly before this fix, since it sums via `getEffectiveAmount(exp, ...)` which reads
+  `exp.history` (populated by `buildLoanHistory` regardless of expense type), not `billingMeta`.
+  Only the due-date/display-amount layer was blind to loans.
+- **Verification:** `expenseCycles.test.js` — 4 new tests for the loan branch of `getNextDueDate`
+  (monthly + weekly cadence, an attached `dueDateAnchor` taking precedence over
+  `loanMeta.firstPaymentDate`, and the null cases). `jobLossFlow.test.jsx` — 1 new `JobLossEntry`
+  test (loan shows the badge in Step 1, is absent from Step 2's picker list with an explanatory
+  line, and lands with `dueDateAnchor` set to its own `firstPaymentDate` on activate) and 1 new
+  `JobLossBudgetPanel` test (badge + `$200/monthly` display). Full suite: 1108 tests passing. Lint
+  diff-clean vs. session baseline. Production build green. **Not covered:** a live click-through
+  with a real loan on a deployed preview, same category of gap as H7/H8.
+
+---
+
+#### H10. Job Loss Mode components weren't eager-saving — DONE 2026-07-19
+
+*Caught during a discussion of the Persistence — Eager Save Pattern (CLAUDE.md, documented on
+Version-control the same day). Every mutation in `JobLossHomePanel`/`JobLossBudgetPanel`/
+`ReemploymentTracker`/`JobLossEntry` built across §15.H7–H9 called raw `setConfig`/`setExpenses`
+with no eager-save callback — none of it would survive a backgrounded/reclaimed tab before the
+800ms debounce fired, the exact production data-loss bug the pattern exists to prevent. `App.jsx`
+already threads `saveConfigNow`/`onSaveExpensesNow`/`savePersistedStateNow` to every normal-mode
+panel; the Job Loss rebuild in H7 never picked them up.*
+
+- [x] **`JobLossEntry`'s activation (`App.jsx`)** — the single highest-stakes gap, since
+  activating Job Loss Mode is a one-shot action carrying the whole review/due-date flow's config +
+  expenses patch. Now computes `nextConfig` synchronously and calls
+  `savePersistedStateNow({ config: nextConfig, expenses: updatedExpenses })` (single atomic write
+  covering both fields) right alongside the existing `setConfig`/`setExpenses` calls.
+- [x] **`JobLossHomePanel`** — new `saveConfigNow`/`readOnly` props, `noop`-shadowed when
+  read-only (same pattern as `HomePanel`/`BudgetPanel`, §17.E). `logIncome`/`removeEntry` compute
+  the next config synchronously and eager-save it.
+- [x] **`ReemploymentTracker`** (embedded in `JobLossHomePanel`, predates this session's rebuild)
+  — new `applyConfigUpdate(updater)` wrapper, same shape as `BudgetPanel.jsx`'s
+  `applyExpenseUpdate`; all 6 mutation sites (target income set/reset, return-to-work
+  date set/clear, application add/edit/delete, status change) renamed to it, no logic
+  hand-transcribed.
+- [x] **`JobLossBudgetPanel`** — new `onSaveExpensesNow`/`readOnly` props; new
+  `applyExpenseUpdate(updater)` wrapper (identical shape to `BudgetPanel.jsx`'s); triage status,
+  auto-reactivate toggle, pause-all-flexible, remove, and add-expense all renamed to it. `readOnly`
+  also hides the Add Expense form, Pause-all button, and per-row status/delete controls (matching
+  normal `BudgetPanel`'s `!readOnly &&` convention) rather than just silently no-op'ing them.
+- **Verification:** `jobLossFlow.test.jsx` — new tests asserting `saveConfigNow`/
+  `onSaveExpensesNow` are called with the correct computed value for: removing a logged income
+  entry, changing an expense's triage status, removing an expense, and setting target income on
+  `ReemploymentTracker`; plus 2 new `readOnly` tests (`JobLossHomePanel` shadows both callbacks;
+  `JobLossBudgetPanel` shadows both callbacks *and* hides its mutation controls). Full suite: 1111
+  tests passing. Lint diff-clean vs. session baseline. Production build green. **Not covered:** a
+  live click-through simulating an actual backgrounded-tab reload, same category of gap as
+  everything else in this file requiring a deployed preview to verify by hand.
+- **Known adjacent gap, not fixed here (flagged, out of scope for this pass):**
+  `RateUpdateModal`'s `onActivate` handler (`App.jsx`) has the identical missing-eager-save
+  pattern — same "Life Event" one-shot-activation shape as `JobLossEntry`'s `onActivate`, just for
+  Quick Rate Update instead of Job Loss Mode. Worth a follow-up pass.
 
 ---
 
@@ -1765,10 +2116,12 @@ is all still open.
 ### J. Visual Testing Checklist — foundation phase (§15.A–C5 + H seed)
 
 *Manual smoke pass, originally scoped to run before merging the foundation phase branch — that
-branch already merged and shipped (§A–C). `jobLossFlow.test.jsx` (20 tests across LifeEventMenu,
-JobLossEntry, JobLossDashboard, ReemploymentTracker, ExpenseTriage) + `buildYearJobLoss.test.js`
-give equivalent automated coverage of the flows below. Kept here as an optional manual pass, not a
-blocking item — no reason to re-run this by hand unless something in §A–C regresses.*
+branch already merged and shipped (§A–C). `jobLossFlow.test.jsx` (30 tests across LifeEventMenu,
+JobLossEntry, RateUpdateModal, JobLossHomePanel, JobLossBudgetPanel, ReemploymentTracker — the
+latter two replaced the now-deleted `JobLossDashboard`/`ExpenseTriage` per §H7) +
+`buildYearJobLoss.test.js` give equivalent automated coverage of the flows below. Kept here as an
+optional manual pass, not a blocking item — no reason to re-run this by hand unless something in
+§A–C regresses.*
 
 #### Entry points
 - [ ] Life Events trigger opens modal with three tiles: Pay Structure Changed, Lost My Job,

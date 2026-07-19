@@ -23,37 +23,42 @@ import { loadUserData, saveUserData, syncUserProfile, saveConfigSnapshot, fetchC
 // Mock helpers
 // ─────────────────────────────────────────────────────────────
 
+/** account_history's query chain (.select().eq().order()) — distinct shape from
+ * the .single()-based user_data/investor_users chains below, so every
+ * setupLoad* helper must branch on table name rather than using one blanket
+ * mockReturnValue (added for TODO §15.D / §19's baseRate-history fetch). */
+function historyChain(historyRows) {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        order: vi.fn().mockResolvedValue({ data: historyRows, error: null }),
+      }),
+    }),
+  }
+}
+
 /** Wire up loadUserData's three .single() calls with controlled responses. */
-function setupLoadMock(mainRowData, wcRowData = { week_confirmations: {} }, subRowData = {}) {
+function setupLoadMock(mainRowData, wcRowData = { week_confirmations: {} }, subRowData = {}, historyRows = []) {
   const single = vi.fn()
     .mockResolvedValueOnce({ data: mainRowData, error: null })
     .mockResolvedValueOnce({ data: wcRowData, error: null })
     .mockResolvedValueOnce({ data: subRowData, error: null })
-  supabase.from.mockReturnValue({
-    select: vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({ single }),
-    }),
-  })
+  const userDataChain = { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single }) }) }
+  supabase.from.mockImplementation((table) => table === 'account_history' ? historyChain(historyRows) : userDataChain)
 }
 
 /** Wire up loadUserData to simulate a genuinely missing row (PGRST116 — .single() matched 0 rows). */
 function setupLoadNoRow() {
   const single = vi.fn().mockResolvedValue({ data: null, error: { message: 'no rows', code: 'PGRST116' } })
-  supabase.from.mockReturnValue({
-    select: vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({ single }),
-    }),
-  })
+  const userDataChain = { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single }) }) }
+  supabase.from.mockImplementation((table) => table === 'account_history' ? historyChain([]) : userDataChain)
 }
 
 /** Wire up loadUserData to simulate a transient/non-missing-row query failure. */
 function setupLoadTransientError() {
   const single = vi.fn().mockResolvedValue({ data: null, error: { message: 'Connection refused' } })
-  supabase.from.mockReturnValue({
-    select: vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({ single }),
-    }),
-  })
+  const userDataChain = { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single }) }) }
+  supabase.from.mockImplementation((table) => table === 'account_history' ? historyChain([]) : userDataChain)
 }
 
 /** Minimal valid row for loadUserData — passes all guard clauses without triggering migrations. */
@@ -497,6 +502,61 @@ describe('loadUserData — misc fields', () => {
     setupLoadMock(makeRow())
     const result = await loadUserData()
     expect(result.ptoGoal).toBeNull()
+  })
+})
+
+describe('loadUserData — baseRate history (TODO §15.D / §19 narrow slice)', () => {
+  it('defaults baseRateHistory to [] when account_history has no rows', async () => {
+    setupLoadMock(makeRow())
+    const result = await loadUserData()
+    expect(result.baseRateHistory).toEqual([])
+  })
+
+  it('maps qualifying account_history rows to { effectiveFrom, baseRate }', async () => {
+    const rows = [
+      { effective_from: '2026-01-05', changed_fields: ['baseRate', 'otThreshold'], snapshot: { baseRate: 20 } },
+      { effective_from: '2026-07-20', changed_fields: ['baseRate'], snapshot: { baseRate: 24.5 } },
+    ]
+    setupLoadMock(makeRow(), undefined, undefined, rows)
+    const result = await loadUserData()
+    expect(result.baseRateHistory).toEqual([
+      { effectiveFrom: '2026-01-05', baseRate: 20 },
+      { effectiveFrom: '2026-07-20', baseRate: 24.5 },
+    ])
+  })
+
+  it('excludes rows whose changed_fields does not include baseRate', async () => {
+    const rows = [{ effective_from: '2026-03-01', changed_fields: ['stateRateLow'], snapshot: { baseRate: 20, stateRateLow: 0.05 } }]
+    setupLoadMock(makeRow(), undefined, undefined, rows)
+    const result = await loadUserData()
+    expect(result.baseRateHistory).toEqual([])
+  })
+
+  it('skips a row missing a numeric baseRate in its snapshot rather than injecting a bad entry', async () => {
+    const rows = [{ effective_from: '2026-03-01', changed_fields: ['baseRate'], snapshot: {} }]
+    setupLoadMock(makeRow(), undefined, undefined, rows)
+    const result = await loadUserData()
+    expect(result.baseRateHistory).toEqual([])
+  })
+
+  it('defaults to [] on a missing-table/query error (migration 020 not yet run)', async () => {
+    // historyChain always resolves cleanly in these mocks; this documents the
+    // equivalent real-world case since db.js reads `historyRows` via plain
+    // destructuring with no error branch — an errored query yields
+    // historyRows === undefined, and extractBaseRateHistory(undefined) is []
+    // by construction, same tolerance pattern as week_confirmations.
+    supabase.from.mockImplementation((table) => {
+      if (table === 'account_history') {
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ order: vi.fn().mockResolvedValue({ data: undefined, error: { message: 'relation "account_history" does not exist' } }) }) }) }
+      }
+      const single = vi.fn()
+        .mockResolvedValueOnce({ data: makeRow(), error: null })
+        .mockResolvedValueOnce({ data: { week_confirmations: {} }, error: null })
+        .mockResolvedValueOnce({ data: {}, error: null })
+      return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single }) }) }
+    })
+    const result = await loadUserData()
+    expect(result.baseRateHistory).toEqual([])
   })
 })
 

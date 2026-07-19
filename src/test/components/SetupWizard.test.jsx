@@ -419,3 +419,114 @@ describe('SetupWizard — step titles', () => {
     }
   })
 })
+
+describe('SetupWizard — Jobless Setup mini-flow (TODO §15.H)', () => {
+  it('pre-answering startedUnemployed=true on first-run shows only 4 steps (Welcome + 3 jobless steps)', () => {
+    renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: true } })
+    expect(getStepCounter()).toContain('of 4')
+  })
+
+  it('answering "Yes" at Step 0 immediately collapses the step count from 6 to 4', () => {
+    renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: false } })
+    expect(getStepCounter()).toContain('of 6')
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i }))
+    expect(getStepCounter()).toContain('of 4')
+  })
+
+  it('answering "No" after "Yes" restores the normal 6-step pay-structure flow', () => {
+    renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: false } })
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i }))
+    expect(getStepCounter()).toContain('of 4')
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
+    expect(getStepCounter()).toContain('of 6')
+  })
+
+  it('walks through the jobless step titles: Welcome, Unemployment Benefits, Job Loss Details, Wrap Up', () => {
+    renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: false } })
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets jobLossDate default — real entry path
+    expect(screen.getByText('Welcome')).toBeTruthy()
+    clickNext()
+    expect(screen.getByText('Unemployment Benefits')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i })) // answer the gate so Next unblocks
+    clickNext()
+    expect(screen.getByText('Job Loss Details')).toBeTruthy()
+    clickNext()
+    expect(screen.getByText('Wrap Up')).toBeTruthy()
+  })
+
+  it('Unemployment Benefits: Next is disabled until the Y/N question is answered', () => {
+    renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: true } })
+    clickNext() // Welcome -> Unemployment Benefits
+    clickNext() // attempt Next with nothing answered
+    expect(screen.getByText('Unemployment Benefits')).toBeTruthy() // still on the same step
+  })
+
+  it('Unemployment Benefits: answering Yes requires weekly amount and duration before proceeding', () => {
+    renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: true } })
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i }))
+    clickNext()
+    expect(screen.getByText('Unemployment Benefits')).toBeTruthy() // blocked — fields empty
+
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 400/i), { target: { value: '350' } })
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 26/i), { target: { value: '20' } })
+    clickNext()
+    expect(screen.getByText('Job Loss Details')).toBeTruthy()
+  })
+
+  it('Unemployment Benefits: answering No proceeds without requiring amount/duration', () => {
+    renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: true } })
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
+    clickNext()
+    expect(screen.getByText('Job Loss Details')).toBeTruthy()
+  })
+
+  it('completing the mini-flow calls onComplete with jobLossMode, jobLossDate, and unemployment fields set', async () => {
+    const { onComplete } = renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: false } })
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets jobLossDate default
+    clickNext() // -> Unemployment Benefits
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i }))
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 400/i), { target: { value: '350' } })
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 26/i), { target: { value: '20' } })
+    clickNext() // -> Job Loss Details
+    clickNext() // -> Wrap Up (jobLossDate already defaulted at Step 0)
+    fireEvent.click(screen.getByRole('button', { name: /finish/i }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const payload = onComplete.mock.calls[0][0]
+    expect(payload.setupComplete).toBe(true)
+    expect(payload.jobLossMode).toBe(true)
+    expect(payload.jobLossDate).toBeTruthy()
+    expect(payload.unemploymentEnabled).toBe(true)
+    expect(payload.unemploymentWeekly).toBe(350)
+    expect(payload.unemploymentDurationWeeks).toBe(20)
+  })
+
+  it('Job Loss Details: entering a prior hourly rate sets targetIncomeAnnual (rate × 40 × 52)', async () => {
+    const { onComplete } = renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: false } })
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i })) // sets jobLossDate default
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
+    clickNext() // -> Job Loss Details
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 22\.00/i), { target: { value: '20' } })
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /finish/i }))
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    expect(onComplete.mock.calls[0][0].targetIncomeAnnual).toBe(20 * 40 * 52)
+  })
+
+  it('structure_change re-entry ignores startedUnemployed (never routes into the jobless mini-flow)', () => {
+    renderWizard({ lifeEvent: 'structure_change', config: { ...BASE_CONFIG, startedUnemployed: true, setupComplete: true } })
+    expect(screen.queryByText('Unemployment Benefits')).toBeNull()
+    expect(getStepCounter()).toContain('of 6')
+  })
+
+  it('structure_change Wrap Up shows a first-time message instead of a diff when startedUnemployed is true', () => {
+    renderWizard({ lifeEvent: 'structure_change', config: { ...BASE_CONFIG, startedUnemployed: true, setupComplete: true } })
+    advanceSteps(5)
+    expect(screen.getByText(/filling in a real pay structure for the first time/i)).toBeTruthy()
+    expect(screen.queryByText(/base rate/i)).toBeNull() // no DIFF_FIELDS row rendered
+  })
+})

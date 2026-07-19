@@ -129,6 +129,11 @@ export const DEFAULT_CONFIG = {
   targetIncomeAnnual: null,
   returnToWorkDate: null,
   jobApplications: [],
+  // Job Loss Home's "log extra income" widget (TODO §15 mode rebuild) — cash
+  // made while job hunting (gig work, odd jobs), stored inline on config same
+  // as jobApplications above. Summed into the runway calc's savings side.
+  // Each entry: { id, amount, note, loggedAt }.
+  jobHuntIncomeLog: [],
 
   // ── Tax rates — generalized (wizard-derived) ─────────────────
   // These replace the old w1/w2 naming which was DHL-specific.

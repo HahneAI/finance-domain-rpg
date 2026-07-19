@@ -451,7 +451,34 @@ export function getPayPeriodEndDate(weekStart, payPeriodEndDay) {
   return result;
 }
 
-export function buildYear(cfg) {
+// Resolves the baseRate actually in effect for a given week, from a sorted-or-
+// unsorted rateHistory list of { effectiveFrom: "YYYY-MM-DD", baseRate }. Mirrors
+// getEffectiveAmount's exact algorithm (latest entry with effectiveFrom <= the
+// target date) so this reads as one consistent point-in-time pattern rather than
+// a second one invented from scratch. Falls back to liveBaseRate — never 0 —
+// when no entry covers the date: that's the correct behavior both for weeks
+// before any recorded rate change (nothing to look up yet) and for the instant
+// after a fresh edit, before its own history row has round-tripped into memory
+// (the live config IS the newest truth at that point).
+//
+// TODO §15.D / §19: a deliberately narrow slice of the deferred Master Timeline
+// read-path — scoped to baseRate only, not a general point-in-time config
+// resolver. Every other historically-sensitive field (schedule, tax rates,
+// benefits, ...) still applies uniformly to every week, past and future, exactly
+// as before. Don't read this as §19 being "done" — only this one field's gap
+// (the one Quick Rate Update surfaced) is closed.
+export function resolveBaseRateForWeek(rateHistory, weekEnd, liveBaseRate) {
+  if (!rateHistory?.length) return liveBaseRate;
+  const iso = toLocalIso(weekEnd);
+  let best = null;
+  for (const entry of rateHistory) {
+    if (entry.effectiveFrom <= iso && (best === null || entry.effectiveFrom >= best.effectiveFrom))
+      best = entry;
+  }
+  return best ? best.baseRate : liveBaseRate;
+}
+
+export function buildYear(cfg, baseRateHistory = null) {
   const weeks = [], k401Start = cfg.k401StartDate ? new Date(cfg.k401StartDate) : null, taxedSet = new Set(cfg.taxedWeeks);
   const isEmployerDHL = cfg.employerPreset === "DHL";
   const benefitsStart = parseIsoDate(cfg.benefitsStartDate);
@@ -549,9 +576,13 @@ export function buildYear(cfg) {
     const otWkndH  = weekendHours - regWkndH;
     const nightDiffEnabled = isEmployerDHL ? cfg.dhlNightShift !== false : cfg.nightDiffEnabled === true;
     const nightDiffHr = nightDiffEnabled ? (cfg.nightDiffRate ?? 0) : 0;
-    grossPay = regularHours  * (cfg.baseRate + nightDiffHr)
+    // Point-in-time baseRate (TODO §15.D / §19 narrow slice — see resolveBaseRateForWeek):
+    // a rate change only recomputes weeks from its effective date forward; weeks before it
+    // keep resolving to whatever baseRate was actually in effect at the time.
+    const weekBaseRate = resolveBaseRateForWeek(baseRateHistory, weekEnd, cfg.baseRate);
+    grossPay = regularHours  * (weekBaseRate + nightDiffHr)
              + regWkndH      * cfg.diffRate
-             + overtimeHours * (cfg.baseRate + nightDiffHr) * cfg.otMultiplier
+             + overtimeHours * (weekBaseRate + nightDiffHr) * cfg.otMultiplier
              + otWkndH       * cfg.diffRate * cfg.otMultiplier;
 
     // Job Loss Mode boundary: collapse earned-income inputs to zero from the

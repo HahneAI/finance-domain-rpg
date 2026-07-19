@@ -1,6 +1,6 @@
-import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex } from "./finance.js";
+import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, computeGoalTimeline } from "./finance.js";
 import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR } from "./fiscalWeek.js";
-import { EVENT_TYPES } from "../constants/config.js";
+import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { EXPENSE_CYCLE_OPTIONS } from "./expense.js";
 
 // Per-expense weekly cost, resolved the same way computeRemainingSpend()
@@ -23,6 +23,22 @@ function resolveWeeklyCost(expense, monthKey, phaseIdx) {
 
 const fmt$ = (n) => (Number.isFinite(n) ? `$${Math.round(n).toLocaleString("en-US")}` : "—");
 
+// Per-goal timeline line — mirrors HomePanel.jsx's per-goal projected-rate math
+// (checksPerYear-adjusted wN, rate = target / pN) exactly, so Coach's numbers
+// can't drift from what the goal card itself shows. Goal LABELS are
+// deliberately withheld here for user privacy — goals are identified only by
+// funding-priority rank ("Goal 1 of N"), which is itself real, useful
+// information (goals fund top to bottom in this order).
+function formatGoalTimelineEntry(g, rank, total, checksPerYear, currentWeekIdx) {
+  if (!Number.isFinite(g.eW)) {
+    return `Goal ${rank} of ${total}: ${fmt$(g.target)} target, not on track to finish within this fiscal year at the current pace`;
+  }
+  const pN = checksPerYear === 52 ? g.wN : g.wN / (FISCAL_WEEKS_PER_YEAR / checksPerYear);
+  const rate = pN > 0 ? g.target / pN : 0;
+  const doneWeekNumber = currentWeekIdx != null ? getFiscalWeekNumber(currentWeekIdx + Math.ceil(g.eW)) : null;
+  return `Goal ${rank} of ${total}: ${fmt$(g.target)} target, ~${fmt$(rate)}/wk projected, ~${Number.isFinite(pN) ? pN.toFixed(1) : "0.0"} wks to fund${doneWeekNumber != null ? `, on track for fiscal week ${doneWeekNumber}` : ""}`;
+}
+
 /**
  * §18.G — deterministic compressed financial snapshot for Coach's system
  * prompt. Same line order/shape on every call (job-loss line only appears
@@ -40,12 +56,26 @@ export function buildCoachContext({
   today = null,
   runwayDays = null,
   logs = [],
+  futureWeeks = [],
+  timelineWeekNets = [],
+  logNetLost = 0,
+  logNetGained = 0,
+  futureEventDeductions = {},
+  prevWeekNet = null,
 } = {}) {
   const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
   const annualSavings = avgWeeklySurplus * 52 - fundedGoalSpend;
   const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * 52);
 
+  // Matches HomePanel.jsx's "Budget Health" tile exactly: spendRatio =
+  // avgWeeklySpend / weeklyIncome, same <50%/<75% thresholds and labels.
+  const spendRatio = weeklyIncome > 0 ? avgWeeklySpend / weeklyIncome : 0;
+  const budgetHealthLabel = spendRatio < 0.5 ? "well-managed" : spendRatio < 0.75 ? "healthy range" : "watch spend";
+
   const completedGoals = goals.filter((g) => g.completed);
+  const activeGoals = goals.filter((g) => !g.completed);
+  const totalActiveGoalsTarget = activeGoals.reduce((s, g) => s + (Number(g.target) || 0), 0);
+  const totalGoalTarget = goals.reduce((s, g) => s + (Number(g.target) || 0), 0);
   const activeExpenses = expenses.filter((e) => (e.jobLossStatus ?? "active") === "active");
   const weekNumber = currentWeek ? getFiscalWeekNumber(currentWeek.idx) : null;
   const weeksLeft = weekNumber != null ? Math.max(FISCAL_WEEKS_PER_YEAR - weekNumber, 0) : null;
@@ -53,13 +83,34 @@ export function buildCoachContext({
     ? [...logs].sort((a, b) => (b.weekEnd ?? "").localeCompare(a.weekEnd ?? ""))[0]
     : null;
 
+  // Matches HomePanel.jsx's "Left This Week" tile: prevWeekNet (falling back
+  // to weeklyIncome before any week is confirmed) minus average weekly spend.
+  const leftThisWeek = (prevWeekNet ?? weeklyIncome) - avgWeeklySpend;
+
+  // Matches HomePanel.jsx's own computeGoalTimeline() call exactly (same
+  // args, same config.goalTimelineEpochIdx epoch) so "weeks to complete all"
+  // and each goal's projected rate/date can't disagree with the goal cards.
+  const goalTimeline = computeGoalTimeline(
+    activeGoals, futureWeeks, timelineWeekNets, expenses, logNetLost, logNetGained,
+    futureEventDeductions, config?.goalTimelineEpochIdx ?? null
+  );
+  const lastGoalEW = goalTimeline.length ? Math.max(...goalTimeline.map((g) => (Number.isFinite(g.eW) ? g.eW : 0))) : 0;
+  const checksPerYear = PAYCHECKS_PER_YEAR[config?.userPaySchedule ?? "weekly"] ?? 52;
+
   const lines = [
     `Weekly net income: ${fmt$(weeklyIncome)}`,
     `Weekly spend: ${fmt$(avgWeeklySpend)}`,
     `Weekly surplus: ${fmt$(avgWeeklySurplus)}`,
+    `Left this week (Home tile): ${fmt$(leftThisWeek)}`,
     `Savings rate: ${netWorthHealth.rate != null ? `${Math.round(netWorthHealth.rate * 100)}%` : "—"}${netWorthHealth.belowThreshold ? " (below 10% target)" : ""}`,
-    `Goals: ${goals.length} goal${goals.length === 1 ? "" : "s"} set (${completedGoals.length} completed), ${fmt$(fundedGoalSpend)} funded so far`,
+    `Net worth trend (Home tile — projected annual savings): ${fmt$(annualSavings)}`,
+    `Budget Health (Home tile): ${Math.round(spendRatio * 100)}% spend ratio (${budgetHealthLabel})`,
+    `Goals: ${goals.length} goal${goals.length === 1 ? "" : "s"} set (${completedGoals.length} completed), ${fmt$(fundedGoalSpend)} funded so far, ${fmt$(totalGoalTarget)} total target`,
     `Expenses: ${activeExpenses.length} active line${activeExpenses.length === 1 ? "" : "s"}, ${fmt$(avgWeeklySpend)}/week`,
+    ...(activeGoals.length ? [
+      `Active goals total (Home tile — unfunded target sum): ${fmt$(totalActiveGoalsTarget)}`,
+      `Weeks to complete all active goals (Home tile): ~${Math.ceil(lastGoalEW)} weeks`,
+    ] : []),
     `Log entries: ${logs.length} logged${mostRecentLog ? `, most recent: ${EVENT_TYPES[mostRecentLog.type]?.label ?? mostRecentLog.type} (week ending ${mostRecentLog.weekEnd ?? "—"})` : ""}`,
     `Fiscal week: ${weekNumber ?? "—"} of ${FISCAL_WEEKS_PER_YEAR}${weeksLeft != null ? ` (${weeksLeft} left)` : ""}`,
     `Today: ${today ?? "—"}`,
@@ -74,6 +125,13 @@ export function buildCoachContext({
     lines.push(`Expense breakdown: ${items}`);
   }
 
+  if (goalTimeline.length) {
+    const items = goalTimeline
+      .map((g, i) => formatGoalTimelineEntry(g, i + 1, goalTimeline.length, checksPerYear, currentWeek?.idx ?? null))
+      .join("; ");
+    lines.push(`Goal breakdown (ranked by funding priority — goal names withheld for privacy): ${items}`);
+  }
+
   if (config?.jobLossMode) {
     lines.push(`Job Loss Mode: active${runwayDays != null ? `, ~${runwayDays} days of runway` : ""}`);
   }
@@ -86,6 +144,10 @@ export function buildCoachContext({
 // each feature extends buildCoachContext instead of growing its own bespoke
 // context builder. Keep this map in sync with docs/TODO.md as items land.
 //
+// Benefits/401k (BenefitsPanel)   — deferred, not built: hold off until we've looked closer at how
+//                                   a base (non-DHL) user onboards other employer comp (signing
+//                                   bonuses, non-DHL 401k match/vesting) — don't bake in DHL-shaped
+//                                   assumptions before that's settled. See docs/TODO.md §18.B.
 // §18.D Statements AI Insights    — period totals: gross, taxes, goal velocity, biggest expense shift
 // §18.E Job Hunt AI Assistant     — target income, application log summary, state/region
 // §18.J Tax Onboarding Interview  — taxedWeeksFed/State split, taxHistoryReliableFrom, account created_at

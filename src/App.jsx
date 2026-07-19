@@ -208,6 +208,11 @@ export default function App() {
   // to LoginScreen so the user sees why they're back at the sign-in form instead of
   // silently landing there with no explanation.
   const [oauthCallbackFailed, setOauthCallbackFailed] = useState(false);
+  // Post-login transition: true for 340ms after a successful sign-in to animate
+  // LoginScreen out and authenticated shell in. During this window, both screens
+  // are rendered with opacity transitions.
+  const [postLoginFade, setPostLoginFade] = useState(false);
+  const prevAuthedUserRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -470,6 +475,18 @@ export default function App() {
       setAuthChecked(true);
     });
   }, []);
+
+  // ── Post-login fade animation: detect successful sign-in and animate transition ──
+  // Triggers a 340ms crossfade when authedUser transitions from null to non-null.
+  useEffect(() => {
+    if (prevAuthedUserRef.current === null && authedUser) {
+      // User just signed in: LoginScreen → authenticated shell crossfade
+      setPostLoginFade(true);
+      const timer = setTimeout(() => setPostLoginFade(false), 340);
+      return () => clearTimeout(timer);
+    }
+    prevAuthedUserRef.current = authedUser;
+  }, [authedUser]);
 
   // ── Detect a Google OAuth callback that reached the app but produced no session ──
   // supabase-js only strips `?code=` from the URL after a *successful* PKCE exchange
@@ -1397,17 +1414,6 @@ export default function App() {
     );
   }
 
-  // No valid session — show login / create account screen.
-  if (!authedUser) {
-    return (
-      <LoginScreen
-        onInvestorVerified={code => setInvestorSession({ code })}
-        oauthCallbackFailed={oauthCallbackFailed}
-        onOauthRetry={() => setOauthCallbackFailed(false)}
-      />
-    );
-  }
-
   // Supabase PASSWORD_RECOVERY event — user clicked a reset link, show set-new-password form.
   if (pendingPasswordReset) {
     return <LoginScreen recoveryMode onRecoveryDone={() => setPendingPasswordReset(false)} />;
@@ -1417,6 +1423,17 @@ export default function App() {
   // successful revival charge (subscription active → effect above) clears this.
   if (revivalInfo) {
     return <ReviveScreen revival={revivalInfo} checkoutReturn={checkoutReturn} />;
+  }
+
+  // No valid session — show login / create account screen (unless in post-login fade).
+  if (!authedUser && !postLoginFade) {
+    return (
+      <LoginScreen
+        onInvestorVerified={code => setInvestorSession({ code })}
+        oauthCallbackFailed={oauthCallbackFailed}
+        onOauthRetry={() => setOauthCallbackFailed(false)}
+      />
+    );
   }
 
   if (loading) {
@@ -1584,7 +1601,9 @@ export default function App() {
     </>
   );
 
-  return (
+  // Post-login fade animation: render both LoginScreen (fading out) and App shell
+  // (fading in) during the 340ms transition. After fade completes, render only shell.
+  const shellContent = (
       <div className="app-shell" style={{ background: "var(--color-bg-gradient)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
         <style>{`
           /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
@@ -3394,4 +3413,37 @@ export default function App() {
       )}
     </div>
   );
+
+  // During post-login fade (340ms after sign-in), render both LoginScreen (fading out)
+  // and authenticated shell (fading in) at the same time for a smooth crossfade.
+  if (postLoginFade) {
+    return (
+      <div style={{ position: "relative" }}>
+        {/* LoginScreen fading out (absolute, behind) */}
+        <div
+          className="fold-lift"
+          data-fold="exiting"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        >
+          <LoginScreen
+            onInvestorVerified={code => setInvestorSession({ code })}
+            oauthCallbackFailed={oauthCallbackFailed}
+            onOauthRetry={() => setOauthCallbackFailed(false)}
+          />
+        </div>
+        {/* Authenticated shell fading in (relative, in front) */}
+        <div className="fold-lift" data-fold="entering" style={{ position: "relative", zIndex: 1 }}>
+          {shellContent}
+        </div>
+      </div>
+    );
+  }
+
+  // Normal render: either LoginScreen (if not authed) or authenticated shell
+  return shellContent;
 }

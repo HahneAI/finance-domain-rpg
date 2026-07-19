@@ -17,12 +17,16 @@ import { getEffectiveAmount, getPhaseIndex } from "./finance.js";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
- * Best-effort runway estimate for the Red tier. Deliberately independent of
- * JobLossDashboard's own runway calc, which includes a session-only
- * "additional savings" override the user types live in that component — this
- * trigger runs in the background with no access to that input, so it assumes
- * $0 extra savings (the conservative floor). Returns null when not in Job
- * Loss Mode or there's no essential burn to divide against.
+ * Best-effort runway estimate for the Red tier. KNOWN DRIFT QUARANTINE
+ * (docs/drift-app-warden.md §8 Block 4, docs/TODO.md §15.H14): the
+ * authoritative runway calc is computeJobLossRunway() in lib/jobLossRunway.js
+ * — this older, independent estimate does NOT read the persisted
+ * jobLossCashOnHand (§15.H13) or logged job-hunt income; it divides projected
+ * unemployment benefits alone by Needs-category burn, so it reads as a
+ * conservative floor. (The "JobLossDashboard" this comment once cited was
+ * deleted in the §15.H7 rebuild.) Do not extend this function — converge it
+ * on computeJobLossRunway() instead. Returns null when not in Job Loss Mode
+ * or there's no essential burn to divide against.
  */
 export function estimateRunwayDays(config, expenses, effectiveToday) {
   if (!config?.jobLossMode || !config?.jobLossDate || !effectiveToday) return null;

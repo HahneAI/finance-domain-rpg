@@ -224,7 +224,7 @@ To be filled one at a time, in collaboration, in this order (each pass produces 
 for that section):
 
 - [x] **T1 — Setup Wizard** — §7 below (surgical pass 2026-07-19)
-- [ ] **T2 — Home Panel**
+- [x] **T2 — Home Panel** — §8 below (surgical pass 2026-07-19)
 - [ ] **T3 — Income Panel**
 - [ ] **T4 — Budget Panel**
 - [ ] **T5 — Benefits Panel**
@@ -459,3 +459,225 @@ skipped entirely).
    in this commit.
 3. **D5, corrected in this pass:** `active-systems.md` §22's "nothing reads this table"
    predated the F10 read path — annotated in this commit.
+
+---
+
+## 8. T2 — Home Panel Drift Map
+
+**Pass date:** 2026-07-19. Same anchor + method rules as §7. Function numbering continues
+from §7 (F13+) so cross-references stay unambiguous.
+**Git-history note:** this section was written hours after the §15.H11/H12 pair
+(`2e0121a`, `10ba9af`) landed — the *newest* intentions on this surface. Those commits
+replaced a four-way parallel-formula drift with two shared helpers; several entries below
+exist specifically to keep that fix from un-happening.
+
+**Scope:** `HomePanel.jsx` (1,403 lines), `JobLossHomePanel.jsx`, `ReemploymentTracker.jsx`,
+`NetWorthHealthTips.jsx`, `CoachNetWorthCard.jsx` + `coachTriggers.js`, and the `App.jsx`
+derivation layer that feeds them (`weeklyIncome`, `prevWeekNet`, `adjustedTakeHome`,
+`remainingSpend`, `fundedGoalSpend`).
+
+### 8.1 Block 1 — Critical inventory (function by function)
+
+**F13 · `resolveActiveWeeksThisYear(firstActiveIdx)`** — `fiscalWeek.js:15`, consumed at
+`App.jsx:1203`, `HomePanel.jsx:104`, `aiContext.js`, `DemoAccountTree.jsx` — **[L]**
+Born 2026-07-19 (`2e0121a`) to kill the flat-`/52` assumption: "how many fiscal weeks is
+this account actually active this year." Backs `weeklyIncome`, HomePanel's
+`annualSavings`, and the Coach's stated savings figure — all four call sites deliberately
+share it so they *can't* re-drift.
+> **IF** any of the four call sites stops using this helper (or a fifth consumer computes
+> active weeks its own way), **THEN** the §15.H11 dilution bug reopens: a mid-year
+> `firstActiveIdx` makes "typical week" and "annual savings" numbers disagree between the
+> Home tile, the Coach, and the Income panel. Check: grep `resolveActiveWeeksThisYear` —
+> consumer count only ever grows; `fiscalWeek.test.js` + `aiContext.test.js` cover it.
+
+**F14 · `weeklyIncome` derivation** — `App.jsx:1193–1204` — **[L]**
+`(projectedAnnualNet / activeWeeksThisYear) − bufferPerWeek`. The single "typical active
+week nets you" number threaded into HomePanel, Coach context, Live State Inspector, and
+Job Loss surfaces. `bufferPerWeek` scales `paycheckBuffer` by `checksPerYear / 52`.
+> **IF** `weeklyIncome`'s formula or its `bufferPerWeek` subtraction changes, **THEN**
+> every downstream "left this week / surplus / savings rate" number shifts together —
+> check HomePanel tiles (F16), `annualSavings` (F17), goal timeline surplus sequencing
+> (`computeGoalTimeline` consumes `weeklyNets`), and Coach context lines. Procedure: Live
+> State Inspector's `weeklyIncome` vs. Home tile vs. an Ask Coach "what do I make weekly"
+> answer — all three must quote the same number.
+
+**F15 · `resolvePrevWeekNet(...)`** — `finance.js:1392` (authoritative), consumed
+`App.jsx:1212–1215`, `DemoAccountTree.jsx` — **[L]**
+"This Week's Check": the specific prior active week's `computeNet` adjusted for that
+week's log entries — falling back to the *current active week's real net*, never the
+`weeklyIncome` average (that fallback was the §15.H11 "diluted fraction of a paycheck"
+bug). Extracted to `finance.js` precisely because App.jsx and DemoAccountTree carried
+duplicated inline versions.
+> **IF** the fallback chain or week-selection logic here changes, **THEN** check both
+> consumers **and** HomePanel's own second-layer fallback (`nextWeekDisplay`,
+> `HomePanel.jsx:119–122`, which cascades `futureWeekNets[0] → prevWeekNet →
+> weeklyIncome`) — a change that's correct in `finance.js` can still leave HomePanel's
+> cascade quoting the old semantics. Check: `finance.test.js` resolvePrevWeekNet cases;
+> a brand-new account (no prior active week) must show a full-size check on day one.
+
+**F16 · HomePanel derived-tile layer** — `HomePanel.jsx:80–258` — **[L]**
+The dense strip where every hero tile's number is computed: `perCheckFactor` (`:81`,
+weekly→per-paycheck display scaling), `leftThisWeek = (prevWeekNet ?? weeklyIncome) −
+avgWeeklySpend` (`:93–94`), `annualSavings = avgWeeklySurplus × activeWeeksThisYear −
+fundedGoalSpend` (`:104–105`), `netWorthHealth` (`:117`), the `nextWeekDisplay` fallback
+cascade (`:119–122`), and the Pulse insight builders (`:154–214`) that must return
+`undefined` on insufficient data (never fabricate a signal — Spine E rule).
+> **IF** any tile formula changes, **THEN** the same number's other holders must move with
+> it: Coach context (`aiContext.js` quotes budget-health/savings via the same functions —
+> the grounding rule), Live State Inspector, and for `annualSavings` the F13 helper.
+> **IF** a new tile is added, **THEN** it must derive via the authoritative Spine-A
+> function for that fact and scale by `perCheckFactor` for display — a raw weekly number
+> on a biweekly account is a silent 2× lie.
+
+**F17 · `adjustedTakeHome` (do-not-default contract)** — computed `App.jsx:1270`
+(`projectedAnnualNet + eventImpact.totalNetAdjustment − fundedGoalSpend`), prop-doc
+warning `HomePanel.jsx:38–43` — **[L]**
+Every real caller computes and passes it. The prop comment explicitly forbids a
+`weeklyIncome × 52` default — that would reintroduce the H11 dilution for any account not
+active all 52 weeks (`10ba9af` purged exactly that dead fallback).
+> **IF** a new HomePanel caller is added (a future demo/preview surface), **THEN** it must
+> compute `adjustedTakeHome` the same way — never default it, never multiply
+> `weeklyIncome` back out by 52. Check: the prop has no default in the signature; keep it
+> that way.
+
+**F18 · `computeGoalTimeline` consumption + Reset Timeline** — call at
+`HomePanel.jsx:287–295` (epoch arg `:295`), reset handler `:500–510` — **[L]**
+The Home goal cards run the authoritative week-by-week surplus simulation with
+`config.goalTimelineEpochIdx ?? null`. Reset Timeline writes the next pay week's idx as
+the new epoch **and** clears active goals' stale `dueWeek`, double eager-saving (config
+via `saveConfigNow`, goals via `onSaveGoalsNow`).
+> **IF** any other surface calls `computeGoalTimeline` with a different epoch argument
+> (Coach context must pass the same one — a 2026-07-16 live-test bug in §24's case law),
+> **THEN** the two surfaces show different goal ETAs for the same account. Check: grep
+> `computeGoalTimeline(` — every call site passes the same
+> `config.goalTimelineEpochIdx ?? null` expression or documents why not.
+> **IF** Reset Timeline's write set changes, **THEN** both eager-saves must still cover
+> the full mutation (config **and** goals) — dropping one is D3.
+
+**F19 · Goal CRUD + reorder (eager-save cluster)** — `HomePanel.jsx:460–566` — **[L/G]**
+Seven mutation sites (`saveEditGoal:462`, add `:470s`, `deleteGoal:484`,
+`toggleComplete:491`, reset `:500`, `handleMarkDone:511–524`, `moveGoal:529` +
+drag-drop `:555–566`), all compute-then-eager-save. `handleMarkDone` is the canonical
+example of the *updater-capture* pattern (value derived inside `setGoals(prev => …)`
+because a celebration `setTimeout` delays it — outer closure would be stale).
+> **IF** a new goal mutation is added, **THEN** it follows compute-then-save (or
+> updater-capture when delayed) and routes through `onSaveGoalsNow` — and **THEN** the
+> `readOnly` shadow (F20) automatically covers it *only* if it uses the shadowed local
+> names (`setGoals`/`onSaveGoalsNow`), never the `...Prop` originals. Check: grep
+> `Prop` suffix usage below line 76 — should be zero.
+
+**F20 · `readOnly` noop shadow** — `HomePanel.jsx:72–76` (and the same pattern at
+`JobLossHomePanel.jsx:29–31`) — **[G]**
+Paywall-expired accounts get all four mutation channels (`setGoals`, `setConfig`,
+`onSaveGoalsNow`, `saveConfigNow`) shadowed to no-ops in one place.
+> **IF** a new mutation-capable prop is threaded into HomePanel or JobLossHomePanel,
+> **THEN** it must be added to this shadow block — otherwise an expired account bypasses
+> the paywall through the new channel even though the visible setters are dead
+> (the exact hole called out in CLAUDE.md's readOnly-gate rule). Check: every prop whose
+> call writes anything appears in the shadow list.
+
+**F21 · Year-End Outlook scoping** — window comment + `activeWeeksThisYear`
+`HomePanel.jsx:90–105`, `yearEndGoalDraw` `:404–415` — **[L]**
+Outlook is clamped to the job/fiscal-year window (never extended backward past Jan 1,
+assumes work through Dec 31 — `08ea5b7`), and goal draw is scoped to the slice each goal
+is *projected to fund by Dec 31* via `tl`'s `remainingAtEnd` (falling back to full target
+when the year-end simulation shape omits it — `ec53450`).
+> **IF** `computeGoalTimeline`'s return shape changes (especially `remainingAtEnd`
+> presence/meaning), **THEN** `yearEndGoalDraw`'s fallback silently flips between
+> "this-year slice" and "full target" — a wrong Outlook with no error. Check: a goal
+> whose ETA lands next year must subtract only its this-year slice from Outlook.
+
+**F22 · Job Loss home surface** — mode fork `App.jsx:1482` (Home) / `:1536` (Budget);
+`JobLossHomePanel.jsx`: `commitCashOnHand:57–63`, runway consumption `:65–67` (via
+`computeJobLossRunway`), `logIncome:92–103`, `removeEntry:107–110`, embedded
+`ReemploymentTracker` `:225` with its `applyConfigUpdate` wrapper
+(`ReemploymentTracker.jsx:104–108`) — **[G→L]**
+`config.jobLossMode` *replaces* HomePanel with JobLossHomePanel (post-§15.H7 architecture
+— the pre-H7 overlay components are deleted; don't resurrect). All panel numbers resolve
+through `computeJobLossRunway()` / `sumJobHuntIncome()` — the one authoritative runway
+pair. Every mutation eager-saves; `jobLossCashOnHand` is persisted and mandatory
+(§15.H13).
+> **IF** the panel needs a new burn/savings/runway number, **THEN** it comes from
+> `jobLossRunway.js` — a second in-component derivation is the exact D1 shape quarantined
+> in F24. **IF** a new `jobLoss*` field is added here, **THEN** it also joins
+> `handleBackToWork`'s reset list (§7 F11). Check: `jobLossFlow.test.jsx`.
+
+**F23 · Net Worth Health cue** — `netWorthHealthStatus` (`finance.js:1407`,
+threshold const `:1405`), suppression `HomePanel.jsx:117–118`
+(`belowThreshold && !config?.jobLossMode`), `pickTips(seed, count = 3)`
+(`NetWorthHealthTips.jsx:48–51`, seeded by fiscal `weekNumber` at `HomePanel.jsx:1350`) — **[G]**
+The savings-rate cue: deterministic 3-of-5 tip rotation per fiscal week; suppressed
+entirely in Job Loss Mode (that mode owns its own runway UI); `aiTip` is a dormant
+forward slot for a Coach-generated insight.
+> **IF** the `NET_WORTH_HEALTH_THRESHOLD` or `netWorthHealthStatus` inputs change,
+> **THEN** check both consumers — this cue *and* the Coach amber tier (F24 uses
+> `belowThreshold` as its amber proxy) — they must fire on the same condition or the
+> Coach warns about a cushion the Home tile calls healthy.
+
+**F24 · Coach Net Worth trigger chain** — gate `HomePanel.jsx:1358` (`canAccessAiFeatures`);
+`CoachNetWorthCard.jsx:48–53` (computes `runwayDays` via **quarantined**
+`estimateRunwayDays`, resolves tier); `coachTriggers.js`: `estimateRunwayDays:27–49`
+[quarantine], `resolveNetWorthSignalTier:56–61`, `shouldFireForTier:67–71` (one message
+per tier per fiscal week) — **[G + quarantined L]**
+Admin/tester-gated proactive Coach message. Red tier keys off `estimateRunwayDays` — the
+app's documented standing D1 violation (independent runway math that ignores persisted
+`jobLossCashOnHand` and job-hunt income; always ≤ the real runway).
+> **IF** touching anything in this chain, **THEN** do not extend `estimateRunwayDays` —
+> converge it on `computeJobLossRunway()` (its doc comment now says exactly this) — and
+> note the *knock-on*: its too-low runway flows into `buildCoachContext`
+> (`CoachNetWorthCard.jsx:78`), so the Coach can claim less runway than the Job Loss
+> panel shows on the same screen. **IF** the gate changes, **THEN** it must remain
+> `canAccessAiFeatures({isAdmin, isTester})` — never fold in `isInvestor` (§23 division).
+
+### 8.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `resolveActiveWeeksThisYear` semantics or a consumer bypasses it | `weeklyIncome` (F14), Home `annualSavings` (F16), Coach `annualSavings` line (`aiContext.js`), DemoAccountTree | Grep consumer count; `fiscalWeek.test.js`, `aiContext.test.js`; mid-year `firstActiveIdx` account shows identical figures on Home tile vs. Ask Coach | D1 |
+| `resolvePrevWeekNet` fallback chain | HomePanel `nextWeekDisplay` cascade (`:119–122`), DemoAccountTree, "This Week's Check" tile | `finance.test.js`; fresh account day-one shows full-size check | D1/D2 |
+| `computeGoalTimeline` return shape or epoch handling (Spine A) | F18's call + epoch arg, `yearEndGoalDraw` fallback (F21), Coach goal lines, BudgetPanel timeline bar (T4) | Grep `computeGoalTimeline(` for epoch-arg parity; next-year-ETA goal subtracts only this-year slice | D1 |
+| `getFundedGoalSpend` (`goalFunding.js`) | `annualSavings` (F16), `adjustedTakeHome` (F17), Live State Inspector `fundedGoalSpend` | Complete a goal; Home savings + Year Summary both absorb it exactly once (no double-count) | D2 |
+| `eventImpact.totalNetAdjustment` composition (Spine A) | `adjustedTakeHome` (F17) → Home Year-End + IncomePanel Year Summary (both read `logTotals.adjustedTakeHome` — single value, keep it that way) | Log a missed shift; both panels move by the same amount | D1 |
+| A new mutation prop threaded into Home/JobLossHome | F20 shadow lists | Prop appears in the shadow block; expired-account test: mutation is a no-op end-to-end | D4 |
+| `netWorthHealthStatus` / threshold | F23 cue **and** F24 amber tier | Both fire on the same account state | D1 |
+| `computeJobLossRunway` / `sumJobHuntIncome` signature | F22 panel consumption, `JobLossBudgetPanel` (T4), and the F24 quarantine's convergence target | `jobLossFlow.test.jsx`; runway headline equals Budget-side runway | D1 |
+| `PAYCHECKS_PER_YEAR` / a new pay schedule (Spine A) | `perCheckFactor` display scaling (F16), `bufferPerWeek` (F14), Wrap Up preview (§7 F6) | Biweekly test account: tile values are 2× weekly, labels say "Check" not "Week" | D1 |
+
+### 8.3 Block 3 — Gate matrix
+
+| Dimension | Cells | Expected behavior |
+|---|---|---|
+| `config.jobLossMode` | false / true | true: `JobLossHomePanel` *replaces* HomePanel entirely (`App.jsx:1482`); Net Worth cue suppressed (F23); nav collapses to budget+profile (`App.jsx:907`); Income/Log tabs force-redirect (`:337`) |
+| `readOnly` (paywall-expired) | false / true | true: all four mutation channels noop'd (F20) in both Home variants; values still render; UpgradeModal triggerable |
+| `isAdmin` / `isTester` | 4 cells | Coach card renders only when `canAccessAiFeatures` — admin or tester; **never** investor (§23); non-gated tiles identical across all cells |
+| Pay schedule | weekly / biweekly / salary / monthly | `perCheckFactor` 1 / 2 / 2 / ~4.33 scales every tile value + "Left This Week"→"Left This Check" label swap (`:153`) |
+| Goals | empty / active / all-completed | Empty: no goal hero, `pulseGoals` undefined (no fabricated signal); completed: absorbed via `fundedGoalSpend`, hidden behind "show completed" fold |
+| `netWorthHealth.belowThreshold` | false / true | true (and not jobLossMode): Breakthrough Tips cue renders with fiscal-week-rotated 3-of-5 tips |
+
+### 8.4 Block 4 — Case law & quarantine
+
+**Precedents (fixed — cite, don't relearn):**
+- *§15.H11 dilution* (`2e0121a`, `10ba9af`, 2026-07-19) — four call sites each did their
+  own active-weeks math (or divided by a flat 52); "This Week's Check" showed a fraction
+  of a real paycheck for any account not active since week 0. Fix: F13 + F15 shared
+  helpers + purging HomePanel's dead `weeklyIncome*52` fallback. F13/F15/F17's IF/THENs
+  exist to keep this killed.
+- *Year-End Outlook overreach* (`08ea5b7`, `ec53450`, 2026-07-13) — Outlook once assumed
+  a full 52-week year and subtracted full goal targets regardless of fundability window;
+  now clamped + scoped (F21).
+- *Paywall read-only gate* (`065ec95`, §17.E) — the noop-shadow pattern (F20) was built
+  here first; CLAUDE.md's readOnly rule generalizes it.
+- *Pre-§15.H7 Job Loss overlay* (`7375c36`) — `JobLossDashboard.jsx`/`ExpenseTriage.jsx`
+  deleted; mode now swaps whole panels. Any PR re-introducing an overlay-on-HomePanel
+  Job Loss surface is reviving deleted architecture.
+
+**Standing quarantine (open):**
+1. **`estimateRunwayDays` (F24)** — known-drifted second runway formula; its too-low
+   number feeds both the Red-tier trigger and Coach context. Convergence target:
+   `computeJobLossRunway()`. Its doc comment now carries the quarantine notice
+   (corrected this pass — it cited the deleted JobLossDashboard and called cash-on-hand
+   "session-only", both stale since §15.H7/H13).
+2. **`runwayDays` never wired to `AskCoachPanel`** — `App.jsx:3351–3368` passes no
+   `runwayDays`, so `aiContext.js:200` renders bare "Job Loss Mode: active" (documented
+   §10 known gap). When wiring it, use `computeJobLossRunway`, not the F24 quarantine —
+   and then both Coach entry points must quote the same runway.

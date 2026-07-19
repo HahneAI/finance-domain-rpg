@@ -1454,10 +1454,12 @@ export default function App() {
         <JobLossHomePanel
           config={config}
           setConfig={setConfig}
+          saveConfigNow={saveConfigNow}
           expenses={expenses}
           effectiveToday={effectiveToday}
           savingsDraft={jobLossSavingsDraft}
           includeBenefits={jobLossIncludeBenefits}
+          readOnly={isExpiredReadOnly}
         />
       ) : (
         <HomePanel
@@ -1508,11 +1510,13 @@ export default function App() {
           config={config}
           expenses={expenses}
           setExpenses={setExpenses}
+          onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
           effectiveToday={effectiveToday}
           savingsDraft={jobLossSavingsDraft}
           setSavingsDraft={setJobLossSavingsDraft}
           includeBenefits={jobLossIncludeBenefits}
           setIncludeBenefits={setJobLossIncludeBenefits}
+          readOnly={isExpiredReadOnly}
         />
       ) : (
         <BudgetPanel
@@ -3351,8 +3355,13 @@ export default function App() {
         expenses={expenses}
         onActivate={(patch, updatedExpenses) => {
           configHistoryMetaRef.current = { source: "life_event:lost_job", effectiveFrom: patch.jobLossDate ?? undefined };
-          setConfig(prev => ({ ...prev, ...patch }));
+          const nextConfig = { ...config, ...patch };
+          setConfig(nextConfig);
           if (updatedExpenses) setExpenses(updatedExpenses);
+          // historySource omitted — configHistoryMetaRef is already set above with the
+          // more specific life_event:lost_job + effectiveFrom pair savePersistedStateNow's
+          // `??=` would otherwise leave untouched anyway.
+          savePersistedStateNow(updatedExpenses ? { config: nextConfig, expenses: updatedExpenses } : { config: nextConfig });
         }}
       />
       {/* ── Quick Rate Update (TODO §15.D) ── */}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, PanelHero, SectionHeader, iS, lS } from "./ui.jsx";
 import { DueDatePicker } from "./DueDatePicker.jsx";
 import { CATEGORY_COLORS, FISCAL_YEAR_START } from "../constants/config.js";
@@ -30,9 +30,26 @@ const isFlexibleCategory = (cat) => cat === "Lifestyle";
  * for this mode, not a lesser version of the normal flow.
  */
 export function JobLossBudgetPanel({
-  config, expenses, setExpenses, effectiveToday,
-  savingsDraft, setSavingsDraft, includeBenefits, setIncludeBenefits,
+  config, expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp,
+  effectiveToday, savingsDraft, setSavingsDraft, includeBenefits, setIncludeBenefits,
+  readOnly = false,
 }) {
+  // Paywall-expired read-only mode, same shadow pattern as HomePanel/BudgetPanel
+  // (docs/TODO.md §17.E): every mutation below becomes a no-op.
+  const noop = useCallback(() => {}, []);
+  const setExpenses = readOnly ? noop : setExpensesProp;
+  const onSaveExpensesNow = readOnly ? noop : onSaveExpensesNowProp;
+  // Eager-save wrapper (docs/TODO.md "Persistence — Eager Save Pattern"), same
+  // shape as BudgetPanel.jsx's applyExpenseUpdate — every mutation below
+  // (triage status, auto-reactivate, pause-all, add/remove expense) computes
+  // its next expenses array synchronously and saves immediately instead of
+  // sitting in the ambient 800ms debounce.
+  const applyExpenseUpdate = (updater) => {
+    let next;
+    setExpenses(prev => { next = updater(prev); return next; });
+    onSaveExpensesNow?.(next);
+  };
+
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "" });
   const [newExpDueDate, setNewExpDueDate] = useState(null);
   const [addAttempted, setAddAttempted] = useState(false);
@@ -101,14 +118,14 @@ export function JobLossBudgetPanel({
     isFlexibleCategory(exp.category) && (exp.jobLossStatus ?? "active") === "active"
   )).length;
 
-  const setStatus = (id, status) => setExpenses(prev => prev.map(e => e.id === id ? { ...e, jobLossStatus: status } : e));
-  const toggleAutoReactivate = (id) => setExpenses(prev => prev.map(e => (
+  const setStatus = (id, status) => applyExpenseUpdate(prev => prev.map(e => e.id === id ? { ...e, jobLossStatus: status } : e));
+  const toggleAutoReactivate = (id) => applyExpenseUpdate(prev => prev.map(e => (
     e.id === id ? { ...e, autoReactivateOnIncome: !(e.autoReactivateOnIncome ?? true) } : e
   )));
-  const pauseAllFlexible = () => setExpenses(prev => prev.map(e => (
+  const pauseAllFlexible = () => applyExpenseUpdate(prev => prev.map(e => (
     isFlexibleCategory(e.category) && (e.jobLossStatus ?? "active") === "active" ? { ...e, jobLossStatus: "paused" } : e
   )));
-  const removeExpense = (id) => setExpenses(prev => prev.filter(e => e.id !== id));
+  const removeExpense = (id) => applyExpenseUpdate(prev => prev.filter(e => e.id !== id));
 
   const newExpDueDateValid = newExpDueDate?.mode === "custom" ? !!newExpDueDate.date
     : newExpDueDate?.mode === "week" ? !!newExpDueDate.week
@@ -120,7 +137,7 @@ export function JobLossBudgetPanel({
     const amount = parseFloat(newExp.amount) || 0;
     const perPaycheck = perPaycheckFromCycle(amount, "every30days");
     const anchor = resolveDueDateAnchor(newExpDueDate, effectiveToday) ?? effectiveToday ?? FISCAL_YEAR_START;
-    setExpenses(prev => [...prev, {
+    applyExpenseUpdate(prev => [...prev, {
       id: `exp_${crypto.randomUUID()}`,
       category: newExp.category,
       label: newExp.label,
@@ -224,45 +241,47 @@ export function JobLossBudgetPanel({
 
       {/* ── Add expense ── */}
       <SectionHeader>Expenses</SectionHeader>
-      <div style={{
-        background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.22)",
-        borderRadius: "12px", padding: "14px", marginBottom: "14px",
-      }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
-          <div>
-            <label style={lS}>Label</label>
-            <input type="text" style={iS} value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} placeholder="e.g. Rent" />
+      {!readOnly && (
+        <div style={{
+          background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.22)",
+          borderRadius: "12px", padding: "14px", marginBottom: "14px",
+        }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+            <div>
+              <label style={lS}>Label</label>
+              <input type="text" style={iS} value={newExp.label} onChange={e => setNewExp(v => ({ ...v, label: e.target.value }))} placeholder="e.g. Rent" />
+            </div>
+            <div>
+              <label style={lS}>Category</label>
+              <select style={iS} value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))}>
+                <option>Needs</option>
+                <option>Lifestyle</option>
+              </select>
+            </div>
+            <div style={{ gridColumn: "1/-1" }}>
+              <label style={lS}>Monthly amount ($)</label>
+              <input type="number" min="0" step="0.01" style={iS} value={newExp.amount} onChange={e => setNewExp(v => ({ ...v, amount: e.target.value }))} placeholder="e.g. 1200" />
+            </div>
           </div>
-          <div>
-            <label style={lS}>Category</label>
-            <select style={iS} value={newExp.category} onChange={e => setNewExp(v => ({ ...v, category: e.target.value }))}>
-              <option>Needs</option>
-              <option>Lifestyle</option>
-            </select>
+          <div style={{ marginBottom: "10px" }}>
+            <label style={lS}>Due date</label>
+            <DueDatePicker value={newExpDueDate} onChange={setNewExpDueDate} attempted={addAttempted} />
           </div>
-          <div style={{ gridColumn: "1/-1" }}>
-            <label style={lS}>Monthly amount ($)</label>
-            <input type="number" min="0" step="0.01" style={iS} value={newExp.amount} onChange={e => setNewExp(v => ({ ...v, amount: e.target.value }))} placeholder="e.g. 1200" />
-          </div>
+          <Pressable
+            onClick={addExpense}
+            style={{
+              width: "100%", background: canAddExpense ? "var(--color-green)" : "var(--color-bg-raised)",
+              color: canAddExpense ? "var(--color-bg-base)" : "var(--color-text-disabled)",
+              border: "none", borderRadius: "10px", padding: "10px",
+              fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer",
+            }}
+          >
+            + Add Expense
+          </Pressable>
         </div>
-        <div style={{ marginBottom: "10px" }}>
-          <label style={lS}>Due date</label>
-          <DueDatePicker value={newExpDueDate} onChange={setNewExpDueDate} attempted={addAttempted} />
-        </div>
-        <Pressable
-          onClick={addExpense}
-          style={{
-            width: "100%", background: canAddExpense ? "var(--color-green)" : "var(--color-bg-raised)",
-            color: canAddExpense ? "var(--color-bg-base)" : "var(--color-text-disabled)",
-            border: "none", borderRadius: "10px", padding: "10px",
-            fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer",
-          }}
-        >
-          + Add Expense
-        </Pressable>
-      </div>
+      )}
 
-      {flexibleActiveCount > 0 && (
+      {!readOnly && flexibleActiveCount > 0 && (
         <Pressable
           onClick={pauseAllFlexible}
           style={{
@@ -328,37 +347,41 @@ export function JobLossBudgetPanel({
                       {exp.category ?? "—"}{monthly != null ? ` · $${Number(monthly).toLocaleString()}${isLoan ? `/${exp.loanMeta?.paymentFrequency ?? "mo"}` : "/mo"}` : ""}
                     </div>
                   </div>
-                  <Pressable
-                    onClick={() => removeExpense(exp.id)}
-                    aria-label="Remove expense"
-                    style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}
-                  >
-                    ✕
-                  </Pressable>
+                  {!readOnly && (
+                    <Pressable
+                      onClick={() => removeExpense(exp.id)}
+                      aria-label="Remove expense"
+                      style={{ background: "transparent", border: "none", color: "var(--color-text-disabled)", cursor: "pointer", fontSize: "14px", padding: "2px 4px" }}
+                    >
+                      ✕
+                    </Pressable>
+                  )}
                 </div>
 
-                <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
-                  {STATUS_OPTIONS.map(opt => {
-                    const active = status === opt.v;
-                    return (
-                      <Pressable
-                        key={opt.v}
-                        onClick={() => setStatus(exp.id, opt.v)}
-                        style={{
-                          flex: 1, padding: "7px 10px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
-                          background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)",
-                          color: active ? opt.color : "var(--color-text-secondary)",
-                          border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
-                          borderRadius: "10px", cursor: "pointer", fontWeight: active ? 700 : 500,
-                        }}
-                      >
-                        {opt.label}
-                      </Pressable>
-                    );
-                  })}
-                </div>
+                {!readOnly && (
+                  <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
+                    {STATUS_OPTIONS.map(opt => {
+                      const active = status === opt.v;
+                      return (
+                        <Pressable
+                          key={opt.v}
+                          onClick={() => setStatus(exp.id, opt.v)}
+                          style={{
+                            flex: 1, padding: "7px 10px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
+                            background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)",
+                            color: active ? opt.color : "var(--color-text-secondary)",
+                            border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
+                            borderRadius: "10px", cursor: "pointer", fontWeight: active ? 700 : 500,
+                          }}
+                        >
+                          {opt.label}
+                        </Pressable>
+                      );
+                    })}
+                  </div>
+                )}
 
-                {status !== "active" && (
+                {!readOnly && status !== "active" && (
                   <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "10px", fontSize: "11px", color: "var(--color-text-secondary)", cursor: "pointer" }}>
                     <input
                       type="checkbox" checked={autoReactivate} onChange={() => toggleAutoReactivate(exp.id)}

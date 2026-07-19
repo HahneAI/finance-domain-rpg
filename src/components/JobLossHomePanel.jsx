@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { MetricCard, Pressable, PanelHero, SectionHeader, iS, lS } from "./ui.jsx";
 import { computeJobLossRunway, sumJobHuntIncome } from "../lib/jobLossRunway.js";
 import { ReemploymentTracker } from "./ReemploymentTracker.jsx";
@@ -19,7 +19,16 @@ import { ReemploymentTracker } from "./ReemploymentTracker.jsx";
  * read-only so both panels agree on the same numbers without duplicating the
  * calc (see lib/jobLossRunway.js).
  */
-export function JobLossHomePanel({ config, setConfig, expenses, effectiveToday, savingsDraft, includeBenefits }) {
+export function JobLossHomePanel({
+  config, setConfig: setConfigProp, saveConfigNow: saveConfigNowProp,
+  expenses, effectiveToday, savingsDraft, includeBenefits, readOnly = false,
+}) {
+  // Paywall-expired read-only mode, same shadow pattern as HomePanel/BudgetPanel
+  // (docs/TODO.md §17.E): every setConfig()/saveConfigNow() below becomes a no-op.
+  const noop = useCallback(() => {}, []);
+  const setConfig = readOnly ? noop : setConfigProp;
+  const saveConfigNow = readOnly ? noop : saveConfigNowProp;
+
   const [amountDraft, setAmountDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
 
@@ -61,13 +70,17 @@ export function JobLossHomePanel({ config, setConfig, expenses, effectiveToday, 
       note: noteDraft.trim() || null,
       loggedAt: new Date().toISOString(),
     };
-    setConfig(prev => ({ ...prev, jobHuntIncomeLog: [...(prev.jobHuntIncomeLog ?? []), entry] }));
+    const next = { ...config, jobHuntIncomeLog: [...(config.jobHuntIncomeLog ?? []), entry] };
+    setConfig(next);
+    saveConfigNow?.(next);
     setAmountDraft("");
     setNoteDraft("");
   };
 
   const removeEntry = (id) => {
-    setConfig(prev => ({ ...prev, jobHuntIncomeLog: (prev.jobHuntIncomeLog ?? []).filter(e => e.id !== id) }));
+    const next = { ...config, jobHuntIncomeLog: (config.jobHuntIncomeLog ?? []).filter(e => e.id !== id) };
+    setConfig(next);
+    saveConfigNow?.(next);
   };
 
   return (
@@ -159,7 +172,7 @@ export function JobLossHomePanel({ config, setConfig, expenses, effectiveToday, 
         )}
       </div>
 
-      {setConfig && <ReemploymentTracker config={config} setConfig={setConfig} />}
+      {setConfig && <ReemploymentTracker config={config} setConfig={setConfig} saveConfigNow={saveConfigNow} />}
     </div>
   );
 }

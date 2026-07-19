@@ -305,14 +305,24 @@ describe('JobLossHomePanel', () => {
     expect(screen.getByText('+ Log Income').closest('button')).toBeDisabled()
   })
 
-  it('removes a logged income entry', () => {
+  it('removes a logged income entry and eager-saves the result', () => {
     const cfg = { ...JOB_LOSS_CONFIG, jobHuntIncomeLog: [{ id: 'jhi_1', amount: 100, note: 'Gig', loggedAt: '2026-06-10T00:00:00.000Z' }] }
     const setConfig = vi.fn()
-    render(<JobLossHomePanel config={cfg} setConfig={setConfig} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
+    const saveConfigNow = vi.fn()
+    render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
     fireEvent.click(screen.getByLabelText('Remove entry'))
-    expect(setConfig).toHaveBeenCalled()
-    const result = setConfig.mock.calls[0][0](cfg)
-    expect(result.jobHuntIncomeLog).toHaveLength(0)
+    expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ jobHuntIncomeLog: [] }))
+    expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ jobHuntIncomeLog: [] }))
+  })
+
+  it('shadows setConfig and saveConfigNow with no-ops when readOnly', () => {
+    const cfg = { ...JOB_LOSS_CONFIG, jobHuntIncomeLog: [{ id: 'jhi_1', amount: 100, note: 'Gig', loggedAt: '2026-06-10T00:00:00.000Z' }] }
+    const setConfig = vi.fn()
+    const saveConfigNow = vi.fn()
+    render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits readOnly />)
+    fireEvent.click(screen.getByLabelText('Remove entry'))
+    expect(setConfig).not.toHaveBeenCalled()
+    expect(saveConfigNow).not.toHaveBeenCalled()
   })
 
   it('embeds the Re-employment Tracker', () => {
@@ -387,20 +397,33 @@ describe('JobLossBudgetPanel', () => {
     expect(result[0].dueDateAnchor).toBe('2026-06-08')
   })
 
-  it('changes an expense triage status', () => {
-    const setExpenses = vi.fn()
-    renderBudget({ setExpenses })
+  it('changes an expense triage status and eager-saves the result', () => {
+    const setExpenses = vi.fn(updater => updater(INITIAL_EXPENSES))
+    const onSaveExpensesNow = vi.fn()
+    renderBudget({ setExpenses, onSaveExpensesNow })
     fireEvent.click(screen.getByText('Paused'))
     expect(setExpenses).toHaveBeenCalled()
+    expect(onSaveExpensesNow).toHaveBeenCalled()
+    const saved = onSaveExpensesNow.mock.calls[0][0]
+    expect(saved.find(e => e.id === INITIAL_EXPENSES[0].id).jobLossStatus).toBe('paused')
   })
 
-  it('removes an expense', () => {
-    const setExpenses = vi.fn()
-    renderBudget({ setExpenses })
+  it('removes an expense and eager-saves the result', () => {
+    const setExpenses = vi.fn(updater => updater(INITIAL_EXPENSES))
+    const onSaveExpensesNow = vi.fn()
+    renderBudget({ setExpenses, onSaveExpensesNow })
     fireEvent.click(screen.getByLabelText('Remove expense'))
     expect(setExpenses).toHaveBeenCalled()
-    const result = setExpenses.mock.calls[0][0](INITIAL_EXPENSES)
-    expect(result).toHaveLength(0)
+    expect(onSaveExpensesNow).toHaveBeenCalledWith([])
+  })
+
+  it('shadows setExpenses/onSaveExpensesNow with no-ops and hides mutation controls when readOnly', () => {
+    const setExpenses = vi.fn()
+    const onSaveExpensesNow = vi.fn()
+    renderBudget({ setExpenses, onSaveExpensesNow, readOnly: true })
+    expect(screen.queryByText('+ Add Expense')).toBeNull()
+    expect(screen.queryByLabelText('Remove expense')).toBeNull()
+    expect(screen.queryByText('Paused')).toBeNull()
   })
 })
 
@@ -418,5 +441,15 @@ describe('ReemploymentTracker', () => {
     }
     const { container } = render(<ReemploymentTracker config={cfg} setConfig={() => {}} />)
     expect(container.textContent).toContain('Acme Logistics')
+  })
+
+  it('eager-saves the computed config when setting the target income', () => {
+    const setConfig = vi.fn(v => v)
+    const saveConfigNow = vi.fn()
+    render(<ReemploymentTracker config={JOB_LOSS_CONFIG} setConfig={setConfig} saveConfigNow={saveConfigNow} />)
+    fireEvent.change(screen.getByPlaceholderText('41600'), { target: { value: '50000' } })
+    fireEvent.click(screen.getByText('Set'))
+    expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ targetIncomeAnnual: 50000 }))
+    expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ targetIncomeAnnual: 50000 }))
   })
 })

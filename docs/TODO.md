@@ -2051,6 +2051,49 @@ got a "Needs Coverage" flag, and displayed no amount in the JobLossBudgetPanel c
 
 ---
 
+#### H10. Job Loss Mode components weren't eager-saving — DONE 2026-07-19
+
+*Caught during a discussion of the Persistence — Eager Save Pattern (CLAUDE.md, documented on
+Version-control the same day). Every mutation in `JobLossHomePanel`/`JobLossBudgetPanel`/
+`ReemploymentTracker`/`JobLossEntry` built across §15.H7–H9 called raw `setConfig`/`setExpenses`
+with no eager-save callback — none of it would survive a backgrounded/reclaimed tab before the
+800ms debounce fired, the exact production data-loss bug the pattern exists to prevent. `App.jsx`
+already threads `saveConfigNow`/`onSaveExpensesNow`/`savePersistedStateNow` to every normal-mode
+panel; the Job Loss rebuild in H7 never picked them up.*
+
+- [x] **`JobLossEntry`'s activation (`App.jsx`)** — the single highest-stakes gap, since
+  activating Job Loss Mode is a one-shot action carrying the whole review/due-date flow's config +
+  expenses patch. Now computes `nextConfig` synchronously and calls
+  `savePersistedStateNow({ config: nextConfig, expenses: updatedExpenses })` (single atomic write
+  covering both fields) right alongside the existing `setConfig`/`setExpenses` calls.
+- [x] **`JobLossHomePanel`** — new `saveConfigNow`/`readOnly` props, `noop`-shadowed when
+  read-only (same pattern as `HomePanel`/`BudgetPanel`, §17.E). `logIncome`/`removeEntry` compute
+  the next config synchronously and eager-save it.
+- [x] **`ReemploymentTracker`** (embedded in `JobLossHomePanel`, predates this session's rebuild)
+  — new `applyConfigUpdate(updater)` wrapper, same shape as `BudgetPanel.jsx`'s
+  `applyExpenseUpdate`; all 6 mutation sites (target income set/reset, return-to-work
+  date set/clear, application add/edit/delete, status change) renamed to it, no logic
+  hand-transcribed.
+- [x] **`JobLossBudgetPanel`** — new `onSaveExpensesNow`/`readOnly` props; new
+  `applyExpenseUpdate(updater)` wrapper (identical shape to `BudgetPanel.jsx`'s); triage status,
+  auto-reactivate toggle, pause-all-flexible, remove, and add-expense all renamed to it. `readOnly`
+  also hides the Add Expense form, Pause-all button, and per-row status/delete controls (matching
+  normal `BudgetPanel`'s `!readOnly &&` convention) rather than just silently no-op'ing them.
+- **Verification:** `jobLossFlow.test.jsx` — new tests asserting `saveConfigNow`/
+  `onSaveExpensesNow` are called with the correct computed value for: removing a logged income
+  entry, changing an expense's triage status, removing an expense, and setting target income on
+  `ReemploymentTracker`; plus 2 new `readOnly` tests (`JobLossHomePanel` shadows both callbacks;
+  `JobLossBudgetPanel` shadows both callbacks *and* hides its mutation controls). Full suite: 1111
+  tests passing. Lint diff-clean vs. session baseline. Production build green. **Not covered:** a
+  live click-through simulating an actual backgrounded-tab reload, same category of gap as
+  everything else in this file requiring a deployed preview to verify by hand.
+- **Known adjacent gap, not fixed here (flagged, out of scope for this pass):**
+  `RateUpdateModal`'s `onActivate` handler (`App.jsx`) has the identical missing-eager-save
+  pattern — same "Life Event" one-shot-activation shape as `JobLossEntry`'s `onActivate`, just for
+  Quick Rate Update instead of Job Loss Mode. Worth a follow-up pass.
+
+---
+
 ### I. Admin Toolkit updates for §15 work
 
 - [ ] **Live State Inspector — Job Loss Mode pill**

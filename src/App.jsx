@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
+import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
-import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel } from "./lib/fiscalWeek.js";
+import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense } from "./lib/db.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
@@ -1174,27 +1174,26 @@ export default function App() {
   const bufferPerWeek = (config.bufferEnabled ?? true)
     ? (config.paycheckBuffer ?? 50) * (checksPerYear / 52)
     : 0;
-  const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
+  // weeklyIncome is meant to read as "what a typical active week nets you" —
+  // dividing by a flat 52 instead of the weeks actually active this fiscal
+  // year silently diluted it by every inactive week before firstActiveIdx.
+  // For a brand-new or just-reactivated (Back to Work) account that's most
+  // of the year, so the "typical week" figure came out a fraction of a real
+  // paycheck (TODO §15 Job Loss Mode investigation, 2026-07-19). For a
+  // full-year account (firstActiveIdx 0) this is byte-identical to /52.
+  const activeWeeksThisYear = resolveActiveWeeksThisYear(config.firstActiveIdx);
+  const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - bufferPerWeek;
 
   // ── Previous week's actual paycheck (what you'll receive this payday) ──
   // Shows the specific prior week's computeNet (high vs low week), not an annual
   // average. Adjusted for any event log entries confirmed for that week
-  // (e.g. missed shifts logged via WeekConfirmModal). Falls back to weeklyIncome
-  // average when no past weeks exist (first week of fiscal year).
-  const prevWeekNet = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
-    if (!pastWeeks.length) return weeklyIncome;
-    const prevWeek = pastWeeks[pastWeeks.length - 1];
-    const baseNet = computeNet(prevWeek, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek;
-    // Apply any confirmed event log adjustments specific to this week
-    const weekAdjustment = logs
-      .filter(e => e.weekIdx === prevWeek.idx)
-      .reduce((sum, e) => {
-        const impact = calcEventImpact(e, config, prevWeek);
-        return sum + impact.netGained - impact.netLost;
-      }, 0);
-    return baseNet + weekAdjustment;
-  }, [allWeeks, effectiveToday, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs]);
+  // (e.g. missed shifts logged via WeekConfirmModal). Falls back to the current
+  // active week's real net (not the diluted weeklyIncome average) when there's
+  // no past active week yet — see resolvePrevWeekNet's doc comment.
+  const prevWeekNet = useMemo(() => resolvePrevWeekNet({
+    allWeeks, todayIso: effectiveToday, config, extraPerCheck: taxDerived.extraPerCheck,
+    showExtra, bufferPerWeek, weeklyIncome, logs, currentWeek,
+  }), [allWeeks, effectiveToday, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs, currentWeek]);
 
   const weekNetLookup = useMemo(() => {
     const adjustments = eventImpact.weeklyNetAdjustments || {};

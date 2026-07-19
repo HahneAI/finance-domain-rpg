@@ -2097,6 +2097,138 @@ panel; the Job Loss rebuild in H7 never picked them up.*
 
 ---
 
+#### H11. "This Week's Check" showing a fraction of a real paycheck after Back to Work — DONE 2026-07-19
+
+*User report: fresh live-tested account, Back to Work into a $22/hr weekly job, 40hr/wk — Income
+panel and the Budget breakdown modal both correctly showed ~$714 net for the current week, but
+BudgetPanel's "This Week's Check" / "Left This Week" tiles showed $293 / $75. Diagnosed live
+against the user's actual Supabase `user_data.config` + `account_history` rows (no admin-tool
+access on the test account, so raw table rows were pulled instead — same data Config Raw View and
+the account_history baseRate ledger would show). Root cause was NOT a stale job-loss rate leaking
+forward (the first hypothesis, ruled out by the actual `account_history` rows) — it's a plain unit
+mismatch that hits any account that hasn't been active all 52 weeks of the fiscal year, which is
+nearly every real account.*
+
+- [x] **Root cause #1 — `prevWeekNet`'s empty-history fallback.** `App.jsx`'s `prevWeekNet` (read by
+  "This Week's Check"/"Left This Week" in both `HomePanel.jsx` and `BudgetPanel.jsx`, and by
+  `aiContext.js`'s "Left this week"/Coach line) is supposed to show last week's real, finalized
+  paycheck. When there's no prior active week yet — day one after Back to Work, or any brand-new
+  account — it fell back to `weeklyIncome`, which is `projectedAnnualNet / 52`. For an account
+  active only 24 of 52 weeks, that's the year's real income diluted by 28 weeks of $0 that haven't
+  happened yet, not a paycheck. Fixed by falling back to the **current** active week's real
+  computed net (already-correct math, just not what the fallback read) instead, only falling back
+  to `weeklyIncome` when there's no active week to read at all (e.g. indefinite Job Loss Mode).
+  New shared `resolvePrevWeekNet()` (`lib/finance.js`) replaces the duplicated inline version in
+  `App.jsx` **and** `DemoAccountTree.jsx` (same bug, same copy-pasted logic, would've hit demo/
+  investor accounts too).
+- [x] **Root cause #2 — `weeklyIncome` itself divides by a flat 52.** Broader and more serious than
+  the tile bug: `weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek` assumes the account was
+  active the whole fiscal year. `HomePanel.jsx`'s "Net Worth Trend" tile already tried to correct
+  for this on the *annual savings* side — `annualSavings = avgWeeklySurplus * activeWeeksThisYear`
+  — but `avgWeeklySurplus` is built from the still-diluted `weeklyIncome`, so the two didn't agree:
+  for a 24-active-week account, `annualSavings` came out roughly diluted by another 24/52 on top of
+  itself (confirmed: a synthetic 24-active-week case priced `annualSavings` at $12,000 vs. the
+  mathematically correct answer — the old formula gave a materially different, wrong number, not a
+  rounding difference). Separately, `aiContext.js`'s own `annualSavings`/`netWorthHealth` used a
+  **hardcoded** `* 52` (not `activeWeeksThisYear` at all) — a straight-up drift from the Home tile
+  it's labeled as matching, the exact anti-pattern `docs/active-systems.md` §24's grounding
+  discipline exists to prevent. Fixed by scaling `weeklyIncome` by the real active-week count
+  instead of a flat 52 in `App.jsx` and `DemoAccountTree.jsx` (byte-identical output for any
+  `firstActiveIdx: 0` account — i.e. every existing test fixture — since 52 active weeks ÷ 52 is
+  unchanged), and by giving `aiContext.js` the same `activeWeeksThisYear` derivation so the Coach
+  can't state a "Home tile" figure the Home tile doesn't actually show.
+- [x] **New shared `resolveActiveWeeksThisYear(firstActiveIdx)`** (`lib/fiscalWeek.js`) — one
+  formula (`FISCAL_WEEKS_PER_YEAR - firstActiveIdx`, clamped to 0) now backs `App.jsx`'s
+  `weeklyIncome`, `DemoAccountTree.jsx`'s `weeklyIncome`, `aiContext.js`'s `annualSavings`, and
+  `HomePanel.jsx`'s own `annualSavings` (swapped from its local inline copy to the same helper) —
+  four previously-independent copies of the same expression down to one, so this can't re-drift.
+  `traceExpenseCalculationSteps`'s own diagnostic `weeklyIncome` mirror (`lib/finance.js`) also
+  switched from `/52` to its own already-computed `activeWeeks.length`, so the audit trace explains
+  the real formula instead of the one it replaced.
+- [x] **Dead fallback purged, not just left inert.** `HomePanel.jsx`'s `monthlyTakehome` used to
+  read `adjustedTakeHome ?? (weeklyIncome * FISCAL_WEEKS_PER_YEAR)` — the same flat-52 shape as the
+  bug just fixed, confirmed dead (both live callers, `App.jsx` and `DemoAccountTree.jsx`, always
+  pass a real `adjustedTakeHome`) but left in place initially. Removed outright rather than left as
+  inert-but-present: dead code shaped exactly like a bug that was JUST fixed elsewhere reads as a
+  pattern to copy to a future session with no memory of this investigation. Now
+  `(adjustedTakeHome ?? 0) / 12`, with a comment on the `adjustedTakeHome` prop itself
+  (`HomePanel.jsx` ~line 38) spelling out why re-adding that fallback would reintroduce the bug.
+  Re-verified: 1128 tests passing, lint diff-clean, build green.
+- **Not fixed here — real scope, deliberately deferred, not urgent (flagged 2026-07-19):** see
+  §15.H12 below for the full write-up. Short version: none of H11's fix accounts for mid-year gaps
+  *within* an otherwise-active year (Job Loss Mode weeks sitting inside the active range) — only
+  for an account that started the year late.
+
+---
+
+#### H12. Annual pace figures don't yet exclude mid-year Job Loss gaps — SCOPED, not started
+
+*Flagged during H11, deliberately not attempted in the same pass — H11 fixed "account started the
+year late," this is the different, harder problem of "account had a gap in the middle of an
+otherwise-active year." User's own framing of the target: score $20k over 4 months, 6 weeks
+unemployed with no draw, score $28k over the next 2 months, then a clean job change with two
+weeks' notice (no gap), finishing the year at a third job pulling $50k. The week-by-week numbers
+already handle this correctly today — this gap is specifically in the *annual rollup* figures.*
+
+**What already works (no change needed):** `buildYear()`'s own `active` flag
+(`lib/finance.js:620`, `const active = idx >= cfg.firstActiveIdx && !inJobLoss;`) already zeroes
+out Job Loss Mode weeks correctly, wherever they fall in the year — this is not a per-week bug.
+`lib/jobLossRunway.js`'s `computeJobLossRunway()` (line 43) is the existing model for gap-aware
+math done right: it takes the real week array and sums only what's actually earned, not a
+count-based average. Any fix here should read the same way — derived from `allWeeks`, not from a
+second `firstActiveIdx`-vs-`today` range computation.
+
+**What doesn't yet work:** every annual-pace figure introduced or touched in H11 —
+`activeWeeksThisYear` itself (`resolveActiveWeeksThisYear()`, `lib/fiscalWeek.js:15`) — is
+`FISCAL_WEEKS_PER_YEAR - firstActiveIdx`, a plain range from account start to year-end. It has no
+idea a chunk of that range was actually a Job Loss Mode gap with $0 real earnings. Four call sites
+inherit this blind spot because they all key off the same helper:
+- `App.jsx:1184-1185` — `weeklyIncome`'s divisor
+- `components/DemoAccountTree.jsx:281-282` — same, demo/investor accounts
+- `components/HomePanel.jsx:104` — `annualSavings`'s multiplier (Net Worth Trend tile)
+- `lib/aiContext.js:98` — Coach's `annualSavings`/`netWorthHealth` copy
+
+Concretely, for the user's own example: an account active weeks 0–51 with a 6-week Job Loss gap
+mid-year currently computes `activeWeeksThisYear = 52 - 0 = 52` (job "started" week 0, so the range
+looks full-year) even though only 46 weeks actually earned anything. `projectedAnnualNet` (the
+numerator, from `buildYear`) is already correct — it's genuinely the sum of the 46 real weeks — but
+dividing/multiplying by 52 instead of 46 means `weeklyIncome`, `annualSavings`, and the Coach's
+narration of both would all be **diluted low** by exactly the size of the gap, the same shape of
+bug H11 fixed, just triggered by a different condition (a gap inside the range, not a late start).
+
+**Why this wasn't just folded into H11:** the fix isn't "swap `resolveActiveWeeksThisYear`'s
+formula" — it needs `allWeeks.filter(w => w.active).length` (a value that isn't uniformly available
+at every H11 call site without also threading `allWeeks` there — `aiContext.js` already receives
+`allWeeks` as a prop, but `HomePanel.jsx` and `DemoAccountTree.jsx` would need it added). It also
+raises a real product question H11 didn't have to answer: should a *closed* gap (the person is
+back to work now, this is retrospective) pull the annual pace down permanently, or should the
+Job-Loss weeks be excluded from the numerator's week-count but the *post-return* pace get its own
+forward-looking read (closer to what `computeJobLossRunway`/the Coach's runway math already do
+during an *active* Job Loss Mode)? That's a design call, not a bug-fix call, and worth its own
+scoped pass rather than a rushed answer bolted onto H11's commit.
+
+**Suggested shape of a future pass (not a commitment, just an entry point):** replace
+`resolveActiveWeeksThisYear(firstActiveIdx)`'s four call sites with something keyed off
+`allWeeks.filter(w => w.active).length` directly (thread `allWeeks` to `HomePanel.jsx`/
+`DemoAccountTree.jsx` where it's missing), decide the retrospective-vs-forward-pace question above
+with the user first, then re-verify `annualSavings`/`weeklyIncome` against a synthetic multi-job,
+mid-year-gap fixture (`buildYear` + a `jobLossMode`/`jobLossDate`/`returnToWorkDate` window,
+similar to the existing `finance.test.js` `buildYear — point-in-time baseRate` fixtures) before
+touching `App.jsx`/`HomePanel.jsx`/`aiContext.js` again.
+- **Verification:** 9 new tests — 4 in `finance.test.js` (`resolvePrevWeekNet`: current-week
+  fallback vs. the old diluted average, real-past-week case unchanged, indefinite-Job-Loss-Mode
+  fallback to `weeklyIncome`, log-adjustment applied on the new fallback path too), 4 in
+  `fiscalWeek.test.js` (`resolveActiveWeeksThisYear` full-year/partial-year/null/clamp cases), 1 in
+  `aiContext.test.js` (Coach's `annualSavings` now scales by `activeWeeksThisYear` from
+  `config.firstActiveIdx`, not a flat 52 — asserts the old drifted $26,000 does NOT appear). Full
+  suite: 1128 tests passing. Lint diff-clean vs. a true `git stash`-verified baseline (not just the
+  session-start snapshot — re-ran eslint against unstashed HEAD to confirm the diff is only line-
+  number shifts from added code, zero new problems). Production build green. **Not covered:** no
+  live click-through on a deployed preview — same category of gap as everything else in this file;
+  the original report came from a real device, but confirming the *fix* still needs a redeploy.
+
+---
+
 ### I. Admin Toolkit updates for §15 work
 
 - [ ] **Live State Inspector — Job Loss Mode pill**

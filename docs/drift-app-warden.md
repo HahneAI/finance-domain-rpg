@@ -223,7 +223,7 @@ direction.
 To be filled one at a time, in collaboration, in this order (each pass produces Blocks 1–4
 for that section):
 
-- [ ] **T1 — Setup Wizard**
+- [x] **T1 — Setup Wizard** — §7 below (surgical pass 2026-07-19)
 - [ ] **T2 — Home Panel**
 - [ ] **T3 — Income Panel**
 - [ ] **T4 — Budget Panel**
@@ -235,3 +235,227 @@ for that section):
 - [ ] **T10 — UI-UX**
 - [ ] **Spines A–F** (final pass — spines are written last so every spine entry's blast
   radius can point at completed surface sections, not forward references)
+
+---
+
+## 7. T1 — Setup Wizard Drift Map
+
+**Pass date:** 2026-07-19. **Line anchors** are `file:line` as of this pass's commit and are
+always paired with a greppable symbol name — when lines shift, grep the symbol; when the
+symbol is gone, this entry is due for re-surgery (D5 on itself).
+**Method note:** this is a key-function-by-key-function study, not line-by-line
+documentation. Each monitored function gets its code anchor **and** a human-readable
+IF/THEN statement — the IF/THEN is the drift check; the anchor is where to aim it.
+
+**Scope:** `SetupWizard.jsx` (2,492 lines, 9 live steps), `LifeEventMenu.jsx`,
+`JobLossEntry.jsx`, `RateUpdateModal.jsx`, their `App.jsx` wiring (completion handler,
+config-history tagging, Back to Work), and `constants/config.js` presets they consume.
+
+### 7.1 Block 1 — Critical inventory (function by function)
+
+**F1 · `dateToWeekIdx(dateStr)`** — `SetupWizard.jsx:703` — **[L]**
+The wizard's only date→fiscal-week formula: `ceil((date − FISCAL_YEAR_START)/7)` clamped
+to `[0, 51]`. Sole writer of `firstActiveIdx` (the nuclear field), `accountCreatedIdx`,
+and the jobless path's start anchors.
+> **IF** the rounding, clamping, or `FISCAL_YEAR_START` consumption in `dateToWeekIdx`
+> changes, **THEN** every existing account silently repositions its `firstActiveIdx` on
+> next wizard open (F2 auto-recalculates it), which repositions `taxedWeeks`, check-in
+> eligibility, and the entire fiscal calendar. Check: `fiscalWeek.js` helpers agree on
+> week-0 semantics; Tax Weeks Grid + Week Inspector on a real account; `SetupWizard.test.jsx`.
+
+**F2 · formData init recalc** — `SetupWizard.jsx:2252–2264` (inside the `useState`
+initializer of `SetupWizard`) — **[L]**
+On every wizard open, `firstActiveIdx` is re-derived from `startDate` — because Step 2's
+`onChange` only fires on user edits, a re-entry keeping the existing `startDate` would
+otherwise carry a stale index (this exact bug shipped once; the comment block records it).
+Also: investor accounts get `employerPreset` forced to `null` here (`:2253–2254`).
+> **IF** a new config field is added whose value is *derived from another field the user
+> can edit* (the `startDate → firstActiveIdx` shape), **THEN** it must either be re-derived
+> in this initializer or derived only at `handleComplete` — a field derived only in a step's
+> `onChange` will go stale on every re-entry. Check: open the wizard as `structure_change`
+> on an account where the source field already has a value; confirm the derived field matches.
+
+**F3 · `isFirstRunJobless(d, ev)` + `STEP_DEFS`** — `SetupWizard.jsx:2119`, `:2122–2210` — **[G]**
+The routing truth table. `showIf`/`isValid` per step; jobless mini-flow is step ids
+10/11/12; Wrap Up (id 7) shows only for `null`(employed) / `changed_jobs` /
+`structure_change`. `isFirstRunJobless` is true only on first-run (`ev === null`) with
+`startedUnemployed === true` — never on any re-entry, including Back to Work.
+> **IF** any step's `showIf`/`isValid` changes, or `LIFE_EVENTS` gains/loses a member,
+> **THEN** walk the full path matrix (§7.3). The two standing traps: (a) `lost_job` and
+> `commission_job` never see Wrap Up — a new field committed only in Wrap Up's UI silently
+> never gets set on those paths (its default must live in `handleComplete`, F5); (b) the
+> jobless path skips Deductions/Tax entirely — every downstream consumer must tolerate a
+> `setupComplete` config with absent tax/benefit/pay fields.
+
+**F4 · Step 0 jobless seed** — `SetupWizard.jsx:66–80` (the "Yes, unemployed" `Pill`
+`onClick` in `Step0`) — **[G→L]**
+One atomic patch: `startedUnemployed: true`, `jobLossMode: true`, `jobLossDate` (defaults
+today), `startDate: today`, `firstActiveIdx`. Answering "No" reverses the first three.
+> **IF** this patch's field set changes, **THEN** check every consumer of the seeded
+> fields: `buildYear()`'s `jobLossMode` income-zeroing, `JobLossHomePanel`/
+> `JobLossBudgetPanel` expectations (`jobLossDate`, `jobLossCashOnHand`), and both special
+> cases in `handleWizardComplete` (F8) that test these exact flags — `skipFoodSeed`
+> (`wizardEntry === false && jobLossMode`) and the H4 `startedUnemployed` clear.
+
+**F5 · `handleComplete()`** — `SetupWizard.jsx:2316–2338` — **[L]**
+The single commit point for every wizard path (all six routes in §7.3 end here). Ordered
+effects: (1) DHL enforced overrides — `payPeriodEndDay: 0`, `otThreshold: 40`,
+`otMultiplier: 1.5` (`:2317–2319`); (2) buffer normalize — `paycheckBuffer ?? 50` whenever
+`bufferEnabled !== false` (`:2323–2325`); (3) `taxedWeeks` derivation — `[]` if
+`taxExemptOptIn`, else every `buildYear()` week with `idx >= firstActiveIdx` (`:2329–2331`);
+(4) `accountCreatedIdx` stamp — preserved if already set, else today's week (`:2336`);
+(5) `setupComplete: true`.
+> **IF** the DHL overrides change, **THEN** check `WeekConfirmModal`'s pay-period
+> assumptions, `buildYear()` OT math, and the DHL row of §7.3.
+> **IF** the `taxedWeeks` formula changes, **THEN** check the Tax Plan surface, the
+> `extraPerCheck` withholding-gap math, `pastWeekTaxStatusOverrides` semantics, and the
+> Tax Weeks Grid (admin).
+> **IF** a new Wrap-Up-only field is introduced, **THEN** its default must be applied here,
+> because `lost_job`/`commission_job`/jobless paths skip Wrap Up but still run
+> `handleComplete`.
+> **Standing invariant:** the jobless path reaches the `buildYear(finalData)` call at
+> `:2326` with *no real pay structure* — any `buildYear` change must keep tolerating that
+> config shape.
+
+**F6 · `estimateWeeklyGross` / `estimateWeeklyNet`** — `finance.js:136` / `finance.js:176` — **[L]**
+The wizard's sanctioned preview approximations (Step 1/Wrap Up live net; `PaystubCalc`).
+They are deliberately *not* `buildYear` — but they promise the user a number the app then
+recomputes for real.
+> **IF** `buildYear`/`computeNet` changes deduction ordering, any tax rule, or any benefit
+> rule, **THEN** these two must change in the same commit, or the wizard's promised net
+> diverges from the first rendered week — a D1 pair, permanently coupled. Check: complete
+> a test wizard run and diff Wrap Up's net against Week Inspector's `computeNet` for the
+> first active week.
+
+**F7 · `StructureChangeDiff` + `DIFF_FIELDS`** — `SetupWizard.jsx:1732` / `:1714–1730` — **[G]**
+Display-only "What's Changing" diff on the `structure_change` Wrap Up, compared against
+the frozen `originalConfigRef` (`:2271`). Guard at `:1738`: a jobless-started account gets
+a "first real pay structure" message instead of a misleading diff against
+`DEFAULT_CONFIG` placeholders.
+> **IF** a new sensitive pay/tax/schedule field is added to the wizard, **THEN** add it to
+> **both** `DIFF_FIELDS` (or it silently vanishes from "What's Changing") **and**
+> `HISTORY_SENSITIVE_FIELDS` (`configHistory.js:14`) (or it escapes `account_history`
+> capture). These two lists monitor the same concept from two angles and must never
+> diverge — diff them against each other whenever either changes.
+
+**F8 · `handleWizardComplete(mergedConfig)`** — `App.jsx:1315–1357` — **[L]**
+The `onComplete` consumer. Ordered effects: tags `configHistoryMetaRef` with
+`source: "setup_wizard" | "life_event:<ev>"` and `effectiveFrom: startDate` (`:1318–1321`);
+clears `startedUnemployed` when Back to Work's `structure_change` completes (`:1327–1329`);
+skips the Food expense seed for a jobless first-run (`:1338–1339`) and restores it on Back
+to Work (`:1345–1348`); eager-saves config **and** expenses in one
+`savePersistedStateNow(overrides)` call (`:1352–1356`).
+> **IF** wizard completion needs to write any new piece of state, **THEN** it must ride the
+> same `savePersistedStateNow` overrides object — a separate `setState` + debounce is the
+> D3 pattern that lost wizard data in production. Check: the overrides object contains
+> every value the completion mutated.
+
+**F9 · Config-history watcher** — `App.jsx:661–689` (`configHistoryMetaRef` +
+`diffSensitiveFields` effect) — **[L]**
+Diffs every config transition; wizard/life-event flows pre-tag `configHistoryMetaRef`
+(one-shot — nulled every run at `:668`); untagged changes record as `"config_edit"`
+effective today; `baseRate` changes also get an optimistic local append to
+`baseRateHistory` (`:686–688`) so `buildYear` resolves the new rate without a reload.
+> **IF** any wizard/life-event flow calls `setConfig` without setting
+> `configHistoryMetaRef` immediately before, **THEN** the snapshot loses its
+> `source`/`effectiveFrom` attribution — and for `baseRate`, `resolveBaseRateForWeek`'s
+> point-in-time math anchors to the *wrong date*. Check: DB Row Viewer's config-history
+> line shows the expected source + date after the flow runs.
+
+**F10 · Quick Rate Update chain** — `RateUpdateModal.jsx:15` (`onActivate` contract at
+`:42`) → `App.jsx:3400–3408` → F9 watcher → `saveConfigSnapshot` + optimistic append →
+`extractBaseRateHistory` (`db.js:19–24`) → `baseRateHistory` state (`App.jsx:293`) →
+`buildYear(config, baseRateHistory)` (`App.jsx:939`, `finance.js:481`) →
+`resolveBaseRateForWeek` (`finance.js:470`) — **[L]**
+**This chain is the first and only read path of `account_history`** — the §19 "narrow
+slice." `extractBaseRateHistory` keeps only rows where `changed_fields` includes
+`"baseRate"` *and* `snapshot.baseRate` is a real number.
+> **IF** `saveConfigSnapshot`'s row shape (`changed_fields`, `snapshot`) or
+> `HISTORY_SENSITIVE_FIELDS`'s spelling of `baseRate` changes, **THEN**
+> `extractBaseRateHistory`'s filter silently drops every affected row and past-rate
+> resolution collapses to the live rate — no error, just retroactively rewritten pay
+> history (D2 re-opened). Check: `db.test.js` baseRateHistory cases + a future-dated rate
+> update showing the *old* rate on weeks before the effective date (Week Inspector).
+
+**F11 · `handleBackToWork()`** — `App.jsx:1362–1386` — **[G]**
+The single reset point for leaving Job Loss Mode: auto-reactivates flagged expenses,
+nulls the `jobLoss*`/unemployment/`returnToWorkDate` fields, routes into
+`structure_change`.
+> **IF** a new `jobLoss*` or unemployment-related config field is added anywhere, **THEN**
+> it must be reset here — or it leaks into the re-employed state and every consumer that
+> gates on it misfires. Check: grep new field name; confirm it appears in this reset patch.
+
+**F12 · `LifeEventMenu` routing + `JobLossEntry` activation** — `App.jsx:3374–3382` /
+`:3384–3398` — **[G]**
+Three routes: `job_loss` → `JobLossEntry` modal (not the wizard), `rate_update` →
+`RateUpdateModal`, anything else → `setWizardEntry(route)`. `JobLossEntry.onActivate`
+tags history (`life_event:lost_job`, `effectiveFrom: jobLossDate`), computes
+`nextConfig` synchronously, and eager-saves config + triaged expenses together — the
+model D3-safe activation.
+> **IF** a new life-event tile is added, **THEN** decide its route class explicitly
+> (wizard string vs. dedicated modal), give it a `life_event:<name>` history source, and
+> follow F12's synchronous-compute + single-eager-save shape. Check: kill the tab within
+> 800ms of activating; reload; the change survived.
+
+### 7.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `FISCAL_YEAR_START` (`constants/config.js`) | Every stored `firstActiveIdx`/`accountCreatedIdx`/`taxedWeeks` in the DB — F1 re-derives on wizard open, but accounts that never re-enter keep indexes anchored to the *old* year-start | Never change mid-year. If it must change: data migration for all three fields + `fiscalWeek.test.js` + Tax Weeks Grid spot-check | D2 |
+| `DHL_PRESET` (`constants/config.js`) — teams, defaults, rotation | Step 1 team prefills (`SetupWizard.jsx:287–320`), rotation copy (`:375–377`), F5's enforced overrides, `buildYear` rotation math | `SetupWizard.test.jsx` + complete a DHL test run; Week Inspector on a long-week and short-week | D1 |
+| `BENEFIT_OPTIONS` (`constants/config.js`) — add/remove/re-type a benefit | Step 3 `isValid`'s weekly-type required loop (`:2190–2192`), `BenefitCard`, `weeklyBenefitDeductions()` in `finance.js`, Wrap Up's benefits row | Snapshot test (`config.test.js.snap`) + wizard run selecting the changed benefit; diff Wrap Up net vs. Week Inspector | D1 |
+| `buildYear` signature or week-object shape (Spine A) | F5's direct call (`:2326` — `taxedWeeks` derives from `w.idx`), F6 preview pair, F10's `baseRateHistory` param | `finance.test.js` + F6's preview-vs-week diff procedure | D1/D2 |
+| A new sensitive field enters the wizard | `DIFF_FIELDS` (F7), `HISTORY_SENSITIVE_FIELDS` (`configHistory.js:14`), ProfilePanel's Pay Structure cards (T7 — same field, second editor) | Three-way grep for the field name; all three lists/surfaces present or explicitly excluded | D5 |
+| `STEP_DEFS` ids or routing comment (`:2105–2113`) | CLAUDE.md SetupWizard quick reference, `SetupWizard.test.jsx`, this section's §7.3 matrix | Re-verify matrix path by path; update both docs in the same PR | D5 |
+| `onComplete` payload shape (F5's spread) | F8, `db.js#saveUserData` column mapping, `docs/account-reference.json` expectations | `db.test.js` + DB Row Viewer drift badge after a wizard run | D3 |
+| Wizard cancel wiring (`App.jsx:3414–3420` — `onCancel` is `undefined` for first-run non-investor) | First-run users must not be able to escape setup with `setupComplete: false` but a live session; TrialExplainerScreen gate (`App.jsx:1466`) sequencing | Manual: fresh account, attempt to dismiss the wizard every way the UI offers | D4 |
+| `JobLossEntry` step contents (cash-on-hand, `trackDuringJobLoss`, due dates) | `computeJobLossRunway()` inputs (T2/T4 surfaces), F11's reset list | `jobLossFlow.test.jsx` + runway headline sanity on a test account | D1 |
+
+### 7.3 Block 3 — Gate matrix (the six paths)
+
+All paths commit through `handleComplete` (F5) — including the two that skip Wrap Up and
+the one with no pay structure.
+
+| Path (lifeEvent · seed) | Steps shown | Wrap Up? | Path-specific invariants |
+|---|---|---|---|
+| First-run employed (`null` · No) | 0 → 1 → 2 → 3 → 4 → 7 | Yes | `onCancel` undefined (non-investor) — no escape; buffer + tax-exempt offered here only |
+| First-run jobless (`null` · Yes) | 0 → 10 → 11 → 12 | Own (12) | No pay structure at `buildYear` call; `jobLossMode: true`; Food seed skipped (F8); lands in Job Loss panels |
+| `structure_change` | 0 → 1 → 2 → 3 → 4 → 7 + diff | Yes | Pre-filled; frozen `originalConfigRef` baseline; clears `startedUnemployed` on completion (F8); Food restored if jobless-started |
+| `lost_job` (legacy wizard route) | 0 → 1 → 2 → 3 → 4 | **No** | Wrap-Up-only fields must default in F5; primary lost-job entry is now the `JobLossEntry` modal (F12), not this |
+| `changed_jobs` | 0 → 1 → 2 → 3 → 4 → 7 | Yes | Full re-run against existing account data |
+| `commission_job` | 0 → 1 → 2 → 3 → 4 | **No** | Commission field appears in Step 1; Wrap-Up-only fields must default in F5 |
+
+Cross-cutting cells on top of every path: **DHL** (Step 2 shows rotation instead of
+hours/pay-day; Step 1 requires `dhlTeam`; F5 overrides fire) · **biweekly/salary**
+(Step 2 requires `biweeklyPayWeekParity` — `isValid:2175`) · **investor**
+(`employerPreset` forced null at F2; Step 0 greets by name) · **Step 3 skippable**
+(only step with `skippable: true` — a required field added to Step 3 must survive being
+skipped entirely).
+
+### 7.4 Block 4 — Case law & quarantine
+
+**Precedents (fixed — cite, don't relearn):**
+- *Stale `firstActiveIdx` on re-entry* — derived field not recomputed on wizard open;
+  fixed by F2's init recalc. The general rule in F2's IF/THEN exists because of this.
+- *Jobless diff against placeholders* (TODO §15.H4) — `structure_change` after a jobless
+  start diffed `DEFAULT_CONFIG`'s `baseRate: 19.65` as if it were a real prior job; fixed
+  by F7's `:1738` guard.
+- *Transient fetch error re-opened the wizard over real data* — `db.js:170–181`: only
+  PGRST116 ("no row") may fall back to `DEFAULT_CONFIG` + wizard; every other load error
+  must propagate. Any change to `loadUserData` error handling re-fights this exact fire.
+- *Quick Rate Update effective date didn't gate the math* (commit `955b0b3`) — the modal
+  saved a date the engine ignored; fixed by the F10 chain. The whole chain exists so the
+  date is load-bearing — treat any simplification of it as reopening the bug.
+
+**Standing findings from this pass (open — decisions owed):**
+1. **Soft-D3, Quick Rate Update:** `App.jsx:3404–3407` sets `config.baseRate` with *no*
+   `savePersistedStateNow` — the live rate rides the 800ms debounce. Mitigation already in
+   place: the `account_history` row (fire-and-forget insert) + optimistic append mean week
+   math survives a lost write after reload; but the *live* `config.baseRate` (ProfilePanel
+   display, F6 previews) can silently revert. Cheap fix: eager-save in `onActivate` like
+   F12 does. Flagged, not fixed — needs owner sign-off.
+2. **D5, corrected in this pass:** CLAUDE.md's SetupWizard quick reference predated the
+   jobless mini-flow, `structure_change`, and the `otMultiplier: 1.5` override — updated
+   in this commit.
+3. **D5, corrected in this pass:** `active-systems.md` §22's "nothing reads this table"
+   predated the F10 read path — annotated in this commit.

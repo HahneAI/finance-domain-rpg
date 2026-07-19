@@ -56,30 +56,33 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 
 ---
 
-## SetupWizard Quick Reference (`src/components/SetupWizard.jsx` ~1800 lines)
+## SetupWizard Quick Reference (`src/components/SetupWizard.jsx` ~2500 lines)
 
-**Export:** `SetupWizard({ config, onComplete, onCancel, lifeEvent })`
-- `config` — current app config; spread into `formData` on mount
-- `lifeEvent` — `null` (first-run) | `"lost_job"` | `"changed_jobs"` | `"commission_job"`
-- `onComplete(data)` — receives merged config + `taxedWeeks` array + `setupComplete: true`
+**Full drift map (key functions, IF/THEN checks, path matrix): `docs/drift-app-warden.md` §7 — consult it before changing anything here.**
+
+**Export:** `SetupWizard({ config, onComplete, onCancel, lifeEvent, isInvestor, isExiting })`
+- `config` — current app config; spread into `formData` on mount; `firstActiveIdx` re-derived from `startDate` on every open
+- `lifeEvent` — `null` (first-run) | `"structure_change"` | `"lost_job"` | `"changed_jobs"` | `"commission_job"`
+- `onComplete(data)` — receives merged config + `taxedWeeks` + `accountCreatedIdx` + `setupComplete: true`
 
 **Steps (controlled by `STEP_DEFS` — each has `showIf(formData, lifeEvent)` + `isValid(formData)`):**
 | Step ID | Title | Key fields / notes |
 |---------|-------|-------------------|
-| 0 | Welcome | First-run intro or life event picker (LIFE_EVENTS array) |
+| 0 | Welcome | First-run: "Are you currently unemployed?" seed (§15.H) + intro; re-entry: life event picker or structure_change overview |
+| 10/11/12 | Jobless mini-flow | First-run + unemployed only: unemployment benefits → job-loss details → wrap up; skips steps 1–4 and 7 entirely |
 | 1 | Pay Structure | DHL employer gate → team/shift/rotation; base rate, OT threshold/multiplier, weekend diff, commission |
-| 2 | Schedule | Job start date → `firstActiveIdx`; rotation week (DHL) or std hours + pay period close day |
+| 2 | Schedule | Job start date → `firstActiveIdx` (via `dateToWeekIdx`); rotation week (DHL) or hours + pay period close day + biweekly parity |
 | 3 | Deductions | BenefitCard toggles (BENEFIT_OPTIONS), `otherDeductions` rows, attendance gate; `skippable: true` |
 | 4 | Tax Rates | State select, inline `PaystubCalc`, rate summary with FICA + std deduction; DHL MO preset |
-| 7 | Wrap Up | Live net preview (`estimateWeeklyGross`), paycheck buffer toggle ($50 default, $200 max), tax-exempt opt-in |
+| 7 | Wrap Up | Live net preview (`estimateWeeklyNet`), paycheck buffer toggle ($50 default, $200 max), tax-exempt opt-in; structure_change adds "What's Changing" diff |
 
-**Life event routing:** `lost_job` → steps 0–4; `commission_job` → steps 0–4 + commission field in step 1; `null` / `"changed_jobs"` → all steps including WrapUp (step 7).
+**Life event routing:** `lost_job` / `commission_job` → steps 0–4, **no WrapUp** (WrapUp-only fields must default in `handleComplete`); `null`(employed) / `"changed_jobs"` / `"structure_change"` → all steps including WrapUp (7); `null` + unemployed → steps 0, 10–12 only.
 
-**Internal helpers (file-private):** `Pill`, `Field`, `FieldRow`, `errBorder`, `BenefitCard`, `PaystubCalc`, `StepWrapUp`, `StepStub`, `estimateWeeklyGross`.
+**Internal helpers (file-private):** `Pill`, `Field`, `FieldRow`, `errBorder`, `BenefitCard`, `PaystubCalc`, `StepWrapUp`, `StructureChangeDiff`, `StepJobless*`, `dateToWeekIdx`, `isFirstRunJobless`.
 
-**State:** `formData` is flat; `update(patch)` merges via `setFormData(prev => ({ ...prev, ...patch }))`. `attempted` bool set on failed Next — triggers red borders/labels; resets on step change.
+**State:** `formData` is flat; `update(patch)` merges via `setFormData(prev => ({ ...prev, ...patch }))`. `attempted` bool set on failed Next — triggers red borders/labels + shake; resets on step change.
 
-**On complete:** enforces DHL overrides (`payPeriodEndDay: 0, otThreshold: 40`), runs `buildYear`, derives `taxedWeeks` from `firstActiveIdx`, calls `onComplete`.
+**On complete:** enforces DHL overrides (`payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5`), normalizes `paycheckBuffer ?? 50`, runs `buildYear`, derives `taxedWeeks` from `firstActiveIdx` (empty if `taxExemptOptIn`), stamps `accountCreatedIdx`, calls `onComplete`.
 
 ---
 

@@ -429,9 +429,13 @@ no representation here until this pass).
   `effectiveFrom`; investor sandbox accounts are exempt.
 - **Admin surface:** DB Row Viewer → Fetch shows "config history: N snapshots · latest [date]
   ([source]) · [changed fields]" (`fetchConfigHistoryMeta`, `db.js`).
-- **Known gap (by design — not yet started):** nothing reads this table. The read-path resolver
-  (an analog of expenses' `getEffectiveAmount`) and the loan-history equivalent fix are explicit,
-  separate follow-ups. Full design record in `docs/TODO.md` §19.
+- **Known gap (by design — mostly unstarted):** almost nothing reads this table. One narrow
+  read slice is live (§15.D Quick Rate Update): `db.js#extractBaseRateHistory` filters
+  `account_history` rows to baseRate changes → `App.jsx` `baseRateHistory` state →
+  `buildYear(cfg, baseRateHistory)` → `resolveBaseRateForWeek` per week. The general
+  read-path resolver (an analog of expenses' `getEffectiveAmount` for all sensitive fields)
+  and the loan-history equivalent fix remain explicit, separate follow-ups. Full design
+  record in `docs/TODO.md` §19. Drift map for the live slice: `docs/drift-app-warden.md` §7 F10.
 
 ---
 

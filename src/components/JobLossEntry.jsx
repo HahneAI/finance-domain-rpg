@@ -43,6 +43,9 @@ import { resolveDueDateAnchor, getExpenseDisplayAmount } from "../lib/expense.js
 export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
+  // Mandatory — the runway calc's seed cash figure. "" = unanswered (blocks
+  // Next); any finite number >= 0, including 0, is a valid answer.
+  const [cashOnHandDraft, setCashOnHandDraft] = useState("");
   // null = unanswered (Activate disabled); true/false once user picks.
   const [unemploymentAnswered, setUnemploymentAnswered] = useState(null);
   const [weeklyDraft, setWeeklyDraft] = useState("");
@@ -57,6 +60,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
   useEffect(() => {
     if (!open) return;
     setDate(today);
+    setCashOnHandDraft("");
     setUnemploymentAnswered(null);
     setWeeklyDraft("");
     setDurationDraft("");
@@ -74,11 +78,17 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
   const fold = useFoldTransition(open, { ms: 340 });
   if (!fold.mounted) return null;
 
+  // Accepts any finite non-negative number, including 0 — rejects empty and
+  // anything that doesn't parse (letters can't get past type="number" in
+  // practice, but this is the real gate, not the input type).
+  const cashOnHandVal = cashOnHandDraft === "" ? null : parseFloat(cashOnHandDraft);
+  const cashOnHandValid = cashOnHandDraft !== "" && Number.isFinite(cashOnHandVal) && cashOnHandVal >= 0;
+
   const hasUnemployment = unemploymentAnswered === true;
   const weeklyVal   = weeklyDraft   === "" ? null : Math.max(0, parseFloat(weeklyDraft)  || 0);
   const durationVal = durationDraft === "" ? null : Math.max(0, parseInt(durationDraft, 10) || 0);
   const unemploymentFieldsValid = !hasUnemployment || ((weeklyVal ?? 0) > 0 && (durationVal ?? 0) > 0);
-  const step0Valid = !!date && unemploymentAnswered !== null && unemploymentFieldsValid;
+  const step0Valid = !!date && cashOnHandValid && unemploymentAnswered !== null && unemploymentFieldsValid;
 
   const hasExpenses = expenses.length > 0;
   const keptExpenses = expenses.filter(e => trackedIds.has(e.id));
@@ -100,6 +110,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
   const buildConfigPatch = () => ({
     jobLossMode: true,
     jobLossDate: date,
+    jobLossCashOnHand: cashOnHandVal ?? 0,
     unemploymentEnabled: hasUnemployment,
     unemploymentWeekly: hasUnemployment ? weeklyVal : null,
     unemploymentDurationWeeks: hasUnemployment ? durationVal : null,
@@ -129,7 +140,8 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
 
   const goNext = () => {
     if (step === 0) {
-      if (!step0Valid) return;
+      if (!step0Valid) { setAttempted(true); return; }
+      setAttempted(false);
       if (!hasExpenses) { confirm(); return; }
       setStep(1);
       return;
@@ -146,6 +158,13 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
     : step === 1 ? (keptPickableExpenses.length > 0 ? "Next" : "Activate")
     : "Activate";
   const nextDisabled = step === 0 ? !step0Valid : step === 2 ? !step2Valid : false;
+  // A native `disabled` button never dispatches onClick at all, so a click on
+  // it can't reach goNext()'s `setAttempted(true)` branch — the red-border/
+  // required feedback (TODO §15.H13) would never actually show. Step 0's
+  // button stays visually greyed via nextDisabled above but must stay truly
+  // clickable so a tap while cash-on-hand is empty surfaces the error instead
+  // of just doing nothing. Steps 1/2 keep the prior native-disabled behavior.
+  const nextNativeDisabled = step === 0 ? false : nextDisabled;
 
   const labelStyle = { fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-text-secondary)", display: "block", marginBottom: "6px" };
   const inputStyle = {
@@ -211,6 +230,36 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
                   onChange={(e) => setDate(e.target.value)}
                   style={inputStyle}
                 />
+              </div>
+
+              {/* ── Cash on hand (mandatory — seeds the runway calc) ── */}
+              <div>
+                <label style={{
+                  ...labelStyle,
+                  ...(attempted && !cashOnHandValid ? { color: "var(--color-deduction)" } : {}),
+                }}>
+                  Cash on hand right now
+                </label>
+                <input
+                  type="number" min="0" step="1" inputMode="decimal"
+                  value={cashOnHandDraft}
+                  onChange={(e) => setCashOnHandDraft(e.target.value)}
+                  placeholder="e.g. 1,023"
+                  style={{
+                    ...inputStyle,
+                    transition: "border-color 0.15s",
+                    ...(attempted && !cashOnHandValid ? { border: "1px solid var(--color-deduction)" } : {}),
+                  }}
+                />
+                {attempted && !cashOnHandValid && (
+                  <div style={{ fontSize: "10px", color: "var(--color-deduction)", marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>
+                    ↑ Required — 0 is a fine answer, just not empty
+                  </div>
+                )}
+                <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
+                  Savings, checking — whatever you could draw on today. Seeds your runway math and
+                  stays editable from Home or Budget once Job Loss Mode is active.
+                </div>
               </div>
 
               {/* ── Unemployment Y/N gate (§15.C2) ── */}
@@ -438,7 +487,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [] }) {
           </Pressable>
           <Pressable
             onClick={goNext}
-            disabled={nextDisabled}
+            disabled={nextNativeDisabled}
             style={{
               background: nextDisabled ? "var(--color-bg-raised)" : "var(--color-gold)",
               color: nextDisabled ? "var(--color-text-disabled)" : "var(--color-bg-base)",

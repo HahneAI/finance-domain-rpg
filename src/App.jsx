@@ -295,12 +295,11 @@ export default function App() {
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
   const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
   const [rateUpdateOpen, setRateUpdateOpen] = useState(false);
-  // TODO §15 mode rebuild — Job Loss Mode's savings input + benefit scenario
-  // toggle now live on JobLossBudgetPanel, but JobLossHomePanel's runway
-  // headline needs the same values — lifted here (session-only, never
-  // persisted, matching the original "not saved to your account" spec) so
-  // both panels agree without either owning the other's state.
-  const [jobLossSavingsDraft, setJobLossSavingsDraft] = useState("");
+  // TODO §15 mode rebuild — the benefit-scenario toggle (unlike cash on hand,
+  // which is now a real persisted config.jobLossCashOnHand field edited
+  // directly by JobLossHomePanel/JobLossBudgetPanel) stays session-only by
+  // design — lifted here so both panels agree without either owning the
+  // other's state.
   const [jobLossIncludeBenefits, setJobLossIncludeBenefits] = useState(true);
   // Session-only dismissal so the banner re-appears on every page load,
   // matching the §15.C1 spec ("dismissible but re-shows on reload").
@@ -1456,7 +1455,6 @@ export default function App() {
           saveConfigNow={saveConfigNow}
           expenses={expenses}
           effectiveToday={effectiveToday}
-          savingsDraft={jobLossSavingsDraft}
           includeBenefits={jobLossIncludeBenefits}
           readOnly={isExpiredReadOnly}
         />
@@ -1507,12 +1505,12 @@ export default function App() {
       {currentView === "budget" && (config.jobLossMode ? (
         <JobLossBudgetPanel
           config={config}
+          setConfig={setConfig}
+          saveConfigNow={saveConfigNow}
           expenses={expenses}
           setExpenses={setExpenses}
           onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
           effectiveToday={effectiveToday}
-          savingsDraft={jobLossSavingsDraft}
-          setSavingsDraft={setJobLossSavingsDraft}
           includeBenefits={jobLossIncludeBenefits}
           setIncludeBenefits={setJobLossIncludeBenefits}
           readOnly={isExpiredReadOnly}

@@ -88,10 +88,12 @@ describe('JobLossEntry', () => {
     const onActivate = vi.fn()
     const onClose = vi.fn()
     render(<JobLossEntry open onClose={onClose} onActivate={onActivate} />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '2000' } })
     fireEvent.click(screen.getByRole('button', { name: 'No' }))
     fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
     expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({
       jobLossMode: true,
+      jobLossCashOnHand: 2000,
       unemploymentEnabled: false,
       unemploymentWeekly: null,
       unemploymentDurationWeeks: null,
@@ -103,6 +105,7 @@ describe('JobLossEntry', () => {
   it('requires weekly amount and duration when the user answers Yes', () => {
     const onActivate = vi.fn()
     render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '2000' } })
     fireEvent.click(screen.getByRole('button', { name: 'Yes' }))
     fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
     expect(onActivate).not.toHaveBeenCalled()
@@ -112,6 +115,7 @@ describe('JobLossEntry', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
     expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({
       jobLossMode: true,
+      jobLossCashOnHand: 2000,
       unemploymentEnabled: true,
       unemploymentWeekly: 350,
       unemploymentDurationWeeks: 20,
@@ -128,6 +132,41 @@ describe('JobLossEntry', () => {
     expect(onActivate).not.toHaveBeenCalled()
   })
 
+  // TODO §15.H13 — cash on hand is mandatory: blocks Next/Activate while
+  // empty, accepts 0 as a real answer, shows the red-border/required state
+  // only after a failed attempt (not on first render).
+  it('blocks Next until cash on hand is entered, with no red border before the first attempt', () => {
+    const onActivate = vi.fn()
+    render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} />)
+    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    const cashInput = screen.getByPlaceholderText('e.g. 1,023')
+    expect(cashInput.style.border).not.toContain('deduction')
+    expect(screen.queryByText(/Required — 0 is a fine answer/i)).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+    expect(onActivate).not.toHaveBeenCalled()
+    expect(screen.getByText(/Required — 0 is a fine answer/i)).toBeTruthy()
+  })
+
+  it('accepts 0 as a valid cash-on-hand answer', () => {
+    const onActivate = vi.fn()
+    render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} />)
+    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+    expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 0 }))
+  })
+
+  it('clears the cash-on-hand required error once a valid value is entered after a failed attempt', () => {
+    const onActivate = vi.fn()
+    render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} />)
+    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+    expect(screen.getByText(/Required — 0 is a fine answer/i)).toBeTruthy()
+    fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '500' } })
+    expect(screen.queryByText(/Required — 0 is a fine answer/i)).toBeNull()
+  })
+
   const REVIEW_EXPENSES = [
     { id: 'exp_rent', category: 'Needs', label: 'Rent', billingMeta: { amount: 1200, cycle: 'every30days', effectiveFrom: '2026-01-01' } },
     { id: 'exp_gym', category: 'Lifestyle', label: 'Gym', billingMeta: { amount: 40, cycle: 'every30days', effectiveFrom: '2026-01-01' } },
@@ -138,7 +177,8 @@ describe('JobLossEntry', () => {
     const onClose = vi.fn()
     render(<JobLossEntry open onClose={onClose} onActivate={onActivate} expenses={REVIEW_EXPENSES} />)
 
-    // Step 0 — same date/benefits gate as before, now advances to Step 1 instead of activating.
+    // Step 0 — same date/benefits/cash-on-hand gate as before, now advances to Step 1 instead of activating.
+    fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '2000' } })
     fireEvent.click(screen.getByRole('button', { name: 'No' }))
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     expect(onActivate).not.toHaveBeenCalled()
@@ -168,12 +208,14 @@ describe('JobLossEntry', () => {
   it('supports going Back from the expense review step without losing Step 0 answers', () => {
     const onActivate = vi.fn()
     render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} expenses={REVIEW_EXPENSES} />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '2000' } })
     fireEvent.click(screen.getByRole('button', { name: 'No' }))
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     expect(screen.getByText('Which bills do you want to track?')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(screen.getByText('Enter Job Loss Mode')).toBeTruthy()
     expect(screen.getByText('✓ No')).toBeTruthy() // step 0's answer persisted across the Back navigation
+    expect(screen.getByPlaceholderText('e.g. 1,023').value).toBe('2000') // cash-on-hand answer persisted too
   })
 
   const LOAN_EXPENSE = {
@@ -184,6 +226,7 @@ describe('JobLossEntry', () => {
   it('shows a Loan badge in the review checklist and attaches the loan\'s own payment date automatically', () => {
     const onActivate = vi.fn()
     render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} expenses={[...REVIEW_EXPENSES, LOAN_EXPENSE]} />)
+    fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '2000' } })
     fireEvent.click(screen.getByRole('button', { name: 'No' }))
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     expect(screen.getByText('Car Note')).toBeTruthy()
@@ -273,7 +316,6 @@ describe('JobLossHomePanel', () => {
         setConfig={() => {}}
         expenses={INITIAL_EXPENSES}
         effectiveToday="2026-06-15"
-        savingsDraft=""
         includeBenefits
       />
     )
@@ -283,14 +325,14 @@ describe('JobLossHomePanel', () => {
 
   it('renders with empty expenses and no unemployment', () => {
     const cfg = { ...JOB_LOSS_CONFIG, unemploymentEnabled: false, unemploymentWeekly: null }
-    render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
+    render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
     expect(screen.getByText('Runway')).toBeTruthy()
   })
 
   it('logs extra income and reflects it in the "Extra Income Logged" tile', () => {
     const configs = []
     const setConfig = vi.fn(updater => configs.push(typeof updater === 'function' ? updater(JOB_LOSS_CONFIG) : updater))
-    render(<JobLossHomePanel config={JOB_LOSS_CONFIG} setConfig={setConfig} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
+    render(<JobLossHomePanel config={JOB_LOSS_CONFIG} setConfig={setConfig} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits />)
     fireEvent.change(screen.getByPlaceholderText('e.g. 150'), { target: { value: '200' } })
     fireEvent.change(screen.getByPlaceholderText('e.g. Weekend gig'), { target: { value: 'Yard work' } })
     fireEvent.click(screen.getByText('+ Log Income'))
@@ -301,7 +343,7 @@ describe('JobLossHomePanel', () => {
   })
 
   it('disables Log Income until a positive amount is entered', () => {
-    render(<JobLossHomePanel config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
+    render(<JobLossHomePanel config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits />)
     expect(screen.getByText('+ Log Income').closest('button')).toBeDisabled()
   })
 
@@ -309,7 +351,7 @@ describe('JobLossHomePanel', () => {
     const cfg = { ...JOB_LOSS_CONFIG, jobHuntIncomeLog: [{ id: 'jhi_1', amount: 100, note: 'Gig', loggedAt: '2026-06-10T00:00:00.000Z' }] }
     const setConfig = vi.fn()
     const saveConfigNow = vi.fn()
-    render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
+    render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits />)
     fireEvent.click(screen.getByLabelText('Remove entry'))
     expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ jobHuntIncomeLog: [] }))
     expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ jobHuntIncomeLog: [] }))
@@ -319,16 +361,55 @@ describe('JobLossHomePanel', () => {
     const cfg = { ...JOB_LOSS_CONFIG, jobHuntIncomeLog: [{ id: 'jhi_1', amount: 100, note: 'Gig', loggedAt: '2026-06-10T00:00:00.000Z' }] }
     const setConfig = vi.fn()
     const saveConfigNow = vi.fn()
-    render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits readOnly />)
+    render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits readOnly />)
     fireEvent.click(screen.getByLabelText('Remove entry'))
     expect(setConfig).not.toHaveBeenCalled()
     expect(saveConfigNow).not.toHaveBeenCalled()
   })
 
   it('embeds the Re-employment Tracker', () => {
-    render(<JobLossHomePanel config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" savingsDraft="" includeBenefits />)
+    render(<JobLossHomePanel config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits />)
     expect(screen.getByText('Re-employment')).toBeTruthy()
     expect(screen.getByText('Target annual')).toBeTruthy()
+  })
+
+  // TODO §15.H13 — cash on hand is now a persisted config field, editable
+  // from Home (this describe block) AND Budget, not a session-only draft.
+  describe('Cash On Hand (persisted, TODO §15.H13)', () => {
+    it('pre-fills the input from config.jobLossCashOnHand', () => {
+      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }
+      render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits />)
+      expect(screen.getByPlaceholderText('e.g. 1,023').value).toBe('1500')
+    })
+
+    it('eager-saves the new value on blur, not on every keystroke', () => {
+      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }
+      const setConfig = vi.fn()
+      const saveConfigNow = vi.fn()
+      render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits />)
+      const cashInput = screen.getByPlaceholderText('e.g. 1,023')
+      fireEvent.change(cashInput, { target: { value: '3000' } })
+      expect(setConfig).not.toHaveBeenCalled() // typing alone doesn't save
+      fireEvent.blur(cashInput)
+      expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000 }))
+      expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000 }))
+    })
+
+    it('does not save on blur when the value is unchanged', () => {
+      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }
+      const setConfig = vi.fn()
+      const saveConfigNow = vi.fn()
+      render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits />)
+      fireEvent.blur(screen.getByPlaceholderText('e.g. 1,023'))
+      expect(setConfig).not.toHaveBeenCalled()
+      expect(saveConfigNow).not.toHaveBeenCalled()
+    })
+
+    it('is disabled when readOnly', () => {
+      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }
+      render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits readOnly />)
+      expect(screen.getByPlaceholderText('e.g. 1,023')).toBeDisabled()
+    })
   })
 })
 
@@ -341,8 +422,6 @@ describe('JobLossBudgetPanel', () => {
         expenses={INITIAL_EXPENSES}
         setExpenses={() => {}}
         effectiveToday="2026-06-15"
-        savingsDraft=""
-        setSavingsDraft={() => {}}
         includeBenefits
         setIncludeBenefits={() => {}}
         {...overrides}
@@ -424,6 +503,39 @@ describe('JobLossBudgetPanel', () => {
     expect(screen.queryByText('+ Add Expense')).toBeNull()
     expect(screen.queryByLabelText('Remove expense')).toBeNull()
     expect(screen.queryByText('Paused')).toBeNull()
+  })
+
+  // TODO §15.H13 — same persisted field as JobLossHomePanel's Cash On Hand
+  // input, editable from both places, neither one "owning" it.
+  describe('Cash on hand / current savings (persisted, TODO §15.H13)', () => {
+    it('pre-fills the input from config.jobLossCashOnHand', () => {
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 } })
+      expect(screen.getByPlaceholderText('e.g. 1,023').value).toBe('1500')
+    })
+
+    it('eager-saves the new value on blur, not on every keystroke', () => {
+      const setConfig = vi.fn()
+      const saveConfigNow = vi.fn()
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }, setConfig, saveConfigNow })
+      const cashInput = screen.getByPlaceholderText('e.g. 1,023')
+      fireEvent.change(cashInput, { target: { value: '3000' } })
+      expect(setConfig).not.toHaveBeenCalled()
+      fireEvent.blur(cashInput)
+      expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000 }))
+      expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000 }))
+    })
+
+    it('shadows setConfig/saveConfigNow and disables the input when readOnly', () => {
+      const setConfig = vi.fn()
+      const saveConfigNow = vi.fn()
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }, setConfig, saveConfigNow, readOnly: true })
+      const cashInput = screen.getByPlaceholderText('e.g. 1,023')
+      expect(cashInput).toBeDisabled()
+      fireEvent.change(cashInput, { target: { value: '3000' } })
+      fireEvent.blur(cashInput)
+      expect(setConfig).not.toHaveBeenCalled()
+      expect(saveConfigNow).not.toHaveBeenCalled()
+    })
   })
 })
 

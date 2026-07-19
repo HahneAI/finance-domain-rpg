@@ -16,10 +16,13 @@ const isFlexibleCategory = (cat) => cat === "Lifestyle";
 /**
  * JobLossBudgetPanel — Job Loss Mode's own Budget view (TODO §15 mode rebuild).
  *
- * Replaces BudgetPanel entirely while `config.jobLossMode` is true. Owns the
- * savings input + benefit scenario toggle that feed the shared runway calc
- * (lib/jobLossRunway.js) — Home reads the same values read-only so both
- * panels never disagree. Also owns expense add/remove/triage, all inline in
+ * Replaces BudgetPanel entirely while `config.jobLossMode` is true. The cash
+ * on hand input (persisted `config.jobLossCashOnHand`, TODO §15.H13) is
+ * editable here AND on JobLossHomePanel — both commit to the same config
+ * field via eager save, so there's no single "owner" to drift from; the
+ * benefit-scenario toggle (session-only, unrelated) still lives here only,
+ * with Home reading it read-only. Both feed the shared runway calc
+ * (lib/jobLossRunway.js). Also owns expense add/remove/triage, all inline in
  * one view rather than a separate modal (the old ExpenseTriage.jsx) plus a
  * jump back to the normal, quarter-scoped BudgetPanel.
  *
@@ -30,8 +33,9 @@ const isFlexibleCategory = (cat) => cat === "Lifestyle";
  * for this mode, not a lesser version of the normal flow.
  */
 export function JobLossBudgetPanel({
-  config, expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp,
-  effectiveToday, savingsDraft, setSavingsDraft, includeBenefits, setIncludeBenefits,
+  config, setConfig: setConfigProp, saveConfigNow: saveConfigNowProp,
+  expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp,
+  effectiveToday, includeBenefits, setIncludeBenefits,
   readOnly = false,
 }) {
   // Paywall-expired read-only mode, same shadow pattern as HomePanel/BudgetPanel
@@ -39,6 +43,8 @@ export function JobLossBudgetPanel({
   const noop = useCallback(() => {}, []);
   const setExpenses = readOnly ? noop : setExpensesProp;
   const onSaveExpensesNow = readOnly ? noop : onSaveExpensesNowProp;
+  const setConfig = readOnly ? noop : setConfigProp;
+  const saveConfigNow = readOnly ? noop : saveConfigNowProp;
   // Eager-save wrapper (docs/TODO.md "Persistence — Eager Save Pattern"), same
   // shape as BudgetPanel.jsx's applyExpenseUpdate — every mutation below
   // (triage status, auto-reactivate, pause-all, add/remove expense) computes
@@ -54,8 +60,33 @@ export function JobLossBudgetPanel({
   const [newExpDueDate, setNewExpDueDate] = useState(null);
   const [addAttempted, setAddAttempted] = useState(false);
 
-  const manualSavings = savingsDraft === "" ? 0 : Math.max(0, parseFloat(savingsDraft) || 0);
+  // Numeric Input Standard (CLAUDE.md): string draft state, only parseFloat
+  // at commit. Re-synced from the persisted value via React's documented
+  // "adjust state during render" pattern (react.dev — not a useEffect, which
+  // would fire an extra render and trip react-hooks/set-state-in-effect) —
+  // only when it actually changes elsewhere (e.g. edited on Home), never
+  // clobbering in-progress typing here.
+  const [lastSyncedCash, setLastSyncedCash] = useState(config.jobLossCashOnHand);
+  const [cashDraft, setCashDraft] = useState(() => (
+    config.jobLossCashOnHand != null ? String(config.jobLossCashOnHand) : ""
+  ));
+  if (config.jobLossCashOnHand !== lastSyncedCash) {
+    setLastSyncedCash(config.jobLossCashOnHand);
+    setCashDraft(config.jobLossCashOnHand != null ? String(config.jobLossCashOnHand) : "");
+  }
+
+  const manualSavings = cashDraft === "" ? 0 : Math.max(0, parseFloat(cashDraft) || 0);
   const huntIncome = sumJobHuntIncome(config);
+
+  // Eager-save on blur, not on every keystroke — same discrete-commit pattern
+  // as JobLossHomePanel's identical input on the same persisted field.
+  const commitCashOnHand = () => {
+    const parsed = cashDraft === "" ? 0 : Math.max(0, parseFloat(cashDraft) || 0);
+    if (parsed === (config.jobLossCashOnHand ?? 0)) return;
+    const next = { ...config, jobLossCashOnHand: parsed };
+    setConfig(next);
+    saveConfigNow?.(next);
+  };
 
   const dash = useMemo(() => computeJobLossRunway({
     config, expenses, effectiveToday, savings: manualSavings + huntIncome,
@@ -166,13 +197,15 @@ export function JobLossBudgetPanel({
         <label style={lS}>Current savings / cash on hand</label>
         <input
           type="number" min="0" step="50" inputMode="decimal"
-          value={savingsDraft}
-          onChange={(e) => setSavingsDraft(e.target.value)}
-          placeholder="e.g. 4000"
+          value={cashDraft}
+          onChange={(e) => setCashDraft(e.target.value)}
+          onBlur={commitCashOnHand}
+          disabled={readOnly}
+          placeholder="e.g. 1,023"
           style={{ ...iS, marginTop: "6px" }}
         />
         <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5, marginBottom: "14px" }}>
-          One-time entry for the runway calc only — not saved to your account. Extra income logged
+          Saved to your account — also editable from Home. Extra income logged
           on Home (${Math.round(huntIncome).toLocaleString()} so far) is added automatically.
         </div>
 

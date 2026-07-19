@@ -336,11 +336,15 @@ bottom, 340ms enter w/ gentle overshoot, 180ms exit).
 ## External / full-screen surfaces (own treatment, outside the fold system)
 These are mode takeovers with their own internal navigation — not modal/dropdown/page-move.
 Order: the two large ones first, then the two smaller.
-1. **SetupWizard** — ✅ *step slides done.* `StepSlide` (direction-aware horizontal push/pop,
-   `step-in/out-*` keyframes) driven by `stepDir` (Next/Skip = forward, Back = back); wizard
-   card gets a `foldLiftIn` takeover entrance. ⬜ still to do: takeover **exit** (App unmounts
-   it instantly — needs `useFoldTransition` at the App mount site), and the failed-Next
-   **validation shake** on `attempted`.
+1. **SetupWizard** — ✅ *step slides done + consistent across all paths (normal + job-loss).* 
+   `StepSlide` (direction-aware horizontal push/pop, `step-in/out-*` keyframes) driven by 
+   `stepDir` (Next/Skip = forward, Back = back); wizard card gets a `foldLiftIn` takeover 
+   entrance. **GRANDER FIRST-MOUNT ENTRANCE** — current entrance uses `foldLiftIn` (300ms, 
+   gentle overshoot); consider a more standout first-run entrance (e.g., stagger the header 
+   + step counter + intro text separately, or scale-up from center with a softer ease) to 
+   emphasize onboarding importance. Test feel after other surfaces ship. ⬜ still to do: 
+   takeover **exit** (App unmounts it instantly — needs `useFoldTransition` at the App mount 
+   site), and the failed-Next **validation shake** on `attempted`.
 2. **LoginScreen** — ⬜ mode crossfades (sign-in ↔ create ↔ investor-code ↔ recovery), then
    the login→dashboard handoff (crosses the auth unmount boundary — hardest, do last).
 3. **PwaInstallModal** — ⬜ native `<dialog>`; needs a `<dialog>`-level open/close animation.

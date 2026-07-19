@@ -225,7 +225,7 @@ for that section):
 
 - [x] **T1 — Setup Wizard** — §7 below (surgical pass 2026-07-19)
 - [x] **T2 — Home Panel** — §8 below (surgical pass 2026-07-19)
-- [ ] **T3 — Income Panel**
+- [x] **T3 — Income Panel** — §9 below (surgical pass 2026-07-19)
 - [ ] **T4 — Budget Panel**
 - [ ] **T5 — Benefits Panel**
 - [ ] **T6 — Log Panel**
@@ -681,3 +681,197 @@ app's documented standing D1 violation (independent runway math that ignores per
    `runwayDays`, so `aiContext.js:200` renders bare "Job Loss Mode: active" (documented
    §10 known gap). When wiring it, use `computeJobLossRunway`, not the F24 quarantine —
    and then both Coach entry points must quote the same runway.
+
+---
+
+## 9. T3 — Income Panel Drift Map
+
+**Pass date:** 2026-07-19. Same anchor + method rules as §7; numbering continues (F25+).
+**Git-history note:** the newest structural intentions here are the biweekly two-week
+check-in (`7f0e36d`, 2026-06-26), job-start-date alignment (`9110e5f`, 2026-06-28), and
+the eager-save audit trio (`debc0cb`, `764da5b`, 2026-07-18) — the check-in confirm
+handler's own comment records the production data-loss incident that motivated it.
+
+**Scope:** `IncomePanel.jsx` (557 lines), `WeekConfirmModal.jsx` (1,488 lines), and the
+`App.jsx` engine strip that feeds them: pay-period gating, confirmation eligibility, the
+`taxDerived` withholding-gap engine, `projectedAnnualNet`, `weekNetLookup`, and the
+check-in `onConfirm` consumer. The Week Inspector (Spine F) opens from this panel's rows.
+
+### 9.1 Block 1 — Critical inventory (function by function)
+
+**F25 · `isPayPeriodPast(week)`** — `App.jsx:951–966` — **[G]**
+The one gate deciding "this pay period has closed" for the confirm modal and badge.
+Base users: strictly after `payPeriodEndDate`'s midnight. DHL: Monday 6:01 AM (overnight
+shift runs to Mon 6:00), with the hour gate bypassed under admin Lock Date so simulation
+works at any wall-clock hour.
+> **IF** this gate's date/hour logic changes, **THEN** every consumer shifts together:
+> the auto-confirm seed (F26), eligibility chain (F27), badge count, and modal trigger.
+> A week that flips eligible too early prompts users for an unfinished period; too late
+> and the badge under-counts. Check: `WeekConfirmModal.test.jsx`; DHL account Monday
+> before/after 6 AM; base account at midnight boundary.
+
+**F26 · Auto-confirm seed effect** — `App.jsx:979–1004` — **[L]**
+One-shot bulk write: when `weekConfirmations` is empty on load, every closed active week
+*before* `accountCreatedIdx` is stamped `autoConfirmed: true` (full attendance assumed —
+consistent with projections). Guarded by "runs once": any existing confirmation aborts it.
+> **IF** the seed's floor (`accountCreatedIdx`, stamped by §7 F5) or its emptiness guard
+> changes, **THEN** two failure shapes open up: (a) seeding *past* the floor marks weeks
+> the user should have confirmed; (b) any code path that ever writes `weekConfirmations`
+> to `{}` re-arms this effect and bulk-stamps everything — the Phase-2 "reset all
+> confirmations" owner tool must account for this before it's built
+> (`docs/admin-toolkit-todo.md`). Check: fresh account created mid-year shows zero
+> unconfirmed badge for pre-creation weeks and prompts only from creation week onward.
+
+**F27 · Confirmation eligibility chain** — `eligiblePastPayWeeks` `App.jsx:1022–1027` →
+`confirmTriggerWeek` `:1031–1034` → `unconfirmedCount` `:1038–1041` — **[G]**
+Eligible = `active && isPayWeek && isPayPeriodPast && idx >= accountCreatedIdx`.
+`isPayWeek` comes from `buildYear` (every active week for weekly; every-other via
+`biweeklyPayWeekParity` for biweekly/salary; last-of-month for monthly). The modal
+surfaces the most recent unconfirmed; the badge counts all of them.
+> **IF** `buildYear`'s `isPayWeek` assignment or `biweeklyPayWeekParity` semantics change
+> (Spine A / §7 Step 2), **THEN** the modal starts prompting on non-paycheck weeks — and
+> the paired-week auto-confirm in F31 writes records for the wrong siblings. Check: a
+> biweekly account gets exactly one prompt per two-week period, on the paycheck week.
+
+**F28 · `taxDerived` withholding-gap engine** — `App.jsx:1122–1170` — **[L]**
+The panel's tax spine: recomputes full-year fed/state liability from
+event-adjusted taxable gross (`adjustedTaxableGrossByWeek`, fed via `fedTax`, state via
+`getStateConfig`/`stateTax` with `moFlatRate` legacy fallback), subtracts scheduled
+withholding (`remediationTaxedForWeek`: past weeks honor `pastWeekTaxStatusOverrides`,
+future weeks always follow `taxedBySchedule`), and spreads the remaining gap —
+minus `targetOwedAtFiling` — across remaining taxed checks as `extraPerCheck`.
+`extraPerCheck` then feeds `computeNet` everywhere (F29, §8 F14/F15).
+> **IF** any input list changes — `taxedWeeks` derivation (§7 F5), override semantics
+> (past-only!), `fedStdDeduction`, state table, `targetOwedAtFiling` — **THEN** the gap
+> and every net in the app move together; verify via Live State Inspector
+> (`extraPerCheck`, `totalGap`, `taxedWeekCount`) against the Tax Weeks Grid's cell
+> states, and the Year Summary card.
+> **⚠ Known stale-dep finding (this pass):** the memo *uses* `effectiveToday` (`:1127`,
+> past/future split) but its dep array (`:1170`) lists only `today` — and `:1148` uses
+> real `today` for `remainingTaxedChecks`. Under admin Lock Date, the override
+> remediation split does not recompute when the lock changes (until another dep moves),
+> and the two lines disagree about what "now" is. See Block 4, finding 1.
+
+**F29 · Net derivation tiers** — `projectedAnnualNet` `App.jsx:1173–1175`,
+`weekNetLookup` `:1217–1233`, `futureWeekNetsRaw`/`futureWeekNets` `:1235–1242` — **[L]**
+Three deliberate tiers off one `computeNet` core: `projectedAnnualNet` (all active weeks,
+no buffer), `futureWeekNetsRaw` (spendable = net − buffer; feeds goal *timeline* display),
+`futureWeekNets` (adjusted-spendable including per-week event adjustments; feeds goal
+*funding* simulation). `weekNetLookup` is the per-week record (baseNet / adjustment /
+spendable) the admin Week Inspector's "Net Lookup" section displays verbatim.
+> **IF** the raw-vs-adjusted split collapses (someone "simplifies" to one array), **THEN**
+> goal ETAs double-count or ignore logged events depending on direction — the two arrays
+> exist because those consumers need different answers. Check: log a missed shift; the
+> goal timeline bar (raw) stays put while goal funding ETA (adjusted) moves.
+
+**F30 · `finalizeWeek` two-week router** — `WeekConfirmModal.jsx:347–361`,
+`handleSameDaysYes` `:379–394`, gate `isBiweeklyTwoWeek` `:98` — **[G→L]**
+Every confirm path routes through this interceptor. Non-biweekly: pass-through. Biweekly
+with an active prior week: sub-week 1 stashes its result and raises the "same days?"
+prompt; "Yes" *mirrors* the selection onto the paycheck week (fresh log id, fresh
+`confirmedAt`, remapped `weekEnd`/`weekIdx`/`weekRotation`); "No" re-collects week 2.
+Either way `onConfirm` fires **once** with the first week bundled under
+`confirmation.firstWeek`.
+> **IF** the mirror copies a new field it shouldn't (or misses one it should remap),
+> **THEN** week 2's log entry silently carries week 1's identity — check every field
+> `handleSameDaysYes` remaps stays in sync with the log-entry shape (`LogPanel`'s event
+> schema, T6). **IF** `isBiweeklyTwoWeek`'s definition changes, **THEN** salary must stay
+> *excluded* (salary uses F31's paired auto-confirm fallback instead — two different
+> mechanisms for the same "two weeks, one check" fact).
+
+**F31 · Check-in `onConfirm` consumer** — `App.jsx:3287–3342` — **[L]**
+The persistence half: strips `firstWeek` out of the stored paycheck record (no duplicate
+log blob), stores the explicit first-week record when present, else auto-confirms the
+paired prior week clean (biweekly first period + salary), fills the rest of the month for
+monthly, appends up to two log entries, then **one** `savePersistedStateNow` carrying
+both `weekConfirmations` and `logs`. The value is computed synchronously — the comment
+records the production incident (lost check-ins on backgrounded tabs) this prevents.
+> **IF** a new pay schedule (or a change to pairing/month-fill rules) is added, **THEN**
+> its auto-confirm branch must write the same record shape as F26 (`autoConfirmed: true`,
+> `eventId: null`, day toggles from `workedDayNames`) and stay inside this single
+> eager-save — a second save call or a functional-updater rewrite reopens D3. Check:
+> confirm a check-in, kill the tab immediately, reload: record + log both present.
+
+**F32 · Reopen Last Check-In (admin)** — `reopenableWeekIdx` `App.jsx:1046–1049`,
+`handleReopenLastCheckIn` `:1055–1068` — **[G]**
+Deletes the most recent confirmed record (and its spawned log entry) so the modal
+reopens; projections are independent of confirmations so the model is untouched.
+> **IF** confirmation records ever gain model-affecting weight (they currently don't),
+> **THEN** this tool's "safe to drop" premise breaks — re-read its CLAUDE.md description
+> before extending. **⚠ Soft-D3 finding (this pass):** both deletes are bare
+> `setState` calls with no eager save — see Block 4, finding 2.
+
+**F33 · IncomePanel display layer** — `gN` wrapper `IncomePanel.jsx:65`, rolling view
+`:100–103`, Year Summary `:93`/`:263`, TX/EX chips `:411–412` etc. — **[L]**
+Pure consumer: `gN(w) = computeNet(w, config, extraPerCheck, showExtra)` for every row;
+`deriveRollingIncomeWeeks(allWeeks, today, 4)` splits visible vs. `hiddenWeeks` archive
+(never deletes); `progressiveScale` densifies rows toward EOY; the Year Summary card
+displays `adjustedTakeHome` — the *same single value* HomePanel and LogPanel read
+(`logTotals.adjustedTakeHome`, §8 F17) — by design, no local recomputation. TX/EX chips
+read `w.taxedBySchedule` (schedule truth), not the F28 remediation view.
+> **IF** any row/summary number here stops flowing through `gN`/`adjustedTakeHome` and
+> grows a local formula, **THEN** that's D1 by definition — this panel deliberately owns
+> zero math. Check: Year Summary equals Home's year figure to the cent; a week row's net
+> equals Week Inspector's `computeNet` for that week.
+
+**F34 · Sharpen Rates modal** — `applySharpener` `IncomePanel.jsx:41–57` — **[L]**
+The post-wizard rate refinement: derives effective fed/state rates from a real paystub,
+writes `fedRateLow/High` + `stateRateLow/High` **and** the legacy `w1/w2` mirrors in the
+same patch, clears `taxRatesEstimated`, compute-then-eager-saves (compliant).
+> **IF** a rate field is renamed or the legacy mirror dropped, **THEN** F28's fallback
+> chain (`fedRateLow ?? w1FedRate`, `:1141–1144`) must change in the same commit — and
+> the three-way sensitive-field rule (§7 F7: `DIFF_FIELDS` + `HISTORY_SENSITIVE_FIELDS`)
+> applies to every rate field this writes. Check: after Sharpen, DB Row Viewer's config
+> history shows the rate change captured; Wrap Up preview (§7 F6) uses the new rates.
+
+### 9.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `buildYear` week fields consumed here (`isPayWeek`, `payPeriodEndDate`, `taxedBySchedule`, `workedDayNames`, `isHighWeek`, `taxableGross`) | F25–F31 all key off them; Week Inspector field display | `finance.test.js` week-shape cases; one biweekly + one DHL manual pass through a check-in | D1/D2 |
+| `computeNet` signature/ordering (Spine A) | `gN` (F33), F29's three tiers, `resolvePrevWeekNet` (§8 F15), Wrap Up preview pair (§7 F6) | Week Inspector Pay vs. Net Lookup sections agree; row net = inspector net | D1 |
+| `pastWeekTaxStatusOverrides` write path (Tax Plan toggles, `debc0cb`) | F28's past-only remediation; Tax Weeks Grid red dots; eager save on each toggle | Toggle a past week; `extraPerCheck` shifts; kill-tab test survives | D3 |
+| `taxedWeeks`/`taxExemptOptIn` (§7 F5) | F28 gap math; TX/EX chips (F33); `remainingTaxedChecks` divisor — zero taxed checks must yield `extraPerCheck: 0`, not `NaN` | Tax-exempt account: gap card shows liability with $0/check spread, no NaN | D1 |
+| `accountCreatedIdx` stamping (§7 F5) | F26 seed floor, F27 eligibility floor | Mid-year fresh account: no pre-creation prompts | D2 |
+| Log-entry schema (T6) | F30's mirror remap fields, F31's append, `record.eventId` linkage used by F32's delete | Reopen tool removes exactly the check-in's own entry, nothing else | D1 |
+| `deriveRollingIncomeWeeks` / `progressiveScale` (Spine A) | F33 visible/archive split; HomePanel's month timeline (same module, §8) | `rollingTimeline` unchanged-since-2026-04 note in active-systems §2 — update it if touched | D5 |
+| UpgradePanel replacement gating (§21, T9) | This panel has **no** internal `readOnly` shadow — it relies on being fully replaced when expired | If expired-mode ever renders IncomePanel, every mutation (F34, tax toggles) is live — the shadow must be added first | D4 |
+
+### 9.3 Block 3 — Gate matrix
+
+| Dimension | Cells | Expected behavior |
+|---|---|---|
+| Pay schedule | weekly / biweekly / salary / monthly | Prompt cadence: every week / paycheck weeks only (parity) / paycheck weeks with silent paired auto-confirm / one prompt + month-fill. Two-week collection UI: biweekly only (F30); salary explicitly excluded |
+| Employer | DHL / base | DHL: Mon 6:01 AM trigger, rotation labels on rows; base: midnight-after-`payPeriodEndDay` |
+| `isAdmin` | false / true | true: Week Inspector on row tap (`onWeekInspect`, `App.jsx:1533`), Reopen tool, Lock Date hour-gate bypass (F25); false: rows inert, no reopen |
+| Entitlement | entitled / expired | Expired: entire panel replaced by `UpgradePanel` (T9) — no partial render, no internal readOnly gate exists |
+| `jobLossMode` | false / true | true: Income tab removed from nav and force-redirected (`App.jsx:337`) — panel unreachable |
+| Lock Date | unset / set | Set: `effectiveToday` drives F25–F27 and displays; F28's stale-dep finding means tax remediation may lag the lock (Block 4.1) |
+
+### 9.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *Lost check-ins on backgrounded tabs* — the original D3 incident; F31's comment block
+  is the in-code memorial. Kill-tab-and-reload is the canonical regression test.
+- *Income projections misaligned to job start* (`9110e5f`, 2026-06-28) — projections once
+  ignored `firstActiveIdx`; alignment now flows from §7 F1/F5. Any new "annual" figure
+  must scope to active weeks (same family as §8's H11 dilution).
+- *Biweekly two-week collection* (`7f0e36d`) — one check, two weeks, one `onConfirm`;
+  the salary-vs-biweekly mechanism split in F30/F31 is deliberate, not an inconsistency.
+- *Tax-toggle eager saves* (`debc0cb`) — per-week taxed/exempt toggles were on the
+  debounce; now every toggle saves immediately.
+
+**Standing findings from this pass (open — decisions owed):**
+1. **Stale memo dep in `taxDerived` (F28):** uses `effectiveToday` at `App.jsx:1127` but
+   deps at `:1170` list only `today`; `:1148` independently uses real `today`. Under
+   admin Lock Date the remediation split lags until an unrelated dep changes, and
+   "remaining taxed checks" ignores the lock entirely — the Lock Date tool's core promise
+   (simulate a date and read these exact numbers) is weakened. Admin-only blast radius.
+   Fix candidates: add `effectiveToday` to deps and decide whether `:1148` should honor
+   it; needs owner intent on Lock Date's scope over tax math.
+2. **Reopen Last Check-In lacks eager save (F32):** deletion of the confirmation record +
+   its log entry rides the 800ms debounce (bare functional `setState`s, `App.jsx:1059–1065`),
+   contrary to the CLAUDE.md rule that Delete-shaped actions eager-save. Worst case is
+   mild (admin-only; a lost delete resurrects a valid confirmation), but it's the only
+   confirmed rule exception on this surface. Cheap fix: compute both next values
+   synchronously and pass through one `savePersistedStateNow`.

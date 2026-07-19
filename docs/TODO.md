@@ -2158,6 +2158,17 @@ nearly every real account.*
   §15.H12 below for the full write-up. Short version: none of H11's fix accounts for mid-year gaps
   *within* an otherwise-active year (Job Loss Mode weeks sitting inside the active range) — only
   for an account that started the year late.
+- **Verification:** 9 new tests — 4 in `finance.test.js` (`resolvePrevWeekNet`: current-week
+  fallback vs. the old diluted average, real-past-week case unchanged, indefinite-Job-Loss-Mode
+  fallback to `weeklyIncome`, log-adjustment applied on the new fallback path too), 4 in
+  `fiscalWeek.test.js` (`resolveActiveWeeksThisYear` full-year/partial-year/null/clamp cases), 1 in
+  `aiContext.test.js` (Coach's `annualSavings` now scales by `activeWeeksThisYear` from
+  `config.firstActiveIdx`, not a flat 52 — asserts the old drifted $26,000 does NOT appear). Full
+  suite: 1128 tests passing. Lint diff-clean vs. a true `git stash`-verified baseline (not just the
+  session-start snapshot — re-ran eslint against unstashed HEAD to confirm the diff is only line-
+  number shifts from added code, zero new problems). Production build green. **Not covered:** no
+  live click-through on a deployed preview — same category of gap as everything else in this file;
+  the original report came from a real device, but confirming the *fix* still needs a redeploy.
 
 ---
 
@@ -2215,17 +2226,87 @@ with the user first, then re-verify `annualSavings`/`weeklyIncome` against a syn
 mid-year-gap fixture (`buildYear` + a `jobLossMode`/`jobLossDate`/`returnToWorkDate` window,
 similar to the existing `finance.test.js` `buildYear — point-in-time baseRate` fixtures) before
 touching `App.jsx`/`HomePanel.jsx`/`aiContext.js` again.
-- **Verification:** 9 new tests — 4 in `finance.test.js` (`resolvePrevWeekNet`: current-week
-  fallback vs. the old diluted average, real-past-week case unchanged, indefinite-Job-Loss-Mode
-  fallback to `weeklyIncome`, log-adjustment applied on the new fallback path too), 4 in
-  `fiscalWeek.test.js` (`resolveActiveWeeksThisYear` full-year/partial-year/null/clamp cases), 1 in
-  `aiContext.test.js` (Coach's `annualSavings` now scales by `activeWeeksThisYear` from
-  `config.firstActiveIdx`, not a flat 52 — asserts the old drifted $26,000 does NOT appear). Full
-  suite: 1128 tests passing. Lint diff-clean vs. a true `git stash`-verified baseline (not just the
-  session-start snapshot — re-ran eslint against unstashed HEAD to confirm the diff is only line-
-  number shifts from added code, zero new problems). Production build green. **Not covered:** no
-  live click-through on a deployed preview — same category of gap as everything else in this file;
-  the original report came from a real device, but confirming the *fix* still needs a redeploy.
+
+---
+
+#### H13. Cash on hand — from session-only draft to a persisted, mandatory field — DONE 2026-07-19
+
+*User framing: the runway calc's "accessible cash on hand" figure needed to actually stick —
+persisted and eager-saved, not a draft that evaporates on reload — and needed to be *the* input
+that kicks off Job Loss Mode's runway math, not an easy-to-miss optional field discovered only on
+Budget. Explicitly the first of a two-part ask: get the number to persist and be prominent first;
+richer uses of it (the "more interesting and useful things") are a deliberate follow-up, not
+attempted here.*
+
+- [x] **New persisted config field `jobLossCashOnHand`** (`constants/config.js`) — `null` = never
+  set (pre-existing accounts only; the wizard makes it mandatory going forward), any number
+  including `0` = a real answer. Replaces the old `jobLossSavingsDraft` React state that lived in
+  `App.jsx` and was explicitly documented as "not saved to your account."
+- [x] **Mandatory in `JobLossEntry.jsx`'s Step 0** — new "Cash on hand right now" field between the
+  date and the unemployment Y/N gate. Validation (`cashOnHandValid`) accepts any finite number ≥ 0
+  including 0, rejects empty — folded into `step0Valid` alongside the existing date/unemployment
+  checks. Ghost placeholder is `"e.g. 1,023"` (deliberately specific, not a round number, so it
+  reads as an example rather than a suggested default).
+- [x] **Real red-border feedback, not just a blocked button — required fixing a click-through bug
+  along the way.** The Next/Activate button already visually greys out when a step is invalid
+  (`nextDisabled`), and was *also* passed as the literal `disabled` prop on the underlying
+  `<button>`. A native disabled button never dispatches `onClick` at all — so the existing
+  `attempted`/red-border mechanism (used for the Step 2 due-date picker too) could never actually
+  fire from a click on that button; tapping it while invalid did visibly nothing, no red border, no
+  message, just silence. Confirmed by writing the intended test first and watching it fail for the
+  right reason. Fixed by splitting the single `nextDisabled` variable into two: `nextDisabled`
+  (unchanged, still drives the grey/gold styling) and a new `nextNativeDisabled` that's `false` for
+  Step 0 specifically — the button now stays genuinely clickable there, so a tap while empty
+  reaches `goNext()`'s `setAttempted(true)` branch and the red border/`"↑ Required — 0 is a fine
+  answer, just not empty"` message actually shows. Steps 1–2 keep the prior native-disabled
+  behavior unchanged (same latent gap likely exists there too — e.g. Step 2's due-date picker error
+  state — but that's pre-existing, untouched, and out of scope here; flagged, not fixed).
+- [x] **Editable from both `JobLossHomePanel.jsx` (new) and `JobLossBudgetPanel.jsx` (existing input
+  repointed)** — neither "owns" the field; both hold a local string draft (Numeric Input Standard:
+  never coerce on `onChange`, only `parseFloat` at commit) and commit via `onBlur`, not per
+  keystroke. Draft re-sync from the persisted value (e.g. edited on the other panel, then navigated
+  back) uses React's documented "adjust state during render" pattern — comparing against a
+  `lastSyncedCash` ref-like state and calling `setCashDraft` directly in the render body — instead
+  of a `useEffect`, which would have tripped `react-hooks/set-state-in-effect` (caught by the lint
+  diff check, not guessed at). `JobLossHomePanel`'s placement is directly below the Runway/Weekly
+  Burn/Extra Income metric row, above Log Extra Income — the most prominent surface on the mode's
+  own Home view, per the ask to make this "more present and more important than it currently is."
+- [x] **Eager-saved on blur** (docs/TODO.md "Persistence — Eager Save Pattern") — both panels
+  compute the parsed number synchronously and call `setConfig`/`saveConfigNow` together, skip the
+  write entirely when the blurred value matches what's already persisted (no-op saves avoided).
+  `JobLossBudgetPanel` didn't receive `setConfig`/`saveConfigNow` props before this pass (it only
+  ever touched expenses) — threaded in from `App.jsx` for the first time, with the same `readOnly`
+  no-op shadow `JobLossHomePanel` already had from §15.H10, plus `disabled={readOnly}` on the input
+  itself so a paywall-expired account can't edit even though the write path is already a no-op
+  (defense in depth, matching the existing convention documented in CLAUDE.md's eager-save section).
+- [x] **`App.jsx` simplified** — the lifted `jobLossSavingsDraft`/`setJobLossSavingsDraft` session
+  state is gone entirely; both panels independently derive their own draft from the same
+  `config.jobLossCashOnHand` prop they already receive, with no cross-panel state to keep in sync
+  (they're never mounted simultaneously — Home and Budget are mutually exclusive tab renders).
+  `jobLossIncludeBenefits` (the benefit-scenario toggle) is untouched, still session-only by design.
+- **Not attempted here (explicitly deferred by the user's own framing):** no new runway/display
+  logic built on top of the persisted number beyond what already reads `manualSavings` — the ask
+  was to get it to stick and be prominent *first*. Also unaddressed: Step 1/2's own pre-existing
+  native-disabled click-through gap (see above), and pre-existing accounts that entered Job Loss
+  Mode before this field existed will read `jobLossCashOnHand: null` → `manualSavings` treats that
+  as `0`, same as an explicit zero — quietly correct behavior, not a migration, but worth knowing
+  if a real account's runway looks off after this ships.
+- **Verification:** 15 new/updated tests in `jobLossFlow.test.jsx` — 6 for `JobLossEntry`'s Step 0
+  gate (blocks Next while empty with no red border before the first attempt, shows the red border/
+  required message after a failed attempt, clears it once a valid value is entered, accepts `0`,
+  persists across Back navigation, included in every existing activation test's expected payload)
+  plus 4 existing tests updated to fill the now-mandatory field; 4 for `JobLossHomePanel`'s Cash On
+  Hand input (pre-fills from config, eager-saves on blur only — not on every keystroke — skips the
+  save when unchanged, disabled when `readOnly`); 3 equivalent for `JobLossBudgetPanel`'s existing
+  input repointed to the persisted field. `DEFAULT_CONFIG` snapshot updated for the new field. Full
+  suite: 1138 tests passing. Lint diff-clean vs. a true `git stash` baseline (caught and fixed two
+  real new issues before landing: a `react-hooks/set-state-in-effect` error from the first draft's
+  `useEffect`-based re-sync, and a `react-hooks/preserve-manual-memoization` error the render-time-
+  sync rewrite exposed on `JobLossHomePanel`'s pre-existing `entries` memo — an inconsistent
+  `config?.jobHuntIncomeLog` optional-chain that didn't match the rest of the file's non-optional
+  `config.jobHuntIncomeLog` access; normalized to match). Production build green. **Not covered:**
+  no live click-through on a deployed preview — same category of gap as everything else in this
+  file; the red-border fix in particular deserves an eyeball on a real device given how it was found.
 
 ---
 

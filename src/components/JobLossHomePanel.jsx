@@ -11,17 +11,18 @@ import { ReemploymentTracker } from "./ReemploymentTracker.jsx";
  * this is meant to read as a genuinely different mode the app enters, not the
  * regular dashboard with things moved around.
  *
- * Shows: runway headline (days / cliff date / weekly burn), a small "log
- * extra income" widget for cash made while job hunting (gig work, odd jobs —
- * folded straight into the runway's savings side), and the Re-employment
- * Tracker (target income + application log). The savings input and benefit
- * scenario toggle live on JobLossBudgetPanel instead — passed in here
- * read-only so both panels agree on the same numbers without duplicating the
- * calc (see lib/jobLossRunway.js).
+ * Shows: runway headline (days / cliff date / weekly burn), the accessible
+ * cash on hand input (persisted config.jobLossCashOnHand — mandatory at
+ * JobLossEntry, editable here AND on JobLossBudgetPanel, both committing to
+ * the same field so neither can drift), a small "log extra income" widget for
+ * cash made while job hunting (gig work, odd jobs — folded straight into the
+ * runway's savings side), and the Re-employment Tracker (target income +
+ * application log). The benefit-scenario toggle still lives on
+ * JobLossBudgetPanel only, passed in here read-only (see lib/jobLossRunway.js).
  */
 export function JobLossHomePanel({
   config, setConfig: setConfigProp, saveConfigNow: saveConfigNowProp,
-  expenses, effectiveToday, savingsDraft, includeBenefits, readOnly = false,
+  expenses, effectiveToday, includeBenefits, readOnly = false,
 }) {
   // Paywall-expired read-only mode, same shadow pattern as HomePanel/BudgetPanel
   // (docs/TODO.md §17.E): every setConfig()/saveConfigNow() below becomes a no-op.
@@ -32,16 +33,42 @@ export function JobLossHomePanel({
   const [amountDraft, setAmountDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
 
-  const manualSavings = savingsDraft === "" ? 0 : Math.max(0, parseFloat(savingsDraft) || 0);
+  // Numeric Input Standard (CLAUDE.md): string draft state, only parseFloat
+  // at commit. Re-synced from the persisted value via React's documented
+  // "adjust state during render" pattern (react.dev — not a useEffect, which
+  // would fire an extra render and trip react-hooks/set-state-in-effect) —
+  // only when the underlying number actually changes (e.g. edited on Budget
+  // then navigated back here), never clobbering in-progress typing.
+  const [lastSyncedCash, setLastSyncedCash] = useState(config.jobLossCashOnHand);
+  const [cashDraft, setCashDraft] = useState(() => (
+    config.jobLossCashOnHand != null ? String(config.jobLossCashOnHand) : ""
+  ));
+  if (config.jobLossCashOnHand !== lastSyncedCash) {
+    setLastSyncedCash(config.jobLossCashOnHand);
+    setCashDraft(config.jobLossCashOnHand != null ? String(config.jobLossCashOnHand) : "");
+  }
+
+  const manualSavings = cashDraft === "" ? 0 : Math.max(0, parseFloat(cashDraft) || 0);
   const huntIncome = sumJobHuntIncome(config);
+
+  // Eager-save on blur, not on every keystroke (docs/TODO.md "Persistence —
+  // Eager Save Pattern": plain typing stays on the debounce; this commits the
+  // discrete "done editing" moment instead of leaving it to the 800ms window).
+  const commitCashOnHand = () => {
+    const parsed = cashDraft === "" ? 0 : Math.max(0, parseFloat(cashDraft) || 0);
+    if (parsed === (config.jobLossCashOnHand ?? 0)) return;
+    const next = { ...config, jobLossCashOnHand: parsed };
+    setConfig(next);
+    saveConfigNow?.(next);
+  };
 
   const dash = useMemo(() => computeJobLossRunway({
     config, expenses, effectiveToday, savings: manualSavings + huntIncome,
   }), [config, expenses, effectiveToday, manualSavings, huntIncome]);
 
   const entries = useMemo(() => (
-    [...(config?.jobHuntIncomeLog ?? [])].sort((a, b) => (b.loggedAt ?? "").localeCompare(a.loggedAt ?? ""))
-  ), [config?.jobHuntIncomeLog]);
+    [...(config.jobHuntIncomeLog ?? [])].sort((a, b) => (b.loggedAt ?? "").localeCompare(a.loggedAt ?? ""))
+  ), [config.jobHuntIncomeLog]);
 
   if (!dash) return null;
 
@@ -91,6 +118,29 @@ export function JobLossHomePanel({
         <MetricCard label="Runway" val={`${daysLabel} days`} sub={cliffLabel !== "—" ? `ends ${cliffLabel}` : null} status={cliffStatus} span={2} centered />
         <MetricCard label="Weekly Burn" val={`$${Math.round(dash.weeklyBurn).toLocaleString()}`} sub={`${dash.essentialCount} essential ${dash.essentialCount === 1 ? "expense" : "expenses"}`} status="gold" centered />
         <MetricCard label="Extra Income Logged" val={`$${Math.round(huntIncome).toLocaleString()}`} sub="added to runway" status={huntIncome > 0 ? "green" : "gold"} centered />
+      </div>
+
+      <SectionHeader sub="Drives the Runway number above — also editable on Budget">
+        Cash On Hand
+      </SectionHeader>
+      <div style={{
+        background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)",
+        borderRadius: "14px", padding: "16px", marginBottom: "20px",
+      }}>
+        <label style={lS}>Accessible cash on hand</label>
+        <input
+          type="number" min="0" step="50" inputMode="decimal"
+          value={cashDraft}
+          onChange={(e) => setCashDraft(e.target.value)}
+          onBlur={commitCashOnHand}
+          disabled={readOnly}
+          placeholder="e.g. 1,023"
+          style={{ ...iS, marginTop: "6px" }}
+        />
+        <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
+          Savings, checking — whatever you could draw on today. Extra income logged below
+          (${Math.round(huntIncome).toLocaleString()} so far) is added automatically.
+        </div>
       </div>
 
       <SectionHeader sub="Cash from gig work or odd jobs — goes straight into your runway savings">

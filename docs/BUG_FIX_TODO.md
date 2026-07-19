@@ -1,11 +1,40 @@
 # Bug Fix To-Do
 
+**Repurposed 2026-07-19:** this file is now the standing **bug intake for Drift App
+Warden passes** (`docs/drift-app-warden.md` — see its "Findings offload" section).
+Every open code defect a drift pass surfaces gets one entry here; the warden doc keeps
+the full analysis, this file is the work queue. Entries link back to their warden
+section rather than duplicating the write-up.
+
+> Status legend: ✅ confirmed by code reading · 🔶 suspect, needs live-data confirmation
+
+---
+
+## Open — Drift Warden findings
+
+| # | Finding | Where | Severity / blast radius | Warden entry |
+|---|---------|-------|------------------------|--------------|
+| DW-1 | ✅ **Quick Rate Update doesn't eager-save the live rate.** `onActivate` sets `config.baseRate` via bare `setConfig` — no `savePersistedStateNow` — so the live rate rides the 800ms debounce. The `account_history` row + optimistic `baseRateHistory` append ARE safe, so week math survives a lost write after reload, but live `config.baseRate` (ProfilePanel display, wizard previews) can silently revert. Cheap fix: mirror `JobLossEntry.onActivate`'s compute-then-eager-save shape. | `App.jsx:3404–3407` | Soft-D3 · any user running Quick Rate Update on mobile | `drift-app-warden.md` §7.4 finding 1 (T1 pass) |
+| DW-2 | ✅ **`taxDerived` memo has a stale dep under admin Lock Date.** The memo uses `effectiveToday` (`:1127`, past/future split for tax-status override remediation) but its dep array (`:1170`) lists only `today`; separately `:1148` (`remainingTaxedChecks`) uses real `today` outright. Setting/changing Lock Date doesn't recompute the remediation split until an unrelated dep moves, and "remaining taxed checks" ignores the lock entirely. Fix: add `effectiveToday` to deps + owner decision on whether `:1148` should honor the lock. | `App.jsx:1122–1170` | Admin-only · weakens the Lock Date tool's simulation promise | `drift-app-warden.md` §9.4 finding 1 (T3 pass) |
+| DW-3 | ✅ **Reopen Last Check-In doesn't eager-save its deletes.** Dropping the confirmation record + its spawned log entry uses bare functional `setState`s — the one Delete-shaped action on the Income surface violating the CLAUDE.md eager-save rule. Worst case mild (admin-only; a lost delete resurrects a valid confirmation). Fix: compute both next values synchronously, one `savePersistedStateNow({ weekConfirmations, logs })`. | `App.jsx:1055–1068` | Soft-D3 · admin-only | `drift-app-warden.md` §9.4 finding 2 (T3 pass) |
+
+---
+
+## ARCHIVED — Expense add/edit defects (2026-06-15/16) — shipped
+
+Everything below is the historical June pass on `monthlyOverrides`/`history`
+reconciliation. **Verified 2026-07-19: the fix shipped** — the pure helpers it
+introduced (`onwardStartMonthKey`, `applyQuarterForward`, `applyAllQuarters`) are live
+in `src/lib/expense.js` with their tests, and the display-anchor fix is in
+`BudgetPanel.jsx`. The only item never formally closed was the optional live-data
+verification on Anthony's account (step 5's `lastEditedAt` cleanup also remains
+vestigial, non-blocking). Kept for the decision record (Decisions 1–3 still govern
+expense-save semantics — do not re-litigate without sign-off).
+
 Tracking expense add/edit defects that surface when acting on the **current**
 fiscal timeline (today = 2026-06-15, Q2). Both reports trace back to how the
 budget panel reconciles two storage layers — `monthlyOverrides` and `history` —
 and how the save/add helpers write to them.
-
-> Status legend: ✅ confirmed by code reading · 🔶 suspect, needs live-data confirmation
 
 ---
 

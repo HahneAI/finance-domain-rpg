@@ -34,6 +34,26 @@ the tax code."
 in a section of this doc must state, in the PR description, which drift-map entries it
 consulted and what was checked. "None applicable" is a valid answer; silence is not.
 
+### Findings offload — standard process for every drift pass
+
+A drift investigation pass regularly surfaces live code defects, not just documentation
+gaps. The division of labor is fixed:
+
+- **This doc keeps the analysis.** Each finding is written up in the owning section's
+  Block 4 ("Standing findings"), with an inline ⚠ marker on the affected function's
+  Block 1 entry. The write-up stays here permanently — even after the fix ships — because
+  it is case law for the Warden.
+- **`docs/BUG_FIX_TODO.md` gets the work item.** Every *open* finding is cross-filed
+  there as a one-row `DW-n` entry (severity, blast radius, fix shape, pointer back to
+  the Block 4 write-up) in the same pass that discovered it — never later, never
+  optional. That file is the work queue; this file is the ledger. No analysis is
+  duplicated between them.
+- **On fix:** the `DW-n` row is closed out in `BUG_FIX_TODO.md`; the Block 4 entry here
+  is annotated with the fixing commit and moves from "Standing findings (open)" to the
+  section's fixed-precedents list. The ⚠ inline marker is removed.
+- Doc-drift findings (D5) are the exception: those are **corrected in the same pass**
+  (per the §5 maintenance covenant), not queued.
+
 ---
 
 ## 2. What Drift Is — Case Law
@@ -448,7 +468,8 @@ skipped entirely).
   date is load-bearing — treat any simplification of it as reopening the bug.
 
 **Standing findings from this pass (open — decisions owed):**
-1. **Soft-D3, Quick Rate Update:** `App.jsx:3404–3407` sets `config.baseRate` with *no*
+1. **Soft-D3, Quick Rate Update** *(queued as DW-1 in `docs/BUG_FIX_TODO.md`)*:
+   `App.jsx:3404–3407` sets `config.baseRate` with *no*
    `savePersistedStateNow` — the live rate rides the 800ms debounce. Mitigation already in
    place: the `account_history` row (fire-and-forget insert) + optimistic append mean week
    math survives a lost write after reload; but the *live* `config.baseRate` (ProfilePanel
@@ -862,14 +883,16 @@ same patch, clears `taxRatesEstimated`, compute-then-eager-saves (compliant).
   debounce; now every toggle saves immediately.
 
 **Standing findings from this pass (open — decisions owed):**
-1. **Stale memo dep in `taxDerived` (F28):** uses `effectiveToday` at `App.jsx:1127` but
+1. **Stale memo dep in `taxDerived` (F28)** *(queued as DW-2 in `docs/BUG_FIX_TODO.md`)*:
+   uses `effectiveToday` at `App.jsx:1127` but
    deps at `:1170` list only `today`; `:1148` independently uses real `today`. Under
    admin Lock Date the remediation split lags until an unrelated dep changes, and
    "remaining taxed checks" ignores the lock entirely — the Lock Date tool's core promise
    (simulate a date and read these exact numbers) is weakened. Admin-only blast radius.
    Fix candidates: add `effectiveToday` to deps and decide whether `:1148` should honor
    it; needs owner intent on Lock Date's scope over tax math.
-2. **Reopen Last Check-In lacks eager save (F32):** deletion of the confirmation record +
+2. **Reopen Last Check-In lacks eager save (F32)** *(queued as DW-3 in
+   `docs/BUG_FIX_TODO.md`)*: deletion of the confirmation record +
    its log entry rides the 800ms debounce (bare functional `setState`s, `App.jsx:1059–1065`),
    contrary to the CLAUDE.md rule that Delete-shaped actions eager-save. Worst case is
    mild (admin-only; a lost delete resurrects a valid confirmation), but it's the only

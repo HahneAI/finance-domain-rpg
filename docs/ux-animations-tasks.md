@@ -336,24 +336,29 @@ bottom, 340ms enter w/ gentle overshoot, 180ms exit).
 ## External / full-screen surfaces (own treatment, outside the fold system)
 These are mode takeovers with their own internal navigation — not modal/dropdown/page-move.
 Order: the two large ones first, then the two smaller.
-1. **SetupWizard** — ✅ *step slides done + consistent across all paths (normal + job-loss).* 
-   `StepSlide` (direction-aware horizontal push/pop, `step-in/out-*` keyframes) driven by 
-   `stepDir` (Next/Skip = forward, Back = back); wizard card gets a `foldLiftIn` takeover 
-   entrance. **GRANDER FIRST-MOUNT ENTRANCE** — current entrance uses `foldLiftIn` (300ms, 
-   gentle overshoot); consider a more standout first-run entrance (e.g., stagger the header 
-   + step counter + intro text separately, or scale-up from center with a softer ease) to 
-   emphasize onboarding importance. Test feel after other surfaces ship. ⬜ still to do: 
-   takeover **exit** (App unmounts it instantly — needs `useFoldTransition` at the App mount 
-   site), and the failed-Next **validation shake** on `attempted`.
-2. **LoginScreen** — ✅ *mode crossfades + login→dashboard handoff complete.*
+1. **SetupWizard** — ✅ *complete: step slides + entrance/exit + validation shake.*
+   - Step slides: `StepSlide` component (direction-aware horizontal push/pop, `step-in/out-*` 
+     keyframes) driven by `stepDir` (Next/Skip = forward, Back = back). Consistent across 
+     normal and job-loss paths.
+   - Entrance: wizard card fades in + rises (`foldLiftIn`, 340ms, gentle overshoot).
+   - Exit: fold-lift downward + fade exit (`foldLiftOut`, 180ms) driven by `wizardExiting` 
+     state in App.jsx. `closeWizardWithAnimation()` helper manages the lifecycle: sets 
+     wizardExiting, waits for animation, then unmounts.
+   - Validation shake: when `attempted` becomes true (failed Next), card shakes horizontally 
+     (`validationShake`, 400ms, ease-out). Respects prefers-reduced-motion.
+   - **GRANDER FIRST-MOUNT ENTRANCE (optional)** — current entrance uses `foldLiftIn` 
+     (340ms); could consider a more standout first-run entrance (e.g., stagger header + 
+     step counter + intro text separately) to emphasize onboarding importance. Test feel 
+     if prioritized.
+2. **LoginScreen** — ✅ *complete: mode crossfades + login→dashboard handoff.*
    - Mode crossfades: `ModeFade` component (`login-fade-*` classes, 200ms ease-out/in). All mode 
      transitions smooth: signin ↔ signup ↔ forgot ↔ revive ↔ info ↔ recovery.
    - Login→dashboard handoff: `postLoginFade` state (App.jsx) triggers 340ms transition when 
      `authedUser` becomes truthy. LoginScreen fades out (fold-lift exiting) while authenticated 
      shell fades in (fold-lift entering) using shared animations. Smooth visual continuity 
      across the auth unmount boundary.
-   - Test status: 1118/1119 passing (1 revival test edge case under investigation).
-   - Manual feature verification needed (all animations).
+   - Test status: **1119/1119 passing** ✅ (revival form timing issue fixed).
+   - Ready for manual feature verification (all animations).
 3. **PwaInstallModal** — ⬜ native `<dialog>`; needs a `<dialog>`-level open/close animation.
 4. **DemoAccountTree / investor account switch** — ⬜ mode swap that bypasses `FoldSwitch`.
 

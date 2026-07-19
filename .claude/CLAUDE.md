@@ -196,6 +196,33 @@ For a file with many call sites mutating the same field (see `BudgetPanel.jsx`'s
 
 ---
 
+## Drift App Warden — MANDATORY drift check before believing a change is done
+
+**`docs/drift-app-warden.md`** is the app's drift ledger: for every critical formula,
+function, pattern, and AI-context point it answers *"I am changing X — what Y must I check
+before X counts as done?"* It exists because the app's dominant failure mode is no longer
+locally-wrong code but **drift** — a locally-correct change that silently invalidates a
+distant system (five documented real incidents are catalogued there as case law: parallel
+formulas, retroactive recompute, lost saves, gate bypass, stale docs).
+
+- **Before changing** anything under a mapped section (Setup Wizard, the 5 panels, Auth,
+  Login, Paywall, UI-UX, or the shared spines — fiscal math, persistence, entitlements, AI
+  context, design system, admin toolkit), read that section's drift trigger map and run its
+  checks. State in the commit/PR which entries were consulted; "none applicable" is valid,
+  silence is not.
+- **Two categories, one fork:** every mapped item is either **LEDGER** (L — computes/stores
+  truth; drift = silently wrong numbers; hunt via cross-check against the single
+  source-of-truth function) or **GATEWAY** (G — routes/gates/presents; drift = wrong
+  surface for the wrong tier/mode; hunt via walking the full gate matrix).
+- **Keep it current in the same PR** — a stale drift-map entry certifies a false checklist,
+  which is worse than none. `active-systems.md` describes what exists; the warden doc maps
+  what breaks what — never duplicate between them.
+- This document is the foundation for a future **Drift Warden AI agent** that will be
+  mandatory for all development-team changes — write entries machine-actionable (named
+  triggers, named blast radii, executable procedures), never as prose warnings.
+
+---
+
 ## Development Workflow
 **30-min sprints, 4×/week.** Before: state the task clearly. After: commit + one-sentence summary.
 - `docs/active-systems.md` — how every live system works. **Working on Coach/AI context?** Read

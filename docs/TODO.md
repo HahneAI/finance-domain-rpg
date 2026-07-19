@@ -1054,14 +1054,22 @@ have to re-derive them or, worse, write a fourth parallel runway calc:*
   user is actually tracking/paying during the search, and real due dates via `getNextDueDate(exp,
   today)` (loan-aware — see `getExpenseDisplayAmount` for the matching amount getter). Useful for
   "how long can I be selective" framing (what's actually due before benefits run out).
-- **Known drift to fix before/while building this:** `lib/coachTriggers.js`'s `estimateRunwayDays`
+- **Known drift to fix before/while building this — worse than originally flagged, re-confirmed
+  during the §15.H14 birdseye review (2026-07-19):** `lib/coachTriggers.js`'s `estimateRunwayDays`
   (used by `CoachNetWorthCard.jsx` for the §18.C Red-tier trigger) is a **second, independent**
-  runway calc — its own doc comment already flags this as deliberate (it can't see the session-only
-  "additional savings" input `JobLossBudgetPanel` owns). It predates the `trackDuringJobLoss` flag
-  added in §15.H8/H9, so it still counts bills the user unchecked from tracking — a real,
-  already-live discrepancy between the number Coach's trigger reasons about and the one Job Loss
-  Home/Budget display. Either retrofit the same `trackDuringJobLoss` filter into it, or (cleaner)
-  have it call `computeJobLossRunway` directly once this feature gives a reason to touch that file.
+  runway calc. Its own doc comment says it "assumes $0 extra savings, the conservative floor" —
+  that comment predates `jobLossCashOnHand` existing as a real persisted field (§15.H13); the
+  "additional savings" input it's talking about used to be a session-only draft `JobLossBudgetPanel`
+  owned, which no longer describes the current architecture at all. It also still predates the
+  `trackDuringJobLoss` flag added in §15.H8/H9, so it counts bills the user unchecked from tracking.
+  Two independent sources of drift on the same function now, both confirmed live: it disagrees with
+  Job Loss Home/Budget on both *which bills count* and *how much cash the user actually has*. Either
+  retrofit both (`trackDuringJobLoss` filter + `jobLossCashOnHand`) into it, or (cleaner) have it
+  call `computeJobLossRunway` directly once this feature gives a reason to touch that file. Separate
+  and worth fixing regardless of whether this feature gets built: `App.jsx` never actually passes
+  `runwayDays` into `buildCoachContext` at all (`lib/aiContext.js:199-201` has the parameter and the
+  context line ready, just never wired) — Coach's Job Loss Mode context today is the bare string
+  `"Job Loss Mode: active"`, no numbers. Full write-up: `docs/TODO.md` §15.H14.
 
 - [ ] **Job Hunt Chat panel** — dedicated sub-view in Job Loss Dashboard; powered by Coach (Claude
   API) with a system prompt including: current role title, prior income, runway days, target income,
@@ -1749,7 +1757,10 @@ note rather than re-listed here to avoid two competing specs for the same shippe
 - [ ] **Application assistant** — for saved listings, "Draft application" launches Coach
   pre-loaded with the specific job description for cover letter / prep mode → **§18.F**
 - [ ] **Profile store for auto-fill** — stored work history summary, skills list, and resume text
-  (user-entered) used to pre-fill application fields and feed the AI assistant context
+  (user-entered) used to pre-fill application fields and feed the AI assistant context. This is the
+  only reference to résumé data anywhere in this doc, and it's scoped as plain user-entered text for
+  auto-fill, not a file upload or an AI-analyzed résumé. An actual résumé-upload / skill-gap-analysis
+  feature is not scoped anywhere — see `docs/TODO.md` §15.H14's dedicated bullet before starting one.
 
 ---
 
@@ -2307,6 +2318,79 @@ attempted here.*
   `config.jobHuntIncomeLog` access; normalized to match). Production build green. **Not covered:**
   no live click-through on a deployed preview — same category of gap as everything else in this
   file; the red-border fix in particular deserves an eyeball on a real device given how it was found.
+
+---
+
+#### H14. Birdseye review — a full walk-through edge case, 2026-07-19 — SCOPED, nothing started
+
+*User exercise: walk one concrete character through the whole mode — loses job with $400 cash and
+a half paycheck still owed (biweekly, job loss lands mid-period), 4 Needs bills ($1,500/mo, staggered
+due dates), 3 Lifestyle bills ($60/mo), keeps every bill tracked (stubborn), starts logging
+applications same-day. Purpose was to find where the architecture actually falls short of "spot-on
+runway, best help finding work" rather than trusting the checkbox state. Everything below is a
+documentation-only pass — research and scoping, explicitly not implementation. Ordered roughly by
+how directly each one touches "is the runway number on screen actually correct."*
+
+- [ ] **No pending/final-paycheck concept in the runway calc.** `buildYear()`'s job-loss zeroing
+  (`lib/finance.js:592-602`, `inJobLoss`) zeroes the *entire* fiscal week containing `jobLossDate`
+  — not prorated, so days already worked that week vanish from every projection (Income panel,
+  Budget breakdown, Home/Budget runway) the instant the mode activates. `computeJobLossRunway`'s
+  `savings` parameter (`lib/jobLossRunway.js:43`) is only `jobLossCashOnHand + sumJobHuntIncome()`
+  — there's no field, no date, no concept anywhere for "I'm still owed a paycheck that hasn't
+  posted yet." For a biweekly user whose job loss lands mid-period, that's real, expected money the
+  runway cliff date doesn't know about until the user manually bumps their cash-on-hand number
+  after it actually lands — and nothing prompts them to do that.
+  **Sketch of a minimal fix** (not committed to, needs user sign-off first): a single optional
+  `jobLossPendingPaycheck: { amount, expectedDate }` pair, asked once in `JobLossEntry` Step 0
+  right after cash-on-hand ("Any paycheck still coming that you haven't been paid yet?" — skippable,
+  unlike cash-on-hand which stays mandatory). `computeJobLossRunway` adds `amount` to the cash pool
+  only once `effectiveToday >= expectedDate` — it's a scheduled inflow, not present-day cash, so it
+  shouldn't extend the runway number until it's actually landed. Deliberately **not** a general
+  point-in-time proration of the job-loss week itself (way bigger, touches DHL/base scheduling core,
+  and the wizard has no "which days did you actually work" input to drive it) — a bolt-on amount +
+  date is the honest, small version of this.
+- [ ] **Lifestyle spend is invisible in the headline runway number, with no UI callout.**
+  `weeklyBurn` (`lib/jobLossRunway.js:56-65`) explicitly excludes `category === "Lifestyle"` —
+  a deliberate, reasonable design choice ("focuses on survival spend," per its own code comment)
+  but nothing in `JobLossBudgetPanel`/`JobLossHomePanel` tells the user this. A user who keeps every
+  bill active (the "stubborn" case) sees their 3 Lifestyle bills in the tracked list, due-date
+  countdown, and "Needs Coverage" flag — but the $60/mo they're still actually paying never touches
+  the "Weekly Burn" tile or the runway-days countdown. Their real runway is shorter than the number
+  on screen, silently. **Sketch of a minimal fix:** a one-line "+ $X/wk Lifestyle spend (not counted
+  in runway above)" caption under the Weekly Burn tile — no calc change, pure transparency.
+- [ ] **`coachTriggers.js`'s `estimateRunwayDays` drift, now worse than when §18.E flagged it.**
+  Already documented as a known second runway calc that doesn't respect `trackDuringJobLoss`
+  (§18.E, "Known drift to fix"). Confirmed during this pass: it's *also* completely blind to
+  `jobLossCashOnHand` (§15.H13) — its own doc comment says it "assumes $0 extra savings, the
+  conservative floor," which predates cash-on-hand existing as a real field at all. For a user with
+  real cash on hand (this scenario: $400), Coach's background Red-tier "you're running low" trigger
+  computes a bleaker runway than what the user's own Home/Budget screens show them. Two drift
+  sources stacked on the same function now, not one.
+- [ ] **Coach never actually receives Job Loss Mode's numbers, even when Coach is reachable.**
+  `lib/aiContext.js:199-201` has a `runwayDays` parameter and a "Job Loss Mode: active, ~N days of
+  runway" line ready to use it — but `App.jsx` never passes `runwayDays` into `buildCoachContext` at
+  any call site. Grepped to confirm: zero matches. So today the line always renders as the bare
+  string `"Job Loss Mode: active"` — no runway, no burn, no benefits, no cash-on-hand reach Coach's
+  system prompt at all. This is a live wiring gap on an existing parameter, not a "not built yet"
+  item — the cheapest of everything in this list to close once someone's in that file.
+- [ ] **AI features (Coach, and by extension the unbuilt Job Hunt Assistant/Job Scout) are
+  `is_admin`/`is_tester`-gated** (`canAccessAiFeatures`, `entitlements.js`). A real user living this
+  exact scenario likely cannot reach any of "getting the best help" today regardless of what gets
+  built — worth keeping in view as a business/rollout question, not just an engineering one, before
+  investing further in §18.E/§18.I.
+- [ ] **Résumé upload / skill tips / skill-gap analysis — not scoped anywhere, not a "not started"
+  TODO item, genuinely absent as an idea.** The only trace in the entire doc is one unbuilt chat
+  prompt ("Help me with my resume," §18.E) and a passing mention of "resume text (user-entered)" as
+  a future auto-fill field for job applications (§15.F) — no file upload, no parsing, no structured
+  skill-gap comparison against a target role. If this is wanted, it needs a first scoping pass from
+  scratch (storage: Supabase Storage bucket vs. inline text? parsing: client-side vs. a Claude call
+  reading extracted text? tied to `ReemploymentTracker`'s target income/company data or standalone?)
+  before it's a buildable item — flagging its absence here so it doesn't quietly stay unconsidered.
+- **Not fixed, not scoped further, deliberately left as a list — user's own framing: "pick this
+  apart... but maybe not immediately."** Recommend picking off the wiring-only items first
+  (`runwayDays` into Coach, the Lifestyle-spend caption) since they're small and don't require a
+  design decision, before touching the pending-paycheck field or the two-runway-calc unification,
+  which both need the user's input on scope/design first.
 
 ---
 

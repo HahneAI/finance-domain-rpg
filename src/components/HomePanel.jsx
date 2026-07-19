@@ -35,6 +35,12 @@ const safeDate = (raw) => {
 export function HomePanel({
   navigate,
   weeklyIncome,
+  // Every real caller (App.jsx, DemoAccountTree.jsx) computes and passes this —
+  // it's the correct full-year net (projectedAnnualNet + event adjustments -
+  // fundedGoalSpend). Do NOT default this to weeklyIncome*FISCAL_WEEKS_PER_YEAR
+  // if a new caller omits it — that reintroduces the §15.H11 dilution bug
+  // (weeklyIncome is a per-ACTIVE-week average; multiplying it back out by a
+  // flat 52 overstates the year for any account that wasn't active all 52).
   adjustedTakeHome,
   remainingSpend,
   goals = [],
@@ -82,7 +88,7 @@ export function HomePanel({
 
   const avgWeeklySpend = remainingSpend?.avgWeeklySpend ?? 0;
   const monthlyExpenses = avgWeeklySpend * (FISCAL_WEEKS_PER_YEAR / 12);
-  const monthlyTakehome = (adjustedTakeHome ?? (weeklyIncome * FISCAL_WEEKS_PER_YEAR)) / 12;
+  const monthlyTakehome = (adjustedTakeHome ?? 0) / 12;
   const projectedWeeklyLeft = (futureWeekNets?.[0] ?? weeklyIncome) - avgWeeklySpend;
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const leftThisWeek = finalizedWeekNet - avgWeeklySpend;

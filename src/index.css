@@ -400,6 +400,20 @@ code {
 .login-fade-in  { animation: loginFadeIn  200ms ease-out both; }
 .login-fade-out { animation: loginFadeOut 200ms ease-in both; }
 
+@keyframes validationShake {
+  0%   { transform: translateX(0); }
+  10%  { transform: translateX(-8px); }
+  20%  { transform: translateX(8px); }
+  30%  { transform: translateX(-8px); }
+  40%  { transform: translateX(8px); }
+  50%  { transform: translateX(-4px); }
+  60%  { transform: translateX(4px); }
+  70%  { transform: translateX(-4px); }
+  80%  { transform: translateX(0); }
+  100% { transform: translateX(0); }
+}
+.validation-shake { animation: validationShake 400ms ease-out; }
+
 @media (prefers-reduced-motion: reduce) {
-  .login-fade-in, .login-fade-out { animation:none; }
+  .login-fade-in, .login-fade-out, .validation-shake { animation:none; }
 }

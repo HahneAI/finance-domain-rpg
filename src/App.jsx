@@ -293,6 +293,9 @@ export default function App() {
   const [baseRateHistory, setBaseRateHistory] = useState([]);
   // wizardEntry: null=closed, false=first-run, string=re-entry life event
   const [wizardEntry, setWizardEntry] = useState(null);
+  // wizardExiting: true while the wizard card is animating out (180ms foldLiftOut).
+  // Allows the wizard to stay mounted during exit animation, then unmount after.
+  const [wizardExiting, setWizardExiting] = useState(false);
   // Gates TrialExplainerScreen ahead of first-run SetupWizard entry (docs/TODO.md
   // §17). Not persisted — re-prompts on a later session same as wizardEntry
   // itself does until setupComplete flips true.
@@ -1300,6 +1303,17 @@ export default function App() {
   // ─────────────────────────────────────────────────────────────────────────────────
   const futureEventDeductions = eventImpact.futureEventDeductionsByWeek;
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SetupWizard exit animation — triggers fold-lift exit, waits 180ms, then unmounts
+  // ─────────────────────────────────────────────────────────────────────────────
+  function closeWizardWithAnimation() {
+    setWizardExiting(true);
+    setTimeout(() => {
+      setWizardEntry(null);
+      setWizardExiting(false);
+    }, 180);
+  }
+
   function handleWizardComplete(mergedConfig) {
     // §19: wizard flows are the one path that passes an explicit effective date
     // (the job start / change date anchor); plain edits default to today.
@@ -1316,7 +1330,7 @@ export default function App() {
       ? { ...mergedConfig, startedUnemployed: false }
       : mergedConfig;
     setConfig(finalConfig);
-    setWizardEntry(null);
+    closeWizardWithAnimation();
     // §15.H3: a first-run signup that ended in Job Loss Mode skipped the Deductions/
     // Tax steps entirely and has no real income yet — defer the pinned Food default
     // to the user's first expense-triage pass instead of seeding it unseen. Passed
@@ -3396,19 +3410,20 @@ export default function App() {
         }}
       />
       {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}
-      {wizardEntry !== null && (
+      {(wizardEntry !== null || wizardExiting) && (
         <SetupWizard
           config={config}
           onComplete={handleWizardComplete}
           onCancel={
             wizardEntry !== false
-              ? () => setWizardEntry(null)
+              ? () => closeWizardWithAnimation()
               : config.isInvestor
-                ? () => { setWizardEntry(null); setActiveInvestorAccount(1); }
+                ? () => { closeWizardWithAnimation(); setActiveInvestorAccount(1); }
                 : undefined
           }
           lifeEvent={wizardEntry === false ? null : wizardEntry}
           isInvestor={config.isInvestor}
+          isExiting={wizardExiting}
         />
       )}
     </div>

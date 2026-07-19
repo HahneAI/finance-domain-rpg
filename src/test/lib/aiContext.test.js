@@ -1,8 +1,24 @@
 import { describe, it, expect } from "vitest";
 import { buildCoachContext } from "../../lib/aiContext.js";
+import { fmtFullDate } from "../../lib/finance.js";
+
+// Builds a synthetic full fiscal year of week objects shaped the way
+// getPayPeriodBounds()/computeGoalTimeline() expect (idx, weekStart, weekEnd,
+// isPayWeek, payPeriodEndDate) — enough to exercise the real date-resolution
+// path rather than the `allWeeks`-not-provided fallback. `isPayWeek` defaults
+// to true for every week (weekly schedule: every week is its own period);
+// pass a predicate for biweekly/monthly fixtures.
+function buildAllWeeks(n, { startDate = new Date(2026, 0, 5), isPayWeek = () => true } = {}) {
+  return Array.from({ length: n }, (_, i) => {
+    const weekStart = new Date(startDate.getTime() + i * 7 * 24 * 60 * 60 * 1000);
+    const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+    return { idx: i, active: true, weekStart, weekEnd, isPayWeek: isPayWeek(i), payPeriodEndDate: weekEnd };
+  });
+}
 
 describe("buildCoachContext", () => {
   it("produces a fixed-shape block from a baseline snapshot", () => {
+    const allWeeks = buildAllWeeks(52);
     const block = buildCoachContext({
       weeklyIncome: 1000,
       avgWeeklySpend: 400,
@@ -14,11 +30,13 @@ describe("buildCoachContext", () => {
       fundedGoalSpend: 500,
       currentWeek: { idx: 27 },
       today: "2026-07-07",
+      allWeeks,
     });
 
     expect(block).toContain("Weekly net income: $1,000");
     expect(block).toContain("Weekly spend: $400");
     expect(block).toContain("Weekly surplus: $600");
+    expect(block).toContain("Next week takehome (Home tile): $1,000 (projected average — no confirmed weeks yet)");
     expect(block).toContain("Left this week (Home tile): $600");
     expect(block).toContain("Net worth trend (Home tile — projected annual savings): $30,700");
     expect(block).toContain("Budget Health (Home tile): 40% spend ratio (well-managed)");
@@ -26,8 +44,39 @@ describe("buildCoachContext", () => {
     expect(block).toContain("Active goals total (Home tile — unfunded target sum): $1,000");
     expect(block).toContain("Expenses: 1 active line, $400/week");
     expect(block).toContain("Expense breakdown: Food (Needs): ~$400/wk");
-    expect(block).toContain("Fiscal week: 28 of 52 (24 left)");
-    expect(block).toContain("Today: 2026-07-07");
+    // Regression: a live test asked Coach for a fiscal week number and got a
+    // vague, seemingly-guessed "mid-November" — the raw ISO date and bare
+    // week number weren't enough for Coach to state a real, non-abbreviated
+    // calendar date. Current period now pairs the two, resolved via the same
+    // getPayPeriodBounds() HomePanel/IncomePanel use.
+    expect(block).toContain(`Current period: the week of ${fmtFullDate(allWeeks[27].weekStart)} (week 28), 24 weeks left in the fiscal year`);
+    expect(block).toContain(`Today: ${fmtFullDate("2026-07-07")}`);
+  });
+
+  // Regression: a live test asked "What's my Next Week Takehome?" and Coach
+  // had to hedge with "isn't showing in the data" — buildCoachContext never
+  // carried futureWeekNets (distinct from timelineWeekNets, which only feeds
+  // computeGoalTimeline). These match HomePanel.jsx's exact fallback chain,
+  // status thresholds, and perCheckFactor scaling for the same tile.
+  it("cites the real Next Week Takehome figure and status when futureWeekNets has a real entry", () => {
+    const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 400, futureWeekNets: [900] });
+    expect(block).toContain("Next week takehome (Home tile): $900 (slightly below average), -$100 vs your average");
+  });
+
+  it("flags Next Week Takehome as below average and adds the vs-average delta past the 3% flat band", () => {
+    const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 400, futureWeekNets: [700] });
+    expect(block).toContain("Next week takehome (Home tile): $700 (below average — check Log), -$300 vs your average");
+  });
+
+  it("reads Next Week Takehome as on track and omits the delta within the 3% flat band", () => {
+    const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 400, futureWeekNets: [1010] });
+    expect(block).toContain("Next week takehome (Home tile): $1,010 (on track)");
+    expect(block).not.toContain("vs your average");
+  });
+
+  it("falls back to the last confirmed week for Next Week Takehome when no scheduled week exists yet", () => {
+    const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 400, prevWeekNet: 900 });
+    expect(block).toContain("Next week takehome (Home tile): $900 (projected from your last confirmed pay)");
   });
 
   it("uses prevWeekNet for Left This Week when a confirmed week exists, not just weeklyIncome", () => {
@@ -39,21 +88,52 @@ describe("buildCoachContext", () => {
   // tile row (Active Goals Total, Weeks to Complete All, per-goal projected
   // rate/finish week) at all — none of it was in context. Goal LABELS are
   // deliberately withheld for privacy; only funding-priority rank is given.
-  it("gives a real per-goal projected rate and finish week from computeGoalTimeline, never the goal's label", () => {
-    const futureWeeks = Array.from({ length: 10 }, (_, i) => ({ idx: i, weekEnd: new Date(2026, 0, (i + 1) * 7) }));
+  it("gives a real per-goal projected rate and finish date from computeGoalTimeline, never the goal's label", () => {
+    const allWeeks = buildAllWeeks(10);
     const timelineWeekNets = Array(10).fill(700);
     const block = buildCoachContext({
       weeklyIncome: 700,
       avgWeeklySpend: 0,
       currentWeek: { idx: 0 },
       goals: [{ id: "g1", label: "Car", target: 2800, completed: false }],
-      futureWeeks,
+      futureWeeks: allWeeks,
       timelineWeekNets,
+      allWeeks,
     });
     expect(block).toContain("Active goals total (Home tile — unfunded target sum): $2,800");
     expect(block).toContain("Weeks to complete all active goals (Home tile): ~4 weeks");
-    expect(block).toContain("Goal breakdown (ranked by funding priority — goal names withheld for privacy): Goal 1 of 1: $2,800 target, ~$700/wk projected, ~4.0 wks to fund, on track for fiscal week 5");
+    // eW resolves to 4 → currentWeekIdx(0) + ceil(4) = week idx 4 = allWeeks[4]
+    expect(block).toContain(`Goal breakdown (ranked by funding priority — goal names withheld for privacy): Goal 1 of 1: $2,800 target, ~$700/wk projected, ~4.0 wks to fund, on track for the week of ${fmtFullDate(allWeeks[4].weekStart)} (week 5)`);
     expect(block).not.toContain("Car");
+  });
+
+  it("switches to check-based terminology and a wider date range for a biweekly pay schedule", () => {
+    const isPayWeek = (i) => i % 2 === 1;
+    const allWeeks = buildAllWeeks(20, { isPayWeek });
+    const timelineWeekNets = Array(20).fill(700);
+    const block = buildCoachContext({
+      config: { userPaySchedule: "biweekly" },
+      weeklyIncome: 700,
+      avgWeeklySpend: 0,
+      currentWeek: { idx: 0 },
+      goals: [{ id: "g1", target: 2800, completed: false }],
+      futureWeeks: allWeeks,
+      timelineWeekNets,
+      allWeeks,
+    });
+    // Current period spans the whole 2-week pay period, not a single week,
+    // and is labeled "paycheck," never "week," for a biweekly account.
+    expect(block).toContain(`Current period: ${fmtFullDate(allWeeks[0].weekStart)}–${fmtFullDate(allWeeks[1].weekEnd)} (paycheck 1), 25 paychecks left in the fiscal year`);
+    expect(block).not.toMatch(/Current period: the week of/);
+    // Weeks-to-complete-all converts to paychecks (4 weeks ≈ 2 paychecks), and
+    // the per-goal rate/duration unit follows the same schedule, not "wk"/"wks".
+    expect(block).toContain("Weeks to complete all active goals (Home tile): ~2 paychecks");
+    expect(block).toMatch(/Goal 1 of 1: \$2,800 target, ~\$1,400\/chk projected, ~2\.0 chks to fund/);
+  });
+
+  it("falls back to a plain period label with no date when allWeeks isn't provided", () => {
+    const block = buildCoachContext({ weeklyIncome: 1000, avgWeeklySpend: 400, currentWeek: { idx: 27 } });
+    expect(block).toContain("Current period: week 28, 24 weeks left in the fiscal year");
   });
 
   it("reports a goal as not on track rather than a bogus finish week when it can't fund within the fiscal year", () => {
@@ -199,7 +279,7 @@ describe("buildCoachContext", () => {
         { type: "missed_unpaid", weekEnd: "2026-06-01" },
       ],
     });
-    expect(block).toContain("Log entries: 2 logged, most recent: Missed Shift (Unpaid/Approved) (week ending 2026-06-01)");
+    expect(block).toContain(`Log entries: 2 logged, most recent: Missed Shift (Unpaid/Approved) (week ending ${fmtFullDate("2026-06-01")})`);
   });
 
   it("falls back to the raw type string for an unrecognized log type", () => {
@@ -208,7 +288,7 @@ describe("buildCoachContext", () => {
       avgWeeklySpend: 300,
       logs: [{ type: "mystery_event", weekEnd: "2026-01-01" }],
     });
-    expect(block).toContain("most recent: mystery_event (week ending 2026-01-01)");
+    expect(block).toContain(`most recent: mystery_event (week ending ${fmtFullDate("2026-01-01")})`);
   });
 
   it("omits the job-loss line when jobLossMode is off", () => {

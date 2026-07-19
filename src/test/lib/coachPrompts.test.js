@@ -37,6 +37,25 @@ describe("ASK_COACH_SYSTEM_PROMPT", () => {
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/applies across all five panels/i);
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/not a script to repeat near-verbatim/i);
   });
+
+  // Regression: a live test showed Coach stacking two non-boxing idioms
+  // ("leaving room to breathe," then "crowding you or staying in its lane")
+  // to restate the same point twice — the old cap only named boxing-specific
+  // vocabulary, leaving general figurative language an open loophole.
+  it("extends the one-figurative-touch cap to any idiom, not just boxing-flavored phrasing", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/isn't limited to corner-man phrasing specifically/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/don't restate it a second time in different colorful language/i);
+  });
+
+  // Per explicit instruction: any week/pay-period/date mention Coach generates
+  // itself must pair a real, non-abbreviated date with the period number, and
+  // use "week" only for weekly-pay accounts — everything else mirrors the
+  // context data's own "paycheck"/"month" terminology.
+  it("instructs pairing dates with period numbers, full month names, and schedule-correct terminology", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/full month name, never abbreviated/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/mirror it exactly rather than defaulting to "week" out of habit/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/"paycheck n" or "month n" instead/i);
+  });
 });
 
 describe("buildNetWorthSystemPrompt", () => {

@@ -930,10 +930,7 @@ financial advisor — Coach answers questions about the app using the user's rea
   at all (only the derived "Savings rate"). Fixed: the guide now names all three tiles ("Next Week
   Takehome", "Net Worth Trend", "Budget Health") explicitly, and the context block adds live
   Budget Health / Net Worth Trend lines computed with the exact same formula/thresholds as
-  `HomePanel.jsx`. **Still not wired:** "Next Week Takehome" has no live figure in Coach's context —
-  it needs `futureWeeks`/`futureWeekNets`/`getNextPayWeek` plumbed through from `App.jsx`, which
-  none of `AskCoachPanel`'s current props carry. Coach can explain the concept from the guide but
-  can't cite the live number yet; wire this in if it comes up again in testing.
+  `HomePanel.jsx`.
   **2026-07-16, second follow-up:** wired in the goal-focused tile row too — "Left This Week",
   "Active Goals Total", "Weeks to Complete All", and a per-goal breakdown (target, projected
   weekly rate, estimated finish fiscal week) computed via the same `computeGoalTimeline()` call
@@ -941,6 +938,12 @@ financial advisor — Coach answers questions about the app using the user's rea
   instruction, goal names/labels are deliberately withheld from context for user privacy** — goals
   are identified only by funding-priority rank ("Goal 1 of N"); the guide tells Coach it can use a
   name back if the *user* volunteers it in their own message, but never learns it from data.
+  **2026-07-16, third follow-up:** closed the "Next Week Takehome" gap flagged in live testing (a
+  user question got an honest "I don't have that" hedge instead of the real figure) — added a new
+  `futureWeekNets` param to `buildCoachContext()` (distinct from `timelineWeekNets`, which is the
+  raw array `computeGoalTimeline()` needs) and replicated `HomePanel.jsx`'s exact fallback chain
+  (confirmed/scheduled next week → last confirmed week → plain average), status thresholds, the
+  "vs your average" delta, and `perCheckFactor` scaling, so the figure can't drift from the tile.
 - [ ] **Benefits / 401k context — deferred, not built.** Per explicit instruction: hold off wiring
   `BenefitsPanel` (401k contribution/match, PTO accrual/usage) into Coach's context until we've
   looked closer at how a **base (non-DHL) user** onboards other forms of employer compensation —

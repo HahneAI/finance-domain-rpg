@@ -2245,7 +2245,7 @@ function StepStub({ title, sprint }) {
 //                      receives taxedWeeks auto-populated + setupComplete: true
 //   lifeEvent        — null (first-run) | "lost_job" | "changed_jobs" | "commission_job"
 // ─────────────────────────────────────────────────────────────────────────────
-export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false }) {
+export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false, isExiting = false }) {
   const [stepIdx,   setStepIdx]   = useState(0);
   // Slide direction for step transitions: 1 = forward (Next/Skip), -1 = back.
   const [stepDir,   setStepDir]   = useState(1);
@@ -2269,6 +2269,8 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   // "what's changing" diff in Wrap Up. Frozen by the ref so edits to formData
   // don't pollute the comparison baseline.
   const originalConfigRef = useRef(config);
+  // Ref to the card div so we can apply the validation shake animation
+  const cardRef = useRef(null);
 
   const activeSteps = STEP_DEFS.filter(s => s.showIf(formData, lifeEvent));
   const current     = activeSteps[stepIdx];
@@ -2277,6 +2279,17 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
 
   // Reset error state whenever the user moves to a new step
   useEffect(() => { setAttempted(false); }, [stepIdx]);
+
+  // Apply validation shake when attempted becomes true (failed Next validation)
+  useEffect(() => {
+    if (attempted && cardRef.current) {
+      cardRef.current.classList.add('validation-shake');
+      const timer = setTimeout(() => {
+        cardRef.current?.classList.remove('validation-shake');
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [attempted]);
 
   function update(patch) {
     setFormData(prev => ({ ...prev, ...patch }));
@@ -2328,27 +2341,30 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   const StepComponent = current?.component ?? null;
 
   return (
-    <div style={{
-      position: "fixed", inset: 0,
-      background: "var(--color-bg-base)",
-      display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center",
-      paddingTop: "max(16px, env(safe-area-inset-top))",
-      paddingBottom: "max(16px, env(safe-area-inset-bottom))",
-      paddingLeft: "16px", paddingRight: "16px",
-      zIndex: 100,
-    }}>
-      <div style={{
-        width: "100%", maxWidth: "480px",
-        background: "var(--color-bg-surface)",
-        border: "1px solid var(--color-border-subtle)",
-        borderRadius: "20px",
+    <div
+      className="fold-lift"
+      data-fold={isExiting ? "exiting" : "entering"}
+      style={{
+        position: "fixed", inset: 0,
+        background: "var(--color-bg-base)",
         display: "flex", flexDirection: "column",
-        flex: 1, minHeight: 0, maxHeight: "680px",
-        overflow: "hidden",
-        // Takeover entrance — the whole wizard card rises + fades in on mount.
-        animation: "foldLiftIn 340ms var(--ease-fold-page-in) both",
+        alignItems: "center", justifyContent: "center",
+        paddingTop: "max(16px, env(safe-area-inset-top))",
+        paddingBottom: "max(16px, env(safe-area-inset-bottom))",
+        paddingLeft: "16px", paddingRight: "16px",
+        zIndex: 100,
       }}>
+      <div
+        ref={cardRef}
+        style={{
+          width: "100%", maxWidth: "480px",
+          background: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border-subtle)",
+          borderRadius: "20px",
+          display: "flex", flexDirection: "column",
+          flex: 1, minHeight: 0, maxHeight: "680px",
+          overflow: "hidden",
+        }}>
 
         {/* ── Header: step counter + title + progress bar ── */}
         <div style={{ padding: "24px 24px 0", flexShrink: 0 }}>

@@ -1,13 +1,89 @@
 # UX Animations — Tasks & Surface Map (Authority Finance)
 
-**Purpose:** Track the two motion systems across every interactive surface in the app:
-1. **Press feedback** (tap fill + spring) — *shipped* (see below).
-2. **Fold-up transitions** (page moves · modal open/close · dropdown open/close) — *rolling out*.
+**Purpose:** Single source of truth for the app's motion systems and their rollout across
+every interactive surface. This file is the handoff doc — read the Quick Reference, then
+the section for whatever you're working on.
 
-**Scope:** The entire authenticated app shell. **Excludes the Login screen only**
-(`LoginScreen.jsx` and its pre-auth siblings — see [Excluded](#excluded)).
+Three motion systems:
+1. **Press feedback** (tap fill + spring) — *shipped everywhere* (`ui.jsx` primitives + `Pressable`).
+2. **Fold-up transitions** (page moves · modal open/close · dropdown open/close) — *broadly rolled out*, tail remaining.
+3. **External / full-screen surfaces** (SetupWizard, LoginScreen, PWA install, demo-account switch) — *in progress, current focus.*
 
-**Last updated:** 2026-07-15
+**Scope:** The authenticated app shell + the setup/login takeovers. **Last updated:** 2026-07-16
+
+---
+
+## 🔭 CURRENT FOCUS
+
+Tuning the **4 external/full-screen "placement" animations**, biggest two first:
+1. **SetupWizard** — ✅ step slides + takeover entrance shipped (being feel-tested). Remaining: takeover **exit** + failed-Next **shake**.
+2. **LoginScreen** — ⬜ next up (mode crossfades, then login→dashboard handoff).
+3. **PwaInstallModal** — ⬜ native `<dialog>` open/close.
+4. **DemoAccountTree / investor account switch** — ⬜ mode swap.
+
+Approach agreed with the user: **cover the placements first with sensible first-pass values,
+tune the feel after they test.** Don't gold-plate before they've felt it in the app.
+
+---
+
+## ⚡ Quick Reference — the animation API
+
+All primitives live in **`src/components/ui.jsx`**; all keyframes/tokens in **`src/index.css`**.
+
+**Press feedback** (shipped): `Pressable` (drop-in `<button>`/`<div>`), `usePressFeedback()` +
+`PressFlashOverlay`, `pressScaleStyle()`. Auto-derives a lighter same-family fill via
+`deriveTapFillColor` (red→lighter red, gold→lighter gold…). Don't re-touch — it's done.
+
+**Fold transitions** — driven by a `data-fold="entering|entered|exiting"` attribute:
+| Helper / class | Use for |
+|---|---|
+| `useFoldTransition(open, {ms})` → `{ mounted, fold }` | Any show/hide surface. Gate render on `mounted`; put `data-fold={fold}` on the element. Keeps it mounted through the exit tween. |
+| `FoldSwitch({activeKey, children})` | Cross-fade **page moves** (keeps outgoing panel through its exit). Wraps `App.jsx` `activePanel`. |
+| `StepSlide({stepKey, direction, children})` | Direction-aware horizontal **wizard step** push/pop. |
+| class `fold-modal` + `fold-backdrop` | Centered **modal** card (folds down-from-top on open, slides up-and-out on close) + its backdrop fade. |
+| class `fold-scale` | Inline **dropdown/expander** reveal (ScaleY from top edge). |
+| class `fold-lift` | **Page** lift+fade (used by `FoldSwitch`). |
+| classes `step-in/out-*` | Wizard step slides (used by `StepSlide`). |
+
+**Recipe — animate a new modal:**
+```jsx
+const fold = useFoldTransition(showX, { ms: 340 });   // 340 gives the 300ms card exit a buffer
+{fold.mounted && createPortal(
+  <div className="fold-backdrop" data-fold={fold.fold} onClick={close} style={{/* fixed inset:0 backdrop */}}>
+    <div className="fold-modal" data-fold={fold.fold} onClick={e=>e.stopPropagation()} style={{/* card */}}>…</div>
+  </div>, document.body)}
+```
+**Recipe — animate a new dropdown/expander:** wrap the revealed content in
+`{fold.mounted && <div className="fold-scale" data-fold={fold.fold}>…</div>}` with
+`useFoldTransition(open, {ms:280})`.
+
+**Tokens (index.css):** `--ease-fold-smooth` (page enter), `--ease-fold-page-in` (page enter
+overshoot), `--ease-fold-overshoot` (modal/dropdown enter), `--ease-fold-exit` (dropdown close),
+`--ease-fold-modal-exit` (modal card close). Durations: `--fold-ms-page` 340 / `--fold-ms-page-out`
+180 / `--fold-ms-modal` 280 / `--fold-ms-modal-out` 240 / `--fold-ms-modal-card-out` 300.
+**Always** guard new keyframes with `@media (prefers-reduced-motion: reduce) { animation:none }`.
+
+**Gotchas learned the hard way:**
+- Never leave a lingering `transform`/`will-change` on a *settled* element — it makes a
+  stacking context/containing block that traps the fixed bottom nav + portaled modals
+  (this caused the Account-panel "nav opens the install modal" bug). Apply them only in the
+  `entering`/`exiting` rules; settle to a clean `entered`/no-class state.
+- Modal **exit** needs visible *travel* (the `fold-modal` slides up 30px) — a pure scale+fade
+  over a fading backdrop reads as a "pop", not a fold.
+- If you change an exit CSS duration, keep it **≤ the hook's `ms`** or the unmount clips the
+  animation (looks like a pop).
+
+## Git / environment context
+- Branch: **`claude/click-animations-hierarchy-9ps15t`**. All this work lives here.
+- The base **`Version-control`** moves fast and frequently absorbs our commits. When a merge
+  conflict appears, it's almost always the same shape: **both sides edited an import line** →
+  keep both imports. Resolve by rebasing onto `origin/Version-control`, then force-push with
+  `--force-with-lease`. (Verify with `git merge-base --is-ancestor origin/Version-control HEAD`.)
+- **Commits:** set `git config user.email noreply@anthropic.com` / `user.name Claude` before
+  committing. A stop-hook will warn about "unverified" commits — that's just the missing GPG
+  signature (no key in this sandbox); it's cosmetic, don't rewrite shared history over it.
+- **Verify** with `npx vite build` + `npm run test:run`. Baseline: **3 `api/*` test files fail
+  on a DB/env issue that is pre-existing and unrelated** — everything else must stay green.
 
 ---
 

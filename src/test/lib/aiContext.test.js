@@ -53,6 +53,24 @@ describe("buildCoachContext", () => {
     expect(block).toContain(`Today: ${fmtFullDate("2026-07-07")}`);
   });
 
+  // Regression (TODO §15, 2026-07-19): buildCoachContext used to scale
+  // annualSavings/netWorthHealth by a hardcoded 52 regardless of config —
+  // drifting from HomePanel.jsx's own activeWeeksThisYear-scaled figure any
+  // time firstActiveIdx wasn't 0 (e.g. a mid-year signup or Back to Work
+  // account). It now derives the same activeWeeksThisYear from config, so
+  // the Coach can't state a "Home tile" number the Home tile doesn't show.
+  it("scales annual savings/net worth by activeWeeksThisYear from config.firstActiveIdx, not a flat 52", () => {
+    const block = buildCoachContext({
+      config: { firstActiveIdx: 28 }, // 24 weeks left in the fiscal year
+      weeklyIncome: 700,
+      avgWeeklySpend: 200,
+      fundedGoalSpend: 0,
+    });
+    // 24 * (700 - 200) = 12,000 — NOT 52 * 500 = 26,000, the old drifted figure.
+    expect(block).toContain("Net worth trend (Home tile — projected annual savings): $12,000");
+    expect(block).not.toContain("$26,000");
+  });
+
   // Regression: a live test asked "What's my Next Week Takehome?" and Coach
   // had to hedge with "isn't showing in the data" — buildCoachContext never
   // carried futureWeekNets (distinct from timelineWeekNets, which only feeds

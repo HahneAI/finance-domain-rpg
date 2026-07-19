@@ -2097,6 +2097,80 @@ panel; the Job Loss rebuild in H7 never picked them up.*
 
 ---
 
+#### H11. "This Week's Check" showing a fraction of a real paycheck after Back to Work — DONE 2026-07-19
+
+*User report: fresh live-tested account, Back to Work into a $22/hr weekly job, 40hr/wk — Income
+panel and the Budget breakdown modal both correctly showed ~$714 net for the current week, but
+BudgetPanel's "This Week's Check" / "Left This Week" tiles showed $293 / $75. Diagnosed live
+against the user's actual Supabase `user_data.config` + `account_history` rows (no admin-tool
+access on the test account, so raw table rows were pulled instead — same data Config Raw View and
+the account_history baseRate ledger would show). Root cause was NOT a stale job-loss rate leaking
+forward (the first hypothesis, ruled out by the actual `account_history` rows) — it's a plain unit
+mismatch that hits any account that hasn't been active all 52 weeks of the fiscal year, which is
+nearly every real account.*
+
+- [x] **Root cause #1 — `prevWeekNet`'s empty-history fallback.** `App.jsx`'s `prevWeekNet` (read by
+  "This Week's Check"/"Left This Week" in both `HomePanel.jsx` and `BudgetPanel.jsx`, and by
+  `aiContext.js`'s "Left this week"/Coach line) is supposed to show last week's real, finalized
+  paycheck. When there's no prior active week yet — day one after Back to Work, or any brand-new
+  account — it fell back to `weeklyIncome`, which is `projectedAnnualNet / 52`. For an account
+  active only 24 of 52 weeks, that's the year's real income diluted by 28 weeks of $0 that haven't
+  happened yet, not a paycheck. Fixed by falling back to the **current** active week's real
+  computed net (already-correct math, just not what the fallback read) instead, only falling back
+  to `weeklyIncome` when there's no active week to read at all (e.g. indefinite Job Loss Mode).
+  New shared `resolvePrevWeekNet()` (`lib/finance.js`) replaces the duplicated inline version in
+  `App.jsx` **and** `DemoAccountTree.jsx` (same bug, same copy-pasted logic, would've hit demo/
+  investor accounts too).
+- [x] **Root cause #2 — `weeklyIncome` itself divides by a flat 52.** Broader and more serious than
+  the tile bug: `weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek` assumes the account was
+  active the whole fiscal year. `HomePanel.jsx`'s "Net Worth Trend" tile already tried to correct
+  for this on the *annual savings* side — `annualSavings = avgWeeklySurplus * activeWeeksThisYear`
+  — but `avgWeeklySurplus` is built from the still-diluted `weeklyIncome`, so the two didn't agree:
+  for a 24-active-week account, `annualSavings` came out roughly diluted by another 24/52 on top of
+  itself (confirmed: a synthetic 24-active-week case priced `annualSavings` at $12,000 vs. the
+  mathematically correct answer — the old formula gave a materially different, wrong number, not a
+  rounding difference). Separately, `aiContext.js`'s own `annualSavings`/`netWorthHealth` used a
+  **hardcoded** `* 52` (not `activeWeeksThisYear` at all) — a straight-up drift from the Home tile
+  it's labeled as matching, the exact anti-pattern `docs/active-systems.md` §24's grounding
+  discipline exists to prevent. Fixed by scaling `weeklyIncome` by the real active-week count
+  instead of a flat 52 in `App.jsx` and `DemoAccountTree.jsx` (byte-identical output for any
+  `firstActiveIdx: 0` account — i.e. every existing test fixture — since 52 active weeks ÷ 52 is
+  unchanged), and by giving `aiContext.js` the same `activeWeeksThisYear` derivation so the Coach
+  can't state a "Home tile" figure the Home tile doesn't actually show.
+- [x] **New shared `resolveActiveWeeksThisYear(firstActiveIdx)`** (`lib/fiscalWeek.js`) — one
+  formula (`FISCAL_WEEKS_PER_YEAR - firstActiveIdx`, clamped to 0) now backs `App.jsx`'s
+  `weeklyIncome`, `DemoAccountTree.jsx`'s `weeklyIncome`, `aiContext.js`'s `annualSavings`, and
+  `HomePanel.jsx`'s own `annualSavings` (swapped from its local inline copy to the same helper) —
+  four previously-independent copies of the same expression down to one, so this can't re-drift.
+  `traceExpenseCalculationSteps`'s own diagnostic `weeklyIncome` mirror (`lib/finance.js`) also
+  switched from `/52` to its own already-computed `activeWeeks.length`, so the audit trace explains
+  the real formula instead of the one it replaced.
+- **Not fixed here (flagged, real scope beyond this pass):** none of the above accounts for
+  mid-year gaps *within* an otherwise-active year — `resolveActiveWeeksThisYear` is
+  `firstActiveIdx`-to-year-end only, the same simple range `HomePanel.jsx` already used, not
+  `allWeeks.filter(w => w.active).length` (which would correctly exclude Job Loss Mode weeks
+  sitting inside that range). The user's stated target scenario — worked 4 months, unemployed 6
+  weeks, worked 2 months, changed jobs, worked out the year — needs that distinction for the
+  *annual* savings/pace figures to stay honest through a gap, even though the *weekly* figures
+  (`computeNet`/`buildYear`'s own `inJobLoss` zeroing) already handle it correctly week-by-week.
+  Worth a dedicated follow-up once this lands, rather than folding it in here. Also unfixed:
+  `HomePanel.jsx`'s `monthlyTakehome` fallback (`weeklyIncome * FISCAL_WEEKS_PER_YEAR`) has the
+  same flat-52 shape, but is dead in production — both live call sites (`App.jsx`,
+  `DemoAccountTree.jsx`) always pass a real `adjustedTakeHome`, so the fallback never fires today.
+- **Verification:** 9 new tests — 4 in `finance.test.js` (`resolvePrevWeekNet`: current-week
+  fallback vs. the old diluted average, real-past-week case unchanged, indefinite-Job-Loss-Mode
+  fallback to `weeklyIncome`, log-adjustment applied on the new fallback path too), 4 in
+  `fiscalWeek.test.js` (`resolveActiveWeeksThisYear` full-year/partial-year/null/clamp cases), 1 in
+  `aiContext.test.js` (Coach's `annualSavings` now scales by `activeWeeksThisYear` from
+  `config.firstActiveIdx`, not a flat 52 — asserts the old drifted $26,000 does NOT appear). Full
+  suite: 1128 tests passing. Lint diff-clean vs. a true `git stash`-verified baseline (not just the
+  session-start snapshot — re-ran eslint against unstashed HEAD to confirm the diff is only line-
+  number shifts from added code, zero new problems). Production build green. **Not covered:** no
+  live click-through on a deployed preview — same category of gap as everything else in this file;
+  the original report came from a real device, but confirming the *fix* still needs a redeploy.
+
+---
+
 ### I. Admin Toolkit updates for §15 work
 
 - [ ] **Live State Inspector — Job Loss Mode pill**

@@ -1,5 +1,5 @@
 import { netWorthHealthStatus, getEffectiveAmountForMonth, getPhaseIndex, computeGoalTimeline, fmtFullDate } from "./finance.js";
-import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining } from "./fiscalWeek.js";
+import { getFiscalWeekNumber, FISCAL_WEEKS_PER_YEAR, getPayPeriodBounds, payPeriodUnit, weekNumToPaycheckNum, weeksToChecksRemaining, resolveActiveWeeksThisYear } from "./fiscalWeek.js";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { EXPENSE_CYCLE_OPTIONS } from "./expense.js";
 
@@ -90,8 +90,14 @@ export function buildCoachContext({
   allWeeks = [],
 } = {}) {
   const avgWeeklySurplus = weeklyIncome - avgWeeklySpend;
-  const annualSavings = avgWeeklySurplus * 52 - fundedGoalSpend;
-  const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * 52);
+  // Matches HomePanel.jsx's activeWeeksThisYear exactly (same shared helper)
+  // so the Coach's stated annual savings/net-worth figures can't drift from
+  // the Home tile they're described as matching — a flat 52 here double-
+  // diluted weeklyIncome's own already-per-active-week average for any
+  // account that didn't start at fiscal week 0 (TODO §15, 2026-07-19).
+  const activeWeeksThisYear = resolveActiveWeeksThisYear(config?.firstActiveIdx);
+  const annualSavings = avgWeeklySurplus * activeWeeksThisYear - fundedGoalSpend;
+  const netWorthHealth = netWorthHealthStatus(annualSavings, weeklyIncome * activeWeeksThisYear);
 
   // Matches HomePanel.jsx's "Budget Health" tile exactly: spendRatio =
   // avgWeeklySpend / weeklyIncome, same <50%/<75% thresholds and labels.

@@ -7,7 +7,7 @@
 **Scope:** The entire authenticated app shell. **Excludes the Login screen only**
 (`LoginScreen.jsx` and its pre-auth siblings — see [Excluded](#excluded)).
 
-**Last updated:** 2026-07-15
+**Last updated:** 2026-07-19
 
 ---
 
@@ -361,6 +361,24 @@ Order: the two large ones first, then the two smaller.
    - Ready for manual feature verification (all animations).
 3. **PwaInstallModal** — ⬜ native `<dialog>`; needs a `<dialog>`-level open/close animation.
 4. **DemoAccountTree / investor account switch** — ⬜ mode swap that bypasses `FoldSwitch`.
+
+---
+
+## Animation Systems — Complete Reference
+
+All four motion systems live in the codebase:
+
+| System | Purpose | Key Components | Duration | Files |
+|--------|---------|-----------------|----------|-------|
+| **Press Feedback** | Tactile response on every clickable | `Pressable` component (ui.jsx); `usePressFeedback()` hook; `pressScaleStyle()` utility | 180ms fill, scale spring ~200ms | `src/components/ui.jsx`, `src/index.css` (.press-fill, .press-scale) |
+| **Fold Transitions** | Page enters/exits, modals, dropdowns | `useFoldTransition()` hook, `FoldSwitch` wrapper, fold-* keyframes | 340ms enter, 180ms exit | `src/components/ui.jsx`, `src/index.css` (@keyframes foldLiftIn/Out, foldScaleIn/Out, etc.) |
+| **SetupWizard Lifecycle** | Onboarding flow animations | `StepSlide` component (direction-aware), `wizardExiting` state, `closeWizardWithAnimation()` | 300ms steps, 340ms enter, 180ms exit, 400ms shake | `src/components/SetupWizard.jsx`, `src/App.jsx` (wizardExiting state), `src/index.css` (.validation-shake) |
+| **LoginScreen Transitions** | Auth form and handoff | `ModeFade` component (mode crossfades), `postLoginFade` state | 200ms mode fade, 340ms auth handoff | `src/components/LoginScreen.jsx`, `src/App.jsx` (postLoginFade state), `src/index.css` (.login-fade-in/out) |
+
+**Test coverage:** 1119/1119 tests passing ✅  
+**Ready for:** Manual feature verification (all animations together).
+
+---
 
 **Tuning notes (revisit later):** page-enter distance/duration, modal-close travel, and the
 wizard step-slide distance (38px) / durations are first-pass values; overhead pass pending

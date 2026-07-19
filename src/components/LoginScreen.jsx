@@ -22,10 +22,33 @@
  * OAuth (Google + Apple) uses signInWithOAuth redirect flow —
  * no extra handling needed; onAuthStateChange in App.jsx fires on return.
  * Providers must be enabled in the Supabase dashboard under Authentication > Providers.
+ *
+ * Animation: mode crossfades (signin ↔ signup ↔ forgot ↔ revive, etc) via opacity fade.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase, validateInvestorCode } from "../lib/supabase.js";
 import { iS, lS } from "./ui.jsx";
+
+// ── Mode crossfade wrapper — smooth opacity transitions between login modes ───
+// For form modes (signin/signup/forgot/revive/info/recovery), fade new mode in
+// without keeping prev mode in the DOM (which would confuse testing/accessibility).
+function ModeFade({ modeKey, children, ms = 200 }) {
+  const [cur, setCur] = useState({ key: modeKey, node: children });
+
+  useEffect(() => {
+    if (modeKey !== cur.key) {
+      setCur({ key: modeKey, node: children });
+    } else if (children !== cur.node) {
+      setCur({ key: modeKey, node: children });
+    }
+  }, [modeKey, children]);
+
+  return (
+    <div key={cur.key} className="login-fade-in">
+      {cur.node}
+    </div>
+  );
+}
 
 // ── OAuth provider button ────────────────────────────────────────────────────
 
@@ -275,51 +298,52 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
     }
   }
 
-  // ── Info / confirmation screen ────────────────────────────────────────────
+  // ── Screen rendering ─────────────────────────────────────────────────────
+  // Determine the screen key and content to render. ModeFade crossfades when
+  // the key changes (e.g., signin → forgot, signup → info, recovery → signin).
+  let screenKey = "signin";
+  let screenTitle = "Sign in";
+  let screenSubtitle = undefined;
+  let screenContent = null;
 
   if (info) {
-    return (
-      <Shell title="Check your email">
-        <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: 1.7 }}>{info}</div>
+    screenKey = "info";
+    screenTitle = "Check your email";
+    screenContent = (
+      <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: 1.7 }}>
+        {info}
         <button
           onClick={() => { setInfo(null); setMode("signin"); }}
-          style={{ marginTop: "20px", background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}
+          style={{ display: "block", marginTop: "20px", background: "transparent", border: "none", color: "var(--color-text-secondary)", fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer" }}
         >
           ← Back to sign in
         </button>
-      </Shell>
+      </div>
     );
-  }
-
-  // ── Recovery mode — set new password ─────────────────────────────────────
-
-  if (recoveryMode) {
-    return (
-      <Shell title="Set new password" subtitle="Enter and confirm your new password.">
-        <form onSubmit={handleSetNewPassword} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <label style={lS}>New Password</label>
-            <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <label style={lS}>Confirm Password</label>
-            <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
-          </div>
-          {error && <ErrorBox>{error}</ErrorBox>}
-          <SubmitBtn loading={loading}>{loading ? "..." : "Update Password"}</SubmitBtn>
-        </form>
-      </Shell>
+  } else if (recoveryMode) {
+    screenKey = "recovery";
+    screenTitle = "Set new password";
+    screenSubtitle = "Enter and confirm your new password.";
+    screenContent = (
+      <form onSubmit={handleSetNewPassword} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <label style={lS}>New Password</label>
+          <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <label style={lS}>Confirm Password</label>
+          <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repeat new password" required autoComplete="new-password" style={{ ...iS, borderRadius: "8px" }} />
+        </div>
+        {error && <ErrorBox>{error}</ErrorBox>}
+        <SubmitBtn loading={loading}>{loading ? "..." : "Update Password"}</SubmitBtn>
+      </form>
     );
-  }
-
-  // ── §17.I Revive an archived account ──────────────────────────────────────
-
-  if (mode === "revive") {
-    return (
-      <Shell
-        title="Welcome back"
-        subtitle="This email belongs to an account that was closed for non-payment — but your data was saved."
-      >
+  } else if (mode === "revive") {
+    screenKey = "revive";
+    screenTitle = "Welcome back";
+    screenSubtitle = "This email belongs to an account that was closed for non-payment — but your data was saved.";
+    screenContent = (
+      <>
         {reviveProvider === "google" ? (
           <>
             <div style={{ fontSize: "13px", color: "var(--color-text-secondary)", lineHeight: 1.6, marginBottom: "18px" }}>
@@ -355,34 +379,33 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
         <div style={{ marginTop: "20px", textAlign: "center" }}>
           <button onClick={() => { setMode("signin"); setError(null); }} style={linkBtnStyle}>← Back to sign in</button>
         </div>
-      </Shell>
+      </>
     );
-  }
-
-  // ── Forgot password ───────────────────────────────────────────────────────
-
-  if (mode === "forgot") {
-    return (
-      <Shell title="Reset password" subtitle="We'll email you a link to set a new password.">
-        <form onSubmit={handleForgot} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <label style={lS}>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required autoComplete="email" style={{ ...iS, borderRadius: "8px" }} />
-          </div>
-          {error && <ErrorBox>{error}</ErrorBox>}
-          <SubmitBtn loading={loading}>{loading ? "..." : "Send reset link"}</SubmitBtn>
-        </form>
-        <div style={{ marginTop: "20px", textAlign: "center" }}>
-          <button onClick={() => { setMode("signin"); setError(null); }} style={linkBtnStyle}>← Back to sign in</button>
+  } else if (mode === "forgot") {
+    screenKey = "forgot";
+    screenTitle = "Reset password";
+    screenSubtitle = "We'll email you a link to set a new password.";
+    screenContent = (
+      <>
+      <form onSubmit={handleForgot} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <label style={lS}>Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required autoComplete="email" style={{ ...iS, borderRadius: "8px" }} />
         </div>
-      </Shell>
+        {error && <ErrorBox>{error}</ErrorBox>}
+        <SubmitBtn loading={loading}>{loading ? "..." : "Send reset link"}</SubmitBtn>
+      </form>
+      <div style={{ marginTop: "20px", textAlign: "center" }}>
+        <button onClick={() => { setMode("signin"); setError(null); }} style={linkBtnStyle}>← Back to sign in</button>
+      </div>
+      </>
     );
-  }
-
-  // ── Sign in / Sign up ─────────────────────────────────────────────────────
-
-  return (
-    <Shell title={isSignUp ? "Create account" : "Sign in"}>
+  } else {
+    // Default: signin or signup
+    screenKey = isSignUp ? "signup" : "signin";
+    screenTitle = isSignUp ? "Create account" : "Sign in";
+    screenContent = (
+      <>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "4px" }}>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -476,7 +499,16 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
           </div>
         </div>
       )}
+    </>
+    );
+  }
 
+  // Wrap all screen content in ModeFade and Shell
+  return (
+    <Shell title={screenTitle} subtitle={screenSubtitle}>
+      <ModeFade modeKey={screenKey}>
+        {screenContent}
+      </ModeFade>
     </Shell>
   );
 }

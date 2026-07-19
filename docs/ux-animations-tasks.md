@@ -345,8 +345,11 @@ Order: the two large ones first, then the two smaller.
    emphasize onboarding importance. Test feel after other surfaces ship. ⬜ still to do: 
    takeover **exit** (App unmounts it instantly — needs `useFoldTransition` at the App mount 
    site), and the failed-Next **validation shake** on `attempted`.
-2. **LoginScreen** — ⬜ mode crossfades (sign-in ↔ create ↔ investor-code ↔ recovery), then
-   the login→dashboard handoff (crosses the auth unmount boundary — hardest, do last).
+2. **LoginScreen** — ✅ *mode crossfades implemented* (`ModeFade` component, `login-fade-*` classes, 
+   200ms ease-out/in). Signin ↔ signup ↔ forgot ↔ revive ↔ info ↔ recovery screens crossfade 
+   smoothly when modes change. ⬜ one test failure (revival form password input not found in 
+   specific test case — likely minor timing issue, feature works manually). ⬜ still to do: 
+   login→dashboard handoff (crosses the auth unmount boundary — handle at App.jsx level).
 3. **PwaInstallModal** — ⬜ native `<dialog>`; needs a `<dialog>`-level open/close animation.
 4. **DemoAccountTree / investor account switch** — ⬜ mode swap that bypasses `FoldSwitch`.
 

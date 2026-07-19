@@ -393,3 +393,13 @@ code {
 @media (prefers-reduced-motion: reduce) {
   .step-in-right, .step-in-left, .step-out-left, .step-out-right { animation:none; }
 }
+
+/* ── Login screen mode crossfades — smooth opacity transitions (ModeFade in LoginScreen.jsx) ── */
+@keyframes loginFadeIn  { from { opacity:0; } to { opacity:1; } }
+@keyframes loginFadeOut { from { opacity:1; } to { opacity:0; } }
+.login-fade-in  { animation: loginFadeIn  200ms ease-out both; }
+.login-fade-out { animation: loginFadeOut 200ms ease-in both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .login-fade-in, .login-fade-out { animation:none; }
+}

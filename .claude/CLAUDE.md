@@ -32,7 +32,7 @@ src/
 │   ├── HomePanel.jsx        — dashboard home tiles
 │   ├── IncomePanel.jsx      — income / tax / rolling weekly view
 │   ├── BudgetPanel.jsx      — expenses / goals / loans
-│   ├── BenefitsPanel.jsx    — 401k + PTO
+│   ├── BenefitsPanel.jsx    — DEAD CODE, never rendered (401k/PTO live in LogPanel + ProfilePanel; see drift-app-warden §11)
 │   ├── LogPanel.jsx         — event log + Log Effect Summary
 │   ├── WeekConfirmModal.jsx — weekly schedule confirmation
 │   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
@@ -56,30 +56,33 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 
 ---
 
-## SetupWizard Quick Reference (`src/components/SetupWizard.jsx` ~1800 lines)
+## SetupWizard Quick Reference (`src/components/SetupWizard.jsx` ~2500 lines)
 
-**Export:** `SetupWizard({ config, onComplete, onCancel, lifeEvent })`
-- `config` — current app config; spread into `formData` on mount
-- `lifeEvent` — `null` (first-run) | `"lost_job"` | `"changed_jobs"` | `"commission_job"`
-- `onComplete(data)` — receives merged config + `taxedWeeks` array + `setupComplete: true`
+**Full drift map (key functions, IF/THEN checks, path matrix): `docs/drift-app-warden.md` §7 — consult it before changing anything here.**
+
+**Export:** `SetupWizard({ config, onComplete, onCancel, lifeEvent, isInvestor, isExiting })`
+- `config` — current app config; spread into `formData` on mount; `firstActiveIdx` re-derived from `startDate` on every open
+- `lifeEvent` — `null` (first-run) | `"structure_change"` | `"lost_job"` | `"changed_jobs"` | `"commission_job"`
+- `onComplete(data)` — receives merged config + `taxedWeeks` + `accountCreatedIdx` + `setupComplete: true`
 
 **Steps (controlled by `STEP_DEFS` — each has `showIf(formData, lifeEvent)` + `isValid(formData)`):**
 | Step ID | Title | Key fields / notes |
 |---------|-------|-------------------|
-| 0 | Welcome | First-run intro or life event picker (LIFE_EVENTS array) |
+| 0 | Welcome | First-run: "Are you currently unemployed?" seed (§15.H) + intro; re-entry: life event picker or structure_change overview |
+| 10/11/12 | Jobless mini-flow | First-run + unemployed only: unemployment benefits → job-loss details → wrap up; skips steps 1–4 and 7 entirely |
 | 1 | Pay Structure | DHL employer gate → team/shift/rotation; base rate, OT threshold/multiplier, weekend diff, commission |
-| 2 | Schedule | Job start date → `firstActiveIdx`; rotation week (DHL) or std hours + pay period close day |
+| 2 | Schedule | Job start date → `firstActiveIdx` (via `dateToWeekIdx`); rotation week (DHL) or hours + pay period close day + biweekly parity |
 | 3 | Deductions | BenefitCard toggles (BENEFIT_OPTIONS), `otherDeductions` rows, attendance gate; `skippable: true` |
 | 4 | Tax Rates | State select, inline `PaystubCalc`, rate summary with FICA + std deduction; DHL MO preset |
-| 7 | Wrap Up | Live net preview (`estimateWeeklyGross`), paycheck buffer toggle ($50 default, $200 max), tax-exempt opt-in |
+| 7 | Wrap Up | Live net preview (`estimateWeeklyNet`), paycheck buffer toggle ($50 default, $200 max), tax-exempt opt-in; structure_change adds "What's Changing" diff |
 
-**Life event routing:** `lost_job` → steps 0–4; `commission_job` → steps 0–4 + commission field in step 1; `null` / `"changed_jobs"` → all steps including WrapUp (step 7).
+**Life event routing:** `lost_job` / `commission_job` → steps 0–4, **no WrapUp** (WrapUp-only fields must default in `handleComplete`); `null`(employed) / `"changed_jobs"` / `"structure_change"` → all steps including WrapUp (7); `null` + unemployed → steps 0, 10–12 only.
 
-**Internal helpers (file-private):** `Pill`, `Field`, `FieldRow`, `errBorder`, `BenefitCard`, `PaystubCalc`, `StepWrapUp`, `StepStub`, `estimateWeeklyGross`.
+**Internal helpers (file-private):** `Pill`, `Field`, `FieldRow`, `errBorder`, `BenefitCard`, `PaystubCalc`, `StepWrapUp`, `StructureChangeDiff`, `StepJobless*`, `dateToWeekIdx`, `isFirstRunJobless`.
 
-**State:** `formData` is flat; `update(patch)` merges via `setFormData(prev => ({ ...prev, ...patch }))`. `attempted` bool set on failed Next — triggers red borders/labels; resets on step change.
+**State:** `formData` is flat; `update(patch)` merges via `setFormData(prev => ({ ...prev, ...patch }))`. `attempted` bool set on failed Next — triggers red borders/labels + shake; resets on step change.
 
-**On complete:** enforces DHL overrides (`payPeriodEndDay: 0, otThreshold: 40`), runs `buildYear`, derives `taxedWeeks` from `firstActiveIdx`, calls `onComplete`.
+**On complete:** enforces DHL overrides (`payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5`), normalizes `paycheckBuffer ?? 50`, runs `buildYear`, derives `taxedWeeks` from `firstActiveIdx` (empty if `taxExemptOptIn`), stamps `accountCreatedIdx`, calls `onComplete`.
 
 ---
 
@@ -196,6 +199,33 @@ For a file with many call sites mutating the same field (see `BudgetPanel.jsx`'s
 
 ---
 
+## Drift App Warden — MANDATORY drift check before believing a change is done
+
+**`docs/drift-app-warden.md`** is the app's drift ledger: for every critical formula,
+function, pattern, and AI-context point it answers *"I am changing X — what Y must I check
+before X counts as done?"* It exists because the app's dominant failure mode is no longer
+locally-wrong code but **drift** — a locally-correct change that silently invalidates a
+distant system (five documented real incidents are catalogued there as case law: parallel
+formulas, retroactive recompute, lost saves, gate bypass, stale docs).
+
+- **Before changing** anything under a mapped section (Setup Wizard, the 5 panels —
+  Home, Income, Budget, Log, Account — Auth, Login, Paywall, UI-UX, or the shared
+  spines — fiscal math, persistence, entitlements, AI context, design system, admin
+  toolkit), read that section's drift trigger map and run its checks. State in the commit/PR which entries were consulted; "none applicable" is valid,
+  silence is not.
+- **Two categories, one fork:** every mapped item is either **LEDGER** (L — computes/stores
+  truth; drift = silently wrong numbers; hunt via cross-check against the single
+  source-of-truth function) or **GATEWAY** (G — routes/gates/presents; drift = wrong
+  surface for the wrong tier/mode; hunt via walking the full gate matrix).
+- **Keep it current in the same PR** — a stale drift-map entry certifies a false checklist,
+  which is worse than none. `active-systems.md` describes what exists; the warden doc maps
+  what breaks what — never duplicate between them.
+- This document is the foundation for a future **Drift Warden AI agent** that will be
+  mandatory for all development-team changes — write entries machine-actionable (named
+  triggers, named blast radii, executable procedures), never as prose warnings.
+
+---
+
 ## Development Workflow
 **30-min sprints, 4×/week.** Before: state the task clearly. After: commit + one-sentence summary.
 - `docs/active-systems.md` — how every live system works. **Working on Coach/AI context?** Read
@@ -254,6 +284,7 @@ Files: kebab-case · Components: PascalCase · Utilities/hooks: camelCase · Dat
 
 ## Known Cleanup
 - `WeekConfirmModal.jsx`, `LoginScreen.jsx`, `ProfilePanel.jsx` — hardcoded hex colors not yet tokenized (tracked in TODO §10)
+- `BenefitsPanel.jsx` (+ its coverage tests) — dead code, unrendered for the repo's entire visible history; 401k/PTO displays live in `LogPanel.jsx`, settings in `ProfilePanel.jsx` `BenefitsDetail`. Safe to delete on owner sign-off (drift-app-warden §11)
 
 ---
 

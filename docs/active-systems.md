@@ -23,9 +23,9 @@ Last updated: 2026-07-16 | App: Authority Finance (A:Fin)
 | 1 | Income & Pay Engine | `finance.js`, `App.jsx` | Live |
 | 2 | Rolling Views & Progressive Scaling | `rollingTimeline.js` | Live |
 | 3 | Budget — Expenses | `BudgetPanel.jsx`, `finance.js` | Live |
-| 4 | Budget — Goals | `BudgetPanel.jsx`, `HomePanel.jsx`, `goalFunding.js` | Live |
+| 4 | Budget — Goals | `HomePanel.jsx`, `goalFunding.js` | Live |
 | 5 | Budget — Loans | `BudgetPanel.jsx`, `finance.js` | Live |
-| 6 | Benefits — 401k & PTO | `BenefitsPanel.jsx` | Live |
+| 6 | Benefits — 401k & PTO | `LogPanel.jsx` (displays), `ProfilePanel.jsx` (settings) | Live — `BenefitsPanel.jsx` is dead code |
 | 7 | Attendance Bucket Model (DHL) | `finance.js` | Live |
 | 8 | Log Panel — Event Log & Effect Summary | `LogPanel.jsx` | Live |
 | 9 | Setup Wizard | `SetupWizard.jsx` | Live |
@@ -111,7 +111,9 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
 ## 4. Budget — Goals
 
 - **Timeline grid:** `computeGoalTimeline()` (`finance.js`) runs week-by-week surplus
-  sequencing against `futureWeeks`; renders as a month-labeled bar in `BudgetPanel.jsx`.
+  sequencing against `futureWeeks`; renders as a month-labeled bar in `HomePanel.jsx`
+  (the whole goals surface — cards, CRUD, reorder, timeline — moved to Home 2026-05-12;
+  `BudgetPanel.jsx` no longer receives `goals` at all).
 - **Reset Timeline:** `config.goalTimelineEpochIdx` — weeks before it contribute no
   surplus. The button (HomePanel Active Goals header) writes the next pay week's idx
   here, behind a confirmation modal; persists normally.
@@ -139,7 +141,12 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
 
 ## 6. Benefits — 401k & PTO
 
-**File:** `BenefitsPanel.jsx`.
+**Files:** `LogPanel.jsx` (displays — ported from the retired standalone panel; marker
+comment at `LogPanel.jsx:86`) + `ProfilePanel.jsx` `BenefitsDetail` (settings — the
+Account tab's "Retirement & Benefits" sub-view). **`BenefitsPanel.jsx` itself is dead
+code** — unrendered for the repo's entire visible history (no import, no nav entry);
+deletion tracked in CLAUDE.md Known Cleanup. Corrected 2026-07-19 (Drift Warden T5 pass,
+`docs/drift-app-warden.md` §11).
 - **401k:** projected employee/employer contributions (adjusted for logged loss/gain
   events), month-by-month breakdown table with running total, enrollment countdown
   banner when `k401StartDate` is in the future.
@@ -316,11 +323,14 @@ Framer Motion.
 ## 17. Auth & Account
 
 - **Auth:** Supabase email/password + Google OAuth (`LoginScreen.jsx`); RLS live.
-- **`ProfilePanel.jsx`** — Account list → sub-views: Employment, Pay Structure (4
-  independently editable cards: Base Pay / Differentials / Overtime Rules / Weekly Hours
-  & Schedule Override), Retirement & Benefits, App Preferences, Tax Plan (gated),
-  Investor Codes (admin), **Life Events** (§10); plus Account (email/password, link
-  Google, sign out, delete account).
+- **`ProfilePanel.jsx`** — Account list → sub-views: Job & Pay (4 independently
+  editable pay cards — Base Pay / Differentials / Overtime Rules / Weekly Hours &
+  Schedule Override — plus the Employment card merged into this view 2026-07-06 and the
+  Life Events entry at its foot; neither is a standalone row anymore), Retirement &
+  Benefits, App Preferences, Tax Plan (gated), Investor Codes (admin), plus Account
+  (email/password, link Google, sign out, delete account, §17.F Subscription card).
+  In Job Loss Mode the Work & Pay group is replaced by a single "Back to Work" row.
+  Full drift map: `drift-app-warden.md` §12.
 
 ---
 
@@ -429,9 +439,13 @@ no representation here until this pass).
   `effectiveFrom`; investor sandbox accounts are exempt.
 - **Admin surface:** DB Row Viewer → Fetch shows "config history: N snapshots · latest [date]
   ([source]) · [changed fields]" (`fetchConfigHistoryMeta`, `db.js`).
-- **Known gap (by design — not yet started):** nothing reads this table. The read-path resolver
-  (an analog of expenses' `getEffectiveAmount`) and the loan-history equivalent fix are explicit,
-  separate follow-ups. Full design record in `docs/TODO.md` §19.
+- **Known gap (by design — mostly unstarted):** almost nothing reads this table. One narrow
+  read slice is live (§15.D Quick Rate Update): `db.js#extractBaseRateHistory` filters
+  `account_history` rows to baseRate changes → `App.jsx` `baseRateHistory` state →
+  `buildYear(cfg, baseRateHistory)` → `resolveBaseRateForWeek` per week. The general
+  read-path resolver (an analog of expenses' `getEffectiveAmount` for all sensitive fields)
+  and the loan-history equivalent fix remain explicit, separate follow-ups. Full design
+  record in `docs/TODO.md` §19. Drift map for the live slice: `docs/drift-app-warden.md` §7 F10.
 
 ---
 

@@ -256,7 +256,7 @@ for that section):
 - [x] **T3 — Income Panel** — §9 below (surgical pass 2026-07-19)
 - [x] **T4 — Budget Panel** — §10 below (surgical pass 2026-07-19)
 - [x] **T5 — Account Panel** — §12 below (surgical pass 2026-07-19; §11 records the redefinition from the phantom "Benefits Panel" tier)
-- [ ] **T6 — Log Panel**
+- [x] **T6 — Log Panel** — §13 below (surgical pass 2026-07-19)
 - [ ] **T7 — Auth System**
 - [ ] **T8 — Login System**
 - [ ] **T9 — Paywall System**
@@ -1329,3 +1329,161 @@ tap-only state and the InvestorAdminPanel's data calls are RLS-gated server-side
 becomes a real gap only if sub-view state ever gains an external setter, which its
 IF/THEN now guards. Queue-visible as watch item **DW-W2** in `BUG_FIX_TODO.md`. The
 D5 correction (active-systems §17 sub-view list) was applied in-pass per protocol.
+
+---
+
+## 13. T6 — Log Panel Drift Map
+
+**Pass date:** 2026-07-19. Same anchor + method rules as §7; numbering continues (F54+).
+**Git-history note:** governing recent intentions are the eager-save audit (`764da5b` —
+log entries covered), the rolling pay-week dropdown (`7532c86`, `e7e5faa`), and the
+base-user-friendly per-entry breakdown (`11da9c7`). This section also absorbs the
+401k/PTO display entries promised by §11.2's redirect (ported from the dead
+BenefitsPanel).
+
+**Scope:** `LogPanel.jsx` (1,293 lines) and its App.jsx feed: the `eventImpact` memo,
+`logTotals` threading, `bucketModel`, and `ptoGoal` state.
+
+### 13.1 Block 1 — Critical inventory (function by function)
+
+**F54 · Log Effect Summary local reduce** — `LogPanel.jsx:72–84` — **[L]**
+⚠ **DW-5.** The summary card's `adjTH`/`adjWA`/`projS` are re-derived from a local
+`logs.reduce` calling `calcEventImpact(e, config)` — **without `weekMeta`** — while the
+values Income/Home display come from App's `eventImpact` memo (`App.jsx:1075–1119`),
+which resolves each event's real week (`weekMeta.isHighWeek`, actual `grossPay`).
+Second divergence vector: App's `totalNetAdjustment` counts only events with a finite
+`weekIdx` (`:1094–1096`); the local reduce counts everything. So the Log tab's
+"Adjusted Take-Home" and Income's Year Summary can disagree on the same screen.
+> **IF** touching either derivation, **THEN** converge them instead: thread
+> `logTotals.adjustedTakeHome` (and the needed aggregates) into LogPanel the way the
+> 401k aggregates already are (`App.jsx:1581–1585`), or pass a weekMeta resolver down.
+> Check: log a missed shift on a high week; Log summary and Income Year Summary move by
+> the identical amount.
+
+**F55 · Event CRUD cluster** — add `:275–290`, `saveEdit:299–314`, delete `:753`,
+entry schema (`blank`, `:45–50`), type filter `:399–404` — **[L/G]**
+All three mutations compute-then-eager-save via `onSaveLogsNow` (compliant). The
+event-type dropdown filters by capability gates: bucket types
+(`missed_unapproved`/`pto_unapproved`) DHL-only; PTO types need `hasPTO`. Entry ids are
+`Date.now()` — the same id scheme WeekConfirmModal's spawned entries use (§9 F30/F31),
+and the check-in linkage (`record.eventId`) depends on id uniqueness.
+> **IF** the entry schema gains/renames a field, **THEN** every `calcEventImpact`
+> branch, the WeekConfirmModal Layer-2 pre-fill (which "mirrors LogPanel's blank event
+> shape" — `WeekConfirmModal.jsx:135`), and the F30 mirror's remap list must move
+> together — three writers of one schema. Check: `jobLossFlow`/`WeekConfirmModal`
+> tests + log an event of each type.
+
+**F56 · Pay-week dropdown + `resolveWeek`** — rolling window ordering (`7532c86`),
+"Week of start–end" labels (`e7e5faa`), `handleEditWeekEndChange:298` (resets
+`missedDays`/hours when the week changes) — **[G]**
+> **IF** week identity fields (`weekEnd`/`weekIdx`/`weekRotation`) can be edited
+> without resetting day-resolution fields, **THEN** stale `missedDays` from the old
+> week silently mis-price the event — the reset in `handleEditWeekEndChange` is
+> load-bearing, keep it on any new week-changing path.
+
+**F57 · `calcEventImpact` consumption contract** — authoritative: `finance.js:1264`
+(3-arg, `weekMeta` grounds `isWeek2` + `baseGross`); weekMeta-aware caller:
+`App.jsx:1082–1085`; weekMeta-**less** callers: `LogPanel.jsx:74` (F54) and `:644`
+(admin per-entry breakdown) — **[L]**
+> **IF** `calcEventImpact`'s fallback path (rotation-string matching,
+> `projectedGross`) changes, **THEN** the weekMeta-less callers shift while App's
+> numbers don't — widening DW-5. Any new caller must pass `weekMeta` when the event
+> has a resolvable `weekIdx`. Check: per-entry breakdown (admin chevron) matches the
+> hero cards for the same entry.
+
+**F58 · 401k display block (ported)** — `:86–98`; gates `has401k:159` (DHL: enrollment
+**and** rate; base: rate only) — **[L]**
+Sums `allWeeks`' `k401kEmployee`/`k401kEmployer` columns (Spine A truth), adjusts by
+the `logTotals` aggregates App threads in (`:1581–1585` — weekMeta-aware, correct
+side of DW-5), honors the `k401StartDate || benefitsStartDate` fallback shared with
+T5's `BenefitsDetail` (§12 F49).
+> **IF** the fallback order or the enrollment-gate asymmetry changes, **THEN** T5's
+> card, this block, and Spine A must move together (the F49 three-reader rule).
+> Check: base user with rate but no enrollment sees 401k here; DHL user without
+> enrollment doesn't.
+
+**F59 · PTO balance model** — `:99–153`: projected-accrual model (`ptoBs`, active-week
+hours ÷ 20) vs. manual-override model (`ptoHoursOverride` + confirmed-weeks earnings −
+consumption − accrual losses since `ptoOverrideWeekIdx`); goal projection
+(`goalPtoProjected`) deliberately sums *all* active weeks to the goal date, not just
+confirmed; `negCap` extends availability — **[L]**
+Override Save is eager-saved (`:1043`, compliant).
+> **IF** accrual rate (÷20), the consumption split (`pto` uses `ptoHours`,
+> `pto_unapproved` uses `hoursLost`), or the override arithmetic changes, **THEN**
+> both models and the goal tracker must stay consistent — and `calcEventImpact`'s
+> `hoursLostForPTO` (accrual-only, no direct draws — the `:107–110` comment) remains
+> a *different* quantity than `ptoUsedAll`. Confusing those two double-counts PTO.
+> Check: log a `pto` event and a missed shift; balance drops by draw + accrual-loss
+> exactly once each.
+
+**F60 · `ptoGoal` CRUD** — `saveForm:187–198`, Clear `:1103`; App wiring
+`App.jsx:1586–1587` (bare `setPtoGoal`) — **[L]**
+⚠ **DW-6.** Save and Clear are discrete actions but ride the 800ms debounce — App
+passes no eager-save wrapper for `ptoGoal` (the only un-eager-saved discrete mutation
+on this surface; the CLAUDE.md eager-save table has no `ptoGoal` row, so the `764da5b`
+audit's coverage claim has a gap).
+> **IF** fixing, **THEN** follow the standard shape: an `onSavePtoGoalNow(next)` prop
+> from App (`savePersistedStateNow({ ptoGoal: next })`) called in both `saveForm` and
+> Clear. Check: kill-tab after Save; goal survives reload.
+
+**F61 · Attendance surfaces** — DHL bucket: `bucketModel` prop (computed in App via
+`computeBucketModel`, Spine A), bucket balance override Save/Reset `:1194`/`:1210`
+(both eager-saved); base-user tracker `:1247+` (`attendanceBucketEnabled === true` +
+thresholds, display-only vs. configured warn/terminate) — **[L/G]**
+> **IF** `computeBucketModel`'s tiers/cap/payout change, **THEN** this display, the
+> bucket-hours hero card, and `calcEventImpact`'s `bucketHoursDeducted` move together.
+> **IF** the base tracker gains any payout math, **THEN** it stops being the
+> deliberately-simpler mechanism active-systems §7 documents — product decision,
+> surface it.
+
+**F62 · Admin per-entry breakdown** — `:644+` (chevron-expanded `calcEventImpact`
+output per entry), `isAdmin`-gated — **[G]**
+Shares F57's weekMeta-less caveat. The breakdown is the Warden's own instrument for
+event-impact verification (Spine F) — its numbers must match the hero-card aggregates.
+> **IF** DW-5's fix converges the derivations, **THEN** update this call site in the
+> same commit — leaving it weekMeta-less would make the diagnostic tool the last liar
+> in the room.
+
+### 13.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `calcEventImpact` signature/branches (Spine A) | F54/F57/F62 callers, App's `eventImpact`, WeekConfirmModal Layer-2 pre-fills, per-week `weeklyNetAdjustments` → goal funding (§9 F29) | `finance.test.js` + one event of each type; hero cards = per-entry breakdown = Income delta | D1 |
+| Event schema (`blank` shape) | F55's three writers (LogPanel CRUD, check-in spawns, F30 mirror), `record.eventId` linkage, `sumJobHuntIncome` (reads `jobHuntIncomeLog`, *separate* log — don't conflate) | Schema greps + `WeekConfirmModal.test.jsx` | D1 |
+| `EVENT_TYPES` (`constants/config.js`) | F55 filter gates, `calcEventImpact` branch coverage, hero-card groupings, attendance history month grouping | Add/rename type → every switch handles it or explicitly ignores | D1 |
+| `logTotals` threading (`App.jsx:1581–1585`) | F58's adjusted 401k figures; DW-5's fix will widen this contract to net totals | Prop list vs. `eventImpact` return shape | D3 |
+| `ptoGoal`/`ptoHoursOverride`/bucket override fields | F59/F60/F61 + `db.js` `pto_goal` column + DB Row drift badge | Kill-tab tests per mutation; drift badge clean | D3 |
+| `allWeeks` 401k columns (`k401kEmployee`/`k401kEmployer`, Spine A) | F58 sums + Week Inspector's 401k display + the known `$14.96 match with matchRate 0` incident class (CLAUDE.md Week Inspector notes) | Week Inspector vs. this block on one week | D1 |
+| UpgradePanel replacement (T9) | Like Income (§9), this panel has **no readOnly shadow** — replaced wholesale when expired (`App.jsx:1570`) | If expired-mode ever renders LogPanel, every mutation is live | D4 |
+
+### 13.3 Block 3 — Gate matrix
+
+| Dimension | Cells | Expected behavior |
+|---|---|---|
+| Employer | DHL / base | DHL: bucket types + bucket card + rotation labels; `has401k` needs enrollment+rate. Base: no bucket types, `has401k` on rate alone, attendance tracker only if opted in |
+| `hasPTO` | DHL / base+`ptoEnabled` / neither | PTO event types + PTO section gated; neither: no PTO surface |
+| `isAdmin` | false / true | true: per-entry impact chevron (F62); false: cards only |
+| Entitlement | entitled / expired | Expired: whole panel replaced by `UpgradePanel` (`App.jsx:1570`) — no internal gate exists |
+| `config.jobLossMode` | false / true | true: Log tab removed from nav + force-redirected (`App.jsx:337`) — unreachable |
+| `ptoHoursOverride` | null / set | Set: rolling-balance model + "(manual)" tag; null: projected-accrual model |
+
+### 13.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *BenefitsPanel port* (§11) — the 401k/PTO blocks here are the living descendants;
+  the marker comment at `:86` is the lineage record.
+- *Base-friendly breakdown* (`11da9c7`) + *extra-day PTO gain* (`a8b9bf0`) — the
+  per-entry breakdown and PTO gain semantics were tuned for base users; DHL-flavored
+  assumptions regressing into them is the watch.
+- *Rolling pay-week dropdown* (`7532c86`, `e7e5faa`) — dropdown order/labels are
+  deliberate UX; the week-change reset (F56) shipped with it.
+
+**Standing findings from this pass (open — decisions owed):**
+1. **Parallel adjusted-take-home derivation (F54/F57/F62)** *(queued as DW-5 in
+   `docs/BUG_FIX_TODO.md`)*: LogPanel re-derives net totals weekMeta-less while
+   Income/Home read App's weekMeta-aware `logTotals` — same-screen disagreement
+   possible; fix by threading `logTotals` down (the 401k aggregates already set the
+   pattern).
+2. **`ptoGoal` lacks eager save (F60)** *(queued as DW-6)*: Save/Clear ride the
+   debounce; the only rule exception on this surface, and a gap in the `764da5b`
+   audit's coverage.

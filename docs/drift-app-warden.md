@@ -273,7 +273,7 @@ for that section):
 - [x] **T9 — Paywall System** — §16 below (surgical pass 2026-07-19; found DW-7, the investigation's highest-severity defect)
 - [x] **T10 — UI-UX** — §17 below (surgical pass 2026-07-19)
 - [x] **Spine A — Fiscal Math** — §18 below (spine pass 2026-07-20)
-- [ ] **Spine B — Persistence & Save Integrity** — §19 below
+- [x] **Spine B — Persistence & Save Integrity** — §19 below (spine pass 2026-07-20)
 - [ ] **Spine C — Entitlement & Gating** — §20 below
 - [ ] **Spine D — AI Layer & Context Grounding** — §21 below
 - [ ] **Spine E — Design System & Motion** — §22 below
@@ -2420,3 +2420,225 @@ owned, and queue-visible (DW-W1 + the §22/Master-Timeline roadmap); no new DW d
 surface passes (T1–T10) already verified those consumers call the exports rather than
 re-deriving. No D5 corrections owed: `active-systems.md` §1/§2/§7/§14 describe these systems,
 this section maps their couplings — the §5 covenant boundary holds.
+
+---
+
+## 19. Spine B — Persistence & Save Integrity Drift Map
+
+**Pass date:** 2026-07-20 (spine pass). Same anchor + method rules as §7; numbering
+continues (F105+).
+**Git-history note:** the governing intentions are the 2026-07-18 eager-save audit trio
+(`debc0cb`/`764da5b` + the general-primitive refactor that turned `saveConfigNow` into a
+thin wrapper over `savePersistedStateNow`), the keepalive unload-flush hardening
+(`168cc4b`), and the `account_history` write path (migration 020, `d9dfd93`). This is the
+**authority record** for how a mutation reaches durable storage; T7 (§14) already mapped
+the load/boot/RLS half (F63–F71) and the surfaces mapped their own eager-save call sites
+(F8, F35, F46, F55, F60/DW-6) — this section owns the App.jsx save *primitive*, the
+debounce/flush machinery, the localStorage hook, the config-history pure layer, the
+migration-folder rules, and the four-site new-field procedure.
+
+**Scope:** `App.jsx` save layer (`savePersistedStateNow`/`attemptSave`/debounce/
+`latestPersistedStateRef`/`pendingSaveRef` + SaveFailedBanner retry), `db.js`
+(`saveUserData`/`flushUserDataKeepalive`/`saveConfigSnapshot` — the write half of F67/F68),
+`hooks/useLocalStorage.js`, `lib/configHistory.js`, `database/migrations/`. Absorbs
+active-systems §22 (account history).
+
+**The five write paths (memorize — every mutation uses exactly one):**
+1. **Debounced autosave** — 800ms after any `config`/`expenses`/`goals`/`logs`/`showExtra`/
+   `weekConfirmations`/`ptoGoal` change (`App.jsx:642–651`). For continuous edits (typing,
+   sliders). Console-only failure handling.
+2. **Eager save** — `savePersistedStateNow(overrides, historySource)` (F105). For discrete
+   Save/Confirm/Add/Delete actions. Retries once at 3s; user-visible `SaveFailedBanner` on
+   double-failure.
+3. **Keepalive unload flush** — `flushUserDataKeepalive` on `visibilitychange`/`pagehide`/
+   `beforeunload` (F106; F64/F68 own the db.js side). Synchronous credential read, direct
+   PostgREST `fetch(keepalive:true)`.
+4. **Force Sync (admin)** — `handleForcePush`/pull (Spine F). Bypasses the debounce.
+5. **Service-role routes** — `api/*` for privileged columns (tier/subscription) the client
+   whitelist-by-destructure (F68) deliberately excludes. Spine C owns these.
+   Plus a **sixth, device-local** channel: `useLocalStorage` (F107) — browser-only UI/signal
+   state that never reaches Supabase at all.
+
+### 19.1 Block 1 — Critical inventory (spine-internal machinery)
+
+**F105 · `savePersistedStateNow` + `attemptSave` + retry/banner path** — `App.jsx:740–777` — **[L]**
+The general eager-save primitive every `saveXNow` wrapper (F8/F35/F46, the inline
+`onSaveGoalsNow`/`onSaveExpensesNow`/`onSaveLogsNow` at `:1501/1543/1572`) funnels through.
+Ordered effects: (1) `historySource` sets `configHistoryMetaRef` via `??=` (`:755` — keeps a
+more-specific wizard/life-event tag a caller already set); (2) cancels the pending debounce
+**and** any pending retry, clears `pendingSaveRef` (`:756–758`); (3) `attemptSave` merges
+`overrides` onto `latestPersistedStateRef.current` into a **complete row**, updates the ref,
+calls `saveUserData`, and sets `saveError` from the *real* Supabase message (`:740–748`);
+(4) on failure schedules one retry at 3s (`:760`). `retryFailedSave` (banner "Retry") and
+`dismissSaveError` (hides banner, does **not** drop data — the next debounce re-persists)
+complete the surface.
+> **IF** the merge-onto-latest-ref shape, the retry cadence, or the error-surfacing changes,
+> **THEN** the eager-save promise (a completed action survives a backgrounded/reclaimed tab)
+> weakens for *every* call site at once — the D3 class the whole 2026-07-18 audit closed.
+> Named checks: F8 (wizard completion), F31 (check-in `onConfirm`), F35 (Budget wrapper),
+> F46 (ProfilePanel cards), the F12 JobLossEntry activation. **Invariant:** overrides is a
+> *partial patch* merged onto the full ref — never pass a functional updater, and never call
+> the bare `setState` alone for a discrete action (the CLAUDE.md eager-save rule). Check:
+> kill the tab within 800ms of a discrete Save; reload; the change survived. **Security note:**
+> `attemptSave` routes through `saveUserData`, whose destructure is the client-writable
+> whitelist (F68) — `savePersistedStateNow` cannot smuggle a tier/subscription column even if
+> an overrides object contains one; it's silently dropped, not written.
+
+**F106 · Debounce + `latestPersistedStateRef` + flush trio** — `App.jsx:635–651`, `:691–720` — **[L]**
+`latestPersistedStateRef.current` is rebuilt **synchronously during render** (`:639`, not in
+an effect) from the seven persisted fields, so the unload flush always reads current state
+even if the tab backgrounds before effects commit. `pendingSaveRef` marks "a debounced write
+is owed"; the 800ms timer clears it and calls `saveUserData`. The flush trio
+(`visibilitychange:hidden`/`pagehide`/`beforeunload`) fires `flushUserDataKeepalive` **only
+when `pendingSaveRef` is set** — a clean state doesn't flush.
+> **IF** the ref stops updating synchronously (moved into a `useEffect`), **THEN** the
+> keepalive flush reads stale state and silently drops the last edit — the exact `168cc4b`
+> class, and it couples to F64 (the credential snapshot must *also* be synchronous). **IF**
+> the seven-field list in the ref (`:639`) diverges from the debounce dep array (`:651`) or
+> `saveUserData`'s destructure, **THEN** a field either never autosaves or never flushes.
+> Check: this is site 3 of the F110 four-site checklist; `db.test.js` + a kill-tab test per
+> field.
+
+**F107 · `useLocalStorage(key, initialValue)`** — `hooks/useLocalStorage.js:3–20` — **[L/G]**
+A `useState` seeded from `localStorage.getItem` (JSON-parsed, try/catch to `initialValue`)
+plus a write-back effect (try/catch swallows quota/private-mode failures). **Not dead legacy:**
+its one live consumer is `CoachNetWorthCard.jsx:40` (`coachNetWorthSignal`) — the per-tier/
+per-fiscal-week Coach message throttle (F24). That means the "one proactive Coach message per
+tier per fiscal week" guarantee is **device-local**, entirely outside the Supabase net
+(debounce, eager save, keepalive all bypass it): a user on a second device gets the message
+again, and clearing browser storage re-arms it.
+> **IF** any *account* truth (not ephemeral UI/signal state) is ever stored through this hook,
+> **THEN** it silently won't sync across devices and won't survive a storage clear — this hook
+> is the localStorage→Supabase migration's vestige and must stay scoped to device-local UI
+> state only (dismissals, signal throttles). Check: grep `useLocalStorage(` — every key is
+> ephemeral display/throttle state, never money/time/account data. **IF** the parse/stringify
+> guards change, **THEN** a corrupt value must still fall back to `initialValue`, never throw
+> into a render (`useLocalStorage.test.js` covers this).
+
+**F108 · `configHistory.js` — whitelist + `diffSensitiveFields`** — `configHistory.js:14–63` — **[L]**
+The pure half of the config-history watcher (F9 owns the App.jsx effect). `HISTORY_SENSITIVE_FIELDS`
+(70 fields across pay/schedule/employer/tax/benefits/attendance/buffer/job-loss) is the
+whitelist; `diffSensitiveFields` returns changed whitelisted fields with two deliberate
+semantics: `undefined`/`null` compare **equal** (`a ?? null` — so `DEFAULT_CONFIG` spreading a
+new field onto an old row never fabricates a snapshot) and arrays/objects compare
+**structurally** (`JSON.stringify`). Everything *not* listed (UI prefs, `goalTimelineEpochIdx`,
+investor display fields, wizard gate flags) is noise and must never trigger a row.
+> **IF** a sensitive pay/tax/schedule field is added to the wizard or a ProfilePanel card
+> (§7 F7, F47, F50 three-way rule), **THEN** it must join this list **and** `DIFF_FIELDS`
+> (SetupWizard) — the two lists watch the same concept from two angles and drift silently if
+> one grows alone. **IF** the null-coalescing or structural-compare rule changes, **THEN**
+> either every load fabricates spurious history rows (undefined→null noise) or a real
+> array/object edit (`taxedWeeks`, `otherDeductions`) stops being captured. This feeds the
+> §22 read slice: only `baseRate` rows are read today (F10/`extractBaseRateHistory`), but the
+> capture is broad by design (Master Timeline, TODO §19). Check: `configHistory.test.js`; DB
+> Row Viewer's config-history line after a sensitive edit.
+
+**F109 · Migration-folder rules** — `database/migrations/` — **[G]**
+Ordered, numbered SQL. **BOOKMARK files are never migrations** — `022_BOOKMARK_schema_snapshot_2026-07-10.sql`
+is a full-schema recap (schema state through 021) that exists so a session reads one file
+instead of the whole folder; the `BOOKMARK` tag + all-caps make it unmistakable, and assigning
+one the next real number expecting it to run is the trap CLAUDE.md warns about. Real migrations
+continue past it: **023** (`coach_chats`, unwired — Spine D), **024** (`user_data` write-
+permission fix — the F69 case law). **The next real migration is 025** — verify against the
+folder before numbering; this note has gone stale once already (this doc's own §14 caught it).
+> **IF** a migration is added, **THEN** it (a) takes the next real number skipping BOOKMARKs
+> (025 now), (b) if it touches `user_data` columns, runs the F69 new-column checklist (RLS
+> grant + service-role route + F67 read mapping + F68 write exclusion + drift-badge column),
+> and (c) if it changes schema shape, a fresh BOOKMARK should be appended and the CLAUDE.md
+> "latest bookmark / next migration" note updated **in the same PR** (D5 otherwise). Check:
+> `ls database/migrations/` — the highest non-BOOKMARK number + 1 is the next; migration 024
+> is the reminder that "SQL ran" ≠ "writes work".
+
+**F110 · The four-site new-persisted-field procedure** — cross-file — **[L]**
+Codifying F68's sketch as a named check. A new field that must persist to `user_data` has to
+appear at **all four** sites or it silently half-works (DW-6's `ptoGoal` gap is the specimen —
+it reached React state but no eager-save wrapper, so discrete saves rode the debounce):
+1. **`saveUserData` destructure** (`db.js:396`) — the debounced/eager writer.
+2. **`flushUserDataKeepalive` destructure** (`db.js:443`) — the unload writer (identical field
+   set to #1 by contract).
+3. **`latestPersistedStateRef.current`** (`App.jsx:639`) + the debounce dep array (`:651`) —
+   so eager merges and the flush see it.
+4. **DB Row Viewer drift-badge column list** (Spine F) — so the admin tool can detect its
+   in-memory≠DB drift.
+Plus, if the field is a *discrete* mutation (Save/Confirm/Add/Delete), a `saveXNow` eager
+wrapper and its `readOnly` no-op shadow (F20/F35 gate). And `loadUserData` (F67) must map it
+back on read, with a `DEFAULT_CONFIG` default so old rows get it.
+> **IF** a field lands at some-but-not-all four sites, **THEN** the failure is silent and
+> path-specific: miss #1/#2 and it never durably saves; miss #3 and eager saves drop it; miss
+> #4 and the drift badge lies. The DW-7 fix's remedy (a test asserting the engine's reads
+> appear in the query) is the template — a `db.test.js` case asserting the two destructures
+> and the ref share one field set would make this class structural. Check: kill-tab test on
+> the new field's discrete action; DB Row drift badge clean after save.
+
+**Reverse index — surface F-entries already covering Spine-B consumers (do not restate):**
+F8 (wizard `savePersistedStateNow`), F9/F10 (config-history watcher effect + baseRate read
+chain), F35 (`applyExpenseUpdate` wrapper), F46 (ProfilePanel card pattern), F31 (check-in
+single eager save), F55/F60 (Log CRUD + `ptoGoal`/DW-6), F63 (`sharedStorage` shim),
+F64 (`cachedAuthSnapshot`), F66 (`applyLoadedData` pending-save guard), F67 (`loadUserData`
+migration gauntlet — the read half), F68 (`saveUserData`/keepalive whitelist — the write half),
+F20 (readOnly noop shadow).
+
+### 19.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| A new persisted `user_data` field | The F110 four sites + eager wrapper + readOnly shadow + F67 read map | Four-site grep; kill-tab test; DB Row drift badge clean | D3 |
+| `savePersistedStateNow`/`attemptSave` merge or retry shape (F105) | Every `saveXNow` wrapper + inline eager caller (F8/F31/F35/F46) | Kill-tab within 800ms of a discrete Save; SaveFailedBanner on a forced failure | D3 |
+| `latestPersistedStateRef` sync-render update or the flush trio (F106) | Keepalive path (F64/F68), pending-save guard (F66) | Background the tab mid-edit; edit survives reload; ref list = debounce deps = destructure | D3 |
+| `HISTORY_SENSITIVE_FIELDS` / `diffSensitiveFields` semantics (F108) | F9 watcher, `DIFF_FIELDS` (§7 F7), §22 read slice (F10) | Sensitive edit → DB Row config-history line; undefined→null edit records nothing; `configHistory.test.js` | D5/D2 |
+| `saveConfigSnapshot` row shape (`snapshot`/`changed_fields`/`effective_from`) | `extractBaseRateHistory` filter (F10, `db.js:19`), Master-Timeline future readers | A `baseRate` edit produces a readable row; future-dated rate shows old rate pre-effective (Week Inspector) | D2 |
+| `useLocalStorage` scope (F107) | `coachNetWorthSignal` throttle (F24) — device-local by design | Grep keys stay ephemeral; no account truth added; `useLocalStorage.test.js` | D3 |
+| `user_data` column set (any migration, F109) | F110 sites, BOOKMARK freshness, CLAUDE.md migration-number note, RLS grants (F69) | Next number skips BOOKMARKs (025); append BOOKMARK + update note same PR; F69 checklist | D2/D5 |
+| Debounce interval / dep array (F106) | Continuous-edit persistence; must NOT gain a discrete-action dependency that should be eager instead | 800ms after typing writes once; a Save button does not rely on it | D3 |
+
+### 19.3 Block 3 — Authority table (persisted field → write paths → readers)
+
+The seven client-writable `user_data` payload fields, each with the paths that write it and
+the load-side reader. A field missing from any write column silently loses that path.
+
+| Field | Debounce (F106) | Eager (F105) | Keepalive (F68) | Drift badge (Spine F) | Load reader (F67) |
+|---|---|---|---|---|---|
+| `config` | ✅ | `saveConfigNow`/`savePersistedStateNow` | ✅ | `config` | `loadUserData` + DEFAULT_CONFIG merge |
+| `expenses` | ✅ | `onSaveExpensesNow` (F35) | ✅ | `expenses` | migration gauntlet (`weekly`→`history`, loans) |
+| `goals` | ✅ | `onSaveGoalsNow` (F18/F19) | ✅ | `goals` | direct |
+| `logs` | ✅ | `onSaveLogsNow` (F55) | ✅ | `logs` | direct |
+| `showExtra` | ✅ | via `savePersistedStateNow` overrides | ✅ | `show_extra` | direct |
+| `weekConfirmations` | ✅ | check-in `onConfirm` (F31), Reopen (F32/DW-3) | ✅ | `week_confirmations` | auto-confirm seed (F26) |
+| `ptoGoal` | ✅ | **⚠ none — DW-6** (bare `setPtoGoal`) | ✅ | `pto_goal` | direct |
+
+**Privileged columns (never in the client payload — service-role only):** tier flags
+(`is_admin`/`is_tester`/`is_investor`/`is_employer_dhl` — the last *derived* at write time from
+`employerPreset`, not stored client-authored), subscription columns (`subscription_status`/
+`trial_ends_at`/`access_ends_at`/`current_period_end`/`card_on_file`/`plan`),
+`tax_projections_enabled`. Writable only through Spine C's `api/*` routes; the F68
+destructure is the enforcing whitelist (migration 019 RLS is the server half).
+
+**Separate table (not `user_data`):** `account_history` (migration 020, write-only via
+`saveConfigSnapshot`, read-only via `extractBaseRateHistory` — the §22 narrow slice);
+`coach_chats` (migration 023, **unwired** — Spine D); `stripe_webhook_events` (migration 018,
+idempotency — Spine C/T9); `deleted_accounts` (cron tombstones — T9).
+
+### 19.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *Production data loss on backgrounded tabs* (pre-2026-07-18 audit) — setup wizard, check-ins,
+  tax toggles, goals/expenses/logs all rode the debounce and vanished when mobile Safari
+  reclaimed the tab. Closed by the eager-save pattern (F105) + the CLAUDE.md rule. F31's
+  in-code comment is the memorial.
+- *Dropped unload writes* (`168cc4b`) — a plain `fetch` aborted at unload; `flushUserDataKeepalive`
+  + the synchronous ref/credential reads (F106/F64) are the fix; sync-dispatch is the invariant.
+- *Eager-save general-primitive refactor* (2026-07-18) — `saveConfigNow` became a thin wrapper
+  over `savePersistedStateNow` so config, goals, expenses, logs, weekConfirmations all share
+  one retry/banner path.
+- *Migration 024* (`8f34def`/`a93dcad`) — the UPDATE grant missing `user_id` broke every upsert
+  conflict path while reads worked; "migration ran" ≠ "writes work" (F109/F69).
+
+**Standing findings from this pass:** none new filed. The one open persistence defect on record
+is **DW-6** (`ptoGoal` lacks an eager-save wrapper — surfaced in the T6 pass, authority table
+above marks the gap); it is the live proof of the F110 four-site procedure's necessity and
+stays queued until fixed. No D5 corrections owed — `active-systems.md` §22 already carries the
+F10 read-path annotation applied during the T7 pass, and the migration-number note in CLAUDE.md
+now self-warns (T7 pass). `useLocalStorage`'s device-local scope (F107) is documented-intended
+(the localStorage→Supabase vestige), not a defect — filed as a standing note, not a DW row,
+because nothing account-critical routes through it today; it would **promote to a defect** the
+moment any money/time/account field is stored through it instead of `user_data`.

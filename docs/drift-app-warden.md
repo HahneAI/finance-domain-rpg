@@ -1,7 +1,10 @@
 # Drift App Warden — Authority Finance
 
-**Status:** Foundation pass (hierarchy + doctrine). Per-section drift maps are filled in one
-surgical pass at a time — see §6 stubs for what's pending.
+**Status:** **Complete** (2026-07-20) — all ten surface tiers (T1–T10, §7–§17) and all six
+shared spines (A–F, §18–§23) mapped. F1–F119 catalogued in one running sequence; every entry
+verified against live code at its pass date. The doc is now the full drift ledger and the
+training foundation for the Drift Warden agent. Maintenance mode from here: the §5 covenant
+governs — any change to a mapped file updates its entry in the same PR.
 **Created:** 2026-07-19 | **Sources cross-referenced:** `docs/active-systems.md` (all 24 systems),
 full git commit history (487 commits, co-change analysis below), live export inventory of every
 `src/lib/*` module.
@@ -257,10 +260,10 @@ direction.
 
 ---
 
-## 6. Section Stubs — pending surgical passes
+## 6. Section Index — all passes complete
 
-To be filled one at a time, in collaboration, in this order (each pass produces Blocks 1–4
-for that section):
+Filled one surgical pass at a time, in this order (each pass produced Blocks 1–4 for that
+section). **All sixteen are done** (T1–T10 surface tiers 2026-07-19; Spines A–F 2026-07-20):
 
 - [x] **T1 — Setup Wizard** — §7 below (surgical pass 2026-07-19)
 - [x] **T2 — Home Panel** — §8 below (surgical pass 2026-07-19)

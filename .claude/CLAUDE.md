@@ -4,7 +4,7 @@
 **Company:** Authority | **Product:** Authority OS | **Tagline:** *"You are missing out… on you."*
 **This app:** Authority Finance (A:Fin) — personal finance dashboard: income modeling, budgeting, goals, event logging.
 **Design system:** Flow shell (live) + Pulse overlay (Phase 2). See `docs/authority-design-system`.
-**Liquid Glass UI:** `src/components/LiquidGlass.jsx` — frosted glass for nav, pills, modals. Recipe in `docs/active-systems.md` §13.
+**Liquid Glass UI:** `src/components/LiquidGlass.jsx` — frosted glass for nav, pills, modals. Recipe in `docs/active-systems.md` §15.
 
 ---
 

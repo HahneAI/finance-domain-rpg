@@ -258,7 +258,7 @@ for that section):
 - [x] **T5 — Account Panel** — §12 below (surgical pass 2026-07-19; §11 records the redefinition from the phantom "Benefits Panel" tier)
 - [x] **T6 — Log Panel** — §13 below (surgical pass 2026-07-19)
 - [x] **T7 — Auth System** — §14 below (surgical pass 2026-07-19)
-- [ ] **T8 — Login System**
+- [x] **T8 — Login System** — §15 below (surgical pass 2026-07-19)
 - [ ] **T9 — Paywall System**
 - [ ] **T10 — UI-UX**
 - [ ] **Spines A–F** (final pass — spines are written last so every spine entry's blast
@@ -1680,3 +1680,142 @@ machine instead of a hardcoded bypass.
    shape: extract to `fiscalWeek.js` and import in both.
 2. **Two D5s corrected in-pass** (CLAUDE.md Tech Stack "no backend/no Stripe" claim;
    migration-numbering note now self-warns and points here).
+
+---
+
+## 15. T8 — Login System Drift Map
+
+**Pass date:** 2026-07-19. Same anchor + method rules as §7; numbering continues (F72+).
+**Git-history note:** a young, fast-moving surface — mode crossfades landed *today*
+(`d7e3269`), the trial explainer six days ago (`3fd8896`), the revival flow two weeks ago
+(`1d65770`). The session boundary rule (§4.1): everything here is pre-session; the
+moment SIGNED_IN fires, T7's boot chain (§14 F65) owns the flow.
+
+**Scope:** `LoginScreen.jsx` (570 lines, 6 modes), `ReviveScreen.jsx`,
+`TrialExplainerScreen.jsx`, `api/revival-lookup.js`, and App.jsx's pre-session render
+ladder (`:1429–1478`).
+
+### 15.1 Block 1 — Critical inventory (function by function)
+
+**F72 · LoginScreen mode machine** — `LoginScreen.jsx:125` (`mode`:
+`signin | signup | forgot | revive`, plus the `info` interstitial and the
+`recoveryMode` prop variant) — **[G]**
+Six visual states, crossfaded (`d7e3269`). `recoveryMode` is not a `mode` value — it's
+a prop set by App when PASSWORD_RECOVERY fires, rendering the set-new-password form.
+> **IF** a mode is added or transitions change, **THEN** every escape hatch must stay
+> reachable (each mode's "← Back to sign in") and the crossfade must not strand focus
+> or double-submit during the fade. Check: `LoginScreen.test.jsx` (the revival test's
+> input-timing fix `6e2ca11` exists because the fade delayed input mounting).
+
+**F73 · Sign-in revival intercept** — `handleSubmit`, `LoginScreen.jsx:211–251`
+(intercept at `:230–243`) — **[G]**
+A non-payment-deleted account fails `signInWithPassword` *exactly like a wrong
+password* (the auth user is gone), so every failed sign-in probes
+`lookupRevivable(email)` before surfacing the error; a match flips to `revive` mode
+(carrying `oauthProvider` for copy), a lookup failure falls through to the generic
+error — the probe can never block a regular login.
+> **IF** the error-handling order changes, **THEN** the tombstone check must stay
+> *before* the error display and stay fail-open. Check: wrong-password on a live
+> account still shows the normal error (no revival flash); tombstoned email lands in
+> revive mode.
+
+**F74 · Revive replacement signup** — `handleReviveSignUp`, `LoginScreen.jsx:259–284` — **[G]**
+Creates a brand-new auth user for the tombstoned email (the old one was hard-deleted).
+Deliberate design: on success (or after email confirmation + sign-in), T7's SIGNED_IN
+chain runs `checkRevival()` and routes to ReviveScreen — this handler does *not* route
+anywhere itself, so the confirmation-required detour loses nothing.
+> **IF** anyone adds direct post-signup routing here, **THEN** it races T7 F65's
+> revival-first ordering — the chain is the single router by design. Check: revive
+> signup with email confirmation ON still lands on ReviveScreen after confirming.
+
+**F75 · Client-side row seeding on signup** — `LoginScreen.jsx:224` / `:278`
+(`supabase.from("user_data").insert({ user_id })`) — **[L]**
+Both signup paths insert a bare `user_data` row (own-row RLS insert). The real
+seeding (profile metadata, trial window) happens later in T7 F71's chain — this bare
+insert just guarantees a row exists so `loadUserData` doesn't take the zero-row path.
+> **IF** RLS insert policy or the row's default column values change, **THEN** check
+> the interplay: bare row now + `syncUserProfile`/`seed-trial` upsert later must
+> converge to the same shape as an OAuth signup (which has no client insert at all
+> and relies wholly on the chain). Check: email signup and Google signup produce
+> identical rows post-chain.
+
+**F76 · OAuth entry + failed-callback surface** — `signInWithOAuth`
+`LoginScreen.jsx:162`; stale-code detection `App.jsx:500–511` (T7 boundary);
+`oauthCallbackFailed`/`onOauthRetry` props — **[G]**
+supabase-js never surfaces a failed PKCE exchange through `onAuthStateChange`
+(`0e0c4b1`) — the app detects the stranded `?code=`/`error` params itself, cleans the
+URL, and tells LoginScreen to explain rather than showing a silently blank form.
+> **IF** OAuth flow or redirect handling changes, **THEN** re-test the failure cell
+> explicitly (a first-time sign-in with a cold code-verifier is the known trigger) —
+> success-path testing alone re-hides this bug class.
+
+**F77 · Investor code entry** — `handleInvestorSubmit`, `LoginScreen.jsx:286–299` →
+`onInvestorVerified` → `investorSession` → `InvestorRegister` (T7 F70) — **[G]**
+Case-insensitive, active-only validation; the verified code becomes the pre-session
+`investorSession` that suppresses the wizard until account-3 selection (§14 F66's
+race guard).
+> **IF** the code contract changes, **THEN** `validateInvestorCode` (fail-closed on
+> error) and `createInvestorAccount`'s `codeUsed` stamp must agree on normalization
+> (trim + lowercase, both ends).
+
+**F78 · Pre-session render ladder** — `App.jsx:1429–1478` — **[G]**
+Fixed precedence: `pendingPasswordReset` → `revivalInfo` (ReviveScreen — "no app, no
+wizard, no trial") → no-session LoginScreen → `loading` → entitlement resolution
+(real wall-clock, §12 F53's rule) → **TrialExplainerScreen gate** (`:1470`: first-run
+wizard entry ∧ not investor ∧ `entitlement.state === "trial"` ∧ not yet acknowledged —
+the required "I understand" checkbox gates entry into setup, `3fd8896`).
+> **IF** ladder order changes, **THEN** walk every rung's capture: a revivable user
+> must never see the wizard or trial explainer; a recovery click must beat everything;
+> the explainer must show exactly once and only to fresh trial signups (never
+> life-event re-entries — `wizardEntry === false` is that discriminator, §7 F8's
+> source/tagging depends on the same value).
+
+**F79 · Revival lookup + ReviveScreen contract** — `api/revival-lookup.js` (dual-mode:
+unauthenticated email probe for F73, session-verified probe for T7's `checkRevival`;
+only `revived_at IS NULL` tombstones count); `ReviveScreen.jsx:24–51`
+(`stripe-revive-checkout`, restore only via webhook after a real charge) — **[G]**
+**Documented accepted risk:** the unauthenticated path is deliberately an existence
+oracle ("this email had an account deleted for non-payment") — the file's own comment
+owns that trade-off; it returns flags + provider, never archived data.
+> **IF** the lookup's filter or response shape changes, **THEN** both callers (F73's
+> email probe, T7 F65's session probe) and the T5 F52 invariant (user-deleted emails
+> return nothing — only cron tombstones exist in `deleted_accounts`) must hold; a
+> consumed tombstone (`revived_at` set) behaves like any other email. Check: the
+> three-signup walk (§14 F71) + a revived account signing in normally afterward.
+
+### 15.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `deleted_accounts` schema / tombstone semantics (T9's webhook writes `revived_at`) | F73/F79 probes, T7 `checkRevival`, ReviveScreen restore copy | Three-signup walk + post-revival sign-in | D4 |
+| `getEntitlement` states or trial seeding timing (Spine C / T7 F71) | F78's explainer condition (`state === "trial"`) — a seeding race regression makes the explainer silently never show (the §14 F65 guard-4 race, same symptom) | Fresh signup: explainer appears before wizard | D4 |
+| `wizardEntry` sentinel values (§7) | F78's `wizardEntry === false` discriminator — the same value T1 uses for history-source tagging | Life-event re-entry never shows the explainer | D4 |
+| Supabase auth settings (email confirmation on/off, password policy) | F74's confirmation detour, F75's row seeding timing, info-mode copy | Both signup paths with confirmation ON and OFF | D4 |
+| LoginScreen visual modes / crossfade timing | Focus/submit integrity during fades; test timing (`6e2ca11` precedent) | `LoginScreen.test.jsx` | D5 |
+
+### 15.3 Block 3 — Gate matrix
+
+| Dimension | Cells | Expected behavior |
+|---|---|---|
+| Render ladder rung | recovery / revivable / no-session / loading / trial-explainer / app | Strict precedence per F78 — each rung fully captures its state |
+| Sign-in outcome | success / wrong password (live account) / tombstoned email / lookup failure | App boot / normal error / revive mode / normal error (fail-open) |
+| Signup path | email+password / Google OAuth / revive replacement / investor code | Bare row + chain / chain only / chain routes to ReviveScreen / InvestorRegister, wizard deferred |
+| Email confirmation | off / on | Immediate session vs. info interstitial; revival detour unaffected (F74) |
+| OAuth callback | success / failed PKCE exchange | Signed in / cleaned URL + explanatory error + retry (F76) |
+| Trial explainer condition | fresh trial signup / investor / life-event re-entry / non-trial state | Shown once with required checkbox / never / never / never |
+
+### 15.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *Silent OAuth callback failure* (`0e0c4b1`) — supabase-js hides failed PKCE
+  exchanges; the app's own detection (F76) is the only surface for it.
+- *Revival flow build* (`1d65770`) — the wrong-password/deleted-account ambiguity is
+  inherent (auth user is gone); F73's probe order is the resolution.
+- *Crossfade test timing* (`6e2ca11`) — mode fades delay input mounting; tests await
+  the input, not the mode flip.
+- *Google double-select + boot races* — owned by T7 (§14); T8 hands off at SIGNED_IN.
+
+**Standing findings from this pass:** none — no DW items. The existence-oracle
+trade-off in F79 is documented-accepted in the API's own comments (revisit only if the
+product's privacy posture changes). Known Cleanup already tracks LoginScreen's
+hardcoded hex colors (Spine E debt, TODO §10).

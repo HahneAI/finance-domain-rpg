@@ -277,7 +277,7 @@ for that section):
 - [x] **Spine C — Entitlement & Gating** — §20 below (spine pass 2026-07-20)
 - [x] **Spine D — AI Layer & Context Grounding** — §21 below (spine pass 2026-07-20)
 - [x] **Spine E — Design System & Motion** — §22 below (spine pass 2026-07-20)
-- [ ] **Spine F — Admin Diagnostic Toolkit** — §23 below
+- [x] **Spine F — Admin Diagnostic Toolkit** — §23 below (spine pass 2026-07-20)
 
 (Spines are written last so every spine entry's blast radius can point at completed
 surface sections, not forward references.)
@@ -3057,3 +3057,136 @@ ALLOWED_PURPOSES doc lag). Not duplicated.
    Cleanup, cited in F88); the DEV-only whitelist enforcement is a discipline boundary noted
    in F92, not a defect. This spine adds no new queue items — its risk surface is fully
    covered by T10's F88–F95 plus the spec-doc covenant above.
+
+---
+
+## 23. Spine F — Admin Diagnostic Toolkit Drift Map
+
+**Pass date:** 2026-07-20 (spine pass — the closing section). Same anchor + method rules as
+§7; numbering continues (F118+).
+**Git-history note:** the toolkit is built inline in `App.jsx` (the tool sheet, Week Inspector
+modal, Live State Inspector pill) rather than as standalone components; its Phase-2 spec lives
+in `docs/admin-toolkit-todo.md`. Its defining property for the Warden: **the toolkit is the
+Warden's own instrument panel** — nearly every L-entry's "Check:" procedure in this doc
+executes *through* one of these tools. A change that breaks a tool doesn't just lose a feature;
+it **blinds every drift check that depends on it**, which is why a broken tool gets L-grade
+scrutiny even though the toolkit itself is a Gateway.
+
+**Scope:** the 8 Phase-1 `isAdmin` tools in `App.jsx` (Lock Date, Reopen Last Check-In, Force
+Sync, Config Raw View, DB Row Viewer, Tax Weeks Grid, Live State Inspector, Week Inspector),
+the per-entry impact breakdown in `LogPanel.jsx`, and the unbuilt Phase-2 `isOwner` tools
+(`docs/admin-toolkit-todo.md`). Absorbs active-systems §13.
+
+### 23.1 Block 1 — Critical inventory (spine-internal machinery)
+
+**F118 · Toolkit integrity invariant + the `effectiveToday` simulation fork** — `App.jsx:863–865`
+(`effectiveToday = (isAdmin && tempLockDate) ? tempLockDate : today`) + the tool reads below — **[G]**
+`effectiveToday` is the **simulation spine**: the Lock Date tool overrides it, and it flows
+into `isPayPeriodPast` (F25), the auto-confirm/eligibility chain (F26/F27), `taxDerived`'s
+past/future split (F28), `futureWeeks`, `currentWeek`, `fundedGoalSpend`, and every displayed
+"now"-relative number. This is what makes Lock Date a *general* date simulator, not a cosmetic
+label. **Hard boundary:** `getEntitlement` and the Stripe/subscription surfaces are called with
+**real `new Date()`, never `effectiveToday`** (F53/F80 — a simulated date must never grant free
+access or extend the hidden grace).
+> **IF** a new "now"-derived number is added, **THEN** it should read `effectiveToday` (so Lock
+> Date can simulate it) **unless** it's entitlement/billing (which must read real wall-clock —
+> the F53/F80 rule). **IF** a tool's read source drifts from what it claims to show, **THEN**
+> every drift check that "asks the user to run [tool]" is now reading a lie — DW-2 is the live
+> specimen: `taxDerived` (F28) *uses* `effectiveToday` but its dep array omits it, so the Lock
+> Date tool's tax-simulation promise silently breaks. **The instrument-panel rule:** any change
+> to a tool's read path re-verifies every F-entry that names that tool in its "Check:" (the
+> §23.3 registry is that index). Check: set Lock Date; Live Inspector's Effective Today +
+> `extraPerCheck` + week idx all move together and match the Tax Weeks Grid / Week Inspector.
+
+**F119 · Phase-2 `isOwner` pre-build warnings** — `docs/admin-toolkit-todo.md` Phase 2 — **[G]**
+The unbuilt owner tools are **write-capable** and get L-grade scrutiny when built — they mutate
+the exact fields the whole fiscal model hangs on. The prebuild landmines, each already flagged
+in a surface F-entry:
+- **Lock `firstActiveIdx`** (the nuclear field) — repositions the entire fiscal calendar
+  retroactively (§7 F1/F2). The load-side sync only ever moves the boundary *earlier* (F67);
+  an owner edit that moves it later deletes modeled income.
+- **Tax Weeks Grid edit** — toggling `config.taxedWeeks` corrupts withholding math if misused;
+  wizard re-run recomputes `taxedWeeks` (F5) while `pastWeekTaxStatusOverrides` survive (F50) —
+  the owner tool must respect that survivorship split.
+- **Bulk Week Confirmation Seeding / reset-all** — writing `weekConfirmations` to `{}`
+  **re-arms the F26 auto-confirm seed effect**, which then bulk-stamps every closed week;
+  "reset all confirmations" must account for this before it ships (F26's IF/THEN is the flag).
+- **Config Raw JSON Apply / Snapshot-Restore** — same blast radius as every field combined;
+  restore overwrites config+logs+expenses+goals in one write and must ride the eager-save/
+  four-site contract (F110), not a bare `setState`.
+> **IF** any Phase-2 tool is built, **THEN** it is an L-change (it writes truth): the `isOwner`
+> flag gets the full F69 tier-flag checklist (migration + RLS + read map + write path), and
+> each write tool inherits the eager-save pattern (Spine B) and the specific landmine above.
+> **IF** the reset-confirmations tool is built without disarming F26, **THEN** it silently
+> re-seeds the whole year. Check: `docs/admin-toolkit-todo.md`'s per-tool spec + the cited
+> surface F-entry before writing a line.
+
+**Reverse index — surface F-entries that wire/verify through the toolkit (do not restate):**
+F25 (Lock Date hour-gate bypass in `isPayPeriodPast`), F26 (auto-confirm seed — the reset-all
+landmine), F28 (`taxDerived` — DW-2 stale-dep weakens Lock Date), F32 (Reopen Last Check-In —
+DW-3), F57/F62 (per-entry breakdown — weekMeta-less caveat, DW-5), F68/F110 (DB Row drift
+badge columns), F9/F10 (config-history line in DB Row viewer), F53/F80 (Live Inspector Sub
+Phase — real-clock rule), plus the Week Inspector "Check:" in F15/F29/F96/F97/F98/F99/F103 and
+the Live Inspector "Check:" in F14/F51.
+
+### 23.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `effectiveToday` fork or a tool's read source (F118) | Every F-entry naming that tool in its "Check:" (§23.3 registry) | Set Lock Date; the tool's displayed values move consistently and match a second tool | D4 |
+| A tool stops reading the authoritative function it displays | The tool becomes a lying instrument — DW-2 (Lock Date/`taxDerived`), DW-5 (per-entry breakdown weakMeta-less) are the specimens | The tool's value = the authoritative function's value on the same account | D1 |
+| A new persisted field (F110) | DB Row drift-badge column list — the 4th of the four sites | DB Row Fetch shows the new column in the drift comparison | D3 |
+| `getEntitlement`/subscription surfaces | Must stay on real `new Date()`, never `effectiveToday` (F53/F80/F118 boundary) | Live Inspector Sub Phase unaffected by Lock Date; billing card uses wall-clock | D4 |
+| Week-object shape (F97) / `computeNet` (F98) | Week Inspector displays the object + Net Lookup verbatim — it must render every field | Tap a week; Pay + Net Lookup sections show the real fields, no `undefined` | D1 |
+| `weekConfirmations` ever written to `{}` (Phase-2 reset, F119) | F26 auto-confirm seed re-arms and bulk-stamps | Any reset tool must guard the seed's emptiness check first | D2 |
+| Config-history row shape (F9/F10) | DB Row viewer's config-history line ("N snapshots · latest…") | After a sensitive edit, the line shows source + date + changed fields | D5 |
+
+### 23.3 Block 3 — The instrument registry (tool → what it reads → which F-entries verify through it)
+
+The Spine-F deliverable: each tool, its read source, and the drift checks that depend on it.
+A change that breaks the "reads" column blinds every entry in the "verifies" column.
+
+| Tool | What it reads | F-entries that verify through it |
+|---|---|---|
+| **Lock Date** (`effectiveToday` override) | `tempLockDate` → `effectiveToday` (F118), fed into F25/F26/F27/F28/futureWeeks | F25 (hour-gate bypass), F26/F27 (eligibility sim), F28 (tax split — **DW-2 weakens it**) |
+| **Reopen Last Check-In** | `reopenableWeekIdx` + `weekConfirmations[idx]` + its spawned log entry | F32 (**DW-3**: deletes lack eager save), F26 (projections independent of confirmations premise) |
+| **Force Sync** (push/pull) | `handleForcePush`/`handleForcePull` — flush/reload `latestPersistedStateRef` | Any save-path check (Spine B F105/F106); before/after a save bug |
+| **Config Raw View** | full `config` JSON | F7 (three-way sensitive-field audit), F43/F50 (tax elections), F49 (benefit config) |
+| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), **DW-6** (`ptoGoal` drift) |
+| **Tax Weeks Grid** | `taxedWeeks` (teal/dark) + `pastWeekTaxStatusOverrides` (red dots) + current-week border | F28 (schedule vs remediation), F50 (override writers), F104 (liability inputs) |
+| **Live State Inspector** | ~16 live values: `effectiveToday`, week idx, `extraPerCheck`, `totalGap`, `taxedWeekCount`, `weeklyIncome`, `bufferPerWeek`, `projectedAnnualNet`, Sub Phase/Trial/Access Ends… | F14 (`weeklyIncome`), F28 (`extraPerCheck`/`totalGap`), F51 (`bufferPerWeek`), F53/F80 (Sub Phase — real clock), F113 (Coach numbers cross-check) |
+| **Week Inspector** | one week object verbatim: schedule, pay (`grossPay`/`taxableGross`/deductions/401k), live `computeNet`, net lookup (baseNet/adjustment/spendable), confirmation record, log entries | F15 (prev-week net), F29 (net tiers), F57 (per-entry vs hero), F58 (401k match), F96/F97/F98 (week shape/net), F99 (DHL rotation), F103 (loan) |
+| **Per-entry breakdown** (LogPanel chevron) | per-event `calcEventImpact` output (weekMeta-**less**) | F57/F62 (**DW-5**: must match hero-card aggregates — currently can't) |
+
+**Gate matrix (who sees the toolkit):**
+
+| Dimension | Cells | Expected behavior |
+|---|---|---|
+| `isAdmin` | false / true | true: tool sheet (mobile nav Tools icon), Week Inspector on row tap, Reopen, Live pill, per-entry chevron; false: none render |
+| `isOwner` (future) | false / true | true (never grantable via UI): Phase-2 write tools (F119); false: Phase-1 read/sim tools only |
+| Lock Date | unset / set | set: `effectiveToday` drives all "now"-relative reads (F118); **billing stays real-clock** (F53/F80) |
+| Tool integrity | tool reads authoritative fn / tool has drifted | drifted = the instrument lies (DW-2, DW-5) — an L-grade defect despite the toolkit being a Gateway |
+
+### 23.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *401k match display bug* (`$14.96 match with `k401MatchRate: 0`) — isolated *by* the Week
+  Inspector (CLAUDE.md Week Inspector notes); the tool doing its job as an instrument.
+- *`ALLOWED_PURPOSES` / count drift* and other doc lags — surfaced because the tools exposed
+  the real state; the toolkit is how many D5s in this investigation were caught.
+
+**Standing findings from this pass:** none new filed. Three existing DW items are
+**tool-integrity defects** — the toolkit's own instruments lying — and are restated here so the
+"a broken tool blinds every check" stance is concrete:
+1. **DW-2** — `taxDerived`'s stale memo dep (F28) means the **Lock Date** tool's tax simulation
+   doesn't recompute when the lock changes; the instrument silently disagrees with the Tax
+   Weeks Grid it's meant to be cross-checked against.
+2. **DW-3** — **Reopen Last Check-In** (F32) deletes without an eager save; the tool can lose
+   its own mutation on a backgrounded tab.
+3. **DW-5** — the **per-entry breakdown** (F62) is weekMeta-less, so the admin's own
+   event-impact instrument can disagree with the hero cards it's used to verify — "the
+   diagnostic tool the last liar in the room" (F62's phrasing).
+No new defect surfaced; the Phase-2 landmines (F119) are pre-build warnings, not live bugs (the
+tools don't exist yet). No D5 corrections owed — CLAUDE.md's Admin Diagnostic Toolkit section
+and active-systems §13 both describe the tools accurately; this section maps how the Warden
+*uses* them, which is new coupling information, not a restatement.

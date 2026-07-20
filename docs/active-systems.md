@@ -349,8 +349,11 @@ should ever imply the other — see §23.
 
 ## 19. PWA / Install
 
-`vite-plugin-pwa` (`vite.config.js`) — autoUpdate, workbox network-first caching for app
-shell + Supabase API. `PwaInstallModal.jsx` detects `beforeinstallprompt` and shows a
+`vite-plugin-pwa` (`vite.config.js`) — `registerType: 'prompt'` (changed from autoUpdate
+2026-07-15, `8c50ff0`: with skipWaiting/clientsClaim, autoUpdate force-reloaded every open
+tab mid-session the instant a deploy landed; updates now surface via `onNeedRefresh` →
+`UpdateAvailableBanner`, reload strictly user-initiated), workbox network-first caching
+for app shell + Supabase API. `PwaInstallModal.jsx` detects `beforeinstallprompt` and shows a
 dismissible install banner/tutorial; entry points in the mobile drawer and Account panel
 ("Install on home screen"), hidden when already running standalone.
 

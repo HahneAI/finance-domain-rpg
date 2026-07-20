@@ -1,7 +1,10 @@
 # Drift App Warden — Authority Finance
 
-**Status:** Foundation pass (hierarchy + doctrine). Per-section drift maps are filled in one
-surgical pass at a time — see §6 stubs for what's pending.
+**Status:** **Complete** (2026-07-20) — all ten surface tiers (T1–T10, §7–§17) and all six
+shared spines (A–F, §18–§23) mapped. F1–F119 catalogued in one running sequence; every entry
+verified against live code at its pass date. The doc is now the full drift ledger and the
+training foundation for the Drift Warden agent. Maintenance mode from here: the §5 covenant
+governs — any change to a mapped file updates its entry in the same PR.
 **Created:** 2026-07-19 | **Sources cross-referenced:** `docs/active-systems.md` (all 24 systems),
 full git commit history (487 commits, co-change analysis below), live export inventory of every
 `src/lib/*` module.
@@ -257,10 +260,10 @@ direction.
 
 ---
 
-## 6. Section Stubs — pending surgical passes
+## 6. Section Index — all passes complete
 
-To be filled one at a time, in collaboration, in this order (each pass produces Blocks 1–4
-for that section):
+Filled one surgical pass at a time, in this order (each pass produced Blocks 1–4 for that
+section). **All sixteen are done** (T1–T10 surface tiers 2026-07-19; Spines A–F 2026-07-20):
 
 - [x] **T1 — Setup Wizard** — §7 below (surgical pass 2026-07-19)
 - [x] **T2 — Home Panel** — §8 below (surgical pass 2026-07-19)
@@ -272,8 +275,15 @@ for that section):
 - [x] **T8 — Login System** — §15 below (surgical pass 2026-07-19)
 - [x] **T9 — Paywall System** — §16 below (surgical pass 2026-07-19; found DW-7, the investigation's highest-severity defect)
 - [x] **T10 — UI-UX** — §17 below (surgical pass 2026-07-19)
-- [ ] **Spines A–F** (final pass — spines are written last so every spine entry's blast
-  radius can point at completed surface sections, not forward references)
+- [x] **Spine A — Fiscal Math** — §18 below (spine pass 2026-07-20)
+- [x] **Spine B — Persistence & Save Integrity** — §19 below (spine pass 2026-07-20)
+- [x] **Spine C — Entitlement & Gating** — §20 below (spine pass 2026-07-20)
+- [x] **Spine D — AI Layer & Context Grounding** — §21 below (spine pass 2026-07-20)
+- [x] **Spine E — Design System & Motion** — §22 below (spine pass 2026-07-20)
+- [x] **Spine F — Admin Diagnostic Toolkit** — §23 below (spine pass 2026-07-20)
+
+(Spines are written last so every spine entry's blast radius can point at completed
+surface sections, not forward references.)
 
 ---
 
@@ -2141,3 +2151,1045 @@ debt is already owned (TODO §10 + Known Cleanup); the DEV-only whitelist enforc
 noted in F92's IF/THEN rather than filed (it's a discipline boundary, not a defect).
 Two D5s corrected in-pass (CLAUDE.md Liquid Glass pointer §13→§15; active-systems §19
 `autoUpdate`→`prompt` with the `8c50ff0` rationale).
+
+---
+
+## 18. Spine A — Fiscal Math Drift Map
+
+**Pass date:** 2026-07-20 (spine pass — written last so every blast radius below points at
+a *finished* surface section, not a forward reference). Same anchor + method rules as §7;
+numbering continues (F96+).
+**Git-history note:** the newest structural intentions on this spine are the §15.H11
+dilution kill (`2e0121a`, `10ba9af` — F13/F15 shared helpers, active-weeks scoping), the
+Quick Rate Update point-in-time `baseRate` slice (`d9dfd93`→`955b0b3` — `resolveBaseRateForWeek`,
+the §22 narrow read-path), and the June expense-save trilogy (`d8c475a`/`d42c118`/`6fb0619`
+— the `expense.js` pure helpers). This section is the **authority record** for the numeric
+truth every surface consumes; it states each contract *once* and reverse-indexes the surface
+F-entries (F1–F95) that already cover the consumers rather than restating them.
+
+**Scope:** `finance.js` (40 exports, 1,413 lines), `fiscalWeek.js`, `rollingTimeline.js`,
+`expense.js`, `goalFunding.js`, `jobLossRunway.js`, `stateTaxTable.js`. Absorbs
+active-systems §1 (income engine), §2 (rolling timeline), §7 (attendance/bucket math),
+§14 (home math).
+
+**The trunk (memorize this):**
+`buildYear(cfg, baseRateHistory)` → per-week objects → `computeNet(w, cfg, extraPerCheck,
+showExtra)` → `calcEventImpact(event, cfg, weekMeta)` adjusts a week → `computeGoalTimeline(
+goals, futureWeeks, weeklyNets, …)` projects the surplus. A change to any stage re-verifies
+every consumer surface (T2–T6) **and** Spine D's context fields. The cardinal L rule (§3)
+lives here: one fact, one function — if a surface needs a number a panel already shows, it
+calls that panel's exported function, never a re-derivation.
+
+### 18.1 Block 1 — Critical inventory (spine-internal machinery)
+
+New F-entries below are for machinery **no surface pass covered** — `buildYear`'s internal
+stages, the week-object shape, the DHL/bucket helpers, the `expense.js` conversion layer,
+the point-in-time resolvers, loan internals, and the tax primitives. Consumers are
+reverse-indexed to their existing F-entries.
+
+**F96 · `buildYear(cfg, baseRateHistory)` — the trunk head** — `finance.js:481–669` — **[L]**
+Emits one object per fiscal week (idx 0…51) by walking `FISCAL_YEAR_START` forward in 7-day
+steps. Ordered internal stages, each a drift surface of its own: (1) **schedule resolution** —
+DHL alternating long/short from `firstActiveIdx` parity (`:509–555`, F99 helpers) vs. base
+flat `customWeeklyHours ?? maxWeeklyHours ?? standardWeeklyHours ?? 40` (`:556–566`);
+(2) **OT split** — `regularHours`/`overtimeHours` against `otThreshold ?? totalHours`, with
+weekend differential hours pushed past the threshold at OT rate (`:568–586`);
+(3) **point-in-time baseRate** — `resolveBaseRateForWeek(baseRateHistory, weekEnd, cfg.baseRate)`
+(`:582`, F98-adjacent) so a rate edit only recomputes weeks from its effective date forward
+(the §22 narrow slice — every *other* historically-sensitive field still applies uniformly,
+the live D2 zone); (4) **Job Loss boundary** — `inJobLoss` zeroes earned income on/after
+`jobLossDate`, closing at `returnToWorkDate` (`:588–602`); (5) **unemployment income**
+(`:604–618`, non-taxed, added by `computeNet`); (6) **active/benefit/401k/taxable gates**
+(`:620–632`); (7) **pay-week flag** — weekly=every active week, biweekly/salary=`idx % 2 ===
+biweeklyParity`, monthly=last active week of the calendar month (`:635`, `:660–667`).
+> **IF** any stage's inputs or ordering change, **THEN** the entire consumer set moves at
+> once — this is the single most blast-heavy function in the app. Named checks: F5 (wizard's
+> `buildYear` call derives `taxedWeeks` from `w.idx`), F6 preview pair (must track deduction
+> ordering), F10 (`baseRateHistory` param), F25–F31 (Income: `isPayWeek`/`payPeriodEndDate`/
+> `taxedBySchedule`), F28 (`taxableGross` feeds the withholding-gap engine), F58 (401k
+> columns), plus the §18.3 authority table row for the changed field. Procedure:
+> `finance.test.js` week-shape cases + one DHL + one biweekly manual pass through Week
+> Inspector. **Standing invariant:** the jobless path reaches this call with *no real pay
+> structure* (F5) — every stage must tolerate that config shape.
+
+**F97 · The week-object field contract** — `finance.js:636–657` (the `weeks.push({…})`) — **[L]**
+The shape a dozen surface F-entries read by name. Grouped: **identity** (`idx`, `weekEnd`,
+`weekStart`, `payPeriodEndDate`); **schedule** (`isPayWeek`, `rotation`, `isHighWeek`,
+`adminRotationTag`, `rotationLabel`, `requiredOtShifts`, `workedDayNames`, `totalHours`/
+`regularHours`/`overtimeHours`/`weekendHours`); **pay** (`grossPay`, `taxableGross`,
+`active`); **benefits/401k** (`has401k`, `k401kEmployee`, `k401kEmployer`, `benefitsDeduction`,
+`benefitsActive`, `payrollDeductions:{benefits,k401Employee,total}`); **tax** (`taxedBySchedule`);
+**job-loss** (`unemploymentIncome`). `grossPay`/`taxableGross` are **zeroed for inactive
+weeks** at emit time — consumers must not re-derive gross for an inactive week.
+> **IF** a field is added, renamed, or its zeroing rule changes, **THEN** grep every reader
+> before shipping: Week Inspector displays the whole object verbatim (Spine F, §9); F28 reads
+> `taxableGross`/`taxedBySchedule`; F29's three net tiers read `active`/`grossPay`; F33's `gN`
+> reads the row; F58 sums `k401kEmployee`/`k401kEmployer`; F25/F27 read `isPayWeek`/
+> `payPeriodEndDate`; `calcEventImpact`'s `weekMeta` path reads `isHighWeek`/`grossPay` (F57).
+> A new field with no reader is dead weight; a renamed field with a missed reader is silent
+> `undefined` math. Check: `finance.test.js` shape assertions; Week Inspector on one active +
+> one inactive week.
+
+**F98 · `computeNet(w, cfg, extraPerCheck, showExtra)` — the net tiers** — `finance.js:671–691` — **[L]**
+The one net formula, in deduction order: inactive week → returns `unemploymentIncome` only
+(`:677`); FICA on `grossPay`; `deriveWeeklyPayrollDeductions` total (benefits + employee 401k,
+`:238–257`); `otherPostTaxDeductions` (post-tax rows, `:265–272`). **Untaxed week** returns
+`gross − fica − ded − otherPostTax + unemployment` (`:682`); **taxed week** additionally
+subtracts fed (`taxableGross × (isHighWeek ? fedHigh : fedLow) + (showExtra ? extraPerCheck :
+0)`) and state, using generalized `fedRateLow/High`/`stateRateLow/High` with legacy
+`w1/w2` fallbacks (`:684–690`). The `showExtra`-gated `extraPerCheck` is the **only** place
+F28's withholding-gap spread enters a net.
+> **IF** the deduction ordering, the taxed/untaxed fork, the rate-field fallback chain, or
+> the `extraPerCheck` gating changes, **THEN** every net in the app moves together. Named
+> checks: F6 preview pair (deliberately-separate approximations that must track this), F29's
+> three tiers, F33's `gN`, F15's `resolvePrevWeekNet`, F57's `weekNetWithLogAdjustments`
+> (`:1369–1378`, folds `calcEventImpact` onto a `computeNet` base). Procedure: Week Inspector
+> Pay vs. Net Lookup sections agree; `finance.test.js` net cases. **Legacy-twin trap:** the
+> `fedRateLow ?? w1FedRate` fallbacks couple to F34 (Sharpen Rates) and F47 (ScheduleCard's
+> read-primary/write-both rule) — a renamed rate field breaks the fallback silently.
+
+**F99 · DHL schedule/rotation helper cluster** — `finance.js`: `getDhlPlannedPattern:345`,
+`resolveDhlWeeklyHours:338`, `getDhlPlannedDayIndexes:326`, `getStandardDhlOtDay:311`,
+`getDhlRotationLabel:333`, `dhlWeekendHoursForDate:274`/`…PerDayName:281`/`…PerDayIndex:303`/
+`…FromDays:292`/`…FromShiftCount:369` — **[L]**
+The file-private engine behind DHL's alternating rotation, weekend-differential hour
+accounting, and OT-shift trimming. `getDhlPlannedPattern` returns `{indexes, weekendHours,
+rotationLabel, totalHours, requiredOtShifts}` consumed by both `buildYear` (F96 stage 1) and
+`projectedGross`/`calcEventImpact` (F57) — so the *projection* and the *actual week* share one
+rotation source.
+> **IF** any DHL helper's day-index convention, weekend-hour boundary (Sat 00:00→Mon 06:00),
+> or hour-resolution (`resolveDhlWeeklyHours`: custom hours override the preset) changes,
+> **THEN** F96 (real weeks), F57 (`calcEventImpact` projection + `projectedGross`), and the
+> §7 F5 DHL enforced-override contract all shift — a base-user account must be unaffected
+> (every helper early-returns or is gated on `employerPreset === "DHL"`). Check:
+> `finance.test.js` DHL long/short cases; Week Inspector on one long + one short week; a
+> base account's numbers unchanged.
+
+**F100 · `computeBucketModel(logs, cfg)`** — `finance.js:1185–1263` — **[L]**
+DHL-exclusive attendance-bucket engine: tiered accrual, 18h/month perfect-attendance bonus,
+cap (`bucketCap ?? 128`), overflow payout at `bucketPayoutRate ?? baseRate/2`, and the
+`bucketBalanceOverride` + `bucketOverrideMonth` rolling-start mechanic. The comment at `:1182`
+is load-bearing: **do not port `payoutRate`/tiers to base-user attendance** (F61's base
+tracker is deliberately simpler — active-systems §7).
+> **IF** tiers, cap, or payout change, **THEN** F61 (LogPanel bucket display + override
+> Save/Reset), the bucket-hours hero card, and `calcEventImpact`'s `bucketHoursDeducted`
+> (F57) move together. **IF** anyone gives the base tracker payout math, **THEN** that's a
+> product decision (F61's IF/THEN), not a consistency fix. Check: `finance.test.js` bucket
+> cases; Week Inspector / LogPanel bucket card agree.
+
+**F101 · `expense.js` cycle-conversion layer** — `toMonthlyCost:110`, `fromMonthlyCost:119`,
+`perPaycheckFromCycle:133`, `cycleAmountFromPerPaycheck:136`, `monthlyFromPerPaycheck:153`,
+`breakdownMonthlyEquiv:149`, `normalizeCycle:15`, `roundToQuarter:108`, `CHECKS_PER_MONTH:13` — **[L]**
+The unit-conversion spine for expenses: every card amount, breakdown row, and per-check
+scaling routes through these. `CHECKS_PER_MONTH = {weekly:4, biweekly:2, monthly:1, salary:2}`
+is the divisor; `roundToQuarter` is the display-rounding rule. The `8e669e3`/`bddeb04`
+incident (breakdown over-counting monthly/yearly bills) lives here.
+> **IF** a conversion factor or `CHECKS_PER_MONTH` changes, **THEN** F36/F37/F42 (Budget
+> writers/display), `minFoodPerCheck` scaling (F39), breakdown rows, and Coach per-expense
+> lines (Spine D) all move — a monthly-cycle bill must show the same cost on card, breakdown,
+> and Ask Coach. Check: `expense.test.js` conversion cases; §10.2's monthly-bill parity row.
+
+**F102 · Point-in-time expense resolvers** — `getEffectiveAmount(exp, weekEndDate, phaseIdx):730`,
+`getPhaseIndex(weekEndDate):722`, `phaseIdxForMonth(monthKey):742`, `getEffectiveAmountForMonth`
+(F38) — `finance.js` — **[L]**
+The quarter/date → amount resolvers. `getPhaseIndex` maps a date to quarter 0–3 via
+`QUARTER_BOUNDARIES`; `getEffectiveAmount` walks `history` for the latest `effectiveFrom ≤
+weekEnd` (same algorithm as `resolveBaseRateForWeek` — one point-in-time pattern, not two);
+`getEffectiveAmountForMonth` (F38) layers `monthlyOverrides` on top (override wins). The
+**week-based** `getEffectiveAmount` is what `computeGoalTimeline` (`:1042` via
+`getEffectiveAmountForMonth`) and `jobLossRunway.weeklyBurn` (`:63`) call; the **month-based**
+F38 is the Budget-panel resolver.
+> **IF** the resolution order (override-first), the `history` walk, or the quarter boundaries
+> change, **THEN** F38's four consumers (Budget cards, `computeRemainingSpend`, budget health,
+> Coach) **and** `computeGoalTimeline`'s per-week spend **and** `computeJobLossRunway`'s burn
+> all move — the §24 grounding case law (a `billingMeta` estimate once disagreed by double
+> digits) is exactly this resolver being bypassed. Check: one expense with both override and
+> history; all resolvers agree; `expense.test.js` + `finance.test.js`.
+
+**F103 · Loan math internals** — `loanWeeklyAmount:1102`, `loanRunwayStartDate:1111`,
+`computeLoanPayoffDate:1119`, `buildLoanHistory:1129`, `loanPaymentsRemaining:1140`,
+`DAYS_PER_FREQ:1079`, `getQuarterEndIsoForDate:1088` — `finance.js` — **[L]**
+The loan primitives F41 (Budget loans cluster) consumes. **`buildLoanHistory` regenerates the
+entire `history` from `loanMeta` on every edit** — the app's standing **D2 exemplar**
+(DW-W1): editing terms retroactively rewrites past weeks' spend. Quarter-safe payoff: the
+`weekly:[0,0,0,0]` zero entry starts the day *after* the quarter-end containing the payoff
+(`:1132–1136`), so a mid-quarter payoff keeps paying through quarter close.
+> **IF** touching loan math, **THEN** you are inside the D2 zone (DW-W1) — do **not** add a
+> consumer that treats regenerated `history` as point-in-time truth for past weeks; the
+> planned fix is an expense-style `history[]` (TODO §19). Named checks: F41 (Budget CRUD +
+> `computeLoanPayoffDate` cards), §7 F12 (JobLossEntry due-date attach reads
+> `loanMeta.firstPaymentDate`), the load-side regeneration in F67 (`db.js:204–225`). Check:
+> `finance.test.js` loan cases; a mid-quarter payoff manual check.
+
+**F104 · Tax primitives** — `fedTax:389`, `stateTax:397`, `getStateConfig:414`,
+`stateTaxTable.js` — **[L]**
+The withholding-liability core F28 (Income tax engine) calls: `fedTax` (bracket schedule),
+`stateTax(income, stateConfig)` (flat/bracketed per state), `getStateConfig(userState)` with
+the `moFlatRate` legacy fallback for the DHL Missouri preset. These compute *annual liability*
+(the gap numerator), distinct from `computeNet`'s *per-week withholding* (the F98 rate fields).
+> **IF** a bracket, the state table, or `getStateConfig`'s fallback changes, **THEN** F28's
+> `taxDerived` gap math moves — `extraPerCheck` shifts and every net follows (F98). Check:
+> Live State Inspector `totalGap`/`extraPerCheck` vs. the Tax Weeks Grid; `finance.test.js`
+> tax cases; a Missouri DHL account still resolves `moFlatRate`.
+
+**Reverse index — surface F-entries already covering Spine-A consumers (do not restate):**
+F1 (`dateToWeekIdx`/`firstActiveIdx`), F5 (wizard `buildYear` call + `taxedWeeks` derivation),
+F6 (`estimateWeeklyGross`/`estimateWeeklyNet` preview pair), F10 (`resolveBaseRateForWeek`
+chain), F13 (`resolveActiveWeeksThisYear`), F14 (`weeklyIncome`), F15 (`resolvePrevWeekNet`),
+F18/F21 (`computeGoalTimeline` consumption + `remainingAtEnd`), F22/F44 (`computeJobLossRunway`/
+`sumJobHuntIncome`), F23 (`netWorthHealthStatus`), F28 (`taxDerived`), F29 (net tiers),
+F33 (`gN` + `deriveRollingIncomeWeeks`), F38 (`getEffectiveAmountForMonth`), F41 (loans),
+F57 (`calcEventImpact` weekMeta contract), F58 (401k columns), F59 (PTO model), F67 (load-side
+migrations that touch expense/loan history).
+
+### 18.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `buildYear` week-object shape (F97) — add/rename/re-zero a field | Every reader: Week Inspector (Spine F), F28 (`taxableGross`), F29 (net tiers), F33 (`gN`), F58 (401k), F25/F27 (`isPayWeek`), F57 (`weekMeta`) | Grep the field name across `src/`; `finance.test.js` shape cases; Week Inspector on active + inactive week | D1 |
+| `computeNet` deduction ordering / taxed-fork / rate fallbacks (F98) | F6 preview pair, F29 tiers, F33 `gN`, F15 `resolvePrevWeekNet`, F57 `weekNetWithLogAdjustments` | Week Inspector Pay vs Net Lookup agree; row net = inspector net; `finance.test.js` | D1 |
+| `resolveBaseRateForWeek` filter / `baseRateHistory` shape (F96 stage 3) | F10 chain (`extractBaseRateHistory` in `db.js`), past-week rate resolution | A future-dated rate update shows the *old* rate on weeks before its effective date (Week Inspector); `db.test.js` baseRateHistory cases | D2 |
+| DHL helper conventions (F99) — day-index, weekend boundary, hour resolution | F96 real weeks, F57 `calcEventImpact`/`projectedGross`, §7 F5 DHL overrides | `finance.test.js` DHL long/short; base account unaffected; Week Inspector both rotations | D1 |
+| `getEffectiveAmount`/`getEffectiveAmountForMonth`/`getPhaseIndex` resolution (F102/F38) | F38's four consumers + `computeGoalTimeline` per-week spend + `computeJobLossRunway` burn + Coach grounding | One expense (override + history): all surfaces + goal ETA + runway agree | D1 |
+| `expense.js` conversion factors / `CHECKS_PER_MONTH` (F101) | F36/F37/F42 Budget, F39 food floor, breakdown rows, Coach per-expense lines | `expense.test.js`; monthly-cycle bill same cost on card/breakdown/Coach | D1 |
+| `computeGoalTimeline` epoch handling / return shape (`remainingAtEnd`) | F18 (Home cards + epoch arg), F21 (`yearEndGoalDraw` fallback), Coach goal lines, T4 timeline bar | Grep `computeGoalTimeline(` for epoch-arg parity; next-year-ETA goal subtracts only this-year slice | D1 |
+| `calcEventImpact` branch/fallback (F57) | App `eventImpact` memo, F54 (Log summary — weekMeta-less, DW-5), F62 (per-entry breakdown), goal-funding `weeklyNetAdjustments` (F29) | `finance.test.js` one event per type; hero cards = per-entry breakdown = Income delta | D1 |
+| `buildLoanHistory` regeneration (F103) | F41 zone (DW-W1) — Budget cards, JobLossEntry due-date, F67 load regen | `finance.test.js` loan cases; mid-quarter payoff manual check; **do not** add past-week-truth consumer | D2 |
+| Tax primitives (`fedTax`/`stateTax`/state table, F104) | F28 gap math → `extraPerCheck` → every net (F98) | Live Inspector `totalGap`/`extraPerCheck` vs Tax Weeks Grid; MO DHL resolves `moFlatRate` | D1 |
+| `resolveActiveWeeksThisYear` (F13) / `FISCAL_WEEKS_PER_YEAR` | F14 `weeklyIncome`, F16 `annualSavings`, Coach savings line, DemoAccountTree — all four share it | Grep consumer count (only grows); mid-year `firstActiveIdx` account: Home tile = Ask Coach | D1 |
+| `FISCAL_YEAR_START` (`constants/config.js`) | Loop bounds in F96, `dateToWeekIdx` (F1), `getPhaseIndex` boundaries, every stored `firstActiveIdx`/`taxedWeeks` | Never change mid-year; if forced: migrate all three fields + `fiscalWeek.test.js` + Tax Weeks Grid | D2 |
+
+### 18.3 Block 3 — Master authority table (every displayed number → its one source → consumers)
+
+The L-spine deliverable: for each user-visible fiscal number, the **single source-of-truth
+function** and the surfaces that must quote it. A surface computing any of these locally
+instead of calling the named function is a D1 finding by definition (§3 cardinal L rule).
+
+| Displayed number | Source-of-truth function (`finance.js` unless noted) | Surface consumers (F-entry) |
+|---|---|---|
+| Per-week gross / hours / rotation | `buildYear` week object (F96/F97) | Income rows (F33), Week Inspector (Spine F) |
+| Per-week net take-home | `computeNet` (F98) | Income `gN` (F33), F29 tiers, `resolvePrevWeekNet` (F15), Week Inspector |
+| "This Week's Check" | `resolvePrevWeekNet` (F15) | Home tile (F16), DemoAccountTree |
+| "Typical weekly income" | `weeklyIncome` = `projectedAnnualNet / activeWeeksThisYear − bufferPerWeek` (F14, App.jsx) | Home (F16), Coach (Spine D), Live Inspector, Job Loss panels |
+| Projected annual net | `projectedAnnualNet` (App.jsx, sums `computeNet` over active weeks) (F29) | Home Year-End (F17), Income Year Summary (F33) |
+| Active weeks this year | `resolveActiveWeeksThisYear` (`fiscalWeek.js`, F13) | `weeklyIncome` (F14), `annualSavings` (F16), Coach, DemoAccountTree |
+| Adjusted take-home (event-folded) | `logTotals.adjustedTakeHome` from App `eventImpact` memo (F17/F33) — **one value** | Home Year-End (F17), Income Year Summary (F33), Log summary target (F54/DW-5) |
+| Withholding gap / `extraPerCheck` | `taxDerived` (App.jsx, F28) over `fedTax`/`stateTax` (F104) | Income tax card, Tax Weeks Grid, `computeNet` `showExtra` term (F98) |
+| Event net impact (missed/PTO/bonus) | `calcEventImpact` (F57) | App `eventImpact`, Log cards (F54), per-entry breakdown (F62), goal funding (F29) |
+| Expense cost in month M | `getEffectiveAmountForMonth` (F38/F102) | Budget cards (F36), `computeRemainingSpend`, budget health, Coach |
+| Expense unit conversions | `expense.js` layer (F101) | Budget cards/breakdown (F37/F42), food floor (F39), Coach |
+| Goal ETA / funding week | `computeGoalTimeline` (F18) with `config.goalTimelineEpochIdx ?? null` | Home goal cards (F18), Year-End draw (F21), Coach goal lines, T4 bar |
+| Completed-goal spend | `getFundedGoalSpend` (`goalFunding.js`) | `annualSavings` (F16), `adjustedTakeHome` (F17), Live Inspector |
+| Job Loss runway / burn | `computeJobLossRunway` + `sumJobHuntIncome` (`jobLossRunway.js`) | JobLossHome (F22), JobLossBudget (F44), Coach (convergence target for F24 quarantine) |
+| Net-worth health status | `netWorthHealthStatus` + `NET_WORTH_HEALTH_THRESHOLD` (F23) | Home cue (F23), Coach amber tier (F24) |
+| 401k employee / employer | `buildYear` `k401kEmployee`/`k401kEmployer` (F97), `dhlEmployerMatchRate` | LogPanel 401k block (F58), Week Inspector |
+| Bucket balance / hours | `computeBucketModel` (F100) | LogPanel bucket (F61), hero card, `calcEventImpact` `bucketHoursDeducted` (F57) |
+| Loan payoff date / weekly | `computeLoanPayoffDate`/`loanWeeklyAmount`/`buildLoanHistory` (F103) | Budget loan cards (F41), JobLossEntry due-date (§7 F12) |
+| Pay-period label / next check | `fiscalWeek.js` (`formatPayPeriodLabel`, `getNextPayWeek`, `getPayPeriodBounds`) | App header chip, Income/Home countdowns |
+| Rolling visible/archive weeks | `deriveRollingIncomeWeeks`/`deriveRollingTimelineMonths` (`rollingTimeline.js`) | Income rolling view (F33), Home month timeline |
+
+### 18.4 Block 4 — Case law & quarantine
+
+**Precedents (fixed — cite, don't relearn):**
+- *§15.H11 dilution* (`2e0121a`, `10ba9af`) — four call sites each did their own
+  active-weeks math or `/52`; killed by F13 + F15 shared helpers. F13/F14/F15's IF/THENs and
+  the authority table's "active weeks" row exist to keep it dead.
+- *Quick Rate Update effective date* (`955b0b3`) — a saved rate the engine ignored; fixed by
+  the `resolveBaseRateForWeek` slice (F96 stage 3 / F10). The whole point-in-time chain exists
+  so the date is load-bearing — simplifying it reopens the bug.
+- *Expense-save Decisions 1–3* (`d8c475a`/`d42c118`/`6fb0619`) — the `expense.js` pure helpers
+  (F101/F37) and override-first resolution (F102/F38); decision record archived in
+  `BUG_FIX_TODO.md`, do not re-litigate.
+- *Breakdown over-counting* (`8e669e3`/`bddeb04`) — monthly/yearly bills double-counted until
+  rooted on 30-day cost (F101).
+
+**Standing quarantines (open — cite, don't extend):**
+1. **Flat-config D2 in `buildYear` (F96)** — one `cfg` applies to all 52 weeks, so a mid-year
+   pay/schedule/tax edit distorts *past-week* totals and annual tax. Only `baseRate` has the
+   point-in-time slice (F10); every other historically-sensitive field is still uniform.
+   `account_history` (§22) captures the changes but only `extractBaseRateHistory` reads them —
+   the drift is *live, fenced*. Convergence target: a general point-in-time config resolver
+   (deferred Master Timeline, TODO §19). Do not add a consumer assuming past-week accuracy.
+2. **`buildLoanHistory` regeneration D2 (F103)** — same root cause, loan side; tracked as
+   **DW-W1**. Convergence target: expense-style `history[]` (TODO §19).
+3. **`estimateRunwayDays` D1 (F24, `coachTriggers.js`)** — a second runway formula that ignores
+   persisted `jobLossCashOnHand`/job-hunt income; always ≤ the real `computeJobLossRunway`.
+   Owned in Spine D; noted here because its convergence target *is* this spine's
+   `computeJobLossRunway`.
+
+**Standing findings from this pass:** none new. The two D2 zones above are pre-existing,
+owned, and queue-visible (DW-W1 + the §22/Master-Timeline roadmap); no new DW defect surfaced
+— every Spine-A export traces to a named consumer through the authority table, and the
+surface passes (T1–T10) already verified those consumers call the exports rather than
+re-deriving. No D5 corrections owed: `active-systems.md` §1/§2/§7/§14 describe these systems,
+this section maps their couplings — the §5 covenant boundary holds.
+
+---
+
+## 19. Spine B — Persistence & Save Integrity Drift Map
+
+**Pass date:** 2026-07-20 (spine pass). Same anchor + method rules as §7; numbering
+continues (F105+).
+**Git-history note:** the governing intentions are the 2026-07-18 eager-save audit trio
+(`debc0cb`/`764da5b` + the general-primitive refactor that turned `saveConfigNow` into a
+thin wrapper over `savePersistedStateNow`), the keepalive unload-flush hardening
+(`168cc4b`), and the `account_history` write path (migration 020, `d9dfd93`). This is the
+**authority record** for how a mutation reaches durable storage; T7 (§14) already mapped
+the load/boot/RLS half (F63–F71) and the surfaces mapped their own eager-save call sites
+(F8, F35, F46, F55, F60/DW-6) — this section owns the App.jsx save *primitive*, the
+debounce/flush machinery, the localStorage hook, the config-history pure layer, the
+migration-folder rules, and the four-site new-field procedure.
+
+**Scope:** `App.jsx` save layer (`savePersistedStateNow`/`attemptSave`/debounce/
+`latestPersistedStateRef`/`pendingSaveRef` + SaveFailedBanner retry), `db.js`
+(`saveUserData`/`flushUserDataKeepalive`/`saveConfigSnapshot` — the write half of F67/F68),
+`hooks/useLocalStorage.js`, `lib/configHistory.js`, `database/migrations/`. Absorbs
+active-systems §22 (account history).
+
+**The five write paths (memorize — every mutation uses exactly one):**
+1. **Debounced autosave** — 800ms after any `config`/`expenses`/`goals`/`logs`/`showExtra`/
+   `weekConfirmations`/`ptoGoal` change (`App.jsx:642–651`). For continuous edits (typing,
+   sliders). Console-only failure handling.
+2. **Eager save** — `savePersistedStateNow(overrides, historySource)` (F105). For discrete
+   Save/Confirm/Add/Delete actions. Retries once at 3s; user-visible `SaveFailedBanner` on
+   double-failure.
+3. **Keepalive unload flush** — `flushUserDataKeepalive` on `visibilitychange`/`pagehide`/
+   `beforeunload` (F106; F64/F68 own the db.js side). Synchronous credential read, direct
+   PostgREST `fetch(keepalive:true)`.
+4. **Force Sync (admin)** — `handleForcePush`/pull (Spine F). Bypasses the debounce.
+5. **Service-role routes** — `api/*` for privileged columns (tier/subscription) the client
+   whitelist-by-destructure (F68) deliberately excludes. Spine C owns these.
+   Plus a **sixth, device-local** channel: `useLocalStorage` (F107) — browser-only UI/signal
+   state that never reaches Supabase at all.
+
+### 19.1 Block 1 — Critical inventory (spine-internal machinery)
+
+**F105 · `savePersistedStateNow` + `attemptSave` + retry/banner path** — `App.jsx:740–777` — **[L]**
+The general eager-save primitive every `saveXNow` wrapper (F8/F35/F46, the inline
+`onSaveGoalsNow`/`onSaveExpensesNow`/`onSaveLogsNow` at `:1501/1543/1572`) funnels through.
+Ordered effects: (1) `historySource` sets `configHistoryMetaRef` via `??=` (`:755` — keeps a
+more-specific wizard/life-event tag a caller already set); (2) cancels the pending debounce
+**and** any pending retry, clears `pendingSaveRef` (`:756–758`); (3) `attemptSave` merges
+`overrides` onto `latestPersistedStateRef.current` into a **complete row**, updates the ref,
+calls `saveUserData`, and sets `saveError` from the *real* Supabase message (`:740–748`);
+(4) on failure schedules one retry at 3s (`:760`). `retryFailedSave` (banner "Retry") and
+`dismissSaveError` (hides banner, does **not** drop data — the next debounce re-persists)
+complete the surface.
+> **IF** the merge-onto-latest-ref shape, the retry cadence, or the error-surfacing changes,
+> **THEN** the eager-save promise (a completed action survives a backgrounded/reclaimed tab)
+> weakens for *every* call site at once — the D3 class the whole 2026-07-18 audit closed.
+> Named checks: F8 (wizard completion), F31 (check-in `onConfirm`), F35 (Budget wrapper),
+> F46 (ProfilePanel cards), the F12 JobLossEntry activation. **Invariant:** overrides is a
+> *partial patch* merged onto the full ref — never pass a functional updater, and never call
+> the bare `setState` alone for a discrete action (the CLAUDE.md eager-save rule). Check:
+> kill the tab within 800ms of a discrete Save; reload; the change survived. **Security note:**
+> `attemptSave` routes through `saveUserData`, whose destructure is the client-writable
+> whitelist (F68) — `savePersistedStateNow` cannot smuggle a tier/subscription column even if
+> an overrides object contains one; it's silently dropped, not written.
+
+**F106 · Debounce + `latestPersistedStateRef` + flush trio** — `App.jsx:635–651`, `:691–720` — **[L]**
+`latestPersistedStateRef.current` is rebuilt **synchronously during render** (`:639`, not in
+an effect) from the seven persisted fields, so the unload flush always reads current state
+even if the tab backgrounds before effects commit. `pendingSaveRef` marks "a debounced write
+is owed"; the 800ms timer clears it and calls `saveUserData`. The flush trio
+(`visibilitychange:hidden`/`pagehide`/`beforeunload`) fires `flushUserDataKeepalive` **only
+when `pendingSaveRef` is set** — a clean state doesn't flush.
+> **IF** the ref stops updating synchronously (moved into a `useEffect`), **THEN** the
+> keepalive flush reads stale state and silently drops the last edit — the exact `168cc4b`
+> class, and it couples to F64 (the credential snapshot must *also* be synchronous). **IF**
+> the seven-field list in the ref (`:639`) diverges from the debounce dep array (`:651`) or
+> `saveUserData`'s destructure, **THEN** a field either never autosaves or never flushes.
+> Check: this is site 3 of the F110 four-site checklist; `db.test.js` + a kill-tab test per
+> field.
+
+**F107 · `useLocalStorage(key, initialValue)`** — `hooks/useLocalStorage.js:3–20` — **[L/G]**
+A `useState` seeded from `localStorage.getItem` (JSON-parsed, try/catch to `initialValue`)
+plus a write-back effect (try/catch swallows quota/private-mode failures). **Not dead legacy:**
+its one live consumer is `CoachNetWorthCard.jsx:40` (`coachNetWorthSignal`) — the per-tier/
+per-fiscal-week Coach message throttle (F24). That means the "one proactive Coach message per
+tier per fiscal week" guarantee is **device-local**, entirely outside the Supabase net
+(debounce, eager save, keepalive all bypass it): a user on a second device gets the message
+again, and clearing browser storage re-arms it.
+> **IF** any *account* truth (not ephemeral UI/signal state) is ever stored through this hook,
+> **THEN** it silently won't sync across devices and won't survive a storage clear — this hook
+> is the localStorage→Supabase migration's vestige and must stay scoped to device-local UI
+> state only (dismissals, signal throttles). Check: grep `useLocalStorage(` — every key is
+> ephemeral display/throttle state, never money/time/account data. **IF** the parse/stringify
+> guards change, **THEN** a corrupt value must still fall back to `initialValue`, never throw
+> into a render (`useLocalStorage.test.js` covers this).
+
+**F108 · `configHistory.js` — whitelist + `diffSensitiveFields`** — `configHistory.js:14–63` — **[L]**
+The pure half of the config-history watcher (F9 owns the App.jsx effect). `HISTORY_SENSITIVE_FIELDS`
+(70 fields across pay/schedule/employer/tax/benefits/attendance/buffer/job-loss) is the
+whitelist; `diffSensitiveFields` returns changed whitelisted fields with two deliberate
+semantics: `undefined`/`null` compare **equal** (`a ?? null` — so `DEFAULT_CONFIG` spreading a
+new field onto an old row never fabricates a snapshot) and arrays/objects compare
+**structurally** (`JSON.stringify`). Everything *not* listed (UI prefs, `goalTimelineEpochIdx`,
+investor display fields, wizard gate flags) is noise and must never trigger a row.
+> **IF** a sensitive pay/tax/schedule field is added to the wizard or a ProfilePanel card
+> (§7 F7, F47, F50 three-way rule), **THEN** it must join this list **and** `DIFF_FIELDS`
+> (SetupWizard) — the two lists watch the same concept from two angles and drift silently if
+> one grows alone. **IF** the null-coalescing or structural-compare rule changes, **THEN**
+> either every load fabricates spurious history rows (undefined→null noise) or a real
+> array/object edit (`taxedWeeks`, `otherDeductions`) stops being captured. This feeds the
+> §22 read slice: only `baseRate` rows are read today (F10/`extractBaseRateHistory`), but the
+> capture is broad by design (Master Timeline, TODO §19). Check: `configHistory.test.js`; DB
+> Row Viewer's config-history line after a sensitive edit.
+
+**F109 · Migration-folder rules** — `database/migrations/` — **[G]**
+Ordered, numbered SQL. **BOOKMARK files are never migrations** — `022_BOOKMARK_schema_snapshot_2026-07-10.sql`
+is a full-schema recap (schema state through 021) that exists so a session reads one file
+instead of the whole folder; the `BOOKMARK` tag + all-caps make it unmistakable, and assigning
+one the next real number expecting it to run is the trap CLAUDE.md warns about. Real migrations
+continue past it: **023** (`coach_chats`, unwired — Spine D), **024** (`user_data` write-
+permission fix — the F69 case law). **The next real migration is 025** — verify against the
+folder before numbering; this note has gone stale once already (this doc's own §14 caught it).
+> **IF** a migration is added, **THEN** it (a) takes the next real number skipping BOOKMARKs
+> (025 now), (b) if it touches `user_data` columns, runs the F69 new-column checklist (RLS
+> grant + service-role route + F67 read mapping + F68 write exclusion + drift-badge column),
+> and (c) if it changes schema shape, a fresh BOOKMARK should be appended and the CLAUDE.md
+> "latest bookmark / next migration" note updated **in the same PR** (D5 otherwise). Check:
+> `ls database/migrations/` — the highest non-BOOKMARK number + 1 is the next; migration 024
+> is the reminder that "SQL ran" ≠ "writes work".
+
+**F110 · The four-site new-persisted-field procedure** — cross-file — **[L]**
+Codifying F68's sketch as a named check. A new field that must persist to `user_data` has to
+appear at **all four** sites or it silently half-works (DW-6's `ptoGoal` gap is the specimen —
+it reached React state but no eager-save wrapper, so discrete saves rode the debounce):
+1. **`saveUserData` destructure** (`db.js:396`) — the debounced/eager writer.
+2. **`flushUserDataKeepalive` destructure** (`db.js:443`) — the unload writer (identical field
+   set to #1 by contract).
+3. **`latestPersistedStateRef.current`** (`App.jsx:639`) + the debounce dep array (`:651`) —
+   so eager merges and the flush see it.
+4. **DB Row Viewer drift-badge column list** (Spine F) — so the admin tool can detect its
+   in-memory≠DB drift.
+Plus, if the field is a *discrete* mutation (Save/Confirm/Add/Delete), a `saveXNow` eager
+wrapper and its `readOnly` no-op shadow (F20/F35 gate). And `loadUserData` (F67) must map it
+back on read, with a `DEFAULT_CONFIG` default so old rows get it.
+> **IF** a field lands at some-but-not-all four sites, **THEN** the failure is silent and
+> path-specific: miss #1/#2 and it never durably saves; miss #3 and eager saves drop it; miss
+> #4 and the drift badge lies. The DW-7 fix's remedy (a test asserting the engine's reads
+> appear in the query) is the template — a `db.test.js` case asserting the two destructures
+> and the ref share one field set would make this class structural. Check: kill-tab test on
+> the new field's discrete action; DB Row drift badge clean after save.
+
+**Reverse index — surface F-entries already covering Spine-B consumers (do not restate):**
+F8 (wizard `savePersistedStateNow`), F9/F10 (config-history watcher effect + baseRate read
+chain), F35 (`applyExpenseUpdate` wrapper), F46 (ProfilePanel card pattern), F31 (check-in
+single eager save), F55/F60 (Log CRUD + `ptoGoal`/DW-6), F63 (`sharedStorage` shim),
+F64 (`cachedAuthSnapshot`), F66 (`applyLoadedData` pending-save guard), F67 (`loadUserData`
+migration gauntlet — the read half), F68 (`saveUserData`/keepalive whitelist — the write half),
+F20 (readOnly noop shadow).
+
+### 19.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| A new persisted `user_data` field | The F110 four sites + eager wrapper + readOnly shadow + F67 read map | Four-site grep; kill-tab test; DB Row drift badge clean | D3 |
+| `savePersistedStateNow`/`attemptSave` merge or retry shape (F105) | Every `saveXNow` wrapper + inline eager caller (F8/F31/F35/F46) | Kill-tab within 800ms of a discrete Save; SaveFailedBanner on a forced failure | D3 |
+| `latestPersistedStateRef` sync-render update or the flush trio (F106) | Keepalive path (F64/F68), pending-save guard (F66) | Background the tab mid-edit; edit survives reload; ref list = debounce deps = destructure | D3 |
+| `HISTORY_SENSITIVE_FIELDS` / `diffSensitiveFields` semantics (F108) | F9 watcher, `DIFF_FIELDS` (§7 F7), §22 read slice (F10) | Sensitive edit → DB Row config-history line; undefined→null edit records nothing; `configHistory.test.js` | D5/D2 |
+| `saveConfigSnapshot` row shape (`snapshot`/`changed_fields`/`effective_from`) | `extractBaseRateHistory` filter (F10, `db.js:19`), Master-Timeline future readers | A `baseRate` edit produces a readable row; future-dated rate shows old rate pre-effective (Week Inspector) | D2 |
+| `useLocalStorage` scope (F107) | `coachNetWorthSignal` throttle (F24) — device-local by design | Grep keys stay ephemeral; no account truth added; `useLocalStorage.test.js` | D3 |
+| `user_data` column set (any migration, F109) | F110 sites, BOOKMARK freshness, CLAUDE.md migration-number note, RLS grants (F69) | Next number skips BOOKMARKs (025); append BOOKMARK + update note same PR; F69 checklist | D2/D5 |
+| Debounce interval / dep array (F106) | Continuous-edit persistence; must NOT gain a discrete-action dependency that should be eager instead | 800ms after typing writes once; a Save button does not rely on it | D3 |
+
+### 19.3 Block 3 — Authority table (persisted field → write paths → readers)
+
+The seven client-writable `user_data` payload fields, each with the paths that write it and
+the load-side reader. A field missing from any write column silently loses that path.
+
+| Field | Debounce (F106) | Eager (F105) | Keepalive (F68) | Drift badge (Spine F) | Load reader (F67) |
+|---|---|---|---|---|---|
+| `config` | ✅ | `saveConfigNow`/`savePersistedStateNow` | ✅ | `config` | `loadUserData` + DEFAULT_CONFIG merge |
+| `expenses` | ✅ | `onSaveExpensesNow` (F35) | ✅ | `expenses` | migration gauntlet (`weekly`→`history`, loans) |
+| `goals` | ✅ | `onSaveGoalsNow` (F18/F19) | ✅ | `goals` | direct |
+| `logs` | ✅ | `onSaveLogsNow` (F55) | ✅ | `logs` | direct |
+| `showExtra` | ✅ | via `savePersistedStateNow` overrides | ✅ | `show_extra` | direct |
+| `weekConfirmations` | ✅ | check-in `onConfirm` (F31), Reopen (F32/DW-3) | ✅ | `week_confirmations` | auto-confirm seed (F26) |
+| `ptoGoal` | ✅ | **⚠ none — DW-6** (bare `setPtoGoal`) | ✅ | `pto_goal` | direct |
+
+**Privileged columns (never in the client payload — service-role only):** tier flags
+(`is_admin`/`is_tester`/`is_investor`/`is_employer_dhl` — the last *derived* at write time from
+`employerPreset`, not stored client-authored), subscription columns (`subscription_status`/
+`trial_ends_at`/`access_ends_at`/`current_period_end`/`card_on_file`/`plan`),
+`tax_projections_enabled`. Writable only through Spine C's `api/*` routes; the F68
+destructure is the enforcing whitelist (migration 019 RLS is the server half).
+
+**Separate table (not `user_data`):** `account_history` (migration 020, write-only via
+`saveConfigSnapshot`, read-only via `extractBaseRateHistory` — the §22 narrow slice);
+`coach_chats` (migration 023, **unwired** — Spine D); `stripe_webhook_events` (migration 018,
+idempotency — Spine C/T9); `deleted_accounts` (cron tombstones — T9).
+
+### 19.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *Production data loss on backgrounded tabs* (pre-2026-07-18 audit) — setup wizard, check-ins,
+  tax toggles, goals/expenses/logs all rode the debounce and vanished when mobile Safari
+  reclaimed the tab. Closed by the eager-save pattern (F105) + the CLAUDE.md rule. F31's
+  in-code comment is the memorial.
+- *Dropped unload writes* (`168cc4b`) — a plain `fetch` aborted at unload; `flushUserDataKeepalive`
+  + the synchronous ref/credential reads (F106/F64) are the fix; sync-dispatch is the invariant.
+- *Eager-save general-primitive refactor* (2026-07-18) — `saveConfigNow` became a thin wrapper
+  over `savePersistedStateNow` so config, goals, expenses, logs, weekConfirmations all share
+  one retry/banner path.
+- *Migration 024* (`8f34def`/`a93dcad`) — the UPDATE grant missing `user_id` broke every upsert
+  conflict path while reads worked; "migration ran" ≠ "writes work" (F109/F69).
+
+**Standing findings from this pass:** none new filed. The one open persistence defect on record
+is **DW-6** (`ptoGoal` lacks an eager-save wrapper — surfaced in the T6 pass, authority table
+above marks the gap); it is the live proof of the F110 four-site procedure's necessity and
+stays queued until fixed. No D5 corrections owed — `active-systems.md` §22 already carries the
+F10 read-path annotation applied during the T7 pass, and the migration-number note in CLAUDE.md
+now self-warns (T7 pass). `useLocalStorage`'s device-local scope (F107) is documented-intended
+(the localStorage→Supabase vestige), not a defect — filed as a standing note, not a DW row,
+because nothing account-critical routes through it today; it would **promote to a defect** the
+moment any money/time/account field is stored through it instead of `user_data`.
+
+---
+
+## 20. Spine C — Entitlement & Gating Drift Map
+
+**Pass date:** 2026-07-20 (spine pass). Same anchor + method rules as §7; numbering
+continues (F111+).
+**Git-history note:** the governing intentions are the tester-gate chain
+(`ec72a07` — `is_tester` flag → `09c7609` → `a430fbf` liability hold → `a643153` — Tax Plan
+extended + `isAdmin` made a structural superset of `isTester`) and the paywall week
+(§17 build, `765eebc`→`8a2683c`), which the T9 pass (§16) already mapped in depth. This is
+the **authority record** for *who is allowed to see/do what*: one entitlement resolver
+(`getEntitlement`, F80), one gate module (`entitlements.js`), three independent tier flags.
+T9 (§16) owns the paywall *enforcement* surface (F80–F87); T5/T4 own the tax-plan gate
+*consumers* (F43/F50); this section owns the gate module itself and the **one-page gate
+registry** — every gate function mapped to its client and server call sites.
+
+**Scope:** `entitlements.js` (`hasTesterAccess`/`canAccessTaxPlan`/`canAccessAiFeatures`),
+`subscription.js` (`getEntitlement` — the F80 state machine), the three tier flags
+(`is_admin`/`is_tester`/`is_investor` + the manual `tax_projections_enabled` and future
+`is_owner`), and the enforcement fork (`paywallBypassed`/`isExpiredReadOnly`, F81). Absorbs
+active-systems §23 (beta testers), §18 (flag semantics), §21 (engine).
+
+**The two cardinal G-rules this spine enforces (§3):**
+1. **Every gate exists twice or not at all.** Client-side gating is UX; the *real* gate is
+   server/RLS-side. `api/coach.js` re-checks `canAccessAiFeatures`; migration 019 locks tier
+   columns to service-role. A gated surface checked only client-side is a drift finding.
+2. **`isAdmin` is a strict superset of `isTester` — by construction, not by convention.**
+   Every feature gate is built on `hasTesterAccess`, so the superset relationship cannot
+   drift feature-by-feature. `is_tester` and `is_investor` **never** overlap.
+
+### 20.1 Block 1 — Critical inventory (spine-internal machinery)
+
+**F111 · `entitlements.js` gate module** — `entitlements.js:11–47` — **[G]**
+Three pure functions, one base:
+- **`hasTesterAccess({isAdmin, isTester})`** (`:11`) — `Boolean(isAdmin || isTester)`. The
+  single OR every feature gate builds on, so `isAdmin ⊇ isTester` is guaranteed structurally
+  (verified: both gates below call it — the `a643153` claim holds in live code).
+- **`canAccessTaxPlan({isAdmin, taxProjectionsEnabled, isTester})`** (`:33`) —
+  `hasTesterAccess(…) || Boolean(taxProjectionsEnabled)`. **`config.taxExemptOptIn` is
+  deliberately NOT a grant path** (`a430fbf` liability hold — the wizard's "Unlock
+  projections" must never reveal tax-plan UI to a normal user until an accountant reviews the
+  withholding math). Re-enabling the wizard path is a one-line change *here* — the rule that
+  the check lives in exactly one place is the whole point.
+- **`canAccessAiFeatures({isAdmin, isTester})`** (`:45`) — `hasTesterAccess(…)`. **`isInvestor`
+  is deliberately NOT in the OR** (the CRUCIAL comment): `is_tester` grants AI only, never
+  demo-account access or the investor code path; `is_investor` grants no AI.
+> **IF** a new gated feature is added, **THEN** it MUST build on `hasTesterAccess` (never
+> re-derive `isAdmin || isTester` inline — that's how the superset drifts) and MUST NOT fold
+> in `isInvestor` unless the feature is genuinely investor-facing (§23 firewall). **IF** the
+> `taxExemptOptIn` non-grant is touched, **THEN** it is a product/liability decision, not a
+> refactor — surface it. Check: `entitlements.test.js` (already asserts investor≠AI,
+> opt-in≠tax-plan, and the truthiness edge cases); a tester account sees AI + Tax Plan but no
+> Demo Tree / investor path.
+
+**F112 · Server-gate column-supply invariant (the DW-7 generalization)** — `api/coach.js:63`,
+`api/_lifecycleEngine.js:44` vs `api/cron-subscription-lifecycle.js:133–139` — **[G]**
+A server-side gate is only as strong as the query that feeds its inputs. Two server gates read
+tier flags off a fetched row: `api/coach.js` gates AI on `userRow.is_admin`/`is_tester`
+(its SELECT supplies both — correct); the lifecycle engine exempts `row.is_admin ||
+row.is_investor || row.is_tester` (`:44`) but the **cron's SELECT omits `is_tester`**
+(`:135–137`), so the tester exemption reads `undefined` and never fires — **DW-7**, this
+investigation's highest-severity defect (silent auto-deletion of testers ~6 months after
+flag flip).
+> **IF** any server gate reads a row field, **THEN** the SELECT that produced the row MUST
+> include that column — a gate whose input column is missing evaluates against `undefined`
+> and silently fails *open or closed* with no error. The fix template (queued in DW-7): add
+> `is_tester` to the cron SELECT **and** a shell-level test asserting every column the engine
+> destructures appears in the query string, making the class structural rather than
+> whack-a-mole. Check: grep each `api/*` gate's field reads against its own `.select(...)`
+> string; unit tests that hand-build rows (as `lifecycleEngine.test.js` does) will NOT catch
+> this — the seam is the query, not the pure function.
+
+**Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
+F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
+`isExpiredReadOnly` enforcement fork), F82 (upgrade surfaces), F85/F86 (lifecycle engine +
+cron shell / DW-7), F43 (BudgetPanel `taxFeatureUnlocked`), F50 (ProfilePanel Tax Plan
+writers), F45 (ProfilePanel `taxplan` route gate + `investorcodes` asymmetry / DW-W2),
+F24 (Coach card AI gate), F69 (tier flags & RLS boundary), F70 (investor/demo machinery),
+F71 (trial seeding), F78 (TrialExplainer gate).
+
+### 20.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `hasTesterAccess` or either gate function (F111) | Every gate consumer (registry below) — the superset relationship moves for all at once | `entitlements.test.js`; walk the tier matrix (§20.3) | D4 |
+| A new gated feature added | Must build on `hasTesterAccess`; must decide `isInvestor` inclusion explicitly; client gate **and** server/RLS gate both present | Grep the new gate for inline `isAdmin || isTester` (forbidden); confirm a server re-check exists | D4 |
+| A server gate's row-field reads (F112) | The feeding SELECT must include every column — DW-7 class | Grep gate field reads vs `.select(...)`; add the field-coverage test | D4 |
+| `getEntitlement` states/precedence/timestamps (F80) | F81 fork, TrialBanner/Sub-card copy, F78 explainer condition, lifecycle engine (F85), Live Inspector Sub Phase | One account through all five states; `subscription.test.js`; **never** thread `effectiveToday` | D1 |
+| `paywallBypassed` set or per-surface split (F81) | Home/Budget readOnly shadows (F20/F35), Income/Log replacement (F81), Account fully-live rule; a **new nav panel gets no enforcement unless wired** | Expired non-admin visits every tab; nothing mutates, checkout reachable | D4 |
+| Tier-flag mapping (`is_admin`/`is_tester`/`is_investor` → camelCase, F67) | Client reads via mapping, never writes; every gate's inputs; `config.isInvestor` (paywall bypass) vs `row.is_investor` (cron) — two spellings of one fact | `db.test.js` mapping cases; DB Row Viewer tier columns | D1/D4 |
+| Tester 6-month window semantics (§23, migration 021 trigger) | F81 non-bypass (testers ride the real paywall) **and** F86 cron exemption (DW-7) — two halves of one promise | Expired tester: sees paywall in-app, never dunned/deleted by cron | D4 |
+| A new tier flag / privileged column | F69 full checklist (migration RLS grant + service-role route + F67 read map + F68 write exclusion + gate on `hasTesterAccess` + cron exemption decision) | Post-migration: plain client upsert still works, new column rejects client writes | D4 |
+
+### 20.3 Block 3 — The one-page gate registry
+
+Every gate in the app, its definition, and **both** sides (client + server). A row with an
+empty "Server / RLS gate" cell is a client-only gate — acceptable *only* when the data it
+guards is itself RLS-protected server-side (noted per row); a genuinely privileged action
+with no server gate is a D4 finding.
+
+| Gate | Definition | Tier inputs | Client call sites | Server / RLS gate |
+|---|---|---|---|---|
+| **`canAccessAiFeatures`** | `isAdmin \|\| isTester` | `is_admin`, `is_tester` | `App.jsx:878` (Coach net-worth trigger), `:3350` (Ask Coach panel), `HomePanel.jsx:1358` (Coach card, F24) | `api/coach.js:63` — re-checks on `userRow.is_admin`/`is_tester` before streaming (the model server gate) |
+| **`canAccessTaxPlan`** | `isAdmin \|\| isTester \|\| taxProjectionsEnabled` | `is_admin`, `is_tester`, `tax_projections_enabled` | `BudgetPanel.jsx:82` (`taxFeatureUnlocked`, F43), `ProfilePanel.jsx:1900` (`canSeeTaxPlan`, F45/F50) | none direct — tax writes go through `config` (F50), RLS-owned via migration 019; the gate is display-only. **No server action to re-gate** (writes are the user's own config row) |
+| **`getEntitlement` → `paywallBypassed`** | `isAdmin \|\| config.isInvestor` (F81) | `is_admin`, `is_investor` | `App.jsx:1463` → `isExpiredReadOnly` fork (F81) drives readOnly shadows + panel replacement | Server side is Stripe/webhook truth + the lifecycle cron (F85/F86); the client fork is UX over server-authoritative subscription columns |
+| **Lifecycle exemption** | `is_admin \|\| is_investor \|\| is_tester` (`_lifecycleEngine.js:44`) | all three flags | — (server-only) | **the gate itself** — but its SELECT omits `is_tester` (DW-7, F112/F86) |
+| **`isAdmin` toolkit** | `user_data.is_admin` (F67 map) | `is_admin` | Admin Tools sheet, Week Inspector, Reopen, per-entry breakdown (Spine F) | Data the tools read is the user's own RLS-scoped row; write-capable Phase-2 tools are `isOwner`-gated (not built) |
+| **`isAdmin` investor codes** | `user_data.is_admin` | `is_admin` | `ProfilePanel.jsx:2019` (ListRow), route `:1944` (**row-gate only** — DW-W2) | `InvestorAdminPanel` data calls are RLS-gated server-side (why DW-W2 is unexploitable today) |
+| **`isInvestor` demo tree** | `user_data.is_investor` / `config.isInvestor` | `is_investor` | `DemoAccountTree`, investor signup path (F70) | `createInvestorAccount`/demo storage RLS-scoped; `is_investor` grants **no** AI (§23 firewall) |
+| **Tier flag writes** | — | all flags + subscription columns | client **never** writes (F68 whitelist-by-destructure) | migration 019 RLS + service-role `api/*` routes only |
+
+**Tier matrix (the cells every G-change must walk):**
+
+| Flag combo | AI features | Tax Plan | Demo tree / investor path | Paywall at expiry | Admin toolkit |
+|---|---|---|---|---|---|
+| plain user | ✗ | ✗ (opt-in alone ✗) | ✗ | **enforced** | ✗ |
+| `taxProjectionsEnabled` | ✗ | ✓ | ✗ | enforced | ✗ |
+| `is_tester` | ✓ | ✓ | ✗ (firewall) | **enforced** (real 6-mo trial; cron-exempt — DW-7) | ✗ |
+| `is_investor` | ✗ (firewall) | ✗ | ✓ | bypassed | ✗ |
+| `is_admin` | ✓ | ✓ | ✗ (unless also investor) | bypassed | ✓ |
+| `is_owner` (future) | ✓ | ✓ | — | bypassed | ✓ + Phase-2 write tools |
+
+### 20.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *Tax Plan tester gate + structural superset* (`a643153`) — the moment `hasTesterAccess`
+  became the shared base; before it, each gate re-derived the OR and could drift. F111's
+  IF/THEN exists to keep every new gate on that base.
+- *Liability hold on the wizard unlock* (`a430fbf`/`09c7609`) — `taxExemptOptIn` was demoted
+  from a grant path to a no-op; the check lives once, in `entitlements.js`, never scattered.
+- *Beta tester ≠ investor firewall* (`ec72a07`, §23) — `is_tester` grants AI only; the
+  CRUCIAL comment in `canAccessAiFeatures` is the in-code guard.
+- *RLS hardening* (`60a4b17`, migration 019) — privileged writes moved server-side; F68's
+  whitelist-by-destructure is the client half.
+- *Migration 024* (`8f34def`/`a93dcad`) — a tier/permission migration can pass in SQL and
+  still break writes; F69's checklist item.
+
+**Standing findings from this pass:** none new filed. The spine's one open defect is **DW-7**
+(the cron SELECT omits `is_tester`, killing the lifecycle exemption) — surfaced in the T9
+pass, generalized here into F112 as a *class* (server gate vs. its feeding query) rather than
+a one-off, and restated in the gate registry and tier matrix so the tester row's "enforced /
+cron-exempt (DW-7)" status is unmissable. **DW-W2** (the `investorcodes` route lacking the
+route-level re-check `taxplan` has) remains queue-visible and is captured in the registry's
+"row-gate only" note; it is not promoted because `activeSection` is tap-only state and the
+underlying data is RLS-gated (F45's IF/THEN is the tripwire). No D5 corrections owed — the
+`a643153` structural-superset claim was verified against live code (both gates call
+`hasTesterAccess`) and holds.
+
+---
+
+## 21. Spine D — AI Layer & Context Grounding Drift Map
+
+**Pass date:** 2026-07-20 (spine pass). Same anchor + method rules as §7; numbering
+continues (F113+).
+**Git-history note:** the governing intentions are the grounding-rediscovery series
+(`bcc8a6a` — per-expense cost resolved from `history` not `billingMeta`; `1c7b086` — Coach
+grounded in Home's actual tile names/figures; `e1d3c90` — goal tiles wired in *minus names*;
+`44e8a30` — Next Week Takehome gap closed; `836921d` — week/period mentions paired with real
+dates; `2e0121a` — active-weeks scoping), each of which fixed a Coach line that had drifted
+from the UI it describes. This spine's **whole game** is §24's grounding rule: *every context
+field resolves through the same authoritative Spine-A function the UI itself uses* — never a
+parallel approximation (D1). This is the authority record for that contract.
+
+**Scope:** `aiContext.js` (`buildCoachContext`), `coachPrompts.js`, `coachFeatureGuide.js`,
+`coachTriggers.js`, `claude.js`, `api/coach.js`, `AskCoachPanel.jsx`, `CoachNetWorthCard.jsx`,
+the dormant `coach_chats` db layer. Absorbs active-systems §24.
+
+### 21.1 Block 1 — Critical inventory (spine-internal machinery)
+
+**F113 · `buildCoachContext` grounding contract** — `aiContext.js:72–204` — **[L]**
+The single Coach context builder. Its defining property: **every line resolves through the
+exact Spine-A function the corresponding UI tile uses**, and each line carries an in-code
+"Matches HomePanel.jsx's X tile exactly" comment naming its twin. Verified groundings:
+`activeWeeksThisYear` → `resolveActiveWeeksThisYear` (F13, not a flat 52); `annualSavings`/
+`netWorthHealth` → `netWorthHealthStatus` (F23); Budget Health `spendRatio` → same <50%/<75%
+thresholds as F16; `leftThisWeek` → `(prevWeekNet ?? weeklyIncome) − avgWeeklySpend` (F15/F16);
+goal timeline → `computeGoalTimeline(…, config?.goalTimelineEpochIdx ?? null)` — **the same
+epoch arg as HomePanel (F18)**, the exact parity a 2026-07-16 live-test bug violated; per-
+expense cost → `getEffectiveAmountForMonth`/`getEffectiveAmount` (F38/F102, the `bcc8a6a`
+fix); period labels → `payPeriodUnit`/`weekNumToPaycheckNum`/`getPayPeriodBounds` (Spine A,
+schedule-aware — never hardcode "week"); `perCheckFactor` = `52/checksPerYear` scaling.
+> **IF** a context line is added or changed, **THEN** it MUST call the authoritative Spine-A
+> function its UI twin calls — writing a local approximation is the D1 pattern §24 exists to
+> catch (the `billingMeta` estimate once disagreed by double digits; the flat-52 double-
+> diluted savings). **IF** a Spine-A signature the context consumes changes (F13/F15/F18/F23/
+> F38/F102), **THEN** this builder is a named consumer in that entry's blast radius. Check:
+> `aiContext.test.js` (grounding regressions are test-fenced — the `aiContext.js ↔ its test`
+> co-change coupling is #6 in §4.3); Ask Coach a "what do I make / when do goals finish"
+> question and diff the answer against the Home tile. **Purity invariant:** `buildCoachContext`
+> is a pure function of its args (no hooks, no fetches) — `aiContext.test.js` asserts
+> idempotency and no-throw on empty input; keep it that way.
+
+**F114 · The privacy split (labels sent, goal names withheld)** — `aiContext.js:187`, `:196` — **[G/L]**
+A deliberate asymmetry: **expense labels ARE sent** to Coach (`exp.label ?? "Unnamed"` in the
+Expense breakdown line, `:187`) but **goal names are withheld** — the goal breakdown is
+"ranked by funding priority — goal names withheld for privacy" (`:196`), sending only rank +
+target + ETA, never `goal.label`. Goals are treated as more sensitive than bills (aspirations
+vs. recurring obligations).
+> **IF** the goal breakdown line is touched, **THEN** it must never interpolate `goal.label`/
+> `goal.name` — the privacy rule is a product commitment, not a formatting choice; the "names
+> withheld" copy in the string is the in-context reminder. **IF** a new context line surfaces
+> goal data, **THEN** it inherits the same withholding. Check: `aiContext.test.js` asserts the
+> goal breakdown contains no goal name; grep the builder for `goal.label`/`g.label` (should be
+> zero in emitted strings). *(Note the asymmetry when adding new entity types: bills follow
+> the expense-label precedent, aspirational/personal entities follow the goal precedent —
+> decide explicitly, don't default.)*
+
+**F115 · `api/coach.js` server gate + trust boundary** — `api/coach.js:60–100` — **[G]**
+The server proxy: (1) **re-gates** AI access server-side — `SELECT is_admin, is_tester` then
+`canAccessAiFeatures({isAdmin, isTester})` (`:60–63`), the Spine-C "every gate twice" rule
+satisfied (and F112-correct: the SELECT supplies both columns the gate reads, unlike DW-7);
+(2) keeps `ANTHROPIC_API_KEY` server-side (test/live split mirrors `_stripeClient.js`);
+(3) reads `{messages, systemPrompt, contextBlock, model}` from the request body, maps `model`
+through `MODEL_IDS` (default `haiku`), applies `cache_control: ephemeral` to the system +
+context blocks (prompt caching), and streams. **Trust boundary:** the context block is built
+*client-side* (F113) and POSTed — the server re-gates *access* but does not re-derive the
+context; it trusts the block's content.
+> **IF** the gate's SELECT changes, **THEN** it must keep supplying every column
+> `canAccessAiFeatures` reads (F112 class). **IF** anything security-sensitive is ever driven
+> by the client-supplied `contextBlock` (it is currently display grounding only, sent to the
+> model, never used for authorization), **THEN** that's a new trust-boundary crossing —
+> re-derive it server-side instead. **IF** the model default or `MODEL_IDS` map changes,
+> **THEN** confirm callers still pass a valid key (`AskCoachPanel` passes `"haiku"`). Check:
+> a non-admin/non-tester request returns 403 before any Anthropic call; the client cannot
+> escalate access by editing the POST body.
+
+**F116 · Dormant `coach_chats` persistence layer** — `db.js:531–620` (`loadCoachChats`/
+`saveCoachChat`/`deleteCoachChat`), migration `023_add_coach_chats.sql` — **[L/G]**
+The DB functions and table exist and are unit-tested (`dbCoachChats.test.js`) but have
+**zero UI callers** — `AskCoachPanel.jsx:11` explicitly defers wiring ("coach_chats wiring
+lands as its own pass once this feels right"). Chat history is currently session-only
+(in-component `messages` state, lost on close). This is *built infrastructure awaiting
+activation*, not dead code.
+> **IF** anyone wires these functions into the Coach UI, **THEN** it earns its own drift-map
+> entry first (it becomes an eager-save concern — Spine B: chat writes are discrete Add/Delete
+> actions needing the F110 four-site treatment and a `readOnly`/gate decision), and the RLS
+> policy on `coach_chats` must be verified own-row-scoped (F69). Until then, do not assume any
+> Coach conversation persists across sessions or devices. Check: grep the three function names
+> for UI callers — currently only `db.js` and its test reference them.
+
+**Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
+F24 (Coach net-worth trigger chain + `estimateRunwayDays` quarantine + `resolveNetWorthSignalTier`/
+`shouldFireForTier`), F22/F44 (`computeJobLossRunway` — the convergence target for the
+quarantine), F13 (`resolveActiveWeeksThisYear`), F15 (`resolvePrevWeekNet`), F18
+(`computeGoalTimeline` epoch parity), F23 (`netWorthHealthStatus`), F38/F102 (expense
+resolvers), F81/F111 (the AI gate, Spine C).
+
+### 21.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| A `buildCoachContext` line's source function (F113) | The UI tile it "Matches … exactly" — they must move together | `aiContext.test.js`; Ask Coach the question, diff vs. the named Home/Income tile | D1 |
+| Any Spine-A signature the context reads (F13/F15/F18/F23/F38/F102) | `buildCoachContext` is a named consumer in that entry's blast radius | The Spine-A entry's own procedure + `aiContext.test.js` | D1 |
+| `computeGoalTimeline` epoch handling (F18) | Coach goal line **and** Home goal cards — both pass `config?.goalTimelineEpochIdx ?? null` | Grep `computeGoalTimeline(` for epoch-arg parity; goal ETA on card = Coach answer | D1 |
+| Goal breakdown line / any goal-surfacing line (F114) | The privacy rule — no `goal.label` interpolation | `aiContext.test.js` no-goal-name assertion; grep builder for label refs | D5/privacy |
+| `canAccessAiFeatures` inputs or `api/coach.js` SELECT (F115) | Server gate must supply every column the gate reads (F112); client callers pass a valid `model` key | Non-entitled request → 403 pre-Anthropic; `entitlements.test.js` | D4 |
+| `estimateRunwayDays` (F24 quarantine, `coachTriggers.js`) | Its too-low runway feeds `CoachNetWorthCard` context (`:78`) → Coach can claim less runway than the Job Loss panel shows | Do **not** extend it — converge on `computeJobLossRunway`; then both Coach entry points quote one runway | D1 |
+| `runwayDays` wiring to `AskCoachPanel` (§8 quarantine 2) | App.jsx passes no `runwayDays` → `aiContext.js:200` renders bare "Job Loss Mode: active" | When wiring, use `computeJobLossRunway` (not the quarantine); both Coach entry points agree | D4 |
+| `coach_chats` db functions get a UI caller (F116) | New eager-save + gate + RLS concern — needs its own map entry first | Grep the three fn names for callers; verify RLS own-row scope | D3/D4 |
+| `EVENT_TYPES`/`PAYCHECKS_PER_YEAR` (`constants/config.js`) | The context's most-recent-log label (`:178`) and `checksPerYear`/`perCheckFactor` scaling | Add/rename a type → context label resolves; biweekly account → per-check scaling correct | D1 |
+
+### 21.3 Block 3 — Authority table (context line → source function → UI twin it must match)
+
+The L-spine deliverable for Spine D: every Coach context line, the Spine-A function it grounds
+through, and the on-screen tile it is documented to match. A line computing its number any
+other way is a §24 grounding violation (D1) by definition.
+
+| Coach context line | Source-of-truth function | UI twin it must match |
+|---|---|---|
+| Weekly net income / surplus | `weeklyIncome` (F14), `avgWeeklySpend` | Home "typical week" tile (F16) |
+| Next week takehome | `futureWeekNets[0]` → fallback `prevWeekNet` → `weeklyIncome` (F15/F29) | Home "Next Week Takehome" tile (F16) |
+| Left this week | `(prevWeekNet ?? weeklyIncome) − avgWeeklySpend` (F15) | Home "Left This Week" tile (F16) |
+| Savings rate / Net worth trend | `netWorthHealthStatus`, `annualSavings` over `activeWeeksThisYear` (F13/F23) | Home Net Worth cue (F23) |
+| Budget Health | `spendRatio` = `avgWeeklySpend/weeklyIncome`, <50/<75 (F16) | Home "Budget Health" tile (F16) |
+| Goals / funded / target | `getFundedGoalSpend` (`goalFunding.js`), goal targets | Home goal cards (F18/F19) |
+| Weeks to complete all goals | `computeGoalTimeline(…, epochIdx)` `lastGoalEW` (F18) | Home goal ETA (F18) |
+| Goal breakdown (rank + ETA, **no names**) | `formatGoalTimelineEntry` over `computeGoalTimeline` (F18/F114) | Home goal cards (rank only) |
+| Expense breakdown (label + cost) | `getEffectiveAmountForMonth`/`getEffectiveAmount` (F38/F102) | Budget cards (F36/F38) |
+| Current period / periods left | `getFiscalWeekNumber`, `weeksToChecksRemaining`, `payPeriodUnit`, `getPayPeriodBounds` (`fiscalWeek.js`) | App header chip, Income period label |
+| Most recent log | `EVENT_TYPES[type].label`, `fmtFullDate` | Log panel entries (T6) |
+| Job Loss runway | `runwayDays` → **should** be `computeJobLossRunway` (F22/F44) | Job Loss Home headline (F22) — **currently divergent** (F24 quarantine + §8 quarantine 2) |
+
+### 21.4 Block 4 — Case law & quarantine
+
+**Precedents (fixed — cite, don't relearn):**
+- *`billingMeta` per-expense estimate* (`bcc8a6a`, §24) — Coach derived per-expense cost from
+  `billingMeta` instead of `history[]`, off by double digits vs. the UI. The grounding rule
+  (F113) is the generalized fix; every context line's "Matches … exactly" comment is the
+  in-code enforcement.
+- *Flat-52 double dilution* (`2e0121a`, §15.H11) — the Coach's savings figure divided by a
+  flat 52 on top of `weeklyIncome`'s own per-active-week average; fixed by `resolveActiveWeeksThisYear`
+  (F13) shared with Home.
+- *Goal-name privacy* (`e1d3c90`) — goal tiles were wired into context deliberately *without*
+  names; F114 is the standing rule.
+- *Week-vs-check terminology* (`836921d`) — context lines hardcoded "week" regardless of pay
+  schedule until routed through `payPeriodUnit`; date mentions widened for larger pay periods.
+
+**Standing quarantines (open — cite, don't extend):**
+1. **`estimateRunwayDays` D1 (F24, `coachTriggers.js:27–49`)** — a second runway formula that
+   ignores persisted `jobLossCashOnHand` and job-hunt income; always ≤ the real
+   `computeJobLossRunway`. Feeds both the Red-tier trigger and `CoachNetWorthCard`'s context,
+   so the Coach can claim less runway than the Job Loss panel shows on the same screen.
+   Convergence target: `computeJobLossRunway` (Spine A / F22). Its doc comment carries the
+   quarantine notice.
+2. **`runwayDays` never wired to `AskCoachPanel` (§8 Block 4.2)** — App passes no `runwayDays`,
+   so `aiContext.js:200` renders bare "Job Loss Mode: active" (documented §10 gap). When
+   wiring, use `computeJobLossRunway`, not quarantine #1 — and both Coach entry points must
+   then quote the same runway.
+
+**Standing findings from this pass:** none new filed. The two quarantines above are
+pre-existing and owned (F24 / §8); both converge on the same Spine-A function
+(`computeJobLossRunway`), which is why Spine A's §18.4 lists quarantine #3 pointing back here.
+The dormant `coach_chats` layer (F116) is infrastructure-awaiting-activation, not a defect —
+filed as a standing note with an explicit "earns its own map entry before wiring" gate, not a
+DW row. No D5 corrections owed — `active-systems.md` §24 already documents the grounding
+pattern and was reconciled during the surface passes.
+
+---
+
+## 22. Spine E — Design System & Motion Drift Map
+
+**Pass date:** 2026-07-20 (spine pass). Numbering continues (F117).
+**Deliberately thin.** T10 (§17, F88–F95) *is* substantially this spine — it mapped the
+`@theme` tokens, press/fold motion, `MetricCard`, `LiquidGlass` whitelist, swipe primitives,
+PWA flow, and input standards, all with full IF/THEN checks. This section is the **authority
+statement plus a reverse index**; it does not re-map what T10 already owns. Per the handoff:
+a thin honest spine beats a duplicated one.
+
+**Scope:** `index.css` (`@theme`), `ui.jsx`, `LiquidGlass.jsx`, `hooks/useSwipeStack.js`,
+animation rules — all mapped in §17. New here: the CLAUDE.md UI-standards tables and
+`docs/authority-design-system` as **enforceable spec**, not just prose. Absorbs
+active-systems §15, §16 (primitives).
+
+**Authority statement — the six invariants this spine guards (all enforced in §17):**
+1. **No raw hex for accent/green/red** in components — reference `@theme` tokens (F88).
+   Standing debt: `WeekConfirmModal`/`LoginScreen`/`ProfilePanel` carry untokenized hex
+   (TODO §10 + CLAUDE.md Known Cleanup).
+2. **Pulse signal tokens** (`--color-signal-blue/purple/glow`) are Phase-2 AI-overlay only —
+   never on Flow elements (F88).
+3. **Liquid Glass** only on `ALLOWED_PURPOSES` (`nav, pulse, modal, log-summary, phase-btn`) —
+   never on primary MetricCards, tables, or buttons; DEV-only warn (F92).
+4. **Motion:** press = `scale(0.97/0.94)` only, no bounce/spin/scale-up; all ≤500ms except the
+   1200ms countup; `prefers-reduced-motion` nulls every `data-fold` animation (F89/F90/F91).
+5. **Data honesty:** `InsightRow`/Pulse builders return `undefined` on insufficient data —
+   signals are never fabricated (F91, shared with §8 F16).
+6. **Numeric inputs:** string drafts, `parseFloat` at commit only; `iS` = 16px font (blocks
+   iOS zoom) + 44px min-height (tap target); `lS` = 10px/2px uppercase labels (F95).
+
+### 22.1 Block 1 — Critical inventory (what T10 scoped out)
+
+**F117 · The UI standards as enforceable spec** — CLAUDE.md ("UI Component Standards",
+"Color Tokens", "Animation Rules"), `docs/authority-design-system` (Flow color table + motion
+rules) — **[G]**
+T10's F88–F95 map the *code*; the standards *text* is the **spec that code is measured
+against** — the color-token table, the button pattern (CANCEL/SAVE recipes), the entrance/
+countup caps, the numeric-input standard. Under the §5 covenant these move with the code:
+a token value change, a new animation, or a new primitive must update the standards tables in
+the same PR, or the next author builds against a false spec. `docs/authority-design-system` is
+the design *vision* (Flow dominates, Pulse assists, Momentum-not-XP, the pillar roadmap) that
+CLAUDE.md operationalizes — its concrete claims (the "live in `src/index.css`" Flow color
+table) are subject to D5 like any other doc.
+> **IF** an `@theme` token, animation value, or primitive contract changes, **THEN** update
+> CLAUDE.md's matching table **and** (if it restates the value) `docs/authority-design-system`
+> in the same PR — F88/F91/F95's IF/THENs already require this for the code side; this entry
+> extends it to the two spec docs so all three stay one truth. Check: grep the changed token/
+> value across CLAUDE.md and `docs/authority-design-system`; the §5 covenant. **IF** a new
+> component uses a Pulse signal token outside the AI overlay, or Liquid Glass outside
+> `ALLOWED_PURPOSES`, **THEN** that's the reserved-token/whitelist violation F88/F92 exist to
+> catch — this spine's job is that those two rules have exactly one home each.
+
+**Reverse index — surface F-entries that ARE this spine (do not restate):**
+F88 (`@theme` tokens + Pulse reservation), F89 (press feedback / `Pressable`), F90 (fold
+motion + reduced-motion kill switch), F91 (`MetricCard`/`InsightRow` data-honesty), F92
+(`LiquidGlass` `ALLOWED_PURPOSES`), F93 (swipe/snap primitives), F94 (PWA update/install),
+F95 (`iS`/`lS` input standards).
+
+### 22.2 Block 2 — Drift trigger map (cross-boundary)
+
+This spine's cross-boundary triggers are enumerated in §17.2 (the T10 trigger map) — every
+row there is a Spine-E row. The only additions this pass surfaces are the two spec-doc
+couplings:
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| Any `@theme` token value/name | §17.2's debt-file row **plus** CLAUDE.md Color Tokens table **plus** `docs/authority-design-system` Flow color table | Grep the token + its raw hex across `src/`, CLAUDE.md, and the design-system doc | D5 |
+| Animation value / new primitive contract | §17.2's `MetricCard`/press/fold rows **plus** CLAUDE.md Animation Rules + UI Component Standards text | The §5 covenant — code and both spec docs in one PR | D5 |
+| (everything else) | See §17.2 in full — not duplicated here | Per §17's procedures | — |
+
+### 22.3 Block 3 — Gate matrix
+
+The design-system gate matrix is §17.3 (motion preference, display context, build mode, SW
+update state, card interactivity, insight-data sufficiency). Not duplicated. The one G-fact
+worth restating as the spine's headline: **`prefers-reduced-motion` must cover every new
+`data-fold` variant** (F90) and **DEV-only** LiquidGlass enforcement means the whitelist is
+"only as strong as DEV-time discipline" (F92) — prod silently accepts any purpose.
+
+### 22.4 Block 4 — Case law & findings
+
+**Precedents:** all in §17.4 (PWA auto-update mid-session reload `8c50ff0`; press-feedback
+unification `4ca9437`; fold-close-as-fade `bb35349`; iOS hit-test portals `c0224ce`;
+ALLOWED_PURPOSES doc lag). Not duplicated.
+
+**Standing findings from this pass:**
+1. **D5, corrected in this pass:** `docs/authority-design-system`'s "Flow Color Tokens (live
+   in `src/index.css`)" table carried stale hex — `--color-bg-base #07130F`, `bg-surface
+   #0D1F19`, `bg-raised #123027`, and the gradient stops — while `index.css` has `#05100c`/
+   `#112c1f`/`#163828`/`#091a11→#05100c`. The table also omitted `--color-deduction` (the
+   active red token) and mislabeled `--color-red` as the live danger color when it is the
+   unused split-test value. Corrected to match `index.css` in this commit — the table now
+   reflects the real Flow palette. (CLAUDE.md's token table was already correct.)
+2. No DW defects. The untokenized-hex debt (three files) is already owned (TODO §10 + Known
+   Cleanup, cited in F88); the DEV-only whitelist enforcement is a discipline boundary noted
+   in F92, not a defect. This spine adds no new queue items — its risk surface is fully
+   covered by T10's F88–F95 plus the spec-doc covenant above.
+
+---
+
+## 23. Spine F — Admin Diagnostic Toolkit Drift Map
+
+**Pass date:** 2026-07-20 (spine pass — the closing section). Same anchor + method rules as
+§7; numbering continues (F118+).
+**Git-history note:** the toolkit is built inline in `App.jsx` (the tool sheet, Week Inspector
+modal, Live State Inspector pill) rather than as standalone components; its Phase-2 spec lives
+in `docs/admin-toolkit-todo.md`. Its defining property for the Warden: **the toolkit is the
+Warden's own instrument panel** — nearly every L-entry's "Check:" procedure in this doc
+executes *through* one of these tools. A change that breaks a tool doesn't just lose a feature;
+it **blinds every drift check that depends on it**, which is why a broken tool gets L-grade
+scrutiny even though the toolkit itself is a Gateway.
+
+**Scope:** the 8 Phase-1 `isAdmin` tools in `App.jsx` (Lock Date, Reopen Last Check-In, Force
+Sync, Config Raw View, DB Row Viewer, Tax Weeks Grid, Live State Inspector, Week Inspector),
+the per-entry impact breakdown in `LogPanel.jsx`, and the unbuilt Phase-2 `isOwner` tools
+(`docs/admin-toolkit-todo.md`). Absorbs active-systems §13.
+
+### 23.1 Block 1 — Critical inventory (spine-internal machinery)
+
+**F118 · Toolkit integrity invariant + the `effectiveToday` simulation fork** — `App.jsx:863–865`
+(`effectiveToday = (isAdmin && tempLockDate) ? tempLockDate : today`) + the tool reads below — **[G]**
+`effectiveToday` is the **simulation spine**: the Lock Date tool overrides it, and it flows
+into `isPayPeriodPast` (F25), the auto-confirm/eligibility chain (F26/F27), `taxDerived`'s
+past/future split (F28), `futureWeeks`, `currentWeek`, `fundedGoalSpend`, and every displayed
+"now"-relative number. This is what makes Lock Date a *general* date simulator, not a cosmetic
+label. **Hard boundary:** `getEntitlement` and the Stripe/subscription surfaces are called with
+**real `new Date()`, never `effectiveToday`** (F53/F80 — a simulated date must never grant free
+access or extend the hidden grace).
+> **IF** a new "now"-derived number is added, **THEN** it should read `effectiveToday` (so Lock
+> Date can simulate it) **unless** it's entitlement/billing (which must read real wall-clock —
+> the F53/F80 rule). **IF** a tool's read source drifts from what it claims to show, **THEN**
+> every drift check that "asks the user to run [tool]" is now reading a lie — DW-2 is the live
+> specimen: `taxDerived` (F28) *uses* `effectiveToday` but its dep array omits it, so the Lock
+> Date tool's tax-simulation promise silently breaks. **The instrument-panel rule:** any change
+> to a tool's read path re-verifies every F-entry that names that tool in its "Check:" (the
+> §23.3 registry is that index). Check: set Lock Date; Live Inspector's Effective Today +
+> `extraPerCheck` + week idx all move together and match the Tax Weeks Grid / Week Inspector.
+
+**F119 · Phase-2 `isOwner` pre-build warnings** — `docs/admin-toolkit-todo.md` Phase 2 — **[G]**
+The unbuilt owner tools are **write-capable** and get L-grade scrutiny when built — they mutate
+the exact fields the whole fiscal model hangs on. The prebuild landmines, each already flagged
+in a surface F-entry:
+- **Lock `firstActiveIdx`** (the nuclear field) — repositions the entire fiscal calendar
+  retroactively (§7 F1/F2). The load-side sync only ever moves the boundary *earlier* (F67);
+  an owner edit that moves it later deletes modeled income.
+- **Tax Weeks Grid edit** — toggling `config.taxedWeeks` corrupts withholding math if misused;
+  wizard re-run recomputes `taxedWeeks` (F5) while `pastWeekTaxStatusOverrides` survive (F50) —
+  the owner tool must respect that survivorship split.
+- **Bulk Week Confirmation Seeding / reset-all** — writing `weekConfirmations` to `{}`
+  **re-arms the F26 auto-confirm seed effect**, which then bulk-stamps every closed week;
+  "reset all confirmations" must account for this before it ships (F26's IF/THEN is the flag).
+- **Config Raw JSON Apply / Snapshot-Restore** — same blast radius as every field combined;
+  restore overwrites config+logs+expenses+goals in one write and must ride the eager-save/
+  four-site contract (F110), not a bare `setState`.
+> **IF** any Phase-2 tool is built, **THEN** it is an L-change (it writes truth): the `isOwner`
+> flag gets the full F69 tier-flag checklist (migration + RLS + read map + write path), and
+> each write tool inherits the eager-save pattern (Spine B) and the specific landmine above.
+> **IF** the reset-confirmations tool is built without disarming F26, **THEN** it silently
+> re-seeds the whole year. Check: `docs/admin-toolkit-todo.md`'s per-tool spec + the cited
+> surface F-entry before writing a line.
+
+**Reverse index — surface F-entries that wire/verify through the toolkit (do not restate):**
+F25 (Lock Date hour-gate bypass in `isPayPeriodPast`), F26 (auto-confirm seed — the reset-all
+landmine), F28 (`taxDerived` — DW-2 stale-dep weakens Lock Date), F32 (Reopen Last Check-In —
+DW-3), F57/F62 (per-entry breakdown — weekMeta-less caveat, DW-5), F68/F110 (DB Row drift
+badge columns), F9/F10 (config-history line in DB Row viewer), F53/F80 (Live Inspector Sub
+Phase — real-clock rule), plus the Week Inspector "Check:" in F15/F29/F96/F97/F98/F99/F103 and
+the Live Inspector "Check:" in F14/F51.
+
+### 23.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `effectiveToday` fork or a tool's read source (F118) | Every F-entry naming that tool in its "Check:" (§23.3 registry) | Set Lock Date; the tool's displayed values move consistently and match a second tool | D4 |
+| A tool stops reading the authoritative function it displays | The tool becomes a lying instrument — DW-2 (Lock Date/`taxDerived`), DW-5 (per-entry breakdown weakMeta-less) are the specimens | The tool's value = the authoritative function's value on the same account | D1 |
+| A new persisted field (F110) | DB Row drift-badge column list — the 4th of the four sites | DB Row Fetch shows the new column in the drift comparison | D3 |
+| `getEntitlement`/subscription surfaces | Must stay on real `new Date()`, never `effectiveToday` (F53/F80/F118 boundary) | Live Inspector Sub Phase unaffected by Lock Date; billing card uses wall-clock | D4 |
+| Week-object shape (F97) / `computeNet` (F98) | Week Inspector displays the object + Net Lookup verbatim — it must render every field | Tap a week; Pay + Net Lookup sections show the real fields, no `undefined` | D1 |
+| `weekConfirmations` ever written to `{}` (Phase-2 reset, F119) | F26 auto-confirm seed re-arms and bulk-stamps | Any reset tool must guard the seed's emptiness check first | D2 |
+| Config-history row shape (F9/F10) | DB Row viewer's config-history line ("N snapshots · latest…") | After a sensitive edit, the line shows source + date + changed fields | D5 |
+
+### 23.3 Block 3 — The instrument registry (tool → what it reads → which F-entries verify through it)
+
+The Spine-F deliverable: each tool, its read source, and the drift checks that depend on it.
+A change that breaks the "reads" column blinds every entry in the "verifies" column.
+
+| Tool | What it reads | F-entries that verify through it |
+|---|---|---|
+| **Lock Date** (`effectiveToday` override) | `tempLockDate` → `effectiveToday` (F118), fed into F25/F26/F27/F28/futureWeeks | F25 (hour-gate bypass), F26/F27 (eligibility sim), F28 (tax split — **DW-2 weakens it**) |
+| **Reopen Last Check-In** | `reopenableWeekIdx` + `weekConfirmations[idx]` + its spawned log entry | F32 (**DW-3**: deletes lack eager save), F26 (projections independent of confirmations premise) |
+| **Force Sync** (push/pull) | `handleForcePush`/`handleForcePull` — flush/reload `latestPersistedStateRef` | Any save-path check (Spine B F105/F106); before/after a save bug |
+| **Config Raw View** | full `config` JSON | F7 (three-way sensitive-field audit), F43/F50 (tax elections), F49 (benefit config) |
+| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), **DW-6** (`ptoGoal` drift) |
+| **Tax Weeks Grid** | `taxedWeeks` (teal/dark) + `pastWeekTaxStatusOverrides` (red dots) + current-week border | F28 (schedule vs remediation), F50 (override writers), F104 (liability inputs) |
+| **Live State Inspector** | ~16 live values: `effectiveToday`, week idx, `extraPerCheck`, `totalGap`, `taxedWeekCount`, `weeklyIncome`, `bufferPerWeek`, `projectedAnnualNet`, Sub Phase/Trial/Access Ends… | F14 (`weeklyIncome`), F28 (`extraPerCheck`/`totalGap`), F51 (`bufferPerWeek`), F53/F80 (Sub Phase — real clock), F113 (Coach numbers cross-check) |
+| **Week Inspector** | one week object verbatim: schedule, pay (`grossPay`/`taxableGross`/deductions/401k), live `computeNet`, net lookup (baseNet/adjustment/spendable), confirmation record, log entries | F15 (prev-week net), F29 (net tiers), F57 (per-entry vs hero), F58 (401k match), F96/F97/F98 (week shape/net), F99 (DHL rotation), F103 (loan) |
+| **Per-entry breakdown** (LogPanel chevron) | per-event `calcEventImpact` output (weekMeta-**less**) | F57/F62 (**DW-5**: must match hero-card aggregates — currently can't) |
+
+**Gate matrix (who sees the toolkit):**
+
+| Dimension | Cells | Expected behavior |
+|---|---|---|
+| `isAdmin` | false / true | true: tool sheet (mobile nav Tools icon), Week Inspector on row tap, Reopen, Live pill, per-entry chevron; false: none render |
+| `isOwner` (future) | false / true | true (never grantable via UI): Phase-2 write tools (F119); false: Phase-1 read/sim tools only |
+| Lock Date | unset / set | set: `effectiveToday` drives all "now"-relative reads (F118); **billing stays real-clock** (F53/F80) |
+| Tool integrity | tool reads authoritative fn / tool has drifted | drifted = the instrument lies (DW-2, DW-5) — an L-grade defect despite the toolkit being a Gateway |
+
+### 23.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *401k match display bug* (`$14.96 match with `k401MatchRate: 0`) — isolated *by* the Week
+  Inspector (CLAUDE.md Week Inspector notes); the tool doing its job as an instrument.
+- *`ALLOWED_PURPOSES` / count drift* and other doc lags — surfaced because the tools exposed
+  the real state; the toolkit is how many D5s in this investigation were caught.
+
+**Standing findings from this pass:** none new filed. Three existing DW items are
+**tool-integrity defects** — the toolkit's own instruments lying — and are restated here so the
+"a broken tool blinds every check" stance is concrete:
+1. **DW-2** — `taxDerived`'s stale memo dep (F28) means the **Lock Date** tool's tax simulation
+   doesn't recompute when the lock changes; the instrument silently disagrees with the Tax
+   Weeks Grid it's meant to be cross-checked against.
+2. **DW-3** — **Reopen Last Check-In** (F32) deletes without an eager save; the tool can lose
+   its own mutation on a backgrounded tab.
+3. **DW-5** — the **per-entry breakdown** (F62) is weekMeta-less, so the admin's own
+   event-impact instrument can disagree with the hero cards it's used to verify — "the
+   diagnostic tool the last liar in the room" (F62's phrasing).
+No new defect surfaced; the Phase-2 landmines (F119) are pre-build warnings, not live bugs (the
+tools don't exist yet). No D5 corrections owed — CLAUDE.md's Admin Diagnostic Toolkit section
+and active-systems §13 both describe the tools accurately; this section maps how the Warden
+*uses* them, which is new coupling information, not a restatement.

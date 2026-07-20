@@ -274,7 +274,7 @@ for that section):
 - [x] **T10 — UI-UX** — §17 below (surgical pass 2026-07-19)
 - [x] **Spine A — Fiscal Math** — §18 below (spine pass 2026-07-20)
 - [x] **Spine B — Persistence & Save Integrity** — §19 below (spine pass 2026-07-20)
-- [ ] **Spine C — Entitlement & Gating** — §20 below
+- [x] **Spine C — Entitlement & Gating** — §20 below (spine pass 2026-07-20)
 - [ ] **Spine D — AI Layer & Context Grounding** — §21 below
 - [ ] **Spine E — Design System & Motion** — §22 below
 - [ ] **Spine F — Admin Diagnostic Toolkit** — §23 below
@@ -2642,3 +2642,151 @@ now self-warns (T7 pass). `useLocalStorage`'s device-local scope (F107) is docum
 (the localStorage→Supabase vestige), not a defect — filed as a standing note, not a DW row,
 because nothing account-critical routes through it today; it would **promote to a defect** the
 moment any money/time/account field is stored through it instead of `user_data`.
+
+---
+
+## 20. Spine C — Entitlement & Gating Drift Map
+
+**Pass date:** 2026-07-20 (spine pass). Same anchor + method rules as §7; numbering
+continues (F111+).
+**Git-history note:** the governing intentions are the tester-gate chain
+(`ec72a07` — `is_tester` flag → `09c7609` → `a430fbf` liability hold → `a643153` — Tax Plan
+extended + `isAdmin` made a structural superset of `isTester`) and the paywall week
+(§17 build, `765eebc`→`8a2683c`), which the T9 pass (§16) already mapped in depth. This is
+the **authority record** for *who is allowed to see/do what*: one entitlement resolver
+(`getEntitlement`, F80), one gate module (`entitlements.js`), three independent tier flags.
+T9 (§16) owns the paywall *enforcement* surface (F80–F87); T5/T4 own the tax-plan gate
+*consumers* (F43/F50); this section owns the gate module itself and the **one-page gate
+registry** — every gate function mapped to its client and server call sites.
+
+**Scope:** `entitlements.js` (`hasTesterAccess`/`canAccessTaxPlan`/`canAccessAiFeatures`),
+`subscription.js` (`getEntitlement` — the F80 state machine), the three tier flags
+(`is_admin`/`is_tester`/`is_investor` + the manual `tax_projections_enabled` and future
+`is_owner`), and the enforcement fork (`paywallBypassed`/`isExpiredReadOnly`, F81). Absorbs
+active-systems §23 (beta testers), §18 (flag semantics), §21 (engine).
+
+**The two cardinal G-rules this spine enforces (§3):**
+1. **Every gate exists twice or not at all.** Client-side gating is UX; the *real* gate is
+   server/RLS-side. `api/coach.js` re-checks `canAccessAiFeatures`; migration 019 locks tier
+   columns to service-role. A gated surface checked only client-side is a drift finding.
+2. **`isAdmin` is a strict superset of `isTester` — by construction, not by convention.**
+   Every feature gate is built on `hasTesterAccess`, so the superset relationship cannot
+   drift feature-by-feature. `is_tester` and `is_investor` **never** overlap.
+
+### 20.1 Block 1 — Critical inventory (spine-internal machinery)
+
+**F111 · `entitlements.js` gate module** — `entitlements.js:11–47` — **[G]**
+Three pure functions, one base:
+- **`hasTesterAccess({isAdmin, isTester})`** (`:11`) — `Boolean(isAdmin || isTester)`. The
+  single OR every feature gate builds on, so `isAdmin ⊇ isTester` is guaranteed structurally
+  (verified: both gates below call it — the `a643153` claim holds in live code).
+- **`canAccessTaxPlan({isAdmin, taxProjectionsEnabled, isTester})`** (`:33`) —
+  `hasTesterAccess(…) || Boolean(taxProjectionsEnabled)`. **`config.taxExemptOptIn` is
+  deliberately NOT a grant path** (`a430fbf` liability hold — the wizard's "Unlock
+  projections" must never reveal tax-plan UI to a normal user until an accountant reviews the
+  withholding math). Re-enabling the wizard path is a one-line change *here* — the rule that
+  the check lives in exactly one place is the whole point.
+- **`canAccessAiFeatures({isAdmin, isTester})`** (`:45`) — `hasTesterAccess(…)`. **`isInvestor`
+  is deliberately NOT in the OR** (the CRUCIAL comment): `is_tester` grants AI only, never
+  demo-account access or the investor code path; `is_investor` grants no AI.
+> **IF** a new gated feature is added, **THEN** it MUST build on `hasTesterAccess` (never
+> re-derive `isAdmin || isTester` inline — that's how the superset drifts) and MUST NOT fold
+> in `isInvestor` unless the feature is genuinely investor-facing (§23 firewall). **IF** the
+> `taxExemptOptIn` non-grant is touched, **THEN** it is a product/liability decision, not a
+> refactor — surface it. Check: `entitlements.test.js` (already asserts investor≠AI,
+> opt-in≠tax-plan, and the truthiness edge cases); a tester account sees AI + Tax Plan but no
+> Demo Tree / investor path.
+
+**F112 · Server-gate column-supply invariant (the DW-7 generalization)** — `api/coach.js:63`,
+`api/_lifecycleEngine.js:44` vs `api/cron-subscription-lifecycle.js:133–139` — **[G]**
+A server-side gate is only as strong as the query that feeds its inputs. Two server gates read
+tier flags off a fetched row: `api/coach.js` gates AI on `userRow.is_admin`/`is_tester`
+(its SELECT supplies both — correct); the lifecycle engine exempts `row.is_admin ||
+row.is_investor || row.is_tester` (`:44`) but the **cron's SELECT omits `is_tester`**
+(`:135–137`), so the tester exemption reads `undefined` and never fires — **DW-7**, this
+investigation's highest-severity defect (silent auto-deletion of testers ~6 months after
+flag flip).
+> **IF** any server gate reads a row field, **THEN** the SELECT that produced the row MUST
+> include that column — a gate whose input column is missing evaluates against `undefined`
+> and silently fails *open or closed* with no error. The fix template (queued in DW-7): add
+> `is_tester` to the cron SELECT **and** a shell-level test asserting every column the engine
+> destructures appears in the query string, making the class structural rather than
+> whack-a-mole. Check: grep each `api/*` gate's field reads against its own `.select(...)`
+> string; unit tests that hand-build rows (as `lifecycleEngine.test.js` does) will NOT catch
+> this — the seam is the query, not the pure function.
+
+**Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
+F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
+`isExpiredReadOnly` enforcement fork), F82 (upgrade surfaces), F85/F86 (lifecycle engine +
+cron shell / DW-7), F43 (BudgetPanel `taxFeatureUnlocked`), F50 (ProfilePanel Tax Plan
+writers), F45 (ProfilePanel `taxplan` route gate + `investorcodes` asymmetry / DW-W2),
+F24 (Coach card AI gate), F69 (tier flags & RLS boundary), F70 (investor/demo machinery),
+F71 (trial seeding), F78 (TrialExplainer gate).
+
+### 20.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `hasTesterAccess` or either gate function (F111) | Every gate consumer (registry below) — the superset relationship moves for all at once | `entitlements.test.js`; walk the tier matrix (§20.3) | D4 |
+| A new gated feature added | Must build on `hasTesterAccess`; must decide `isInvestor` inclusion explicitly; client gate **and** server/RLS gate both present | Grep the new gate for inline `isAdmin || isTester` (forbidden); confirm a server re-check exists | D4 |
+| A server gate's row-field reads (F112) | The feeding SELECT must include every column — DW-7 class | Grep gate field reads vs `.select(...)`; add the field-coverage test | D4 |
+| `getEntitlement` states/precedence/timestamps (F80) | F81 fork, TrialBanner/Sub-card copy, F78 explainer condition, lifecycle engine (F85), Live Inspector Sub Phase | One account through all five states; `subscription.test.js`; **never** thread `effectiveToday` | D1 |
+| `paywallBypassed` set or per-surface split (F81) | Home/Budget readOnly shadows (F20/F35), Income/Log replacement (F81), Account fully-live rule; a **new nav panel gets no enforcement unless wired** | Expired non-admin visits every tab; nothing mutates, checkout reachable | D4 |
+| Tier-flag mapping (`is_admin`/`is_tester`/`is_investor` → camelCase, F67) | Client reads via mapping, never writes; every gate's inputs; `config.isInvestor` (paywall bypass) vs `row.is_investor` (cron) — two spellings of one fact | `db.test.js` mapping cases; DB Row Viewer tier columns | D1/D4 |
+| Tester 6-month window semantics (§23, migration 021 trigger) | F81 non-bypass (testers ride the real paywall) **and** F86 cron exemption (DW-7) — two halves of one promise | Expired tester: sees paywall in-app, never dunned/deleted by cron | D4 |
+| A new tier flag / privileged column | F69 full checklist (migration RLS grant + service-role route + F67 read map + F68 write exclusion + gate on `hasTesterAccess` + cron exemption decision) | Post-migration: plain client upsert still works, new column rejects client writes | D4 |
+
+### 20.3 Block 3 — The one-page gate registry
+
+Every gate in the app, its definition, and **both** sides (client + server). A row with an
+empty "Server / RLS gate" cell is a client-only gate — acceptable *only* when the data it
+guards is itself RLS-protected server-side (noted per row); a genuinely privileged action
+with no server gate is a D4 finding.
+
+| Gate | Definition | Tier inputs | Client call sites | Server / RLS gate |
+|---|---|---|---|---|
+| **`canAccessAiFeatures`** | `isAdmin \|\| isTester` | `is_admin`, `is_tester` | `App.jsx:878` (Coach net-worth trigger), `:3350` (Ask Coach panel), `HomePanel.jsx:1358` (Coach card, F24) | `api/coach.js:63` — re-checks on `userRow.is_admin`/`is_tester` before streaming (the model server gate) |
+| **`canAccessTaxPlan`** | `isAdmin \|\| isTester \|\| taxProjectionsEnabled` | `is_admin`, `is_tester`, `tax_projections_enabled` | `BudgetPanel.jsx:82` (`taxFeatureUnlocked`, F43), `ProfilePanel.jsx:1900` (`canSeeTaxPlan`, F45/F50) | none direct — tax writes go through `config` (F50), RLS-owned via migration 019; the gate is display-only. **No server action to re-gate** (writes are the user's own config row) |
+| **`getEntitlement` → `paywallBypassed`** | `isAdmin \|\| config.isInvestor` (F81) | `is_admin`, `is_investor` | `App.jsx:1463` → `isExpiredReadOnly` fork (F81) drives readOnly shadows + panel replacement | Server side is Stripe/webhook truth + the lifecycle cron (F85/F86); the client fork is UX over server-authoritative subscription columns |
+| **Lifecycle exemption** | `is_admin \|\| is_investor \|\| is_tester` (`_lifecycleEngine.js:44`) | all three flags | — (server-only) | **the gate itself** — but its SELECT omits `is_tester` (DW-7, F112/F86) |
+| **`isAdmin` toolkit** | `user_data.is_admin` (F67 map) | `is_admin` | Admin Tools sheet, Week Inspector, Reopen, per-entry breakdown (Spine F) | Data the tools read is the user's own RLS-scoped row; write-capable Phase-2 tools are `isOwner`-gated (not built) |
+| **`isAdmin` investor codes** | `user_data.is_admin` | `is_admin` | `ProfilePanel.jsx:2019` (ListRow), route `:1944` (**row-gate only** — DW-W2) | `InvestorAdminPanel` data calls are RLS-gated server-side (why DW-W2 is unexploitable today) |
+| **`isInvestor` demo tree** | `user_data.is_investor` / `config.isInvestor` | `is_investor` | `DemoAccountTree`, investor signup path (F70) | `createInvestorAccount`/demo storage RLS-scoped; `is_investor` grants **no** AI (§23 firewall) |
+| **Tier flag writes** | — | all flags + subscription columns | client **never** writes (F68 whitelist-by-destructure) | migration 019 RLS + service-role `api/*` routes only |
+
+**Tier matrix (the cells every G-change must walk):**
+
+| Flag combo | AI features | Tax Plan | Demo tree / investor path | Paywall at expiry | Admin toolkit |
+|---|---|---|---|---|---|
+| plain user | ✗ | ✗ (opt-in alone ✗) | ✗ | **enforced** | ✗ |
+| `taxProjectionsEnabled` | ✗ | ✓ | ✗ | enforced | ✗ |
+| `is_tester` | ✓ | ✓ | ✗ (firewall) | **enforced** (real 6-mo trial; cron-exempt — DW-7) | ✗ |
+| `is_investor` | ✗ (firewall) | ✗ | ✓ | bypassed | ✗ |
+| `is_admin` | ✓ | ✓ | ✗ (unless also investor) | bypassed | ✓ |
+| `is_owner` (future) | ✓ | ✓ | — | bypassed | ✓ + Phase-2 write tools |
+
+### 20.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *Tax Plan tester gate + structural superset* (`a643153`) — the moment `hasTesterAccess`
+  became the shared base; before it, each gate re-derived the OR and could drift. F111's
+  IF/THEN exists to keep every new gate on that base.
+- *Liability hold on the wizard unlock* (`a430fbf`/`09c7609`) — `taxExemptOptIn` was demoted
+  from a grant path to a no-op; the check lives once, in `entitlements.js`, never scattered.
+- *Beta tester ≠ investor firewall* (`ec72a07`, §23) — `is_tester` grants AI only; the
+  CRUCIAL comment in `canAccessAiFeatures` is the in-code guard.
+- *RLS hardening* (`60a4b17`, migration 019) — privileged writes moved server-side; F68's
+  whitelist-by-destructure is the client half.
+- *Migration 024* (`8f34def`/`a93dcad`) — a tier/permission migration can pass in SQL and
+  still break writes; F69's checklist item.
+
+**Standing findings from this pass:** none new filed. The spine's one open defect is **DW-7**
+(the cron SELECT omits `is_tester`, killing the lifecycle exemption) — surfaced in the T9
+pass, generalized here into F112 as a *class* (server gate vs. its feeding query) rather than
+a one-off, and restated in the gate registry and tier matrix so the tester row's "enforced /
+cron-exempt (DW-7)" status is unmissable. **DW-W2** (the `investorcodes` route lacking the
+route-level re-check `taxplan` has) remains queue-visible and is captured in the registry's
+"row-gate only" note; it is not promoted because `activeSection` is tap-only state and the
+underlying data is RLS-gated (F45's IF/THEN is the tripwire). No D5 corrections owed — the
+`a643153` structural-superset claim was verified against live code (both gates call
+`hasTesterAccess`) and holds.

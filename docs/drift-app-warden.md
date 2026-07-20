@@ -257,7 +257,7 @@ for that section):
 - [x] **T4 — Budget Panel** — §10 below (surgical pass 2026-07-19)
 - [x] **T5 — Account Panel** — §12 below (surgical pass 2026-07-19; §11 records the redefinition from the phantom "Benefits Panel" tier)
 - [x] **T6 — Log Panel** — §13 below (surgical pass 2026-07-19)
-- [ ] **T7 — Auth System**
+- [x] **T7 — Auth System** — §14 below (surgical pass 2026-07-19)
 - [ ] **T8 — Login System**
 - [ ] **T9 — Paywall System**
 - [ ] **T10 — UI-UX**
@@ -1487,3 +1487,196 @@ event-impact verification (Spine F) — its numbers must match the hero-card agg
 2. **`ptoGoal` lacks eager save (F60)** *(queued as DW-6)*: Save/Clear ride the
    debounce; the only rule exception on this surface, and a gap in the `764da5b`
    audit's coverage.
+
+---
+
+## 14. T7 — Auth System Drift Map
+
+**Pass date:** 2026-07-19. Same anchor + method rules as §7; numbering continues (F63+).
+**Git-history note:** this surface is where the repo's hardest-won race-condition case
+law lives — nearly every guard in the boot chain has an in-code memorial comment naming
+the production bug it fixed: the Google double-select bug (INITIAL_SESSION gate), the
+visibility-re-emit data-loss bug (SIGNED_IN dedup), the wizard-re-trigger-over-real-data
+bug (`cc227ad`), the dropped unload write (`168cc4b`), the RLS write-permission trigger
+failure (`8f34def`→`a93dcad`→migration 024). Two D5s corrected in-pass: CLAUDE.md's
+"No backend server / no Stripe — yet" Tech Stack claim (14 serverless functions exist)
+and its "next migration is 023" note (023/024 exist; next is 025).
+
+**Scope:** `lib/supabase.js`, `lib/db.js` (load/save/flush/investor/demo/revival),
+the `App.jsx` auth boot chain, tier flags + RLS migrations, and the investor/demo
+machinery (`DemoAccountTree.jsx`, `InvestorRegister.jsx`, `InvestorAdminPanel.jsx`).
+The ProfilePanel UI that *calls* these primitives is T5 (§12); pre-session surfaces are
+T8.
+
+### 14.1 Block 1 — Critical inventory (function by function)
+
+**F63 · `sharedStorage` dual-write session shim** — `supabase.js:12–40` — **[G]**
+iOS Safari PWAs run in an isolated storage partition: localStorage set in the browser
+tab is invisible to the home-screen app, but cookies are shared. Sessions dual-write
+localStorage + cookie (skipping the cookie when the encoded session exceeds ~3800
+bytes), and reads prefer a *validated* cookie (JSON.parse before trusting).
+> **IF** the storage shim, cookie size guard, or key handling changes, **THEN** the
+> failure is invisible on desktop and total on iOS PWA: users signed in via Safari
+> appear signed out in the installed app. Check: Safari sign-in → install → launch
+> standalone → still signed in; and a session > 4KB still works via localStorage.
+
+**F64 · `cachedAuthSnapshot`** — `supabase.js:61–71` — **[L]**
+An `onAuthStateChange` listener keeps `{accessToken, userId}` current so
+`flushUserDataKeepalive` (F68) can read credentials **synchronously** — unload handlers
+get no time to await `getSession()`.
+> **IF** anything makes the flush path async before its `fetch()` dispatch, **THEN**
+> the keepalive hardening silently stops working (the page tears down first) — the
+> exact class `168cc4b` fixed. The snapshot must stay listener-maintained, never
+> promise-fetched at flush time.
+
+**F65 · Auth boot chain** — `App.jsx:422–479` (`onAuthChange` effect) — **[G]**
+Four load-bearing guards, each with its own incident history:
+(1) **No `getSession()` pre-check** — INITIAL_SESSION is the `authChecked` gate,
+because `getSession()` resolves before the OAuth code exchange and once overwrote a
+signed-in user back to null (the Google double-select bug).
+(2) **SIGNED_IN dedup** (`signedInChainRanForRef`) — GoTrueClient re-emits SIGNED_IN
+with the same session on every hidden→visible transition; before the guard, each
+re-emit force-reloaded from DB, overwriting in-memory edits and flashing the loading
+screen.
+(3) **Revival-first ordering** — `checkRevival()` must run before `syncUserProfile()`:
+an OAuth sign-in with a tombstoned email would otherwise silently seed a fresh free
+trial instead of routing to ReviveScreen; a lookup *failure* falls back to the normal
+flow so a server blip can't lock a real user out.
+(4) **Post-seed `reloadTrigger` bump** — `loadUserData` races the seeding chain on
+brand-new signups and usually wins, reading all-null trial fields; without the bump,
+`getEntitlement` would permanently report "none".
+> **IF** any event handling, ordering, or guard in this chain changes, **THEN** re-test
+> all four incident scenarios by name: Google first-sign-in (single select), mobile
+> app-switch during an unsaved edit (edit survives), tombstoned-email OAuth sign-in
+> (ReviveScreen, no trial seed), brand-new signup (trial countdown appears without a
+> manual reload). This is the highest-density incident zone in the app — nothing here
+> is decorative.
+
+**F66 · Load effect + `applyLoadedData`** — `App.jsx:517–581` — **[L]**
+Deps are `[authedUser?.id, reloadTrigger]` — *id*, not the object, so TOKEN_REFRESHED
+can't re-trigger a stale overwrite. `applyLoadedData` skips the debounce-writable
+fields when `pendingSaveRef` is set (a load must not revert an edit made in the last
+800ms) but always applies tier flags/subscription. Failure path: retry once after
+1.5s, **never fall back to defaults** — conflating failure with "new account" is the
+`cc227ad` wizard-re-trigger bug (and `db.js:170–181`'s PGRST116 rule is the same law
+on the query side).
+> **IF** the dep list, the pending-save guard, or the retry policy changes, **THEN**
+> walk the same incident set as F65 plus: transient offline reload on an existing
+> account must show a retry/loading state, never the setup wizard. Check:
+> `db.test.js`'s PGRST116 cases.
+
+**F67 · `loadUserData` migration gauntlet** — `db.js:98–380` — **[L]**
+Ordered, idempotent, load-time normalization: DEFAULT_CONFIG merge (new fields reach
+existing rows — `:227–232`); expense migrations (legacy `weekly`→`history`, Q4
+back-fill, loan history regeneration `:204–225` — the F41/DW-W1 zone's load-side);
+DHL one-time corrections (pre-wizard preset, rotation, baseRate/diffRate value fixes);
+`startDate`→`firstActiveIdx` sync with a **direction guard — only ever moves the
+boundary *earlier*** (`:310–319`; moving later would delete modeled income);
+`taxExemptOptIn` clears `taxedWeeks` (`:328–330`, `b8ca233`); tier-flag mapping
+(`is_admin`/`is_tester`/`is_investor`/`tax_projections_enabled` → camelCase, `:370–378`).
+> **IF** a migration step is added/reordered, **THEN** it must stay idempotent (every
+> load runs the whole gauntlet) and respect the ordering comments (rename-before-
+> correction at `:270–277` exists because the reverse order re-broke the value). The
+> `firstActiveIdx` inline formula (`:313–316`) is a duplicate of the wizard's
+> `dateToWeekIdx` (§7 F1) — see DW-W3. Check: `db.test.js` migration cases; a
+> legacy-shaped row loads to the same numbers twice in a row.
+
+**F68 · `saveUserData` + `flushUserDataKeepalive`** — `db.js:396–423` / `:443–482` — **[L]**
+The only two writers of `user_data`'s client-writable columns. Both write the identical
+field set; both derive `is_employer_dhl` from `config.employerPreset` at write time;
+**neither accepts subscription/tier columns** (service-role only — the destructure *is*
+the whitelist). The flush bypasses supabase-js to hit PostgREST directly with
+`keepalive: true`, reading credentials from F64; a synchronous throw (64KB keepalive
+body limit) falls back to the normal upsert.
+> **IF** a new persisted field is added, **THEN** it must be added to *both* writers'
+> field sets + `savePersistedStateNow`'s `latestPersistedStateRef` + the DB Row
+> Viewer's drift-badge columns — four sites, one shape (DW-6's `ptoGoal` gap shows
+> what a partial wiring looks like). **IF** anyone adds a subscription/tier field
+> here, **THEN** that's a privilege-escalation path RLS would reject in prod and
+> silently "work" in tests — the whitelist-by-destructure is a security boundary,
+> not a style choice.
+
+**F69 · Tier flags & RLS boundary** — migrations `019` (RLS + column grants), `021`
+(`is_tester` + 6-month trial trigger), `024` (user_id UPDATE-grant fix); service-role
+routes (`60a4b17`) — **[G]**
+The three flags are independent by construction (CLAUDE.md Account Tiers): client
+reads them via F67's mapping, *never* writes them; every AI/tax gate builds on
+`hasTesterAccess` so `isAdmin` ⊇ `isTester` structurally. Migration 024 is the
+case-law reminder that a migration can pass in SQL and still break writes (the
+UPDATE grant was missing `user_id`, failing every upsert's conflict path).
+> **IF** a new tier flag or privileged column is added, **THEN** the full checklist
+> is: migration with RLS column grant + service-role write route + F67 read mapping +
+> F68 exclusion + entitlements gate built on the existing base functions + lifecycle
+> cron exemption decision (§20's skip list). Miss any one and you get either a
+> privilege hole or a `024`-style silent write failure. Check: after the migration,
+> a plain client upsert still succeeds and the new column rejects client writes.
+
+**F70 · Investor & demo machinery** — `createInvestorAccount` (`db.js:641`),
+`validateInvestorCode` (`supabase.js:94`), `saveInvestorActiveAccount`/`loadDemoAccount`/
+`saveDemoAccount` (`db.js:730–852`), `InvestorAdminPanel`, `DemoAccountTree` — **[G]**
+The dormant-but-live investor path: code validation (case-insensitive, active-only) →
+registration → `investor_users` + `user_data` seeding → demo-account tree (accounts
+1–2 demo data, 3 = wizard-driven sandbox; admin-editable via `saveDemoAccount`).
+Investor accounts are exempt from config-history capture (§7 F9) and the lifecycle
+cron; `is_investor` grants no AI features (§23 division).
+> **IF** demo-account storage or the account-3 wizard route changes, **THEN** check
+> the isolation contract — demo edits must never touch real `user_data` rows
+> (`f9ed2ba`'s isolation docs) — and F66's `investorSession` race guard
+> (`App.jsx:551–553`) that keeps the wizard from firing before investor config lands.
+
+**F71 · Sign-in side-effect chain** — `syncUserProfile` (`db.js:854`), `/api/seed-trial`,
+`checkRevival` (`db.js:892–908`) — **[G→L]**
+Runs once per signed-in user id (F65 guard): revival lookup (bearer-authed, fails
+open to normal flow), then profile sync + trial seeding, then the reload bump. The
+trial seed is what routes every new account through the real entitlement state
+machine instead of a hardcoded bypass.
+> **IF** seeding moves, gains conditions, or the revival contract changes, **THEN**
+> re-verify the F65 ordering invariants and T8/T9's consumers (ReviveScreen inputs,
+> trial countdown on first render). Check: fresh email signup, fresh Google signup,
+> and tombstoned-email Google signup — three different landings, all correct.
+
+### 14.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| supabase-js upgrade (GoTrueClient behavior) | F63 storage contract, F65's event semantics (INITIAL_SESSION timing, SIGNED_IN re-emit behavior — both are *undocumented internals* the guards depend on) | Full F65 incident-scenario walk on a staging build before shipping the bump | D4 |
+| `user_data` column set (any migration) | F67 mapping, F68 both writers + drift badge + `latestPersistedStateRef`, BOOKMARK freshness, CLAUDE.md migration-number note | The F69 new-column checklist; regenerate/append bookmark | D2/D5 |
+| `DEFAULT_CONFIG` shape (`constants/config.js`) | F67's merge (new fields flow to existing rows), snapshot tests, wizard `formData` spread (§7 F2) | `config.test.js.snap` update is *expected* — an unchanged snapshot after adding a field means the merge missed it | D1 |
+| Load-time migration steps (F67) | Idempotency + ordering; `db.test.js` migration cases; the §22 read slice (`extractBaseRateHistory` runs in the same load) | Load a legacy-shaped fixture twice; identical output both times | D2 |
+| `checkRevival`/`revival-lookup` contract | F65 ordering, T8's ReviveScreen inputs, T5 F52's hard-delete invariant (user-deleted emails must NOT be revivable) | Three-signup walk (F71) + user-deleted email returns `revivable: false` | D4 |
+| Trial seeding (`/api/seed-trial`, migration 021 trigger) | F71 → `getEntitlement` inputs (T9), tester 6-month window semantics (§23), lifecycle cron's skip list | New signup shows 14-day countdown; `is_tester` flip seeds 6-month window once | D1/D4 |
+| Investor code/demo storage | F70 isolation contract + investor exemptions (config-history, cron) | Demo edit writes demo rows only; investor account generates no `account_history` rows | D4 |
+
+### 14.3 Block 3 — Gate matrix
+
+| Dimension | Cells | Expected behavior |
+|---|---|---|
+| Session storage context | desktop browser / iOS Safari tab / iOS installed PWA | All three share one session (F63); PWA launch after Safari sign-in is the canary cell |
+| Auth event | INITIAL_SESSION / SIGNED_IN (first per id) / SIGNED_IN (re-emit) / TOKEN_REFRESHED / SIGNED_OUT / PASSWORD_RECOVERY | Only first-per-id SIGNED_IN runs the F71 chain; re-emits and refreshes must be no-ops for data; PASSWORD_RECOVERY routes to reset form; SIGNED_OUT clears the dedup ref |
+| Account state at sign-in | existing row / no row (new) / tombstoned email / investor code session | Load & go / seed trial + reload / ReviveScreen, no seed / registration flow, wizard deferred to account 3 |
+| Load outcome | row found / PGRST116 zero-row / query failure | Normal / defaults + wizard (only legitimate case) / retry once then error state — **never** defaults |
+| Tier flags | none / admin / tester / investor (and combos) | Each unlocks only its documented surface; admin ⊇ tester structurally; investor grants no AI; combos never interact beyond that |
+| Write path | debounced / eager (`savePersistedStateNow`) / unload flush (keepalive) / service-role route | First three write the identical client field set; privileged columns only via the fourth |
+
+### 14.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *Google double-select* — `getSession()` racing the OAuth code exchange; F65 guard (1).
+- *Visibility re-emit data loss* — SIGNED_IN re-runs overwriting in-memory edits; F65
+  guard (2) + F66's pending-save guard are the two ends of the same fix.
+- *Wizard re-trigger over real data* (`cc227ad` + `db.js` PGRST116 rule) — only a
+  confirmed zero-row may ever mean "new account".
+- *Dropped unload writes* (`168cc4b`) — F64/F68's keepalive design; the sync-dispatch
+  constraint is the invariant.
+- *Migration 024* (`8f34def`, `a93dcad`) — the UPDATE grant missing `user_id` broke
+  every upsert conflict path while reads worked fine; "migration ran" ≠ "writes work".
+- *RLS hardening* (`60a4b17`, migration 019) — privileged writes moved server-side;
+  F68's whitelist-by-destructure is the client half.
+
+**Standing findings from this pass:**
+1. **Duplicated week-index formula** *(queued as watch item DW-W3)*: `db.js:313–316`
+   inlines the `dateToWeekIdx` formula (§7 F1) because the original is file-private to
+   SetupWizard. Both copies are identical today; they drift the day one changes. Fix
+   shape: extract to `fiscalWeek.js` and import in both.
+2. **Two D5s corrected in-pass** (CLAUDE.md Tech Stack "no backend/no Stripe" claim;
+   migration-numbering note now self-warns and points here).

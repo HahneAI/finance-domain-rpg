@@ -18,7 +18,11 @@
 | PWA | vite-plugin-pwa (manifest + service worker active) |
 | Hosting | Vercel |
 
-**No backend server.** Pure frontend. No Express, no Claude API, no Stripe — yet.
+**No standalone backend server** — but no longer "pure frontend": `api/` holds 14 Vercel
+serverless functions (Stripe checkout/webhook/portal/revive, Coach streaming proxy, daily
+subscription-lifecycle cron + email engine, delete-account, revival-lookup, trial/investor
+seeding). All privileged writes (tier flags, subscription columns) go through these
+service-role routes — the client never writes them (RLS migration 019).
 
 ---
 
@@ -241,8 +245,11 @@ formulas, retroactive recompute, lost saves, gate bypass, stale docs).
 periodic full-schema recaps, not real migrations — never assign one the actual next migration
 number in sequence expecting it to run. They exist purely so a session can read one file instead
 of the entire migrations folder to understand current DB shape. The `BOOKMARK` tag and all-caps
-make them impossible to mistake for a pending migration. Latest: `022_BOOKMARK_schema_snapshot_2026-07-10.sql`
-(schema state through migration 021). The next real migration should still be numbered 023.
+make them impossible to mistake for a pending migration. Latest bookmark:
+`022_BOOKMARK_schema_snapshot_2026-07-10.sql` (schema state through migration 021).
+Real migrations continue past it: 023 (coach_chats) and 024 (user_data write-permission
+fix) exist — **the next real migration is 025.** Verify against the folder before
+numbering; this note has gone stale once already (drift-app-warden §14).
 
 ---
 

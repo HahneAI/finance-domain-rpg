@@ -250,7 +250,7 @@ for that section):
 - [x] **T2 — Home Panel** — §8 below (surgical pass 2026-07-19)
 - [x] **T3 — Income Panel** — §9 below (surgical pass 2026-07-19)
 - [x] **T4 — Budget Panel** — §10 below (surgical pass 2026-07-19)
-- [ ] **T5 — Account Panel** — redefined 2026-07-19 (was "Benefits Panel"; §11 records the investigation: `BenefitsPanel.jsx` is dead code, the fifth nav panel is Account/`ProfilePanel.jsx`); full surgical pass still pending
+- [x] **T5 — Account Panel** — §12 below (surgical pass 2026-07-19; §11 records the redefinition from the phantom "Benefits Panel" tier)
 - [ ] **T6 — Log Panel**
 - [ ] **T7 — Auth System**
 - [ ] **T8 — Login System**
@@ -1131,7 +1131,195 @@ that write-two-read-two square is the drift surface that remains real.
 
 ### 11.3 Cleanup queued
 
-Deleting `BenefitsPanel.jsx` (and its coverage tests) is the owner's call — filed in
-CLAUDE.md's Known Cleanup list, not as a DW defect (dead code isn't a live bug; the
-risk is someone "fixing" or extending the dead file believing it ships — this section
-and the CLAUDE.md note now prevent that).
+Deleting `BenefitsPanel.jsx` (and its coverage tests) is the owner's call — queued as
+**DW-4** in `docs/BUG_FIX_TODO.md` (owner-scheduled dead-code cleanup pass: delete the
+file + tests and import-graph-sweep for any other orphans in the same investigation)
+and mirrored in CLAUDE.md's Known Cleanup list. The risk being managed isn't runtime —
+it's someone "fixing" or extending the dead file believing it ships.
+
+---
+
+## 12. T5 — Account Panel Drift Map
+
+**Pass date:** 2026-07-19 (same day as the §11 redefinition — this is the true T5 pass).
+Same anchor + method rules as §7; numbering continues (F45+).
+**Git-history note:** the governing recent intentions are the structural merge
+(`75ab021` — Employment folded into Job & Pay; `e6800ec` — Pay Structure split into
+independently editable cards + Life Events entry), the wrong-field fix (`44c0538` — the
+cleanest specimen of legacy-field drift in the repo), the Tax Plan unlock chain
+(`342d2ae` → `09c7609` → `a430fbf` → `a643153`), and the §17.F subscription surface
+(`30bd1be`, `a7573df`). Active-systems §17's sub-view list predated the merge —
+corrected in-pass.
+
+**Scope:** `ProfilePanel.jsx` (2,079 lines): the sub-view router, the five Job & Pay
+cards, `BenefitsDetail`, `PreferencesDetail`, `TaxPlanDetail`, `AccountDetail` (auth
+actions + subscription card), and the Investor Codes entry. The auth/db primitives
+these call are T7's scope; the boundary rule is §4.1's three-way note.
+
+### 12.1 Block 1 — Critical inventory (function by function)
+
+**F45 · Sub-view router + Job Loss swap** — `ProfilePanel.jsx:1929–1946` (routes),
+`:1959–1993` (mode swap) — **[G]**
+`activeSection` state routes to six sub-views. Two gate styles coexist: `taxplan`
+re-checks its gate *at the route* (`activeSection === "taxplan" && canSeeTaxPlan`,
+`:1941`); `investorcodes` gates only the ListRow (`isAdmin`, `:2019`) — the route
+itself (`:1944`) trusts that state can only be set by tapping the row. In Job Loss
+Mode the whole Work & Pay group is replaced by one "Back to Work" row (`:1959`) —
+deliberate: Job & Pay / Retirement figures would be stale or misleading with no income.
+> **IF** `activeSection` ever becomes settable by anything other than a row tap (deep
+> link, restored nav state, URL param), **THEN** `investorcodes` needs the same
+> route-level re-check `taxplan` has — today's asymmetry is safe only because state is
+> tap-only. **IF** the Job Loss swap's row set changes, **THEN** re-check §7 F11
+> (`handleBackToWork` is the row's target) and that no hidden row leaks stale figures.
+
+**F46 · The compute-then-save card pattern** — every save site: `EmploymentCard:604`,
+`BasePayCard:776`, `DifferentialsCard:890`, `OvertimeCard:995`, `ScheduleCard:1129`,
+`BenefitsDetail:1335`, `PreferencesDetail:1507`, `TaxPlanDetail:1596` + `:1604` — **[L]**
+All eight follow `const newConfig = {...config, ...patch}; setConfig(newConfig);
+onSaveConfig?.(newConfig)` — the file is the reference implementation CLAUDE.md's
+eager-save section cites. `onSaveConfig` is `saveConfigNow` threaded from App. Every
+save here also transits the config-history watcher (§7 F9) as `"config_edit"`
+(effective today) — pay-rate edits additionally get the optimistic `baseRateHistory`
+append (§7 F10).
+> **IF** a new card or field editor is added to this panel, **THEN** it uses this exact
+> shape (computed value to both calls — never a bare functional updater), and **THEN**
+> if its field is pay/tax/schedule-sensitive it must appear in
+> `HISTORY_SENSITIVE_FIELDS` + `DIFF_FIELDS` (the §7 F7 three-way rule). Check: DB Row
+> Viewer's config-history line captures the edit; kill-tab test survives.
+
+**F47 · ScheduleCard field-priority contract** — `ScheduleCard:1045–1129`; case law
+`44c0538` — **[L]**
+The weekly-hours editor reads/writes **`maxWeeklyHours` first**; `standardWeeklyHours`
+is legacy, kept in sync on write only. The fixed bug: the editor once read/wrote the
+legacy field while the finance engine and the read-only label prioritized
+`maxWeeklyHours` — an edit that visibly "took" in the form but never reached the math.
+Also DHL-gated: the Schedule Override toggle is hidden from base users (`f7ca4ef`).
+> **IF** any editor touches a config field that has a legacy twin (`maxWeeklyHours`/
+> `standardWeeklyHours`, `fedRateLow`/`w1FedRate`, `stateRateLow`/`w1StateRate`…),
+> **THEN** it must read the *primary* field first and write *both* — editing only the
+> legacy twin is the exact `44c0538` failure. Check: edit the field, confirm the change
+> lands in Week Inspector math, not just the form's own display.
+
+**F48 · Job & Pay composition** — `PayDetail:1265–1275` — **[G]**
+Renders the four pay cards + `EmploymentCard` + the Life Events entry point. Employment
+and Life Events are *not* standalone Account rows (merge `75ab021`; router comment
+`:1973–1977`) — Life Events is otherwise reachable via the sidebar/drawer only.
+> **IF** a new pay-structure field is added, **THEN** it belongs in exactly one card
+> (they're independently editable — two cards writing one field race each other's
+> `config` snapshots), and the wizard's Step 1/2 (§7) remains the other editor of the
+> same field — keep both in the §7 F7 three-way lists. Check: edit in card, re-open
+> wizard as `structure_change`: value carries; edit in wizard: card shows it.
+
+**F49 · `BenefitsDetail`** — `:1295–1490s`, save at `:1335` — **[L]**
+The settings half of the benefits square (§11.2): writes `selectedBenefits`,
+`k401Rate`, `k401MatchRate` (base users; DHL derives via `dhlEmployerMatchRate`),
+`k401StartDate`, `benefitsStartDate`, and weekly premium fields. Read by Spine A
+(`weeklyBenefitDeductions`, `buildYear`'s 401k columns) and displayed by T6
+(LogPanel's ported 401k/PTO sections, which honor the same
+`k401StartDate || benefitsStartDate` fallback — `LogPanel.jsx:91–92`).
+> **IF** the start-date fallback order or any benefit field changes, **THEN** the same
+> fallback must hold in all three readers (this card's display `:1300–1305`, LogPanel
+> `:91–92`, Spine A) — and the wizard's Step 3 (§7, `BENEFIT_OPTIONS` loop) writes the
+> same fields. Check: set only `benefitsStartDate`; LogPanel countdown and this card
+> both label it "(benefits start)".
+
+**F50 · `TaxPlanDetail` writers** — `setPastStatus:1587–1597` (past-week
+`pastWeekTaxStatusOverrides`), `toggleWeek:1599–1605` (**direct `config.taxedWeeks`
+mutation** for future weeks), plus the `showExtra` switch — **[L]**
+The only user-facing writers of the two fields F28 (T3) consumes. Both eager-saved
+(`debc0cb`). Note the asymmetry is *by design*: past weeks are overridden via the
+overrides map (schedule stays intact); future weeks edit `taxedWeeks` itself —
+diverging it from §7 F5's wizard derivation is user intent, not drift.
+> **IF** either writer's field shape changes, **THEN** F28's remediation logic
+> (past-only override honor) and the admin Tax Weeks Grid's red-dot rendering both
+> read the same shapes — walk both. **IF** a re-run of the wizard recomputes
+> `taxedWeeks` (§7 F5 does!), **THEN** know that manual `toggleWeek` edits are
+> *overwritten by design* on wizard completion while `pastWeekTaxStatusOverrides`
+> survive (separate field) — any change to that survivorship split is a product
+> decision, surface it.
+
+**F51 · `PreferencesDetail`** — `:1494–1567`; buffer save `:1503–1509` — **[G/L]**
+Buffer editor (On/Off + amount, clamped 0–200 — same `BUFFER_MAX` cap as the wizard's
+Wrap Up, §7 F5's `?? 50` default) and the Tax Exempt display row (lock icon when the
+tax feature is locked, `d6bfecf`; label deliberately says "Standard withholding" for
+everyone locked, since `taxExemptOptIn` without the unlock is ignored by the math).
+> **IF** the buffer cap/default changes here or in the wizard, **THEN** both editors
+> and `bufferPerWeek` (§8 F14) move together — three sites, one number. Check: set
+> $200 here, Wrap Up shows $200; Live Inspector `bufferPerWeek` matches schedule
+> scaling.
+
+**F52 · `AccountDetail` auth actions** — `:86–345`: change email `:120–135`, change
+password `:171` (hidden for Google-only accounts — no email identity, `6e123e8`,
+`:113–117`), link Google `:198`, global sign-out `:186–193`, **hard delete**
+`:317–345` (type-DELETE confirmation → `POST /api/delete-account` with bearer token →
+global sign-out) — **[G]**
+The delete here is the **true, unrecoverable** path — server-side it does *not*
+tombstone into `deleted_accounts`; only the cron's non-payment deletion archives first
+(§21). The two delete paths' difference is a product invariant.
+> **IF** the delete flow is touched, **THEN** preserve the archive asymmetry (user
+> delete = hard, cron delete = tombstone) or escalate it as a product decision — and
+> the confirmation text contract (`confirmationText` body field) must match
+> `api/delete-account`'s server-side check. **IF** identity-gating changes, **THEN**
+> re-walk the Google-only × email-only × linked matrix — the password form must never
+> show where re-auth can't succeed.
+
+**F53 · Subscription card + checkout/portal** — `:206–315`: `handleCheckout:210`
+(→ `/api/stripe-create-checkout`), `handleManageSubscription:241` (→
+`/api/stripe-portal`), status resolution `:269–315` — **[G]**
+§17.F surface. Status resolution order is deliberate: raw Stripe `past_due`/`canceled`
+take display precedence over the resolved entitlement, and `getEntitlement` is called
+with **real wall-clock `new Date()`** — never `effectiveToday`/Lock Date (same rule as
+the paywall gate; the comment at `:269–277` records it).
+> **IF** anything here starts passing a simulated date into `getEntitlement`, **THEN**
+> that's the exact drift the §21 rule forbids (Lock Date must not extend trials or the
+> hidden grace); **IF** plan labels/prices change, **THEN** they must match
+> `UpgradeCard` (T9's shared pitch) and the Stripe dashboard's real prices — three
+> surfaces, one truth. Check: Live State Inspector's Sub Phase vs. this card vs.
+> TrialBanner agree on the same account.
+
+### 12.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| A pay/tax/schedule field edited by any card | §7 F7 three-way lists (`DIFF_FIELDS`, `HISTORY_SENSITIVE_FIELDS`), the wizard's step editors, F28's fallback chains (`fedRateLow ?? w1FedRate`) | Three-way grep; edit → config-history line captured; Week Inspector reflects it | D1/D5 |
+| Legacy-twin field pairs | F47's read-primary/write-both contract | Edit via card → engine math moves (not just the form) | D1 |
+| `canAccessTaxPlan` inputs or unlock flags (Spine C) | F45's `taxplan` route gate + BudgetPanel's F43 consumer + PreferencesDetail's lock icon — all three surfaces | Tester/admin/`taxProjectionsEnabled`/plain matrix across all three | D4 |
+| `pastWeekTaxStatusOverrides` / `taxedWeeks` shape | F50 writers ↔ F28 math ↔ Tax Weeks Grid rendering ↔ §7 F5 wizard recompute survivorship | Toggle past + future week; grid dots + `extraPerCheck` move; wizard re-run keeps overrides, resets `taxedWeeks` | D1 |
+| Benefits fields / start-date fallback | F49's three readers + wizard Step 3 | Set `benefitsStartDate` only; all surfaces agree | D1 |
+| Buffer cap/default | F51 + wizard Wrap Up (§7 F5) + `bufferPerWeek` (§8 F14) | $200 here ↔ Wrap Up ↔ Live Inspector | D1 |
+| `api/delete-account` contract or archive semantics | F52's hard-delete invariant vs. §21's cron tombstone path; revival flow (T8/T9) must keep finding only *cron-deleted* accounts revivable | `db.test.js` + revival lookup on a user-deleted email returns nothing | D4 |
+| Stripe plan labels/prices/status precedence | F53 ↔ `UpgradeCard` ↔ TrialBanner ↔ Live Inspector Sub Phase | One account, four surfaces, same story | D5 |
+| `subscription` prop shape (`db.js` mapping, T7) | F53's status resolution + `getEntitlement` inputs | `db.test.js` subscription mapping cases | D1 |
+
+### 12.3 Block 3 — Gate matrix
+
+| Dimension | Cells | Expected behavior |
+|---|---|---|
+| `config.jobLossMode` | false / true | true: Work & Pay group → single "Back to Work" row (F45); Account/Preferences/admin rows unchanged |
+| `canSeeTaxPlan` | false / true | true (admin, tester, or manual flag — never wizard opt-in alone, `a430fbf`): Tax Plan row + route; false: row hidden, route dead-ends, Preferences shows lock icon |
+| `isAdmin` | false / true | true: Investor Codes row (row-gated only — F45's asymmetry note) |
+| Identity providers | email-only / Google-only / linked | Google-only: password form hidden (`6e123e8`), link-Google hidden; email-only: link offer shown |
+| Employer | DHL / base | DHL: Schedule Override toggle visible (`f7ca4ef`), match rate derived via `dhlEmployerMatchRate`; base: manual `k401MatchRate` |
+| Entitlement | entitled / expired | **No readOnly gate by design** — expired users need this panel to reach checkout, manage billing, and delete; nothing here mutates the fiscal model except config edits, which remain intentionally live |
+
+### 12.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *Wrong-field write* (`44c0538`) — the repo's cleanest legacy-twin drift specimen;
+  F47's contract generalizes it.
+- *Employment/Life Events merge* (`75ab021`, `e6800ec`) — sub-view structure is one
+  level deep by intent; active-systems §17 lagged it until this pass (D5, corrected).
+- *Tax Plan unlock chain* (`342d2ae`→`09c7609`→`a430fbf`→`a643153`) — manual-only
+  unlock, wizard opt-in never reveals, `isAdmin` structurally ⊇ `isTester`.
+- *Dropped-prop crash* (`04b246c`) — `onInstallClick` was dropped in a refactor and
+  crashed the whole Account tab; ProfilePanel's 18-prop signature makes it the most
+  prop-fragile component in the app — treat any App.jsx wiring change here as
+  crash-risk until rendered once.
+- *Google-only password form* (`6e123e8`) — identity-gated forms, F52.
+
+**Standing findings from this pass:** none filed as DW items. The `investorcodes`
+route-gate asymmetry (F45) is a hardening note, not a live defect — `activeSection` is
+tap-only state and the InvestorAdminPanel's data calls are RLS-gated server-side; it
+becomes a real gap only if sub-view state ever gains an external setter, which its
+IF/THEN now guards. The D5 correction (active-systems §17 sub-view list) was applied
+in-pass per protocol.

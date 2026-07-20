@@ -323,11 +323,14 @@ Framer Motion.
 ## 17. Auth & Account
 
 - **Auth:** Supabase email/password + Google OAuth (`LoginScreen.jsx`); RLS live.
-- **`ProfilePanel.jsx`** — Account list → sub-views: Employment, Pay Structure (4
-  independently editable cards: Base Pay / Differentials / Overtime Rules / Weekly Hours
-  & Schedule Override), Retirement & Benefits, App Preferences, Tax Plan (gated),
-  Investor Codes (admin), **Life Events** (§10); plus Account (email/password, link
-  Google, sign out, delete account).
+- **`ProfilePanel.jsx`** — Account list → sub-views: Job & Pay (4 independently
+  editable pay cards — Base Pay / Differentials / Overtime Rules / Weekly Hours &
+  Schedule Override — plus the Employment card merged into this view 2026-07-06 and the
+  Life Events entry at its foot; neither is a standalone row anymore), Retirement &
+  Benefits, App Preferences, Tax Plan (gated), Investor Codes (admin), plus Account
+  (email/password, link Google, sign out, delete account, §17.F Subscription card).
+  In Job Loss Mode the Work & Pay group is replaced by a single "Back to Work" row.
+  Full drift map: `drift-app-warden.md` §12.
 
 ---
 

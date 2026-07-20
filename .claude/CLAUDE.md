@@ -32,7 +32,7 @@ src/
 │   ├── HomePanel.jsx        — dashboard home tiles
 │   ├── IncomePanel.jsx      — income / tax / rolling weekly view
 │   ├── BudgetPanel.jsx      — expenses / goals / loans
-│   ├── BenefitsPanel.jsx    — 401k + PTO
+│   ├── BenefitsPanel.jsx    — DEAD CODE, never rendered (401k/PTO live in LogPanel + ProfilePanel; see drift-app-warden §11)
 │   ├── LogPanel.jsx         — event log + Log Effect Summary
 │   ├── WeekConfirmModal.jsx — weekly schedule confirmation
 │   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
@@ -208,10 +208,10 @@ locally-wrong code but **drift** — a locally-correct change that silently inva
 distant system (five documented real incidents are catalogued there as case law: parallel
 formulas, retroactive recompute, lost saves, gate bypass, stale docs).
 
-- **Before changing** anything under a mapped section (Setup Wizard, the 5 panels, Auth,
-  Login, Paywall, UI-UX, or the shared spines — fiscal math, persistence, entitlements, AI
-  context, design system, admin toolkit), read that section's drift trigger map and run its
-  checks. State in the commit/PR which entries were consulted; "none applicable" is valid,
+- **Before changing** anything under a mapped section (Setup Wizard, the 5 panels —
+  Home, Income, Budget, Log, Account — Auth, Login, Paywall, UI-UX, or the shared
+  spines — fiscal math, persistence, entitlements, AI context, design system, admin
+  toolkit), read that section's drift trigger map and run its checks. State in the commit/PR which entries were consulted; "none applicable" is valid,
   silence is not.
 - **Two categories, one fork:** every mapped item is either **LEDGER** (L — computes/stores
   truth; drift = silently wrong numbers; hunt via cross-check against the single
@@ -284,6 +284,7 @@ Files: kebab-case · Components: PascalCase · Utilities/hooks: camelCase · Dat
 
 ## Known Cleanup
 - `WeekConfirmModal.jsx`, `LoginScreen.jsx`, `ProfilePanel.jsx` — hardcoded hex colors not yet tokenized (tracked in TODO §10)
+- `BenefitsPanel.jsx` (+ its coverage tests) — dead code, unrendered for the repo's entire visible history; 401k/PTO displays live in `LogPanel.jsx`, settings in `ProfilePanel.jsx` `BenefitsDetail`. Safe to delete on owner sign-off (drift-app-warden §11)
 
 ---
 

@@ -25,7 +25,7 @@ Last updated: 2026-07-16 | App: Authority Finance (A:Fin)
 | 3 | Budget — Expenses | `BudgetPanel.jsx`, `finance.js` | Live |
 | 4 | Budget — Goals | `HomePanel.jsx`, `goalFunding.js` | Live |
 | 5 | Budget — Loans | `BudgetPanel.jsx`, `finance.js` | Live |
-| 6 | Benefits — 401k & PTO | `BenefitsPanel.jsx` | Live |
+| 6 | Benefits — 401k & PTO | `LogPanel.jsx` (displays), `ProfilePanel.jsx` (settings) | Live — `BenefitsPanel.jsx` is dead code |
 | 7 | Attendance Bucket Model (DHL) | `finance.js` | Live |
 | 8 | Log Panel — Event Log & Effect Summary | `LogPanel.jsx` | Live |
 | 9 | Setup Wizard | `SetupWizard.jsx` | Live |
@@ -141,7 +141,12 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
 
 ## 6. Benefits — 401k & PTO
 
-**File:** `BenefitsPanel.jsx`.
+**Files:** `LogPanel.jsx` (displays — ported from the retired standalone panel; marker
+comment at `LogPanel.jsx:86`) + `ProfilePanel.jsx` `BenefitsDetail` (settings — the
+Account tab's "Retirement & Benefits" sub-view). **`BenefitsPanel.jsx` itself is dead
+code** — unrendered for the repo's entire visible history (no import, no nav entry);
+deletion tracked in CLAUDE.md Known Cleanup. Corrected 2026-07-19 (Drift Warden T5 pass,
+`docs/drift-app-warden.md` §11).
 - **401k:** projected employee/employer contributions (adjusted for logged loss/gain
   events), month-by-month breakdown table with running total, enrollment countdown
   banner when `k401StartDate` is in the future.

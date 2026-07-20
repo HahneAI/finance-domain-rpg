@@ -146,18 +146,21 @@ nothing is orphaned).
 | T2 | **Home Panel** | G | `HomePanel.jsx`, `JobLossHomePanel.jsx`, `NetWorthHealthTips.jsx`, `CoachNetWorthCard.jsx`, `ReemploymentTracker.jsx` | §14 · §10 (Job Loss home surface) · §4 (the *entire* goals surface — cards, CRUD, reorder, timeline bar; moved off Budget 2026-05-12) · §16 (sprints 3/5) | A, B, C, D, E |
 | T3 | **Income Panel** | L | `IncomePanel.jsx`, `WeekConfirmModal.jsx` | §1 (display surface) · §2 · §12 · §16 (sprint 2, unshipped) | A, B, E, F |
 | T4 | **Budget Panel** | L | `BudgetPanel.jsx`, `JobLossBudgetPanel.jsx`, `BulkEditPanel.jsx`, `MonthQuarterSelector.jsx`, `DueDatePicker.jsx` | §3 · §5 · §10 (Job Loss budget surface) · Tax Plan gate (§23 consumer; §4 goals moved to T2 — corrected in T4 pass) | A, B, C |
-| T5 | **Benefits Panel** | L | `BenefitsPanel.jsx` | §6 | A, B |
+| T5 | **Account Panel** (redefined 2026-07-19 — was "Benefits Panel", see §11: `BenefitsPanel.jsx` is dead code; the fifth nav panel is Account) | G | `ProfilePanel.jsx` (all sub-views: Employment, Pay Structure cards, Retirement & Benefits `BenefitsDetail`, App Preferences, Tax Plan writers, Investor Codes, Life Events row, Account/auth actions UI) | §17 (account-management surface) · §6 (settings side; displays → T6) · Tax Plan write path (§23 consumer) | A, B, C |
 | T6 | **Log Panel** | L | `LogPanel.jsx` | §8 · §7 (attendance surfaces) · §13 (per-entry admin breakdown) | A, B, F |
-| T7 | **Auth System** | G | `ProfilePanel.jsx`, `lib/supabase.js`, `db.js` (account mapping), migrations (RLS, tier columns), `DemoAccountTree.jsx`, `InvestorRegister.jsx`, `InvestorAdminPanel.jsx` | §17 (account management) · §18 · §23 | B, C |
+| T7 | **Auth System** | G | `lib/supabase.js`, `db.js` (account mapping, `loadUserData`/`saveUserData`), migrations (RLS, tier columns), `DemoAccountTree.jsx`, `InvestorRegister.jsx`, `InvestorAdminPanel.jsx` | §17 (session + identity/tier truth; the ProfilePanel UI surface is T5) · §18 · §23 | B, C |
 | T8 | **Login System** | G | `LoginScreen.jsx`, `ReviveScreen.jsx`, `TrialExplainerScreen.jsx`, `api/revival-lookup.js` | §17 (auth entry) · §21 (revival detection at sign-in) | B, C |
 | T9 | **Paywall System** | G | `App.jsx` (entitlement resolution + `readOnly` fencing), `UpgradeCard/Modal/Panel.jsx`, `TrialBanner.jsx`, `api/stripe-*.js`, `api/cron-subscription-lifecycle.js` + `_lifecycle*.js`, `_email.js` | §21 · §20 | B, C |
 | T10 | **UI-UX** | G | `ui.jsx`, `LiquidGlass.jsx`, `index.css` (`@theme`), `useSwipeStack.js`, `PwaInstallModal.jsx`, animation rules | §15 · §16 (primitives) · §19 | E |
 
 Notes on deliberate placements:
 
-- **T7 Auth vs. T8 Login** are split on the session boundary: T8 is every pre-session
-  surface (sign-in, sign-up, OAuth, recovery, revival detection); T7 is in-session identity
-  truth (account settings, tier flags, RLS, delete-account, investor/demo machinery).
+- **T5 Account vs. T7 Auth vs. T8 Login** — T8 is every pre-session surface (sign-in,
+  sign-up, OAuth, recovery, revival detection); T7 is in-session identity/tier *truth*
+  (session handling, RLS, tier flags, account mapping, investor/demo machinery); T5 is
+  the Account *panel* — the ProfilePanel UI where the user edits settings and triggers
+  account actions. A ProfilePanel button (T5) calling an auth/db primitive (T7) is the
+  expected coupling, not drift.
   Drift between them is exactly the §21 revival flow — which is why they're separate
   sections with an explicit boundary entry, not one blob.
 - **Job Loss Mode (§10)** is a genuine app *mode*, not a panel — its pieces are assigned to
@@ -189,7 +192,7 @@ strongest couplings:
 |----------|-----------|---------|
 | `App.jsx` ↔ `db.js` | 13 | The wiring harness and persistence move together — Spine B boundary is the hottest in the app |
 | `BudgetPanel` ↔ `HomePanel` | 11 | T4 and T2 share goals/expenses surfaces — a goal-logic change that touches only one of them is suspicious by default |
-| `App.jsx` ↔ `ProfilePanel` | 11 | Account/config wiring (T7) |
+| `App.jsx` ↔ `ProfilePanel` | 11 | Account/config wiring (T5/T7) |
 | `App.jsx` ↔ `finance.js` | 10 | Spine A output re-wired through the harness |
 | `constants/config.js` ↔ `finance.js` | 9 | Config shape and math evolve in lockstep — a new config field almost always demands a Spine-A consumer |
 | `aiContext.js` ↔ its test | 9 | Spine D churns and is test-fenced — keep it that way |
@@ -247,7 +250,7 @@ for that section):
 - [x] **T2 — Home Panel** — §8 below (surgical pass 2026-07-19)
 - [x] **T3 — Income Panel** — §9 below (surgical pass 2026-07-19)
 - [x] **T4 — Budget Panel** — §10 below (surgical pass 2026-07-19)
-- [ ] **T5 — Benefits Panel**
+- [ ] **T5 — Account Panel** — redefined 2026-07-19 (was "Benefits Panel"; §11 records the investigation: `BenefitsPanel.jsx` is dead code, the fifth nav panel is Account/`ProfilePanel.jsx`); full surgical pass still pending
 - [ ] **T6 — Log Panel**
 - [ ] **T7 — Auth System**
 - [ ] **T8 — Login System**
@@ -425,7 +428,7 @@ model D3-safe activation.
 | `DHL_PRESET` (`constants/config.js`) — teams, defaults, rotation | Step 1 team prefills (`SetupWizard.jsx:287–320`), rotation copy (`:375–377`), F5's enforced overrides, `buildYear` rotation math | `SetupWizard.test.jsx` + complete a DHL test run; Week Inspector on a long-week and short-week | D1 |
 | `BENEFIT_OPTIONS` (`constants/config.js`) — add/remove/re-type a benefit | Step 3 `isValid`'s weekly-type required loop (`:2190–2192`), `BenefitCard`, `weeklyBenefitDeductions()` in `finance.js`, Wrap Up's benefits row | Snapshot test (`config.test.js.snap`) + wizard run selecting the changed benefit; diff Wrap Up net vs. Week Inspector | D1 |
 | `buildYear` signature or week-object shape (Spine A) | F5's direct call (`:2326` — `taxedWeeks` derives from `w.idx`), F6 preview pair, F10's `baseRateHistory` param | `finance.test.js` + F6's preview-vs-week diff procedure | D1/D2 |
-| A new sensitive field enters the wizard | `DIFF_FIELDS` (F7), `HISTORY_SENSITIVE_FIELDS` (`configHistory.js:14`), ProfilePanel's Pay Structure cards (T7 — same field, second editor) | Three-way grep for the field name; all three lists/surfaces present or explicitly excluded | D5 |
+| A new sensitive field enters the wizard | `DIFF_FIELDS` (F7), `HISTORY_SENSITIVE_FIELDS` (`configHistory.js:14`), ProfilePanel's Pay Structure cards (T5 — same field, second editor) | Three-way grep for the field name; all three lists/surfaces present or explicitly excluded | D5 |
 | `STEP_DEFS` ids or routing comment (`:2105–2113`) | CLAUDE.md SetupWizard quick reference, `SetupWizard.test.jsx`, this section's §7.3 matrix | Re-verify matrix path by path; update both docs in the same PR | D5 |
 | `onComplete` payload shape (F5's spread) | F8, `db.js#saveUserData` column mapping, `docs/account-reference.json` expectations | `db.test.js` + DB Row Viewer drift badge after a wizard run | D3 |
 | Wizard cancel wiring (`App.jsx:3414–3420` — `onCancel` is `undefined` for first-run non-investor) | First-run users must not be able to escape setup with `setupComplete: false` but a live session; TrialExplainerScreen gate (`App.jsx:1466`) sequencing | Manual: fresh account, attempt to dismiss the wizard every way the UI offers | D4 |
@@ -1012,7 +1015,7 @@ Multi-expense edit/delete/add in one pass, anchored to `displayMonthKey`'s month
 `:2103` — **[G]**
 `canAccessTaxPlan({isAdmin, taxProjectionsEnabled, isTester})` — display-only here
 (tax-exempt week info). The *writers* (per-week taxed/exempt toggles →
-`pastWeekTaxStatusOverrides`) live in **ProfilePanel** (T7, eager-saved since
+`pastWeekTaxStatusOverrides`) live in **ProfilePanel** (T5, eager-saved since
 `debc0cb`); the math consumer is F28 (T3). `a430fbf`: the unlock is manual-only
 (liability hold) — setup's tax-exempt opt-in alone never surfaces it to a normal user.
 > **IF** this gate's inputs change, **THEN** BudgetPanel and ProfilePanel must gate
@@ -1083,3 +1086,52 @@ active-systems §4 + this doc's §4.1 hierarchy rows) were applied in-pass per p
 The F41 loan D2 zone remains the surface's known open debt, already tracked as
 TODO §19's loan follow-up — not re-filed as a DW item since it's a designed-in gap with
 an owned roadmap entry, not a discovered defect.
+
+---
+
+## 11. T5 — Redefinition Record: "Benefits Panel" → Account Panel
+
+**Pass date:** 2026-07-19. T5 was investigated for a full surgical pass as "Benefits
+Panel" (the foundation pass's guess at the fifth panel) and found to be a phantom —
+then redefined per owner correction: **the five nav panels are Home, Income, Budget,
+Log, Account**, so T5 is the **Account Panel** (`ProfilePanel.jsx`), and its full
+surgical pass is still pending (§6 checklist). T-numbering is preserved; this section
+records the investigation so the dead-code findings survive as case law.
+
+### 11.1 What the investigation found
+
+- **`BenefitsPanel.jsx` (553 lines) is dead code.** It is imported by no module and
+  reachable from no nav entry (`NAV_ITEMS`/`BOTTOM_NAV`, `App.jsx:40–45`, have no
+  benefits key). The repo's visible history begins at PR #333 (2026-05-04) and the file
+  was *already orphaned then* — no commit in 487 visible commits ever rendered it. Its
+  only touches since are blanket sweeps: the press-feedback rollout (`973c399`) and the
+  coverage pass (`12f5441`), which added tests to what was already dead code.
+- **The living benefits features split across two surfaces:**
+  - **Displays** — 401k projected employee/employer contributions (event-adjusted),
+    enrollment countdown, and the PTO accrual/goal tracker — live in **`LogPanel.jsx`**
+    (ported; see the marker comment at `LogPanel.jsx:86` and the `k401`/`ptoGoal` block
+    `:87–97+`). These get their F-entries in the **T6 pass**.
+  - **Settings** — benefit enrollment, rates, start dates (`BenefitsDetail`,
+    `ProfilePanel.jsx:1295+`, the Account tab's "Retirement & Benefits" sub-view) —
+    belong to the **T5 (Account Panel) pass**.
+- **Doc drift corrected in-pass (D5):** `active-systems.md` §6 listed
+  `BenefitsPanel.jsx` as the system's live file; CLAUDE.md's file-structure map carried
+  the same claim. Both now point at the real surfaces and flag the dead file.
+
+### 11.2 Standing redirect
+
+Any future "benefits drift" question routes to: **T6** for a number shown about 401k/PTO
+(LEDGER — cross-check `allWeeks`' `k401kEmployee`/`k401kEmployer` sums and
+`calcEventImpact`'s 401k/PTO deltas), **T5 (Account Panel)** for who can edit which
+benefit setting and how it saves (GATEWAY + eager-save). The shared config fields
+(`selectedBenefits`, `k401Rate`, `k401MatchRate`, `k401StartDate`, `benefitsStartDate`,
+weekly premium fields) are written by the wizard (§7, Step 3) and by `BenefitsDetail`
+(T5), and read by Spine A (`weeklyBenefitDeductions`, `buildYear`) and LogPanel (T6) —
+that write-two-read-two square is the drift surface that remains real.
+
+### 11.3 Cleanup queued
+
+Deleting `BenefitsPanel.jsx` (and its coverage tests) is the owner's call — filed in
+CLAUDE.md's Known Cleanup list, not as a DW defect (dead code isn't a live bug; the
+risk is someone "fixing" or extending the dead file believing it ships — this section
+and the CLAUDE.md note now prevent that).

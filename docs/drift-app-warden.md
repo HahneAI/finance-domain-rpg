@@ -271,7 +271,7 @@ for that section):
 - [x] **T7 — Auth System** — §14 below (surgical pass 2026-07-19)
 - [x] **T8 — Login System** — §15 below (surgical pass 2026-07-19)
 - [x] **T9 — Paywall System** — §16 below (surgical pass 2026-07-19; found DW-7, the investigation's highest-severity defect)
-- [ ] **T10 — UI-UX**
+- [x] **T10 — UI-UX** — §17 below (surgical pass 2026-07-19)
 - [ ] **Spines A–F** (final pass — spines are written last so every spine entry's blast
   radius can point at completed surface sections, not forward references)
 
@@ -1987,3 +1987,157 @@ the select list sits outside that seam, which is how it slipped.
    omits `is_tester`, so the engine's exemption gate reads `undefined` and beta
    testers are dunned and auto-deleted on the real schedule ~6 months after flag
    flip. One-line fix + a field-coverage shell test to kill the class.
+
+---
+
+## 17. T10 — UI-UX Drift Map
+
+**Pass date:** 2026-07-19. Same anchor + method rules as §7; numbering continues (F88+).
+**Git-history note:** two governing waves — the press-feedback system rollout
+(`4ca9437`→`ed7705c`→`973c399`, 2026-06-28: press became the *default* via `Pressable`,
+not per-component opt-in) and the fold-motion architecture (`8752cd4`→`453060a`→
+`bb35349`→`bf49c06`, 2026-07-14/15, still extending through the wizard/login work of
+07-17/19). Plus the PWA auto-update fix (`8c50ff0`) — the one UI commit with data-loss
+stakes. Two D5s corrected in-pass: CLAUDE.md's Liquid Glass pointer (§13 → §15) and
+active-systems §19's stale `autoUpdate` claim.
+
+**Scope:** `ui.jsx` (808 lines, the primitive library), `LiquidGlass.jsx`,
+`index.css` (`@theme` tokens + every keyframe), `hooks/useSwipeStack.js`,
+`PwaInstallModal.jsx`, `UpdateAvailableBanner.jsx`, `vite.config.js` (PWA), and the
+CLAUDE.md animation/color/input standards this tier enforces app-wide.
+
+### 17.1 Block 1 — Critical inventory (function by function)
+
+**F88 · `@theme` design tokens** — `index.css:3–50` — **[G]**
+The single source of color/font truth. Two reserved-token rules: the Pulse signal set
+(`--color-signal-blue/purple/glow`, `:46–48`) is for the Phase-2 AI overlay only —
+never on Flow elements; and no raw hex for accent/green/red anywhere in components.
+Known standing debt: `WeekConfirmModal`/`LoginScreen`/`ProfilePanel` carry untokenized
+hex (CLAUDE.md Known Cleanup, TODO §10).
+> **IF** a token's value or name changes, **THEN** grep both the var *and* its raw hex
+> value — the three debt files bypass the token and will silently keep the old color,
+> splitting the palette. **IF** a new component uses a signal token outside the Pulse
+> overlay, **THEN** that's the reserved-token violation Spine E exists to catch.
+
+**F89 · Press feedback system** — `usePressFeedback:70`, `pressScaleStyle:100`,
+`PressFlashOverlay:169`, `Pressable:193` (`ui.jsx`) — **[G]**
+Press is the *default* interaction system: `Pressable` wraps and derives its press fill
+from the target's own background color family (`ed7705c` — lighter same-family, iOS
+style), scale confined to 0.94–0.97. New interactive elements use `Pressable`, not
+hand-rolled `:active` styles.
+> **IF** press timing/scale/fill derivation changes, **THEN** it changes *everywhere at
+> once* — that's the design; verify against CLAUDE.md's animation rules (press =
+> `scale(0.97)` only, no bounce/spin). **IF** a new button hand-rolls feedback,
+> **THEN** it forks the system — the rollout commits exist because per-component
+> feedback drifted before.
+
+**F90 · Fold motion architecture** — `useFoldTransition:251`, `FoldSwitch:282`,
+`StepSlide:326` (`ui.jsx`); keyframes + `data-fold` state classes
+(`index.css:345–384`); **`prefers-reduced-motion` kill switch `:380`** — **[G]**
+One vocabulary for enter/exit: pages (`fold-lift`), dropdowns (`fold-scale`), modals
+(`fold-modal` — close must read as *upward* fold travel, `bb35349`), backdrops. The
+hook keeps components mounted through exit (`useFoldTransition`'s whole purpose);
+`FoldSwitch`/`StepSlide` sequence sibling swaps (wizard steps, login modes).
+> **IF** durations/easings/keyframes change, **THEN** every consumer moves together
+> (that's the point), but check the two known traps: exit-before-unmount timing (a
+> shortened exit that outlives its `setTimeout` unmount flashes; T8's `6e2ca11` test
+> precedent is the same class) and the reduced-motion block must keep covering every
+> new `data-fold` variant. All ≤500ms per CLAUDE.md rules.
+
+**F91 · `MetricCard`/`Card` contract** — `ui.jsx:446–553` (alias `:553`) — **[G/L]**
+The workhorse: `entranceIndex` staggered `fadeSlideUp` (80ms/card, capped 400ms),
+`rawVal` 0→target countup (1200ms — the one sanctioned >500ms animation), `status`
+(green/gold/red semantics), `visualTier` (glass/overlay tint without a wrapper),
+`insight` → `InsightRow:668` — which **returns `undefined` and renders nothing when
+backing data is insufficient**: signals are never fabricated (Spine E's data-honesty
+rule, shared with §8 F16's Pulse builders).
+> **IF** the card's prop contract changes, **THEN** every panel moves — this is the
+> most-consumed component in the app; snapshot tests + one visual pass per panel.
+> **IF** `InsightRow`'s undefined-on-insufficient-data behavior changes, **THEN**
+> fabricated-signal drift opens across every tile that passes a computed `insight`.
+
+**F92 · `LiquidGlass` purpose whitelist** — `LiquidGlass.jsx:27`
+(`ALLOWED_PURPOSES`: `nav, pulse, modal, log-summary, phase-btn`), dev-mode warn
+`:55–58` — **[G]**
+Frosted glass is scarce by design — never on primary MetricCards, tables, or buttons.
+Extending usage means extending the whitelist *deliberately* (the file's own comment
+says so), and the warn only fires in DEV.
+> **IF** a new purpose is added, **THEN** update active-systems §15's count in the same
+> commit (it went stale at "3" once — corrected during the T4-era passes) and confirm
+> the surface isn't one of the forbidden classes. Prod silently accepts any purpose —
+> the whitelist is only as strong as DEV-time discipline.
+
+**F93 · Swipe/snap primitives** — `ScrollSnapRow:764`, `PaginationDots:709` (`ui.jsx`),
+`hooks/useSwipeStack.js` — **[G]**
+CSS scroll-snap, no animation library. Consumers: Home goal cards (§16 sprint 3),
+Income mobile month cards, goal reorder modal (sprint 5). **Sprint 2 (Income weekly
+rows → snap cards) is NOT started** — active-systems §16's table is the truth; don't
+assume the desktop table converted.
+> **IF** snap/scroll behavior changes, **THEN** test on touch (450ms-hold drag
+> interplay, §10 F40) — the drag-and-drop and snap-scroll systems share gesture space
+> on the same cards; a change to one can eat the other's gestures.
+
+**F94 · PWA update + install flow** — `vite.config.js:15–22` (`registerType: 'prompt'`
++ the comment naming why), `:57` (`skipWaiting`), `UpdateAvailableBanner.jsx`
+(user-initiated reload only), `PwaInstallModal.jsx` (`beforeinstallprompt` capture,
+hidden when standalone), app identity rename `1692c6a` — **[G]**
+The `8c50ff0` case law: with skipWaiting/clientsClaim, `autoUpdate` force-reloaded
+every open tab the instant a deploy landed — mid-check-in, mid-wizard — a UI-layer
+change with D3-grade consequences. Updates now wait for the user.
+> **IF** anyone "simplifies" back to `autoUpdate` or removes the banner, **THEN**
+> that's the same incident re-shipped; the vite.config comment is the tripwire. **IF**
+> caching strategy changes, **THEN** re-verify a deploy → update → reload cycle
+> preserves in-flight state (the eager-save net catches what the debounce would lose,
+> but only for completed actions).
+
+**F95 · Input/label standards** — `iS`/`lS` style objects (`ui.jsx:42–44`) — **[G]**
+`iS`: 16px font (blocks iOS auto-zoom), 44px min-height (tap target), JetBrains Mono.
+`lS`: 10px/2px-tracking uppercase labels. Every input/select spreads these; the
+numeric-input standard (string drafts, parse at commit, `attempted` error styling) is
+§7 F-territory but renders through these objects.
+> **IF** `iS` font-size drops below 16px or min-height below 44px, **THEN** iOS zooms
+> on focus / tap targets fail the mobile checklist — the two hard numbers in these
+> objects are compliance, not taste.
+
+### 17.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| Any `@theme` token | The three untokenized-hex debt files (they won't follow), Pulse reservation, status-color semantics (green/gold/red meanings in CLAUDE.md) | Grep var name + raw hex; visual pass in the debt files | D5 |
+| `Pressable`/press-system internals | Every interactive element app-wide (it's the default), CLAUDE.md animation rules | One press per panel; nothing bounces/spins/scales-up | D1 |
+| Fold keyframes/durations (`index.css:345–384`) | All `useFoldTransition`/`FoldSwitch`/`StepSlide` consumers; exit-vs-unmount timings; reduced-motion coverage | Wizard step, login mode, modal close, dropdown — all four fold shapes; `prefers-reduced-motion` on | D1 |
+| `MetricCard` props/animation values | Every panel's tiles; entrance/countup caps in CLAUDE.md | Snapshot tests + per-panel visual pass | D1 |
+| `ALLOWED_PURPOSES` | active-systems §15's count (went stale once), forbidden-surface rule | Same-commit doc update; DEV console clean | D5 |
+| PWA config (`vite.config.js`) | `8c50ff0`'s prompt-mode invariant, workbox caching of app shell + Supabase, install modal's standalone detection | Deploy → open old tab → banner (no forced reload); install flow from Safari | D4 |
+| CLAUDE.md animation/color/input standards text | This section + Spine E — the standards ARE the spec; code and doc must move together | The §5 covenant | D5 |
+
+### 17.3 Block 3 — Gate matrix
+
+| Dimension | Cells | Expected behavior |
+|---|---|---|
+| Motion preference | default / `prefers-reduced-motion` | Full fold/press/countup vocabulary / all `data-fold` animations none'd (`index.css:380`); press scale is the one retained affordance |
+| Display context | browser tab / iOS standalone PWA / Android standalone | Install modal shown / hidden / hidden; safe-area insets honored; dark status bar |
+| Build mode | DEV / prod | LiquidGlass purpose warn fires / silent (whitelist unenforced) |
+| SW update state | none / waiting | Nothing / UpdateAvailableBanner, reload only on tap |
+| Card interactivity | static / `onClick` | 18px/16px padding variants, `minHeight: 88px` interactive; press feedback only on interactive |
+| Insight data | sufficient / insufficient | InsightRow renders / renders nothing (`undefined`) — never a fabricated signal |
+
+### 17.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *PWA auto-update mid-session reload* (`8c50ff0`) — the UI commit with data-loss
+  stakes; `registerType: 'prompt'` + user-initiated reload is the invariant.
+- *Press-feedback unification* (`4ca9437` series) — feedback was per-component and
+  inconsistent; `Pressable` made it systemic. Hand-rolled feedback is regression.
+- *Fold close reading as a fade* (`bb35349`) — modal close must show visible upward
+  travel; "fold" is a direction, not just an opacity curve.
+- *iOS hit-test portals* (`c0224ce`, `95c449c`, `e9f55cc`) — fixed overlays must
+  portal to body on iOS Safari or buttons go dead; any new fixed overlay follows.
+- *ALLOWED_PURPOSES doc lag* — the §15 count went stale at 3 while code grew to 5;
+  caught and corrected during this investigation's earlier passes.
+
+**Standing findings from this pass:** none filed — no new DW items. The untokenized-hex
+debt is already owned (TODO §10 + Known Cleanup); the DEV-only whitelist enforcement is
+noted in F92's IF/THEN rather than filed (it's a discipline boundary, not a defect).
+Two D5s corrected in-pass (CLAUDE.md Liquid Glass pointer §13→§15; active-systems §19
+`autoUpdate`→`prompt` with the `8c50ff0` rationale).

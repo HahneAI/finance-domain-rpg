@@ -26,15 +26,16 @@ Flow makes the product feel natural, fluid, and usable every day. It's the finte
 
 | Token | Value | Use |
 |---|---|---|
-| `--color-bg-base` | `#07130F` | App shell / page background |
-| `--color-bg-surface` | `#0D1F19` | Card background |
-| `--color-bg-raised` | `#123027` | Elevated surfaces, button hover |
-| `--color-bg-gradient` | `linear-gradient(180deg, #0F2A21, #07130F)` | Header / container zones |
+| `--color-bg-base` | `#05100c` | App shell / page background |
+| `--color-bg-surface` | `#112c1f` | Card background |
+| `--color-bg-raised` | `#163828` | Elevated surfaces, button hover |
+| `--color-bg-gradient` | `linear-gradient(180deg, #091a11, #05100c)` | Header / container zones |
 | `--color-accent-primary` | `#00C896` | Primary CTAs, active states, highlights |
 | `--color-accent-soft` | `#4ADE80` | Soft positive indicators |
 | `--color-gold` | `#00C896` | Legacy alias — maps to accent-primary |
 | `--color-green` | `#22C55E` | Semantic success |
-| `--color-red` | `#EF4444` | Semantic danger |
+| `--color-red` | `#EF4444` | Split-test darker red — kept for reference, **not used in UI**; low-emphasis negatives route through `--color-deduction` |
+| `--color-deduction` | `#f4a4a4` | Active red — same hue as `--color-red`, higher lightness; all UI red now routes here |
 | `--color-warning` | `#F59E0B` | Semantic warning |
 | `--color-text-primary` | `#E6F4EF` | Body text |
 | `--color-text-secondary` | `#7FA39A` | Labels, sublabels |

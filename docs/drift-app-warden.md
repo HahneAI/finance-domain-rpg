@@ -276,7 +276,7 @@ for that section):
 - [x] **Spine B — Persistence & Save Integrity** — §19 below (spine pass 2026-07-20)
 - [x] **Spine C — Entitlement & Gating** — §20 below (spine pass 2026-07-20)
 - [x] **Spine D — AI Layer & Context Grounding** — §21 below (spine pass 2026-07-20)
-- [ ] **Spine E — Design System & Motion** — §22 below
+- [x] **Spine E — Design System & Motion** — §22 below (spine pass 2026-07-20)
 - [ ] **Spine F — Admin Diagnostic Toolkit** — §23 below
 
 (Spines are written last so every spine entry's blast radius can point at completed
@@ -2959,3 +2959,101 @@ The dormant `coach_chats` layer (F116) is infrastructure-awaiting-activation, no
 filed as a standing note with an explicit "earns its own map entry before wiring" gate, not a
 DW row. No D5 corrections owed — `active-systems.md` §24 already documents the grounding
 pattern and was reconciled during the surface passes.
+
+---
+
+## 22. Spine E — Design System & Motion Drift Map
+
+**Pass date:** 2026-07-20 (spine pass). Numbering continues (F117).
+**Deliberately thin.** T10 (§17, F88–F95) *is* substantially this spine — it mapped the
+`@theme` tokens, press/fold motion, `MetricCard`, `LiquidGlass` whitelist, swipe primitives,
+PWA flow, and input standards, all with full IF/THEN checks. This section is the **authority
+statement plus a reverse index**; it does not re-map what T10 already owns. Per the handoff:
+a thin honest spine beats a duplicated one.
+
+**Scope:** `index.css` (`@theme`), `ui.jsx`, `LiquidGlass.jsx`, `hooks/useSwipeStack.js`,
+animation rules — all mapped in §17. New here: the CLAUDE.md UI-standards tables and
+`docs/authority-design-system` as **enforceable spec**, not just prose. Absorbs
+active-systems §15, §16 (primitives).
+
+**Authority statement — the six invariants this spine guards (all enforced in §17):**
+1. **No raw hex for accent/green/red** in components — reference `@theme` tokens (F88).
+   Standing debt: `WeekConfirmModal`/`LoginScreen`/`ProfilePanel` carry untokenized hex
+   (TODO §10 + CLAUDE.md Known Cleanup).
+2. **Pulse signal tokens** (`--color-signal-blue/purple/glow`) are Phase-2 AI-overlay only —
+   never on Flow elements (F88).
+3. **Liquid Glass** only on `ALLOWED_PURPOSES` (`nav, pulse, modal, log-summary, phase-btn`) —
+   never on primary MetricCards, tables, or buttons; DEV-only warn (F92).
+4. **Motion:** press = `scale(0.97/0.94)` only, no bounce/spin/scale-up; all ≤500ms except the
+   1200ms countup; `prefers-reduced-motion` nulls every `data-fold` animation (F89/F90/F91).
+5. **Data honesty:** `InsightRow`/Pulse builders return `undefined` on insufficient data —
+   signals are never fabricated (F91, shared with §8 F16).
+6. **Numeric inputs:** string drafts, `parseFloat` at commit only; `iS` = 16px font (blocks
+   iOS zoom) + 44px min-height (tap target); `lS` = 10px/2px uppercase labels (F95).
+
+### 22.1 Block 1 — Critical inventory (what T10 scoped out)
+
+**F117 · The UI standards as enforceable spec** — CLAUDE.md ("UI Component Standards",
+"Color Tokens", "Animation Rules"), `docs/authority-design-system` (Flow color table + motion
+rules) — **[G]**
+T10's F88–F95 map the *code*; the standards *text* is the **spec that code is measured
+against** — the color-token table, the button pattern (CANCEL/SAVE recipes), the entrance/
+countup caps, the numeric-input standard. Under the §5 covenant these move with the code:
+a token value change, a new animation, or a new primitive must update the standards tables in
+the same PR, or the next author builds against a false spec. `docs/authority-design-system` is
+the design *vision* (Flow dominates, Pulse assists, Momentum-not-XP, the pillar roadmap) that
+CLAUDE.md operationalizes — its concrete claims (the "live in `src/index.css`" Flow color
+table) are subject to D5 like any other doc.
+> **IF** an `@theme` token, animation value, or primitive contract changes, **THEN** update
+> CLAUDE.md's matching table **and** (if it restates the value) `docs/authority-design-system`
+> in the same PR — F88/F91/F95's IF/THENs already require this for the code side; this entry
+> extends it to the two spec docs so all three stay one truth. Check: grep the changed token/
+> value across CLAUDE.md and `docs/authority-design-system`; the §5 covenant. **IF** a new
+> component uses a Pulse signal token outside the AI overlay, or Liquid Glass outside
+> `ALLOWED_PURPOSES`, **THEN** that's the reserved-token/whitelist violation F88/F92 exist to
+> catch — this spine's job is that those two rules have exactly one home each.
+
+**Reverse index — surface F-entries that ARE this spine (do not restate):**
+F88 (`@theme` tokens + Pulse reservation), F89 (press feedback / `Pressable`), F90 (fold
+motion + reduced-motion kill switch), F91 (`MetricCard`/`InsightRow` data-honesty), F92
+(`LiquidGlass` `ALLOWED_PURPOSES`), F93 (swipe/snap primitives), F94 (PWA update/install),
+F95 (`iS`/`lS` input standards).
+
+### 22.2 Block 2 — Drift trigger map (cross-boundary)
+
+This spine's cross-boundary triggers are enumerated in §17.2 (the T10 trigger map) — every
+row there is a Spine-E row. The only additions this pass surfaces are the two spec-doc
+couplings:
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| Any `@theme` token value/name | §17.2's debt-file row **plus** CLAUDE.md Color Tokens table **plus** `docs/authority-design-system` Flow color table | Grep the token + its raw hex across `src/`, CLAUDE.md, and the design-system doc | D5 |
+| Animation value / new primitive contract | §17.2's `MetricCard`/press/fold rows **plus** CLAUDE.md Animation Rules + UI Component Standards text | The §5 covenant — code and both spec docs in one PR | D5 |
+| (everything else) | See §17.2 in full — not duplicated here | Per §17's procedures | — |
+
+### 22.3 Block 3 — Gate matrix
+
+The design-system gate matrix is §17.3 (motion preference, display context, build mode, SW
+update state, card interactivity, insight-data sufficiency). Not duplicated. The one G-fact
+worth restating as the spine's headline: **`prefers-reduced-motion` must cover every new
+`data-fold` variant** (F90) and **DEV-only** LiquidGlass enforcement means the whitelist is
+"only as strong as DEV-time discipline" (F92) — prod silently accepts any purpose.
+
+### 22.4 Block 4 — Case law & findings
+
+**Precedents:** all in §17.4 (PWA auto-update mid-session reload `8c50ff0`; press-feedback
+unification `4ca9437`; fold-close-as-fade `bb35349`; iOS hit-test portals `c0224ce`;
+ALLOWED_PURPOSES doc lag). Not duplicated.
+
+**Standing findings from this pass:**
+1. **D5, corrected in this pass:** `docs/authority-design-system`'s "Flow Color Tokens (live
+   in `src/index.css`)" table carried stale hex — `--color-bg-base #07130F`, `bg-surface
+   #0D1F19`, `bg-raised #123027`, and the gradient stops — while `index.css` has `#05100c`/
+   `#112c1f`/`#163828`/`#091a11→#05100c`. The table also omitted `--color-deduction` (the
+   active red token) and mislabeled `--color-red` as the live danger color when it is the
+   unused split-test value. Corrected to match `index.css` in this commit — the table now
+   reflects the real Flow palette. (CLAUDE.md's token table was already correct.)
+2. No DW defects. The untokenized-hex debt (three files) is already owned (TODO §10 + Known
+   Cleanup, cited in F88); the DEV-only whitelist enforcement is a discipline boundary noted
+   in F92, not a defect. This spine adds no new queue items — its risk surface is fully
+   covered by T10's F88–F95 plus the spec-doc covenant above.

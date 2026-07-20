@@ -6,6 +6,17 @@ surgical pass at a time — see §6 stubs for what's pending.
 full git commit history (487 commits, co-change analysis below), live export inventory of every
 `src/lib/*` module.
 
+## Notation Legend (quick reference — full definitions in the cited sections)
+
+| Prefix | Meaning | Defined in |
+|--------|---------|------------|
+| **D1–D5** | The five drift *classes*, each anchored to a real past incident: **D1** parallel formula · **D2** retroactive recompute · **D3** save-path (lost debounced write) · **D4** gate (wrong tier/mode/surface) · **D5** doc/spec vs. shipped code | §2 |
+| **L / G** | The two categories every mapped item gets exactly one of: **L**EDGER (computes/stores truth; drift = silently wrong numbers — hunt by cross-checking the source-of-truth function) · **G**ATEWAY (routes/gates/presents; drift = wrong surface for the wrong person — hunt by walking the gate matrix) | §3 |
+| **T1–T10** | Top-of-hierarchy surface tiers: T1 Setup Wizard · T2 Home · T3 Income · T4 Budget · T5 Account · T6 Log · T7 Auth · T8 Login · T9 Paywall · T10 UI-UX | §4.1 |
+| **Spine A–F** | Cross-cutting shared systems: **A** fiscal math · **B** persistence & save integrity · **C** entitlements & gating · **D** AI layer/context · **E** design system & motion · **F** admin toolkit | §4.2 |
+| **F1, F2, …** | Key-function entries — one running number across the whole doc (F1 = `dateToWeekIdx` in T1; numbering never resets), so "F41" is an unambiguous cross-reference from anywhere. Each carries a code anchor + a human-readable IF/THEN drift check | §5 (format), §7+ (entries) |
+| **DW-n / DW-W-n** | Work-queue rows in `docs/BUG_FIX_TODO.md`: **DW-n** = confirmed defect found by a drift pass · **DW-W-n** = watch item ("not a bug, but could use attention"), with its promotion condition stated | §1 (offload protocol) |
+
 ---
 
 ## 1. Purpose & Mandate

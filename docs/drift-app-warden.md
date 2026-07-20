@@ -275,7 +275,7 @@ for that section):
 - [x] **Spine A — Fiscal Math** — §18 below (spine pass 2026-07-20)
 - [x] **Spine B — Persistence & Save Integrity** — §19 below (spine pass 2026-07-20)
 - [x] **Spine C — Entitlement & Gating** — §20 below (spine pass 2026-07-20)
-- [ ] **Spine D — AI Layer & Context Grounding** — §21 below
+- [x] **Spine D — AI Layer & Context Grounding** — §21 below (spine pass 2026-07-20)
 - [ ] **Spine E — Design System & Motion** — §22 below
 - [ ] **Spine F — Admin Diagnostic Toolkit** — §23 below
 
@@ -2790,3 +2790,172 @@ route-level re-check `taxplan` has) remains queue-visible and is captured in the
 underlying data is RLS-gated (F45's IF/THEN is the tripwire). No D5 corrections owed — the
 `a643153` structural-superset claim was verified against live code (both gates call
 `hasTesterAccess`) and holds.
+
+---
+
+## 21. Spine D — AI Layer & Context Grounding Drift Map
+
+**Pass date:** 2026-07-20 (spine pass). Same anchor + method rules as §7; numbering
+continues (F113+).
+**Git-history note:** the governing intentions are the grounding-rediscovery series
+(`bcc8a6a` — per-expense cost resolved from `history` not `billingMeta`; `1c7b086` — Coach
+grounded in Home's actual tile names/figures; `e1d3c90` — goal tiles wired in *minus names*;
+`44e8a30` — Next Week Takehome gap closed; `836921d` — week/period mentions paired with real
+dates; `2e0121a` — active-weeks scoping), each of which fixed a Coach line that had drifted
+from the UI it describes. This spine's **whole game** is §24's grounding rule: *every context
+field resolves through the same authoritative Spine-A function the UI itself uses* — never a
+parallel approximation (D1). This is the authority record for that contract.
+
+**Scope:** `aiContext.js` (`buildCoachContext`), `coachPrompts.js`, `coachFeatureGuide.js`,
+`coachTriggers.js`, `claude.js`, `api/coach.js`, `AskCoachPanel.jsx`, `CoachNetWorthCard.jsx`,
+the dormant `coach_chats` db layer. Absorbs active-systems §24.
+
+### 21.1 Block 1 — Critical inventory (spine-internal machinery)
+
+**F113 · `buildCoachContext` grounding contract** — `aiContext.js:72–204` — **[L]**
+The single Coach context builder. Its defining property: **every line resolves through the
+exact Spine-A function the corresponding UI tile uses**, and each line carries an in-code
+"Matches HomePanel.jsx's X tile exactly" comment naming its twin. Verified groundings:
+`activeWeeksThisYear` → `resolveActiveWeeksThisYear` (F13, not a flat 52); `annualSavings`/
+`netWorthHealth` → `netWorthHealthStatus` (F23); Budget Health `spendRatio` → same <50%/<75%
+thresholds as F16; `leftThisWeek` → `(prevWeekNet ?? weeklyIncome) − avgWeeklySpend` (F15/F16);
+goal timeline → `computeGoalTimeline(…, config?.goalTimelineEpochIdx ?? null)` — **the same
+epoch arg as HomePanel (F18)**, the exact parity a 2026-07-16 live-test bug violated; per-
+expense cost → `getEffectiveAmountForMonth`/`getEffectiveAmount` (F38/F102, the `bcc8a6a`
+fix); period labels → `payPeriodUnit`/`weekNumToPaycheckNum`/`getPayPeriodBounds` (Spine A,
+schedule-aware — never hardcode "week"); `perCheckFactor` = `52/checksPerYear` scaling.
+> **IF** a context line is added or changed, **THEN** it MUST call the authoritative Spine-A
+> function its UI twin calls — writing a local approximation is the D1 pattern §24 exists to
+> catch (the `billingMeta` estimate once disagreed by double digits; the flat-52 double-
+> diluted savings). **IF** a Spine-A signature the context consumes changes (F13/F15/F18/F23/
+> F38/F102), **THEN** this builder is a named consumer in that entry's blast radius. Check:
+> `aiContext.test.js` (grounding regressions are test-fenced — the `aiContext.js ↔ its test`
+> co-change coupling is #6 in §4.3); Ask Coach a "what do I make / when do goals finish"
+> question and diff the answer against the Home tile. **Purity invariant:** `buildCoachContext`
+> is a pure function of its args (no hooks, no fetches) — `aiContext.test.js` asserts
+> idempotency and no-throw on empty input; keep it that way.
+
+**F114 · The privacy split (labels sent, goal names withheld)** — `aiContext.js:187`, `:196` — **[G/L]**
+A deliberate asymmetry: **expense labels ARE sent** to Coach (`exp.label ?? "Unnamed"` in the
+Expense breakdown line, `:187`) but **goal names are withheld** — the goal breakdown is
+"ranked by funding priority — goal names withheld for privacy" (`:196`), sending only rank +
+target + ETA, never `goal.label`. Goals are treated as more sensitive than bills (aspirations
+vs. recurring obligations).
+> **IF** the goal breakdown line is touched, **THEN** it must never interpolate `goal.label`/
+> `goal.name` — the privacy rule is a product commitment, not a formatting choice; the "names
+> withheld" copy in the string is the in-context reminder. **IF** a new context line surfaces
+> goal data, **THEN** it inherits the same withholding. Check: `aiContext.test.js` asserts the
+> goal breakdown contains no goal name; grep the builder for `goal.label`/`g.label` (should be
+> zero in emitted strings). *(Note the asymmetry when adding new entity types: bills follow
+> the expense-label precedent, aspirational/personal entities follow the goal precedent —
+> decide explicitly, don't default.)*
+
+**F115 · `api/coach.js` server gate + trust boundary** — `api/coach.js:60–100` — **[G]**
+The server proxy: (1) **re-gates** AI access server-side — `SELECT is_admin, is_tester` then
+`canAccessAiFeatures({isAdmin, isTester})` (`:60–63`), the Spine-C "every gate twice" rule
+satisfied (and F112-correct: the SELECT supplies both columns the gate reads, unlike DW-7);
+(2) keeps `ANTHROPIC_API_KEY` server-side (test/live split mirrors `_stripeClient.js`);
+(3) reads `{messages, systemPrompt, contextBlock, model}` from the request body, maps `model`
+through `MODEL_IDS` (default `haiku`), applies `cache_control: ephemeral` to the system +
+context blocks (prompt caching), and streams. **Trust boundary:** the context block is built
+*client-side* (F113) and POSTed — the server re-gates *access* but does not re-derive the
+context; it trusts the block's content.
+> **IF** the gate's SELECT changes, **THEN** it must keep supplying every column
+> `canAccessAiFeatures` reads (F112 class). **IF** anything security-sensitive is ever driven
+> by the client-supplied `contextBlock` (it is currently display grounding only, sent to the
+> model, never used for authorization), **THEN** that's a new trust-boundary crossing —
+> re-derive it server-side instead. **IF** the model default or `MODEL_IDS` map changes,
+> **THEN** confirm callers still pass a valid key (`AskCoachPanel` passes `"haiku"`). Check:
+> a non-admin/non-tester request returns 403 before any Anthropic call; the client cannot
+> escalate access by editing the POST body.
+
+**F116 · Dormant `coach_chats` persistence layer** — `db.js:531–620` (`loadCoachChats`/
+`saveCoachChat`/`deleteCoachChat`), migration `023_add_coach_chats.sql` — **[L/G]**
+The DB functions and table exist and are unit-tested (`dbCoachChats.test.js`) but have
+**zero UI callers** — `AskCoachPanel.jsx:11` explicitly defers wiring ("coach_chats wiring
+lands as its own pass once this feels right"). Chat history is currently session-only
+(in-component `messages` state, lost on close). This is *built infrastructure awaiting
+activation*, not dead code.
+> **IF** anyone wires these functions into the Coach UI, **THEN** it earns its own drift-map
+> entry first (it becomes an eager-save concern — Spine B: chat writes are discrete Add/Delete
+> actions needing the F110 four-site treatment and a `readOnly`/gate decision), and the RLS
+> policy on `coach_chats` must be verified own-row-scoped (F69). Until then, do not assume any
+> Coach conversation persists across sessions or devices. Check: grep the three function names
+> for UI callers — currently only `db.js` and its test reference them.
+
+**Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
+F24 (Coach net-worth trigger chain + `estimateRunwayDays` quarantine + `resolveNetWorthSignalTier`/
+`shouldFireForTier`), F22/F44 (`computeJobLossRunway` — the convergence target for the
+quarantine), F13 (`resolveActiveWeeksThisYear`), F15 (`resolvePrevWeekNet`), F18
+(`computeGoalTimeline` epoch parity), F23 (`netWorthHealthStatus`), F38/F102 (expense
+resolvers), F81/F111 (the AI gate, Spine C).
+
+### 21.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| A `buildCoachContext` line's source function (F113) | The UI tile it "Matches … exactly" — they must move together | `aiContext.test.js`; Ask Coach the question, diff vs. the named Home/Income tile | D1 |
+| Any Spine-A signature the context reads (F13/F15/F18/F23/F38/F102) | `buildCoachContext` is a named consumer in that entry's blast radius | The Spine-A entry's own procedure + `aiContext.test.js` | D1 |
+| `computeGoalTimeline` epoch handling (F18) | Coach goal line **and** Home goal cards — both pass `config?.goalTimelineEpochIdx ?? null` | Grep `computeGoalTimeline(` for epoch-arg parity; goal ETA on card = Coach answer | D1 |
+| Goal breakdown line / any goal-surfacing line (F114) | The privacy rule — no `goal.label` interpolation | `aiContext.test.js` no-goal-name assertion; grep builder for label refs | D5/privacy |
+| `canAccessAiFeatures` inputs or `api/coach.js` SELECT (F115) | Server gate must supply every column the gate reads (F112); client callers pass a valid `model` key | Non-entitled request → 403 pre-Anthropic; `entitlements.test.js` | D4 |
+| `estimateRunwayDays` (F24 quarantine, `coachTriggers.js`) | Its too-low runway feeds `CoachNetWorthCard` context (`:78`) → Coach can claim less runway than the Job Loss panel shows | Do **not** extend it — converge on `computeJobLossRunway`; then both Coach entry points quote one runway | D1 |
+| `runwayDays` wiring to `AskCoachPanel` (§8 quarantine 2) | App.jsx passes no `runwayDays` → `aiContext.js:200` renders bare "Job Loss Mode: active" | When wiring, use `computeJobLossRunway` (not the quarantine); both Coach entry points agree | D4 |
+| `coach_chats` db functions get a UI caller (F116) | New eager-save + gate + RLS concern — needs its own map entry first | Grep the three fn names for callers; verify RLS own-row scope | D3/D4 |
+| `EVENT_TYPES`/`PAYCHECKS_PER_YEAR` (`constants/config.js`) | The context's most-recent-log label (`:178`) and `checksPerYear`/`perCheckFactor` scaling | Add/rename a type → context label resolves; biweekly account → per-check scaling correct | D1 |
+
+### 21.3 Block 3 — Authority table (context line → source function → UI twin it must match)
+
+The L-spine deliverable for Spine D: every Coach context line, the Spine-A function it grounds
+through, and the on-screen tile it is documented to match. A line computing its number any
+other way is a §24 grounding violation (D1) by definition.
+
+| Coach context line | Source-of-truth function | UI twin it must match |
+|---|---|---|
+| Weekly net income / surplus | `weeklyIncome` (F14), `avgWeeklySpend` | Home "typical week" tile (F16) |
+| Next week takehome | `futureWeekNets[0]` → fallback `prevWeekNet` → `weeklyIncome` (F15/F29) | Home "Next Week Takehome" tile (F16) |
+| Left this week | `(prevWeekNet ?? weeklyIncome) − avgWeeklySpend` (F15) | Home "Left This Week" tile (F16) |
+| Savings rate / Net worth trend | `netWorthHealthStatus`, `annualSavings` over `activeWeeksThisYear` (F13/F23) | Home Net Worth cue (F23) |
+| Budget Health | `spendRatio` = `avgWeeklySpend/weeklyIncome`, <50/<75 (F16) | Home "Budget Health" tile (F16) |
+| Goals / funded / target | `getFundedGoalSpend` (`goalFunding.js`), goal targets | Home goal cards (F18/F19) |
+| Weeks to complete all goals | `computeGoalTimeline(…, epochIdx)` `lastGoalEW` (F18) | Home goal ETA (F18) |
+| Goal breakdown (rank + ETA, **no names**) | `formatGoalTimelineEntry` over `computeGoalTimeline` (F18/F114) | Home goal cards (rank only) |
+| Expense breakdown (label + cost) | `getEffectiveAmountForMonth`/`getEffectiveAmount` (F38/F102) | Budget cards (F36/F38) |
+| Current period / periods left | `getFiscalWeekNumber`, `weeksToChecksRemaining`, `payPeriodUnit`, `getPayPeriodBounds` (`fiscalWeek.js`) | App header chip, Income period label |
+| Most recent log | `EVENT_TYPES[type].label`, `fmtFullDate` | Log panel entries (T6) |
+| Job Loss runway | `runwayDays` → **should** be `computeJobLossRunway` (F22/F44) | Job Loss Home headline (F22) — **currently divergent** (F24 quarantine + §8 quarantine 2) |
+
+### 21.4 Block 4 — Case law & quarantine
+
+**Precedents (fixed — cite, don't relearn):**
+- *`billingMeta` per-expense estimate* (`bcc8a6a`, §24) — Coach derived per-expense cost from
+  `billingMeta` instead of `history[]`, off by double digits vs. the UI. The grounding rule
+  (F113) is the generalized fix; every context line's "Matches … exactly" comment is the
+  in-code enforcement.
+- *Flat-52 double dilution* (`2e0121a`, §15.H11) — the Coach's savings figure divided by a
+  flat 52 on top of `weeklyIncome`'s own per-active-week average; fixed by `resolveActiveWeeksThisYear`
+  (F13) shared with Home.
+- *Goal-name privacy* (`e1d3c90`) — goal tiles were wired into context deliberately *without*
+  names; F114 is the standing rule.
+- *Week-vs-check terminology* (`836921d`) — context lines hardcoded "week" regardless of pay
+  schedule until routed through `payPeriodUnit`; date mentions widened for larger pay periods.
+
+**Standing quarantines (open — cite, don't extend):**
+1. **`estimateRunwayDays` D1 (F24, `coachTriggers.js:27–49`)** — a second runway formula that
+   ignores persisted `jobLossCashOnHand` and job-hunt income; always ≤ the real
+   `computeJobLossRunway`. Feeds both the Red-tier trigger and `CoachNetWorthCard`'s context,
+   so the Coach can claim less runway than the Job Loss panel shows on the same screen.
+   Convergence target: `computeJobLossRunway` (Spine A / F22). Its doc comment carries the
+   quarantine notice.
+2. **`runwayDays` never wired to `AskCoachPanel` (§8 Block 4.2)** — App passes no `runwayDays`,
+   so `aiContext.js:200` renders bare "Job Loss Mode: active" (documented §10 gap). When
+   wiring, use `computeJobLossRunway`, not quarantine #1 — and both Coach entry points must
+   then quote the same runway.
+
+**Standing findings from this pass:** none new filed. The two quarantines above are
+pre-existing and owned (F24 / §8); both converge on the same Spine-A function
+(`computeJobLossRunway`), which is why Spine A's §18.4 lists quarantine #3 pointing back here.
+The dormant `coach_chats` layer (F116) is infrastructure-awaiting-activation, not a defect —
+filed as a standing note with an explicit "earns its own map entry before wiring" gate, not a
+DW row. No D5 corrections owed — `active-systems.md` §24 already documents the grounding
+pattern and was reconciled during the surface passes.

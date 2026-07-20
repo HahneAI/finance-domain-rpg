@@ -21,6 +21,21 @@ section rather than duplicating the write-up.
 
 ---
 
+## ⚠️ Not bugs — but could use attention
+
+Watch items from Drift Warden passes: nothing here is a live defect, and nothing here
+should be "fixed" casually — each one is either designed-in debt with an owned roadmap
+entry, or a hardening opportunity whose risk is currently fenced. Filed so they're
+visible in the work queue, not just the ledger. `DW-W` numbering keeps them distinct
+from the defect rows above.
+
+| # | Item | Where | Why it's not a bug / what would change that | Warden entry |
+|---|------|-------|---------------------------------------------|--------------|
+| DW-W1 | **Loans D2 zone — history regenerated retroactively.** Every loan edit rebuilds the loan's entire `history` from `loanMeta` (`history: buildLoanHistory(meta)`), so editing terms rewrites past weeks' spend — same root cause as the income engine's flat-config gap. | `BudgetPanel.jsx:1272–1293` · `finance.js:1129` | Designed-in known gap with an owned roadmap entry (`TODO.md` §19's loan follow-up — the plan is an expense-style point-in-time `history[]`). Becomes a defect only if someone adds a consumer that treats regenerated history as past-week truth before §19 ships. | `drift-app-warden.md` §10 F41 + §10.4 |
+| DW-W2 | **`investorcodes` sub-view lacks a route-level gate.** ProfilePanel's `taxplan` route re-checks its gate at the route (`activeSection === "taxplan" && canSeeTaxPlan`); `investorcodes` gates only the admin ListRow — the route itself trusts that `activeSection` can only be set by tapping. | `ProfilePanel.jsx:1944–1946` vs `:1941` | Unexploitable today: `activeSection` is tap-only component state, and InvestorAdminPanel's data calls are RLS-gated server-side. Becomes real the day sub-view state gains any external setter (deep link, restored nav state, URL param) — F45's IF/THEN is the tripwire. Cheap hardening: add `&& isAdmin` to the route for symmetry. | `drift-app-warden.md` §12 F45 + §12.4 |
+
+---
+
 ## ARCHIVED — Expense add/edit defects (2026-06-15/16) — shipped
 
 Everything below is the historical June pass on `monthlyOverrides`/`history`

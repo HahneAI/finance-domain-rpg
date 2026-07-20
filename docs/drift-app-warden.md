@@ -51,6 +51,11 @@ gaps. The division of labor is fixed:
 - **On fix:** the `DW-n` row is closed out in `BUG_FIX_TODO.md`; the Block 4 entry here
   is annotated with the fixing commit and moves from "Standing findings (open)" to the
   section's fixed-precedents list. The ⚠ inline marker is removed.
+- **Watch items get `DW-W` rows.** Non-defects worth queue visibility — designed-in
+  debt with an owned roadmap entry, or hardening opportunities whose risk is currently
+  fenced — go in `BUG_FIX_TODO.md`'s "Not bugs — but could use attention" section with
+  `DW-W` numbering, so the defect rows stay unambiguous. Each row states what would
+  *promote* it to a real defect.
 - Doc-drift findings (D5) are the exception: those are **corrected in the same pass**
   (per the §5 maintenance covenant), not queued.
 
@@ -1084,8 +1089,9 @@ verified through F35's wrapper (the `764da5b`/`cd0480f` audits hold), and the re
 shadows cover all threaded mutation props. The D5 corrections (goals location in
 active-systems §4 + this doc's §4.1 hierarchy rows) were applied in-pass per protocol.
 The F41 loan D2 zone remains the surface's known open debt, already tracked as
-TODO §19's loan follow-up — not re-filed as a DW item since it's a designed-in gap with
-an owned roadmap entry, not a discovered defect.
+TODO §19's loan follow-up — not filed as a DW defect since it's a designed-in gap with
+an owned roadmap entry, but queue-visible as watch item **DW-W1** in
+`BUG_FIX_TODO.md`.
 
 ---
 
@@ -1317,9 +1323,9 @@ the paywall gate; the comment at `:269–277` records it).
   crash-risk until rendered once.
 - *Google-only password form* (`6e123e8`) — identity-gated forms, F52.
 
-**Standing findings from this pass:** none filed as DW items. The `investorcodes`
+**Standing findings from this pass:** none filed as DW defects. The `investorcodes`
 route-gate asymmetry (F45) is a hardening note, not a live defect — `activeSection` is
 tap-only state and the InvestorAdminPanel's data calls are RLS-gated server-side; it
 becomes a real gap only if sub-view state ever gains an external setter, which its
-IF/THEN now guards. The D5 correction (active-systems §17 sub-view list) was applied
-in-pass per protocol.
+IF/THEN now guards. Queue-visible as watch item **DW-W2** in `BUG_FIX_TODO.md`. The
+D5 correction (active-systems §17 sub-view list) was applied in-pass per protocol.

@@ -272,8 +272,15 @@ for that section):
 - [x] **T8 — Login System** — §15 below (surgical pass 2026-07-19)
 - [x] **T9 — Paywall System** — §16 below (surgical pass 2026-07-19; found DW-7, the investigation's highest-severity defect)
 - [x] **T10 — UI-UX** — §17 below (surgical pass 2026-07-19)
-- [ ] **Spines A–F** (final pass — spines are written last so every spine entry's blast
-  radius can point at completed surface sections, not forward references)
+- [x] **Spine A — Fiscal Math** — §18 below (spine pass 2026-07-20)
+- [ ] **Spine B — Persistence & Save Integrity** — §19 below
+- [ ] **Spine C — Entitlement & Gating** — §20 below
+- [ ] **Spine D — AI Layer & Context Grounding** — §21 below
+- [ ] **Spine E — Design System & Motion** — §22 below
+- [ ] **Spine F — Admin Diagnostic Toolkit** — §23 below
+
+(Spines are written last so every spine entry's blast radius can point at completed
+surface sections, not forward references.)
 
 ---
 
@@ -2141,3 +2148,275 @@ debt is already owned (TODO §10 + Known Cleanup); the DEV-only whitelist enforc
 noted in F92's IF/THEN rather than filed (it's a discipline boundary, not a defect).
 Two D5s corrected in-pass (CLAUDE.md Liquid Glass pointer §13→§15; active-systems §19
 `autoUpdate`→`prompt` with the `8c50ff0` rationale).
+
+---
+
+## 18. Spine A — Fiscal Math Drift Map
+
+**Pass date:** 2026-07-20 (spine pass — written last so every blast radius below points at
+a *finished* surface section, not a forward reference). Same anchor + method rules as §7;
+numbering continues (F96+).
+**Git-history note:** the newest structural intentions on this spine are the §15.H11
+dilution kill (`2e0121a`, `10ba9af` — F13/F15 shared helpers, active-weeks scoping), the
+Quick Rate Update point-in-time `baseRate` slice (`d9dfd93`→`955b0b3` — `resolveBaseRateForWeek`,
+the §22 narrow read-path), and the June expense-save trilogy (`d8c475a`/`d42c118`/`6fb0619`
+— the `expense.js` pure helpers). This section is the **authority record** for the numeric
+truth every surface consumes; it states each contract *once* and reverse-indexes the surface
+F-entries (F1–F95) that already cover the consumers rather than restating them.
+
+**Scope:** `finance.js` (40 exports, 1,413 lines), `fiscalWeek.js`, `rollingTimeline.js`,
+`expense.js`, `goalFunding.js`, `jobLossRunway.js`, `stateTaxTable.js`. Absorbs
+active-systems §1 (income engine), §2 (rolling timeline), §7 (attendance/bucket math),
+§14 (home math).
+
+**The trunk (memorize this):**
+`buildYear(cfg, baseRateHistory)` → per-week objects → `computeNet(w, cfg, extraPerCheck,
+showExtra)` → `calcEventImpact(event, cfg, weekMeta)` adjusts a week → `computeGoalTimeline(
+goals, futureWeeks, weeklyNets, …)` projects the surplus. A change to any stage re-verifies
+every consumer surface (T2–T6) **and** Spine D's context fields. The cardinal L rule (§3)
+lives here: one fact, one function — if a surface needs a number a panel already shows, it
+calls that panel's exported function, never a re-derivation.
+
+### 18.1 Block 1 — Critical inventory (spine-internal machinery)
+
+New F-entries below are for machinery **no surface pass covered** — `buildYear`'s internal
+stages, the week-object shape, the DHL/bucket helpers, the `expense.js` conversion layer,
+the point-in-time resolvers, loan internals, and the tax primitives. Consumers are
+reverse-indexed to their existing F-entries.
+
+**F96 · `buildYear(cfg, baseRateHistory)` — the trunk head** — `finance.js:481–669` — **[L]**
+Emits one object per fiscal week (idx 0…51) by walking `FISCAL_YEAR_START` forward in 7-day
+steps. Ordered internal stages, each a drift surface of its own: (1) **schedule resolution** —
+DHL alternating long/short from `firstActiveIdx` parity (`:509–555`, F99 helpers) vs. base
+flat `customWeeklyHours ?? maxWeeklyHours ?? standardWeeklyHours ?? 40` (`:556–566`);
+(2) **OT split** — `regularHours`/`overtimeHours` against `otThreshold ?? totalHours`, with
+weekend differential hours pushed past the threshold at OT rate (`:568–586`);
+(3) **point-in-time baseRate** — `resolveBaseRateForWeek(baseRateHistory, weekEnd, cfg.baseRate)`
+(`:582`, F98-adjacent) so a rate edit only recomputes weeks from its effective date forward
+(the §22 narrow slice — every *other* historically-sensitive field still applies uniformly,
+the live D2 zone); (4) **Job Loss boundary** — `inJobLoss` zeroes earned income on/after
+`jobLossDate`, closing at `returnToWorkDate` (`:588–602`); (5) **unemployment income**
+(`:604–618`, non-taxed, added by `computeNet`); (6) **active/benefit/401k/taxable gates**
+(`:620–632`); (7) **pay-week flag** — weekly=every active week, biweekly/salary=`idx % 2 ===
+biweeklyParity`, monthly=last active week of the calendar month (`:635`, `:660–667`).
+> **IF** any stage's inputs or ordering change, **THEN** the entire consumer set moves at
+> once — this is the single most blast-heavy function in the app. Named checks: F5 (wizard's
+> `buildYear` call derives `taxedWeeks` from `w.idx`), F6 preview pair (must track deduction
+> ordering), F10 (`baseRateHistory` param), F25–F31 (Income: `isPayWeek`/`payPeriodEndDate`/
+> `taxedBySchedule`), F28 (`taxableGross` feeds the withholding-gap engine), F58 (401k
+> columns), plus the §18.3 authority table row for the changed field. Procedure:
+> `finance.test.js` week-shape cases + one DHL + one biweekly manual pass through Week
+> Inspector. **Standing invariant:** the jobless path reaches this call with *no real pay
+> structure* (F5) — every stage must tolerate that config shape.
+
+**F97 · The week-object field contract** — `finance.js:636–657` (the `weeks.push({…})`) — **[L]**
+The shape a dozen surface F-entries read by name. Grouped: **identity** (`idx`, `weekEnd`,
+`weekStart`, `payPeriodEndDate`); **schedule** (`isPayWeek`, `rotation`, `isHighWeek`,
+`adminRotationTag`, `rotationLabel`, `requiredOtShifts`, `workedDayNames`, `totalHours`/
+`regularHours`/`overtimeHours`/`weekendHours`); **pay** (`grossPay`, `taxableGross`,
+`active`); **benefits/401k** (`has401k`, `k401kEmployee`, `k401kEmployer`, `benefitsDeduction`,
+`benefitsActive`, `payrollDeductions:{benefits,k401Employee,total}`); **tax** (`taxedBySchedule`);
+**job-loss** (`unemploymentIncome`). `grossPay`/`taxableGross` are **zeroed for inactive
+weeks** at emit time — consumers must not re-derive gross for an inactive week.
+> **IF** a field is added, renamed, or its zeroing rule changes, **THEN** grep every reader
+> before shipping: Week Inspector displays the whole object verbatim (Spine F, §9); F28 reads
+> `taxableGross`/`taxedBySchedule`; F29's three net tiers read `active`/`grossPay`; F33's `gN`
+> reads the row; F58 sums `k401kEmployee`/`k401kEmployer`; F25/F27 read `isPayWeek`/
+> `payPeriodEndDate`; `calcEventImpact`'s `weekMeta` path reads `isHighWeek`/`grossPay` (F57).
+> A new field with no reader is dead weight; a renamed field with a missed reader is silent
+> `undefined` math. Check: `finance.test.js` shape assertions; Week Inspector on one active +
+> one inactive week.
+
+**F98 · `computeNet(w, cfg, extraPerCheck, showExtra)` — the net tiers** — `finance.js:671–691` — **[L]**
+The one net formula, in deduction order: inactive week → returns `unemploymentIncome` only
+(`:677`); FICA on `grossPay`; `deriveWeeklyPayrollDeductions` total (benefits + employee 401k,
+`:238–257`); `otherPostTaxDeductions` (post-tax rows, `:265–272`). **Untaxed week** returns
+`gross − fica − ded − otherPostTax + unemployment` (`:682`); **taxed week** additionally
+subtracts fed (`taxableGross × (isHighWeek ? fedHigh : fedLow) + (showExtra ? extraPerCheck :
+0)`) and state, using generalized `fedRateLow/High`/`stateRateLow/High` with legacy
+`w1/w2` fallbacks (`:684–690`). The `showExtra`-gated `extraPerCheck` is the **only** place
+F28's withholding-gap spread enters a net.
+> **IF** the deduction ordering, the taxed/untaxed fork, the rate-field fallback chain, or
+> the `extraPerCheck` gating changes, **THEN** every net in the app moves together. Named
+> checks: F6 preview pair (deliberately-separate approximations that must track this), F29's
+> three tiers, F33's `gN`, F15's `resolvePrevWeekNet`, F57's `weekNetWithLogAdjustments`
+> (`:1369–1378`, folds `calcEventImpact` onto a `computeNet` base). Procedure: Week Inspector
+> Pay vs. Net Lookup sections agree; `finance.test.js` net cases. **Legacy-twin trap:** the
+> `fedRateLow ?? w1FedRate` fallbacks couple to F34 (Sharpen Rates) and F47 (ScheduleCard's
+> read-primary/write-both rule) — a renamed rate field breaks the fallback silently.
+
+**F99 · DHL schedule/rotation helper cluster** — `finance.js`: `getDhlPlannedPattern:345`,
+`resolveDhlWeeklyHours:338`, `getDhlPlannedDayIndexes:326`, `getStandardDhlOtDay:311`,
+`getDhlRotationLabel:333`, `dhlWeekendHoursForDate:274`/`…PerDayName:281`/`…PerDayIndex:303`/
+`…FromDays:292`/`…FromShiftCount:369` — **[L]**
+The file-private engine behind DHL's alternating rotation, weekend-differential hour
+accounting, and OT-shift trimming. `getDhlPlannedPattern` returns `{indexes, weekendHours,
+rotationLabel, totalHours, requiredOtShifts}` consumed by both `buildYear` (F96 stage 1) and
+`projectedGross`/`calcEventImpact` (F57) — so the *projection* and the *actual week* share one
+rotation source.
+> **IF** any DHL helper's day-index convention, weekend-hour boundary (Sat 00:00→Mon 06:00),
+> or hour-resolution (`resolveDhlWeeklyHours`: custom hours override the preset) changes,
+> **THEN** F96 (real weeks), F57 (`calcEventImpact` projection + `projectedGross`), and the
+> §7 F5 DHL enforced-override contract all shift — a base-user account must be unaffected
+> (every helper early-returns or is gated on `employerPreset === "DHL"`). Check:
+> `finance.test.js` DHL long/short cases; Week Inspector on one long + one short week; a
+> base account's numbers unchanged.
+
+**F100 · `computeBucketModel(logs, cfg)`** — `finance.js:1185–1263` — **[L]**
+DHL-exclusive attendance-bucket engine: tiered accrual, 18h/month perfect-attendance bonus,
+cap (`bucketCap ?? 128`), overflow payout at `bucketPayoutRate ?? baseRate/2`, and the
+`bucketBalanceOverride` + `bucketOverrideMonth` rolling-start mechanic. The comment at `:1182`
+is load-bearing: **do not port `payoutRate`/tiers to base-user attendance** (F61's base
+tracker is deliberately simpler — active-systems §7).
+> **IF** tiers, cap, or payout change, **THEN** F61 (LogPanel bucket display + override
+> Save/Reset), the bucket-hours hero card, and `calcEventImpact`'s `bucketHoursDeducted`
+> (F57) move together. **IF** anyone gives the base tracker payout math, **THEN** that's a
+> product decision (F61's IF/THEN), not a consistency fix. Check: `finance.test.js` bucket
+> cases; Week Inspector / LogPanel bucket card agree.
+
+**F101 · `expense.js` cycle-conversion layer** — `toMonthlyCost:110`, `fromMonthlyCost:119`,
+`perPaycheckFromCycle:133`, `cycleAmountFromPerPaycheck:136`, `monthlyFromPerPaycheck:153`,
+`breakdownMonthlyEquiv:149`, `normalizeCycle:15`, `roundToQuarter:108`, `CHECKS_PER_MONTH:13` — **[L]**
+The unit-conversion spine for expenses: every card amount, breakdown row, and per-check
+scaling routes through these. `CHECKS_PER_MONTH = {weekly:4, biweekly:2, monthly:1, salary:2}`
+is the divisor; `roundToQuarter` is the display-rounding rule. The `8e669e3`/`bddeb04`
+incident (breakdown over-counting monthly/yearly bills) lives here.
+> **IF** a conversion factor or `CHECKS_PER_MONTH` changes, **THEN** F36/F37/F42 (Budget
+> writers/display), `minFoodPerCheck` scaling (F39), breakdown rows, and Coach per-expense
+> lines (Spine D) all move — a monthly-cycle bill must show the same cost on card, breakdown,
+> and Ask Coach. Check: `expense.test.js` conversion cases; §10.2's monthly-bill parity row.
+
+**F102 · Point-in-time expense resolvers** — `getEffectiveAmount(exp, weekEndDate, phaseIdx):730`,
+`getPhaseIndex(weekEndDate):722`, `phaseIdxForMonth(monthKey):742`, `getEffectiveAmountForMonth`
+(F38) — `finance.js` — **[L]**
+The quarter/date → amount resolvers. `getPhaseIndex` maps a date to quarter 0–3 via
+`QUARTER_BOUNDARIES`; `getEffectiveAmount` walks `history` for the latest `effectiveFrom ≤
+weekEnd` (same algorithm as `resolveBaseRateForWeek` — one point-in-time pattern, not two);
+`getEffectiveAmountForMonth` (F38) layers `monthlyOverrides` on top (override wins). The
+**week-based** `getEffectiveAmount` is what `computeGoalTimeline` (`:1042` via
+`getEffectiveAmountForMonth`) and `jobLossRunway.weeklyBurn` (`:63`) call; the **month-based**
+F38 is the Budget-panel resolver.
+> **IF** the resolution order (override-first), the `history` walk, or the quarter boundaries
+> change, **THEN** F38's four consumers (Budget cards, `computeRemainingSpend`, budget health,
+> Coach) **and** `computeGoalTimeline`'s per-week spend **and** `computeJobLossRunway`'s burn
+> all move — the §24 grounding case law (a `billingMeta` estimate once disagreed by double
+> digits) is exactly this resolver being bypassed. Check: one expense with both override and
+> history; all resolvers agree; `expense.test.js` + `finance.test.js`.
+
+**F103 · Loan math internals** — `loanWeeklyAmount:1102`, `loanRunwayStartDate:1111`,
+`computeLoanPayoffDate:1119`, `buildLoanHistory:1129`, `loanPaymentsRemaining:1140`,
+`DAYS_PER_FREQ:1079`, `getQuarterEndIsoForDate:1088` — `finance.js` — **[L]**
+The loan primitives F41 (Budget loans cluster) consumes. **`buildLoanHistory` regenerates the
+entire `history` from `loanMeta` on every edit** — the app's standing **D2 exemplar**
+(DW-W1): editing terms retroactively rewrites past weeks' spend. Quarter-safe payoff: the
+`weekly:[0,0,0,0]` zero entry starts the day *after* the quarter-end containing the payoff
+(`:1132–1136`), so a mid-quarter payoff keeps paying through quarter close.
+> **IF** touching loan math, **THEN** you are inside the D2 zone (DW-W1) — do **not** add a
+> consumer that treats regenerated `history` as point-in-time truth for past weeks; the
+> planned fix is an expense-style `history[]` (TODO §19). Named checks: F41 (Budget CRUD +
+> `computeLoanPayoffDate` cards), §7 F12 (JobLossEntry due-date attach reads
+> `loanMeta.firstPaymentDate`), the load-side regeneration in F67 (`db.js:204–225`). Check:
+> `finance.test.js` loan cases; a mid-quarter payoff manual check.
+
+**F104 · Tax primitives** — `fedTax:389`, `stateTax:397`, `getStateConfig:414`,
+`stateTaxTable.js` — **[L]**
+The withholding-liability core F28 (Income tax engine) calls: `fedTax` (bracket schedule),
+`stateTax(income, stateConfig)` (flat/bracketed per state), `getStateConfig(userState)` with
+the `moFlatRate` legacy fallback for the DHL Missouri preset. These compute *annual liability*
+(the gap numerator), distinct from `computeNet`'s *per-week withholding* (the F98 rate fields).
+> **IF** a bracket, the state table, or `getStateConfig`'s fallback changes, **THEN** F28's
+> `taxDerived` gap math moves — `extraPerCheck` shifts and every net follows (F98). Check:
+> Live State Inspector `totalGap`/`extraPerCheck` vs. the Tax Weeks Grid; `finance.test.js`
+> tax cases; a Missouri DHL account still resolves `moFlatRate`.
+
+**Reverse index — surface F-entries already covering Spine-A consumers (do not restate):**
+F1 (`dateToWeekIdx`/`firstActiveIdx`), F5 (wizard `buildYear` call + `taxedWeeks` derivation),
+F6 (`estimateWeeklyGross`/`estimateWeeklyNet` preview pair), F10 (`resolveBaseRateForWeek`
+chain), F13 (`resolveActiveWeeksThisYear`), F14 (`weeklyIncome`), F15 (`resolvePrevWeekNet`),
+F18/F21 (`computeGoalTimeline` consumption + `remainingAtEnd`), F22/F44 (`computeJobLossRunway`/
+`sumJobHuntIncome`), F23 (`netWorthHealthStatus`), F28 (`taxDerived`), F29 (net tiers),
+F33 (`gN` + `deriveRollingIncomeWeeks`), F38 (`getEffectiveAmountForMonth`), F41 (loans),
+F57 (`calcEventImpact` weekMeta contract), F58 (401k columns), F59 (PTO model), F67 (load-side
+migrations that touch expense/loan history).
+
+### 18.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `buildYear` week-object shape (F97) — add/rename/re-zero a field | Every reader: Week Inspector (Spine F), F28 (`taxableGross`), F29 (net tiers), F33 (`gN`), F58 (401k), F25/F27 (`isPayWeek`), F57 (`weekMeta`) | Grep the field name across `src/`; `finance.test.js` shape cases; Week Inspector on active + inactive week | D1 |
+| `computeNet` deduction ordering / taxed-fork / rate fallbacks (F98) | F6 preview pair, F29 tiers, F33 `gN`, F15 `resolvePrevWeekNet`, F57 `weekNetWithLogAdjustments` | Week Inspector Pay vs Net Lookup agree; row net = inspector net; `finance.test.js` | D1 |
+| `resolveBaseRateForWeek` filter / `baseRateHistory` shape (F96 stage 3) | F10 chain (`extractBaseRateHistory` in `db.js`), past-week rate resolution | A future-dated rate update shows the *old* rate on weeks before its effective date (Week Inspector); `db.test.js` baseRateHistory cases | D2 |
+| DHL helper conventions (F99) — day-index, weekend boundary, hour resolution | F96 real weeks, F57 `calcEventImpact`/`projectedGross`, §7 F5 DHL overrides | `finance.test.js` DHL long/short; base account unaffected; Week Inspector both rotations | D1 |
+| `getEffectiveAmount`/`getEffectiveAmountForMonth`/`getPhaseIndex` resolution (F102/F38) | F38's four consumers + `computeGoalTimeline` per-week spend + `computeJobLossRunway` burn + Coach grounding | One expense (override + history): all surfaces + goal ETA + runway agree | D1 |
+| `expense.js` conversion factors / `CHECKS_PER_MONTH` (F101) | F36/F37/F42 Budget, F39 food floor, breakdown rows, Coach per-expense lines | `expense.test.js`; monthly-cycle bill same cost on card/breakdown/Coach | D1 |
+| `computeGoalTimeline` epoch handling / return shape (`remainingAtEnd`) | F18 (Home cards + epoch arg), F21 (`yearEndGoalDraw` fallback), Coach goal lines, T4 timeline bar | Grep `computeGoalTimeline(` for epoch-arg parity; next-year-ETA goal subtracts only this-year slice | D1 |
+| `calcEventImpact` branch/fallback (F57) | App `eventImpact` memo, F54 (Log summary — weekMeta-less, DW-5), F62 (per-entry breakdown), goal-funding `weeklyNetAdjustments` (F29) | `finance.test.js` one event per type; hero cards = per-entry breakdown = Income delta | D1 |
+| `buildLoanHistory` regeneration (F103) | F41 zone (DW-W1) — Budget cards, JobLossEntry due-date, F67 load regen | `finance.test.js` loan cases; mid-quarter payoff manual check; **do not** add past-week-truth consumer | D2 |
+| Tax primitives (`fedTax`/`stateTax`/state table, F104) | F28 gap math → `extraPerCheck` → every net (F98) | Live Inspector `totalGap`/`extraPerCheck` vs Tax Weeks Grid; MO DHL resolves `moFlatRate` | D1 |
+| `resolveActiveWeeksThisYear` (F13) / `FISCAL_WEEKS_PER_YEAR` | F14 `weeklyIncome`, F16 `annualSavings`, Coach savings line, DemoAccountTree — all four share it | Grep consumer count (only grows); mid-year `firstActiveIdx` account: Home tile = Ask Coach | D1 |
+| `FISCAL_YEAR_START` (`constants/config.js`) | Loop bounds in F96, `dateToWeekIdx` (F1), `getPhaseIndex` boundaries, every stored `firstActiveIdx`/`taxedWeeks` | Never change mid-year; if forced: migrate all three fields + `fiscalWeek.test.js` + Tax Weeks Grid | D2 |
+
+### 18.3 Block 3 — Master authority table (every displayed number → its one source → consumers)
+
+The L-spine deliverable: for each user-visible fiscal number, the **single source-of-truth
+function** and the surfaces that must quote it. A surface computing any of these locally
+instead of calling the named function is a D1 finding by definition (§3 cardinal L rule).
+
+| Displayed number | Source-of-truth function (`finance.js` unless noted) | Surface consumers (F-entry) |
+|---|---|---|
+| Per-week gross / hours / rotation | `buildYear` week object (F96/F97) | Income rows (F33), Week Inspector (Spine F) |
+| Per-week net take-home | `computeNet` (F98) | Income `gN` (F33), F29 tiers, `resolvePrevWeekNet` (F15), Week Inspector |
+| "This Week's Check" | `resolvePrevWeekNet` (F15) | Home tile (F16), DemoAccountTree |
+| "Typical weekly income" | `weeklyIncome` = `projectedAnnualNet / activeWeeksThisYear − bufferPerWeek` (F14, App.jsx) | Home (F16), Coach (Spine D), Live Inspector, Job Loss panels |
+| Projected annual net | `projectedAnnualNet` (App.jsx, sums `computeNet` over active weeks) (F29) | Home Year-End (F17), Income Year Summary (F33) |
+| Active weeks this year | `resolveActiveWeeksThisYear` (`fiscalWeek.js`, F13) | `weeklyIncome` (F14), `annualSavings` (F16), Coach, DemoAccountTree |
+| Adjusted take-home (event-folded) | `logTotals.adjustedTakeHome` from App `eventImpact` memo (F17/F33) — **one value** | Home Year-End (F17), Income Year Summary (F33), Log summary target (F54/DW-5) |
+| Withholding gap / `extraPerCheck` | `taxDerived` (App.jsx, F28) over `fedTax`/`stateTax` (F104) | Income tax card, Tax Weeks Grid, `computeNet` `showExtra` term (F98) |
+| Event net impact (missed/PTO/bonus) | `calcEventImpact` (F57) | App `eventImpact`, Log cards (F54), per-entry breakdown (F62), goal funding (F29) |
+| Expense cost in month M | `getEffectiveAmountForMonth` (F38/F102) | Budget cards (F36), `computeRemainingSpend`, budget health, Coach |
+| Expense unit conversions | `expense.js` layer (F101) | Budget cards/breakdown (F37/F42), food floor (F39), Coach |
+| Goal ETA / funding week | `computeGoalTimeline` (F18) with `config.goalTimelineEpochIdx ?? null` | Home goal cards (F18), Year-End draw (F21), Coach goal lines, T4 bar |
+| Completed-goal spend | `getFundedGoalSpend` (`goalFunding.js`) | `annualSavings` (F16), `adjustedTakeHome` (F17), Live Inspector |
+| Job Loss runway / burn | `computeJobLossRunway` + `sumJobHuntIncome` (`jobLossRunway.js`) | JobLossHome (F22), JobLossBudget (F44), Coach (convergence target for F24 quarantine) |
+| Net-worth health status | `netWorthHealthStatus` + `NET_WORTH_HEALTH_THRESHOLD` (F23) | Home cue (F23), Coach amber tier (F24) |
+| 401k employee / employer | `buildYear` `k401kEmployee`/`k401kEmployer` (F97), `dhlEmployerMatchRate` | LogPanel 401k block (F58), Week Inspector |
+| Bucket balance / hours | `computeBucketModel` (F100) | LogPanel bucket (F61), hero card, `calcEventImpact` `bucketHoursDeducted` (F57) |
+| Loan payoff date / weekly | `computeLoanPayoffDate`/`loanWeeklyAmount`/`buildLoanHistory` (F103) | Budget loan cards (F41), JobLossEntry due-date (§7 F12) |
+| Pay-period label / next check | `fiscalWeek.js` (`formatPayPeriodLabel`, `getNextPayWeek`, `getPayPeriodBounds`) | App header chip, Income/Home countdowns |
+| Rolling visible/archive weeks | `deriveRollingIncomeWeeks`/`deriveRollingTimelineMonths` (`rollingTimeline.js`) | Income rolling view (F33), Home month timeline |
+
+### 18.4 Block 4 — Case law & quarantine
+
+**Precedents (fixed — cite, don't relearn):**
+- *§15.H11 dilution* (`2e0121a`, `10ba9af`) — four call sites each did their own
+  active-weeks math or `/52`; killed by F13 + F15 shared helpers. F13/F14/F15's IF/THENs and
+  the authority table's "active weeks" row exist to keep it dead.
+- *Quick Rate Update effective date* (`955b0b3`) — a saved rate the engine ignored; fixed by
+  the `resolveBaseRateForWeek` slice (F96 stage 3 / F10). The whole point-in-time chain exists
+  so the date is load-bearing — simplifying it reopens the bug.
+- *Expense-save Decisions 1–3* (`d8c475a`/`d42c118`/`6fb0619`) — the `expense.js` pure helpers
+  (F101/F37) and override-first resolution (F102/F38); decision record archived in
+  `BUG_FIX_TODO.md`, do not re-litigate.
+- *Breakdown over-counting* (`8e669e3`/`bddeb04`) — monthly/yearly bills double-counted until
+  rooted on 30-day cost (F101).
+
+**Standing quarantines (open — cite, don't extend):**
+1. **Flat-config D2 in `buildYear` (F96)** — one `cfg` applies to all 52 weeks, so a mid-year
+   pay/schedule/tax edit distorts *past-week* totals and annual tax. Only `baseRate` has the
+   point-in-time slice (F10); every other historically-sensitive field is still uniform.
+   `account_history` (§22) captures the changes but only `extractBaseRateHistory` reads them —
+   the drift is *live, fenced*. Convergence target: a general point-in-time config resolver
+   (deferred Master Timeline, TODO §19). Do not add a consumer assuming past-week accuracy.
+2. **`buildLoanHistory` regeneration D2 (F103)** — same root cause, loan side; tracked as
+   **DW-W1**. Convergence target: expense-style `history[]` (TODO §19).
+3. **`estimateRunwayDays` D1 (F24, `coachTriggers.js`)** — a second runway formula that ignores
+   persisted `jobLossCashOnHand`/job-hunt income; always ≤ the real `computeJobLossRunway`.
+   Owned in Spine D; noted here because its convergence target *is* this spine's
+   `computeJobLossRunway`.
+
+**Standing findings from this pass:** none new. The two D2 zones above are pre-existing,
+owned, and queue-visible (DW-W1 + the §22/Master-Timeline roadmap); no new DW defect surfaced
+— every Spine-A export traces to a named consumer through the authority table, and the
+surface passes (T1–T10) already verified those consumers call the exports rather than
+re-deriving. No D5 corrections owed: `active-systems.md` §1/§2/§7/§14 describe these systems,
+this section maps their couplings — the §5 covenant boundary holds.

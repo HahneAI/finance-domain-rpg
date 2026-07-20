@@ -6,6 +6,17 @@ surgical pass at a time — see §6 stubs for what's pending.
 full git commit history (487 commits, co-change analysis below), live export inventory of every
 `src/lib/*` module.
 
+## Notation Legend (quick reference — full definitions in the cited sections)
+
+| Prefix | Meaning | Defined in |
+|--------|---------|------------|
+| **D1–D5** | The five drift *classes*, each anchored to a real past incident: **D1** parallel formula · **D2** retroactive recompute · **D3** save-path (lost debounced write) · **D4** gate (wrong tier/mode/surface) · **D5** doc/spec vs. shipped code | §2 |
+| **L / G** | The two categories every mapped item gets exactly one of: **L**EDGER (computes/stores truth; drift = silently wrong numbers — hunt by cross-checking the source-of-truth function) · **G**ATEWAY (routes/gates/presents; drift = wrong surface for the wrong person — hunt by walking the gate matrix) | §3 |
+| **T1–T10** | Top-of-hierarchy surface tiers: T1 Setup Wizard · T2 Home · T3 Income · T4 Budget · T5 Account · T6 Log · T7 Auth · T8 Login · T9 Paywall · T10 UI-UX | §4.1 |
+| **Spine A–F** | Cross-cutting shared systems: **A** fiscal math · **B** persistence & save integrity · **C** entitlements & gating · **D** AI layer/context · **E** design system & motion · **F** admin toolkit | §4.2 |
+| **F1, F2, …** | Key-function entries — one running number across the whole doc (F1 = `dateToWeekIdx` in T1; numbering never resets), so "F41" is an unambiguous cross-reference from anywhere. Each carries a code anchor + a human-readable IF/THEN drift check | §5 (format), §7+ (entries) |
+| **DW-n / DW-W-n** | Work-queue rows in `docs/BUG_FIX_TODO.md`: **DW-n** = confirmed defect found by a drift pass · **DW-W-n** = watch item ("not a bug, but could use attention"), with its promotion condition stated | §1 (offload protocol) |
+
 ---
 
 ## 1. Purpose & Mandate
@@ -259,7 +270,7 @@ for that section):
 - [x] **T6 — Log Panel** — §13 below (surgical pass 2026-07-19)
 - [x] **T7 — Auth System** — §14 below (surgical pass 2026-07-19)
 - [x] **T8 — Login System** — §15 below (surgical pass 2026-07-19)
-- [ ] **T9 — Paywall System**
+- [x] **T9 — Paywall System** — §16 below (surgical pass 2026-07-19; found DW-7, the investigation's highest-severity defect)
 - [ ] **T10 — UI-UX**
 - [ ] **Spines A–F** (final pass — spines are written last so every spine entry's blast
   radius can point at completed surface sections, not forward references)
@@ -1819,3 +1830,160 @@ owns that trade-off; it returns flags + provider, never archived data.
 trade-off in F79 is documented-accepted in the API's own comments (revisit only if the
 product's privacy posture changes). Known Cleanup already tracks LoginScreen's
 hardcoded hex colors (Spine E debt, TODO §10).
+
+---
+
+## 16. T9 — Paywall System Drift Map
+
+**Pass date:** 2026-07-19. Same anchor + method rules as §7; numbering continues (F80+).
+**Git-history note:** the whole system shipped in one dense week (§17 build,
+2026-07-03→07-07): the state machine (`765eebc`), real replacement panels over covering
+modals (`3a2e04f`), request-derived redirect origins (`1a12dd6`), the lifecycle cron
+(`97d1ee4`), archive-then-delete wiring (`1f94022`), and cancel-on-delete hardening
+(`8a2683c`). This pass found the investigation's most serious defect — **DW-7**, the
+dead tester exemption in the cron (F86).
+
+**Scope:** `lib/subscription.js` (the Spine-C engine's enforcement half),
+`App.jsx` gating + checkout-return plumbing, `UpgradeCard/Modal/Panel.jsx`,
+`TrialBanner.jsx`, `api/_stripeClient.js`, `api/stripe-*.js`,
+`api/cron-subscription-lifecycle.js`, `api/_lifecycleEngine.js`,
+`api/_lifecycleEmails.js`, `api/_email.js`.
+
+### 16.1 Block 1 — Critical inventory (function by function)
+
+**F80 · `getEntitlement(subscription, now)`** — `subscription.js:27–77` — **[L]**
+The one state machine: `active | trial | grace | expired | none`. Load-bearing rules:
+(1) **`now` is real wall-clock, never Lock Date** — the header comment names the
+exploit (a simulated date would grant free access); every caller (App gate, banners,
+Sub card, cron engine) obeys. (2) **Live-subscription precedence** — `active`,
+`trialing`-with-sub-id, and `past_due`/`canceled` *within the paid period* are entitled
+regardless of trial timestamps (Stripe's retry schedule gets room to work). (3) The
+day-14→21 gap is a **hidden grace**: `state: "grace"` pins `trialDaysLeft` to 0 and
+`accessDaysLeft` exists for admin surfaces only. (4) Unseeded rows (investor/demo,
+pre-017) are `none` — not a paywall case.
+> **IF** states, precedence, or timestamps change, **THEN** every consumer moves at
+> once: F81's fork, TrialBanner copy, T5 F53's Sub card, T8 F78's explainer condition,
+> the cron engine (F85), and the admin Live Inspector's Sub Phase. Check:
+> `subscription.test.js` + one account walked through all five states across the
+> surfaces — same story everywhere. **Never** thread `effectiveToday` into any caller.
+
+**F81 · Paywall enforcement fork** — `App.jsx:1459–1464` + consumers — **[G]**
+`paywallBypassed = isAdmin || config.isInvestor` — **deliberately not `isTester`**:
+testers ride the real trial machine on a 6-month window (§23), so they see banners and
+can expire in-app; their protection is supposed to live in the cron exemption (F86 —
+see DW-7). `isExpiredReadOnly` then splits enforcement by surface: Home/Budget (and
+Job Loss panels) get `readOnly` prop-shadowing (§8 F20, §10 F35); Income/Log are
+*replaced* by `UpgradePanel` (`:1522`, `:1570`); Account (T5) stays fully live so
+expired users can pay, manage, or delete.
+> **IF** the bypass set or the per-surface split changes, **THEN** re-walk all three
+> enforcement styles per tier — the known trap: a new panel added to nav gets *no*
+> enforcement unless wired into one of the three styles explicitly. Check: expired
+> non-admin account visits every tab; nothing mutates, checkout is reachable.
+
+**F82 · Upgrade surfaces** — `UpgradeCard.jsx` (shared pitch + checkout POST),
+`UpgradeModal.jsx` (dismissible wrapper, Home/Budget), `UpgradePanel.jsx`
+(non-dismissible replacement + per-tab tagline, `ee784c2`), `TrialBanner.jsx`
+(persistent countdown; session-only dismiss `App.jsx:315`; suppressed exactly where
+UpgradePanel already occupies the view, `:2168`) — **[G]**
+> **IF** plan labels/prices change, **THEN** the §12 F53 three-surface parity rule
+> applies (Card ↔ Sub card ↔ Stripe dashboard). **IF** banner suppression cells
+> change, **THEN** verify no state shows *two* upgrade pitches stacked (banner +
+> panel) or zero (dismissed banner on a replaced tab).
+
+**F83 · Post-checkout return + poll** — `App.jsx:583–631` — **[G→L]**
+Reads `?checkout=success|cancel` once and scrubs the URL (reload-safe); on success,
+polls `loadUserData` up to 5×2s because the webhook may not have landed; the revival
+variant (`:603–609`) clears ReviveScreen only when the restored subscription reads
+`active`, closes the wizard the bare pre-restore row opened, and forces a reload.
+> **IF** poll cadence/exit conditions change, **THEN** check both consumers — normal
+> checkout (banner flips without manual reload) and revival (ReviveScreen exits to the
+> *restored* account, not the bare row's wizard). The wizard-close line is load-bearing:
+> without it a revived user lands in setup over their restored data.
+
+**F84 · Stripe server routes** — `_stripeClient.js#resolveAppOrigin:118` (redirects
+derive from the requesting deployment — `1a12dd6`); `stripe-create-checkout` /
+`stripe-portal` / `stripe-revive-checkout` (bearer-token pattern);
+`stripe-webhook.js`: signature verification + **idempotency via
+`stripe_webhook_events`** (migration 018, `:122`), event cases (`:134–181`), and
+`restoreRevivedAccount:42–86` (matches tombstone `revived_at IS NULL`, upserts the
+archived blobs, stamps `revived_at`) — **[L/G]**
+> **IF** webhook event handling changes, **THEN** idempotency must hold (Stripe
+> retries deliver duplicates) and the revival restore must stay inside
+> `checkout.session.completed`'s metadata match — a restore that fires on subscription
+> events double-applies. **IF** redirect handling changes, **THEN** test from a
+> preview deployment, not just prod (`resolveAppOrigin`'s whole reason). Check:
+> replay a captured webhook event twice — one restore, one no-op.
+
+**F85 · Lifecycle engine** — `_lifecycleEngine.js#decideLifecycleAction:38–90` — **[L]**
+Pure per-row decision, delegating phase math to F80: exemption gate (`:44`) → card/
+active/none clears leftover dunning state (`reset`) → trial nudges at days 7/12 since
+trial start → grace/expired warnings on a 2-day throttle keyed off
+`last_dunning_email_at` (never calendar-day flips) → `deleteDue` at
+`access_ends_at + 7d`. Stamped only after successful send — idempotent, self-retrying.
+> **IF** cadence, templates, or the exemption set change, **THEN**
+> `lifecycleEngine.test.js`/`lifecycleEmails.test.js` encode the contract — including
+> the **disclosure rule: user-facing copy references the 14-day trial only, never the
+> hidden grace** (test-enforced; breaking it leaks §17's core secret). And **THEN**
+> the cron's SELECT must supply every column the engine reads — see DW-7.
+
+**F86 · Cron shell** — `cron-subscription-lifecycle.js`: `CRON_SECRET` bearer auth
+(`:110–114`), the row SELECT (`:133–139`), per-row loop with
+`archiveAndDeleteAccount:38` taking precedence over a same-run deletion warning
+(`:153–160`), summary counters — **[G]**
+⚠ **DW-7.** The SELECT fetches `is_admin, is_investor` but **not `is_tester`** — the
+engine's tester exemption reads `undefined` and never fires. A tester's lapsed 6-month
+window → real dunning → archive+delete. The engine is unit-tested with hand-built rows;
+the select list sits outside that seam, which is how it slipped.
+> **IF** the engine gains any new row-field read, **THEN** the SELECT must grow in the
+> same commit — the fix for DW-7 should add a shell-level test asserting every field
+> the engine destructures appears in the query string, making this class structural.
+
+**F87 · Email layer** — `_lifecycleEmails.js` (templates; disclosure rule per F85),
+`_email.js` (Resend via plain fetch; `RESEND_API_KEY` fallback name `71d2692`;
+`EMAIL_FROM` defaults to the dev-only `onboarding@resend.dev` sender) — **[G]**
+> **IF** launch approaches, **THEN** the dev sender swap is a **launch blocker**
+> already flagged in §20 ("swap before real users hit day 7") — first real trial
+> nudge from a resend.dev address lands in spam or looks like phishing. Check:
+> `EMAIL_FROM` set to the verified domain in prod env.
+
+### 16.2 Block 2 — Drift trigger map (cross-boundary)
+
+| If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
+|---|---|---|---|
+| `getEntitlement` shape/states (Spine C) | F81 fork, F85 engine, TrialBanner/Sub-card/explainer copy, Live Inspector Sub Phase | One account through all five states; all surfaces agree; `subscription.test.js` | D1 |
+| `subscription` column set (migration 017+) | `db.js#mapSubscription`, the cron SELECT (F86/DW-7 class), webhook writers, admin DB Row viewer | The F86 field-coverage test once it exists; `db.test.js` mapping cases | D2/D4 |
+| Trial/grace timestamps or seeding (`seed-trial`, migration 021 trigger) | F80 phase math, F85 nudge days, T8 explainer, tester 6-month semantics | Fresh signup + tester flip walked through day-7/12/14/21/28 with a clock mock | D1 |
+| Tier bypass semantics (§23) | F81's deliberate tester **non**-bypass vs F86's cron exemption — two halves of one promise; breaking either strands testers (paywall) or deletes them (cron) | Expired tester account: sees paywall, never dunned/deleted | D4 |
+| Webhook event set / Stripe API version | F84 cases + idempotency table + revival restore path | Replay-twice test; Stripe CLI fixture run | D2 |
+| `deleted_accounts` restore blob shape | F84's `restoreRevivedAccount` upsert vs `archiveAndDeleteAccount`'s archive write (F86) — writer and reader of one shape in two files | Archive → revive round-trip restores every field (config/expenses/goals/logs/weekConfirmations/ptoGoal) | D1 |
+| Redirect/origin handling | `resolveAppOrigin` candidates; checkout/portal/revive all three routes | Checkout from a preview deployment returns to that deployment | D4 |
+
+### 16.3 Block 3 — Gate matrix
+
+| Dimension | Cells | Expected behavior |
+|---|---|---|
+| Entitlement state | trial / grace / active / expired / none | Banner countdown / banner "ended" copy (no grace mention) / nothing / enforcement fork / nothing (unseeded) |
+| Tier at expiry | plain / admin / investor / tester | Enforcement / bypassed / bypassed / **enforced** (real paywall, by design §23) — protection is cron-side only (DW-7 pending) |
+| Surface under `isExpiredReadOnly` | Home / Budget / Income / Log / Account | readOnly shadow / readOnly shadow / UpgradePanel replace / UpgradePanel replace / fully live |
+| Checkout return | success (webhook landed) / success (webhook late) / cancel | Immediate flip / poll up to 10s then flip / cancel notice, no state change |
+| Revival | tombstone match + charge / tombstone consumed / no tombstone | Restore + `revived_at` stamp / normal account behavior / normal checkout |
+| Cron row | admin/investor / tester / carded / active / trial day 7/12 / grace / expired / expired+7d | none / **should be none — currently dunned (DW-7)** / reset-or-none / reset-or-none / nudge / 2-day warnings / 2-day warnings / archive+delete |
+
+### 16.4 Block 4 — Case law & findings
+
+**Precedents (fixed — cite, don't relearn):**
+- *Replacement panels, not covering modals* (`3a2e04f`) — a dismissible modal over
+  Income/Log was escapable; UpgradePanel replacement is the enforcement, which is
+  exactly why those panels carry no internal readOnly gate (§9/§13 Block 2 rows).
+- *Redirects to the wrong deployment* (`1a12dd6`) — static APP_URL broke preview
+  checkouts; `resolveAppOrigin` derives from the request.
+- *Cancel-on-delete* (`8a2683c`) — account deletion cancels the Stripe sub so ghosts
+  don't keep billing; live-verification items parked in §21's known gaps.
+- *Archive-then-delete wiring* (`1f94022`) — the cron's delete is the only archiving
+  delete (T5 F52's invariant is the other half).
+
+**Standing findings from this pass (open — decisions owed):**
+1. **Dead tester exemption in the cron (F86)** *(queued as DW-7 — HIGH)*: the SELECT
+   omits `is_tester`, so the engine's exemption gate reads `undefined` and beta
+   testers are dunned and auto-deleted on the real schedule ~6 months after flag
+   flip. One-line fix + a field-coverage shell test to kill the class.

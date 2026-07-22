@@ -114,7 +114,7 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 ### Shared Primitives (`src/components/ui.jsx`)
 | Export | What it is | Key props |
 |--------|-----------|-----------|
-| `MetricCard` / `Card` | Static + interactive metric card | `label`, `val`, `sub`, `status` (`green\|gold\|red`), `onClick`, `rawVal`, `entranceIndex`, `span` |
+| `MetricCard` / `Card` | Static + interactive metric card | `label`, `val`, `sub`, `status` (`green\|teal\|red`), `onClick`, `rawVal`, `entranceIndex`, `span` |
 | `NT` | Nav tab | `label`, `active`, `onClick` — teal fill when active |
 | `VT` | View tab | Same as NT, smaller padding |
 | `SmBtn` | Inline utility button | `children`, `onClick`, `c`, `bg` |
@@ -124,14 +124,14 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 
 **Layout:** card gap `12px` · section `marginBottom` `20px` · card pad `18px 16px` (static) / `16px 18px` + `minHeight: 88px` (interactive).
 
-**Button pattern:** CANCEL — bg-raised, text-secondary, border-subtle, radius 12px, pad 7px 14px, 10px uppercase. SAVE — bg-gold/green, color bg-base, radius 12px, pad 8px 16px, 10px bold uppercase.
+**Button pattern:** CANCEL — bg-raised, text-secondary, border-subtle, radius 12px, pad 7px 14px, 10px uppercase. SAVE — bg-teal/green, color bg-base, radius 12px, pad 8px 16px, 10px bold uppercase.
 
 ### Numeric Input Standard
 **Never coerce on `onChange`.** Use string draft state (`field ?? ""`); only `parseFloat` at commit (blur/save). For required fields, pass `attempted` bool — show red label + border + `↑ Required` when `attempted && fieldEmpty`. Reference implementation: `Field` + `errBorder` in SetupWizard.
 
 ### Animation Rules
 - Entrance stagger: `entranceIndex` on MetricCard → `fadeSlideUp` 400ms, 80ms/card, capped 400ms
-- Countup: `rawVal` → 0→target 1200ms on mount/change · value flash → gold 150ms, fades 600ms
+- Countup: `rawVal` → 0→target 1200ms on mount/change · value flash → teal 150ms, fades 600ms
 - **No bounce, no spin, no scale-up on mount. Press = `scale(0.97)` only. All ≤ 500ms except countup.**
 
 ---
@@ -145,7 +145,7 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 | `--color-bg-surface` | `#112c1f` | Card background |
 | `--color-bg-raised` | `#163828` | Elevated surfaces, button hover |
 | `--color-bg-gradient` | `linear-gradient(180deg, #091a11, #05100c)` | Header gradient |
-| `--color-gold` / `--color-accent-primary` | `#00c896` | Active tabs, CTAs, section bars |
+| `--color-teal` / `--color-accent-primary` | `#00c896` | Active tabs, CTAs, section bars |
 | `--color-green` | `#22c55e` | Income values, positive status |
 | `--color-red` | `#ef4444` | Spend, negative, risk |
 | `--color-deduction` | `#f4a4a4` | Soft deduction rows — same H=0° hue as `--color-red`, lightness ~80%; not harsh on dark. Candidate to replace `--color-red` in low-emphasis negative contexts. |
@@ -158,7 +158,7 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 | `--font-display` / `--font-sans` | `'Inter'` | Headings + body |
 | `--font-mono` | `'JetBrains Mono'` | Inputs + data cells only |
 
-**Status:** `green` = positive/ahead · `gold` = attention/mixed · `red` = risk/behind
+**Status:** `green` = positive/ahead · `teal` = attention/mixed · `red` = risk/behind
 
 **Pulse tokens (Phase 2 — not in index.css):** `--color-signal-blue` `#5B8CFF` · `--color-signal-purple` `#7C5CFF` · `--color-signal-glow` `rgba(124,92,255,0.25)` — reserved for AI insight overlay, do not use on Flow elements.
 
@@ -329,7 +329,7 @@ grant AI features. Full detail: `docs/active-systems.md` §23 (Beta Tester Accou
 | **Force Sync** | Tools sheet → Sync | **Push ↑** flushes in-memory state to Supabase immediately (bypasses 800ms debounce). **Pull ↓** reloads from DB into memory. Use before/after a save-related bug. |
 | **Config Raw View** | Tools sheet → Config JSON → View ↓ | Paste the full JSON here to audit any config field. Copy button puts it on clipboard. **Session insight:** Revealed the full tax strategy (`taxExemptOptIn`, `targetOwedAtFiling`, `pastWeekTaxStatusOverrides`) and deduction setup in one shot — ask for this first whenever the issue could involve pay structure, tax elections, or benefit configuration. |
 | **DB Row Viewer** | Tools sheet → DB Row → Fetch | Shows raw `user_data` row + `updated_at`. **Drift** badge lists any column where in-memory value ≠ DB value (`config`, `expenses`, `goals`, `logs`, `show_extra`, `week_confirmations`, `pto_goal`). Ask: "run Fetch and paste the drift line and updated_at." **Session insight:** Provided the full expense list and all 5 goals with targets/due dates — the only tool that exposes spending profile and goal inventory, making it essential any time the issue involves budget health, goal timelines, or whether saved data matches what's in memory. Fetch also surfaces the §19 config-history line: "config history: N snapshots · latest [date] ([source]) · [changed fields]" — ask for it when verifying that a pay/tax/schedule edit was captured in `account_history`. |
-| **Tax Weeks Grid** | Tools sheet → Tax Weeks → View ↓ | 52-cell grid. Teal = taxed/future · dark = untaxed/future · gray = past · gold border = current week · red dot = `pastWeekTaxStatusOverride`. Ask: "open Tax Weeks and describe any red dots or unexpected cell colors." |
+| **Tax Weeks Grid** | Tools sheet → Tax Weeks → View ↓ | 52-cell grid. Teal = taxed/future · dark = untaxed/future · gray = past · teal border = current week · red dot = `pastWeekTaxStatusOverride`. Ask: "open Tax Weeks and describe any red dots or unexpected cell colors." |
 | **Live State Inspector** | Amber "Live" pill fixed bottom-right corner | Tap to expand a real-time card showing: `effectiveToday` (amber if lock-offset), week idx + label, futureWeeks.length, unconfirmedCount, extraPerCheck, totalGap, taxedWeekCount, fundedGoalSpend, bufferPerWeek, weeklyIncome, projectedAnnualNet, plus (§17.F) the resolved subscription phase (`Sub Phase` — trial/grace/active/expired/none, with the raw Stripe status as its sub-label), `Trial Ends`, `Access Ends` (the hidden day-21 cutoff — admin-only, never shown elsewhere), `Period End`, and `Card / Dunning`. Ask: "open Live and paste all 16 values." **Session insight:** Surfaced the $3,690 tax gap, $65/wk surplus, and $0 goal funding in a single read — ask for this early in any diagnostic where the complaint is about a number shown on screen, since it reflects exactly what the app is computing right now. |
 | **Week Inspector** | Tap any week row in Income panel | Full-screen modal. Shows every field on the week object: schedule (workedDayNames, hours, OT, weekend), pay (grossPay, taxableGross, deductions, 401k, live computeNet), net lookup (baseNet, adjustment, spendable), confirmation record, and all log entries touching this week with net impact. Ask: "tap week [N] and describe the Pay and Net Lookup sections." **Session insight:** Confirmed per-week income math was correct and isolated a 401k employer match display bug ($14.96 shown despite `k401MatchRate: 0`) — use this when the issue is a specific wrong number on a paycheck or week, or to rule out income math as the cause of a broader trend problem. |
 

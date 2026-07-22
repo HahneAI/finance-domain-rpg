@@ -337,7 +337,7 @@ export const EVENT_TYPES = {
   missed_unapproved: { label: "Missed Work (Unapproved)",       color: "#e8622a", icon: "⚠" },
   pto:               { label: "PTO Used",                       color: "#7a8bbf", icon: "◷" },
   pto_unapproved:    { label: "PTO Used (Unapproved)",          color: "#c8922a", icon: "⚠" },
-  partial:           { label: "Partial Shift",                  color: "var(--color-gold)", icon: "◑" },
+  partial:           { label: "Partial Shift",                  color: "var(--color-teal)", icon: "◑" },
   bonus:             { label: "Bonus / Extra Pay",              color: "var(--color-green)", icon: "+" },
   other_loss:        { label: "Other Income Loss",              color: "#888",    icon: "−" },
 };

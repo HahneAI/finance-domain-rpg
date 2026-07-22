@@ -90,7 +90,7 @@ export function LifeEventMenu({ open, onClose, onSelect }) {
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "5px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "5px" }}>
                 Life Events
               </div>
               <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>

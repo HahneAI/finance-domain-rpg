@@ -18,10 +18,10 @@ Two cues, within the CLAUDE.md press budget (scale-only, ≤500ms):
 
 1. **Family press fill** — a quick fill in a lighter shade of the target's **own**
    resting color (same hue family) that fades quickly (~180ms) back to the control's
-   color. A red ✕/Cancel flashes lighter red, a gold tab lighter gold, a green Save
+   color. A red ✕/Cancel flashes lighter red, a teal tab lighter teal, a green Save
    lighter green, etc. The fill auto-derives at press time via `getComputedStyle` +
    HSL lightening (`deriveTapFillColor`), picking the most chromatic of the control's
-   background/border/text. Pass `flashColor` to override; falls back to gold-bright
+   background/border/text. Pass `flashColor` to override; falls back to teal-bright
    when no usable color is found. This is the primary cue.
 2. **Scale spring** — a subtle `scale(0.94)` press-in with a gentle overshoot spring
    back. Supporting cue.

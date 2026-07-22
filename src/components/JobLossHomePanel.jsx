@@ -83,7 +83,7 @@ export function JobLossHomePanel({
     : "∞";
   const cliffStatus = !Number.isFinite(primary.days) ? "green"
     : primary.days <= 30 ? "red"
-    : primary.days <= 90 ? "gold"
+    : primary.days <= 90 ? "teal"
     : "green";
 
   const amountVal = amountDraft === "" ? null : parseFloat(amountDraft);
@@ -116,8 +116,8 @@ export function JobLossHomePanel({
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "28px" }}>
         <MetricCard label="Runway" val={`${daysLabel} days`} sub={cliffLabel !== "—" ? `ends ${cliffLabel}` : null} status={cliffStatus} span={2} centered />
-        <MetricCard label="Weekly Burn" val={`$${Math.round(dash.weeklyBurn).toLocaleString()}`} sub={`${dash.essentialCount} essential ${dash.essentialCount === 1 ? "expense" : "expenses"}`} status="gold" centered />
-        <MetricCard label="Extra Income Logged" val={`$${Math.round(huntIncome).toLocaleString()}`} sub="added to runway" status={huntIncome > 0 ? "green" : "gold"} centered />
+        <MetricCard label="Weekly Burn" val={`$${Math.round(dash.weeklyBurn).toLocaleString()}`} sub={`${dash.essentialCount} essential ${dash.essentialCount === 1 ? "expense" : "expenses"}`} status="teal" centered />
+        <MetricCard label="Extra Income Logged" val={`$${Math.round(huntIncome).toLocaleString()}`} sub="added to runway" status={huntIncome > 0 ? "green" : "teal"} centered />
       </div>
 
       <SectionHeader sub="Drives the Runway number above — also editable on Budget">

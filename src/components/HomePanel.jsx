@@ -227,7 +227,7 @@ export function HomePanel({
         : `${fallbackSource === "prev" ? "last confirmed pay" : "projected average"} (projected)`,
       status: nextWeekDisplay != null
         ? (nextWeekDisplay >= weeklyIncome * 0.95 ? "green"
-          : nextWeekDisplay >= weeklyIncome * 0.8 ? "gold" : "red")
+          : nextWeekDisplay >= weeklyIncome * 0.8 ? "teal" : "red")
         : "green",
       span: 2,
       onClick: () => navigate("log"),
@@ -239,7 +239,7 @@ export function HomePanel({
       value: fmt$(annualSavings),
       rawVal: annualSavings,
       sub: weekNumber != null ? `${startDateDisplay ? `from ${startDateDisplay} · ` : ""}projected annual savings · ${payPeriodUnit(checksPerYear, 'abbrev')} ${weekNumToPaycheckNum(weekNumber, checksPerYear)}` : startDateDisplay ? `from ${startDateDisplay} · projected annual savings` : "projected annual savings",
-      status: annualSavings > 5000 ? "green" : annualSavings >= 0 ? "gold" : "red",
+      status: annualSavings > 5000 ? "green" : annualSavings >= 0 ? "teal" : "red",
       span: 2,
       onClick: () => navigate("income"),
       key: "income",
@@ -249,7 +249,7 @@ export function HomePanel({
       title: "Budget Health",
       value: fmtPct(spendRatio),
       sub: `${fmt$(monthlyExpenses)}/mo expenses · ${fmt$(monthlyTakehome)}/mo take-home`,
-      status: spendRatio < 0.5 ? "green" : spendRatio < 0.75 ? "gold" : "red",
+      status: spendRatio < 0.5 ? "green" : spendRatio < 0.75 ? "teal" : "red",
       span: 2,
       onClick: () => navigate("budget"),
       key: "budget",
@@ -642,7 +642,7 @@ export function HomePanel({
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "12px", marginBottom: "20px" }}>
           <MetricCard label={leftThisCheckLabel} val={fmt$(leftThisWeek * perCheckFactor)} rawVal={leftThisWeek * perCheckFactor} status={leftThisWeek >= 0 ? "green" : "red"} insight={pulseLeftThisWeek} />
-          <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="gold" />
+          <MetricCard label="Active Goals Total" val={fmt$(totalActiveGoals)} rawVal={totalActiveGoals} status="teal" />
           <MetricCard
             label={`${payPeriodUnit(checksPerYear, 'fullPlural')} to Complete All`}
             val={`~${Math.ceil(lastGoalEW / (FISCAL_WEEKS_PER_YEAR / checksPerYear))} ${payPeriodUnit(checksPerYear, 'abbrev').toLowerCase()}s`}
@@ -654,14 +654,14 @@ export function HomePanel({
             sub={completedGoals.length > 0
               ? `${fmt$(completedGoalValue)} of ${fmt$(totalGoalTarget)} funded`
               : `${fmt$(totalGoalTarget)} total target`}
-            status={goals.length > 0 && completedGoals.length === goals.length ? "green" : "gold"}
+            status={goals.length > 0 && completedGoals.length === goals.length ? "green" : "teal"}
             insight={pulseGoals}
           />
         </div>
 
         <div style={{ marginBottom: "16px", padding: "12px 0", borderRadius: "10px", border: "1px solid #222", background: "rgba(16,16,16,0.55)", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tl.length ? "10px" : "0", padding: "0 12px" }}>
-            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>Active Goals</div>
+            <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)" }}>Active Goals</div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               {tl.length > 0 && setConfigProp && !readOnly && (
                 <Pressable
@@ -797,7 +797,7 @@ export function HomePanel({
                                 ⠿ REORDER
                               </SmBtn>
                             )}
-                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)" style={{ flex: 1 }}>EDIT</SmBtn>
+                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-teal)" style={{ flex: 1 }}>EDIT</SmBtn>
                             <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
                               <>
@@ -928,7 +928,7 @@ export function HomePanel({
                                 ⠿ REORDER
                               </SmBtn>
                             )}
-                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-gold)" style={{ flex: 1 }}>EDIT</SmBtn>
+                            <SmBtn onClick={() => startEditGoal(g)} c="var(--color-teal)" style={{ flex: 1 }}>EDIT</SmBtn>
                             <SmBtn onClick={() => handleMarkDone(g.id)} c="var(--color-green)" style={{ flex: 1 }}>✓ DONE</SmBtn>
                             {delGoalId === g.id ? (
                               <>
@@ -984,7 +984,7 @@ export function HomePanel({
             >
               {/* Header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px", flexShrink: 0 }}>
-                <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)" }}>
+                <div style={{ fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)" }}>
                   REORDER GOALS
                 </div>
                 <Pressable
@@ -1212,7 +1212,7 @@ export function HomePanel({
                 boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
               }}
             >
-              <div style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-gold)", marginBottom: "12px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "12px" }}>
                 Reset Goal Timeline
               </div>
               <div style={{ fontSize: "13px", lineHeight: 1.5, color: "var(--color-text-primary)", marginBottom: "8px" }}>
@@ -1251,7 +1251,7 @@ export function HomePanel({
                   onClick={resetGoalTimeline}
                   style={{
                     flex: 1,
-                    background: "var(--color-gold)",
+                    background: "var(--color-teal)",
                     border: "none",
                     borderRadius: "12px",
                     color: "var(--color-bg-base)",
@@ -1283,7 +1283,7 @@ export function HomePanel({
               <SmBtn onClick={() => { setAddingGoal(false); setNewGoal({ label: "", target: "", note: "" }); }}>CANCEL</SmBtn>
             </div>
           </div>
-        ) : <Pressable onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</Pressable>)}
+        ) : <Pressable onClick={() => setAddingGoal(true)} style={{ background: "var(--color-bg-surface)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.22)", borderRadius: "6px", padding: "10px", width: "100%", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", marginBottom: "16px" }}>+ ADD GOAL</Pressable>)}
 
         {completedGoals.length > 0 && (
           <div style={{ marginTop: "8px", border: "1px solid #1e1e1e", borderRadius: "8px", overflow: "hidden", marginBottom: "12px" }}>

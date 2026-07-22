@@ -851,7 +851,7 @@ is written, since model lineups move.*
   into navigation and enforces the data-grounded voice mechanically, not just by prompt.
 - [ ] **Seed the eval suite from Phase A day one** — every admin-flagged bad answer during the
   admin-only phase gets saved (snapshot + question + bad answer) into a fixtures folder; §21.E's
-  10 golden conversations assemble themselves before public launch instead of being invented.
+  10 tealen conversations assemble themselves before public launch instead of being invented.
 - [ ] **Live State Inspector: Coach line** — admin-only "last Coach call: [type] · [model] ·
   [tokens in/out] · [cache hit?]" so cost behavior is verifiable from a phone, same pattern as
   §19's config-history line.
@@ -2046,7 +2046,7 @@ got a "Needs Coverage" flag, and displayed no amount in the JobLossBudgetPanel c
   from `keptExpenses` (kept, everything) — so a loan-only selection skips Step 2 outright, same as
   an empty one.
 - [x] **"Loan" badge added** in both the Step 1 checklist row and the `JobLossBudgetPanel` expense
-  card list — small gold badge matching the existing "Essential"/"Flexible"/"Needs Coverage" badge
+  card list — small teal badge matching the existing "Essential"/"Flexible"/"Needs Coverage" badge
   language already in that list. Amount display for loans shows `$X/<frequency>` (e.g. `$200/
   monthly`) instead of the regular bills' `$X/mo`, since a loan's cadence is meaningful (matches
   what normal `BudgetPanel` already does for its own loan rows).
@@ -2266,7 +2266,7 @@ attempted here.*
   fire from a click on that button; tapping it while invalid did visibly nothing, no red border, no
   message, just silence. Confirmed by writing the intended test first and watching it fail for the
   right reason. Fixed by splitting the single `nextDisabled` variable into two: `nextDisabled`
-  (unchanged, still drives the grey/gold styling) and a new `nextNativeDisabled` that's `false` for
+  (unchanged, still drives the grey/teal styling) and a new `nextNativeDisabled` that's `false` for
   Step 0 specifically — the button now stays genuinely clickable there, so a tap while empty
   reaches `goNext()`'s `setAttempted(true)` branch and the red border/`"↑ Required — 0 is a fine
   answer, just not empty"` message actually shows. Steps 1–2 keep the prior native-disabled
@@ -2722,7 +2722,7 @@ insight over raw categorization, and consolidation into fewer, smarter surfaces.
   (this is the same disclosure discipline as §20.C, generalized).
 - [ ] **Coach eval suite** — a fixture set of (user snapshot → expected answer quality) cases
   run against prompt changes, so Coach regressions are caught like code regressions. Start with
-  10 golden conversations; grow it from real flagged answers. Example golden case: given a
+  10 tealen conversations; grow it from real flagged answers. Example tealen case: given a
   snapshot with a $3,690 tax gap, Coach's answer must mention the gap, name the per-check extra,
   and propose exactly one action — an answer missing any of the three fails the eval.
 - [ ] **AI cost telemetry** — per-feature token/cost dashboards from day one of §18 (log

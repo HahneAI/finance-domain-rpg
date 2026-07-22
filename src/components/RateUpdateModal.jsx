@@ -80,7 +80,7 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
         }}
       >
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "5px" }}>
+          <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "5px" }}>
             Life Event
           </div>
           <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
@@ -125,7 +125,7 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--color-text-primary)" }}>
               <span>Base rate</span>
               <span style={{ fontFamily: "var(--font-mono)" }}>
-                ${oldRate.toFixed(2)}/hr {canActivate && <span style={{ color: "var(--color-text-secondary)" }}>→</span>} {canActivate && <strong style={{ color: "var(--color-gold)" }}>${newRate.toFixed(2)}/hr</strong>}
+                ${oldRate.toFixed(2)}/hr {canActivate && <span style={{ color: "var(--color-text-secondary)" }}>→</span>} {canActivate && <strong style={{ color: "var(--color-teal)" }}>${newRate.toFixed(2)}/hr</strong>}
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "8px", marginTop: "2px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
@@ -172,7 +172,7 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
             onClick={confirm}
             disabled={!canActivate}
             style={{
-              background: canActivate ? "var(--color-gold)" : "var(--color-bg-raised)",
+              background: canActivate ? "var(--color-teal)" : "var(--color-bg-raised)",
               color: canActivate ? "var(--color-bg-base)" : "var(--color-text-disabled)",
               border: "none", borderRadius: "12px", padding: "8px 16px",
               fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",

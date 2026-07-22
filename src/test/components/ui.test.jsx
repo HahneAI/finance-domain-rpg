@@ -197,8 +197,8 @@ describe('MetricCard — status tinting', () => {
     expect(screen.getByText('Deficit')).toBeTruthy()
   })
 
-  it('renders with status="gold" without throwing', () => {
-    render(<MetricCard label="Goal" val="75%" status="gold" />)
+  it('renders with status="teal" without throwing', () => {
+    render(<MetricCard label="Goal" val="75%" status="teal" />)
     expect(screen.getByText('Goal')).toBeTruthy()
   })
 })

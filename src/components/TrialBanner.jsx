@@ -37,7 +37,7 @@ export function TrialBanner({ entitlement, onUpgrade, onDismiss }) {
       <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
         <Pressable
           onClick={onUpgrade}
-          style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", padding: "6px 14px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer" }}
+          style={{ background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", padding: "6px 14px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer" }}
         >
           Upgrade
         </Pressable>

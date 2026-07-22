@@ -1556,6 +1556,26 @@ get no time to await `getSession()`.
 > exact class `168cc4b` fixed. The snapshot must stay listener-maintained, never
 > promise-fetched at flush time.
 
+**F120 · `getCurrentUserId` session fallback** — `supabase.js:50–70` — **[L]**
+The identity primitive every `db.js` load/save/flush path resolves through. It probes
+`auth.getUser()` first (a `/auth/v1/user` network round-trip) but **falls back to the
+persisted session (`getSession()`, a local read) when `getUser()` returns a null user
+without throwing** — which is exactly what happens right after a deploy reload, when the
+access token is mid-refresh or the round-trip transiently fails. This is the **third
+door** to the `cc227ad` wizard-reset failure, alongside F66's load-failure path and
+`db.js:170–181`'s PGRST116 query rule: a transiently-null `userId` sends `loadUserData`
+into its `if (!userId)` branch (`db.js:103–118`) → `DEFAULT_CONFIG` (`setupComplete:false`)
+→ setup wizard reopens for a signed-in user, overwriting the real row if completed. The
+build/deploy reload is the trigger that opened this door in production; the getUser→session
+fallback closes it because the load effect only runs once `authedUser` (session-derived) is
+set, so the session is always in storage by then.
+> **IF** this probe order changes, or a caller starts trusting `getUser()`'s null
+> directly, **THEN** the wizard-reset-over-real-data bug returns through the identity
+> layer even with F66 and the PGRST116 rule intact. The `getUser()`-succeeds path must
+> stay behaviorally unchanged (session fallback is null-only); only a genuinely absent
+> session (real SIGNED_OUT — supabase-js clears storage) may resolve null. Check:
+> `supabaseAuth.test.js`'s three cases (normal id, null-user→session fallback, both empty).
+
 **F65 · Auth boot chain** — `App.jsx:422–479` (`onAuthChange` effect) — **[G]**
 Four load-bearing guards, each with its own incident history:
 (1) **No `getSession()` pre-check** — INITIAL_SESSION is the `authChecked` gate,
@@ -1586,7 +1606,8 @@ fields when `pendingSaveRef` is set (a load must not revert an edit made in the 
 800ms) but always applies tier flags/subscription. Failure path: retry once after
 1.5s, **never fall back to defaults** — conflating failure with "new account" is the
 `cc227ad` wizard-re-trigger bug (and `db.js:170–181`'s PGRST116 rule is the same law
-on the query side).
+on the query side; F120's `getCurrentUserId` session fallback is the same law on the
+identity side — three doors, one failure).
 > **IF** the dep list, the pending-save guard, or the retry policy changes, **THEN**
 > walk the same incident set as F65 plus: transient offline reload on an existing
 > account must show a retry/loading state, never the setup wizard. Check:

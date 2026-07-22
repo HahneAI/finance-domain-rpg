@@ -24,6 +24,7 @@ import {
   computeNet,
   computeRemainingSpend,
   calcEventImpact,
+  resolveEventWeekMeta,
   toLocalIso,
   isFutureWeek,
   fedTax,
@@ -178,10 +179,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
     const grossDeltaByWeek = {};
 
     logs.forEach(e => {
-      const eIdx = Number(e.weekIdx);
-      const weekMeta = Number.isFinite(eIdx)
-        ? (allWeeks.find(w => w.idx === eIdx) ?? null)
-        : null;
+      const { weekIdx: eIdx, weekMeta } = resolveEventWeekMeta(e, allWeeks);
       const i = calcEventImpact(e, config, weekMeta);
       nL += i.netLost; nG += i.netGained;
       if ((e.type === "missed_unpaid" || e.type === "missed_unapproved") && i.netLost)
@@ -189,7 +187,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
       k4L += i.k401kLost; k4ML += i.k401kMatchLost;
       ptoL += i.hoursLostForPTO;
 
-      if (!Number.isFinite(eIdx)) return;
+      if (eIdx == null) return;
       const netDelta = (i.netGained || 0) - (i.netLost || 0);
       if (netDelta !== 0)
         weeklyNetAdjustments[eIdx] = (weeklyNetAdjustments[eIdx] || 0) + netDelta;
@@ -425,7 +423,6 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
             isAdmin={isAdmin}
             setConfig={setConfig}
             weekConfirmations={{}}
-            projectedAnnualNet={projectedAnnualNet}
             baseWeeklyUnallocated={baseWeeklyUnallocated}
             futureWeeks={futureWeeks}
             allWeeks={allWeeks}
@@ -436,6 +433,9 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
             logK401kGained={logTotals.k401kGained}
             logK401kMatchGained={logTotals.k401kMatchGained}
             logPTOHoursLost={logTotals.ptoHoursLost}
+            logNetLost={logTotals.netLost}
+            logNetGained={logTotals.netGained}
+            adjustedTakeHome={logTotals.adjustedTakeHome}
             ptoGoal={null}
             setPtoGoal={NOOP}
             goals={goals}

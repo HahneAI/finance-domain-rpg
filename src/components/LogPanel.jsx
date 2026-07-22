@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/static-components */
 import { useState } from "react";
 import { EVENT_TYPES, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { calcEventImpact, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
+import { calcEventImpact, resolveEventWeekMeta, dhlEmployerMatchRate, toLocalIso, fiscalMonthKey, fiscalMonthLabel } from "../lib/finance.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getPayPeriodBounds } from "../lib/fiscalWeek.js";
 import { deriveRollingIncomeWeeks } from "../lib/rollingTimeline.js";
 import { Card, iS, lS, SmBtn, Pressable, useFoldTransition, PanelHero, SectionHeader } from "./ui.jsx";
@@ -37,9 +37,10 @@ const fmtDate  = iso => {
 const EMPTY_FORM = { label: "", hoursNeeded: "", targetDate: "", negativeBalanceCap: "40" };
 
 export function LogPanel({
-  logs, setLogs, onSaveLogsNow, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals,
+  logs, setLogs, onSaveLogsNow, config, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals,
   fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isEmployerDHL = false, isAdmin = false, effectiveToday = null, setConfig, saveConfigNow,
   logK401kLost = 0, logK401kMatchLost = 0, logK401kGained = 0, logK401kMatchGained = 0, logPTOHoursLost = 0,
+  logNetLost = 0, logNetGained = 0, adjustedTakeHome = 0,
   ptoGoal, setPtoGoal, onSavePtoGoalNow, weekConfirmations = {},
 }) {
   const blank = {
@@ -70,15 +71,20 @@ export function LogPanel({
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
   const weeksLeft = futureWeeks.length || 1;
+  // Only grossLost/grossGained/bucketHoursDeducted have no App-level authoritative
+  // aggregate to consume — netLost/netGained/k401kLost/ptoHoursLost are threaded down
+  // as logNetLost/logNetGained/logK401kLost/logPTOHoursLost props instead of being
+  // re-derived here, so this panel can't drift from Income/Home's numbers (DW-5).
+  // Resolving weekMeta per event (rather than omitting it) keeps grossLost/grossGained
+  // consistent with the real week's actual gross, not a flat schedule projection.
   const tot = logs.reduce((a, e) => {
-    const i = calcEventImpact(e, config);
-    a.gL += i.grossLost; a.gG += i.grossGained; a.nL += i.netLost; a.nG += i.netGained;
-    a.k4 += i.k401kLost; a.pto += i.hoursLostForPTO; a.bucket += i.bucketHoursDeducted;
+    const { weekMeta } = resolveEventWeekMeta(e, allWeeks);
+    const i = calcEventImpact(e, config, weekMeta);
+    a.gL += i.grossLost; a.gG += i.grossGained; a.bucket += i.bucketHoursDeducted;
     return a;
-  }, { gL: 0, gG: 0, nL: 0, nG: 0, k4: 0, pto: 0, bucket: 0 });
+  }, { gL: 0, gG: 0, bucket: 0 });
 
-  const adjTH   = projectedAnnualNet - tot.nL + tot.nG;
-  const adjWA   = baseWeeklyUnallocated - (tot.nL / weeksLeft) + (tot.nG / weeksLeft);
+  const adjWA   = baseWeeklyUnallocated - (logNetLost / weeksLeft) + (logNetGained / weeksLeft);
   const projS   = adjWA * weeksLeft - fundedGoalSpend;
   const totGoals = goals.filter(g => !g.completed).reduce((s, g) => s + g.target, 0);
   const ok = projS >= totGoals;
@@ -643,7 +649,7 @@ export function LogPanel({
 
     {/* Log entries */}
     {logs.map(entry => {
-      const imp  = calcEventImpact(entry, config);
+      const imp  = calcEventImpact(entry, config, resolveEventWeekMeta(entry, allWeeks).weekMeta);
       const ev   = EVENT_TYPES[entry.type] ?? { label: entry.type, color: "var(--color-text-secondary)", icon: "?" };
       const isB  = entry.type === "bonus";
       const isUA = entry.type === "missed_unapproved" || entry.type === "pto_unapproved";
@@ -845,8 +851,8 @@ export function LogPanel({
         />
       )}
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${1 + (hasPTO ? 1 : 0) + (hasBucket ? 1 : 0)},1fr)`, gap: "12px" }}>
-        <Card label="Total Net Lost" val={f(tot.nL)} rawVal={tot.nL} color="var(--color-deduction)" />
-        {hasPTO && <Card label="PTO Accrual Lost" val={`${(tot.pto / 20).toFixed(1)} hrs`} sub={`${tot.pto}h ÷ 20`} color="var(--color-text-primary)" />}
+        <Card label="Total Net Lost" val={f(logNetLost)} rawVal={logNetLost} color="var(--color-deduction)" />
+        {hasPTO && <Card label="PTO Accrual Lost" val={`${(logPTOHoursLost / 20).toFixed(1)} hrs`} sub={`${logPTOHoursLost}h ÷ 20`} color="var(--color-text-primary)" />}
         {hasBucket && <Card label="Bucket Hrs Deducted" val={`${tot.bucket}h`} sub="Unapproved absences" color="#e8622a" />}
       </div>
     </div>
@@ -863,7 +869,7 @@ export function LogPanel({
         </div>
         <div>
           <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adjusted Take-Home</div>
-          <div style={{ fontSize: "14px", color: "var(--color-green)", fontWeight: "bold" }}>{f0(adjTH)}</div>
+          <div style={{ fontSize: "14px", color: "var(--color-green)", fontWeight: "bold" }}>{f0(adjustedTakeHome)}</div>
         </div>
         <div>
           <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Adj. Weekly Unalloc.</div>
@@ -871,7 +877,7 @@ export function LogPanel({
         </div>
         {has401k && <div>
           <div style={{ fontSize: "9px", letterSpacing: "1px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>401k Lost</div>
-          <div style={{ fontSize: "14px", color: "#7a8bbf", fontWeight: "bold" }}>{f(tot.k4)}</div>
+          <div style={{ fontSize: "14px", color: "#7a8bbf", fontWeight: "bold" }}>{f(logK401kLost)}</div>
         </div>}
       </div>
       <div style={{ borderTop: "1px solid #1f1f1f", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>

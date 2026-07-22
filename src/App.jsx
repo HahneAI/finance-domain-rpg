@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
+import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense } from "./lib/db.js";
@@ -1078,8 +1078,7 @@ export default function App() {
     const grossDeltaByWeek = {};
 
     logs.forEach(e => {
-      const eIdx = Number(e.weekIdx);
-      const weekMeta = Number.isFinite(eIdx) ? (allWeeks.find(w => w.idx === eIdx) ?? null) : null;
+      const { weekIdx: eIdx, weekMeta } = resolveEventWeekMeta(e, allWeeks);
       const i = calcEventImpact(e, config, weekMeta);
       nL += i.netLost; nG += i.netGained;
       if ((e.type === "missed_unpaid" || e.type === "missed_unapproved") && i.netLost) {
@@ -1089,7 +1088,7 @@ export default function App() {
       k4G += i.k401kGained; k4MG += i.k401kMatchGained;
       ptoL += i.hoursLostForPTO; bucket += i.bucketHoursDeducted;
 
-      if (!Number.isFinite(eIdx)) return;
+      if (eIdx == null) return;
       const netDelta = (i.netGained || 0) - (i.netLost || 0);
       if (netDelta !== 0) weeklyNetAdjustments[eIdx] = (weeklyNetAdjustments[eIdx] || 0) + netDelta;
       const grossDelta = (i.grossGained || 0) - (i.grossLost || 0);
@@ -1570,7 +1569,6 @@ export default function App() {
         onSaveLogsNow={(newLogs) => savePersistedStateNow({ logs: newLogs })}
         effectiveToday={effectiveToday}
         setConfig={setConfig} saveConfigNow={saveConfigNow} weekConfirmations={weekConfirmations}
-        projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}
         allWeeks={allWeeks}
@@ -1581,6 +1579,9 @@ export default function App() {
         logK401kGained={logTotals.k401kGained}
         logK401kMatchGained={logTotals.k401kMatchGained}
         logPTOHoursLost={logTotals.ptoHoursLost}
+        logNetLost={logTotals.netLost}
+        logNetGained={logTotals.netGained}
+        adjustedTakeHome={logTotals.adjustedTakeHome}
         ptoGoal={ptoGoal}
         setPtoGoal={setPtoGoal}
         onSavePtoGoalNow={(next) => savePersistedStateNow({ ptoGoal: next })}
@@ -2869,7 +2870,7 @@ export default function App() {
         const conf = weekConfirmations[w.idx] ?? null;
         const wLookup = weekNetLookup[w.idx] ?? null;
         const netVal = computeNet(w, config, taxDerived.extraPerCheck, showExtra);
-        const weekLogs = logs.filter(e => Number(e.weekIdx) === w.idx);
+        const weekLogs = logs.filter(e => resolveEventWeekMeta(e, allWeeks).weekIdx === w.idx);
         const fC = n => (n ?? 0).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const fN = n => n != null ? fC(n) : "—";
         const Row = ({ label, val, mono = true, color }) => (

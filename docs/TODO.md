@@ -2392,6 +2392,65 @@ how directly each one touches "is the runway number on screen actually correct."
   design decision, before touching the pending-paycheck field or the two-runway-calc unification,
   which both need the user's input on scope/design first.
 
+#### H15. Pending/final paycheck — the first H14 gap, built, 2026-07-22 — DONE
+
+*User asked directly for this one (not the "wiring-only items first" ordering H14 recommended):
+mimic the weekly check-in's day-picker UX to ask "what days did you work in the last pay period,"
+derive the lost job's pay-period-end date from existing pay-schedule config, ask a separate
+day-of-week question for "when do checks normally arrive," and feed the result into the runway
+formula as both an amount and an arrival date — plus a small UI line counting down to it.*
+
+- [x] **`lib/jobLossRunway.js`** — three new pure functions, `computeJobLossRunway` extended:
+  - `resolveLastPayPeriodEnd(jobLossDateIso, payPeriodEndDay, userPaySchedule)` — first
+    occurrence of `payPeriodEndDay` on/after the job-loss date (schedule-length-agnostic: weekly
+    and biweekly both just repeat the same weekday, so no separate biweekly branch); `monthly`
+    falls back to the calendar month's last day, since there's no day-of-week concept.
+  - `resolvePendingCheckArrivalDate(periodEndDate, arrivalDow)` — first occurrence of the
+    user's answered arrival weekday strictly after the period end (payroll always lands at least
+    a day after the period it covers).
+  - `estimatePendingCheckAmount(workedDaysCount, cfg)` — same flat-rate sketch
+    `ReemploymentTracker.jsx`'s `targetWeeklyNet` uses (gross minus fed/state/FICA/401k rates
+    already on file); not a full `computeNet` pass, since this covers a check `buildYear` never
+    actually computes (job-loss week is zeroed, not prorated — H14's other bullet, still open).
+  - `computeJobLossRunway`'s `daysFromCash` rewritten piecewise: the pending amount only enters
+    the cash pool once its arrival day is reached, not lump-summed into today's cash — if cash
+    dries up before the check lands, the cliff hits at the dry-out point same as if the check
+    didn't exist, exactly as the user asked ("what day to add check to the runway cash on hand
+    bucket"). Returns a new `pendingCheck: {amount, date, daysOut} | null` field.
+- [x] **`constants/config.js`** — `jobLossPendingCheckAmount`/`jobLossPendingCheckDate` added to
+  `DEFAULT_CONFIG` (both `null` by default); snapshot updated (`npx vitest run -u`).
+- [x] **`components/JobLossEntry.jsx`** — new Step 1 inserted between the existing Step 0
+  (date/cash/unemployment) and the expense-review steps. Skippable Y/N gate ("Any paycheck still
+  coming from that job?"); Yes reveals a Mon–Sun worked-days toggle grid (0 days is a valid,
+  non-blocking answer) and a single-select arrival-day grid (required once Yes is chosen — red
+  border + inline error on a blocked Next, matching the existing cash-on-hand pattern) plus a
+  live preview line once an arrival day is picked. Resolved once at Activate time into concrete
+  `jobLossPendingCheckAmount`/`jobLossPendingCheckDate` values — raw day picks aren't stored,
+  same pattern as `DueDatePicker`'s `resolveDueDateAnchor`. Reused the native-disabled-button-
+  blocks-onClick fix from §15.H13 (`nextNativeDisabled` split from `nextDisabled`) so the new
+  step's required-field error can still fire on a "visually disabled but genuinely clickable"
+  Next/Activate button. **Deliberately scoped to a single 7-day picker regardless of pay
+  schedule** — for biweekly/salary users this covers only the final week worked, not the full
+  period; a full 14-day grid would overcomplicate the input for a one-time estimate, so this is a
+  known, flagged limit, not silently wrong. `App.jsx` threads `config` into `JobLossEntry` so the
+  new step can read `payPeriodEndDay`/`userPaySchedule`.
+- [x] **UI countdown line** — `JobLossHomePanel.jsx` and `JobLossBudgetPanel.jsx` both render a
+  small line under the Cash On Hand input when `dash.pendingCheck` is set: "Pending check: $X
+  arriving in N days (Mon DD)" (or "arriving today" at `daysOut === 0`). Reads straight off the
+  same `computeJobLossRunway` output the headline runway numbers already use — no parallel calc.
+- [x] Tests — `src/test/components/jobLossFlow.test.jsx`: 6 existing `JobLossEntry` tests fixed
+  for the new step (button-label/navigation changes from inserting Step 1); 6 new tests added
+  under `describe('Pending/final paycheck (§15.H15)')` covering skippability, blocked-Next
+  validation, 0-worked-days validity, exact amount/date computation (cross-checked directly
+  against the three new lib functions), live preview rendering, and toggle-off behavior. Full
+  suite: 1144 tests, 1 pre-existing unrelated flake in `LoginScreen.test.jsx` confirmed via
+  `git stash` baseline (fails identically with or without this change — full-suite ordering
+  issue, passes standalone). Lint diffed against a `git stash` baseline: zero new
+  errors/warnings. Production build green.
+- **Still open from H14, not touched by this pass:** the Lifestyle-spend invisibility caption,
+  the `estimateRunwayDays`/Coach drift items — explicitly out of scope per the user ("runway bugs
+  are already being worked on").
+
 ---
 
 ### I. Admin Toolkit updates for §15 work

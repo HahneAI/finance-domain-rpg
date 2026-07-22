@@ -3385,6 +3385,7 @@ export default function App() {
         open={jobLossEntryOpen}
         onClose={() => setJobLossEntryOpen(false)}
         expenses={expenses}
+        config={config}
         onActivate={(patch, updatedExpenses) => {
           configHistoryMetaRef.current = { source: "life_event:lost_job", effectiveFrom: patch.jobLossDate ?? undefined };
           const nextConfig = { ...config, ...patch };

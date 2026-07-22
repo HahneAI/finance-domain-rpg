@@ -7,6 +7,8 @@ import { JobLossHomePanel } from '../../components/JobLossHomePanel.jsx'
 import { JobLossBudgetPanel } from '../../components/JobLossBudgetPanel.jsx'
 import { ReemploymentTracker } from '../../components/ReemploymentTracker.jsx'
 import { DEFAULT_CONFIG, INITIAL_EXPENSES } from '../../constants/config.js'
+import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount } from '../../lib/jobLossRunway.js'
+import { toLocalIso } from '../../lib/finance.js'
 
 const JOB_LOSS_CONFIG = {
   ...DEFAULT_CONFIG,
@@ -77,11 +79,12 @@ describe('JobLossEntry', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('disables Activate until the unemployment question is answered', () => {
+  it('disables Next until the unemployment question is answered', () => {
     const onActivate = vi.fn()
     render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     expect(onActivate).not.toHaveBeenCalled()
+    expect(screen.getByText('Enter Job Loss Mode')).toBeTruthy() // still on Step 0
   })
 
   it('activates with unemployment disabled when the user answers No', () => {
@@ -89,11 +92,15 @@ describe('JobLossEntry', () => {
     const onClose = vi.fn()
     render(<JobLossEntry open onClose={onClose} onActivate={onActivate} />)
     fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '2000' } })
-    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.click(screen.getByRole('button', { name: 'No' })) // unemployment
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 1 (pending check)
+    fireEvent.click(screen.getByRole('button', { name: 'No' })) // pending check
     fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
     expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({
       jobLossMode: true,
       jobLossCashOnHand: 2000,
+      jobLossPendingCheckAmount: null,
+      jobLossPendingCheckDate: null,
       unemploymentEnabled: false,
       unemploymentWeekly: null,
       unemploymentDurationWeeks: null,
@@ -107,11 +114,14 @@ describe('JobLossEntry', () => {
     render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} />)
     fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '2000' } })
     fireEvent.click(screen.getByRole('button', { name: 'Yes' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     expect(onActivate).not.toHaveBeenCalled()
+    expect(screen.getByText('Enter Job Loss Mode')).toBeTruthy() // blocked, still Step 0
 
     fireEvent.change(screen.getByPlaceholderText('e.g. 400'), { target: { value: '350' } })
     fireEvent.change(screen.getByPlaceholderText('e.g. 26'), { target: { value: '20' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 1
+    fireEvent.click(screen.getByRole('button', { name: 'No' })) // pending check
     fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
     expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({
       jobLossMode: true,
@@ -143,7 +153,7 @@ describe('JobLossEntry', () => {
     expect(cashInput.style.border).not.toContain('deduction')
     expect(screen.queryByText(/Required — 0 is a fine answer/i)).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     expect(onActivate).not.toHaveBeenCalled()
     expect(screen.getByText(/Required — 0 is a fine answer/i)).toBeTruthy()
   })
@@ -151,8 +161,10 @@ describe('JobLossEntry', () => {
   it('accepts 0 as a valid cash-on-hand answer', () => {
     const onActivate = vi.fn()
     render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} />)
-    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.click(screen.getByRole('button', { name: 'No' })) // unemployment
     fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 1
+    fireEvent.click(screen.getByRole('button', { name: 'No' })) // pending check
     fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
     expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 0 }))
   })
@@ -161,10 +173,98 @@ describe('JobLossEntry', () => {
     const onActivate = vi.fn()
     render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} />)
     fireEvent.click(screen.getByRole('button', { name: 'No' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     expect(screen.getByText(/Required — 0 is a fine answer/i)).toBeTruthy()
     fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '500' } })
     expect(screen.queryByText(/Required — 0 is a fine answer/i)).toBeNull()
+  })
+
+  // TODO §15.H15 — pending/final paycheck: skippable Y/N gate; Yes reveals a
+  // worked-days grid + a single-select arrival-day picker; resolved once at
+  // Activate time into a concrete amount + date (raw picks aren't stored).
+  describe('Pending/final paycheck (§15.H15)', () => {
+    const PAY_CONFIG = {
+      payPeriodEndDay: 0, userPaySchedule: 'weekly', baseRate: 20, shiftHours: 8,
+      fedRateLow: 0.08, stateRateLow: 0.03, ficaRate: 0.0765, k401Rate: 0,
+    }
+
+    function reachPendingCheckStep(onActivate, config = PAY_CONFIG, cash = '2000') {
+      render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} config={config} />)
+      fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: cash } })
+      fireEvent.click(screen.getByRole('button', { name: 'No' })) // unemployment
+      fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 1
+    }
+
+    it('is skippable — No leaves both fields null and does not block Activate', () => {
+      const onActivate = vi.fn()
+      reachPendingCheckStep(onActivate)
+      fireEvent.click(screen.getByRole('button', { name: 'No' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+      expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({
+        jobLossPendingCheckAmount: null,
+        jobLossPendingCheckDate: null,
+      }))
+    })
+
+    it('blocks Next when Yes is chosen but no arrival day is picked, with a real click reaching the guard', () => {
+      const onActivate = vi.fn()
+      reachPendingCheckStep(onActivate)
+      fireEvent.click(screen.getByRole('button', { name: 'Yes' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Activate' })) // no expenses passed → this step's button is "Activate"
+      expect(onActivate).not.toHaveBeenCalled()
+      expect(screen.getByText(/Required to estimate when the check lands/i)).toBeTruthy()
+    })
+
+    it('accepts 0 worked days as valid — a $0 estimate, not a blocked step', () => {
+      const onActivate = vi.fn()
+      reachPendingCheckStep(onActivate)
+      fireEvent.click(screen.getByRole('button', { name: 'Yes' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Arrives Fri' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+      expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ jobLossPendingCheckAmount: 0 }))
+    })
+
+    it('computes a concrete amount + date from worked days + arrival day, matching the lib helpers directly', () => {
+      const onActivate = vi.fn()
+      reachPendingCheckStep(onActivate)
+      fireEvent.click(screen.getByRole('button', { name: 'Yes' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Worked Mon' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Worked Tue' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Worked Wed' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Arrives Fri' }))
+
+      const today = new Date().toISOString().slice(0, 10)
+      const periodEnd = resolveLastPayPeriodEnd(today, PAY_CONFIG.payPeriodEndDay, PAY_CONFIG.userPaySchedule)
+      const arrivalDate = resolvePendingCheckArrivalDate(periodEnd, 5) // Fri = 5
+      const expectedAmount = Math.round(estimatePendingCheckAmount(3, PAY_CONFIG))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+      expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({
+        jobLossPendingCheckAmount: expectedAmount,
+        jobLossPendingCheckDate: toLocalIso(arrivalDate),
+      }))
+    })
+
+    it('shows a live preview once an arrival day is picked', () => {
+      const onActivate = vi.fn()
+      reachPendingCheckStep(onActivate)
+      fireEvent.click(screen.getByRole('button', { name: 'Yes' }))
+      expect(screen.queryByText(/arriving/i)).toBeNull() // no arrival day yet
+      fireEvent.click(screen.getByRole('button', { name: 'Worked Mon' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Arrives Fri' }))
+      expect(screen.getByText(/arriving/i)).toBeTruthy()
+    })
+
+    it('toggling a worked day back off removes it from the count', () => {
+      const onActivate = vi.fn()
+      reachPendingCheckStep(onActivate)
+      fireEvent.click(screen.getByRole('button', { name: 'Yes' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Worked Mon' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Worked Mon' })) // toggle back off
+      fireEvent.click(screen.getByRole('button', { name: 'Arrives Fri' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+      expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({ jobLossPendingCheckAmount: 0 }))
+    })
   })
 
   const REVIEW_EXPENSES = [
@@ -180,11 +280,16 @@ describe('JobLossEntry', () => {
     // Step 0 — same date/benefits/cash-on-hand gate as before, now advances to Step 1 instead of activating.
     fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '2000' } })
     fireEvent.click(screen.getByRole('button', { name: 'No' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 1 (pending check)
     expect(onActivate).not.toHaveBeenCalled()
+    expect(screen.getByText('Any paycheck still coming?')).toBeTruthy()
+
+    // Step 1 — skip the pending check.
+    fireEvent.click(screen.getByRole('button', { name: 'No' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 2
     expect(screen.getByText('Which bills do you want to track?')).toBeTruthy()
 
-    // Step 1 — both start checked; uncheck Gym.
+    // Step 2 — both start checked; uncheck Gym.
     fireEvent.click(screen.getByText('Gym').closest('label').querySelector('input[type="checkbox"]'))
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     expect(screen.getByText('When are these due?')).toBeTruthy()
@@ -210,9 +315,13 @@ describe('JobLossEntry', () => {
     render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} expenses={REVIEW_EXPENSES} />)
     fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '2000' } })
     fireEvent.click(screen.getByRole('button', { name: 'No' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 1 (pending check)
+    fireEvent.click(screen.getByRole('button', { name: 'No' })) // skip pending check
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 2
     expect(screen.getByText('Which bills do you want to track?')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Back' })) // → Step 1
+    expect(screen.getByText('Any paycheck still coming?')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Back' })) // → Step 0
     expect(screen.getByText('Enter Job Loss Mode')).toBeTruthy()
     expect(screen.getByText('✓ No')).toBeTruthy() // step 0's answer persisted across the Back navigation
     expect(screen.getByPlaceholderText('e.g. 1,023').value).toBe('2000') // cash-on-hand answer persisted too
@@ -228,7 +337,9 @@ describe('JobLossEntry', () => {
     render(<JobLossEntry open onClose={() => {}} onActivate={onActivate} expenses={[...REVIEW_EXPENSES, LOAN_EXPENSE]} />)
     fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '2000' } })
     fireEvent.click(screen.getByRole('button', { name: 'No' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 1 (pending check)
+    fireEvent.click(screen.getByRole('button', { name: 'No' })) // skip pending check
+    fireEvent.click(screen.getByRole('button', { name: 'Next' })) // → Step 2
     expect(screen.getByText('Car Note')).toBeTruthy()
     expect(screen.getByText('Loan')).toBeTruthy() // badge in the checklist row
 

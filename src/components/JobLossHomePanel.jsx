@@ -141,6 +141,13 @@ export function JobLossHomePanel({
           Savings, checking — whatever you could draw on today. Extra income logged below
           (${Math.round(huntIncome).toLocaleString()} so far) is added automatically.
         </div>
+        {dash.pendingCheck && (
+          <div style={{ marginTop: "10px", fontSize: "11px", color: "var(--color-green)", lineHeight: 1.5 }}>
+            Pending check: ${Math.round(dash.pendingCheck.amount).toLocaleString()} arriving{" "}
+            {dash.pendingCheck.daysOut === 0 ? "today" : `in ${dash.pendingCheck.daysOut} ${dash.pendingCheck.daysOut === 1 ? "day" : "days"}`}
+            {" "}({new Date(dash.pendingCheck.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })})
+          </div>
+        )}
       </div>
 
       <SectionHeader sub="Cash from gig work or odd jobs — goes straight into your runway savings">

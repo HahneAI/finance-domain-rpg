@@ -49,6 +49,8 @@ exports[`DEFAULT_CONFIG > matches snapshot (guards against accidental mutations)
   "jobLossCashOnHand": null,
   "jobLossDate": null,
   "jobLossMode": false,
+  "jobLossPendingCheckAmount": null,
+  "jobLossPendingCheckDate": null,
   "k401MatchRate": 0,
   "k401Rate": 0,
   "k401StartDate": null,

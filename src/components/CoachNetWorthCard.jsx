@@ -4,7 +4,8 @@ import { useLocalStorage } from "../hooks/useLocalStorage.js";
 import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
 import { buildNetWorthSystemPrompt } from "../lib/coachPrompts.js";
-import { estimateRunwayDays, resolveNetWorthSignalTier, shouldFireForTier } from "../lib/coachTriggers.js";
+import { resolveNetWorthSignalTier, shouldFireForTier } from "../lib/coachTriggers.js";
+import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "../lib/jobLossRunway.js";
 
 const TIER_COLOR = {
   amber: "var(--color-warning)",
@@ -45,10 +46,18 @@ export function CoachNetWorthCard({
     dismissedWeekIdx: null,
   });
 
-  const runwayDays = useMemo(
-    () => estimateRunwayDays(config, expenses, today),
-    [config, expenses, today]
-  );
+  // Real runway, not the old independent estimate — computeJobLossRunway()
+  // is the same function the Job Loss panels use, so this can't understate
+  // runway vs. what those panels show (drift-app-warden §21 F24).
+  // includeBenefits defaults true here, matching App.jsx's own default for
+  // the session-only toggle (this card only ever renders inside HomePanel,
+  // which doesn't mount during Job Loss Mode, so there's no live toggle to
+  // thread through yet).
+  const runwayDays = useMemo(() => {
+    const savings = (config?.jobLossCashOnHand ?? 0) + sumJobHuntIncome(config);
+    const dash = computeJobLossRunway({ config, expenses, effectiveToday: today, savings });
+    return resolvePrimaryRunwayDays(dash, config, true);
+  }, [config, expenses, today]);
   const weekIdx = currentWeek?.idx ?? null;
   const tier = resolveNetWorthSignalTier({ netWorthHealth, runwayDays, previousTier: signalState.lastFiredTier });
 

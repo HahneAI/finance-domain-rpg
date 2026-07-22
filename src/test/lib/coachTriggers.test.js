@@ -1,48 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { estimateRunwayDays, resolveNetWorthSignalTier, shouldFireForTier } from "../../lib/coachTriggers.js";
+import { resolveNetWorthSignalTier, shouldFireForTier } from "../../lib/coachTriggers.js";
 
-describe("estimateRunwayDays", () => {
-  it("returns null when not in Job Loss Mode", () => {
-    expect(estimateRunwayDays({ jobLossMode: false }, [], "2026-07-07")).toBeNull();
-  });
-
-  it("returns null when there's no essential active burn to divide against", () => {
-    const config = { jobLossMode: true, jobLossDate: "2026-06-01" };
-    expect(estimateRunwayDays(config, [], "2026-07-07")).toBeNull();
-  });
-
-  it("computes runway from unemployment benefits over essential weekly burn", () => {
-    const config = {
-      jobLossMode: true,
-      jobLossDate: "2026-06-01",
-      unemploymentEnabled: true,
-      unemploymentWeekly: 300,
-      unemploymentDurationWeeks: 10,
-      unemploymentWaitingWeek: false,
-    };
-    const expenses = [
-      { category: "Needs", jobLossStatus: "active", weekly: [100, 100, 100, 100] },
-    ];
-    const days = estimateRunwayDays(config, expenses, "2026-06-08");
-    expect(days).toBeGreaterThan(0);
-  });
-
-  it("excludes Lifestyle and paused/cancelled expenses from the burn rate", () => {
-    const config = {
-      jobLossMode: true,
-      jobLossDate: "2026-06-01",
-      unemploymentEnabled: true,
-      unemploymentWeekly: 300,
-      unemploymentDurationWeeks: 10,
-    };
-    const expenses = [
-      { category: "Lifestyle", jobLossStatus: "active", weekly: [500, 500, 500, 500] },
-      { category: "Needs", jobLossStatus: "cancelled", weekly: [500, 500, 500, 500] },
-    ];
-    // Both excluded → zero burn → null (no essential burn to divide against)
-    expect(estimateRunwayDays(config, expenses, "2026-06-08")).toBeNull();
-  });
-});
+// estimateRunwayDays was removed 2026-07-21 (drift-app-warden §21 F24
+// quarantine, closed) — callers now compute runwayDays via
+// computeJobLossRunway()/resolvePrimaryRunwayDays() (jobLossRunway.js,
+// see jobLossRunway.test.js) so every Coach surface quotes the same
+// number as the Job Loss panels.
 
 describe("resolveNetWorthSignalTier", () => {
   it("returns red when runway is under 30 days, regardless of savings health", () => {

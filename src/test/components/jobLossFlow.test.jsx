@@ -440,6 +440,35 @@ describe('JobLossHomePanel', () => {
     expect(screen.getByText('Runway')).toBeTruthy()
   })
 
+  // TODO §15.H14 bullet 2 / §15.H16 — Lifestyle spend is excluded from
+  // weeklyBurn on purpose (survival-spend focus), but a user who keeps those
+  // bills tracked is still paying for them; this caption is the transparency
+  // fix so the headline number doesn't silently omit real spend.
+  describe('Lifestyle spend caption (§15.H16)', () => {
+    const GYM = {
+      id: 'exp_gym', category: 'Lifestyle', label: 'Gym',
+      billingMeta: { amount: 40, cycle: 'every7days', effectiveFrom: '2026-01-01' },
+      history: [{ effectiveFrom: '2026-01-01', weekly: [40, 40, 40, 40] }],
+    }
+
+    it('shows a caption when a tracked Lifestyle expense is active', () => {
+      render(<JobLossHomePanel config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={[...INITIAL_EXPENSES, GYM]} effectiveToday="2026-06-15" includeBenefits />)
+      expect(screen.getByText(/Lifestyle spend still tracked/i)).toBeTruthy()
+      expect(screen.getByText(/\$40\/wk/)).toBeTruthy()
+    })
+
+    it('does not show the caption when there are no Lifestyle expenses', () => {
+      render(<JobLossHomePanel config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits />)
+      expect(screen.queryByText(/Lifestyle spend still tracked/i)).toBeNull()
+    })
+
+    it('does not show the caption when the Lifestyle expense is untracked', () => {
+      const untracked = { ...GYM, trackDuringJobLoss: false }
+      render(<JobLossHomePanel config={JOB_LOSS_CONFIG} setConfig={() => {}} expenses={[...INITIAL_EXPENSES, untracked]} effectiveToday="2026-06-15" includeBenefits />)
+      expect(screen.queryByText(/Lifestyle spend still tracked/i)).toBeNull()
+    })
+  })
+
   it('logs extra income and reflects it in the "Extra Income Logged" tile', () => {
     const configs = []
     const setConfig = vi.fn(updater => configs.push(typeof updater === 'function' ? updater(JOB_LOSS_CONFIG) : updater))

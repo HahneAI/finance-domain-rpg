@@ -2451,6 +2451,35 @@ formula as both an amount and an arrival date — plus a small UI line counting 
   the `estimateRunwayDays`/Coach drift items — explicitly out of scope per the user ("runway bugs
   are already being worked on").
 
+#### H16. Lifestyle spend caption — the second H14 gap, built, 2026-07-22 — DONE
+
+*Closes the second bullet from §15.H14's birdseye review: `weeklyBurn` deliberately excludes
+Lifestyle-category expenses (survival-spend focus), but nothing told a user who keeps those bills
+tracked that their real burn is higher than the headline number — a "stubborn" user's runway was
+silently shorter than what Home displayed. Pure transparency fix, no calc change to the existing
+runway math itself.*
+
+- [x] **`lib/jobLossRunway.js`** — `computeJobLossRunway` now also computes `lifestyleActive`
+  (same active+tracked gating as `essentialActive`, just `flexible === true` instead of excluded)
+  and returns `lifestyleWeeklySpend` alongside the existing `weeklyBurn`. No change to `weeklyBurn`
+  itself or to the runway/cliff math — this is a separate, additive figure for display only.
+- [x] **`components/JobLossHomePanel.jsx`** — a one-line caption ("+ $X/wk Lifestyle spend still
+  tracked (not counted in runway above)") renders under the metric-tile grid whenever
+  `dash.lifestyleWeeklySpend > 0`, right where the Weekly Burn tile lives. `JobLossBudgetPanel.jsx`
+  has no equivalent Weekly Burn tile (it already badges/sorts Lifestyle rows in its own expense
+  list via the pre-existing `isFlexibleCategory` helper), so no change was needed there — the gap
+  H14 flagged was specifically about the headline number on Home.
+- [x] Tests — `src/test/components/jobLossFlow.test.jsx`, new `describe('Lifestyle spend caption
+  (§15.H16)')` under `JobLossHomePanel`: caption appears for a tracked active Lifestyle expense
+  with the correct weekly amount, does not appear with no Lifestyle expenses, does not appear when
+  the Lifestyle expense is untracked (`trackDuringJobLoss: false`). Full suite: 1147 tests, all
+  green (including the H15 write-up's flagged `LoginScreen.test.jsx` flake — passed clean this
+  run, confirming it's pure full-suite ordering, not a real regression). Lint diffed against a
+  `git stash` baseline: zero new errors/warnings. Production build green.
+- **Still open from H14:** the `estimateRunwayDays`/Coach drift items and the AI-gating/résumé
+  scoping bullets — all explicitly out of scope per the user ("runway bugs are already being
+  worked on").
+
 ---
 
 ### I. Admin Toolkit updates for §15 work

@@ -114,11 +114,17 @@ export function JobLossHomePanel({
     <div>
       <PanelHero eyebrow="Job Loss Mode">Home</PanelHero>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "28px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
         <MetricCard label="Runway" val={`${daysLabel} days`} sub={cliffLabel !== "—" ? `ends ${cliffLabel}` : null} status={cliffStatus} span={2} centered />
         <MetricCard label="Weekly Burn" val={`$${Math.round(dash.weeklyBurn).toLocaleString()}`} sub={`${dash.essentialCount} essential ${dash.essentialCount === 1 ? "expense" : "expenses"}`} status="gold" centered />
         <MetricCard label="Extra Income Logged" val={`$${Math.round(huntIncome).toLocaleString()}`} sub="added to runway" status={huntIncome > 0 ? "green" : "gold"} centered />
       </div>
+      {dash.lifestyleWeeklySpend > 0 && (
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+          + ${Math.round(dash.lifestyleWeeklySpend).toLocaleString()}/wk Lifestyle spend still tracked (not counted in runway above)
+        </div>
+      )}
+      <div style={{ marginBottom: "16px" }} />
 
       <SectionHeader sub="Drives the Runway number above — also editable on Budget">
         Cash On Hand

@@ -114,6 +114,22 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, savings
     0,
   );
 
+  // Lifestyle spend (TODO §15.H14 bullet 2): still tracked/active rows in this
+  // category are deliberately excluded from weeklyBurn above ("focuses on
+  // survival spend"), but a user who keeps them checked is still actually
+  // paying for them — surfaced separately so the runway UI can caption it
+  // instead of letting the headline number silently omit real spend.
+  const lifestyleActive = (expenses ?? []).filter(exp => {
+    const status = exp.jobLossStatus ?? "active";
+    const flexible = exp.category === "Lifestyle";
+    const tracked = exp.trackDuringJobLoss !== false;
+    return status === "active" && flexible && tracked;
+  });
+  const lifestyleWeeklySpend = lifestyleActive.reduce(
+    (sum, exp) => sum + getEffectiveAmount(exp, todayDate, phaseIdx),
+    0,
+  );
+
   const jobLossStartMs = new Date(config.jobLossDate + "T00:00:00").getTime();
   const weeksSinceLoss = Math.max(0, Math.floor((todayDate.getTime() - jobLossStartMs) / (7 * 86400000)));
 
@@ -163,6 +179,7 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, savings
   return {
     weeklyBurn,
     essentialCount: essentialActive.length,
+    lifestyleWeeklySpend,
     benefitsRemainingWeeks,
     projectedUnemploymentTotal,
     pendingCheck: pendingDaysOut != null

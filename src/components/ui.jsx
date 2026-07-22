@@ -49,7 +49,7 @@ export const lS = { fontSize: "10px", letterSpacing: "2px", color: "var(--color-
 // This is the app-wide standard for press/tap feedback. Every clickable surface
 // should adopt it so the whole app feels consistent. Two primary cues:
 //   1. Green press fill — a quick fill of the lighter same-family green
-//      (--color-gold-bright #33e0b0) that fades quickly to whatever the control
+//      (--color-teal-bright #33e0b0) that fades quickly to whatever the control
 //      settles to (the selected green #00c896 on tabs, or the control's own bg).
 //   2. Scale spring — a subtle scale(0.94) press-in with a gentle overshoot
 //      spring back. Supporting cue only; the green fill is the star.
@@ -110,8 +110,8 @@ export function pressScaleStyle(pressed, scale = 0.94, extra = "") {
 
 // ── Press-fill color derivation ──────────────────────────────────────────────
 // The press fill is a lighter shade of the tappable target's OWN resting color,
-// same family — so a red ✕/Cancel flashes lighter red, a gold tab flashes lighter
-// gold, a green Save flashes lighter green, etc. We read the control's computed
+// same family — so a red ✕/Cancel flashes lighter red, a teal tab flashes lighter
+// teal, a green Save flashes lighter green, etc. We read the control's computed
 // colors at press time and lighten the most chromatic one in HSL.
 
 function _parseRgb(str) {
@@ -139,8 +139,8 @@ function _rgbToHsl({ r, g, b }) {
 }
 
 // Returns a CSS color string: a lighter, same-family shade of the target's color.
-// Falls back to gold-bright if nothing usable is found (or in non-DOM/test env).
-function deriveTapFillColor(el, fallback = "var(--color-gold-bright)") {
+// Falls back to teal-bright if nothing usable is found (or in non-DOM/test env).
+function deriveTapFillColor(el, fallback = "var(--color-teal-bright)") {
   try {
     if (!el || typeof getComputedStyle !== "function") return fallback;
     const cs = getComputedStyle(el);
@@ -149,7 +149,7 @@ function deriveTapFillColor(el, fallback = "var(--color-gold-bright)") {
       .filter(c => c && c.a > 0.05)            // ignore transparent (e.g. ghost-button bg)
       .map(c => ({ ...c, hsl: _rgbToHsl(c) }));
     if (!cands.length) return fallback;
-    // Pick the most chromatic color — that's the control's identity (red, gold, …),
+    // Pick the most chromatic color — that's the control's identity (red, teal, …),
     // not the dark neutral surface behind it.
     cands.sort((a, b) => b.hsl.s - a.hsl.s);
     const { h, s, l } = cands[0].hsl;
@@ -163,10 +163,10 @@ function deriveTapFillColor(el, fallback = "var(--color-gold-bright)") {
 
 // PressFlashOverlay — the press fill. Renders behind the control's content
 // (zIndex -1, so it never covers text/icons) and clips to the parent's radius.
-// `color` defaults to gold-bright but callers normally pass a derived family color.
+// `color` defaults to teal-bright but callers normally pass a derived family color.
 // The parent MUST set `position: relative`, `overflow: hidden`, and
 // `isolation: isolate` (Pressable and the primitives below all do).
-export function PressFlashOverlay({ lit, color = "var(--color-gold-bright)", opacity = 1 }) {
+export function PressFlashOverlay({ lit, color = "var(--color-teal-bright)", opacity = 1 }) {
   return (
     <span
       aria-hidden="true"
@@ -368,9 +368,9 @@ export function NT({ label, active, onClick }) {
       style={{
         padding: "10px 18px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px",
         textTransform: "uppercase", fontFamily: "var(--font-sans)",
-        background: active ? "var(--color-gold)" : "var(--color-bg-surface)",
+        background: active ? "var(--color-teal)" : "var(--color-bg-surface)",
         color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)",
-        border: "1px solid " + (active ? "var(--color-gold)" : "var(--color-border-subtle)"),
+        border: "1px solid " + (active ? "var(--color-teal)" : "var(--color-border-subtle)"),
         borderRadius: "12px", cursor: "pointer",
       }}
     >
@@ -380,7 +380,7 @@ export function NT({ label, active, onClick }) {
 }
 
 // VT — view tab. Uses the default tap feedback via Pressable: a quick lighter-green
-// fill (--color-gold-bright) that fades to the selected green, plus a subtle spring.
+// fill (--color-teal-bright) that fades to the selected green, plus a subtle spring.
 export function VT({ label, active, onClick }) {
   return (
     <Pressable
@@ -388,9 +388,9 @@ export function VT({ label, active, onClick }) {
       style={{
         padding: "10px 16px", minHeight: "44px", fontSize: "11px", letterSpacing: "2px",
         textTransform: "uppercase", fontFamily: "var(--font-sans)",
-        background: active ? "var(--color-gold)" : "var(--color-bg-surface)",
+        background: active ? "var(--color-teal)" : "var(--color-bg-surface)",
         color: active ? "var(--color-bg-base)" : "var(--color-text-secondary)",
-        border: "1px solid " + (active ? "var(--color-gold)" : "var(--color-border-subtle)"),
+        border: "1px solid " + (active ? "var(--color-teal)" : "var(--color-border-subtle)"),
         borderRadius: "12px", cursor: "pointer",
       }}
     >
@@ -409,14 +409,14 @@ export function VT({ label, active, onClick }) {
 //   sub     — optional sublabel at bottom
 //   color   — explicit value color (overrides status)
 //   size    — font size of val (default "22px")
-//   status  — "green" | "gold" | "red" → tinted bg + matching val color
+//   status  — "green" | "teal" | "red" → tinted bg + matching val color
 //   onClick — makes the card a pressable button
 //   span    — 2 = gridColumn "span 2" (for HomePanel grid tiles)
 // ─────────────────────────────────────────────────────────────
 
 const METRIC_STATUS = {
   green: { bg: "linear-gradient(170deg, rgba(0,200,150,0.16), rgba(7,19,15,0.65))", border: "rgba(0,200,150,0.28)", val: "var(--color-green)" },
-  gold:  { bg: "linear-gradient(170deg, rgba(0,200,150,0.12), rgba(7,19,15,0.60))", border: "rgba(0,200,150,0.24)", val: "var(--color-accent-primary)" },
+  teal:  { bg: "linear-gradient(170deg, rgba(0,200,150,0.12), rgba(7,19,15,0.60))", border: "rgba(0,200,150,0.24)", val: "var(--color-accent-primary)" },
   red:   { bg: "linear-gradient(170deg, rgba(239,68,68,0.16), rgba(29,10,10,0.65))",  border: "rgba(239,68,68,0.3)",  val: "var(--color-deduction)" },
 };
 
@@ -446,7 +446,7 @@ const GLASS_TIER = {
 export function MetricCard({ label, val, sub, color, size = "22px", status, onClick, span, rawVal, entranceIndex, insight, visualTier, centered }) {
   const { pressed, lit, handlers } = usePressFeedback();
   const btnRef = useRef(null);
-  // Press fill derived from the card's own color (status green/gold/red, etc).
+  // Press fill derived from the card's own color (status green/teal/red, etc).
   const [fill, setFill] = useState(undefined);
   const [flashing, setFlashing] = useState(false);
   const prevRaw = useRef(null);
@@ -462,7 +462,7 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
       prevRaw.current = rawVal;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFlashing(true);
-      const t = setTimeout(() => setFlashing(false), 150); // stays gold 150ms, CSS transition fades over 600ms
+      const t = setTimeout(() => setFlashing(false), 150); // stays teal 150ms, CSS transition fades over 600ms
       return () => clearTimeout(t);
     }
   }, [rawVal]);
@@ -513,7 +513,7 @@ export function MetricCard({ label, val, sub, color, size = "22px", status, onCl
 
   // Flash overrides the status color briefly, then CSS transition fades back
   const baseValColor = color || (s ? s.val : "var(--color-text-primary)");
-  const valColor     = flashing ? "var(--color-gold-bright)" : baseValColor;
+  const valColor     = flashing ? "var(--color-teal-bright)" : baseValColor;
   const displayVal   = rawVal != null ? _fmt$(counted) : val;
 
   const content = (
@@ -624,7 +624,7 @@ export function FlowSparklineCard({
 }
 
 export function SmBtn({ children, onClick, c = "var(--color-text-secondary)", bg = "var(--color-bg-surface)", style: extraStyle }) { return <Pressable onClick={onClick} style={{ background: bg, color: c, border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "10px 14px", minHeight: "44px", fontSize: "11px", fontFamily: "var(--font-sans)", cursor: "pointer", ...extraStyle }}>{children}</Pressable>; }
-export function SH({ children, color, textColor, right }) { const c = color || "var(--color-gold)"; const tc = textColor || c; return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "4px" }}><div style={{ display: "flex", alignItems: "center", gap: "12px" }}><div style={{ width: "3px", height: "18px", background: c, borderRadius: "2px", flexShrink: 0 }} /><div style={{ fontSize: "11px", letterSpacing: "3px", color: tc, textTransform: "uppercase", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{children}</div></div>{right != null && <div style={{ fontSize: "12px", color: tc, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{right}</div>}</div>; }
+export function SH({ children, color, textColor, right }) { const c = color || "var(--color-teal)"; const tc = textColor || c; return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "4px" }}><div style={{ display: "flex", alignItems: "center", gap: "12px" }}><div style={{ width: "3px", height: "18px", background: c, borderRadius: "2px", flexShrink: 0 }} /><div style={{ fontSize: "11px", letterSpacing: "3px", color: tc, textTransform: "uppercase", fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{children}</div></div>{right != null && <div style={{ fontSize: "12px", color: tc, fontWeight: "bold", fontFamily: "var(--font-sans)" }}>{right}</div>}</div>; }
 
 export function PanelHero({ eyebrow, children }) {
   return (

@@ -293,7 +293,7 @@ const [isCoarsePointer] = useState(() =>
 ```
 
 **Modal header:**
-- Left: `REORDER GOALS` label (10px, 2px tracking, uppercase, var(--color-gold))
+- Left: `REORDER GOALS` label (10px, 2px tracking, uppercase, var(--color-teal))
 - Right: `✕` close button → `setShowReorderModal(false)`
 - Backdrop click → `setShowReorderModal(false)`
 

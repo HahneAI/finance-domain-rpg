@@ -12,8 +12,13 @@ section rather than duplicating the write-up.
 
 ## Open — Drift Warden findings
 
-None. Every DW-n finding from the original investigation is fixed (DW-1, DW-2, DW-3,
-DW-4, DW-5, DW-6, DW-7 — see the Fixed table below).
+DW-1 through DW-7 (the original investigation) are all fixed — see the Fixed table
+below. One new finding landed on `master` independently while that work was in
+progress and hasn't been picked up yet:
+
+| # | Finding | Where | Severity / blast radius | Warden entry |
+|---|---------|-------|------------------------|--------------|
+| DW-8 | ✅ **`CoachNetWorthCard` (Red tier trigger) can never render during Job Loss Mode.** `CoachNetWorthCard` is only ever mounted inside `HomePanel.jsx`, but `App.jsx`'s Home-view branch (`config.jobLossMode ? <JobLossHomePanel/> : <HomePanel/>`) fully replaces `HomePanel` with `JobLossHomePanel` whenever `config.jobLossMode` is true — and `JobLossHomePanel` never renders `CoachNetWorthCard`. The Red tier ("user is in Job Loss Mode, runway under 30 days") is real, tested, now-correctly-computed logic (§21 quarantine-1 closed this session) that is structurally unreachable in the one state it exists to cover — the runway-formula fix doesn't change that it can't fire. Fix shape: decide whether Job Loss Mode should carry its own Coach presence (e.g. mount the card in `JobLossHomePanel` too) or whether the Red tier's trigger condition should move — needs an owner call, not a drive-by fix. | `App.jsx` Home-view branch; `HomePanel.jsx` / `JobLossHomePanel.jsx` | Feature-completeness, not data corruption — the Red tier's entire premise never triggers in production | Found while closing `drift-app-warden.md` §21 F24/quarantine-2, 2026-07-21 — not yet covered by a formal warden pass |
 
 ---
 

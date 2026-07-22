@@ -491,7 +491,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
           gap: "12px",
         }}>
           <div>
-            <SH color="var(--color-gold)">Demo Account {accountNumber}</SH>
+            <SH color="var(--color-teal)">Demo Account {accountNumber}</SH>
             <div style={{
               fontSize: "12px",
               color: "var(--color-text-secondary)",

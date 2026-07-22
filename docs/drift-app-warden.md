@@ -2104,7 +2104,7 @@ hook keeps components mounted through exit (`useFoldTransition`'s whole purpose)
 **F91 · `MetricCard`/`Card` contract** — `ui.jsx:446–553` (alias `:553`) — **[G/L]**
 The workhorse: `entranceIndex` staggered `fadeSlideUp` (80ms/card, capped 400ms),
 `rawVal` 0→target countup (1200ms — the one sanctioned >500ms animation), `status`
-(green/gold/red semantics), `visualTier` (glass/overlay tint without a wrapper),
+(green/teal/red semantics), `visualTier` (glass/overlay tint without a wrapper),
 `insight` → `InsightRow:668` — which **returns `undefined` and renders nothing when
 backing data is insufficient**: signals are never fabricated (Spine E's data-honesty
 rule, shared with §8 F16's Pulse builders).
@@ -2160,7 +2160,7 @@ numeric-input standard (string drafts, parse at commit, `attempted` error stylin
 
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
 |---|---|---|---|
-| Any `@theme` token | The three untokenized-hex debt files (they won't follow), Pulse reservation, status-color semantics (green/gold/red meanings in CLAUDE.md) | Grep var name + raw hex; visual pass in the debt files | D5 |
+| Any `@theme` token | The three untokenized-hex debt files (they won't follow), Pulse reservation, status-color semantics (green/teal/red meanings in CLAUDE.md) | Grep var name + raw hex; visual pass in the debt files | D5 |
 | `Pressable`/press-system internals | Every interactive element app-wide (it's the default), CLAUDE.md animation rules | One press per panel; nothing bounces/spins/scales-up | D1 |
 | Fold keyframes/durations (`index.css:345–384`) | All `useFoldTransition`/`FoldSwitch`/`StepSlide` consumers; exit-vs-unmount timings; reduced-motion coverage | Wizard step, login mode, modal close, dropdown — all four fold shapes; `prefers-reduced-motion` on | D1 |
 | `MetricCard` props/animation values | Every panel's tiles; entrance/countup caps in CLAUDE.md | Snapshot tests + per-panel visual pass | D1 |

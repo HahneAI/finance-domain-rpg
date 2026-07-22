@@ -164,7 +164,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
           >
             <span style={{
               fontSize: "13px", fontWeight: "600",
-              color: active ? "var(--color-gold)" : "var(--color-text-primary)",
+              color: active ? "var(--color-teal)" : "var(--color-text-primary)",
             }}>
               {active && "✓ "}{ev.label}
             </span>
@@ -190,7 +190,7 @@ function Pill({ label, active, onClick, disabled }) {
         padding: "7px 14px",
         fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
         background: disabled ? "var(--color-bg-base)" : active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
-        color: disabled ? "var(--color-text-disabled)" : active ? "var(--color-gold)" : "var(--color-text-secondary)",
+        color: disabled ? "var(--color-text-disabled)" : active ? "var(--color-teal)" : "var(--color-text-secondary)",
         border: `1px solid ${disabled ? "var(--color-bg-raised)" : active ? "rgba(0,200,150,0.28)" : "var(--color-border-subtle)"}`,
         borderRadius: "10px", cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.5 : 1,
@@ -335,7 +335,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
           padding: "10px 12px",
           fontSize: "12px", color: "var(--color-text-primary)", lineHeight: 1.5,
         }}>
-          <strong style={{ color: "var(--color-gold)" }}>
+          <strong style={{ color: "var(--color-teal)" }}>
             Switched to {formData.employerPreset === "DHL" ? "DHL" : "Base"} preset.
           </strong>{" "}
           {formData.employerPreset === "DHL"
@@ -798,19 +798,19 @@ function Step2({ formData, onChange, attempted }) {
             </div>
             <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: "1.7", marginBottom: "14px" }}>
               <div style={{ marginBottom: "10px" }}>
-                <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>1. Your whole year is built from this number.</span>
+                <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>1. Your whole year is built from this number.</span>
                 {" "}The app treats {formData.maxWeeklyHours}h as your expected weekly pay — every paycheck, every goal timeline, every budget health calculation starts here.
               </div>
               <div style={{ marginBottom: "10px" }}>
-                <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>2. Each week you'll confirm what you actually worked.</span>
+                <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>2. Each week you'll confirm what you actually worked.</span>
                 {" "}A check-in will ask how many days you put in. If you came in short, that difference gets logged so your real income stays on track.
               </div>
               <div style={{ marginBottom: "10px" }}>
-                <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>3. Overtime is not guaranteed income.</span>
+                <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>3. Overtime is not guaranteed income.</span>
                 {" "}If your budget or goals depend on max-hour paychecks, you could come up short in lighter weeks. Set this to the hours you can reliably count on — you can always log extra when overtime actually happens.
               </div>
               <div>
-                <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>4. You can change this any time.</span>
+                <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>4. You can change this any time.</span>
                 {" "}Head to Account → Schedule to adjust your ceiling as your situation changes.
               </div>
             </div>
@@ -819,7 +819,7 @@ function Step2({ formData, onChange, attempted }) {
                 type="checkbox"
                 checked={Boolean(formData.hoursUnderstood)}
                 onChange={e => onChange({ hoursUnderstood: e.target.checked })}
-                style={{ marginTop: "3px", accentColor: "var(--color-gold)", width: "16px", height: "16px", flexShrink: 0 }}
+                style={{ marginTop: "3px", accentColor: "var(--color-teal)", width: "16px", height: "16px", flexShrink: 0 }}
               />
               <span style={{ fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.6" }}>
                 I understand — my income projections, budget, and goals are all built from this ceiling. I'll log my actual hours each week so my real earnings stay accurate.
@@ -909,7 +909,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle, attempted })
         <div>
           <div style={{
             fontSize: "13px", fontWeight: 600,
-            color: selected ? "var(--color-gold)" : "var(--color-text-primary)",
+            color: selected ? "var(--color-teal)" : "var(--color-text-primary)",
           }}>
             {selected && "✓ "}{def.label}
           </div>
@@ -919,7 +919,7 @@ function BenefitCard({ def, selected, formData, onChange, onToggle, attempted })
         </div>
         <div style={{
           fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
-          color: selected ? "var(--color-gold)" : "var(--color-text-disabled)",
+          color: selected ? "var(--color-teal)" : "var(--color-text-disabled)",
           flexShrink: 0,
         }}>
           {selected ? "On" : "Off"}
@@ -1547,7 +1547,7 @@ function Step4({ formData, onChange, attempted }) {
             Night shift paystub-derived. Flagged as estimated until you confirm with your own stub.
           </div>
           <Pressable onClick={loadDHLPreset} style={{
-            background: "rgba(0,200,150,0.10)", color: "var(--color-gold)",
+            background: "rgba(0,200,150,0.10)", color: "var(--color-teal)",
             border: "1px solid rgba(0,200,150,0.28)", borderRadius: "10px",
             padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
             textTransform: "uppercase", cursor: "pointer",
@@ -1605,7 +1605,7 @@ function Step4({ formData, onChange, attempted }) {
               background: formData.taxRatesEstimated
                 ? "rgba(0,200,150,0.12)" : "rgba(34,197,94,0.12)",
               color: formData.taxRatesEstimated
-                ? "var(--color-gold)" : "var(--color-green)",
+                ? "var(--color-teal)" : "var(--color-green)",
               border: `1px solid ${formData.taxRatesEstimated
                 ? "rgba(0,200,150,0.3)" : "rgba(34,197,94,0.3)"}`,
             }}>
@@ -1624,7 +1624,7 @@ function Step4({ formData, onChange, attempted }) {
               <span style={{ color: "var(--color-text-primary)" }}>{r.label}</span>
               <strong style={{
                 color: (r.est && formData.taxRatesEstimated)
-                  ? "var(--color-gold)" : "var(--color-text-primary)",
+                  ? "var(--color-teal)" : "var(--color-text-primary)",
               }}>
                 {r.val}{r.est && formData.taxRatesEstimated ? " est." : ""}
               </strong>
@@ -1634,7 +1634,7 @@ function Step4({ formData, onChange, attempted }) {
             <div style={{
               marginTop: "6px", fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.5",
             }}>
-              Confirm rates anytime via <strong style={{ color: "var(--color-gold)" }}>Sharpen Rates</strong> in Income.
+              Confirm rates anytime via <strong style={{ color: "var(--color-teal)" }}>Sharpen Rates</strong> in Income.
             </div>
           )}
         </div>
@@ -1794,7 +1794,7 @@ function StructureChangeDiff({ originalConfig, formData }) {
                   {fmtDiffValue(r.key, r.before)}
                 </span>
                 <span style={{ color: "var(--color-text-primary)" }}>→</span>
-                <span style={{ color: "var(--color-gold)", fontWeight: 600 }}>
+                <span style={{ color: "var(--color-teal)", fontWeight: 600 }}>
                   {fmtDiffValue(r.key, r.after)}
                 </span>
               </span>
@@ -1928,7 +1928,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
               {TAX_EXEMPT_DISCLAIMER}
             </p>
             <Pressable onClick={() => onChange({ taxExemptOptIn: true })} style={{
-              background: "rgba(0,200,150,0.12)", color: "var(--color-gold)",
+              background: "rgba(0,200,150,0.12)", color: "var(--color-teal)",
               border: "1px solid rgba(0,200,150,0.4)", borderRadius: "10px",
               padding: "7px 14px", fontSize: "10px", letterSpacing: "1.5px",
               fontWeight: 700, textTransform: "uppercase", cursor: "pointer",
@@ -2386,7 +2386,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
           }}>
             <div style={{
               height: "100%", borderRadius: "2px",
-              background: "var(--color-gold)",
+              background: "var(--color-teal)",
               width: `${progressPct}%`,
               transition: "width 0.3s ease",
             }} />
@@ -2472,7 +2472,7 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
             onClick={handleNext}
             disabled={!canProceed}
             style={{
-              background: canProceed ? "var(--color-gold)" : "var(--color-bg-raised)",
+              background: canProceed ? "var(--color-teal)" : "var(--color-bg-raised)",
               color: canProceed ? "var(--color-bg-base)" : "var(--color-text-disabled)",
               border: "none", borderRadius: "12px", padding: "8px 22px",
               fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",

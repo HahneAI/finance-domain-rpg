@@ -119,6 +119,14 @@ export const DEFAULT_CONFIG = {
   // both JobLossHomePanel and JobLossBudgetPanel, persisted via eager save —
   // NOT session-only like the old draft-only version of this field.
   jobLossCashOnHand: null,
+  // Pending/final paycheck still owed from the lost job (TODO §15.H15) —
+  // optional, skippable in the wizard (unlike cash on hand). Resolved once at
+  // Activate time from "days worked in your final week" + "which day checks
+  // normally arrive" into a concrete estimated amount + date, not re-derived
+  // later — same resolve-to-a-concrete-value pattern as expense dueDateAnchor.
+  // null = no pending check expected (or the step was skipped).
+  jobLossPendingCheckAmount: null,
+  jobLossPendingCheckDate: null,  // "YYYY-MM-DD"
 
   // Unemployment benefits (TODO §15.C2) — captured in the Job Loss entry flow.
   // null = unanswered (pre-entry); true/false once the user has set them.
@@ -337,7 +345,7 @@ export const EVENT_TYPES = {
   missed_unapproved: { label: "Missed Work (Unapproved)",       color: "#e8622a", icon: "⚠" },
   pto:               { label: "PTO Used",                       color: "#7a8bbf", icon: "◷" },
   pto_unapproved:    { label: "PTO Used (Unapproved)",          color: "#c8922a", icon: "⚠" },
-  partial:           { label: "Partial Shift",                  color: "var(--color-gold)", icon: "◑" },
+  partial:           { label: "Partial Shift",                  color: "var(--color-teal)", icon: "◑" },
   bonus:             { label: "Bonus / Extra Pay",              color: "var(--color-green)", icon: "+" },
   other_loss:        { label: "Other Income Loss",              color: "#888",    icon: "−" },
 };

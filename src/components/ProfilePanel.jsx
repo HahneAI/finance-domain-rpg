@@ -38,7 +38,7 @@ function BackBar({ onBack, title }) {
     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
       <Pressable
         onClick={onBack}
-        style={{ background: "transparent", border: "none", color: "var(--color-gold)", cursor: "pointer", fontSize: "13px", padding: "4px 0", display: "flex", alignItems: "center", gap: "5px" }}
+        style={{ background: "transparent", border: "none", color: "var(--color-teal)", cursor: "pointer", fontSize: "13px", padding: "4px 0", display: "flex", alignItems: "center", gap: "5px" }}
       >
         <span style={{ fontSize: "16px", lineHeight: 1 }}>‹</span>
         <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>Profile</span>
@@ -84,7 +84,7 @@ function DetailCard({ children, style }) {
 // ── Sub-views ───────────────────────────────────────────────────────────────
 
 export function AccountDetail({ authedUser, config, subscription, onBack }) {
-  const setupColor  = config.setupComplete ? "var(--color-green)"           : "var(--color-gold)";
+  const setupColor  = config.setupComplete ? "var(--color-green)"           : "var(--color-teal)";
   const setupBg     = config.setupComplete ? "rgba(76,175,125,0.12)"        : "rgba(0,200,150,0.08)";
   const setupBorder = config.setupComplete ? "rgba(76,175,125,0.3)"         : "rgba(0,200,150,0.22)";
   const setupLabel  = config.setupComplete ? "Setup complete"               : "Setup pending";
@@ -287,7 +287,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
       subStatusLabel = "Past Due"; subStatusTone = "red";
       subDetailText = "Your last payment failed — update your card to keep access.";
     } else if (subscription?.status === "canceled") {
-      subStatusLabel = "Canceled"; subStatusTone = "gold";
+      subStatusLabel = "Canceled"; subStatusTone = "teal";
       subDetailText = subscription?.currentPeriodEnd
         ? `Access continues through ${fmtDate(subscription.currentPeriodEnd)}.`
         : "Your subscription has been canceled.";
@@ -298,10 +298,10 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
         : "Your subscription is active.";
     }
   } else if (entitlement.state === "trial") {
-    subStatusLabel = "Trial"; subStatusTone = "gold";
+    subStatusLabel = "Trial"; subStatusTone = "teal";
     subDetailText = `${entitlement.trialDaysLeft} day${entitlement.trialDaysLeft === 1 ? "" : "s"} left in your free trial.`;
   } else if (entitlement.state === "none") {
-    subStatusLabel = "N/A"; subStatusTone = "gold";
+    subStatusLabel = "N/A"; subStatusTone = "teal";
     subDetailText = "No subscription required for this account.";
   } else {
     subStatusLabel = "Trial Ended"; subStatusTone = "red";
@@ -310,7 +310,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
 
   const subToneColors = {
     green: { color: "var(--color-green)", bg: "rgba(76,175,125,0.12)", border: "rgba(76,175,125,0.3)" },
-    gold:  { color: "var(--color-gold)", bg: "rgba(0,200,150,0.08)", border: "rgba(0,200,150,0.22)" },
+    teal:  { color: "var(--color-teal)", bg: "rgba(0,200,150,0.08)", border: "rgba(0,200,150,0.22)" },
     red:   { color: "var(--color-deduction)", bg: "rgba(244,164,164,0.1)", border: "rgba(244,164,164,0.28)" },
   }[subStatusTone];
 
@@ -390,7 +390,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
                 <Pressable
                   onClick={() => handleCheckout("annual")}
                   disabled={checkoutState.plan !== null}
-                  style={{ flex: 1, minWidth: "120px", padding: "9px 0", background: "var(--color-gold)", border: "none", borderRadius: "10px", color: "var(--color-bg-base)", fontSize: "12px", fontWeight: "700", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "annual" ? 0.5 : 1 }}
+                  style={{ flex: 1, minWidth: "120px", padding: "9px 0", background: "var(--color-teal)", border: "none", borderRadius: "10px", color: "var(--color-bg-base)", fontSize: "12px", fontWeight: "700", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "annual" ? 0.5 : 1 }}
                 >
                   {checkoutState.plan === "annual" ? "Redirecting…" : "Annual — $10.00/mo"}
                 </Pressable>
@@ -639,9 +639,9 @@ function EmploymentCard({ config, setConfig, onSaveConfig }) {
                   onClick={() => { setDhlTeam(t); setTeamDirty(t !== config.dhlTeam); }}
                   style={{
                     flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid",
-                    borderColor: dhlTeam === t ? "var(--color-gold)" : "var(--color-border-subtle)",
+                    borderColor: dhlTeam === t ? "var(--color-teal)" : "var(--color-border-subtle)",
                     background: dhlTeam === t ? "rgba(0,200,150,0.10)" : "var(--color-bg-base)",
-                    color: dhlTeam === t ? "var(--color-gold)" : "var(--color-text-secondary)",
+                    color: dhlTeam === t ? "var(--color-teal)" : "var(--color-text-secondary)",
                     fontWeight: "bold", fontSize: "14px", cursor: "pointer",
                   }}
                 >
@@ -685,7 +685,7 @@ function PaySectionHeader({ title, editing, onEdit }) {
       {!editing && (
         <Pressable
           onClick={onEdit}
-          style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}
+          style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}
         >
           Edit
         </Pressable>
@@ -784,7 +784,7 @@ function BasePayCard({ config, setConfig, onSaveConfig }) {
       {!editing ? (
         <DetailCard>
           <DetailRow label="Pay Schedule" value={PAY_SCHEDULE_LABELS[config.userPaySchedule] ?? "Weekly"} />
-          <DetailRow label="Base Rate"    value={`$${config.baseRate}/hr`} valueColor="var(--color-gold)" />
+          <DetailRow label="Base Rate"    value={`$${config.baseRate}/hr`} valueColor="var(--color-teal)" />
           <DetailRow label="Shift Length" value={config.shiftHours > 0 ? `${config.shiftHours}h` : "—"} last />
         </DetailCard>
       ) : (
@@ -1140,11 +1140,11 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
           {config.customWeeklyHours != null && (
             config.customWeeklyHoursLong != null && config.customWeeklyHoursShort != null ? (
               <>
-                <DetailRow label="Long Week Override" value={`${config.customWeeklyHoursLong} hrs`} valueColor="var(--color-gold)" />
-                <DetailRow label="Short Week Override" value={`${config.customWeeklyHoursShort} hrs`} valueColor="var(--color-gold)" last />
+                <DetailRow label="Long Week Override" value={`${config.customWeeklyHoursLong} hrs`} valueColor="var(--color-teal)" />
+                <DetailRow label="Short Week Override" value={`${config.customWeeklyHoursShort} hrs`} valueColor="var(--color-teal)" last />
               </>
             ) : (
-              <DetailRow label="Custom Override" value={`${config.customWeeklyHours} hrs/wk`} valueColor="var(--color-gold)" last />
+              <DetailRow label="Custom Override" value={`${config.customWeeklyHours} hrs/wk`} valueColor="var(--color-teal)" last />
             )
           )}
         </DetailCard>
@@ -1167,7 +1167,7 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
 
             {isEmployerDHL && (
               <div>
-                <SH color="var(--color-gold)" right={null}>Schedule Override</SH>
+                <SH color="var(--color-teal)" right={null}>Schedule Override</SH>
                 <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "8px" }}>
                   {`${config.dhlTeam ?? "B"}-Team · Long/Short alternating (DHL preset rotation)`}
                 </div>
@@ -1177,9 +1177,9 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
                     onClick={() => change("customScheduleEnabled", false)}
                     style={{
                       padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
-                      border: !draft.customScheduleEnabled ? "1px solid var(--color-gold)" : "1px solid var(--color-border-subtle)",
+                      border: !draft.customScheduleEnabled ? "1px solid var(--color-teal)" : "1px solid var(--color-border-subtle)",
                       background: !draft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
-                      color: !draft.customScheduleEnabled ? "var(--color-gold)" : "var(--color-text-secondary)",
+                      color: !draft.customScheduleEnabled ? "var(--color-teal)" : "var(--color-text-secondary)",
                       fontWeight: !draft.customScheduleEnabled ? "bold" : "normal",
                     }}
                   >
@@ -1190,9 +1190,9 @@ function ScheduleCard({ config, setConfig, onSaveConfig, isEmployerDHL }) {
                     onClick={() => change("customScheduleEnabled", true)}
                     style={{
                       padding: "6px 14px", borderRadius: "6px", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
-                      border: draft.customScheduleEnabled ? "1px solid var(--color-gold)" : "1px solid var(--color-border-subtle)",
+                      border: draft.customScheduleEnabled ? "1px solid var(--color-teal)" : "1px solid var(--color-border-subtle)",
                       background: draft.customScheduleEnabled ? "rgba(0,200,150,0.1)" : "var(--color-bg-surface)",
-                      color: draft.customScheduleEnabled ? "var(--color-gold)" : "var(--color-text-secondary)",
+                      color: draft.customScheduleEnabled ? "var(--color-teal)" : "var(--color-text-secondary)",
                       fontWeight: draft.customScheduleEnabled ? "bold" : "normal",
                     }}
                   >
@@ -1282,7 +1282,7 @@ function PayDetail({ config, setConfig, onSaveConfig, onBack, onOpenLifeEvents }
           style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "14px 16px", background: "var(--color-bg-surface)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", cursor: "pointer", textAlign: "left" }}
         >
           <div>
-            <div style={{ fontSize: "14px", color: "var(--color-gold)", fontWeight: "600" }}>Life Events</div>
+            <div style={{ fontSize: "14px", color: "var(--color-teal)", fontWeight: "600" }}>Life Events</div>
             <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "2px" }}>Pay structure changed, new job, or lost your job</div>
           </div>
           <span style={{ fontSize: "18px", color: "var(--color-text-primary)", marginLeft: "12px", lineHeight: 1 }}>›</span>
@@ -1302,7 +1302,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
   const k401StartLabel = effectiveK401Start
     ? `${fmt(effectiveK401Start)}${k401StartSource === "benefits" ? " (benefits start)" : ""}`
     : "—";
-  const k401StartColor = k401StartSource === "benefits" ? "var(--color-gold)" : undefined;
+  const k401StartColor = k401StartSource === "benefits" ? "var(--color-teal)" : undefined;
   const enrolledConfig = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
 
   const [editing, setEditing]   = useState(true);
@@ -1353,7 +1353,7 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", paddingLeft: "4px" }}>401k</div>
         {!editing && (
-          <Pressable onClick={() => setEditing(true)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
+          <Pressable onClick={() => setEditing(true)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
         )}
       </div>
 
@@ -1555,7 +1555,7 @@ function PreferencesDetail({ config, setConfig, onSaveConfig, onBack, taxFeature
               Standard withholding
             </span>
           )}
-          valueColor={showTaxExempt ? "var(--color-gold)" : "var(--color-text-secondary)"}
+          valueColor={showTaxExempt ? "var(--color-teal)" : "var(--color-text-secondary)"}
           last
         />
       </DetailCard>
@@ -1661,8 +1661,8 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
 
       {/* Extra withholding quick-toggle */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", padding: "10px 14px", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px" }}>
-        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", flex: 1 }}>Apply extra withholding <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerPaycheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
-        <Pressable onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)", color: showExtra ? "var(--color-gold)" : "var(--color-text-primary)", border: "1px solid " + (showExtra ? "var(--color-gold)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</Pressable>
+        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", flex: 1 }}>Apply extra withholding <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>{f2(extraPerPaycheck)}/check</span> on taxed weeks → ~{f(config.targetOwedAtFiling)} owed at filing</div>
+        <Pressable onClick={() => setShowExtra(v => !v)} style={{ fontSize: "9px", letterSpacing: "2px", padding: "5px 12px", borderRadius: "12px", cursor: "pointer", background: showExtra ? "rgba(0,200,150,0.10)" : "var(--color-bg-surface)", color: showExtra ? "var(--color-teal)" : "var(--color-text-primary)", border: "1px solid " + (showExtra ? "var(--color-teal)" : "var(--color-border-subtle)"), textTransform: "uppercase", flexShrink: 0 }}>{showExtra ? "ON" : "OFF"}</Pressable>
       </div>
 
       <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
@@ -1674,7 +1674,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
               moFlatRate: String(config.moFlatRate ?? ""),
               targetOwedAtFiling: String(config.targetOwedAtFiling ?? ""),
               firstActiveIdx: String(config.firstActiveIdx ?? ""),
-            })} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Edit Tax Plan</Pressable>
+            })} style={{ background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Edit Tax Plan</Pressable>
           ) : (
             <div style={{ display: "flex", gap: "8px" }}>
               <Pressable onClick={() => { const nc = { ...config, fedStdDeduction: parseFloat(taxDraft.fedStdDeduction) || 0, moFlatRate: parseFloat(taxDraft.moFlatRate) || 0, targetOwedAtFiling: parseFloat(taxDraft.targetOwedAtFiling) || 0, firstActiveIdx: parseInt(taxDraft.firstActiveIdx) || 0 }; setConfig(nc); onSaveConfig?.(nc); setTaxDraft(null); }} style={{ background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>Save</Pressable>
@@ -1700,7 +1700,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: "12px", marginBottom: "20px" }}>
         <Card label="Full Year Fed Liability" val={f(fedLiability)} rawVal={fedLiability} sub={`${startDateDisplay ? `from ${startDateDisplay} · ` : ""}On ${f(fedAGI)} AGI`} color="var(--color-deduction)" size="20px" />
-        <Card label="Full Year MO Liability" val={f(moLiability)} rawVal={moLiability} sub="4.7% flat" color="var(--color-gold)" size="20px" />
+        <Card label="Full Year MO Liability" val={f(moLiability)} rawVal={moLiability} sub="4.7% flat" color="var(--color-teal)" size="20px" />
         <Card label="FICA (Always Paid)" val={f(ficaTotal)} rawVal={ficaTotal} sub="7.65% every check" color="var(--color-text-primary)" size="20px" />
       </div>
 
@@ -1708,7 +1708,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "8px", padding: "20px", marginBottom: "16px" }}>
         <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px", lineHeight: 1, marginBottom: "12px" }}>Tax Gap Analysis</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", fontSize: "13px" }}>
-          {[{ l: "Fed withheld (taxed weeks)", v: f(fedWithheldBase), c: "var(--color-green)" }, { l: "MO withheld (taxed weeks)", v: f(moWithheldBase), c: "var(--color-green)" }, { l: "Federal gap", v: f(fedGap), c: "var(--color-deduction)" }, { l: "Missouri gap", v: f(moGap), c: "var(--color-deduction)" }, { l: "Total income tax gap", v: f(totalGap), c: "var(--color-deduction)" }, { l: "Target owed at filing", v: f(config.targetOwedAtFiling), c: "var(--color-gold)" }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "var(--color-text-primary)" }}>{r.l}</span><span style={{ fontWeight: "bold", color: r.c }}>{r.v}</span></div>)}
+          {[{ l: "Fed withheld (taxed weeks)", v: f(fedWithheldBase), c: "var(--color-green)" }, { l: "MO withheld (taxed weeks)", v: f(moWithheldBase), c: "var(--color-green)" }, { l: "Federal gap", v: f(fedGap), c: "var(--color-deduction)" }, { l: "Missouri gap", v: f(moGap), c: "var(--color-deduction)" }, { l: "Total income tax gap", v: f(totalGap), c: "var(--color-deduction)" }, { l: "Target owed at filing", v: f(config.targetOwedAtFiling), c: "var(--color-teal)" }].map(r => <div key={r.l} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #222" }}><span style={{ color: "var(--color-text-primary)" }}>{r.l}</span><span style={{ fontWeight: "bold", color: r.c }}>{r.v}</span></div>)}
         </div>
 
         {/* Event log pipeline indicator — always shown so user can confirm events are wired in */}
@@ -1742,9 +1742,9 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "20px", marginBottom: "28px" }}>
         <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "var(--font-display)", color: "var(--color-text-primary)", letterSpacing: "-0.2px", lineHeight: 1, marginBottom: "12px" }}>Extra Withholding Plan</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: "12px", marginBottom: "16px" }}>
-          {[{ l: "Extra Needed", v: f(targetExtraTotal), c: "var(--color-deduction)" }, { l: "Remaining Paychecks", v: remainingPaychecks, c: "var(--color-text-primary)" }, { l: "Extra Per Check", v: f2(extraPerPaycheck), c: "var(--color-gold)" }].map(c => <div key={c.l} style={{ textAlign: "center", padding: "12px", background: "var(--color-bg-base)", borderRadius: "6px" }}><div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-primary)", textTransform: "uppercase", marginBottom: "6px" }}>{c.l}</div><div style={{ fontSize: "20px", fontWeight: "bold", color: c.c }}>{c.v}</div></div>)}
+          {[{ l: "Extra Needed", v: f(targetExtraTotal), c: "var(--color-deduction)" }, { l: "Remaining Paychecks", v: remainingPaychecks, c: "var(--color-text-primary)" }, { l: "Extra Per Check", v: f2(extraPerPaycheck), c: "var(--color-teal)" }].map(c => <div key={c.l} style={{ textAlign: "center", padding: "12px", background: "var(--color-bg-base)", borderRadius: "6px" }}><div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-text-primary)", textTransform: "uppercase", marginBottom: "6px" }}>{c.l}</div><div style={{ fontSize: "20px", fontWeight: "bold", color: c.c }}>{c.v}</div></div>)}
         </div>
-        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.8" }}>Add <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f2(extraPerPaycheck)}</span> extra federal withholding on each of your <span style={{ color: "var(--color-gold)" }}>{remainingPaychecks} remaining taxed checks</span>.</div>
+        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.8" }}>Add <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>{f2(extraPerPaycheck)}</span> extra federal withholding on each of your <span style={{ color: "var(--color-teal)" }}>{remainingPaychecks} remaining taxed checks</span>.</div>
       </div>
 
       {/* ── Check History — Past Tax Status Editor ─────────────────────────── */}
@@ -1756,7 +1756,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
               Overrides only affect extra withholding math · {sortedCheckWeeks.length} check{sortedCheckWeeks.length !== 1 ? "s" : ""} recorded
             </div>
           </div>
-          <span style={{ fontSize: "9px", padding: "3px 8px", borderRadius: "10px", flexShrink: 0, background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.18)", color: "var(--color-gold)", letterSpacing: "1px", textTransform: "uppercase" }}>
+          <span style={{ fontSize: "9px", padding: "3px 8px", borderRadius: "10px", flexShrink: 0, background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.18)", color: "var(--color-teal)", letterSpacing: "1px", textTransform: "uppercase" }}>
             {PAY_SCHEDULE_LABELS[paySchedule] ?? "Weekly"}
           </span>
         </div>
@@ -1831,7 +1831,7 @@ function TaxPlanDetail({ config, setConfig, onSaveConfig, allWeeks, taxDerived, 
       </div>
 
       {scheduleByMonth.map(m => <div key={m.name} style={{ marginBottom: "20px" }}>
-        <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "8px" }}>{m.name.slice(0, 3)}</div>
+        <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "8px" }}>{m.name.slice(0, 3)}</div>
         {m.wks.map(w => {
           const taxed = config.taxedWeeks.includes(w.idx);
           const isPast = today ? toLocalIso(w.weekEnd) < today : false;

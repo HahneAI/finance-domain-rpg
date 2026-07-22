@@ -106,7 +106,7 @@ export function ReviveScreen({ revival, checkoutReturn }) {
             <Pressable
               onClick={() => handleReviveCheckout("annual")}
               disabled={checkoutState.plan !== null}
-              style={{ padding: "14px 16px", borderRadius: "12px", background: "var(--color-gold)", border: "none", color: "var(--color-bg-base)", textAlign: "left", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "annual" ? 0.5 : 1 }}
+              style={{ padding: "14px 16px", borderRadius: "12px", background: "var(--color-teal)", border: "none", color: "var(--color-bg-base)", textAlign: "left", cursor: checkoutState.plan ? "default" : "pointer", opacity: checkoutState.plan && checkoutState.plan !== "annual" ? 0.5 : 1 }}
             >
               <div style={{ fontSize: "14px", fontWeight: "bold" }}>Annual — Best Value</div>
               <div style={{ fontSize: "12px" }}>

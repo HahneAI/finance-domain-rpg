@@ -182,7 +182,7 @@ export function InvestorRegister({ onRegister, onBack }) {
           disabled={loading}
           style={{
             marginTop: "4px",
-            background: loading ? "var(--color-bg-raised)" : "var(--color-gold)",
+            background: loading ? "var(--color-bg-raised)" : "var(--color-teal)",
             color: loading ? "var(--color-text-disabled)" : "var(--color-bg-base)",
             border: "none", borderRadius: "8px",
             padding: "13px 0", fontSize: "11px",
@@ -209,6 +209,6 @@ export function InvestorRegister({ onRegister, onBack }) {
 
 const linkStyle = {
   background: "transparent", border: "none",
-  color: "var(--color-gold)", fontSize: "11px",
+  color: "var(--color-teal)", fontSize: "11px",
   cursor: "pointer", padding: 0, textDecoration: "underline",
 };

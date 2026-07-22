@@ -13,8 +13,8 @@ import { Pressable } from "./ui.jsx";
  *
  * Status pills carry the spec colors:
  *   Applied   → gray
- *   Screening → gold
- *   Interview → gold
+ *   Screening → teal
+ *   Interview → teal
  *   Offer     → green
  *   Rejected  → red
  *   Withdrawn → muted gray
@@ -22,8 +22,8 @@ import { Pressable } from "./ui.jsx";
 
 const STATUS_OPTIONS = [
   { v: "applied",   label: "Applied",   tone: "muted" },
-  { v: "screening", label: "Screening", tone: "gold"  },
-  { v: "interview", label: "Interview", tone: "gold"  },
+  { v: "screening", label: "Screening", tone: "teal"  },
+  { v: "interview", label: "Interview", tone: "teal"  },
   { v: "offer",     label: "Offer",     tone: "green" },
   { v: "rejected",  label: "Rejected",  tone: "red"   },
   { v: "withdrawn", label: "Withdrawn", tone: "muted" },
@@ -31,13 +31,13 @@ const STATUS_OPTIONS = [
 
 const TONE_BG = {
   muted: "rgba(127,163,154,0.12)",
-  gold:  "rgba(245,158,11,0.14)",
+  teal:  "rgba(245,158,11,0.14)",
   green: "rgba(34,197,94,0.14)",
   red:   "rgba(239,68,68,0.14)",
 };
 const TONE_FG = {
   muted: "var(--color-text-secondary)",
-  gold:  "var(--color-warning)",
+  teal:  "var(--color-warning)",
   green: "var(--color-green)",
   red:   "var(--color-deduction)",
 };
@@ -221,7 +221,7 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
               onClick={commitTarget}
               disabled={targetDraft === ""}
               style={{
-                background: targetDraft === "" ? "var(--color-bg-surface)" : "var(--color-gold)",
+                background: targetDraft === "" ? "var(--color-bg-surface)" : "var(--color-teal)",
                 color: targetDraft === "" ? "var(--color-text-disabled)" : "var(--color-bg-base)",
                 border: "none", borderRadius: "10px",
                 padding: "8px 12px",
@@ -304,7 +304,7 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
               }}
               style={{
                 background: "rgba(0,200,150,0.12)",
-                color: "var(--color-gold)",
+                color: "var(--color-teal)",
                 border: "1px solid rgba(0,200,150,0.32)",
                 borderRadius: "10px",
                 padding: "6px 12px",
@@ -379,7 +379,7 @@ export function ReemploymentTracker({ config, setConfig, saveConfigNow }) {
                 onClick={saveDraft}
                 disabled={!draft.company.trim() || !draft.role.trim() || !draft.dateApplied}
                 style={{
-                  background: (!draft.company.trim() || !draft.role.trim() || !draft.dateApplied) ? "var(--color-bg-raised)" : "var(--color-gold)",
+                  background: (!draft.company.trim() || !draft.role.trim() || !draft.dateApplied) ? "var(--color-bg-raised)" : "var(--color-teal)",
                   color: (!draft.company.trim() || !draft.role.trim() || !draft.dateApplied) ? "var(--color-text-disabled)" : "var(--color-bg-base)",
                   border: "none", borderRadius: "10px",
                   padding: "7px 14px",

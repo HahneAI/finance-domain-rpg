@@ -496,14 +496,15 @@ skipped entirely).
   saved a date the engine ignored; fixed by the F10 chain. The whole chain exists so the
   date is load-bearing — treat any simplification of it as reopening the bug.
 
-**Standing findings from this pass (open — decisions owed):**
-1. **Soft-D3, Quick Rate Update** *(queued as DW-1 in `docs/BUG_FIX_TODO.md`)*:
-   `App.jsx:3404–3407` sets `config.baseRate` with *no*
-   `savePersistedStateNow` — the live rate rides the 800ms debounce. Mitigation already in
-   place: the `account_history` row (fire-and-forget insert) + optimistic append mean week
-   math survives a lost write after reload; but the *live* `config.baseRate` (ProfilePanel
-   display, F6 previews) can silently revert. Cheap fix: eager-save in `onActivate` like
-   F12 does. Flagged, not fixed — needs owner sign-off.
+**Standing findings from this pass:**
+1. **Soft-D3, Quick Rate Update — fixed.** *(DW-1 in `docs/BUG_FIX_TODO.md`)*:
+   `App.jsx`'s `RateUpdateModal.onActivate` set `config.baseRate` with *no*
+   `savePersistedStateNow` — the live rate rode the 800ms debounce. Mitigation was already in
+   place: the `account_history` row (fire-and-forget insert) + optimistic append meant week
+   math survived a lost write after reload; but the *live* `config.baseRate` (ProfilePanel
+   display, F6 previews) could silently revert. Fixed by mirroring F12's compute-then-eager-save
+   shape: `onActivate` now computes `nextConfig` synchronously and calls
+   `savePersistedStateNow({ config: nextConfig })` in the same handler.
 2. **D5, corrected in this pass:** CLAUDE.md's SetupWizard quick reference predated the
    jobless mini-flow, `structure_change`, and the `otMultiplier: 1.5` override — updated
    in this commit.
@@ -848,8 +849,9 @@ Deletes the most recent confirmed record (and its spawned log entry) so the moda
 reopens; projections are independent of confirmations so the model is untouched.
 > **IF** confirmation records ever gain model-affecting weight (they currently don't),
 > **THEN** this tool's "safe to drop" premise breaks — re-read its CLAUDE.md description
-> before extending. **⚠ Soft-D3 finding (this pass):** both deletes are bare
-> `setState` calls with no eager save — see Block 4, finding 2.
+> before extending. **Soft-D3 finding (fixed):** both deletes now compute their next values
+> synchronously and ride one `savePersistedStateNow` call alongside the `setState`s — see
+> Block 4, finding 2.
 
 **F33 · IncomePanel display layer** — `gN` wrapper `IncomePanel.jsx:65`, rolling view
 `:100–103`, Year Summary `:93`/`:263`, TX/EX chips `:411–412` etc. — **[L]**
@@ -920,13 +922,14 @@ same patch, clears `taxRatesEstimated`, compute-then-eager-saves (compliant).
    (simulate a date and read these exact numbers) is weakened. Admin-only blast radius.
    Fix candidates: add `effectiveToday` to deps and decide whether `:1148` should honor
    it; needs owner intent on Lock Date's scope over tax math.
-2. **Reopen Last Check-In lacks eager save (F32)** *(queued as DW-3 in
+2. **Reopen Last Check-In lacks eager save (F32) — fixed.** *(DW-3 in
    `docs/BUG_FIX_TODO.md`)*: deletion of the confirmation record +
-   its log entry rides the 800ms debounce (bare functional `setState`s, `App.jsx:1059–1065`),
-   contrary to the CLAUDE.md rule that Delete-shaped actions eager-save. Worst case is
-   mild (admin-only; a lost delete resurrects a valid confirmation), but it's the only
-   confirmed rule exception on this surface. Cheap fix: compute both next values
-   synchronously and pass through one `savePersistedStateNow`.
+   its log entry rode the 800ms debounce (bare functional `setState`s), contrary to the
+   CLAUDE.md rule that Delete-shaped actions eager-save. Worst case was mild (admin-only;
+   a lost delete resurrects a valid confirmation), but it was the only confirmed rule
+   exception on this surface. Fixed: `handleReopenLastCheckIn` now computes both next
+   values (`nextLogs`, `nextWeekConfirmations`) synchronously and passes both through one
+   `savePersistedStateNow({ weekConfirmations, logs })` call, alongside the `setState`s.
 
 ---
 
@@ -1437,15 +1440,17 @@ Override Save is eager-saved (`:1043`, compliant).
 > Check: log a `pto` event and a missed shift; balance drops by draw + accrual-loss
 > exactly once each.
 
-**F60 · `ptoGoal` CRUD** — `saveForm:187–198`, Clear `:1103`; App wiring
-`App.jsx:1586–1587` (bare `setPtoGoal`) — **[L]**
-⚠ **DW-6.** Save and Clear are discrete actions but ride the 800ms debounce — App
-passes no eager-save wrapper for `ptoGoal` (the only un-eager-saved discrete mutation
-on this surface; the CLAUDE.md eager-save table has no `ptoGoal` row, so the `764da5b`
-audit's coverage claim has a gap).
-> **IF** fixing, **THEN** follow the standard shape: an `onSavePtoGoalNow(next)` prop
-> from App (`savePersistedStateNow({ ptoGoal: next })`) called in both `saveForm` and
-> Clear. Check: kill-tab after Save; goal survives reload.
+**F60 · `ptoGoal` CRUD** — `saveForm:187–198`, Clear `:1105`; App wiring
+`App.jsx` (`onSavePtoGoalNow` prop → `savePersistedStateNow({ ptoGoal: next })`) — **[L]**
+**DW-6 (fixed).** Save and Clear are discrete actions but rode the 800ms debounce — App
+passed no eager-save wrapper for `ptoGoal` (the only un-eager-saved discrete mutation
+on this surface; the CLAUDE.md eager-save table had no `ptoGoal` row, so the `764da5b`
+audit's coverage claim had a gap). Fixed: `onSavePtoGoalNow(next)` prop added to App
+(mirrors `saveConfigNow`'s shape), threaded to `LogPanel`, and called in both `saveForm`
+and Clear alongside `setPtoGoal` with the same computed value. CLAUDE.md's eager-save
+table now has a `ptoGoal` row. Regression-tested in `LogPanel.test.jsx` ("PTO Goal —
+eager save").
+> Check: kill-tab after Save; goal survives reload.
 
 **F61 · Attendance surfaces** — DHL bucket: `bucketModel` prop (computed in App via
 `computeBucketModel`, Spine A), bucket balance override Save/Reset `:1194`/`:1210`
@@ -1499,15 +1504,16 @@ event-impact verification (Spine F) — its numbers must match the hero-card agg
 - *Rolling pay-week dropdown* (`7532c86`, `e7e5faa`) — dropdown order/labels are
   deliberate UX; the week-change reset (F56) shipped with it.
 
-**Standing findings from this pass (open — decisions owed):**
+**Standing findings from this pass:**
 1. **Parallel adjusted-take-home derivation (F54/F57/F62)** *(queued as DW-5 in
-   `docs/BUG_FIX_TODO.md`)*: LogPanel re-derives net totals weekMeta-less while
+   `docs/BUG_FIX_TODO.md`, still open)*: LogPanel re-derives net totals weekMeta-less while
    Income/Home read App's weekMeta-aware `logTotals` — same-screen disagreement
    possible; fix by threading `logTotals` down (the 401k aggregates already set the
    pattern).
-2. **`ptoGoal` lacks eager save (F60)** *(queued as DW-6)*: Save/Clear ride the
-   debounce; the only rule exception on this surface, and a gap in the `764da5b`
-   audit's coverage.
+2. **`ptoGoal` lacks eager save (F60) — fixed** *(DW-6)*: Save/Clear rode the
+   debounce; it was the only rule exception on this surface, and a gap in the `764da5b`
+   audit's coverage. `onSavePtoGoalNow` added to App + CLAUDE.md's eager-save table;
+   both call sites now eager-save.
 
 ---
 
@@ -2561,8 +2567,9 @@ folder before numbering; this note has gone stale once already (this doc's own �
 
 **F110 · The four-site new-persisted-field procedure** — cross-file — **[L]**
 Codifying F68's sketch as a named check. A new field that must persist to `user_data` has to
-appear at **all four** sites or it silently half-works (DW-6's `ptoGoal` gap is the specimen —
-it reached React state but no eager-save wrapper, so discrete saves rode the debounce):
+appear at **all four** sites or it silently half-works (DW-6's `ptoGoal` gap, now fixed, was
+the specimen — it reached React state but had no eager-save wrapper, so discrete saves rode
+the debounce):
 1. **`saveUserData` destructure** (`db.js:396`) — the debounced/eager writer.
 2. **`flushUserDataKeepalive` destructure** (`db.js:443`) — the unload writer (identical field
    set to #1 by contract).
@@ -2613,8 +2620,8 @@ the load-side reader. A field missing from any write column silently loses that 
 | `goals` | ✅ | `onSaveGoalsNow` (F18/F19) | ✅ | `goals` | direct |
 | `logs` | ✅ | `onSaveLogsNow` (F55) | ✅ | `logs` | direct |
 | `showExtra` | ✅ | via `savePersistedStateNow` overrides | ✅ | `show_extra` | direct |
-| `weekConfirmations` | ✅ | check-in `onConfirm` (F31), Reopen (F32/DW-3) | ✅ | `week_confirmations` | auto-confirm seed (F26) |
-| `ptoGoal` | ✅ | **⚠ none — DW-6** (bare `setPtoGoal`) | ✅ | `pto_goal` | direct |
+| `weekConfirmations` | ✅ | check-in `onConfirm` (F31), Reopen (F32/DW-3 fixed) | ✅ | `week_confirmations` | auto-confirm seed (F26) |
+| `ptoGoal` | ✅ | `onSavePtoGoalNow` (F60/DW-6 fixed) | ✅ | `pto_goal` | direct |
 
 **Privileged columns (never in the client payload — service-role only):** tier flags
 (`is_admin`/`is_tester`/`is_investor`/`is_employer_dhl` — the last *derived* at write time from
@@ -2643,10 +2650,11 @@ idempotency — Spine C/T9); `deleted_accounts` (cron tombstones — T9).
 - *Migration 024* (`8f34def`/`a93dcad`) — the UPDATE grant missing `user_id` broke every upsert
   conflict path while reads worked; "migration ran" ≠ "writes work" (F109/F69).
 
-**Standing findings from this pass:** none new filed. The one open persistence defect on record
-is **DW-6** (`ptoGoal` lacks an eager-save wrapper — surfaced in the T6 pass, authority table
-above marks the gap); it is the live proof of the F110 four-site procedure's necessity and
-stays queued until fixed. No D5 corrections owed — `active-systems.md` §22 already carries the
+**Standing findings from this pass:** none new filed. **DW-6** (`ptoGoal` lacked an eager-save
+wrapper — surfaced in the T6 pass, authority table above marked the gap) is fixed: it was the
+live proof of the F110 four-site procedure's necessity and is now the reference example of the
+procedure closing a gap end-to-end (App wrapper + prop + both call sites + CLAUDE.md table +
+regression test). No D5 corrections owed — `active-systems.md` §22 already carries the
 F10 read-path annotation applied during the T7 pass, and the migration-number note in CLAUDE.md
 now self-warns (T7 pass). `useLocalStorage`'s device-local scope (F107) is documented-intended
 (the localStorage→Supabase vestige), not a defect — filed as a standing note, not a DW row,
@@ -3161,10 +3169,10 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 | Tool | What it reads | F-entries that verify through it |
 |---|---|---|
 | **Lock Date** (`effectiveToday` override) | `tempLockDate` → `effectiveToday` (F118), fed into F25/F26/F27/F28/futureWeeks | F25 (hour-gate bypass), F26/F27 (eligibility sim), F28 (tax split — **DW-2 weakens it**) |
-| **Reopen Last Check-In** | `reopenableWeekIdx` + `weekConfirmations[idx]` + its spawned log entry | F32 (**DW-3**: deletes lack eager save), F26 (projections independent of confirmations premise) |
+| **Reopen Last Check-In** | `reopenableWeekIdx` + `weekConfirmations[idx]` + its spawned log entry | F32 (**DW-3 fixed**: deletes now eager-save), F26 (projections independent of confirmations premise) |
 | **Force Sync** (push/pull) | `handleForcePush`/`handleForcePull` — flush/reload `latestPersistedStateRef` | Any save-path check (Spine B F105/F106); before/after a save bug |
 | **Config Raw View** | full `config` JSON | F7 (three-way sensitive-field audit), F43/F50 (tax elections), F49 (benefit config) |
-| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), **DW-6** (`ptoGoal` drift) |
+| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), **DW-6 fixed** (`ptoGoal` now eager-saves; no more drift-badge exposure) |
 | **Tax Weeks Grid** | `taxedWeeks` (teal/dark) + `pastWeekTaxStatusOverrides` (red dots) + current-week border | F28 (schedule vs remediation), F50 (override writers), F104 (liability inputs) |
 | **Live State Inspector** | ~16 live values: `effectiveToday`, week idx, `extraPerCheck`, `totalGap`, `taxedWeekCount`, `weeklyIncome`, `bufferPerWeek`, `projectedAnnualNet`, Sub Phase/Trial/Access Ends… | F14 (`weeklyIncome`), F28 (`extraPerCheck`/`totalGap`), F51 (`bufferPerWeek`), F53/F80 (Sub Phase — real clock), F113 (Coach numbers cross-check) |
 | **Week Inspector** | one week object verbatim: schedule, pay (`grossPay`/`taxableGross`/deductions/401k), live `computeNet`, net lookup (baseNet/adjustment/spendable), confirmation record, log entries | F15 (prev-week net), F29 (net tiers), F57 (per-entry vs hero), F58 (401k match), F96/F97/F98 (week shape/net), F99 (DHL rotation), F103 (loan) |
@@ -3187,17 +3195,18 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 - *`ALLOWED_PURPOSES` / count drift* and other doc lags — surfaced because the tools exposed
   the real state; the toolkit is how many D5s in this investigation were caught.
 
-**Standing findings from this pass:** none new filed. Three existing DW items are
+**Standing findings from this pass:** none new filed. Three DW items were
 **tool-integrity defects** — the toolkit's own instruments lying — and are restated here so the
 "a broken tool blinds every check" stance is concrete:
 1. **DW-2** — `taxDerived`'s stale memo dep (F28) means the **Lock Date** tool's tax simulation
    doesn't recompute when the lock changes; the instrument silently disagrees with the Tax
-   Weeks Grid it's meant to be cross-checked against.
-2. **DW-3** — **Reopen Last Check-In** (F32) deletes without an eager save; the tool can lose
-   its own mutation on a backgrounded tab.
+   Weeks Grid it's meant to be cross-checked against. Still open.
+2. **DW-3 — fixed.** **Reopen Last Check-In** (F32) deleted without an eager save; the tool
+   could lose its own mutation on a backgrounded tab. Now computes both next values
+   synchronously and eager-saves them alongside the `setState`s.
 3. **DW-5** — the **per-entry breakdown** (F62) is weekMeta-less, so the admin's own
    event-impact instrument can disagree with the hero cards it's used to verify — "the
-   diagnostic tool the last liar in the room" (F62's phrasing).
+   diagnostic tool the last liar in the room" (F62's phrasing). Still open.
 No new defect surfaced; the Phase-2 landmines (F119) are pre-build warnings, not live bugs (the
 tools don't exist yet). No D5 corrections owed — CLAUDE.md's Admin Diagnostic Toolkit section
 and active-systems §13 both describe the tools accurately; this section maps how the Warden

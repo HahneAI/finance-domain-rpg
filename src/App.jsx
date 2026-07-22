@@ -1142,7 +1142,7 @@ export default function App() {
     const fWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? fedHigh : fedLow), 0);
     const mWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? stHigh : stLow), 0);
     const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - config.targetOwedAtFiling, 0);
-    const remainingTaxedChecks = activeWeeks.filter(w => toLocalIso(w.weekEnd) >= today && w.taxedBySchedule).length;
+    const remainingTaxedChecks = activeWeeks.filter(w => toLocalIso(w.weekEnd) >= effectiveToday && w.taxedBySchedule).length;
 
     // How much events have shifted total taxable gross (+ = bonus/pickup, - = missed shifts)
     const eventGrossDelta = activeWeeks.reduce((s, w) => s + (eventImpact.grossDeltaByWeek[w.idx] || 0), 0);
@@ -1164,7 +1164,7 @@ export default function App() {
       fedLiabilityEventDelta,
       moLiabilityEventDelta,
     };
-  }, [allWeeks, config, eventImpact.grossDeltaByWeek, today]);
+  }, [allWeeks, config, eventImpact.grossDeltaByWeek, effectiveToday]);
 
   // ── Live projected net from income engine ──
   const projectedAnnualNet = useMemo(() =>

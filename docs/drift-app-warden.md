@@ -797,11 +797,15 @@ minus `targetOwedAtFiling` — across remaining taxed checks as `extraPerCheck`.
 > and every net in the app move together; verify via Live State Inspector
 > (`extraPerCheck`, `totalGap`, `taxedWeekCount`) against the Tax Weeks Grid's cell
 > states, and the Year Summary card.
-> **⚠ Known stale-dep finding (this pass):** the memo *uses* `effectiveToday` (`:1127`,
-> past/future split) but its dep array (`:1170`) lists only `today` — and `:1148` uses
-> real `today` for `remainingTaxedChecks`. Under admin Lock Date, the override
-> remediation split does not recompute when the lock changes (until another dep moves),
-> and the two lines disagree about what "now" is. See Block 4, finding 1.
+> **Stale-dep finding — fixed.** The memo *uses* `effectiveToday` (past/future split) but
+> its dep array listed only `today`, and `remainingTaxedChecks` used real `today` outright
+> — so under admin Lock Date the override-remediation split didn't recompute when the lock
+> changed, and the two lines disagreed about what "now" was. Fixed per F118's own rule
+> ("every 'now'-derived number reads `effectiveToday` unless it's entitlement/billing" —
+> tax withholding isn't): `remainingTaxedChecks` now filters on `effectiveToday`, and the
+> dep array lists `effectiveToday` (not `today`, which the body no longer reads). Lock
+> Date now fully — and consistently — simulates the Tax Plan gap calc, same as every
+> other schedule-derived number in the app. See Block 4, finding 1.
 
 **F29 · Net derivation tiers** — `projectedAnnualNet` `App.jsx:1173–1175`,
 `weekNetLookup` `:1217–1233`, `futureWeekNetsRaw`/`futureWeekNets` `:1235–1242` — **[L]**
@@ -913,15 +917,16 @@ same patch, clears `taxRatesEstimated`, compute-then-eager-saves (compliant).
 - *Tax-toggle eager saves* (`debc0cb`) — per-week taxed/exempt toggles were on the
   debounce; now every toggle saves immediately.
 
-**Standing findings from this pass (open — decisions owed):**
-1. **Stale memo dep in `taxDerived` (F28)** *(queued as DW-2 in `docs/BUG_FIX_TODO.md`)*:
-   uses `effectiveToday` at `App.jsx:1127` but
-   deps at `:1170` list only `today`; `:1148` independently uses real `today`. Under
-   admin Lock Date the remediation split lags until an unrelated dep changes, and
-   "remaining taxed checks" ignores the lock entirely — the Lock Date tool's core promise
-   (simulate a date and read these exact numbers) is weakened. Admin-only blast radius.
-   Fix candidates: add `effectiveToday` to deps and decide whether `:1148` should honor
-   it; needs owner intent on Lock Date's scope over tax math.
+**Standing findings from this pass:**
+1. **Stale memo dep in `taxDerived` (F28) — fixed.** *(DW-2 in `docs/BUG_FIX_TODO.md`)*:
+   used `effectiveToday` for the past/future remediation split but
+   deps listed only `today`; `remainingTaxedChecks` independently used real `today`. Under
+   admin Lock Date the remediation split lagged until an unrelated dep changed, and
+   "remaining taxed checks" ignored the lock entirely — the Lock Date tool's core promise
+   (simulate a date and read these exact numbers) was weakened. Admin-only blast radius.
+   Resolved per F118's rule (tax math isn't entitlement/billing, so it should honor the
+   simulated date like everything else does): `remainingTaxedChecks` now filters on
+   `effectiveToday`, and the dep array lists `effectiveToday` in place of `today`.
 2. **Reopen Last Check-In lacks eager save (F32) — fixed.** *(DW-3 in
    `docs/BUG_FIX_TODO.md`)*: deletion of the confirmation record +
    its log entry rode the 800ms debounce (bare functional `setState`s), contrary to the
@@ -3134,9 +3139,9 @@ access or extend the hidden grace).
 > **IF** a new "now"-derived number is added, **THEN** it should read `effectiveToday` (so Lock
 > Date can simulate it) **unless** it's entitlement/billing (which must read real wall-clock —
 > the F53/F80 rule). **IF** a tool's read source drifts from what it claims to show, **THEN**
-> every drift check that "asks the user to run [tool]" is now reading a lie — DW-2 is the live
-> specimen: `taxDerived` (F28) *uses* `effectiveToday` but its dep array omits it, so the Lock
-> Date tool's tax-simulation promise silently breaks. **The instrument-panel rule:** any change
+> every drift check that "asks the user to run [tool]" is now reading a lie — DW-2 was the
+> specimen: `taxDerived` (F28) *used* `effectiveToday` but its dep array omitted it, so the Lock
+> Date tool's tax-simulation promise silently broke (fixed — see F28). **The instrument-panel rule:** any change
 > to a tool's read path re-verifies every F-entry that names that tool in its "Check:" (the
 > §23.3 registry is that index). Check: set Lock Date; Live Inspector's Effective Today +
 > `extraPerCheck` + week idx all move together and match the Tax Weeks Grid / Week Inspector.
@@ -3166,7 +3171,7 @@ in a surface F-entry:
 
 **Reverse index — surface F-entries that wire/verify through the toolkit (do not restate):**
 F25 (Lock Date hour-gate bypass in `isPayPeriodPast`), F26 (auto-confirm seed — the reset-all
-landmine), F28 (`taxDerived` — DW-2 stale-dep weakens Lock Date), F32 (Reopen Last Check-In —
+landmine), F28 (`taxDerived` — DW-2 fixed, stale-dep no longer weakens Lock Date), F32 (Reopen Last Check-In —
 DW-3 fixed), F57/F62 (per-entry breakdown — DW-5 fixed, now weekMeta-grounded), F68/F110 (DB Row drift
 badge columns), F9/F10 (config-history line in DB Row viewer), F53/F80 (Live Inspector Sub
 Phase — real-clock rule), plus the Week Inspector "Check:" in F15/F29/F96/F97/F98/F99/F103 and
@@ -3177,7 +3182,7 @@ the Live Inspector "Check:" in F14/F51.
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
 |---|---|---|---|
 | `effectiveToday` fork or a tool's read source (F118) | Every F-entry naming that tool in its "Check:" (§23.3 registry) | Set Lock Date; the tool's displayed values move consistently and match a second tool | D4 |
-| A tool stops reading the authoritative function it displays | The tool becomes a lying instrument — DW-2 (Lock Date/`taxDerived`, still open) is the live specimen; DW-5 (per-entry breakdown) is the fixed one | The tool's value = the authoritative function's value on the same account | D1 |
+| A tool stops reading the authoritative function it displays | The tool becomes a lying instrument — DW-2 (Lock Date/`taxDerived`) and DW-5 (per-entry breakdown) are the fixed specimens | The tool's value = the authoritative function's value on the same account | D1 |
 | A new persisted field (F110) | DB Row drift-badge column list — the 4th of the four sites | DB Row Fetch shows the new column in the drift comparison | D3 |
 | `getEntitlement`/subscription surfaces | Must stay on real `new Date()`, never `effectiveToday` (F53/F80/F118 boundary) | Live Inspector Sub Phase unaffected by Lock Date; billing card uses wall-clock | D4 |
 | Week-object shape (F97) / `computeNet` (F98) | Week Inspector displays the object + Net Lookup verbatim — it must render every field | Tap a week; Pay + Net Lookup sections show the real fields, no `undefined` | D1 |
@@ -3191,7 +3196,7 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 
 | Tool | What it reads | F-entries that verify through it |
 |---|---|---|
-| **Lock Date** (`effectiveToday` override) | `tempLockDate` → `effectiveToday` (F118), fed into F25/F26/F27/F28/futureWeeks | F25 (hour-gate bypass), F26/F27 (eligibility sim), F28 (tax split — **DW-2 weakens it**) |
+| **Lock Date** (`effectiveToday` override) | `tempLockDate` → `effectiveToday` (F118), fed into F25/F26/F27/F28/futureWeeks | F25 (hour-gate bypass), F26/F27 (eligibility sim), F28 (tax split — **DW-2 fixed**, `remainingTaxedChecks` and the dep array both honor it now) |
 | **Reopen Last Check-In** | `reopenableWeekIdx` + `weekConfirmations[idx]` + its spawned log entry | F32 (**DW-3 fixed**: deletes now eager-save), F26 (projections independent of confirmations premise) |
 | **Force Sync** (push/pull) | `handleForcePush`/`handleForcePull` — flush/reload `latestPersistedStateRef` | Any save-path check (Spine B F105/F106); before/after a save bug |
 | **Config Raw View** | full `config` JSON | F7 (three-way sensitive-field audit), F43/F50 (tax elections), F49 (benefit config) |
@@ -3208,7 +3213,7 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 | `isAdmin` | false / true | true: tool sheet (mobile nav Tools icon), Week Inspector on row tap, Reopen, Live pill, per-entry chevron; false: none render |
 | `isOwner` (future) | false / true | true (never grantable via UI): Phase-2 write tools (F119); false: Phase-1 read/sim tools only |
 | Lock Date | unset / set | set: `effectiveToday` drives all "now"-relative reads (F118); **billing stays real-clock** (F53/F80) |
-| Tool integrity | tool reads authoritative fn / tool has drifted | drifted = the instrument lies (DW-2 open, DW-5 fixed) — an L-grade defect despite the toolkit being a Gateway |
+| Tool integrity | tool reads authoritative fn / tool has drifted | drifted = the instrument lies (DW-2, DW-5 — both fixed) — an L-grade defect despite the toolkit being a Gateway |
 
 ### 23.4 Block 4 — Case law & findings
 
@@ -3221,9 +3226,11 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 **Standing findings from this pass:** none new filed. Three DW items were
 **tool-integrity defects** — the toolkit's own instruments lying — and are restated here so the
 "a broken tool blinds every check" stance is concrete:
-1. **DW-2** — `taxDerived`'s stale memo dep (F28) means the **Lock Date** tool's tax simulation
-   doesn't recompute when the lock changes; the instrument silently disagrees with the Tax
-   Weeks Grid it's meant to be cross-checked against. Still open.
+1. **DW-2 — fixed.** `taxDerived`'s stale memo dep (F28) meant the **Lock Date** tool's tax
+   simulation didn't recompute when the lock changed; the instrument silently disagreed with
+   the Tax Weeks Grid it's meant to be cross-checked against. Also fixed the accompanying
+   design gap — `remainingTaxedChecks` now honors `effectiveToday` too, per F118's own rule
+   that only entitlement/billing gets the real-clock carve-out.
 2. **DW-3 — fixed.** **Reopen Last Check-In** (F32) deleted without an eager save; the tool
    could lose its own mutation on a backgrounded tab. Now computes both next values
    synchronously and eager-saves them alongside the `setState`s.

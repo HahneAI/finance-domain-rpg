@@ -108,3 +108,23 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, savings
     },
   };
 }
+
+/**
+ * Selects the single "primary" runway day count from a computeJobLossRunway()
+ * result — with or without unemployment benefits folded in — matching the
+ * exact `hasBenefits && includeBenefits` selection JobLossHomePanel.jsx and
+ * JobLossBudgetPanel.jsx each do inline for their headline tile. Pulled out
+ * so any *other* consumer (Coach's trigger/context) quoting "the" runway
+ * number can't independently drift from what those two panels show (the
+ * drift-app-warden §21 F24/quarantine-2 fix). If the two panels' inline
+ * selection logic ever changes, update this to match.
+ *
+ * Returns null when there's no dash (not in Job Loss Mode) or burn is zero
+ * (infinite runway — nothing meaningful to report as a day count).
+ */
+export function resolvePrimaryRunwayDays(dash, config, includeBenefits = true) {
+  if (!dash) return null;
+  const hasBenefits = Boolean(config?.unemploymentEnabled) && dash.projectedUnemploymentTotal > 0;
+  const primary = (hasBenefits && includeBenefits) ? dash.withBenefits : dash.withoutBenefits;
+  return Number.isFinite(primary.days) ? primary.days : null;
+}

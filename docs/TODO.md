@@ -1084,6 +1084,68 @@ have to re-derive them or, worse, write a fourth parallel runway calc:*
   rate, target net, current week) so advice is grounded in real numbers
 - [ ] **Prompt caching** — cache the financial context block across the conversation session
 
+#### E1. Résumé upload / skill-gap analysis — scoped, 2026-07-22 — SCOPED, nothing started
+
+*Expands the bare "Help me with my resume" bullet above into an actual spec. Flagged by §15.H14
+bullet 6 as "genuinely absent as an idea" — the only prior trace anywhere in this doc was that one
+unbuilt chat-prompt bullet and §15.F's "Profile store for auto-fill," which is explicitly scoped as
+plain user-entered text for form auto-fill, not this. This pass answers §15.H14's three open
+questions (storage, parsing, standalone vs. tied to `ReemploymentTracker`) and proposes a phased
+scope — documentation only, nothing below is implemented.*
+
+- **Storage — plain text, not a file upload, for v1.** Confirmed via grep: this codebase has zero
+  existing Supabase Storage usage anywhere (`grep -rn "storage.from\|createSignedUrl"` across
+  `src/` and `api/` — no matches), so a real PDF/DOCX upload path is entirely new infra: a bucket +
+  its own RLS policies, a file-type/size validator, and a parsing step, for a feature that's
+  currently unreachable by real users anyway (AI features are `is_admin`/`is_tester`-gated — H14
+  bullet 5, still true). A "paste your resume text" textarea gets the same downstream
+  skill-gap-analysis value at a fraction of the surface area: a pasted-text resume and a
+  PDF-extracted-text resume look identical to the LLM call that actually does the analysis, so the
+  parsing step is a wash for the common case (text-only resume) and only matters for scanned/
+  image-based resumes, which are the minority. Recommend v1 = plain text; treat file upload as a
+  v2 candidate once v1 has proven anyone actually uses this (see phasing below) — Storage bucket +
+  client-side extraction (`pdf.js`/`mammoth.js`, to avoid yet another server route) can be added
+  later without touching the analysis pipeline downstream, since that pipeline only ever sees text.
+- **Parsing — not applicable in v1.** Follows directly from the storage decision: no file, no
+  parsing step. Pasted text goes straight into the Coach system prompt as-is.
+- **Standalone table, not a `config` field, but reads `ReemploymentTracker` data for grounding.**
+  Resume text can run to several KB and doesn't belong in the `config` jsonb blob that's read/
+  written on every debounced autosave (docs/TODO.md "Persistence — Eager Save Pattern") — bloats
+  every save for a field that changes rarely. Model a new `resume_profile` table after
+  `coach_chats` (migration `023_add_coach_chats.sql`): one row per user
+  (`user_id references user_data(user_id) on delete cascade`), own-row RLS (all four CRUD ops,
+  same policy shape as `coach_chats`, not `account_history`'s insert-only posture), service-role
+  bypass for future admin diagnostics. Columns: `resume_text`, `target_role` (free-text override —
+  see below), `last_reviewed_at`, `created_at`/`updated_at` (client-stamped, matching the
+  established no-trigger pattern — see 023's own deviation note). The *analysis itself* is
+  standalone data, but the skill-gap comparison needs a target role to compare against — cheapest
+  version: default to the most recent `config.jobApplications` entry's `role` field (already
+  captured by `ReemploymentTracker`, zero new input), with `resume_profile.target_role` as a
+  free-text override when the user wants to compare against a role they haven't applied to yet.
+  No change to `ReemploymentTracker.jsx` itself required for this — read-only reference.
+- **AI pipeline reuses existing §18.G infra — no new serverless route.** Add `'resume_review'` to
+  `coach_chats`'s `chat_type` check constraint (currently `ask_coach`, `job_scout`, `job_hunt`,
+  `statement_summary`) rather than building a separate endpoint — `api/coach.js`'s existing
+  auth/gating/streaming already covers this. Use Sonnet, not Haiku (§18.G's existing model split:
+  Haiku for chat/FAQ/triggers, Sonnet for statement summaries and job-hunt drafts — a resume review
+  is closer to the latter in depth). Store the structured skill-gap output in `coach_chats.insights`
+  (already a jsonb column, already used for "statement insight keys" — no schema change needed
+  beyond the chat_type enum value) alongside a written review in `messages`.
+- **Entitlement gating — same `canAccessAiFeatures` gate as every other Coach surface,** no new
+  gate needed. H14 bullet 5's finding still applies unchanged: real users can't reach this without
+  the broader AI-features rollout question being resolved first — worth noting again here, not a
+  blocker to scoping, but a real blocker to shipping this to anyone but admins/testers.
+- **Recommended phasing:**
+  - **v1** — `resume_profile` table + RLS; a "Resume" card in `ReemploymentTracker` (or its own
+    section in the Job Loss Dashboard) with a paste-text textarea + "Get skill-gap review" button;
+    `resume_review` chat_type wired through the existing `api/coach.js`; output rendered as a
+    bullet list of gaps + a short written review, saved to `coach_chats`.
+  - **v2 (only if v1 shows real usage)** — file upload (PDF/DOCX) via a new Supabase Storage
+    bucket + client-side text extraction feeding the same v1 analysis pipeline unchanged.
+  - **Not scoped even for v2:** any auto-apply / auto-tailor-resume-per-listing feature — that's a
+    materially different (and higher-liability) feature than "review my resume against a role,"
+    and depends on §15.F's job-board integrations existing first regardless.
+
 ---
 
 ### F. Application Assistant *(extracted from §15.F — Phase 4)*
@@ -1757,10 +1819,9 @@ note rather than re-listed here to avoid two competing specs for the same shippe
 - [ ] **Application assistant** — for saved listings, "Draft application" launches Coach
   pre-loaded with the specific job description for cover letter / prep mode → **§18.F**
 - [ ] **Profile store for auto-fill** — stored work history summary, skills list, and resume text
-  (user-entered) used to pre-fill application fields and feed the AI assistant context. This is the
-  only reference to résumé data anywhere in this doc, and it's scoped as plain user-entered text for
-  auto-fill, not a file upload or an AI-analyzed résumé. An actual résumé-upload / skill-gap-analysis
-  feature is not scoped anywhere — see `docs/TODO.md` §15.H14's dedicated bullet before starting one.
+  (user-entered) used to pre-fill application fields and feed the AI assistant context. Scoped as
+  plain user-entered text for auto-fill, not a file upload or an AI-analyzed résumé — that's a
+  separate feature, now scoped at **§18.E1** (résumé upload / skill-gap analysis).
 
 ---
 
@@ -2378,14 +2439,17 @@ how directly each one touches "is the runway number on screen actually correct."
   exact scenario likely cannot reach any of "getting the best help" today regardless of what gets
   built — worth keeping in view as a business/rollout question, not just an engineering one, before
   investing further in §18.E/§18.I.
-- [ ] **Résumé upload / skill tips / skill-gap analysis — not scoped anywhere, not a "not started"
-  TODO item, genuinely absent as an idea.** The only trace in the entire doc is one unbuilt chat
-  prompt ("Help me with my resume," §18.E) and a passing mention of "resume text (user-entered)" as
-  a future auto-fill field for job applications (§15.F) — no file upload, no parsing, no structured
-  skill-gap comparison against a target role. If this is wanted, it needs a first scoping pass from
-  scratch (storage: Supabase Storage bucket vs. inline text? parsing: client-side vs. a Claude call
-  reading extracted text? tied to `ReemploymentTracker`'s target income/company data or standalone?)
-  before it's a buildable item — flagging its absence here so it doesn't quietly stay unconsidered.
+- [x] **Résumé upload / skill tips / skill-gap analysis — scoped 2026-07-22, see §18.E1.** Was
+  genuinely absent as an idea (only trace was one unbuilt chat prompt and a passing "resume text"
+  auto-fill mention in §15.F). Now has a full spec: plain-text v1 (no file upload/parsing — a
+  Supabase Storage bucket is new infra this codebase doesn't have anywhere yet, and text-in/
+  text-out is a wash for the LLM either way), a new standalone `resume_profile` table (not a
+  `config` field — modeled on `coach_chats`'s own-row-RLS pattern) that reads `ReemploymentTracker`'s
+  `jobApplications` for a default target role rather than duplicating that data, and a new
+  `resume_review` `coach_chats.chat_type` reusing `api/coach.js` end to end — no new serverless
+  route. File upload (PDF/DOCX via Storage + client-side extraction) deferred to a v2 gated on v1
+  actually proving demand. Still blocked on the same AI-gating question as everything else in this
+  list (bullet above) before it can reach a real (non-admin/tester) user.
 - **Not fixed, not scoped further, deliberately left as a list — user's own framing: "pick this
   apart... but maybe not immediately."** Recommend picking off the wiring-only items first
   (`runwayDays` into Coach, the Lifestyle-spend caption) since they're small and don't require a

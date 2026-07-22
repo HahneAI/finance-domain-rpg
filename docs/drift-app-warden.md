@@ -273,7 +273,7 @@ section). **All sixteen are done** (T1–T10 surface tiers 2026-07-19; Spines A�
 - [x] **T6 — Log Panel** — §13 below (surgical pass 2026-07-19)
 - [x] **T7 — Auth System** — §14 below (surgical pass 2026-07-19)
 - [x] **T8 — Login System** — §15 below (surgical pass 2026-07-19)
-- [x] **T9 — Paywall System** — §16 below (surgical pass 2026-07-19; found DW-7, the investigation's highest-severity defect)
+- [x] **T9 — Paywall System** — §16 below (surgical pass 2026-07-19; found DW-7, the investigation's highest-severity defect — fixed 2026-07-22)
 - [x] **T10 — UI-UX** — §17 below (surgical pass 2026-07-19)
 - [x] **Spine A — Fiscal Math** — §18 below (spine pass 2026-07-20)
 - [x] **Spine B — Persistence & Save Integrity** — §19 below (spine pass 2026-07-20)
@@ -496,14 +496,15 @@ skipped entirely).
   saved a date the engine ignored; fixed by the F10 chain. The whole chain exists so the
   date is load-bearing — treat any simplification of it as reopening the bug.
 
-**Standing findings from this pass (open — decisions owed):**
-1. **Soft-D3, Quick Rate Update** *(queued as DW-1 in `docs/BUG_FIX_TODO.md`)*:
-   `App.jsx:3404–3407` sets `config.baseRate` with *no*
-   `savePersistedStateNow` — the live rate rides the 800ms debounce. Mitigation already in
-   place: the `account_history` row (fire-and-forget insert) + optimistic append mean week
-   math survives a lost write after reload; but the *live* `config.baseRate` (ProfilePanel
-   display, F6 previews) can silently revert. Cheap fix: eager-save in `onActivate` like
-   F12 does. Flagged, not fixed — needs owner sign-off.
+**Standing findings from this pass:**
+1. **Soft-D3, Quick Rate Update — fixed.** *(DW-1 in `docs/BUG_FIX_TODO.md`)*:
+   `App.jsx`'s `RateUpdateModal.onActivate` set `config.baseRate` with *no*
+   `savePersistedStateNow` — the live rate rode the 800ms debounce. Mitigation was already in
+   place: the `account_history` row (fire-and-forget insert) + optimistic append meant week
+   math survived a lost write after reload; but the *live* `config.baseRate` (ProfilePanel
+   display, F6 previews) could silently revert. Fixed by mirroring F12's compute-then-eager-save
+   shape: `onActivate` now computes `nextConfig` synchronously and calls
+   `savePersistedStateNow({ config: nextConfig })` in the same handler.
 2. **D5, corrected in this pass:** CLAUDE.md's SetupWizard quick reference predated the
    jobless mini-flow, `structure_change`, and the `otMultiplier: 1.5` override — updated
    in this commit.
@@ -848,8 +849,9 @@ Deletes the most recent confirmed record (and its spawned log entry) so the moda
 reopens; projections are independent of confirmations so the model is untouched.
 > **IF** confirmation records ever gain model-affecting weight (they currently don't),
 > **THEN** this tool's "safe to drop" premise breaks — re-read its CLAUDE.md description
-> before extending. **⚠ Soft-D3 finding (this pass):** both deletes are bare
-> `setState` calls with no eager save — see Block 4, finding 2.
+> before extending. **Soft-D3 finding (fixed):** both deletes now compute their next values
+> synchronously and ride one `savePersistedStateNow` call alongside the `setState`s — see
+> Block 4, finding 2.
 
 **F33 · IncomePanel display layer** — `gN` wrapper `IncomePanel.jsx:65`, rolling view
 `:100–103`, Year Summary `:93`/`:263`, TX/EX chips `:411–412` etc. — **[L]**
@@ -920,13 +922,14 @@ same patch, clears `taxRatesEstimated`, compute-then-eager-saves (compliant).
    (simulate a date and read these exact numbers) is weakened. Admin-only blast radius.
    Fix candidates: add `effectiveToday` to deps and decide whether `:1148` should honor
    it; needs owner intent on Lock Date's scope over tax math.
-2. **Reopen Last Check-In lacks eager save (F32)** *(queued as DW-3 in
+2. **Reopen Last Check-In lacks eager save (F32) — fixed.** *(DW-3 in
    `docs/BUG_FIX_TODO.md`)*: deletion of the confirmation record +
-   its log entry rides the 800ms debounce (bare functional `setState`s, `App.jsx:1059–1065`),
-   contrary to the CLAUDE.md rule that Delete-shaped actions eager-save. Worst case is
-   mild (admin-only; a lost delete resurrects a valid confirmation), but it's the only
-   confirmed rule exception on this surface. Cheap fix: compute both next values
-   synchronously and pass through one `savePersistedStateNow`.
+   its log entry rode the 800ms debounce (bare functional `setState`s), contrary to the
+   CLAUDE.md rule that Delete-shaped actions eager-save. Worst case was mild (admin-only;
+   a lost delete resurrects a valid confirmation), but it was the only confirmed rule
+   exception on this surface. Fixed: `handleReopenLastCheckIn` now computes both next
+   values (`nextLogs`, `nextWeekConfirmations`) synchronously and passes both through one
+   `savePersistedStateNow({ weekConfirmations, logs })` call, alongside the `setState`s.
 
 ---
 
@@ -1437,15 +1440,17 @@ Override Save is eager-saved (`:1043`, compliant).
 > Check: log a `pto` event and a missed shift; balance drops by draw + accrual-loss
 > exactly once each.
 
-**F60 · `ptoGoal` CRUD** — `saveForm:187–198`, Clear `:1103`; App wiring
-`App.jsx:1586–1587` (bare `setPtoGoal`) — **[L]**
-⚠ **DW-6.** Save and Clear are discrete actions but ride the 800ms debounce — App
-passes no eager-save wrapper for `ptoGoal` (the only un-eager-saved discrete mutation
-on this surface; the CLAUDE.md eager-save table has no `ptoGoal` row, so the `764da5b`
-audit's coverage claim has a gap).
-> **IF** fixing, **THEN** follow the standard shape: an `onSavePtoGoalNow(next)` prop
-> from App (`savePersistedStateNow({ ptoGoal: next })`) called in both `saveForm` and
-> Clear. Check: kill-tab after Save; goal survives reload.
+**F60 · `ptoGoal` CRUD** — `saveForm:187–198`, Clear `:1105`; App wiring
+`App.jsx` (`onSavePtoGoalNow` prop → `savePersistedStateNow({ ptoGoal: next })`) — **[L]**
+**DW-6 (fixed).** Save and Clear are discrete actions but rode the 800ms debounce — App
+passed no eager-save wrapper for `ptoGoal` (the only un-eager-saved discrete mutation
+on this surface; the CLAUDE.md eager-save table had no `ptoGoal` row, so the `764da5b`
+audit's coverage claim had a gap). Fixed: `onSavePtoGoalNow(next)` prop added to App
+(mirrors `saveConfigNow`'s shape), threaded to `LogPanel`, and called in both `saveForm`
+and Clear alongside `setPtoGoal` with the same computed value. CLAUDE.md's eager-save
+table now has a `ptoGoal` row. Regression-tested in `LogPanel.test.jsx` ("PTO Goal —
+eager save").
+> Check: kill-tab after Save; goal survives reload.
 
 **F61 · Attendance surfaces** — DHL bucket: `bucketModel` prop (computed in App via
 `computeBucketModel`, Spine A), bucket balance override Save/Reset `:1194`/`:1210`
@@ -1499,15 +1504,16 @@ event-impact verification (Spine F) — its numbers must match the hero-card agg
 - *Rolling pay-week dropdown* (`7532c86`, `e7e5faa`) — dropdown order/labels are
   deliberate UX; the week-change reset (F56) shipped with it.
 
-**Standing findings from this pass (open — decisions owed):**
+**Standing findings from this pass:**
 1. **Parallel adjusted-take-home derivation (F54/F57/F62)** *(queued as DW-5 in
-   `docs/BUG_FIX_TODO.md`)*: LogPanel re-derives net totals weekMeta-less while
+   `docs/BUG_FIX_TODO.md`, still open)*: LogPanel re-derives net totals weekMeta-less while
    Income/Home read App's weekMeta-aware `logTotals` — same-screen disagreement
    possible; fix by threading `logTotals` down (the 401k aggregates already set the
    pattern).
-2. **`ptoGoal` lacks eager save (F60)** *(queued as DW-6)*: Save/Clear ride the
-   debounce; the only rule exception on this surface, and a gap in the `764da5b`
-   audit's coverage.
+2. **`ptoGoal` lacks eager save (F60) — fixed** *(DW-6)*: Save/Clear rode the
+   debounce; it was the only rule exception on this surface, and a gap in the `764da5b`
+   audit's coverage. `onSavePtoGoalNow` added to App + CLAUDE.md's eager-save table;
+   both call sites now eager-save.
 
 ---
 
@@ -1851,7 +1857,7 @@ hardcoded hex colors (Spine E debt, TODO §10).
 modals (`3a2e04f`), request-derived redirect origins (`1a12dd6`), the lifecycle cron
 (`97d1ee4`), archive-then-delete wiring (`1f94022`), and cancel-on-delete hardening
 (`8a2683c`). This pass found the investigation's most serious defect — **DW-7**, the
-dead tester exemption in the cron (F86).
+dead tester exemption in the cron (F86) — since fixed (§16.4).
 
 **Scope:** `lib/subscription.js` (the Spine-C engine's enforcement half),
 `App.jsx` gating + checkout-return plumbing, `UpgradeCard/Modal/Panel.jsx`,
@@ -1940,13 +1946,16 @@ trial start → grace/expired warnings on a 2-day throttle keyed off
 (`:110–114`), the row SELECT (`:133–139`), per-row loop with
 `archiveAndDeleteAccount:38` taking precedence over a same-run deletion warning
 (`:153–160`), summary counters — **[G]**
-⚠ **DW-7.** The SELECT fetches `is_admin, is_investor` but **not `is_tester`** — the
-engine's tester exemption reads `undefined` and never fires. A tester's lapsed 6-month
+**DW-7 (fixed).** The SELECT fetched `is_admin, is_investor` but **not `is_tester`** — the
+engine's tester exemption read `undefined` and never fired. A tester's lapsed 6-month
 window → real dunning → archive+delete. The engine is unit-tested with hand-built rows;
-the select list sits outside that seam, which is how it slipped.
+the select list sat outside that seam, which is how it slipped. Fixed by adding `is_tester`
+to the SELECT (`:137`) plus `src/test/api/cronLifecycleSelectColumns.test.js`, a structural
+regression test that reads the real runtime `.select()` argument and asserts it's a superset
+of every `row.*` field `_lifecycleEngine.js` reads — kills the class, not just the instance.
 > **IF** the engine gains any new row-field read, **THEN** the SELECT must grow in the
-> same commit — the fix for DW-7 should add a shell-level test asserting every field
-> the engine destructures appears in the query string, making this class structural.
+> same commit, or `cronLifecycleSelectColumns.test.js` fails — the field-coverage test this
+> entry called for now exists and enforces this automatically.
 
 **F87 · Email layer** — `_lifecycleEmails.js` (templates; disclosure rule per F85),
 `_email.js` (Resend via plain fetch; `RESEND_API_KEY` fallback name `71d2692`;
@@ -1961,7 +1970,7 @@ the select list sits outside that seam, which is how it slipped.
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
 |---|---|---|---|
 | `getEntitlement` shape/states (Spine C) | F81 fork, F85 engine, TrialBanner/Sub-card/explainer copy, Live Inspector Sub Phase | One account through all five states; all surfaces agree; `subscription.test.js` | D1 |
-| `subscription` column set (migration 017+) | `db.js#mapSubscription`, the cron SELECT (F86/DW-7 class), webhook writers, admin DB Row viewer | The F86 field-coverage test once it exists; `db.test.js` mapping cases | D2/D4 |
+| `subscription` column set (migration 017+) | `db.js#mapSubscription`, the cron SELECT (F86/DW-7 class), webhook writers, admin DB Row viewer | `cronLifecycleSelectColumns.test.js` (the F86 field-coverage test); `db.test.js` mapping cases | D2/D4 |
 | Trial/grace timestamps or seeding (`seed-trial`, migration 021 trigger) | F80 phase math, F85 nudge days, T8 explainer, tester 6-month semantics | Fresh signup + tester flip walked through day-7/12/14/21/28 with a clock mock | D1 |
 | Tier bypass semantics (§23) | F81's deliberate tester **non**-bypass vs F86's cron exemption — two halves of one promise; breaking either strands testers (paywall) or deletes them (cron) | Expired tester account: sees paywall, never dunned/deleted | D4 |
 | Webhook event set / Stripe API version | F84 cases + idempotency table + revival restore path | Replay-twice test; Stripe CLI fixture run | D2 |
@@ -1973,11 +1982,11 @@ the select list sits outside that seam, which is how it slipped.
 | Dimension | Cells | Expected behavior |
 |---|---|---|
 | Entitlement state | trial / grace / active / expired / none | Banner countdown / banner "ended" copy (no grace mention) / nothing / enforcement fork / nothing (unseeded) |
-| Tier at expiry | plain / admin / investor / tester | Enforcement / bypassed / bypassed / **enforced** (real paywall, by design §23) — protection is cron-side only (DW-7 pending) |
+| Tier at expiry | plain / admin / investor / tester | Enforcement / bypassed / bypassed / **enforced** (real paywall, by design §23) — cron-side protection fixed (DW-7) |
 | Surface under `isExpiredReadOnly` | Home / Budget / Income / Log / Account | readOnly shadow / readOnly shadow / UpgradePanel replace / UpgradePanel replace / fully live |
 | Checkout return | success (webhook landed) / success (webhook late) / cancel | Immediate flip / poll up to 10s then flip / cancel notice, no state change |
 | Revival | tombstone match + charge / tombstone consumed / no tombstone | Restore + `revived_at` stamp / normal account behavior / normal checkout |
-| Cron row | admin/investor / tester / carded / active / trial day 7/12 / grace / expired / expired+7d | none / **should be none — currently dunned (DW-7)** / reset-or-none / reset-or-none / nudge / 2-day warnings / 2-day warnings / archive+delete |
+| Cron row | admin/investor / tester / carded / active / trial day 7/12 / grace / expired / expired+7d | none / **none (DW-7 fixed)** / reset-or-none / reset-or-none / nudge / 2-day warnings / 2-day warnings / archive+delete |
 
 ### 16.4 Block 4 — Case law & findings
 
@@ -1991,12 +2000,16 @@ the select list sits outside that seam, which is how it slipped.
   don't keep billing; live-verification items parked in §21's known gaps.
 - *Archive-then-delete wiring* (`1f94022`) — the cron's delete is the only archiving
   delete (T5 F52's invariant is the other half).
+- *Dead tester exemption in the cron (F86), fixed in this pass* — `DW-7`, this
+  investigation's highest-severity defect: the SELECT omitted `is_tester`, so the
+  engine's exemption gate read `undefined` and lapsed beta testers were dunned and
+  due for auto-deletion on the real schedule ~6 months after flag flip. Fixed by
+  adding `is_tester` to the SELECT plus `cronLifecycleSelectColumns.test.js`, a
+  structural field-coverage test (not a one-off assertion) that fails on any future
+  engine read the cron's SELECT doesn't cover.
 
-**Standing findings from this pass (open — decisions owed):**
-1. **Dead tester exemption in the cron (F86)** *(queued as DW-7 — HIGH)*: the SELECT
-   omits `is_tester`, so the engine's exemption gate reads `undefined` and beta
-   testers are dunned and auto-deleted on the real schedule ~6 months after flag
-   flip. One-line fix + a field-coverage shell test to kill the class.
+**Standing findings from this pass:** none open. DW-7 (above) was this pass's one
+defect and is now fixed.
 
 ---
 
@@ -2554,8 +2567,9 @@ folder before numbering; this note has gone stale once already (this doc's own �
 
 **F110 · The four-site new-persisted-field procedure** — cross-file — **[L]**
 Codifying F68's sketch as a named check. A new field that must persist to `user_data` has to
-appear at **all four** sites or it silently half-works (DW-6's `ptoGoal` gap is the specimen —
-it reached React state but no eager-save wrapper, so discrete saves rode the debounce):
+appear at **all four** sites or it silently half-works (DW-6's `ptoGoal` gap, now fixed, was
+the specimen — it reached React state but had no eager-save wrapper, so discrete saves rode
+the debounce):
 1. **`saveUserData` destructure** (`db.js:396`) — the debounced/eager writer.
 2. **`flushUserDataKeepalive` destructure** (`db.js:443`) — the unload writer (identical field
    set to #1 by contract).
@@ -2606,8 +2620,8 @@ the load-side reader. A field missing from any write column silently loses that 
 | `goals` | ✅ | `onSaveGoalsNow` (F18/F19) | ✅ | `goals` | direct |
 | `logs` | ✅ | `onSaveLogsNow` (F55) | ✅ | `logs` | direct |
 | `showExtra` | ✅ | via `savePersistedStateNow` overrides | ✅ | `show_extra` | direct |
-| `weekConfirmations` | ✅ | check-in `onConfirm` (F31), Reopen (F32/DW-3) | ✅ | `week_confirmations` | auto-confirm seed (F26) |
-| `ptoGoal` | ✅ | **⚠ none — DW-6** (bare `setPtoGoal`) | ✅ | `pto_goal` | direct |
+| `weekConfirmations` | ✅ | check-in `onConfirm` (F31), Reopen (F32/DW-3 fixed) | ✅ | `week_confirmations` | auto-confirm seed (F26) |
+| `ptoGoal` | ✅ | `onSavePtoGoalNow` (F60/DW-6 fixed) | ✅ | `pto_goal` | direct |
 
 **Privileged columns (never in the client payload — service-role only):** tier flags
 (`is_admin`/`is_tester`/`is_investor`/`is_employer_dhl` — the last *derived* at write time from
@@ -2636,10 +2650,11 @@ idempotency — Spine C/T9); `deleted_accounts` (cron tombstones — T9).
 - *Migration 024* (`8f34def`/`a93dcad`) — the UPDATE grant missing `user_id` broke every upsert
   conflict path while reads worked; "migration ran" ≠ "writes work" (F109/F69).
 
-**Standing findings from this pass:** none new filed. The one open persistence defect on record
-is **DW-6** (`ptoGoal` lacks an eager-save wrapper — surfaced in the T6 pass, authority table
-above marks the gap); it is the live proof of the F110 four-site procedure's necessity and
-stays queued until fixed. No D5 corrections owed — `active-systems.md` §22 already carries the
+**Standing findings from this pass:** none new filed. **DW-6** (`ptoGoal` lacked an eager-save
+wrapper — surfaced in the T6 pass, authority table above marked the gap) is fixed: it was the
+live proof of the F110 four-site procedure's necessity and is now the reference example of the
+procedure closing a gap end-to-end (App wrapper + prop + both call sites + CLAUDE.md table +
+regression test). No D5 corrections owed — `active-systems.md` §22 already carries the
 F10 read-path annotation applied during the T7 pass, and the migration-number note in CLAUDE.md
 now self-warns (T7 pass). `useLocalStorage`'s device-local scope (F107) is documented-intended
 (the localStorage→Supabase vestige), not a defect — filed as a standing note, not a DW row,
@@ -2705,18 +2720,19 @@ Three pure functions, one base:
 A server-side gate is only as strong as the query that feeds its inputs. Two server gates read
 tier flags off a fetched row: `api/coach.js` gates AI on `userRow.is_admin`/`is_tester`
 (its SELECT supplies both — correct); the lifecycle engine exempts `row.is_admin ||
-row.is_investor || row.is_tester` (`:44`) but the **cron's SELECT omits `is_tester`**
-(`:135–137`), so the tester exemption reads `undefined` and never fires — **DW-7**, this
+row.is_investor || row.is_tester` (`:44`) and the **cron's SELECT once omitted `is_tester`**
+(`:135–137`), so the tester exemption read `undefined` and never fired — **DW-7**, this
 investigation's highest-severity defect (silent auto-deletion of testers ~6 months after
-flag flip).
+flag flip), fixed in this pass.
 > **IF** any server gate reads a row field, **THEN** the SELECT that produced the row MUST
 > include that column — a gate whose input column is missing evaluates against `undefined`
-> and silently fails *open or closed* with no error. The fix template (queued in DW-7): add
-> `is_tester` to the cron SELECT **and** a shell-level test asserting every column the engine
-> destructures appears in the query string, making the class structural rather than
-> whack-a-mole. Check: grep each `api/*` gate's field reads against its own `.select(...)`
-> string; unit tests that hand-build rows (as `lifecycleEngine.test.js` does) will NOT catch
-> this — the seam is the query, not the pure function.
+> and silently fails *open or closed* with no error. The fix template DW-7 applied: add
+> `is_tester` to the cron SELECT **and** a shell-level test (`cronLifecycleSelectColumns.test.js`)
+> asserting every column the engine destructures appears in the query string, making the class
+> structural rather than whack-a-mole. Check: grep each `api/*` gate's field reads against its
+> own `.select(...)` string; unit tests that hand-build rows (as `lifecycleEngine.test.js` does)
+> will NOT catch this — the seam is the query, not the pure function — which is exactly why
+> the fix is a runtime test against the actual `.select()` call, not another hand-built-row test.
 
 **Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
 F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
@@ -2751,7 +2767,7 @@ with no server gate is a D4 finding.
 | **`canAccessAiFeatures`** | `isAdmin \|\| isTester` | `is_admin`, `is_tester` | `App.jsx:878` (Coach net-worth trigger), `:3350` (Ask Coach panel), `HomePanel.jsx:1358` (Coach card, F24) | `api/coach.js:63` — re-checks on `userRow.is_admin`/`is_tester` before streaming (the model server gate) |
 | **`canAccessTaxPlan`** | `isAdmin \|\| isTester \|\| taxProjectionsEnabled` | `is_admin`, `is_tester`, `tax_projections_enabled` | `BudgetPanel.jsx:82` (`taxFeatureUnlocked`, F43), `ProfilePanel.jsx:1900` (`canSeeTaxPlan`, F45/F50) | none direct — tax writes go through `config` (F50), RLS-owned via migration 019; the gate is display-only. **No server action to re-gate** (writes are the user's own config row) |
 | **`getEntitlement` → `paywallBypassed`** | `isAdmin \|\| config.isInvestor` (F81) | `is_admin`, `is_investor` | `App.jsx:1463` → `isExpiredReadOnly` fork (F81) drives readOnly shadows + panel replacement | Server side is Stripe/webhook truth + the lifecycle cron (F85/F86); the client fork is UX over server-authoritative subscription columns |
-| **Lifecycle exemption** | `is_admin \|\| is_investor \|\| is_tester` (`_lifecycleEngine.js:44`) | all three flags | — (server-only) | **the gate itself** — but its SELECT omits `is_tester` (DW-7, F112/F86) |
+| **Lifecycle exemption** | `is_admin \|\| is_investor \|\| is_tester` (`_lifecycleEngine.js:44`) | all three flags | — (server-only) | **the gate itself** — SELECT now supplies `is_tester` (DW-7 fixed, F112/F86); field-coverage regression test enforces it stays that way |
 | **`isAdmin` toolkit** | `user_data.is_admin` (F67 map) | `is_admin` | Admin Tools sheet, Week Inspector, Reopen, per-entry breakdown (Spine F) | Data the tools read is the user's own RLS-scoped row; write-capable Phase-2 tools are `isOwner`-gated (not built) |
 | **`isAdmin` investor codes** | `user_data.is_admin` | `is_admin` | `ProfilePanel.jsx:2019` (ListRow), route `:1944` (**row-gate only** — DW-W2) | `InvestorAdminPanel` data calls are RLS-gated server-side (why DW-W2 is unexploitable today) |
 | **`isInvestor` demo tree** | `user_data.is_investor` / `config.isInvestor` | `is_investor` | `DemoAccountTree`, investor signup path (F70) | `createInvestorAccount`/demo storage RLS-scoped; `is_investor` grants **no** AI (§23 firewall) |
@@ -2763,7 +2779,7 @@ with no server gate is a D4 finding.
 |---|---|---|---|---|---|
 | plain user | ✗ | ✗ (opt-in alone ✗) | ✗ | **enforced** | ✗ |
 | `taxProjectionsEnabled` | ✗ | ✓ | ✗ | enforced | ✗ |
-| `is_tester` | ✓ | ✓ | ✗ (firewall) | **enforced** (real 6-mo trial; cron-exempt — DW-7) | ✗ |
+| `is_tester` | ✓ | ✓ | ✗ (firewall) | **enforced** (real 6-mo trial; cron-exempt — DW-7 fixed) | ✗ |
 | `is_investor` | ✗ (firewall) | ✗ | ✓ | bypassed | ✗ |
 | `is_admin` | ✓ | ✓ | ✗ (unless also investor) | bypassed | ✓ |
 | `is_owner` (future) | ✓ | ✓ | — | bypassed | ✓ + Phase-2 write tools |
@@ -2783,11 +2799,12 @@ with no server gate is a D4 finding.
 - *Migration 024* (`8f34def`/`a93dcad`) — a tier/permission migration can pass in SQL and
   still break writes; F69's checklist item.
 
-**Standing findings from this pass:** none new filed. The spine's one open defect is **DW-7**
-(the cron SELECT omits `is_tester`, killing the lifecycle exemption) — surfaced in the T9
-pass, generalized here into F112 as a *class* (server gate vs. its feeding query) rather than
-a one-off, and restated in the gate registry and tier matrix so the tester row's "enforced /
-cron-exempt (DW-7)" status is unmissable. **DW-W2** (the `investorcodes` route lacking the
+**Standing findings from this pass:** none new filed. **DW-7** (the cron SELECT once omitted
+`is_tester`, killing the lifecycle exemption) — surfaced in the T9 pass, generalized here into
+F112 as a *class* (server gate vs. its feeding query) rather than a one-off, and now fixed
+(SELECT + `cronLifecycleSelectColumns.test.js`) — is restated in the gate registry and tier
+matrix so the tester row's "enforced / cron-exempt (DW-7 fixed)" status is unmissable.
+**DW-W2** (the `investorcodes` route lacking the
 route-level re-check `taxplan` has) remains queue-visible and is captured in the registry's
 "row-gate only" note; it is not promoted because `activeSection` is tap-only state and the
 underlying data is RLS-gated (F45's IF/THEN is the tripwire). No D5 corrections owed — the
@@ -3152,10 +3169,10 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 | Tool | What it reads | F-entries that verify through it |
 |---|---|---|
 | **Lock Date** (`effectiveToday` override) | `tempLockDate` → `effectiveToday` (F118), fed into F25/F26/F27/F28/futureWeeks | F25 (hour-gate bypass), F26/F27 (eligibility sim), F28 (tax split — **DW-2 weakens it**) |
-| **Reopen Last Check-In** | `reopenableWeekIdx` + `weekConfirmations[idx]` + its spawned log entry | F32 (**DW-3**: deletes lack eager save), F26 (projections independent of confirmations premise) |
+| **Reopen Last Check-In** | `reopenableWeekIdx` + `weekConfirmations[idx]` + its spawned log entry | F32 (**DW-3 fixed**: deletes now eager-save), F26 (projections independent of confirmations premise) |
 | **Force Sync** (push/pull) | `handleForcePush`/`handleForcePull` — flush/reload `latestPersistedStateRef` | Any save-path check (Spine B F105/F106); before/after a save bug |
 | **Config Raw View** | full `config` JSON | F7 (three-way sensitive-field audit), F43/F50 (tax elections), F49 (benefit config) |
-| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), **DW-6** (`ptoGoal` drift) |
+| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), **DW-6 fixed** (`ptoGoal` now eager-saves; no more drift-badge exposure) |
 | **Tax Weeks Grid** | `taxedWeeks` (teal/dark) + `pastWeekTaxStatusOverrides` (red dots) + current-week border | F28 (schedule vs remediation), F50 (override writers), F104 (liability inputs) |
 | **Live State Inspector** | ~16 live values: `effectiveToday`, week idx, `extraPerCheck`, `totalGap`, `taxedWeekCount`, `weeklyIncome`, `bufferPerWeek`, `projectedAnnualNet`, Sub Phase/Trial/Access Ends… | F14 (`weeklyIncome`), F28 (`extraPerCheck`/`totalGap`), F51 (`bufferPerWeek`), F53/F80 (Sub Phase — real clock), F113 (Coach numbers cross-check) |
 | **Week Inspector** | one week object verbatim: schedule, pay (`grossPay`/`taxableGross`/deductions/401k), live `computeNet`, net lookup (baseNet/adjustment/spendable), confirmation record, log entries | F15 (prev-week net), F29 (net tiers), F57 (per-entry vs hero), F58 (401k match), F96/F97/F98 (week shape/net), F99 (DHL rotation), F103 (loan) |
@@ -3178,17 +3195,18 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 - *`ALLOWED_PURPOSES` / count drift* and other doc lags — surfaced because the tools exposed
   the real state; the toolkit is how many D5s in this investigation were caught.
 
-**Standing findings from this pass:** none new filed. Three existing DW items are
+**Standing findings from this pass:** none new filed. Three DW items were
 **tool-integrity defects** — the toolkit's own instruments lying — and are restated here so the
 "a broken tool blinds every check" stance is concrete:
 1. **DW-2** — `taxDerived`'s stale memo dep (F28) means the **Lock Date** tool's tax simulation
    doesn't recompute when the lock changes; the instrument silently disagrees with the Tax
-   Weeks Grid it's meant to be cross-checked against.
-2. **DW-3** — **Reopen Last Check-In** (F32) deletes without an eager save; the tool can lose
-   its own mutation on a backgrounded tab.
+   Weeks Grid it's meant to be cross-checked against. Still open.
+2. **DW-3 — fixed.** **Reopen Last Check-In** (F32) deleted without an eager save; the tool
+   could lose its own mutation on a backgrounded tab. Now computes both next values
+   synchronously and eager-saves them alongside the `setState`s.
 3. **DW-5** — the **per-entry breakdown** (F62) is weekMeta-less, so the admin's own
    event-impact instrument can disagree with the hero cards it's used to verify — "the
-   diagnostic tool the last liar in the room" (F62's phrasing).
+   diagnostic tool the last liar in the room" (F62's phrasing). Still open.
 No new defect surfaced; the Phase-2 landmines (F119) are pre-build warnings, not live bugs (the
 tools don't exist yet). No D5 corrections owed — CLAUDE.md's Admin Diagnostic Toolkit section
 and active-systems §13 both describe the tools accurately; this section maps how the Warden

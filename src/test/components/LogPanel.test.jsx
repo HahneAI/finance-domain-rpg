@@ -385,3 +385,46 @@ describe('Pay Week dropdown — rolling order', () => {
     expect(forWeek0.textContent).toBe('Week of Dec 29th – Jan 4th')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PTO Goal — eager save (DW-6 regression: Save/Clear must not rely solely on
+// the 800ms debounce — see CLAUDE.md's Persistence eager-save table)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('PTO Goal — eager save', () => {
+  const PTO_PROPS = { ...BASE_PROPS, config: { ...BASE_CONFIG, ptoEnabled: true } }
+
+  it('calls onSavePtoGoalNow with the same value passed to setPtoGoal on Save', () => {
+    const setPtoGoal = vi.fn()
+    const onSavePtoGoalNow = vi.fn()
+    render(<LogPanel {...PTO_PROPS} logs={[]} ptoGoal={null} setPtoGoal={setPtoGoal} onSavePtoGoalNow={onSavePtoGoalNow} />)
+
+    fireEvent.click(screen.getByText('Set Goal'))
+    fireEvent.change(screen.getByPlaceholderText('e.g. Paternity Leave'), { target: { value: 'Paternity Leave' } })
+    fireEvent.change(screen.getByPlaceholderText('e.g. 134'), { target: { value: '80' } })
+    fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-06-01' } })
+    fireEvent.click(screen.getByText('Save'))
+
+    expect(setPtoGoal).toHaveBeenCalledTimes(1)
+    expect(onSavePtoGoalNow).toHaveBeenCalledTimes(1)
+    expect(onSavePtoGoalNow).toHaveBeenCalledWith(setPtoGoal.mock.calls[0][0])
+    expect(setPtoGoal.mock.calls[0][0]).toMatchObject({
+      label: 'Paternity Leave',
+      hoursNeeded: 80,
+      targetDate: '2026-06-01',
+      negativeBalanceCap: 40,
+    })
+  })
+
+  it('calls onSavePtoGoalNow(null) alongside setPtoGoal(null) on Clear', () => {
+    const setPtoGoal = vi.fn()
+    const onSavePtoGoalNow = vi.fn()
+    const existingGoal = { label: 'Paternity Leave', hoursNeeded: 80, targetDate: '2026-06-01', negativeBalanceCap: 40 }
+    render(<LogPanel {...PTO_PROPS} logs={[]} ptoGoal={existingGoal} setPtoGoal={setPtoGoal} onSavePtoGoalNow={onSavePtoGoalNow} />)
+
+    fireEvent.click(screen.getByText('Clear'))
+
+    expect(setPtoGoal).toHaveBeenCalledWith(null)
+    expect(onSavePtoGoalNow).toHaveBeenCalledWith(null)
+  })
+})

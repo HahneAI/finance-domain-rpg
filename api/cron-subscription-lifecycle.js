@@ -134,7 +134,7 @@ export default async function handler(req, res) {
     .select(
       "user_id, subscription_status, stripe_subscription_id, trial_started_at, trial_ends_at, " +
         "access_ends_at, card_on_file, last_dunning_email_at, dunning_email_count, " +
-        "current_period_end, is_admin, is_investor"
+        "current_period_end, is_admin, is_investor, is_tester"
     )
     .not("trial_started_at", "is", null);
   if (fetchError) {

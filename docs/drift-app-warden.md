@@ -1164,13 +1164,19 @@ weekly premium fields) are written by the wizard (§7, Step 3) and by `BenefitsD
 (T5), and read by Spine A (`weeklyBenefitDeductions`, `buildYear`) and LogPanel (T6) —
 that write-two-read-two square is the drift surface that remains real.
 
-### 11.3 Cleanup queued
+### 11.3 Cleanup — done
 
-Deleting `BenefitsPanel.jsx` (and its coverage tests) is the owner's call — queued as
-**DW-4** in `docs/BUG_FIX_TODO.md` (owner-scheduled dead-code cleanup pass: delete the
-file + tests and import-graph-sweep for any other orphans in the same investigation)
-and mirrored in CLAUDE.md's Known Cleanup list. The risk being managed isn't runtime —
-it's someone "fixing" or extending the dead file believing it ships.
+**DW-4 (fixed).** `BenefitsPanel.jsx` and its coverage tests (`panels.test.jsx`'s
+`describe('BenefitsPanel', ...)` block) are deleted, on owner sign-off. Before deleting,
+re-ran the import-graph sweep the finding called for across all of `src/components/`
+(35 files) and `src/lib/` (18 files) — `BenefitsPanel.jsx` was the only module reachable
+from nothing but its own test; no other orphans turned up. (Noted in passing, not part of
+this fix: `formatFiscalWeekLabel` — a `fiscalWeek.js` export superseded per its own
+in-file comment — is imported-but-uncalled in four files, `App.jsx`/`LogPanel.jsx`/
+`BudgetPanel.jsx`/`HomePanel.jsx`, though still genuinely called from
+`DemoAccountTree.jsx`. That's dead-import cruft on a still-live export, a different and
+smaller class than DW-4's whole-module orphan — left for a future lint-debt pass.)
+CLAUDE.md's file-structure map and Known Cleanup list updated in the same commit.
 
 ---
 

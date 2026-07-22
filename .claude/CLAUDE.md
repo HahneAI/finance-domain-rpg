@@ -36,7 +36,6 @@ src/
 │   ├── HomePanel.jsx        — dashboard home tiles
 │   ├── IncomePanel.jsx      — income / tax / rolling weekly view
 │   ├── BudgetPanel.jsx      — expenses / goals / loans
-│   ├── BenefitsPanel.jsx    — DEAD CODE, never rendered (401k/PTO live in LogPanel + ProfilePanel; see drift-app-warden §11)
 │   ├── LogPanel.jsx         — event log + Log Effect Summary
 │   ├── WeekConfirmModal.jsx — weekly schedule confirmation
 │   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
@@ -292,7 +291,6 @@ Files: kebab-case · Components: PascalCase · Utilities/hooks: camelCase · Dat
 
 ## Known Cleanup
 - `WeekConfirmModal.jsx`, `LoginScreen.jsx`, `ProfilePanel.jsx` — hardcoded hex colors not yet tokenized (tracked in TODO §10)
-- `BenefitsPanel.jsx` (+ its coverage tests) — dead code, unrendered for the repo's entire visible history; 401k/PTO displays live in `LogPanel.jsx`, settings in `ProfilePanel.jsx` `BenefitsDetail`. Safe to delete on owner sign-off (drift-app-warden §11)
 
 ---
 

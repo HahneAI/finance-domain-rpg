@@ -56,6 +56,26 @@ describe("ASK_COACH_SYSTEM_PROMPT", () => {
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/mirror it exactly rather than defaulting to "week" out of habit/i);
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/"paycheck n" or "month n" instead/i);
   });
+
+  // Regression: "Give me a full rundown of my Home panel" produced a
+  // two-screen wall of text — Coach explained what every tile meant *in
+  // addition to* stating it, and that explanatory clause compounded across
+  // seven-plus tiles. Narrow single-metric questions earned that depth in
+  // earlier tests; a broad "everything" question shouldn't repeat it seven
+  // times over.
+  it("instructs compressed treatment for broad multi-topic questions, with narrow questions still getting full explanations", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/do not explain what each metric means or walk every tile in turn/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/invite a follow-up for whatever you didn't cover/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/still earns the fuller explanation it's asking for/i);
+  });
+
+  // Regression: asked for the most expensive line item, Coach stated Gas
+  // ($85) as the biggest, then mid-message: "Food is actually your highest,
+  // my mistake" — a real comparison slip, made worse by narrating it aloud.
+  it("instructs silent self-correction instead of narrating a caught mistake", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/never narrate the correction to the user/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/"my mistake," "actually, wait"/);
+  });
 });
 
 describe("buildNetWorthSystemPrompt", () => {

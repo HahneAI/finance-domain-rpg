@@ -36,6 +36,7 @@ import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
 import { canAccessAiFeatures } from "./lib/entitlements.js";
+import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./lib/jobLossRunway.js";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -1253,6 +1254,19 @@ export default function App() {
   const remainingSpend = useMemo(() => computeRemainingSpend(projectableExpenses, futureWeeks), [projectableExpenses, futureWeeks]);
   const fundedGoalSpend = useMemo(() => getFundedGoalSpend(goals, effectiveToday), [goals, effectiveToday]);
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
+
+  // Real runway for Ask Coach (drift-app-warden §21 quarantine-2 fix) — was
+  // never wired at all before, so a Job Loss Mode user asking Coach about
+  // runway got a bare "Job Loss Mode: active" with no number. Same
+  // computeJobLossRunway()/resolvePrimaryRunwayDays() pair CoachNetWorthCard
+  // now uses, and the real (not defaulted) jobLossIncludeBenefits toggle, so
+  // Ask Coach agrees with whatever the Job Loss panels are showing.
+  const coachRunwayDays = useMemo(() => {
+    if (!config.jobLossMode) return null;
+    const savings = (config.jobLossCashOnHand ?? 0) + sumJobHuntIncome(config);
+    const dash = computeJobLossRunway({ config, expenses, effectiveToday, savings });
+    return resolvePrimaryRunwayDays(dash, config, jobLossIncludeBenefits);
+  }, [config, expenses, effectiveToday, jobLossIncludeBenefits]);
 
   // ── Event log cascade ──
   const logTotals = useMemo(() => ({
@@ -3366,6 +3380,7 @@ export default function App() {
           futureEventDeductions={futureEventDeductions}
           prevWeekNet={prevWeekNet}
           allWeeks={allWeeks}
+          runwayDays={coachRunwayDays}
         />
       )}
 

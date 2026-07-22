@@ -27,7 +27,7 @@ export function DueDatePicker({ value, onChange, attempted = false }) {
               style={{
                 padding: "6px 10px", fontSize: "10px", letterSpacing: "0.5px",
                 background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
-                color: active ? "var(--color-gold)" : "var(--color-text-secondary)",
+                color: active ? "var(--color-teal)" : "var(--color-text-secondary)",
                 border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
                 borderRadius: "8px", cursor: "pointer",
               }}
@@ -41,7 +41,7 @@ export function DueDatePicker({ value, onChange, attempted = false }) {
           style={{
             padding: "6px 10px", fontSize: "10px", letterSpacing: "0.5px",
             background: mode === "custom" ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
-            color: mode === "custom" ? "var(--color-gold)" : "var(--color-text-secondary)",
+            color: mode === "custom" ? "var(--color-teal)" : "var(--color-text-secondary)",
             border: `1px solid ${mode === "custom" ? "rgba(0,200,150,0.32)" : (showError ? "var(--color-deduction)" : "var(--color-border-subtle)")}`,
             borderRadius: "8px", cursor: "pointer",
           }}

@@ -230,7 +230,7 @@ export function JobLossBudgetPanel({
                     style={{
                       padding: "7px 12px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
                       background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
-                      color: active ? "var(--color-gold)" : "var(--color-text-secondary)",
+                      color: active ? "var(--color-teal)" : "var(--color-text-secondary)",
                       border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
                       borderRadius: "10px", cursor: "pointer", fontWeight: active ? 700 : 500,
                     }}
@@ -360,7 +360,7 @@ export function JobLossBudgetPanel({
                       {isLoan && (
                         <span style={{
                           fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
-                          color: "var(--color-bg-base)", background: "var(--color-gold)",
+                          color: "var(--color-bg-base)", background: "var(--color-teal)",
                           padding: "2px 6px", borderRadius: "3px", fontWeight: "bold",
                         }}>
                           Loan

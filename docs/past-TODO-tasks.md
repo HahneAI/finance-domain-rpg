@@ -121,7 +121,7 @@ One-liner per item — see git history for full implementation detail.*
 
 ## §10 — Authority OS Design System Migration
 
-- [x] **Green token alignment** — `METRIC_STATUS` green fixed; `--color-gold-bright` flash token updated; `--color-accent-soft` purged from all foreground use
+- [x] **Green token alignment** — `METRIC_STATUS` green fixed; `--color-teal-bright` flash token updated; `--color-accent-soft` purged from all foreground use
 - [x] **Authority OS rename** — `index.html`, PWA label, `package.json`, LoginScreen "Life RPG" eyebrow updated; dead Google Fonts (DM Serif/Sans) removed
 - [x] **Pulse signal layer** — Signal tokens added to `index.css`; `InsightRow` component built and exported from `ui.jsx`; `insight` prop feathered into MetricCard/Card across HomePanel, IncomePanel, BudgetPanel
 

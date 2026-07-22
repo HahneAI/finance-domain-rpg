@@ -430,7 +430,7 @@ export function LogPanel({
             const h = parseFloat(vals.hoursLost) || 0;
             const expected = s * config.shiftHours;
             return expected > 0 && Math.abs(h - expected) > 0.01 ? (
-              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
+              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-teal)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
                 ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h
               </div>
             ) : (
@@ -469,7 +469,7 @@ export function LogPanel({
             const h = parseFloat(vals.hoursLost) || 0;
             const expected = s * config.shiftHours;
             return expected > 0 && Math.abs(h - expected) > 0.01 ? (
-              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
+              <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-teal)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
                 ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h{hasBucket ? " · bucket hit uses override amount" : ""}
               </div>
             ) : null;
@@ -580,7 +580,7 @@ export function LogPanel({
     {currentWeek && <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "10px 14px", marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>Current fiscal week</div>
       <div style={{ display: "flex", gap: "16px", alignItems: "center", fontSize: "11px" }}>
-        <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>Week ending {currentWeek.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+        <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>Week ending {currentWeek.weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
         <span style={{ color: "var(--color-text-primary)" }}>{formatRotationDisplay(currentWeek, { isAdmin })}</span>
         <span style={{ color: "var(--color-green)", fontWeight: "bold" }}>{fiscalWeekLabel}</span>
       </div>
@@ -589,12 +589,12 @@ export function LogPanel({
     {/* Log header + add button */}
     <div style={{ marginBottom: "12px" }}>
       <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "10px" }}>Event Log ({logs.length})</div>
-      <Pressable onClick={() => { setAdding(true); setEditId(null); }} style={{ width: "100%", background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "14px", fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>+ LOG EVENT</Pressable>
+      <Pressable onClick={() => { setAdding(true); setEditId(null); }} style={{ width: "100%", background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "14px", fontSize: "12px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold" }}>+ LOG EVENT</Pressable>
     </div>
 
     {/* Add form */}
     {adding && <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-accent-primary)", borderRadius: "8px", padding: "18px", marginBottom: "16px" }}>
-      <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>New Event</div>
+      <div style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px" }}>New Event</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
         <FormFields vals={nEv} set={setNEv} onWeekEndChange={handleWeekEndChange} />
       </div>
@@ -606,7 +606,7 @@ export function LogPanel({
             const h = parseFloat(nEv.hoursLost) || 0;
             const expected = s * config.shiftHours;
             const overridden = expected > 0 && Math.abs(h - expected) > 0.01;
-            return <div>{s} shift(s) · {h}h missed{overridden && <span style={{ color: "var(--color-gold)", marginLeft: "6px", fontSize: "9px" }}>⚠ hours overridden (expected {expected}h)</span>}</div>;
+            return <div>{s} shift(s) · {h}h missed{overridden && <span style={{ color: "var(--color-teal)", marginLeft: "6px", fontSize: "9px" }}>⚠ hours overridden (expected {expected}h)</span>}</div>;
           })()}
           {nEv.type === "bonus" && <div>+${parseFloat(nEv.amount) || 0} · {parseInt(nEv.shiftsGained) || 0} shift(s) · {parseFloat(nEv.hoursGained) || 0}h gained</div>}
           {nEv.type === "partial" && <div>{parseFloat(nEv.hoursLost) || 0}h partial shift</div>}
@@ -695,7 +695,7 @@ export function LogPanel({
                   const h = parseFloat(editVals.hoursLost) || 0;
                   const expected = s * config.shiftHours;
                   const overridden = expected > 0 && Math.abs(h - expected) > 0.01;
-                  return <div>{s} shift(s) · {h}h missed{overridden && <span style={{ color: "var(--color-gold)", marginLeft: "6px", fontSize: "9px" }}>⚠ hours overridden (expected {expected}h)</span>}</div>;
+                  return <div>{s} shift(s) · {h}h missed{overridden && <span style={{ color: "var(--color-teal)", marginLeft: "6px", fontSize: "9px" }}>⚠ hours overridden (expected {expected}h)</span>}</div>;
                 })()}
                 {editVals.type === "bonus" && <div>+${parseFloat(editVals.amount) || 0} · {parseInt(editVals.shiftsGained) || 0} shift(s) · {parseFloat(editVals.hoursGained) || 0}h gained</div>}
                 {editVals.type === "partial" && <div>{parseFloat(editVals.hoursLost) || 0}h partial shift</div>}
@@ -877,7 +877,7 @@ export function LogPanel({
       <div style={{ borderTop: "1px solid #1f1f1f", paddingTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
         <div>
           <div style={{ fontSize: "10px", letterSpacing: "2px", color: ok ? "var(--color-green)" : "var(--color-deduction)", textTransform: "uppercase", marginBottom: "4px" }}>Goals Impact</div>
-          <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Adj. savings: <span style={{ color: "var(--color-gold)", fontWeight: "bold" }}>{f0(projS)}</span> · Goals: <span style={{ color: "var(--color-gold)" }}>{f0(totGoals)}</span></div>
+          <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Adj. savings: <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>{f0(projS)}</span> · Goals: <span style={{ color: "var(--color-teal)" }}>{f0(totGoals)}</span></div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: "14px", fontWeight: "bold", color: ok ? "var(--color-green)" : "var(--color-deduction)" }}>{ok ? "All goals on track" : "Goals at risk"}</div>
@@ -943,10 +943,10 @@ export function LogPanel({
                   {dowSorted.map(([day, count]) => {
                     const pct = totalMissedDays > 0 ? count / totalMissedDays : 0;
                     const isWeekend = day === "Sat" || day === "Sun";
-                    const col = pct >= 0.3 ? "var(--color-deduction)" : pct >= 0.15 ? "var(--color-gold)" : "var(--color-text-secondary)";
+                    const col = pct >= 0.3 ? "var(--color-deduction)" : pct >= 0.15 ? "var(--color-teal)" : "var(--color-text-secondary)";
                     return (
                       <div key={day} style={{ display: "flex", alignItems: "center", gap: "5px", background: "var(--color-bg-raised)", padding: "4px 10px", borderRadius: "12px" }}>
-                        <span style={{ fontSize: "10px", color: isWeekend ? "var(--color-gold)" : col, fontWeight: pct >= 0.2 ? "bold" : "normal", textTransform: "uppercase", letterSpacing: "1px" }}>{day.toUpperCase()}</span>
+                        <span style={{ fontSize: "10px", color: isWeekend ? "var(--color-teal)" : col, fontWeight: pct >= 0.2 ? "bold" : "normal", textTransform: "uppercase", letterSpacing: "1px" }}>{day.toUpperCase()}</span>
                         <span style={{ fontSize: "11px", color: col, fontFamily: "var(--font-mono)", fontWeight: "bold" }}>{count}</span>
                       </div>
                     );
@@ -991,12 +991,12 @@ export function LogPanel({
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
         <Card label="Proj. Your Contributions" val={f(bE)} rawVal={bE} color="#7a8bbf" size="18px" />
         <Card label="Proj. Employer Match" val={f(bM)} rawVal={bM} color="var(--color-green)" size="18px" />
-        <Card label="Proj. Year-End Balance" val={f(bE + bM)} rawVal={bE + bM} color="var(--color-gold)" size="18px" />
+        <Card label="Proj. Year-End Balance" val={f(bE + bM)} rawVal={bE + bM} color="var(--color-teal)" size="18px" />
       </div>
       {(logK401kLost > 0 || logK401kMatchLost > 0 || logK401kGained > 0 || logK401kMatchGained > 0) && <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
         <Card label="Proj. Your Contributions (adj.)" val={f(aE)} rawVal={aE} sub={[logK401kLost > 0 && `-${f(logK401kLost)} lost`, logK401kGained > 0 && `+${f(logK401kGained)} bonus`].filter(Boolean).join(" · ")} color="#7a8bbf" size="18px" />
         <Card label="Proj. Employer Match (adj.)" val={f(aM)} rawVal={aM} sub={[logK401kMatchLost > 0 && `-${f(logK401kMatchLost)} lost`, logK401kMatchGained > 0 && `+${f(logK401kMatchGained)} bonus`].filter(Boolean).join(" · ")} color="var(--color-green)" size="18px" />
-        <Card label="Proj. Year-End Balance (adj.)" val={f(aE + aM)} rawVal={aE + aM} color="var(--color-gold)" size="18px" />
+        <Card label="Proj. Year-End Balance (adj.)" val={f(aE + aM)} rawVal={aE + aM} color="var(--color-teal)" size="18px" />
       </div>}
       {(() => {
         const matchRate = config.employerPreset === "DHL" ? dhlEmployerMatchRate(config.k401Rate) : (config.k401MatchRate ?? 0);
@@ -1015,11 +1015,11 @@ export function LogPanel({
         return (
           <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}>
             <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "360px" }}>
-              <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+              <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-teal)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
                 <th style={{ textAlign: "left", padding: "8px 4px" }}>Month</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Your {(config.k401Rate * 100).toFixed(0)}%</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Match {(matchRate * 100).toFixed(1)}%</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Mo Total</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Running</th>
               </tr></thead>
-              <tbody>{rows.map(m => <tr key={m.name} style={{ borderBottom: "1px solid #161616" }}><td style={{ padding: "7px 4px", fontWeight: "bold", color: "var(--color-gold)" }}>{m.name}</td><td style={{ padding: "7px 4px", textAlign: "right" }}>{f(m.gross)}</td><td style={{ padding: "7px 4px", textAlign: "right", color: "#7a8bbf" }}>{f2(m.k4E)}</td><td style={{ padding: "7px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(m.k4M)}</td><td style={{ padding: "7px 4px", textAlign: "right" }}>{f2(m.k4E + m.k4M)}</td><td style={{ padding: "7px 4px", textAlign: "right", color: "var(--color-gold)", fontWeight: "bold" }}>{f2(m.running)}</td></tr>)}</tbody>
-              <tfoot><tr style={{ borderTop: "2px solid var(--color-accent-primary)", fontWeight: "bold", color: "var(--color-gold)" }}>
+              <tbody>{rows.map(m => <tr key={m.name} style={{ borderBottom: "1px solid #161616" }}><td style={{ padding: "7px 4px", fontWeight: "bold", color: "var(--color-teal)" }}>{m.name}</td><td style={{ padding: "7px 4px", textAlign: "right" }}>{f(m.gross)}</td><td style={{ padding: "7px 4px", textAlign: "right", color: "#7a8bbf" }}>{f2(m.k4E)}</td><td style={{ padding: "7px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(m.k4M)}</td><td style={{ padding: "7px 4px", textAlign: "right" }}>{f2(m.k4E + m.k4M)}</td><td style={{ padding: "7px 4px", textAlign: "right", color: "var(--color-teal)", fontWeight: "bold" }}>{f2(m.running)}</td></tr>)}</tbody>
+              <tfoot><tr style={{ borderTop: "2px solid var(--color-accent-primary)", fontWeight: "bold", color: "var(--color-teal)" }}>
                 <td colSpan={2} style={{ padding: "10px 4px" }}>Year-End Total</td><td style={{ padding: "10px 4px", textAlign: "right", color: "#7a8bbf" }}>{f(bE)}</td><td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(bM)}</td><td style={{ padding: "10px 4px", textAlign: "right" }}>{f(bE + bM)}</td><td style={{ padding: "10px 4px", textAlign: "right" }}>{f(bE + bM)}</td>
               </tr></tfoot>
             </table>
@@ -1042,7 +1042,7 @@ export function LogPanel({
           {editingPto ? (
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <input {...iS} style={{ ...iS, width: "100px", padding: "6px 10px" }} type="number" min="0" step="0.5" value={ptoInput} onChange={e => setPtoInput(e.target.value)} placeholder="hours" autoFocus />
-              <SmBtn onClick={() => { const val = parseFloat(ptoInput); if (setConfig && Number.isFinite(val) && val >= 0) { const newConfig = { ...config, ptoHoursOverride: val, ptoOverrideWeekIdx: currentWeek?.idx ?? 0 }; setConfig(newConfig); saveConfigNow?.(newConfig); } setEditingPto(false); }} c="var(--color-bg-base)" bg="var(--color-gold)">Save</SmBtn>
+              <SmBtn onClick={() => { const val = parseFloat(ptoInput); if (setConfig && Number.isFinite(val) && val >= 0) { const newConfig = { ...config, ptoHoursOverride: val, ptoOverrideWeekIdx: currentWeek?.idx ?? 0 }; setConfig(newConfig); saveConfigNow?.(newConfig); } setEditingPto(false); }} c="var(--color-bg-base)" bg="var(--color-teal)">Save</SmBtn>
               <SmBtn onClick={() => setEditingPto(false)} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Cancel</SmBtn>
             </div>
           ) : (
@@ -1084,7 +1084,7 @@ export function LogPanel({
             {/* No override — show projected accrual toward goal */}
             <Card label={`Base Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${ptoBs.toFixed(1)} hrs`} color="var(--color-text-primary)" size="18px" />
             {logPTOHoursLost > 0
-              ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
+              ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-teal)" size="18px" />
               : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="var(--color-text-primary)" size="14px" />
             }
           </>) : (<>
@@ -1111,7 +1111,7 @@ export function LogPanel({
         {!formOpen && !ptoGoal && (
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: "6px", padding: "14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>No PTO leave goal set. Add one to track your accrual progress toward a leave target.</div>
-            <SmBtn onClick={openAdd} c="var(--color-gold)" bg="var(--color-bg-raised)">Set Goal</SmBtn>
+            <SmBtn onClick={openAdd} c="var(--color-teal)" bg="var(--color-bg-raised)">Set Goal</SmBtn>
           </div>
         )}
         {formOpen && (
@@ -1125,7 +1125,7 @@ export function LogPanel({
             <div><label style={lS}>Leave Start Date</label><input {...iS} style={{ ...iS }} type="date" value={formVals.targetDate} onChange={e => setFormVals(v => ({ ...v, targetDate: e.target.value }))} /><div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "4px" }}>App projects your PTO accrual up to this date.</div></div>
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
               <Pressable onClick={() => setFormOpen(false)} style={{ background: "var(--color-bg-raised)", color: "var(--color-text-secondary)", border: "1px solid #333", borderRadius: "12px", padding: "7px 14px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}>Cancel</Pressable>
-              <Pressable onClick={saveForm} disabled={!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate} style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", fontWeight: "bold", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", opacity: (!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate) ? 0.4 : 1 }}>Save</Pressable>
+              <Pressable onClick={saveForm} disabled={!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate} style={{ background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", fontWeight: "bold", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", opacity: (!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate) ? 0.4 : 1 }}>Save</Pressable>
             </div>
           </div>
         )}
@@ -1135,7 +1135,7 @@ export function LogPanel({
     {hasBucket && (() => {
       const bm = bucketModel;
       const cap = config.bucketCap ?? 128;
-      const bandColor = bm.status === "safe" ? "var(--color-green)" : bm.status === "caution" ? "var(--color-gold)" : "var(--color-deduction)";
+      const bandColor = bm.status === "safe" ? "var(--color-green)" : bm.status === "caution" ? "var(--color-teal)" : "var(--color-deduction)";
       const bandBg = bm.status === "safe" ? "#1a2d1e" : bm.status === "caution" ? "#2d2710" : "#2d1a1a";
       return (
         <div style={{ marginBottom: "24px" }}>
@@ -1160,7 +1160,7 @@ export function LogPanel({
                 <div style={{ fontSize: "10px" }}>
                   <span style={{ color: "var(--color-text-primary)" }}>{monthLabel}: </span>
                   {bm.currentTier === 1 && <span style={{ color: "var(--color-green)" }}>Tier 1 · any unapproved absence changes tier</span>}
-                  {bm.currentTier === 2 && <span style={{ color: "var(--color-gold)" }}>Tier 2 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
+                  {bm.currentTier === 2 && <span style={{ color: "var(--color-teal)" }}>Tier 2 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
                   {bm.currentTier === 3 && <span style={{ color: "var(--color-deduction)" }}>Tier 3 · {bm.currentM}h unapproved · {bm.hoursToNextTier}h to worst tier</span>}
                   {bm.currentTier === 4 && <span style={{ color: "var(--color-deduction)" }}>Tier 4 · worst tier · {bm.currentM}h unapproved this month</span>}
                 </div>
@@ -1197,7 +1197,7 @@ export function LogPanel({
                     }
                     setEditingBucket(false);
                   }}
-                  c="var(--color-bg-base)" bg="var(--color-gold)"
+                  c="var(--color-bg-base)" bg="var(--color-teal)"
                 >Save</SmBtn>
                 <SmBtn onClick={() => setEditingBucket(false)} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Cancel</SmBtn>
               </div>
@@ -1220,7 +1220,7 @@ export function LogPanel({
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "10px 14px", marginBottom: "10px", fontSize: "11px" }}>
             <span style={{ color: "var(--color-text-secondary)", marginRight: "8px" }}>{fmtMonth(currentMonthStr)} — Tier {bm.currentTier}</span>
             {bm.currentTier === 1 && <span style={{ color: "var(--color-green)" }}>perfect so far · any unapproved absence changes tier</span>}
-            {bm.currentTier === 2 && <span style={{ color: "var(--color-gold)" }}>{bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
+            {bm.currentTier === 2 && <span style={{ color: "var(--color-teal)" }}>{bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
             {bm.currentTier === 3 && <span style={{ color: "var(--color-deduction)" }}>{bm.currentM}h unapproved · {bm.hoursToNextTier}h to worst tier</span>}
             {bm.currentTier === 4 && <span style={{ color: "var(--color-deduction)" }}>worst tier · {bm.currentM}h unapproved this month</span>}
           </div>
@@ -1228,17 +1228,17 @@ export function LogPanel({
             <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
               <thead><tr style={{ borderBottom: "1px solid #222", color: "var(--color-text-disabled)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase" }}><th style={{ padding: "8px 12px", textAlign: "left" }}>Month</th><th style={{ padding: "8px 8px", textAlign: "right" }}>Unappr.</th><th style={{ padding: "8px 8px", textAlign: "right" }}>Net</th><th style={{ padding: "8px 8px", textAlign: "right" }}>Balance</th><th style={{ padding: "8px 12px", textAlign: "right" }}>Overflow Payout</th></tr></thead>
               <tbody>
-                {bm.monthHistory.map(row => <tr key={row.month} style={{ borderBottom: "1px solid #181818" }}><td style={{ padding: "7px 12px", color: "var(--color-text-primary)" }}>{fmtMonth(row.month)}</td><td style={{ padding: "7px 8px", textAlign: "right", color: row.M > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{row.M > 0 ? `${row.M}h` : "—"}</td><td style={{ padding: "7px 8px", textAlign: "right", color: row.net >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>{row.net >= 0 ? "+" : ""}{row.net}h</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-secondary)" }}>{row.closingBalance}h</td><td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "var(--color-gold)" : "var(--color-text-primary)" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td></tr>)}
-                <tr style={{ borderBottom: "1px solid #252525", background: "var(--color-bg-surface)" }}><td style={{ padding: "7px 12px", color: "var(--color-gold)" }}>{fmtMonth(currentMonthStr)} <span style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>in progress</span></td><td style={{ padding: "7px 8px", textAlign: "right", color: bm.currentM > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{bm.currentM > 0 ? `${bm.currentM}h` : "—"}</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>{bm.currentBalance}h</td><td style={{ padding: "7px 12px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td></tr>
+                {bm.monthHistory.map(row => <tr key={row.month} style={{ borderBottom: "1px solid #181818" }}><td style={{ padding: "7px 12px", color: "var(--color-text-primary)" }}>{fmtMonth(row.month)}</td><td style={{ padding: "7px 8px", textAlign: "right", color: row.M > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{row.M > 0 ? `${row.M}h` : "—"}</td><td style={{ padding: "7px 8px", textAlign: "right", color: row.net >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>{row.net >= 0 ? "+" : ""}{row.net}h</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-secondary)" }}>{row.closingBalance}h</td><td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "var(--color-teal)" : "var(--color-text-primary)" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td></tr>)}
+                <tr style={{ borderBottom: "1px solid #252525", background: "var(--color-bg-surface)" }}><td style={{ padding: "7px 12px", color: "var(--color-teal)" }}>{fmtMonth(currentMonthStr)} <span style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>in progress</span></td><td style={{ padding: "7px 8px", textAlign: "right", color: bm.currentM > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{bm.currentM > 0 ? `${bm.currentM}h` : "—"}</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>{bm.currentBalance}h</td><td style={{ padding: "7px 12px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td></tr>
                 {bm.projectedHistory.map(row => <tr key={row.month} style={{ borderBottom: "1px solid #181818", opacity: 0.45 }}><td style={{ padding: "7px 12px", color: "var(--color-text-primary)", fontStyle: "italic" }}>{fmtMonth(row.month)}</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-disabled)" }}>+{row.net}h</td><td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-disabled)" }}>{row.closingBalance}h</td><td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "#8a6e20" : "var(--color-text-primary)" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td></tr>)}
               </tbody>
             </table>
           </div>
           <div style={{ background: bandBg, border: `1px solid ${bandColor}33`, borderRadius: "6px", padding: "12px 14px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "5px 16px", fontSize: "11px", alignItems: "center" }}>
-              <span style={{ color: "var(--color-text-secondary)" }}>Realized overflow payout:</span><span style={{ textAlign: "right", color: bm.realizedPayout > 0 ? "var(--color-gold)" : "var(--color-text-primary)" }}>{f2(bm.realizedPayout)}</span>
+              <span style={{ color: "var(--color-text-secondary)" }}>Realized overflow payout:</span><span style={{ textAlign: "right", color: bm.realizedPayout > 0 ? "var(--color-teal)" : "var(--color-text-primary)" }}>{f2(bm.realizedPayout)}</span>
               <span style={{ color: "var(--color-text-secondary)" }}>Projected (perfect attendance):</span><span style={{ textAlign: "right", color: "var(--color-green)" }}>{f2(bm.projectedPayout)}</span>
-              <span style={{ color: "var(--color-text-primary)", fontWeight: "bold", borderTop: "1px solid #ffffff11", paddingTop: "6px" }}>Total projected bonus income:</span><span style={{ textAlign: "right", color: "var(--color-gold)", fontWeight: "bold", borderTop: "1px solid #ffffff11", paddingTop: "6px" }}>{f2(bm.totalProjectedBonus)}</span>
+              <span style={{ color: "var(--color-text-primary)", fontWeight: "bold", borderTop: "1px solid #ffffff11", paddingTop: "6px" }}>Total projected bonus income:</span><span style={{ textAlign: "right", color: "var(--color-teal)", fontWeight: "bold", borderTop: "1px solid #ffffff11", paddingTop: "6px" }}>{f2(bm.totalProjectedBonus)}</span>
             </div>
           </div>
         </div>

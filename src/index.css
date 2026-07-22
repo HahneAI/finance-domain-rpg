@@ -7,13 +7,13 @@
   --color-bg-raised:  #163828;
   --color-bg-gradient: linear-gradient(180deg, #091a11 0%, #05100c 100%);
 
+  --color-teal:        #00c896;
+  --color-teal-muted:  #0a8f6f;
+  --color-teal-bright: #33e0b0;
+
+  /* Accent primary — teal flow color */
   --color-accent-primary: #00c896;
   --color-accent-soft:    #4ade80;
-
-  /* Keep legacy gold token name mapped to Flow accent for compatibility. */
-  --color-gold:        #00c896;
-  --color-gold-muted:  #0a8f6f;
-  --color-gold-bright: #33e0b0;
 
   --color-green:       #22c55e;
   --color-green-muted: #168246;

@@ -266,8 +266,8 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
         }}
       >
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid var(--color-border-subtle)" }}>
-          <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "5px" }}>
-            Life Event · Step {step + 1} of {totalSteps}
+          <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "5px" }}>
+            Life Event{hasExpenses ? ` · Step ${step + 1} of 3` : ""}
           </div>
           <div style={{ fontSize: "16px", fontWeight: "bold", color: "var(--color-text-primary)" }}>
             {step === 0 && "Enter Job Loss Mode"}
@@ -340,7 +340,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
                           padding: "8px 18px",
                           fontSize: "11px", letterSpacing: "1.5px", textTransform: "uppercase",
                           background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
-                          color: active ? "var(--color-gold)" : "var(--color-text-secondary)",
+                          color: active ? "var(--color-teal)" : "var(--color-text-secondary)",
                           border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
                           borderRadius: "10px",
                           cursor: "pointer",
@@ -390,7 +390,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
                               padding: "7px 14px",
                               fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
                               background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
-                              color: active ? "var(--color-gold)" : "var(--color-text-secondary)",
+                              color: active ? "var(--color-teal)" : "var(--color-text-secondary)",
                               border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
                               borderRadius: "10px",
                               cursor: "pointer",
@@ -580,7 +580,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
                           {isLoan && (
                             <span style={{
                               fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
-                              color: "var(--color-bg-base)", background: "var(--color-gold)",
+                              color: "var(--color-bg-base)", background: "var(--color-teal)",
                               padding: "2px 6px", borderRadius: "3px", fontWeight: "bold",
                             }}>
                               Loan
@@ -664,7 +664,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
             onClick={goNext}
             disabled={nextNativeDisabled}
             style={{
-              background: nextDisabled ? "var(--color-bg-raised)" : "var(--color-gold)",
+              background: nextDisabled ? "var(--color-bg-raised)" : "var(--color-teal)",
               color: nextDisabled ? "var(--color-text-disabled)" : "var(--color-bg-base)",
               border: "none", borderRadius: "12px", padding: "8px 16px",
               fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase",

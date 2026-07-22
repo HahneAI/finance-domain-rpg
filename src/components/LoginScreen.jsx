@@ -109,7 +109,7 @@ export function Shell({ title, subtitle, children }) {
     <div style={{ minHeight: "100vh", background: "var(--color-bg-base)", display: "flex", alignItems: "center", justifyContent: "center", padding: "24px" }}>
       <div style={{ width: "100%", maxWidth: "360px", background: "var(--color-bg-surface)", border: "1px solid #222", borderRadius: "12px", padding: "32px 28px" }}>
         <div style={{ marginBottom: "28px", textAlign: "center" }}>
-          <div style={{ fontSize: "11px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "16px" }}>Authority Finance</div>
+          <div style={{ fontSize: "11px", letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "16px" }}>Authority Finance</div>
           <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-primary)", textAlign: "left" }}>{title}</div>
           {subtitle && <div style={{ fontSize: "12px", color: "var(--color-text-secondary)", marginTop: "4px", textAlign: "left" }}>{subtitle}</div>}
         </div>
@@ -536,7 +536,7 @@ async function lookupRevivable(email) {
 
 const linkBtnStyle = {
   background: "transparent", border: "none",
-  color: "var(--color-gold)", fontSize: "11px",
+  color: "var(--color-teal)", fontSize: "11px",
   cursor: "pointer", padding: 0, textDecoration: "underline",
 };
 
@@ -555,7 +555,7 @@ function SubmitBtn({ loading, children }) {
       disabled={loading}
       style={{
         marginTop: "4px",
-        background: loading ? "var(--color-bg-raised)" : "var(--color-gold)",
+        background: loading ? "var(--color-bg-raised)" : "var(--color-teal)",
         color: loading ? "var(--color-text-disabled)" : "var(--color-bg-base)",
         border: "none", borderRadius: "8px",
         padding: "13px 0", fontSize: "11px",

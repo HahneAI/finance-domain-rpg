@@ -10,14 +10,14 @@ export function UpdateAvailableBanner({ onUpdate, onDismiss }) {
       borderRadius: "12px", padding: "10px 14px", marginBottom: "14px",
       display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap",
     }}>
-      <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--color-gold)", flexShrink: 0 }} />
+      <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--color-teal)", flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: "180px", fontSize: "12px", color: "var(--color-text-secondary)" }}>
         A new version is ready — refresh when you're done editing.
       </div>
       <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
         <Pressable
           onClick={onUpdate}
-          style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", padding: "6px 14px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer" }}
+          style={{ background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "10px", padding: "6px 14px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 700, cursor: "pointer" }}
         >
           Refresh
         </Pressable>

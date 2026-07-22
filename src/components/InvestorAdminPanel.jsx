@@ -22,7 +22,7 @@ function BackBar({ onBack }) {
         onClick={onBack}
         style={{
           background: "transparent", border: "none",
-          color: "var(--color-gold)", cursor: "pointer",
+          color: "var(--color-teal)", cursor: "pointer",
           fontSize: "13px", padding: "4px 0",
           display: "flex", alignItems: "center", gap: "5px",
         }}
@@ -410,7 +410,7 @@ export function InvestorAdminPanel({ onBack }) {
         </Pressable>
       )}
 
-      <SH color="var(--color-gold)">Access Codes</SH>
+      <SH color="var(--color-teal)">Access Codes</SH>
 
       {/* Loading */}
       {codes === null && !loadError && (

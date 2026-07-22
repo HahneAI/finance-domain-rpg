@@ -81,6 +81,18 @@ describe("ASK_COACH_SYSTEM_PROMPT", () => {
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/this holds even when the user's own wording says "break down," "explain," or "walk me through"/i);
   });
 
+  // Regression: re-tested "Break down my home panel please" after the
+  // compression fix landed — length was fixed, but the goal timeline mentions
+  // regressed to vague relative phrasing ("in about a week," "around late
+  // December") instead of the paired date/period format required elsewhere.
+  // The compression instruction was silent on precision, so the model traded
+  // it away along with length. Clarify that compression trims tile coverage
+  // and per-item explanation, not date-pairing precision.
+  it("clarifies that broad-answer compression doesn't loosen date-pairing precision", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/not loosening precision on the dates you do state/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/still gets the same full date-pairing treatment as a narrow one/i);
+  });
+
   // Regression: asked for the most expensive line item, Coach stated Gas
   // ($85) as the biggest, then mid-message: "Food is actually your highest,
   // my mistake" — a real comparison slip, made worse by narrating it aloud.

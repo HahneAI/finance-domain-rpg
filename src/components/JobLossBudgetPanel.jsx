@@ -204,10 +204,18 @@ export function JobLossBudgetPanel({
           placeholder="e.g. 1,023"
           style={{ ...iS, marginTop: "6px" }}
         />
-        <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5, marginBottom: "14px" }}>
+        <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
           Saved to your account — also editable from Home. Extra income logged
           on Home (${Math.round(huntIncome).toLocaleString()} so far) is added automatically.
         </div>
+        {dash?.pendingCheck && (
+          <div style={{ marginTop: "10px", fontSize: "11px", color: "var(--color-green)", lineHeight: 1.5 }}>
+            Pending check: ${Math.round(dash.pendingCheck.amount).toLocaleString()} arriving{" "}
+            {dash.pendingCheck.daysOut === 0 ? "today" : `in ${dash.pendingCheck.daysOut} ${dash.pendingCheck.daysOut === 1 ? "day" : "days"}`}
+            {" "}({new Date(dash.pendingCheck.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })})
+          </div>
+        )}
+        <div style={{ marginBottom: "14px" }} />
 
         {hasBenefits && dash && (
           <>

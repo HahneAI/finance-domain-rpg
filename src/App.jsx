@@ -36,6 +36,7 @@ import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
 import { canAccessAiFeatures } from "./lib/entitlements.js";
+import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./lib/jobLossRunway.js";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -1055,17 +1056,15 @@ export default function App() {
   const handleReopenLastCheckIn = useCallback(() => {
     if (reopenableWeekIdx == null) return;
     const record = weekConfirmations[reopenableWeekIdx];
-    if (record?.eventId != null) {
-      setLogs(ls => ls.filter(l => l.id !== record.eventId));
-    }
-    setWeekConfirmations(c => {
-      const next = { ...c };
-      delete next[reopenableWeekIdx];
-      return next;
-    });
+    const nextLogs = record?.eventId != null ? logs.filter(l => l.id !== record.eventId) : logs;
+    const nextWeekConfirmations = { ...weekConfirmations };
+    delete nextWeekConfirmations[reopenableWeekIdx];
+    setLogs(nextLogs);
+    setWeekConfirmations(nextWeekConfirmations);
+    savePersistedStateNow({ weekConfirmations: nextWeekConfirmations, logs: nextLogs });
     setConfirmDismissed(false);  // ensure the modal pops back open
     setToolSheetOpen(false);     // close the admin sheet so the modal is visible
-  }, [reopenableWeekIdx, weekConfirmations]);
+  }, [reopenableWeekIdx, weekConfirmations, logs, savePersistedStateNow]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);
@@ -1255,6 +1254,19 @@ export default function App() {
   const remainingSpend = useMemo(() => computeRemainingSpend(projectableExpenses, futureWeeks), [projectableExpenses, futureWeeks]);
   const fundedGoalSpend = useMemo(() => getFundedGoalSpend(goals, effectiveToday), [goals, effectiveToday]);
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
+
+  // Real runway for Ask Coach (drift-app-warden §21 quarantine-2 fix) — was
+  // never wired at all before, so a Job Loss Mode user asking Coach about
+  // runway got a bare "Job Loss Mode: active" with no number. Same
+  // computeJobLossRunway()/resolvePrimaryRunwayDays() pair CoachNetWorthCard
+  // now uses, and the real (not defaulted) jobLossIncludeBenefits toggle, so
+  // Ask Coach agrees with whatever the Job Loss panels are showing.
+  const coachRunwayDays = useMemo(() => {
+    if (!config.jobLossMode) return null;
+    const savings = (config.jobLossCashOnHand ?? 0) + sumJobHuntIncome(config);
+    const dash = computeJobLossRunway({ config, expenses, effectiveToday, savings });
+    return resolvePrimaryRunwayDays(dash, config, jobLossIncludeBenefits);
+  }, [config, expenses, effectiveToday, jobLossIncludeBenefits]);
 
   // ── Event log cascade ──
   const logTotals = useMemo(() => ({
@@ -1585,6 +1597,7 @@ export default function App() {
         logPTOHoursLost={logTotals.ptoHoursLost}
         ptoGoal={ptoGoal}
         setPtoGoal={setPtoGoal}
+        onSavePtoGoalNow={(next) => savePersistedStateNow({ ptoGoal: next })}
         goals={goals}
         fundedGoalSpend={fundedGoalSpend}
         bucketModel={bucketModel}
@@ -3367,6 +3380,7 @@ export default function App() {
           futureEventDeductions={futureEventDeductions}
           prevWeekNet={prevWeekNet}
           allWeeks={allWeeks}
+          runwayDays={coachRunwayDays}
         />
       )}
 
@@ -3385,6 +3399,7 @@ export default function App() {
         open={jobLossEntryOpen}
         onClose={() => setJobLossEntryOpen(false)}
         expenses={expenses}
+        config={config}
         onActivate={(patch, updatedExpenses) => {
           configHistoryMetaRef.current = { source: "life_event:lost_job", effectiveFrom: patch.jobLossDate ?? undefined };
           const nextConfig = { ...config, ...patch };
@@ -3403,7 +3418,11 @@ export default function App() {
         config={config}
         onActivate={(patch) => {
           configHistoryMetaRef.current = { source: "life_event:rate_update", effectiveFrom: patch.effectiveFrom };
-          setConfig(prev => ({ ...prev, baseRate: patch.baseRate }));
+          const nextConfig = { ...config, baseRate: patch.baseRate };
+          setConfig(nextConfig);
+          // historySource omitted — configHistoryMetaRef is already set above (mirrors
+          // JobLossEntry's onActivate just above).
+          savePersistedStateNow({ config: nextConfig });
         }}
       />
       {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}

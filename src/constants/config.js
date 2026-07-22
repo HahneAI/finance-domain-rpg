@@ -119,6 +119,14 @@ export const DEFAULT_CONFIG = {
   // both JobLossHomePanel and JobLossBudgetPanel, persisted via eager save —
   // NOT session-only like the old draft-only version of this field.
   jobLossCashOnHand: null,
+  // Pending/final paycheck still owed from the lost job (TODO §15.H15) —
+  // optional, skippable in the wizard (unlike cash on hand). Resolved once at
+  // Activate time from "days worked in your final week" + "which day checks
+  // normally arrive" into a concrete estimated amount + date, not re-derived
+  // later — same resolve-to-a-concrete-value pattern as expense dueDateAnchor.
+  // null = no pending check expected (or the step was skipped).
+  jobLossPendingCheckAmount: null,
+  jobLossPendingCheckDate: null,  // "YYYY-MM-DD"
 
   // Unemployment benefits (TODO §15.C2) — captured in the Job Loss entry flow.
   // null = unanswered (pre-entry); true/false once the user has set them.

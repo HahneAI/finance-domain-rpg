@@ -114,11 +114,17 @@ export function JobLossHomePanel({
     <div>
       <PanelHero eyebrow="Job Loss Mode">Home</PanelHero>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "28px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
         <MetricCard label="Runway" val={`${daysLabel} days`} sub={cliffLabel !== "—" ? `ends ${cliffLabel}` : null} status={cliffStatus} span={2} centered />
         <MetricCard label="Weekly Burn" val={`$${Math.round(dash.weeklyBurn).toLocaleString()}`} sub={`${dash.essentialCount} essential ${dash.essentialCount === 1 ? "expense" : "expenses"}`} status="teal" centered />
         <MetricCard label="Extra Income Logged" val={`$${Math.round(huntIncome).toLocaleString()}`} sub="added to runway" status={huntIncome > 0 ? "green" : "teal"} centered />
       </div>
+      {dash.lifestyleWeeklySpend > 0 && (
+        <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
+          + ${Math.round(dash.lifestyleWeeklySpend).toLocaleString()}/wk Lifestyle spend still tracked (not counted in runway above)
+        </div>
+      )}
+      <div style={{ marginBottom: "16px" }} />
 
       <SectionHeader sub="Drives the Runway number above — also editable on Budget">
         Cash On Hand
@@ -141,6 +147,13 @@ export function JobLossHomePanel({
           Savings, checking — whatever you could draw on today. Extra income logged below
           (${Math.round(huntIncome).toLocaleString()} so far) is added automatically.
         </div>
+        {dash.pendingCheck && (
+          <div style={{ marginTop: "10px", fontSize: "11px", color: "var(--color-green)", lineHeight: 1.5 }}>
+            Pending check: ${Math.round(dash.pendingCheck.amount).toLocaleString()} arriving{" "}
+            {dash.pendingCheck.daysOut === 0 ? "today" : `in ${dash.pendingCheck.daysOut} ${dash.pendingCheck.daysOut === 1 ? "day" : "days"}`}
+            {" "}({new Date(dash.pendingCheck.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })})
+          </div>
+        )}
       </div>
 
       <SectionHeader sub="Cash from gig work or odd jobs — goes straight into your runway savings">

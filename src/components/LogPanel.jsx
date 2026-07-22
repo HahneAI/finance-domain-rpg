@@ -40,7 +40,7 @@ export function LogPanel({
   logs, setLogs, onSaveLogsNow, config, projectedAnnualNet, baseWeeklyUnallocated, futureWeeks, allWeeks, currentWeek, goals,
   fundedGoalSpend = 0, bucketModel, fiscalWeekInfo, isEmployerDHL = false, isAdmin = false, effectiveToday = null, setConfig, saveConfigNow,
   logK401kLost = 0, logK401kMatchLost = 0, logK401kGained = 0, logK401kMatchGained = 0, logPTOHoursLost = 0,
-  ptoGoal, setPtoGoal, weekConfirmations = {},
+  ptoGoal, setPtoGoal, onSavePtoGoalNow, weekConfirmations = {},
 }) {
   const blank = {
     weekEnd: "", weekIdx: "", weekRotation: "6-Day", type: "missed_unpaid",
@@ -188,12 +188,14 @@ export function LogPanel({
     const hrs = parseFloat(formVals.hoursNeeded) || 0;
     const cap = parseFloat(formVals.negativeBalanceCap) || 40;
     if (!setPtoGoal || !formVals.label.trim() || !hrs || !formVals.targetDate) return;
-    setPtoGoal({
+    const nextPtoGoal = {
       label: formVals.label.trim(),
       hoursNeeded: hrs,
       targetDate: formVals.targetDate,
       negativeBalanceCap: cap,
-    });
+    };
+    setPtoGoal(nextPtoGoal);
+    onSavePtoGoalNow?.(nextPtoGoal);
     setFormOpen(false);
   }
 
@@ -1100,7 +1102,7 @@ export function LogPanel({
                 {!onTrack && <div style={{ fontSize: "10px", color: "var(--color-deduction)" }}>Short {(hoursNeed - avail).toFixed(1)} hrs</div>}
                 <div style={{ display: "flex", gap: "6px", marginTop: "2px" }}>
                   <SmBtn onClick={openEdit} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Edit</SmBtn>
-                  <SmBtn onClick={() => setPtoGoal?.(null)} c="var(--color-deduction)" bg="var(--color-bg-raised)">Clear</SmBtn>
+                  <SmBtn onClick={() => { setPtoGoal?.(null); onSavePtoGoalNow?.(null); }} c="var(--color-deduction)" bg="var(--color-bg-raised)">Clear</SmBtn>
                 </div>
               </div>
             </div>

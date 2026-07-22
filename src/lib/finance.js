@@ -1257,6 +1257,21 @@ export function computeBucketModel(logs, cfg) {
   return { currentBalance, currentM, currentTier, hoursToNextTier, status, monthHistory, projectedHistory, realizedPayout, projectedPayout, totalProjectedBonus: realizedPayout + projectedPayout };
 }
 
+// Resolves an event's real fiscal weekIdx (or null if unset/unmatched) plus
+// its matching week object from allWeeks. event.weekIdx is "" on a blank/
+// unresolved form (LogPanel's resolveWeek()) — Number("") and Number(null)
+// both evaluate to 0, so a naive Number(event.weekIdx) silently misattributes
+// an unresolved event to week 0 instead of excluding it. Every caller that
+// needs "does this event have a real week" should go through here rather
+// than re-deriving it, so that answer stays one fact in one place.
+export function resolveEventWeekMeta(event, allWeeks) {
+  const raw = event.weekIdx;
+  const hasWeekIdx = raw !== "" && raw != null && Number.isFinite(Number(raw));
+  const weekIdx = hasWeekIdx ? Number(raw) : null;
+  const weekMeta = weekIdx != null ? ((allWeeks ?? []).find(w => w.idx === weekIdx) ?? null) : null;
+  return { weekIdx, weekMeta };
+}
+
 // weekMeta: optional week object from buildYear for the event's week.
 // When provided, uses the actual scheduled isHighWeek and grossPay so the
 // impact calculation stays consistent with computeNet for that same week.
@@ -1340,11 +1355,17 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
   // Net impact accounts for FICA always, plus withholding on taxed weeks.
   // Past-week overrides (pastWeekTaxStatusOverrides) take precedence over the
   // scheduled status so net projections stay consistent with the tax plan view.
-  const _wIdx = Number(event.weekIdx);
+  // event.weekIdx of "" or null must NOT resolve to week 0 via Number() coercion —
+  // an event with no real week has no real tax status to borrow (see
+  // resolveEventWeekMeta's comment for why this guard exists).
+  const _hasWIdx = event.weekIdx !== "" && event.weekIdx != null && Number.isFinite(Number(event.weekIdx));
+  const _wIdx = _hasWIdx ? Number(event.weekIdx) : null;
   const _overrides = cfg.pastWeekTaxStatusOverrides ?? {};
-  const isTaxedWeek = Object.prototype.hasOwnProperty.call(_overrides, _wIdx)
-    ? Boolean(_overrides[_wIdx])
-    : (Array.isArray(cfg.taxedWeeks) && cfg.taxedWeeks.includes(_wIdx));
+  const isTaxedWeek = _wIdx != null && (
+    Object.prototype.hasOwnProperty.call(_overrides, _wIdx)
+      ? Boolean(_overrides[_wIdx])
+      : (Array.isArray(cfg.taxedWeeks) && cfg.taxedWeeks.includes(_wIdx))
+  );
   const withholdingRate = isTaxedWeek
     ? (isWeek2 ? cfg.w2FedRate + cfg.w2StateRate : cfg.w1FedRate + cfg.w1StateRate)
     : 0;

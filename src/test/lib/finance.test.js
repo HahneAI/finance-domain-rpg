@@ -19,6 +19,7 @@ import {
   loanPaymentsRemaining,
   computeBucketModel,
   calcEventImpact,
+  resolveEventWeekMeta,
   toLocalIso,
   stateTax,
   getStateConfig,
@@ -1804,6 +1805,70 @@ describe('calcEventImpact', () => {
       const newEvent = makeEvent({ type: 'bonus', weekRotation: '6-Day', weekEnd: '2026-02-02', amount: 100 })
       expect(calcEventImpact(legacyEvent, cfg).grossGained).toBe(calcEventImpact(newEvent, cfg).grossGained)
     })
+  })
+
+  // DW-5 regression: Number("") and Number(null) both evaluate to 0, so a naive
+  // Number(event.weekIdx) silently borrows week 0's real tax status for an event
+  // that isn't actually tied to any week — see resolveEventWeekMeta's comment.
+  describe('weekIdx "" / null must not be coerced to week 0', () => {
+    it('an unresolved weekIdx ("") does not inherit week 0\'s tax override', () => {
+      const cfgWithOverride = { ...cfg, pastWeekTaxStatusOverrides: { 0: true } }
+      const event = makeEvent({ type: 'other_loss', weekIdx: '', amount: 100 })
+      const result = calcEventImpact(event, cfgWithOverride)
+      // No real week → FICA only, no withholding guessed from week 0's override.
+      expect(result.netLost).toBeCloseTo(100 * (1 - cfg.ficaRate))
+    })
+
+    it('an unresolved weekIdx (null) behaves the same as ""', () => {
+      const cfgWithOverride = { ...cfg, pastWeekTaxStatusOverrides: { 0: true } }
+      const event = makeEvent({ type: 'other_loss', weekIdx: null, amount: 100 })
+      const result = calcEventImpact(event, cfgWithOverride)
+      expect(result.netLost).toBeCloseTo(100 * (1 - cfg.ficaRate))
+    })
+
+    it('an event genuinely tied to weekIdx 0 still honors week 0\'s override', () => {
+      const cfgWithOverride = { ...cfg, pastWeekTaxStatusOverrides: { 0: true } }
+      const event = makeEvent({ type: 'other_loss', weekRotation: '4-Day', weekIdx: 0, weekEnd: '2026-01-05', amount: 100 })
+      const result = calcEventImpact(event, cfgWithOverride)
+      const effectiveRate = cfg.ficaRate + cfg.w1FedRate + cfg.w1StateRate
+      expect(result.netLost).toBeCloseTo(100 * (1 - effectiveRate))
+    })
+  })
+})
+
+describe('resolveEventWeekMeta', () => {
+  const allWeeks = [
+    { idx: 0, grossPay: 111, isHighWeek: false },
+    { idx: 5, grossPay: 999, isHighWeek: true },
+  ]
+
+  it('resolves a real weekIdx to its matching week object', () => {
+    const { weekIdx, weekMeta } = resolveEventWeekMeta({ weekIdx: 5 }, allWeeks)
+    expect(weekIdx).toBe(5)
+    expect(weekMeta).toEqual(allWeeks[1])
+  })
+
+  it('returns weekIdx 0 (not null) for a genuine week-0 event', () => {
+    const { weekIdx, weekMeta } = resolveEventWeekMeta({ weekIdx: 0 }, allWeeks)
+    expect(weekIdx).toBe(0)
+    expect(weekMeta).toEqual(allWeeks[0])
+  })
+
+  it('returns null weekIdx/weekMeta for ""', () => {
+    const result = resolveEventWeekMeta({ weekIdx: '' }, allWeeks)
+    expect(result.weekIdx).toBeNull()
+    expect(result.weekMeta).toBeNull()
+  })
+
+  it('returns null weekIdx/weekMeta for null and undefined', () => {
+    expect(resolveEventWeekMeta({ weekIdx: null }, allWeeks).weekIdx).toBeNull()
+    expect(resolveEventWeekMeta({ weekIdx: undefined }, allWeeks).weekIdx).toBeNull()
+  })
+
+  it('returns the real weekIdx but null weekMeta when no week in allWeeks matches', () => {
+    const { weekIdx, weekMeta } = resolveEventWeekMeta({ weekIdx: 42 }, allWeeks)
+    expect(weekIdx).toBe(42)
+    expect(weekMeta).toBeNull()
   })
 })
 

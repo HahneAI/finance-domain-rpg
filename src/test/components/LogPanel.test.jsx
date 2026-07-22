@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { LogPanel } from '../../components/LogPanel.jsx'
 import { DEFAULT_CONFIG } from '../../constants/config.js'
+import { calcEventImpact } from '../../lib/finance.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Minimal props for LogPanel — only fields that the component actually reads.
@@ -20,7 +21,6 @@ const BASE_CONFIG = {
 const BASE_PROPS = {
   config: BASE_CONFIG,
   setLogs: vi.fn(),
-  projectedAnnualNet: 40000,
   baseWeeklyUnallocated: 200,
   futureWeeks: [],
   allWeeks: [],
@@ -426,5 +426,78 @@ describe('PTO Goal — eager save', () => {
 
     expect(setPtoGoal).toHaveBeenCalledWith(null)
     expect(onSavePtoGoalNow).toHaveBeenCalledWith(null)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Log Effect Summary — DW-5 regression: these tiles must read the authoritative
+// App-computed props (logNetLost/logK401kLost/logPTOHoursLost/adjustedTakeHome),
+// not a locally-recomputed value that could disagree with what Income/Home show
+// for the same account. Rendering with an empty `logs` array but non-zero prop
+// values proves the tiles can no longer be driven by a local recomputation —
+// before the fix, "Adjusted Take-Home"/"Total Net Lost"/"401k Lost"/"PTO Accrual
+// Lost" all derived from a local `logs.reduce`, so this exact scenario would have
+// shown $0 / 0h regardless of what the props said.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const fmt2 = n => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmt0 = n => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+
+describe('Log Effect Summary — reads authoritative props, not local recomputation', () => {
+  const AUTHORITATIVE_PROPS = {
+    ...BASE_PROPS,
+    config: { ...BASE_CONFIG, k401Rate: 0.05, ptoEnabled: true },
+    logNetLost: 1234.56,
+    logNetGained: 0,
+    logK401kLost: 78.9,
+    logPTOHoursLost: 24,
+    adjustedTakeHome: 39876,
+  }
+
+  // "Total Net Lost" is a MetricCard with rawVal, which counts up from 0 via
+  // requestAnimationFrame (CLAUDE.md's countup rule) instead of rendering the
+  // final value on mount — jsdom doesn't drive rAF forward, so that specific
+  // tile isn't asserted here. It reads the same `logNetLost` prop (`val={f(logNetLost)}
+  // rawVal={logNetLost}`) as the tiles proven below, via the identical code path.
+
+  it('"Adjusted Take-Home" shows the adjustedTakeHome prop even though logs is empty', () => {
+    render(<LogPanel {...AUTHORITATIVE_PROPS} logs={[]} />)
+    expect(screen.getByText(fmt0(39876))).toBeInTheDocument()
+  })
+
+  it('"401k Lost" shows logK401kLost even though logs is empty', () => {
+    render(<LogPanel {...AUTHORITATIVE_PROPS} logs={[]} />)
+    expect(screen.getByText(fmt2(78.9))).toBeInTheDocument()
+  })
+
+  it('"PTO Accrual Lost" shows logPTOHoursLost even though logs is empty', () => {
+    render(<LogPanel {...AUTHORITATIVE_PROPS} logs={[]} />)
+    expect(screen.getByText('1.2 hrs')).toBeInTheDocument() // 24h ÷ 20
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Total Gross Lost" — DW-5 root cause A: must resolve the event's real week
+// from `allWeeks` (already an existing prop) instead of falling back to a flat
+// schedule projection, so a week with unusual actual pay doesn't quietly throw
+// off the one figure LogPanel is the sole source of.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Total Gross Lost — resolves the real week from allWeeks', () => {
+  it('uses the matching week\'s actual grossPay, not the flat schedule projection', () => {
+    // A deliberately unusual grossPay so the weekMeta-aware and weekMeta-less
+    // calculations are guaranteed to diverge — proving which one rendered.
+    const week = { idx: 3, grossPay: 5000, isHighWeek: true }
+    const event = {
+      id: 1, type: 'missed_unpaid', weekIdx: 3, weekEnd: '2026-02-02',
+      weekRotation: '6-Day', shiftsLost: 1, weekendShifts: 0, missedDays: [],
+    }
+    const withWeekMeta = calcEventImpact(event, BASE_CONFIG, week)
+    const withoutWeekMeta = calcEventImpact(event, BASE_CONFIG)
+    expect(withWeekMeta.grossLost).not.toBeCloseTo(withoutWeekMeta.grossLost, 2) // sanity: they really do diverge
+
+    render(<LogPanel {...BASE_PROPS} logs={[event]} allWeeks={[week]} />)
+    expect(screen.getByText(fmt2(withWeekMeta.grossLost))).toBeInTheDocument()
+    expect(screen.queryByText(fmt2(withoutWeekMeta.grossLost))).not.toBeInTheDocument()
   })
 })

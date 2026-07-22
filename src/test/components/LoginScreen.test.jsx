@@ -86,11 +86,12 @@ describe('LoginScreen — §17.I revival routing', () => {
     render(<LoginScreen />)
     submitLogin()
     await waitFor(() => expect(screen.getByText('Welcome back')).toBeTruthy())
+    // Wait for the revive form to fully render with the password input
+    await waitFor(() => expect(screen.getByPlaceholderText('At least 6 characters')).toBeTruthy())
     expect(fetch).toHaveBeenCalledWith('/api/revival-lookup', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({ email: 'gone@example.com' }),
     }))
-    expect(screen.getByPlaceholderText('At least 6 characters')).toBeTruthy()
     expect(screen.queryByText(/Invalid login credentials/i)).toBeNull()
   })
 

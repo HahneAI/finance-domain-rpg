@@ -4,7 +4,7 @@
 **Company:** Authority | **Product:** Authority OS | **Tagline:** *"You are missing out… on you."*
 **This app:** Authority Finance (A:Fin) — personal finance dashboard: income modeling, budgeting, goals, event logging.
 **Design system:** Flow shell (live) + Pulse overlay (Phase 2). See `docs/authority-design-system`.
-**Liquid Glass UI:** `src/components/LiquidGlass.jsx` — frosted glass for nav, pills, modals. Recipe in `docs/active-systems.md` §13.
+**Liquid Glass UI:** `src/components/LiquidGlass.jsx` — frosted glass for nav, pills, modals. Recipe in `docs/active-systems.md` §15.
 
 ---
 
@@ -18,7 +18,11 @@
 | PWA | vite-plugin-pwa (manifest + service worker active) |
 | Hosting | Vercel |
 
-**No backend server.** Pure frontend. No Express, no Claude API, no Stripe — yet.
+**No standalone backend server** — but no longer "pure frontend": `api/` holds 14 Vercel
+serverless functions (Stripe checkout/webhook/portal/revive, Coach streaming proxy, daily
+subscription-lifecycle cron + email engine, delete-account, revival-lookup, trial/investor
+seeding). All privileged writes (tier flags, subscription columns) go through these
+service-role routes — the client never writes them (RLS migration 019).
 
 ---
 
@@ -32,7 +36,7 @@ src/
 │   ├── HomePanel.jsx        — dashboard home tiles
 │   ├── IncomePanel.jsx      — income / tax / rolling weekly view
 │   ├── BudgetPanel.jsx      — expenses / goals / loans
-│   ├── BenefitsPanel.jsx    — 401k + PTO
+│   ├── BenefitsPanel.jsx    — DEAD CODE, never rendered (401k/PTO live in LogPanel + ProfilePanel; see drift-app-warden §11)
 │   ├── LogPanel.jsx         — event log + Log Effect Summary
 │   ├── WeekConfirmModal.jsx — weekly schedule confirmation
 │   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
@@ -56,30 +60,33 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 
 ---
 
-## SetupWizard Quick Reference (`src/components/SetupWizard.jsx` ~1800 lines)
+## SetupWizard Quick Reference (`src/components/SetupWizard.jsx` ~2500 lines)
 
-**Export:** `SetupWizard({ config, onComplete, onCancel, lifeEvent })`
-- `config` — current app config; spread into `formData` on mount
-- `lifeEvent` — `null` (first-run) | `"lost_job"` | `"changed_jobs"` | `"commission_job"`
-- `onComplete(data)` — receives merged config + `taxedWeeks` array + `setupComplete: true`
+**Full drift map (key functions, IF/THEN checks, path matrix): `docs/drift-app-warden.md` §7 — consult it before changing anything here.**
+
+**Export:** `SetupWizard({ config, onComplete, onCancel, lifeEvent, isInvestor, isExiting })`
+- `config` — current app config; spread into `formData` on mount; `firstActiveIdx` re-derived from `startDate` on every open
+- `lifeEvent` — `null` (first-run) | `"structure_change"` | `"lost_job"` | `"changed_jobs"` | `"commission_job"`
+- `onComplete(data)` — receives merged config + `taxedWeeks` + `accountCreatedIdx` + `setupComplete: true`
 
 **Steps (controlled by `STEP_DEFS` — each has `showIf(formData, lifeEvent)` + `isValid(formData)`):**
 | Step ID | Title | Key fields / notes |
 |---------|-------|-------------------|
-| 0 | Welcome | First-run intro or life event picker (LIFE_EVENTS array) |
+| 0 | Welcome | First-run: "Are you currently unemployed?" seed (§15.H) + intro; re-entry: life event picker or structure_change overview |
+| 10/11/12 | Jobless mini-flow | First-run + unemployed only: unemployment benefits → job-loss details → wrap up; skips steps 1–4 and 7 entirely |
 | 1 | Pay Structure | DHL employer gate → team/shift/rotation; base rate, OT threshold/multiplier, weekend diff, commission |
-| 2 | Schedule | Job start date → `firstActiveIdx`; rotation week (DHL) or std hours + pay period close day |
+| 2 | Schedule | Job start date → `firstActiveIdx` (via `dateToWeekIdx`); rotation week (DHL) or hours + pay period close day + biweekly parity |
 | 3 | Deductions | BenefitCard toggles (BENEFIT_OPTIONS), `otherDeductions` rows, attendance gate; `skippable: true` |
 | 4 | Tax Rates | State select, inline `PaystubCalc`, rate summary with FICA + std deduction; DHL MO preset |
-| 7 | Wrap Up | Live net preview (`estimateWeeklyGross`), paycheck buffer toggle ($50 default, $200 max), tax-exempt opt-in |
+| 7 | Wrap Up | Live net preview (`estimateWeeklyNet`), paycheck buffer toggle ($50 default, $200 max), tax-exempt opt-in; structure_change adds "What's Changing" diff |
 
-**Life event routing:** `lost_job` → steps 0–4; `commission_job` → steps 0–4 + commission field in step 1; `null` / `"changed_jobs"` → all steps including WrapUp (step 7).
+**Life event routing:** `lost_job` / `commission_job` → steps 0–4, **no WrapUp** (WrapUp-only fields must default in `handleComplete`); `null`(employed) / `"changed_jobs"` / `"structure_change"` → all steps including WrapUp (7); `null` + unemployed → steps 0, 10–12 only.
 
-**Internal helpers (file-private):** `Pill`, `Field`, `FieldRow`, `errBorder`, `BenefitCard`, `PaystubCalc`, `StepWrapUp`, `StepStub`, `estimateWeeklyGross`.
+**Internal helpers (file-private):** `Pill`, `Field`, `FieldRow`, `errBorder`, `BenefitCard`, `PaystubCalc`, `StepWrapUp`, `StructureChangeDiff`, `StepJobless*`, `dateToWeekIdx`, `isFirstRunJobless`.
 
-**State:** `formData` is flat; `update(patch)` merges via `setFormData(prev => ({ ...prev, ...patch }))`. `attempted` bool set on failed Next — triggers red borders/labels; resets on step change.
+**State:** `formData` is flat; `update(patch)` merges via `setFormData(prev => ({ ...prev, ...patch }))`. `attempted` bool set on failed Next — triggers red borders/labels + shake; resets on step change.
 
-**On complete:** enforces DHL overrides (`payPeriodEndDay: 0, otThreshold: 40`), runs `buildYear`, derives `taxedWeeks` from `firstActiveIdx`, calls `onComplete`.
+**On complete:** enforces DHL overrides (`payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5`), normalizes `paycheckBuffer ?? 50`, runs `buildYear`, derives `taxedWeeks` from `firstActiveIdx` (empty if `taxExemptOptIn`), stamps `accountCreatedIdx`, calls `onComplete`.
 
 ---
 
@@ -157,9 +164,80 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 
 ---
 
+## Persistence — Eager Save Pattern
+**Every new Save/Confirm/Add/Delete action must call an eager save, not rely solely on the debounce.** `App.jsx` also runs a background debounced autosave (800ms after any `config`/`expenses`/`goals`/`logs`/`weekConfirmations` change) — that's fine for continuous edits (typing, live sliders), but a discrete "I'm done with this action" gesture that only relies on it can lose the change if the tab gets backgrounded/reclaimed before the debounce fires (mobile Safari does this aggressively). This caused real data loss in production (setup wizard, weekly check-ins, tax-plan toggles, goals/expenses/log entries) before every action below was audited and fixed — don't reintroduce the gap in new code.
+
+**The rule:** any handler for a button whose label is essentially "Save," "Confirm," "Add," "Delete," or a per-item toggle (not a live-typing field) must compute the new value *synchronously* and pass that same value to both the local `setState` and the matching eager-save callback — never rely on a bare `setState(prev => ...)` alone for one of these.
+
+| Field | Eager-save callback | Defined in |
+|-------|---------------------|------------|
+| `config` | `saveConfigNow(newConfig)` | `App.jsx`, threaded to `ProfilePanel`/`IncomePanel`/`LogPanel`/`HomePanel` |
+| `goals` | `onSaveGoalsNow(newGoals)` | `App.jsx`, threaded to `HomePanel` |
+| `expenses` | `onSaveExpensesNow(newExpenses)` | `App.jsx`, threaded to `BudgetPanel` |
+| `logs` | `onSaveLogsNow(newLogs)` | `App.jsx`, threaded to `LogPanel` |
+| `ptoGoal` | `onSavePtoGoalNow(newPtoGoal)` | `App.jsx`, threaded to `LogPanel` |
+
+All five are thin wrappers over `savePersistedStateNow(overrides, historySource)` (`App.jsx`) — the general eager-save primitive: cancels the pending debounce, merges `overrides` onto the latest known full state, writes immediately, retries once on failure, and surfaces `SaveFailedBanner` (with the real Supabase error text) if the retry also fails.
+
+**Pattern:**
+```js
+const handleSave = () => {
+  const next = { ...currentValue, ...patch };   // or newArray.map/filter/concat — computed, not a functional updater
+  setTheState(next);
+  onSaveXNow?.(next);
+};
+```
+For a value only reachable inside a `setState` updater (e.g. a handler delayed via `setTimeout`, where the outer closure's value could be stale by the time it fires), capture the computed result *through* the updater instead of bypassing it:
+```js
+let next;
+setTheState(prev => { next = /* derive from prev */; return next; });
+onSaveXNow?.(next);
+```
+For a file with many call sites mutating the same field (see `BudgetPanel.jsx`'s `applyExpenseUpdate`), wrap `setState` once in a helper that captures and eager-saves the updater's result, then convert each call site by renaming the outer function call only — don't hand-transcribe complex per-item transformation logic.
+
+**Do NOT** add eager save to:
+- Plain text/number input `onChange` — stays on the debounce, that's what it's for.
+- Continuous/high-frequency events (`dragover`, live drag preview) — verify a reorder handler fires once on drop/dragend before wiring it up, not on every pointer move, or it'll fire a network write per pixel.
+- `useEffect`-driven derived-state sync (e.g. auto-recalculating a goal's projected due date whenever the timeline changes) — that's recomputed automatically from other data on every relevant render, not a user action; if a write is ever lost it just recomputes the same correct value again next load.
+
+**readOnly gate:** `HomePanel`/`BudgetPanel` shadow their setters (and now their eager-save callbacks) with no-ops when `readOnly` (paywall-expired) is true — see the `noop` pattern near the top of each. Any new eager-save prop threaded into a component with this gate must be shadowed the same way, or a read-only account could bypass the paywall via the eager-save path even though the local `setState` is a no-op.
+
+---
+
+## Drift App Warden — MANDATORY drift check before believing a change is done
+
+**`docs/drift-app-warden.md`** is the app's drift ledger: for every critical formula,
+function, pattern, and AI-context point it answers *"I am changing X — what Y must I check
+before X counts as done?"* It exists because the app's dominant failure mode is no longer
+locally-wrong code but **drift** — a locally-correct change that silently invalidates a
+distant system (five documented real incidents are catalogued there as case law: parallel
+formulas, retroactive recompute, lost saves, gate bypass, stale docs).
+
+- **Before changing** anything under a mapped section (Setup Wizard, the 5 panels —
+  Home, Income, Budget, Log, Account — Auth, Login, Paywall, UI-UX, or the shared
+  spines — fiscal math, persistence, entitlements, AI context, design system, admin
+  toolkit), read that section's drift trigger map and run its checks. State in the commit/PR which entries were consulted; "none applicable" is valid,
+  silence is not.
+- **Two categories, one fork:** every mapped item is either **LEDGER** (L — computes/stores
+  truth; drift = silently wrong numbers; hunt via cross-check against the single
+  source-of-truth function) or **GATEWAY** (G — routes/gates/presents; drift = wrong
+  surface for the wrong tier/mode; hunt via walking the full gate matrix).
+- **Keep it current in the same PR** — a stale drift-map entry certifies a false checklist,
+  which is worse than none. `active-systems.md` describes what exists; the warden doc maps
+  what breaks what — never duplicate between them.
+- This document is the foundation for a future **Drift Warden AI agent** that will be
+  mandatory for all development-team changes — write entries machine-actionable (named
+  triggers, named blast radii, executable procedures), never as prose warnings.
+
+---
+
 ## Development Workflow
 **30-min sprints, 4×/week.** Before: state the task clearly. After: commit + one-sentence summary.
-- `docs/active-systems.md` — how every live system works
+- `docs/active-systems.md` — how every live system works. **Working on Coach/AI context?** Read
+  §24 first — it documents the grounding pattern (every context field must resolve through the
+  same authoritative function the UI itself uses, e.g. `computeGoalTimeline()`,
+  `getEffectiveAmountForMonth()` — never a parallel approximation) that live testing had to
+  rediscover through several real bugs. Skipping it reintroduces those bugs.
 - `docs/TODO.md` — prioritized backlog (open items only)
 - `docs/past-TODO-tasks.md` — completed work log (one-liner per shipped item, for historical context)
 - `docs/account-reference.json` — Anthony's primary account ground truth
@@ -168,8 +246,11 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 periodic full-schema recaps, not real migrations — never assign one the actual next migration
 number in sequence expecting it to run. They exist purely so a session can read one file instead
 of the entire migrations folder to understand current DB shape. The `BOOKMARK` tag and all-caps
-make them impossible to mistake for a pending migration. Latest: `022_BOOKMARK_schema_snapshot_2026-07-10.sql`
-(schema state through migration 021). The next real migration should still be numbered 023.
+make them impossible to mistake for a pending migration. Latest bookmark:
+`022_BOOKMARK_schema_snapshot_2026-07-10.sql` (schema state through migration 021).
+Real migrations continue past it: 023 (coach_chats) and 024 (user_data write-permission
+fix) exist — **the next real migration is 025.** Verify against the folder before
+numbering; this note has gone stale once already (drift-app-warden §14).
 
 ---
 
@@ -211,6 +292,7 @@ Files: kebab-case · Components: PascalCase · Utilities/hooks: camelCase · Dat
 
 ## Known Cleanup
 - `WeekConfirmModal.jsx`, `LoginScreen.jsx`, `ProfilePanel.jsx` — hardcoded hex colors not yet tokenized (tracked in TODO §10)
+- `BenefitsPanel.jsx` (+ its coverage tests) — dead code, unrendered for the repo's entire visible history; 401k/PTO displays live in `LogPanel.jsx`, settings in `ProfilePanel.jsx` `BenefitsDetail`. Safe to delete on owner sign-off (drift-app-warden §11)
 
 ---
 

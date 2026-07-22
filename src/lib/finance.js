@@ -129,6 +129,72 @@ function parseIsoDate(value) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+// Estimate a typical weekly gross from a config-shaped object — does not
+// require a built week object. Used by SetupWizard's live net preview (before
+// buildYear() has anything to read) and the Quick Rate Update modal's
+// before/after diff (TODO §15.D).
+export function estimateWeeklyGross(d) {
+  const isEmployerDHL = d.employerPreset === "DHL";
+  if (isEmployerDHL) {
+    const gross = (h) => {
+      const base = d.baseRate || 0;
+      const reg = Math.min(h, d.otThreshold || 40);
+      const ot = Math.max(h - (d.otThreshold || 40), 0);
+      return reg * base + ot * base * (d.otMultiplier || 1.5);
+    };
+    const longCustom = d.customWeeklyHoursLong;
+    const shortCustom = d.customWeeklyHoursShort;
+    if (longCustom != null || shortCustom != null) {
+      const fallback = d.customWeeklyHours ?? 60;
+      const longHours = longCustom ?? fallback;
+      const shortHours = shortCustom ?? fallback;
+      return (gross(shortHours) + gross(longHours)) / 2;
+    }
+    if (d.customWeeklyHours != null) {
+      // Flat custom hours — same projected total every week
+      return gross(d.customWeeklyHours);
+    }
+    // Standard DHL rotation: weighted average of long (5-shift) and short (4-shift) weeks
+    const hoursPerShift = d.shiftHours || 12;
+    return (gross(4 * hoursPerShift) + gross(5 * hoursPerShift)) / 2;
+  }
+  // Base user: flat ceiling. customWeeklyHours overrides maxWeeklyHours; standardWeeklyHours is legacy fallback.
+  const h = d.customWeeklyHours ?? d.maxWeeklyHours ?? d.standardWeeklyHours ?? 40;
+  const base = d.baseRate || 0;
+  const nightDiff = d.nightDiffEnabled === true ? (d.nightDiffRate ?? 0) : 0;
+  const effectiveOtThreshold = d.otThreshold ?? h;
+  const reg = Math.min(h, effectiveOtThreshold);
+  const ot = Math.max(h - effectiveOtThreshold, 0);
+  return reg * (base + nightDiff) + ot * (base + nightDiff) * (d.otMultiplier || 1.5);
+}
+
+// Estimate a typical weekly net (+ the deduction breakdown) from a config-shaped
+// object. Shared by SetupWizard's StepWrapUp live preview and the Quick Rate
+// Update modal's before/after diff (TODO §15.D) — keep both callers reading
+// the same formula rather than letting two independent "estimated net"
+// implementations drift.
+export function estimateWeeklyNet(cfg) {
+  const gross = estimateWeeklyGross(cfg);
+  const fica     = gross * (cfg.ficaRate || 0.0765);
+  const k401k    = gross * (cfg.k401Rate || 0);
+  const baseBenefits =
+    (cfg.healthPremium || 0) + (cfg.dentalPremium || 0) +
+    (cfg.visionPremium || 0) + (cfg.stdWeekly || 0) +
+    (cfg.lifePremium || 0)   + (cfg.hsaWeekly || 0) +
+    (cfg.fsaWeekly || 0)     + (cfg.ltd || 0);
+  const benefitsStart = cfg.benefitsStartDate ? new Date(cfg.benefitsStartDate) : null;
+  const benefitsActive = !benefitsStart || Number.isNaN(benefitsStart.getTime()) || benefitsStart <= new Date();
+  const checksPerYear = PAYCHECKS_PER_YEAR[cfg.userPaySchedule ?? "weekly"] ?? 52;
+  const perWeekFactor = checksPerYear / 52; // weekly deduction factor (e.g. 0.5 for biweekly)
+  const benefits = benefitsActive ? baseBenefits * perWeekFactor : 0;
+  const otherPerCheck = (cfg.otherDeductions || []).reduce((s, r) => s + (r.perCheckAmount ?? r.weeklyAmount ?? 0), 0);
+  const other = otherPerCheck * perWeekFactor;
+  const fed   = gross * (cfg.fedRateLow || 0);
+  const state = gross * (cfg.stateRateLow || 0);
+  const net   = gross - fica - k401k - benefits - other - fed - state;
+  return { gross, fica, k401k, benefits, other, fed, state, net };
+}
+
 // ─── DHL 401k tiered employer match ─────────────────────────────────────────
 // DHL matches 100% up to 4%, then 50¢ per $1 from 4%→6%, capped at 5% match.
 //   Contribute 4% → DHL matches 4.0%
@@ -385,7 +451,34 @@ export function getPayPeriodEndDate(weekStart, payPeriodEndDay) {
   return result;
 }
 
-export function buildYear(cfg) {
+// Resolves the baseRate actually in effect for a given week, from a sorted-or-
+// unsorted rateHistory list of { effectiveFrom: "YYYY-MM-DD", baseRate }. Mirrors
+// getEffectiveAmount's exact algorithm (latest entry with effectiveFrom <= the
+// target date) so this reads as one consistent point-in-time pattern rather than
+// a second one invented from scratch. Falls back to liveBaseRate — never 0 —
+// when no entry covers the date: that's the correct behavior both for weeks
+// before any recorded rate change (nothing to look up yet) and for the instant
+// after a fresh edit, before its own history row has round-tripped into memory
+// (the live config IS the newest truth at that point).
+//
+// TODO §15.D / §19: a deliberately narrow slice of the deferred Master Timeline
+// read-path — scoped to baseRate only, not a general point-in-time config
+// resolver. Every other historically-sensitive field (schedule, tax rates,
+// benefits, ...) still applies uniformly to every week, past and future, exactly
+// as before. Don't read this as §19 being "done" — only this one field's gap
+// (the one Quick Rate Update surfaced) is closed.
+export function resolveBaseRateForWeek(rateHistory, weekEnd, liveBaseRate) {
+  if (!rateHistory?.length) return liveBaseRate;
+  const iso = toLocalIso(weekEnd);
+  let best = null;
+  for (const entry of rateHistory) {
+    if (entry.effectiveFrom <= iso && (best === null || entry.effectiveFrom >= best.effectiveFrom))
+      best = entry;
+  }
+  return best ? best.baseRate : liveBaseRate;
+}
+
+export function buildYear(cfg, baseRateHistory = null) {
   const weeks = [], k401Start = cfg.k401StartDate ? new Date(cfg.k401StartDate) : null, taxedSet = new Set(cfg.taxedWeeks);
   const isEmployerDHL = cfg.employerPreset === "DHL";
   const benefitsStart = parseIsoDate(cfg.benefitsStartDate);
@@ -483,9 +576,13 @@ export function buildYear(cfg) {
     const otWkndH  = weekendHours - regWkndH;
     const nightDiffEnabled = isEmployerDHL ? cfg.dhlNightShift !== false : cfg.nightDiffEnabled === true;
     const nightDiffHr = nightDiffEnabled ? (cfg.nightDiffRate ?? 0) : 0;
-    grossPay = regularHours  * (cfg.baseRate + nightDiffHr)
+    // Point-in-time baseRate (TODO §15.D / §19 narrow slice — see resolveBaseRateForWeek):
+    // a rate change only recomputes weeks from its effective date forward; weeks before it
+    // keep resolving to whatever baseRate was actually in effect at the time.
+    const weekBaseRate = resolveBaseRateForWeek(baseRateHistory, weekEnd, cfg.baseRate);
+    grossPay = regularHours  * (weekBaseRate + nightDiffHr)
              + regWkndH      * cfg.diffRate
-             + overtimeHours * (cfg.baseRate + nightDiffHr) * cfg.otMultiplier
+             + overtimeHours * (weekBaseRate + nightDiffHr) * cfg.otMultiplier
              + otWkndH       * cfg.diffRate * cfg.otMultiplier;
 
     // Job Loss Mode boundary: collapse earned-income inputs to zero from the
@@ -778,13 +875,17 @@ export function traceExpenseCalculationSteps({
   const weeklyNets = activeWeeks.map(w => computeNet(w, safeCfg, extraPerCheck, showExtra));
   const spendableNets = weeklyNets.map(n => n - bufferPerWeek);
   const projectedAnnualNet = weeklyNets.reduce((sum, n) => sum + n, 0);
-  const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
+  // Divide by the weeks actually active, not a flat 52 (TODO §15, 2026-07-19)
+  // — same fix as App.jsx's weeklyIncome, mirrored here so this trace explains
+  // the real production formula instead of the diluted one it replaced.
+  const weeklyIncome = activeWeeks.length > 0 ? projectedAnnualNet / activeWeeks.length - bufferPerWeek : -bufferPerWeek;
   add(
     "computeNet + weeklyIncome",
     "Transform weekly gross/tax data into spendable weekly income.",
     {
       projectedAnnualNet,
-      averageNetBeforeBuffer: projectedAnnualNet / 52,
+      activeWeekCount: activeWeeks.length,
+      averageNetBeforeBuffer: activeWeeks.length > 0 ? projectedAnnualNet / activeWeeks.length : 0,
       bufferPerWeek,
       spendableWeeklyIncome: weeklyIncome,
       sampledSpendableWeeks: spendableNets.slice(0, 3),
@@ -1260,6 +1361,39 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
     k401kGained: affectsK401 ? grossGained * cfg.k401Rate : 0,
     k401kMatchGained: affectsK401 ? grossGained * (cfg.employerPreset === "DHL" ? dhlEmployerMatchRate(cfg.k401Rate) : cfg.k401MatchRate) : 0
   };
+}
+
+// A specific week's spendable net, with any confirmed log-entry adjustments
+// for that week folded in (missed shifts, etc.) — the same per-week math
+// "This Week's Check" style tiles need, factored out so callers can't drift.
+function weekNetWithLogAdjustments(week, cfg, extraPerCheck, showExtra, bufferPerWeek, logs) {
+  const baseNet = computeNet(week, cfg, extraPerCheck, showExtra) - bufferPerWeek;
+  const weekAdjustment = (logs ?? [])
+    .filter(e => e.weekIdx === week.idx)
+    .reduce((sum, e) => {
+      const impact = calcEventImpact(e, cfg, week);
+      return sum + impact.netGained - impact.netLost;
+    }, 0);
+  return baseNet + weekAdjustment;
+}
+
+// Resolves the "last finalized paycheck" figure that "This Week's Check" /
+// "Left This Week" style tiles read (TODO §15 Job Loss Mode investigation,
+// 2026-07-19). Prefers the most recent past active week; when there isn't
+// one yet (a brand-new account, or the very first week after Back to Work —
+// firstActiveIdx pointing at the current week), falls back to the CURRENT
+// active week's real computed net rather than weeklyIncome. weeklyIncome is
+// projectedAnnualNet/52 — a full fiscal-year average that's deliberately
+// diluted by every inactive $0 week before firstActiveIdx, so on day one of
+// a new active period it understates a real paycheck by however much of the
+// year hasn't started yet. Only falls back to weeklyIncome when there's no
+// active week at all to read (currentWeek null — before firstActiveIdx, or
+// mid-Job-Loss-Mode).
+export function resolvePrevWeekNet({ allWeeks, todayIso, config, extraPerCheck, showExtra, bufferPerWeek, weeklyIncome, logs, currentWeek }) {
+  const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < todayIso);
+  const referenceWeek = pastWeeks.length ? pastWeeks[pastWeeks.length - 1] : (currentWeek?.active ? currentWeek : null);
+  if (!referenceWeek) return weeklyIncome;
+  return weekNetWithLogAdjustments(referenceWeek, config, extraPerCheck, showExtra, bufferPerWeek, logs);
 }
 
 // ── Net worth health ──────────────────────────────────────────────────────

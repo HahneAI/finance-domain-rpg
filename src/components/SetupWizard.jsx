@@ -15,7 +15,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef } from "react";
-import { buildYear, dhlEmployerMatchRate } from "../lib/finance.js";
+import { buildYear, dhlEmployerMatchRate, estimateWeeklyNet } from "../lib/finance.js";
 import { iS, lS, Pressable, StepSlide } from "./ui.jsx";
 import { FISCAL_YEAR_START, DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR } from "../lib/fiscalWeek.js";
@@ -54,7 +54,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
           </p>
         )}
 
-        {/* ── First question: employment status (TODO §15.H seed) ── */}
+        {/* ── First question: employment status (TODO §15.H) ── */}
         <div>
           <label style={lSp}>Are you currently unemployed?</label>
           <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
@@ -63,7 +63,21 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
                 key={opt.label}
                 label={opt.label}
                 active={startedUnemployed === opt.v}
-                onClick={() => onChange({ startedUnemployed: opt.v })}
+                onClick={() => {
+                  if (opt.v === true) {
+                    const today = new Date();
+                    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                    onChange({
+                      startedUnemployed: true,
+                      jobLossMode: true,
+                      jobLossDate: formData?.jobLossDate ?? todayIso,
+                      startDate: todayIso,
+                      firstActiveIdx: dateToWeekIdx(todayIso),
+                    });
+                  } else {
+                    onChange({ startedUnemployed: false, jobLossMode: false, jobLossDate: null });
+                  }
+                }}
               />
             ))}
           </div>
@@ -71,8 +85,9 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
             marginTop: "8px", fontSize: "12px", lineHeight: "1.5",
             color: "var(--color-text-primary)", marginBottom: 0,
           }}>
-            Either answer continues to pay setup for now — we're seeding a future onboarding
-            path that lands jobless users straight in the Job Loss Dashboard.
+            {startedUnemployed === true
+              ? "You'll skip straight to a short unemployment setup and land in the Job Loss Dashboard — no pay structure needed until you're back to work."
+              : "Either answer continues to pay setup for now."}
           </p>
         </div>
 
@@ -1629,48 +1644,12 @@ function Step4({ formData, onChange, attempted }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STEP 7 — Paycheck Buffer (estimateWeeklyGross helper defined above)
+// STEP 7 — Paycheck Buffer (estimateWeeklyNet imported from lib/finance.js)
 //
 // Shows a live net-per-check preview, then lets the user toggle the buffer on/off
 // and set an amount (default $50, max $200). See App.jsx bufferPerWeek comment for
 // how the buffer is excluded from all downstream spendable math at runtime.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Estimate a typical weekly gross from formData — does not require a week object.
-function estimateWeeklyGross(d) {
-  const isEmployerDHL = d.employerPreset === "DHL";
-  if (isEmployerDHL) {
-    const gross = (h) => {
-      const base = d.baseRate || 0;
-      const reg = Math.min(h, d.otThreshold || 40);
-      const ot = Math.max(h - (d.otThreshold || 40), 0);
-      return reg * base + ot * base * (d.otMultiplier || 1.5);
-    };
-    const longCustom = d.customWeeklyHoursLong;
-    const shortCustom = d.customWeeklyHoursShort;
-    if (longCustom != null || shortCustom != null) {
-      const fallback = d.customWeeklyHours ?? 60;
-      const longHours = longCustom ?? fallback;
-      const shortHours = shortCustom ?? fallback;
-      return (gross(shortHours) + gross(longHours)) / 2;
-    }
-    if (d.customWeeklyHours != null) {
-      // Flat custom hours — same projected total every week
-      return gross(d.customWeeklyHours);
-    }
-    // Standard DHL rotation: weighted average of long (5-shift) and short (4-shift) weeks
-    const hoursPerShift = d.shiftHours || 12;
-    return (gross(4 * hoursPerShift) + gross(5 * hoursPerShift)) / 2;
-  }
-  // Base user: flat ceiling. customWeeklyHours overrides maxWeeklyHours; standardWeeklyHours is legacy fallback.
-  const h = d.customWeeklyHours ?? d.maxWeeklyHours ?? d.standardWeeklyHours ?? 40;
-  const base = d.baseRate || 0;
-  const nightDiff = d.nightDiffEnabled === true ? (d.nightDiffRate ?? 0) : 0;
-  const effectiveOtThreshold = d.otThreshold ?? h;
-  const reg = Math.min(h, effectiveOtThreshold);
-  const ot = Math.max(h - effectiveOtThreshold, 0);
-  return reg * (base + nightDiff) + ot * (base + nightDiff) * (d.otMultiplier || 1.5);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STEP 8 — Tax Exempt Gate
@@ -1751,6 +1730,29 @@ const DIFF_FIELDS = [
 ];
 
 function StructureChangeDiff({ originalConfig, formData }) {
+  // TODO §15.H4: a user who started jobless (never filled in real pay structure)
+  // running Back to Work hits this same structure_change flow, but originalConfig's
+  // pay fields are still DEFAULT_CONFIG placeholders (e.g. baseRate: 19.65) — not a
+  // real prior rate. Diffing those would misleadingly show "before: $19.65/hr" as if
+  // it were the user's actual old job. Show a dedicated first-time message instead.
+  if (originalConfig?.startedUnemployed === true) {
+    return (
+      <div>
+        <label style={lSp}>What's Changing</label>
+        <div style={{
+          marginTop: "10px", background: "var(--color-bg-raised)",
+          border: "1px solid var(--color-border-subtle)", borderRadius: "12px", padding: "14px",
+        }}>
+          <div style={{ fontSize: "12px", color: "var(--color-text-primary)", lineHeight: 1.6 }}>
+            You're filling in a real pay structure for the first time — there's no prior setup to
+            compare against, so nothing to diff here. Your goals, expenses, and logs stay exactly
+            as they are.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const rows = DIFF_FIELDS
     .map(f => {
       const before = originalConfig?.[f.key] ?? null;
@@ -1809,25 +1811,11 @@ function StructureChangeDiff({ originalConfig, formData }) {
 }
 
 function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
-  const gross = estimateWeeklyGross(formData);
-  const fica     = gross * (formData.ficaRate || 0.0765);
-  const k401k    = gross * (formData.k401Rate || 0);
-  const baseBenefits =
-    (formData.healthPremium || 0) + (formData.dentalPremium || 0) +
-    (formData.visionPremium || 0) + (formData.stdWeekly || 0) +
-    (formData.lifePremium || 0)   + (formData.hsaWeekly || 0) +
-    (formData.fsaWeekly || 0)     + (formData.ltd || 0);
+  const { gross, fica, k401k, benefits, other, fed, state, net } = estimateWeeklyNet(formData);
+  const checksPerYear = PAYCHECKS_PER_YEAR[formData.userPaySchedule ?? "weekly"] ?? 52;
+  const perCheckFactor = 52 / checksPerYear; // display scale: weekly → per-paycheck (e.g. 2 for biweekly)
   const benefitsStart = formData.benefitsStartDate ? new Date(formData.benefitsStartDate) : null;
   const benefitsActive = !benefitsStart || Number.isNaN(benefitsStart.getTime()) || benefitsStart <= new Date();
-  const checksPerYear = PAYCHECKS_PER_YEAR[formData.userPaySchedule ?? "weekly"] ?? 52;
-  const perWeekFactor = checksPerYear / 52;  // weekly deduction factor (e.g. 0.5 for biweekly)
-  const perCheckFactor = 52 / checksPerYear; // display scale: weekly → per-paycheck (e.g. 2 for biweekly)
-  const benefits = benefitsActive ? baseBenefits * perWeekFactor : 0;
-  const otherPerCheck = (formData.otherDeductions || []).reduce((s, r) => s + (r.perCheckAmount ?? r.weeklyAmount ?? 0), 0);
-  const other = otherPerCheck * perWeekFactor;
-  const fed   = gross * (formData.fedRateLow || 0);
-  const state = gross * (formData.stateRateLow || 0);
-  const net   = gross - fica - k401k - benefits - other - fed - state;
 
   const bufferOn = formData.bufferEnabled ?? true;
   const buf      = formData.paycheckBuffer ?? 50;
@@ -1959,6 +1947,156 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// JOBLESS SETUP MINI-FLOW (TODO §15.H2) — only shown on first-run when the
+// user answered "Yes" to Step 0's employment-status question. Consolidates
+// H2's five conceptual sub-steps (0a-0e) into three actual wizard screens:
+// unemployment benefits (0a+0b, same fields as JobLossEntry.jsx's existing
+// modal for the same data), job-loss date + optional prior-pay context
+// (0c+0d), and a plain confirm/finish screen (0e) — no live net preview,
+// since there's no pay structure to preview yet.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function StepJoblessBenefits({ formData, onChange, attempted }) {
+  const answered = formData.unemploymentEnabled;
+  const hasUnemployment = answered === true;
+  const weeklyMissing = attempted && hasUnemployment && !((formData.unemploymentWeekly ?? 0) > 0);
+  const durationMissing = attempted && hasUnemployment && !((formData.unemploymentDurationWeeks ?? 0) > 0);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+      <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
+        This replaces the usual pay-structure steps for now — you can fill those in anytime later
+        from Life Events once you're back to work.
+      </p>
+      <Field label="Are you getting unemployment benefits?" error={attempted && answered == null ? "Required" : null}>
+        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+          {[{ v: true, label: "Yes" }, { v: false, label: "No" }].map(opt => (
+            <Pill
+              key={opt.label}
+              label={opt.label}
+              active={answered === opt.v}
+              onClick={() => onChange({
+                unemploymentEnabled: opt.v,
+                ...(opt.v === false ? { unemploymentWeekly: null, unemploymentDurationWeeks: null, unemploymentWaitingWeek: false } : {}),
+              })}
+            />
+          ))}
+        </div>
+      </Field>
+      {hasUnemployment && (
+        <>
+          <Field label="Weekly benefit amount" error={weeklyMissing ? "Required" : null}>
+            <input
+              type="number" min="0" step="1" inputMode="decimal"
+              style={{ ...iS, ...errBorder(weeklyMissing) }}
+              value={formData.unemploymentWeekly ?? ""}
+              onChange={e => onChange({ unemploymentWeekly: e.target.value === "" ? null : parseFloat(e.target.value) })}
+              placeholder="e.g. 400"
+            />
+          </Field>
+          <Field label="Benefit duration (weeks)" error={durationMissing ? "Required" : null}>
+            <input
+              type="number" min="0" step="1" inputMode="numeric"
+              style={{ ...iS, ...errBorder(durationMissing) }}
+              value={formData.unemploymentDurationWeeks ?? ""}
+              onChange={e => onChange({ unemploymentDurationWeeks: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
+              placeholder="e.g. 26"
+            />
+          </Field>
+          <Field label="Waiting week (first week unpaid)">
+            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+              {[{ v: true, label: "Yes" }, { v: false, label: "No" }].map(opt => (
+                <Pill
+                  key={opt.label}
+                  label={opt.label}
+                  active={(formData.unemploymentWaitingWeek ?? true) === opt.v}
+                  onClick={() => onChange({ unemploymentWaitingWeek: opt.v })}
+                />
+              ))}
+            </div>
+          </Field>
+        </>
+      )}
+    </div>
+  );
+}
+
+function StepJoblessDetails({ formData, onChange }) {
+  const [priorRateDraft, setPriorRateDraft] = useState("");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+      <Field label="Job loss effective date">
+        <input
+          type="date"
+          style={iS}
+          value={formData.jobLossDate ?? ""}
+          onChange={e => onChange({ jobLossDate: e.target.value })}
+        />
+      </Field>
+      <div>
+        <label style={lSp}>Prior hourly rate (optional)</label>
+        <p style={{ margin: "4px 0 8px", fontSize: "12px", lineHeight: 1.5, color: "var(--color-text-primary)" }}>
+          Used only to suggest a target income goal on your Re-employment Tracker — assumes a
+          standard 40hr week. Skip this if you'd rather set a target manually later.
+        </p>
+        <input
+          type="number" min="0" step="0.01" inputMode="decimal"
+          style={iS}
+          value={priorRateDraft}
+          onChange={e => {
+            const raw = e.target.value;
+            setPriorRateDraft(raw);
+            const rate = raw === "" ? null : parseFloat(raw);
+            onChange({ targetIncomeAnnual: rate != null && rate > 0 ? Math.round(rate * 40 * 52) : null });
+          }}
+          placeholder="e.g. 22.00"
+        />
+      </div>
+    </div>
+  );
+}
+
+function StepJoblessWrapUp({ formData }) {
+  const fmt = n => `$${Number(n).toLocaleString()}`;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+      <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.6, color: "var(--color-text-primary)", fontWeight: 600 }}>
+        Ready to go — here's what we've got.
+      </p>
+      <div style={{
+        background: "var(--color-bg-raised)", borderRadius: "12px", padding: "14px",
+        border: "1px solid var(--color-border-subtle)",
+        display: "flex", flexDirection: "column", gap: "8px", fontSize: "13px",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <span style={{ color: "var(--color-text-secondary)" }}>Job loss date</span>
+          <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>{formData.jobLossDate ?? "—"}</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <span style={{ color: "var(--color-text-secondary)" }}>Unemployment benefits</span>
+          <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>
+            {formData.unemploymentEnabled
+              ? `${fmt(formData.unemploymentWeekly ?? 0)}/wk × ${formData.unemploymentDurationWeeks ?? 0}wk`
+              : "None"}
+          </span>
+        </div>
+        {formData.targetIncomeAnnual != null && (
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "var(--color-text-secondary)" }}>Target income goal</span>
+            <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>{fmt(formData.targetIncomeAnnual)}/yr</span>
+          </div>
+        )}
+      </div>
+      <p style={{ margin: 0, fontSize: "12px", lineHeight: 1.6, color: "var(--color-text-secondary)" }}>
+        Tap Finish to enter Job Loss Mode. Whenever you're back to work, use Life Events → Pay
+        Structure Changed to fill in your real pay for the first time.
+      </p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STEP DEFINITIONS
 //
 // showIf(formData, lifeEvent) → bool — controls which steps appear per life event
@@ -1971,7 +2109,16 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
 //   "commission_job"    → steps 0–5 only; steps 6–8 skipped
 //   "structure_change"  → steps 0–4 + Wrap Up (7); pre-filled from current config; the Wrap Up
 //                          step gains a "What's Changing" diff section in this mode
+//   null + startedUnemployed===true (TODO §15.H) → steps 0, 10-12 only (Jobless Setup mini-flow);
+//                          steps 1-4 and 7 are skipped entirely, not just hidden
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Gate used by steps 1-4/7 (skip) and 10-12 (show only) — a first-run wizard
+// where the user answered "Yes, unemployed" at Step 0. Never true on any
+// life-event re-entry (ev !== null), even structure_change from Back to Work.
+function isFirstRunJobless(d, ev) {
+  return ev === null && d.startedUnemployed === true;
+}
 const STEP_DEFS = [
   {
     id: 0, title: "Welcome",
@@ -1982,8 +2129,28 @@ const STEP_DEFS = [
     component: Step0,
   },
   {
+    id: 10, title: "Unemployment Benefits",
+    showIf: (d, ev) => isFirstRunJobless(d, ev),
+    isValid: (d) => d.unemploymentEnabled === true
+      ? (d.unemploymentWeekly ?? 0) > 0 && (d.unemploymentDurationWeeks ?? 0) > 0
+      : d.unemploymentEnabled === false,
+    component: StepJoblessBenefits,
+  },
+  {
+    id: 11, title: "Job Loss Details",
+    showIf: (d, ev) => isFirstRunJobless(d, ev),
+    isValid: (d) => !!d.jobLossDate,
+    component: StepJoblessDetails,
+  },
+  {
+    id: 12, title: "Wrap Up",
+    showIf: (d, ev) => isFirstRunJobless(d, ev),
+    isValid: () => true,
+    component: StepJoblessWrapUp,
+  },
+  {
     id: 1, title: "Pay Structure",
-    showIf: () => true,
+    showIf: (d, ev) => !isFirstRunJobless(d, ev),
     isValid: (d) => {
       if (!d.userPaySchedule) return false;
       if (d.employerPreset === "DHL" && !d.dhlTeam) return false;
@@ -1997,7 +2164,7 @@ const STEP_DEFS = [
   },
   {
     id: 2, title: "Schedule",
-    showIf: () => true,
+    showIf: (d, ev) => !isFirstRunJobless(d, ev),
     isValid: (d) => {
       if (!d.startDate) return false;
       if ((d.firstActiveIdx ?? 0) < 0 || (d.firstActiveIdx ?? 0) >= FISCAL_WEEKS_PER_YEAR) return false;
@@ -2012,7 +2179,7 @@ const STEP_DEFS = [
   },
   {
     id: 3, title: "Deductions",
-    showIf: () => true,
+    showIf: (d, ev) => !isFirstRunJobless(d, ev),
     isValid: (d) => {
       if (d.employerPreset !== "DHL" && d.attendanceBucketEnabled === null) return false;
       const sel = new Set(d.selectedBenefits ?? []);
@@ -2030,13 +2197,13 @@ const STEP_DEFS = [
   },
   {
     id: 4, title: "Tax Rates",
-    showIf: () => true,
+    showIf: (d, ev) => !isFirstRunJobless(d, ev),
     isValid: (d) => d.fedRateLow > 0 && d.userState != null,
     component: Step4,
   },
   {
     id: 7, title: "Wrap Up",
-    showIf: (_, ev) => ev === null || ev === "changed_jobs" || ev === "structure_change",
+    showIf: (d, ev) => (ev === null && !isFirstRunJobless(d, ev)) || ev === "changed_jobs" || ev === "structure_change",
     isValid: () => true,
     component: StepWrapUp,
   },
@@ -2078,7 +2245,7 @@ function StepStub({ title, sprint }) {
 //                      receives taxedWeeks auto-populated + setupComplete: true
 //   lifeEvent        — null (first-run) | "lost_job" | "changed_jobs" | "commission_job"
 // ─────────────────────────────────────────────────────────────────────────────
-export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false }) {
+export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLifeEvent = null, isInvestor = false, isExiting = false }) {
   const [stepIdx,   setStepIdx]   = useState(0);
   // Slide direction for step transitions: 1 = forward (Next/Skip), -1 = back.
   const [stepDir,   setStepDir]   = useState(1);
@@ -2102,6 +2269,8 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   // "what's changing" diff in Wrap Up. Frozen by the ref so edits to formData
   // don't pollute the comparison baseline.
   const originalConfigRef = useRef(config);
+  // Ref to the card div so we can apply the validation shake animation
+  const cardRef = useRef(null);
 
   const activeSteps = STEP_DEFS.filter(s => s.showIf(formData, lifeEvent));
   const current     = activeSteps[stepIdx];
@@ -2110,6 +2279,17 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
 
   // Reset error state whenever the user moves to a new step
   useEffect(() => { setAttempted(false); }, [stepIdx]);
+
+  // Apply validation shake when attempted becomes true (failed Next validation)
+  useEffect(() => {
+    if (attempted && cardRef.current) {
+      cardRef.current.classList.add('validation-shake');
+      const timer = setTimeout(() => {
+        cardRef.current?.classList.remove('validation-shake');
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [attempted]);
 
   function update(patch) {
     setFormData(prev => ({ ...prev, ...patch }));
@@ -2161,27 +2341,30 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   const StepComponent = current?.component ?? null;
 
   return (
-    <div style={{
-      position: "fixed", inset: 0,
-      background: "var(--color-bg-base)",
-      display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center",
-      paddingTop: "max(16px, env(safe-area-inset-top))",
-      paddingBottom: "max(16px, env(safe-area-inset-bottom))",
-      paddingLeft: "16px", paddingRight: "16px",
-      zIndex: 100,
-    }}>
-      <div style={{
-        width: "100%", maxWidth: "480px",
-        background: "var(--color-bg-surface)",
-        border: "1px solid var(--color-border-subtle)",
-        borderRadius: "20px",
+    <div
+      className="fold-lift"
+      data-fold={isExiting ? "exiting" : "entering"}
+      style={{
+        position: "fixed", inset: 0,
+        background: "var(--color-bg-base)",
         display: "flex", flexDirection: "column",
-        flex: 1, minHeight: 0, maxHeight: "680px",
-        overflow: "hidden",
-        // Takeover entrance — the whole wizard card rises + fades in on mount.
-        animation: "foldLiftIn 340ms var(--ease-fold-page-in) both",
+        alignItems: "center", justifyContent: "center",
+        paddingTop: "max(16px, env(safe-area-inset-top))",
+        paddingBottom: "max(16px, env(safe-area-inset-bottom))",
+        paddingLeft: "16px", paddingRight: "16px",
+        zIndex: 100,
       }}>
+      <div
+        ref={cardRef}
+        style={{
+          width: "100%", maxWidth: "480px",
+          background: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border-subtle)",
+          borderRadius: "20px",
+          display: "flex", flexDirection: "column",
+          flex: 1, minHeight: 0, maxHeight: "680px",
+          overflow: "hidden",
+        }}>
 
         {/* ── Header: step counter + title + progress bar ── */}
         <div style={{ padding: "24px 24px 0", flexShrink: 0 }}>

@@ -7,9 +7,12 @@ duplicate/stale entries from the old chronological version were merged or droppe
 Extended 2026-07-07: added §21 (Monetization — the paywall/entitlement/revival system, TODO §17,
 was previously undocumented here despite being almost entirely shipped), §22 (Master Timeline
 config-history write path, TODO §19 phase 1), and §23 (Beta Tester Accounts, TODO §18); refreshed
-the §1/§5 known-gap notes to match.
+the §1/§5 known-gap notes to match. Extended 2026-07-16: added §24 (AI Layer — Coach, TODO §18) —
+the chat panel, persona/feature-guide prompts, and context builder, plus the grounding pattern a
+live testing pass surfaced (reuse the UI's own authoritative computation, never a parallel
+approximation) that every future context-field addition should follow.
 **Guardrail: keep under 300 lines — currently over; a trim pass is owed.** Summarize; do not transcribe.
-Last updated: 2026-07-07 | App: Authority Finance (A:Fin)
+Last updated: 2026-07-16 | App: Authority Finance (A:Fin)
 
 ---
 
@@ -20,13 +23,13 @@ Last updated: 2026-07-07 | App: Authority Finance (A:Fin)
 | 1 | Income & Pay Engine | `finance.js`, `App.jsx` | Live |
 | 2 | Rolling Views & Progressive Scaling | `rollingTimeline.js` | Live |
 | 3 | Budget — Expenses | `BudgetPanel.jsx`, `finance.js` | Live |
-| 4 | Budget — Goals | `BudgetPanel.jsx`, `HomePanel.jsx`, `goalFunding.js` | Live |
+| 4 | Budget — Goals | `HomePanel.jsx`, `goalFunding.js` | Live |
 | 5 | Budget — Loans | `BudgetPanel.jsx`, `finance.js` | Live |
-| 6 | Benefits — 401k & PTO | `BenefitsPanel.jsx` | Live |
+| 6 | Benefits — 401k & PTO | `LogPanel.jsx` (displays), `ProfilePanel.jsx` (settings) | Live — `BenefitsPanel.jsx` is dead code |
 | 7 | Attendance Bucket Model (DHL) | `finance.js` | Live |
 | 8 | Log Panel — Event Log & Effect Summary | `LogPanel.jsx` | Live |
 | 9 | Setup Wizard | `SetupWizard.jsx` | Live |
-| 10 | Life Events & Job Loss Mode | `LifeEventMenu.jsx`, `JobLossDashboard.jsx`, `JobLossEntry.jsx`, `ExpenseTriage.jsx` | Live |
+| 10 | Life Events & Job Loss Mode | `LifeEventMenu.jsx`, `JobLossEntry.jsx`, `JobLossHomePanel.jsx`, `JobLossBudgetPanel.jsx`, `jobLossRunway.js` | Live, known gaps |
 | 11 | Employer Preset Convention | all panels (architectural rule) | Live |
 | 12 | Biweekly Two-Week Check-In | `WeekConfirmModal.jsx` | Live |
 | 13 | Admin Diagnostic Toolkit | `App.jsx`, `LogPanel.jsx` | Live (Phase 1, 8 tools) |
@@ -40,6 +43,7 @@ Last updated: 2026-07-07 | App: Authority Finance (A:Fin)
 | 21 | Monetization — Trial, Paywall & Account Revival | `subscription.js`, `App.jsx`, `api/stripe-*.js`, `api/revival-lookup.js`, `UpgradeCard.jsx`, `UpgradeModal.jsx`, `UpgradePanel.jsx`, `TrialBanner.jsx`, `ReviveScreen.jsx` | Live — all migrations through 020 confirmed run |
 | 22 | Master Timeline — Config History | `configHistory.js`, `db.js`, `App.jsx` | Live, migration run (write path only — nothing reads it yet) |
 | 23 | Beta Tester Accounts | `entitlements.js`, `db.js`, `App.jsx`, migration 021 | Live |
+| 24 | AI Layer — Coach ("Ask Coach") | `api/coach.js`, `lib/claude.js`, `lib/coachPrompts.js`, `lib/coachFeatureGuide.js`, `lib/aiContext.js`, `AskCoachPanel.jsx`, `CoachNetWorthCard.jsx` | Live, admin/tester-gated |
 
 ---
 
@@ -107,7 +111,9 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
 ## 4. Budget — Goals
 
 - **Timeline grid:** `computeGoalTimeline()` (`finance.js`) runs week-by-week surplus
-  sequencing against `futureWeeks`; renders as a month-labeled bar in `BudgetPanel.jsx`.
+  sequencing against `futureWeeks`; renders as a month-labeled bar in `HomePanel.jsx`
+  (the whole goals surface — cards, CRUD, reorder, timeline — moved to Home 2026-05-12;
+  `BudgetPanel.jsx` no longer receives `goals` at all).
 - **Reset Timeline:** `config.goalTimelineEpochIdx` — weeks before it contribute no
   surplus. The button (HomePanel Active Goals header) writes the next pay week's idx
   here, behind a confirmation modal; persists normally.
@@ -135,7 +141,12 @@ futureWeekNets[] → computeGoalTimeline() → goal fund sequences
 
 ## 6. Benefits — 401k & PTO
 
-**File:** `BenefitsPanel.jsx`.
+**Files:** `LogPanel.jsx` (displays — ported from the retired standalone panel; marker
+comment at `LogPanel.jsx:86`) + `ProfilePanel.jsx` `BenefitsDetail` (settings — the
+Account tab's "Retirement & Benefits" sub-view). **`BenefitsPanel.jsx` itself is dead
+code** — unrendered for the repo's entire visible history (no import, no nav entry);
+deletion tracked in CLAUDE.md Known Cleanup. Corrected 2026-07-19 (Drift Warden T5 pass,
+`docs/drift-app-warden.md` §11).
 - **401k:** projected employee/employer contributions (adjusted for logged loss/gain
   events), month-by-month breakdown table with running total, enrollment countdown
   banner when `k401StartDate` is in the future.
@@ -198,19 +209,44 @@ Wrap Up):
 
 ## 10. Life Events & Job Loss Mode
 
-Live, not scaffolding — more built than `docs/TODO.md` §15's checkbox state suggests.
+Live, not scaffolding — more built than `docs/TODO.md` §15's checkbox state suggests. As of the
+§15.H7 rebuild (2026-07-18), Job Loss Mode is a genuinely distinct app mode, not a card layered on
+the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` **instead of**
+`HomePanel`/`BudgetPanel` while `config.jobLossMode` is true. `JobLossDashboard.jsx`/
+`ExpenseTriage.jsx` (the pre-H7 architecture) are deleted — don't resurrect that pattern.
 
 - **`LifeEventMenu.jsx`** — modal, 3 tiles: Pay Structure Changed →
-  `SetupWizard(lifeEvent="structure_change")`; Lost My Job → `JobLossEntry.jsx`; Quick
-  Rate Update (disabled, "Coming Soon").
-- **`JobLossEntry.jsx` → `JobLossDashboard.jsx`** — runway calculator, unemployment
-  benefits config, re-employment tracker. `config.jobLossMode` zeroes earned income from
-  `jobLossDate` forward in `buildYear()`.
-- **`ExpenseTriage.jsx`** — per-expense `jobLossStatus: active|paused|cancelled`,
-  excluded from projections while paused/cancelled; auto-reactivate on "Back to Work".
-- **App shell:** persistent amber banner while `jobLossMode` is true; "Back to Work"
-  re-enters the wizard as `structure_change`. Entry point also lives in the Account panel
-  (`ProfilePanel` "Life Events" row → same `LifeEventMenu`).
+  `SetupWizard(lifeEvent="structure_change")`; Lost My Job → `JobLossEntry.jsx`; Quick Rate
+  Update → `RateUpdateModal.jsx`.
+- **`JobLossEntry.jsx`** — 3-step modal: (1) date + mandatory `jobLossCashOnHand` (§15.H13,
+  persisted, accepts 0) + unemployment benefits; (2) expense review checklist, all bills checked
+  by default, unchecking sets `trackDuringJobLoss: false` without touching anything else about the
+  expense; (3) due-date assignment (`DueDatePicker`) for kept non-loan bills — loans auto-attach
+  `loanMeta.firstPaymentDate`. Steps 2–3 skip entirely when there are no expenses. `config.jobLossMode`
+  zeroes earned income from `jobLossDate` forward in `buildYear()` — **not prorated**: the entire
+  fiscal week containing `jobLossDate` zeroes out, including days already worked that week.
+- **`lib/jobLossRunway.js`** — `computeJobLossRunway()` is the one authoritative runway/burn
+  function; both panels read it, nothing else should compute a second one (see Known gaps —
+  `coachTriggers.js` already does). `weeklyBurn` only sums **Needs** (and loan) expenses —
+  Lifestyle-category bills are tracked and shown but deliberately excluded from the burn number.
+  `savings` = `jobLossCashOnHand` (persisted, editable from both panels) + `sumJobHuntIncome()`
+  (gig income logged via Home's "Log Extra Income" widget) — no concept of a pending/not-yet-paid
+  final paycheck exists in this calc.
+- **`JobLossHomePanel.jsx`** — runway headline, cash-on-hand input, Log Extra Income widget,
+  embeds `ReemploymentTracker` (target income, return-to-work date, application CRUD with 6
+  statuses). **`JobLossBudgetPanel.jsx`** — savings + benefit-scenario toggle, upcoming-bills
+  countdown, full expense triage (active/paused/cancelled) inline, simplified add-expense form.
+  Both eager-save every mutation (§15.H10).
+- **App shell:** persistent amber banner while `jobLossMode` is true; "Back to Work" re-enters the
+  wizard as `structure_change` and restores the mandatory Food expense if it was skipped at
+  first-run. Entry point also lives in the Account panel (`ProfilePanel` "Life Events" row → same
+  `LifeEventMenu`).
+- **Known gaps** (full write-up: `docs/TODO.md` §15.H14): no pending/final-paycheck concept in the
+  runway calc; Lifestyle spend excluded from `weeklyBurn` with no UI callout; `coachTriggers.js`'s
+  `estimateRunwayDays` is a second, drifted runway calc (doesn't know about `trackDuringJobLoss` or
+  `jobLossCashOnHand`); Coach's Job Loss context line never actually receives `runwayDays` from
+  `App.jsx` (renders as bare `"Job Loss Mode: active"`); AI features (Coach, Job Hunt Assistant,
+  Job Scout) are `is_admin`/`is_tester`-gated, so most real Job Loss Mode users can't reach them.
 
 ---
 
@@ -287,11 +323,14 @@ Framer Motion.
 ## 17. Auth & Account
 
 - **Auth:** Supabase email/password + Google OAuth (`LoginScreen.jsx`); RLS live.
-- **`ProfilePanel.jsx`** — Account list → sub-views: Employment, Pay Structure (4
-  independently editable cards: Base Pay / Differentials / Overtime Rules / Weekly Hours
-  & Schedule Override), Retirement & Benefits, App Preferences, Tax Plan (gated),
-  Investor Codes (admin), **Life Events** (§10); plus Account (email/password, link
-  Google, sign out, delete account).
+- **`ProfilePanel.jsx`** — Account list → sub-views: Job & Pay (4 independently
+  editable pay cards — Base Pay / Differentials / Overtime Rules / Weekly Hours &
+  Schedule Override — plus the Employment card merged into this view 2026-07-06 and the
+  Life Events entry at its foot; neither is a standalone row anymore), Retirement &
+  Benefits, App Preferences, Tax Plan (gated), Investor Codes (admin), plus Account
+  (email/password, link Google, sign out, delete account, §17.F Subscription card).
+  In Job Loss Mode the Work & Pay group is replaced by a single "Back to Work" row.
+  Full drift map: `drift-app-warden.md` §12.
 
 ---
 
@@ -310,8 +349,11 @@ should ever imply the other — see §23.
 
 ## 19. PWA / Install
 
-`vite-plugin-pwa` (`vite.config.js`) — autoUpdate, workbox network-first caching for app
-shell + Supabase API. `PwaInstallModal.jsx` detects `beforeinstallprompt` and shows a
+`vite-plugin-pwa` (`vite.config.js`) — `registerType: 'prompt'` (changed from autoUpdate
+2026-07-15, `8c50ff0`: with skipWaiting/clientsClaim, autoUpdate force-reloaded every open
+tab mid-session the instant a deploy landed; updates now surface via `onNeedRefresh` →
+`UpdateAvailableBanner`, reload strictly user-initiated), workbox network-first caching
+for app shell + Supabase API. `PwaInstallModal.jsx` detects `beforeinstallprompt` and shows a
 dismissible install banner/tutorial; entry points in the mobile drawer and Account panel
 ("Install on home screen"), hidden when already running standalone.
 
@@ -400,9 +442,13 @@ no representation here until this pass).
   `effectiveFrom`; investor sandbox accounts are exempt.
 - **Admin surface:** DB Row Viewer → Fetch shows "config history: N snapshots · latest [date]
   ([source]) · [changed fields]" (`fetchConfigHistoryMeta`, `db.js`).
-- **Known gap (by design — not yet started):** nothing reads this table. The read-path resolver
-  (an analog of expenses' `getEffectiveAmount`) and the loan-history equivalent fix are explicit,
-  separate follow-ups. Full design record in `docs/TODO.md` §19.
+- **Known gap (by design — mostly unstarted):** almost nothing reads this table. One narrow
+  read slice is live (§15.D Quick Rate Update): `db.js#extractBaseRateHistory` filters
+  `account_history` rows to baseRate changes → `App.jsx` `baseRateHistory` state →
+  `buildYear(cfg, baseRateHistory)` → `resolveBaseRateForWeek` per week. The general
+  read-path resolver (an analog of expenses' `getEffectiveAmount` for all sensitive fields)
+  and the loan-history equivalent fix remain explicit, separate follow-ups. Full design
+  record in `docs/TODO.md` §19. Drift map for the live slice: `docs/drift-app-warden.md` §7 F10.
 
 ---
 
@@ -431,3 +477,42 @@ since migration 019's RLS column grants).
   in `isInvestor`.
 - **Lifecycle cron:** bypassed the same as admin/investor (§20) — testers are never dunned
   or auto-deleted if the 6-month window lapses before renewal.
+
+---
+
+## 24. AI Layer — Coach ("Ask Coach")
+
+Coach is an in-app AI companion — corner-man persona, full voice brief and scored tuning rubric
+in `docs/coach-personality-rubric.md` — that answers questions about how Authority Finance works,
+grounded in the user's real data. Gated behind `canAccessAiFeatures({isAdmin, isTester})` (§23)
+client **and** server side; every AI surface stays admin/tester-only until Coach leaves its
+build-out phase (`docs/TODO.md` §18 standing constraint).
+
+- **Pieces:** `api/coach.js` (Vercel function; streams Anthropic SSE through; re-checks the gate
+  server-side; prod/test key split via `ANTHROPIC_API_KEY`/`ANTHROPIC_API_KEY_TEST`, same MODE
+  pattern as Stripe) · `lib/claude.js` (`chatWithCoach()`, thin client) · `lib/coachPrompts.js`
+  (`COACH_PERSONA_PROMPT` shared voice + `buildNetWorthSystemPrompt`/`ASK_COACH_SYSTEM_PROMPT`)
+  · `lib/coachFeatureGuide.js` (`COACH_FEATURE_GUIDE`, hand-written panel tutorial, concatenated
+  into the Ask Coach system prompt) · `lib/aiContext.js` (`buildCoachContext()`, the per-user data
+  snapshot) · `components/AskCoachPanel.jsx` (chat UI; gated bottom-nav entry mirrors the admin
+  `__tools__` pattern; no persistence yet) · `components/CoachNetWorthCard.jsx` (§C's proactive
+  Net Worth Trend trigger, rate-limited to once/tier/fiscal-week).
+- **Grounding pattern — the rule to follow when extending this:** every context field must resolve
+  through the *same* authoritative function the UI itself displays that number with, never a
+  parallel approximation. Concretely: per-expense weekly cost goes through
+  `getEffectiveAmountForMonth()`/`getPhaseIndex()` (what `computeRemainingSpend()` uses), and
+  per-goal timeline data goes through `computeGoalTimeline()` with the same
+  `config.goalTimelineEpochIdx` epoch `HomePanel.jsx` passes. A 2026-07-16 live-testing pass found
+  and fixed three real bugs from skipping this: a per-expense estimate derived from `billingMeta`
+  instead of `history` that disagreed with the real number by double digits; an ambiguous
+  "M/N completed" goals line the model misread as "no goals set"; and a flat "I don't have that
+  data" on the Home "Budget Health" tile, which context simply never carried. Reuse the exported
+  pure function — don't hand-derive a shortcut.
+- **Privacy:** goal labels are deliberately excluded from `buildCoachContext()` — goals are
+  identified only by funding-priority rank ("Goal 1 of N"). Coach may use a name back only if the
+  *user* volunteers it in their own message; it never learns one from data.
+- **Known gaps:** chat history persistence exists at the data layer (`coach_chats` table, migration
+  023 live, `db.js` load/save/delete functions) but isn't wired into `App.jsx`/`AskCoachPanel` yet
+  (§18.H). Benefits/401k context is intentionally not wired — blocked on a product decision about
+  how base (non-DHL) users onboard other employer comp.
+- Full build log, deviations, and open questions: `docs/TODO.md` §18.

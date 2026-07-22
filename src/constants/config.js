@@ -112,6 +112,21 @@ export const DEFAULT_CONFIG = {
   // structure_change wizard).
   jobLossMode: false,
   jobLossDate: null,           // "YYYY-MM-DD" — first week where projections drop to $0 earned
+  // Accessible cash on hand at Job Loss entry — mandatory in the JobLossEntry
+  // wizard (0 is a valid answer; only null means "never actually set," which
+  // shouldn't happen post-wizard but is the safe default for pre-existing
+  // accounts). Seeds computeJobLossRunway's savings figure; editable from
+  // both JobLossHomePanel and JobLossBudgetPanel, persisted via eager save —
+  // NOT session-only like the old draft-only version of this field.
+  jobLossCashOnHand: null,
+  // Pending/final paycheck still owed from the lost job (TODO §15.H15) —
+  // optional, skippable in the wizard (unlike cash on hand). Resolved once at
+  // Activate time from "days worked in your final week" + "which day checks
+  // normally arrive" into a concrete estimated amount + date, not re-derived
+  // later — same resolve-to-a-concrete-value pattern as expense dueDateAnchor.
+  // null = no pending check expected (or the step was skipped).
+  jobLossPendingCheckAmount: null,
+  jobLossPendingCheckDate: null,  // "YYYY-MM-DD"
 
   // Unemployment benefits (TODO §15.C2) — captured in the Job Loss entry flow.
   // null = unanswered (pre-entry); true/false once the user has set them.
@@ -129,6 +144,11 @@ export const DEFAULT_CONFIG = {
   targetIncomeAnnual: null,
   returnToWorkDate: null,
   jobApplications: [],
+  // Job Loss Home's "log extra income" widget (TODO §15 mode rebuild) — cash
+  // made while job hunting (gig work, odd jobs), stored inline on config same
+  // as jobApplications above. Summed into the runway calc's savings side.
+  // Each entry: { id, amount, note, loggedAt }.
+  jobHuntIncomeLog: [],
 
   // ── Tax rates — generalized (wizard-derived) ─────────────────
   // These replace the old w1/w2 naming which was DHL-specific.

@@ -16,44 +16,49 @@ vi.mock('../../lib/supabase.js', () => ({
   getCachedAuthSnapshot: vi.fn().mockReturnValue({ accessToken: 'tok-123', userId: 'test-user-id' }),
 }))
 
-import { getCachedAuthSnapshot, supabase } from '../../lib/supabase.js'
+import { getCachedAuthSnapshot, getCurrentUserId, supabase } from '../../lib/supabase.js'
 import { loadUserData, saveUserData, syncUserProfile, saveConfigSnapshot, fetchConfigHistoryMeta, flushUserDataKeepalive } from '../../lib/db.js'
 
 // ─────────────────────────────────────────────────────────────
 // Mock helpers
 // ─────────────────────────────────────────────────────────────
 
+/** account_history's query chain (.select().eq().order()) — distinct shape from
+ * the .single()-based user_data/investor_users chains below, so every
+ * setupLoad* helper must branch on table name rather than using one blanket
+ * mockReturnValue (added for TODO §15.D / §19's baseRate-history fetch). */
+function historyChain(historyRows) {
+  return {
+    select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        order: vi.fn().mockResolvedValue({ data: historyRows, error: null }),
+      }),
+    }),
+  }
+}
+
 /** Wire up loadUserData's three .single() calls with controlled responses. */
-function setupLoadMock(mainRowData, wcRowData = { week_confirmations: {} }, subRowData = {}) {
+function setupLoadMock(mainRowData, wcRowData = { week_confirmations: {} }, subRowData = {}, historyRows = []) {
   const single = vi.fn()
     .mockResolvedValueOnce({ data: mainRowData, error: null })
     .mockResolvedValueOnce({ data: wcRowData, error: null })
     .mockResolvedValueOnce({ data: subRowData, error: null })
-  supabase.from.mockReturnValue({
-    select: vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({ single }),
-    }),
-  })
+  const userDataChain = { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single }) }) }
+  supabase.from.mockImplementation((table) => table === 'account_history' ? historyChain(historyRows) : userDataChain)
 }
 
 /** Wire up loadUserData to simulate a genuinely missing row (PGRST116 — .single() matched 0 rows). */
 function setupLoadNoRow() {
   const single = vi.fn().mockResolvedValue({ data: null, error: { message: 'no rows', code: 'PGRST116' } })
-  supabase.from.mockReturnValue({
-    select: vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({ single }),
-    }),
-  })
+  const userDataChain = { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single }) }) }
+  supabase.from.mockImplementation((table) => table === 'account_history' ? historyChain([]) : userDataChain)
 }
 
 /** Wire up loadUserData to simulate a transient/non-missing-row query failure. */
 function setupLoadTransientError() {
   const single = vi.fn().mockResolvedValue({ data: null, error: { message: 'Connection refused' } })
-  supabase.from.mockReturnValue({
-    select: vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({ single }),
-    }),
-  })
+  const userDataChain = { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single }) }) }
+  supabase.from.mockImplementation((table) => table === 'account_history' ? historyChain([]) : userDataChain)
 }
 
 /** Minimal valid row for loadUserData — passes all guard clauses without triggering migrations. */
@@ -500,6 +505,61 @@ describe('loadUserData — misc fields', () => {
   })
 })
 
+describe('loadUserData — baseRate history (TODO §15.D / §19 narrow slice)', () => {
+  it('defaults baseRateHistory to [] when account_history has no rows', async () => {
+    setupLoadMock(makeRow())
+    const result = await loadUserData()
+    expect(result.baseRateHistory).toEqual([])
+  })
+
+  it('maps qualifying account_history rows to { effectiveFrom, baseRate }', async () => {
+    const rows = [
+      { effective_from: '2026-01-05', changed_fields: ['baseRate', 'otThreshold'], snapshot: { baseRate: 20 } },
+      { effective_from: '2026-07-20', changed_fields: ['baseRate'], snapshot: { baseRate: 24.5 } },
+    ]
+    setupLoadMock(makeRow(), undefined, undefined, rows)
+    const result = await loadUserData()
+    expect(result.baseRateHistory).toEqual([
+      { effectiveFrom: '2026-01-05', baseRate: 20 },
+      { effectiveFrom: '2026-07-20', baseRate: 24.5 },
+    ])
+  })
+
+  it('excludes rows whose changed_fields does not include baseRate', async () => {
+    const rows = [{ effective_from: '2026-03-01', changed_fields: ['stateRateLow'], snapshot: { baseRate: 20, stateRateLow: 0.05 } }]
+    setupLoadMock(makeRow(), undefined, undefined, rows)
+    const result = await loadUserData()
+    expect(result.baseRateHistory).toEqual([])
+  })
+
+  it('skips a row missing a numeric baseRate in its snapshot rather than injecting a bad entry', async () => {
+    const rows = [{ effective_from: '2026-03-01', changed_fields: ['baseRate'], snapshot: {} }]
+    setupLoadMock(makeRow(), undefined, undefined, rows)
+    const result = await loadUserData()
+    expect(result.baseRateHistory).toEqual([])
+  })
+
+  it('defaults to [] on a missing-table/query error (migration 020 not yet run)', async () => {
+    // historyChain always resolves cleanly in these mocks; this documents the
+    // equivalent real-world case since db.js reads `historyRows` via plain
+    // destructuring with no error branch — an errored query yields
+    // historyRows === undefined, and extractBaseRateHistory(undefined) is []
+    // by construction, same tolerance pattern as week_confirmations.
+    supabase.from.mockImplementation((table) => {
+      if (table === 'account_history') {
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ order: vi.fn().mockResolvedValue({ data: undefined, error: { message: 'relation "account_history" does not exist' } }) }) }) }
+      }
+      const single = vi.fn()
+        .mockResolvedValueOnce({ data: makeRow(), error: null })
+        .mockResolvedValueOnce({ data: { week_confirmations: {} }, error: null })
+        .mockResolvedValueOnce({ data: {}, error: null })
+      return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ single }) }) }
+    })
+    const result = await loadUserData()
+    expect(result.baseRateHistory).toEqual([])
+  })
+})
+
 describe('loadUserData — subscription mapping (migration 017)', () => {
   it('maps subscription columns from the third Supabase query', async () => {
     const subRow = {
@@ -627,6 +687,36 @@ describe('saveUserData', () => {
 
     expect(consoleSpy).toHaveBeenCalledWith('Failed to save user data:', 'Connection refused')
     consoleSpy.mockRestore()
+  })
+
+  // App.jsx's eager-save helper (savePersistedStateNow) awaits this return
+  // value to decide whether to surface a SaveFailedBanner (with the real
+  // error text) and schedule a retry — must accurately reflect success/
+  // failure and the real message, not just log-and-swallow.
+  it('resolves { ok: true, message: null } on a successful upsert', async () => {
+    supabase.from.mockReturnValue({ upsert: vi.fn().mockResolvedValue({ error: null }) })
+    await expect(saveUserData({
+      config: DEFAULT_CONFIG,
+      expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
+    })).resolves.toEqual({ ok: true, message: null })
+  })
+
+  it('resolves { ok: false, message } on a failed upsert', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    supabase.from.mockReturnValue({ upsert: vi.fn().mockResolvedValue({ error: { message: 'Connection refused' } }) })
+    await expect(saveUserData({
+      config: DEFAULT_CONFIG,
+      expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
+    })).resolves.toEqual({ ok: false, message: 'Connection refused' })
+    consoleSpy.mockRestore()
+  })
+
+  it('resolves { ok: false } when unauthenticated (no userId)', async () => {
+    getCurrentUserId.mockResolvedValueOnce(null)
+    await expect(saveUserData({
+      config: DEFAULT_CONFIG,
+      expenses: [], goals: [], logs: [], showExtra: true, weekConfirmations: {},
+    })).resolves.toEqual({ ok: false, message: 'Not signed in' })
   })
 })
 

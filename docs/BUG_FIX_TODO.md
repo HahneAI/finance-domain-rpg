@@ -1,11 +1,67 @@
 # Bug Fix To-Do
 
+**Repurposed 2026-07-19:** this file is now the standing **bug intake for Drift App
+Warden passes** (`docs/drift-app-warden.md` — see its "Findings offload" section).
+Every open code defect a drift pass surfaces gets one entry here; the warden doc keeps
+the full analysis, this file is the work queue. Entries link back to their warden
+section rather than duplicating the write-up.
+
+> Status legend: ✅ confirmed by code reading · 🔶 suspect, needs live-data confirmation
+
+---
+
+## Open — Drift Warden findings
+
+| # | Finding | Where | Severity / blast radius | Warden entry |
+|---|---------|-------|------------------------|--------------|
+| DW-2 | ✅ **`taxDerived` memo has a stale dep under admin Lock Date.** The memo uses `effectiveToday` (`:1127`, past/future split for tax-status override remediation) but its dep array (`:1170`) lists only `today`; separately `:1148` (`remainingTaxedChecks`) uses real `today` outright. Setting/changing Lock Date doesn't recompute the remediation split until an unrelated dep moves, and "remaining taxed checks" ignores the lock entirely. Fix: add `effectiveToday` to deps + owner decision on whether `:1148` should honor the lock. | `App.jsx:1122–1170` | Admin-only · weakens the Lock Date tool's simulation promise | `drift-app-warden.md` §9.4 finding 1 (T3 pass) |
+| DW-4 | ✅ **Dead-code cleanup pass (owner-scheduled).** `BenefitsPanel.jsx` (553 lines) is confirmed dead: imported by no module, no nav entry, orphaned for the repo's entire visible history — yet it still receives blanket-sweep edits and even gained coverage tests in the July test pass (`12f5441`), so it actively costs maintenance and can mislead a future change into "fixing" unshipped code. Scope for the pass: delete `BenefitsPanel.jsx` + its coverage tests, and sweep for any other orphaned modules/exports the same way (import-graph check, not filename guesswork) so the whole class is cleared in one investigation rather than file-by-file. | `src/components/BenefitsPanel.jsx` (+ tests) | Dead code · no runtime impact, real maintenance/drift cost | `drift-app-warden.md` §11 (T5 redefinition record); CLAUDE.md Known Cleanup |
+| DW-5 | ✅ **Log Effect Summary re-derives adjusted take-home in parallel with App.** `LogPanel.jsx:72–84` reduces over `calcEventImpact(e, config)` **without `weekMeta`** (falls back to rotation-string matching + `projectedGross` approximation) and counts events App's `totalNetAdjustment` excludes (no finite `weekIdx`), while Income/Home display App's weekMeta-aware `logTotals.adjustedTakeHome` — the Log tab and Income Year Summary can disagree on the same account. The admin per-entry breakdown (`:644`) shares the weekMeta-less caveat. Fix: thread `logTotals` down like the 401k aggregates already are (`App.jsx:1581–1585`), and pass a weekMeta resolver to the per-entry breakdown. | `LogPanel.jsx:72–84`, `:644` vs `App.jsx:1075–1119` | D1 · any account with logged events on high/low weeks | `drift-app-warden.md` §13.4 finding 1 (T6 pass) |
+
+---
+
+## Fixed — Drift Warden findings
+
+| # | Finding | Where | Severity / blast radius | Fix |
+|---|---------|-------|------------------------|-----|
+| DW-1 | **Quick Rate Update didn't eager-save the live rate.** `onActivate` set `config.baseRate` via bare `setConfig` — no `savePersistedStateNow` — so the live rate rode the 800ms debounce. The `account_history` row + optimistic `baseRateHistory` append were already safe, so week math survived a lost write after reload, but live `config.baseRate` (ProfilePanel display, wizard previews) could silently revert. | `App.jsx` — `RateUpdateModal.onActivate` | Soft-D3 · any user running Quick Rate Update on mobile | Mirrors `JobLossEntry.onActivate`'s compute-then-eager-save shape immediately above it: computes `nextConfig` synchronously, calls `setConfig(nextConfig)` then `savePersistedStateNow({ config: nextConfig })` in the same handler. `drift-app-warden.md` §7.4 finding 1 (T1 pass) |
+| DW-3 | **Reopen Last Check-In didn't eager-save its deletes.** Dropping the confirmation record + its spawned log entry used bare functional `setState`s — the one Delete-shaped action on the Income surface violating the CLAUDE.md eager-save rule. Worst case was mild (admin-only; a lost delete resurrects a valid confirmation). | `App.jsx` — `handleReopenLastCheckIn` | Soft-D3 · admin-only | `handleReopenLastCheckIn` now computes `nextLogs`/`nextWeekConfirmations` synchronously and calls `savePersistedStateNow({ weekConfirmations: nextWeekConfirmations, logs: nextLogs })` alongside the `setState`s. `drift-app-warden.md` §9.4 finding 2 (T3 pass) |
+| DW-6 | **`ptoGoal` Save/Clear lacked eager save.** `saveForm` (`LogPanel.jsx`) and Clear were discrete Save/Clear actions but App passed bare `setPtoGoal` — no eager-save wrapper existed for `ptoGoal` anywhere (the CLAUDE.md eager-save table had no `ptoGoal` row; gap in the `764da5b` audit). | `LogPanel.jsx` `saveForm`/Clear · `App.jsx` | D3 · any PTO-tracking user on mobile | Added `onSavePtoGoalNow(next)` prop in App (`savePersistedStateNow({ ptoGoal: next })`), threaded to `LogPanel`, called in both `saveForm` and Clear alongside `setPtoGoal`. CLAUDE.md's eager-save table now has a `ptoGoal` row. Regression-tested in `LogPanel.test.jsx` ("PTO Goal — eager save"; verified it fails on the pre-fix code). `drift-app-warden.md` §13.4 finding 2 (T6 pass) |
+| DW-7 | **Lifecycle cron never fetched `is_tester` — tester exemption was dead in production.** `decideLifecycleAction`'s bypass gate (`api/_lifecycleEngine.js:44`) checks `row.is_admin \|\| row.is_investor \|\| row.is_tester`, but the cron's SELECT (`api/cron-subscription-lifecycle.js:135–137`) fetched only `is_admin, is_investor` — `row.is_tester` was always `undefined`, so a beta tester whose 6-month window lapsed unrenewed would be dunned on the real cadence and, at window+7d, **archived and deleted** by `archiveAndDeleteAccount` — the exact outcome §23/§20 say must never happen. Unit tests passed because they build rows with `is_tester` set directly; the select list sat outside the pure engine's test seam. | `api/cron-subscription-lifecycle.js:135–137` vs `api/_lifecycleEngine.js:44` | **D4 · HIGH** — silent auto-deletion of beta tester accounts ~6 months after flag flip | Added `is_tester` to the SELECT. Added `src/test/api/cronLifecycleSelectColumns.test.js` — a structural regression test that reads the actual string passed to Supabase's `.select()` at runtime and asserts it's a superset of every `row.*` field `_lifecycleEngine.js` reads (verified by reverting the fix locally: the new test fails with `expected ['is_tester'] to deeply equal []`). Kills the whole class (any future field the engine reads but the cron doesn't select), not just this instance. `drift-app-warden.md` §16.1 F86 / §16.4 / §20.1 F112 |
+
+---
+
+## ⚠️ Not bugs — but could use attention
+
+Watch items from Drift Warden passes: nothing here is a live defect, and nothing here
+should be "fixed" casually — each one is either designed-in debt with an owned roadmap
+entry, or a hardening opportunity whose risk is currently fenced. Filed so they're
+visible in the work queue, not just the ledger. `DW-W` numbering keeps them distinct
+from the defect rows above.
+
+| # | Item | Where | Why it's not a bug / what would change that | Warden entry |
+|---|------|-------|---------------------------------------------|--------------|
+| DW-W1 | **Loans D2 zone — history regenerated retroactively.** Every loan edit rebuilds the loan's entire `history` from `loanMeta` (`history: buildLoanHistory(meta)`), so editing terms rewrites past weeks' spend — same root cause as the income engine's flat-config gap. | `BudgetPanel.jsx:1272–1293` · `finance.js:1129` | Designed-in known gap with an owned roadmap entry (`TODO.md` §19's loan follow-up — the plan is an expense-style point-in-time `history[]`). Becomes a defect only if someone adds a consumer that treats regenerated history as past-week truth before §19 ships. | `drift-app-warden.md` §10 F41 + §10.4 |
+| DW-W2 | **`investorcodes` sub-view lacks a route-level gate.** ProfilePanel's `taxplan` route re-checks its gate at the route (`activeSection === "taxplan" && canSeeTaxPlan`); `investorcodes` gates only the admin ListRow — the route itself trusts that `activeSection` can only be set by tapping. | `ProfilePanel.jsx:1944–1946` vs `:1941` | Unexploitable today: `activeSection` is tap-only component state, and InvestorAdminPanel's data calls are RLS-gated server-side. Becomes real the day sub-view state gains any external setter (deep link, restored nav state, URL param) — F45's IF/THEN is the tripwire. Cheap hardening: add `&& isAdmin` to the route for symmetry. | `drift-app-warden.md` §12 F45 + §12.4 |
+| DW-W3 | **`dateToWeekIdx` formula duplicated in `db.js`.** The `startDate`→`firstActiveIdx` load-time sync (`db.js:313–316`) inlines the exact formula of SetupWizard's file-private `dateToWeekIdx` (§7 F1): `ceil((date − FISCAL_YEAR_START)/7)` clamped to `[0,51]`. Two copies of the app's most nuclear derivation. | `db.js:313–316` vs `SetupWizard.jsx:703` | Identical today — becomes D1 the day either copy changes alone. Fix shape: extract one shared helper into `fiscalWeek.js`, import in both. | `drift-app-warden.md` §14 F67 + §14.4 finding 1 (T7 pass) |
+
+---
+
+## ARCHIVED — Expense add/edit defects (2026-06-15/16) — shipped
+
+Everything below is the historical June pass on `monthlyOverrides`/`history`
+reconciliation. **Verified 2026-07-19: the fix shipped** — the pure helpers it
+introduced (`onwardStartMonthKey`, `applyQuarterForward`, `applyAllQuarters`) are live
+in `src/lib/expense.js` with their tests, and the display-anchor fix is in
+`BudgetPanel.jsx`. The only item never formally closed was the optional live-data
+verification on Anthony's account (step 5's `lastEditedAt` cleanup also remains
+vestigial, non-blocking). Kept for the decision record (Decisions 1–3 still govern
+expense-save semantics — do not re-litigate without sign-off).
+
 Tracking expense add/edit defects that surface when acting on the **current**
 fiscal timeline (today = 2026-06-15, Q2). Both reports trace back to how the
 budget panel reconciles two storage layers — `monthlyOverrides` and `history` —
 and how the save/add helpers write to them.
-
-> Status legend: ✅ confirmed by code reading · 🔶 suspect, needs live-data confirmation
 
 ---
 

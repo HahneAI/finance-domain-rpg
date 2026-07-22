@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate } from "./lib/finance.js";
+import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
-import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive } from "./lib/db.js";
+import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear } from "./lib/fiscalWeek.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense } from "./lib/db.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -24,12 +24,14 @@ import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { TrialBanner } from "./components/TrialBanner.jsx";
 import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner.jsx";
+import { SaveFailedBanner } from "./components/SaveFailedBanner.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { Pressable, FoldSwitch } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
 import { JobLossEntry } from "./components/JobLossEntry.jsx";
-import { ExpenseTriage } from "./components/ExpenseTriage.jsx";
-import { JobLossDashboard } from "./components/JobLossDashboard.jsx";
+import { RateUpdateModal } from "./components/RateUpdateModal.jsx";
+import { JobLossHomePanel } from "./components/JobLossHomePanel.jsx";
+import { JobLossBudgetPanel } from "./components/JobLossBudgetPanel.jsx";
 import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
@@ -206,6 +208,11 @@ export default function App() {
   // to LoginScreen so the user sees why they're back at the sign-in form instead of
   // silently landing there with no explanation.
   const [oauthCallbackFailed, setOauthCallbackFailed] = useState(false);
+  // Post-login transition: true for 340ms after a successful sign-in to animate
+  // LoginScreen out and authenticated shell in. During this window, both screens
+  // are rendered with opacity transitions.
+  const [postLoginFade, setPostLoginFade] = useState(false);
+  const prevAuthedUserRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -279,15 +286,29 @@ export default function App() {
   //                        pickupDays, netShiftDelta, eventId } }
   // Keyed by weekIdx (number) so lookup is O(1) in confirmTriggerWeek.
   const [weekConfirmations, setWeekConfirmations] = useState({});
+  // Point-in-time baseRate lookup (TODO §15.D / §19 narrow slice) — sorted-or-not
+  // list of { effectiveFrom, baseRate } fed to buildYear() so a rate change only
+  // recomputes weeks from its effective date forward. See resolveBaseRateForWeek
+  // in lib/finance.js for the resolution algorithm.
+  const [baseRateHistory, setBaseRateHistory] = useState([]);
   // wizardEntry: null=closed, false=first-run, string=re-entry life event
   const [wizardEntry, setWizardEntry] = useState(null);
+  // wizardExiting: true while the wizard card is animating out (180ms foldLiftOut).
+  // Allows the wizard to stay mounted during exit animation, then unmount after.
+  const [wizardExiting, setWizardExiting] = useState(false);
   // Gates TrialExplainerScreen ahead of first-run SetupWizard entry (docs/TODO.md
   // §17). Not persisted — re-prompts on a later session same as wizardEntry
   // itself does until setupComplete flips true.
   const [trialExplainerAcknowledged, setTrialExplainerAcknowledged] = useState(false);
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
   const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
-  const [expenseTriageOpen, setExpenseTriageOpen] = useState(false);
+  const [rateUpdateOpen, setRateUpdateOpen] = useState(false);
+  // TODO §15 mode rebuild — the benefit-scenario toggle (unlike cash on hand,
+  // which is now a real persisted config.jobLossCashOnHand field edited
+  // directly by JobLossHomePanel/JobLossBudgetPanel) stays session-only by
+  // design — lifted here so both panels agree without either owning the
+  // other's state.
+  const [jobLossIncludeBenefits, setJobLossIncludeBenefits] = useState(true);
   // Session-only dismissal so the banner re-appears on every page load,
   // matching the §15.C1 spec ("dismissible but re-shows on reload").
   const [jobLossBannerDismissed, setJobLossBannerDismissed] = useState(false);
@@ -305,6 +326,19 @@ export default function App() {
   }, []);
 
   const currentView = viewStack[viewStack.length - 1];
+
+  // TODO §15 nav restructuring — Income/Log are dropped from the nav entirely
+  // in Job Loss Mode (effectiveBottomNav/effectiveNavItems above), but a user
+  // could already be sitting on one of those tabs the instant jobLossMode
+  // flips true (Back to Work's counterpart already reuses whatever tab was
+  // active, so no redirect needed on exit). Bounce to Home rather than
+  // stranding them on a tab with no way back to it via the nav.
+  useEffect(() => {
+    if (config.jobLossMode && (currentView === "income" || currentView === "log")) {
+      navigateDirect("home");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.jobLossMode]);
   const mainContentRef = useRef(null);
   // Track the actual DOM element in state so useScrollDirection's effect
   // re-runs when the element mounts (first render hits auth gate, so the
@@ -444,6 +478,18 @@ export default function App() {
     });
   }, []);
 
+  // ── Post-login fade animation: detect successful sign-in and animate transition ──
+  // Triggers a 340ms crossfade when authedUser transitions from null to non-null.
+  useEffect(() => {
+    if (prevAuthedUserRef.current === null && authedUser) {
+      // User just signed in: LoginScreen → authenticated shell crossfade
+      setPostLoginFade(true);
+      const timer = setTimeout(() => setPostLoginFade(false), 340);
+      return () => clearTimeout(timer);
+    }
+    prevAuthedUserRef.current = authedUser;
+  }, [authedUser]);
+
   // ── Detect a Google OAuth callback that reached the app but produced no session ──
   // supabase-js only strips `?code=` from the URL after a *successful* PKCE exchange
   // (see GoTrueClient#_getSessionFromURL) and never surfaces the failure through
@@ -489,6 +535,7 @@ export default function App() {
         setExpenses(data.expenses);
         setGoals(data.goals);
         setWeekConfirmations(data.weekConfirmations ?? {});
+        setBaseRateHistory(data.baseRateHistory ?? []);
       }
       setIsEmployerDHL(data.isEmployerDHL);
       setIsAdmin(data.isAdmin);
@@ -623,12 +670,22 @@ export default function App() {
     if (config.isInvestor) return; // investor sandboxes are exempt, matching §17.G
     const changedFields = diffSensitiveFields(prev, config);
     if (changedFields.length === 0) return;
+    const effectiveFrom = meta?.effectiveFrom ?? toLocalIso(new Date());
     saveConfigSnapshot({
       config,
       changedFields,
       source: meta?.source ?? "config_edit",
-      effectiveFrom: meta?.effectiveFrom ?? toLocalIso(new Date()),
+      effectiveFrom,
     });
+    // Optimistic local append (TODO §15.D / §19 narrow slice) — the DB insert above
+    // is fire-and-forget, so without this the just-made change wouldn't affect
+    // buildYear()'s point-in-time resolution until the next full reload. Matters
+    // most for a future-dated effective date: without the local entry, weeks
+    // between today and that future date would incorrectly fall back to the new
+    // live baseRate instead of holding the old one until the chosen date arrives.
+    if (changedFields.includes("baseRate")) {
+      setBaseRateHistory(prev => [...prev, { effectiveFrom, baseRate: config.baseRate }]);
+    }
   }, [config, loading]);
 
   useEffect(() => {
@@ -662,16 +719,68 @@ export default function App() {
     };
   }, [loading]);
 
-  // ── Immediate config save — for ProfilePanel sub-views that need guaranteed persistence ──
-  // Called with the already-computed newConfig so we don't rely on React having flushed setConfig yet.
-  const saveConfigNow = useCallback((newConfig) => {
-    // Attribute the paired setConfig's history snapshot (if any) to a profile
-    // save; ??= keeps a more specific tag (wizard/life event) when one is set.
-    configHistoryMetaRef.current ??= { source: "profile_edit" };
+  // ── Eager save — for actions that represent a completed unit of work
+  // (wizard completion, weekly check-in confirmation, profile edits) rather
+  // than an in-progress edit, so they don't sit exposed in the 800ms debounce
+  // window where a backgrounded/reclaimed mobile tab can lose them.
+  // `overrides` is a partial patch (e.g. { config: newConfig } or
+  // { weekConfirmations: next, logs: newLogs }) merged onto the latest known
+  // full state (latestPersistedStateRef, kept current every render) so the
+  // write is always a complete, consistent row — same shape the debounce
+  // itself writes, just not waiting 800ms to do it.
+  // [saveError]: the real Supabase error message (not a generic guess),
+  // surfaced via SaveFailedBanner so a failed "guaranteed" save isn't
+  // silently invisible — this promise is stronger than the ambient
+  // debounce's, so a failure here needs to be user-visible, unlike the
+  // debounce's console-only failure handling. null = no failure currently shown.
+  const [saveError, setSaveError] = useState(null);
+  const saveRetryTimerRef = useRef(null);
+  const lastFailedOverridesRef = useRef(null);
+
+  const attemptSave = useCallback((overrides) => {
+    const nextState = { ...latestPersistedStateRef.current, ...overrides };
+    latestPersistedStateRef.current = nextState;
+    return saveUserData(nextState).then(({ ok, message }) => {
+      setSaveError(ok ? null : (message || "Unknown error"));
+      lastFailedOverridesRef.current = ok ? null : overrides;
+      return ok;
+    });
+  }, []);
+
+  // Called with the already-computed new value(s) so we don't rely on React
+  // having flushed the paired setState yet. `historySource` mirrors the
+  // config-history attribution saveConfigNow always did — ??= keeps a more
+  // specific tag (wizard/life event) a caller may have already set.
+  const savePersistedStateNow = useCallback((overrides, historySource) => {
+    if (historySource) configHistoryMetaRef.current ??= { source: historySource };
     clearTimeout(saveTimer.current);
+    clearTimeout(saveRetryTimerRef.current);
     pendingSaveRef.current = false;
-    saveUserData({ config: newConfig, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal });
-  }, [expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
+    attemptSave(overrides).then((ok) => {
+      if (!ok) saveRetryTimerRef.current = setTimeout(() => attemptSave(overrides), 3000);
+    });
+  }, [attemptSave]);
+
+  const retryFailedSave = useCallback(() => {
+    if (!lastFailedOverridesRef.current) return;
+    clearTimeout(saveRetryTimerRef.current);
+    attemptSave(lastFailedOverridesRef.current);
+  }, [attemptSave]);
+
+  // Dismiss just hides the banner — it does NOT drop the unsaved data. The
+  // edit already landed in React state (and latestPersistedStateRef) before
+  // the failed save fired, so the very next debounced autosave cycle (any
+  // subsequent state change) will naturally re-attempt persisting the same
+  // value. Re-shows automatically the next time any eager save fails.
+  const dismissSaveError = useCallback(() => setSaveError(null), []);
+
+  useEffect(() => () => clearTimeout(saveRetryTimerRef.current), []);
+
+  // Kept as its own name (many ProfilePanel call sites already use it) —
+  // now a thin wrapper over the general eager-save helper above.
+  const saveConfigNow = useCallback((newConfig) => {
+    savePersistedStateNow({ config: newConfig }, "profile_edit");
+  }, [savePersistedStateNow]);
 
   const handleForcePush = useCallback(async () => {
     clearTimeout(saveTimer.current);
@@ -699,13 +808,14 @@ export default function App() {
       setExpenses(data.expenses);
       setGoals(data.goals);
       setWeekConfirmations(data.weekConfirmations ?? {});
+      setBaseRateHistory(data.baseRateHistory ?? []);
       setPtoGoal(data.ptoGoal);
       setSyncStatus({ op: "pull", ok: true, ts: new Date() });
     } catch {
       setSyncStatus({ op: "pull", ok: false });
     }
     setTimeout(() => setSyncStatus(null), 4000);
-  }, [setConfig, setShowExtra, setLogs, setExpenses, setGoals, setWeekConfirmations, setPtoGoal]);
+  }, [setConfig, setShowExtra, setLogs, setExpenses, setGoals, setWeekConfirmations, setBaseRateHistory, setPtoGoal]);
 
   const handleFetchRow = useCallback(async () => {
     setRowFetching(true);
@@ -756,7 +866,13 @@ export default function App() {
   );
 
   const effectiveBottomNav = useMemo(() => {
-    const items = [...BOTTOM_NAV];
+    // TODO §15 nav restructuring — Income and Log both assume an active pay
+    // structure (projected income, per-paycheck event log) that a Job Loss
+    // Mode account doesn't have. Drop to Home/Budget/Account so nothing in the
+    // nav points at a screen that's misleading or meaningless right now.
+    const items = config.jobLossMode
+      ? BOTTOM_NAV.filter(i => i.key === "home" || i.key === "budget" || i.key === "profile")
+      : [...BOTTOM_NAV];
     // §18 standing constraint: Ask Coach stays isAdmin/isTester-gated until
     // Coach leaves admin-only (docs/TODO.md §18.0 build order).
     if (canAccessAiFeatures({ isAdmin, isTester })) {
@@ -782,7 +898,14 @@ export default function App() {
       });
     }
     return items;
-  }, [isAdmin, isTester]);
+  }, [isAdmin, isTester, config.jobLossMode]);
+
+  // Desktop sidebar counterpart to effectiveBottomNav's Job Loss Mode trim —
+  // same Income/Log exclusion, kept as a separate memo since NAV_ITEMS (unlike
+  // BOTTOM_NAV) never includes "home" as one of its entries.
+  const effectiveNavItems = useMemo(() => (
+    config.jobLossMode ? NAV_ITEMS.filter(i => i.key === "budget" || i.key === "profile") : NAV_ITEMS
+  ), [config.jobLossMode]);
 
   // Diff between in-memory state and what the last fetched DB row contains.
   // Returns array of column names where values diverge.
@@ -813,7 +936,7 @@ export default function App() {
   }, [historyMeta]);
 
   // ── Build year reactively from config ──
-  const allWeeks = useMemo(() => buildYear(config), [config]);
+  const allWeeks = useMemo(() => buildYear(config, baseRateHistory), [config, baseRateHistory]);
 
   // ── Pay period past check ──
   // Determines whether a week's pay period has closed, gating the confirmation modal
@@ -932,17 +1055,15 @@ export default function App() {
   const handleReopenLastCheckIn = useCallback(() => {
     if (reopenableWeekIdx == null) return;
     const record = weekConfirmations[reopenableWeekIdx];
-    if (record?.eventId != null) {
-      setLogs(ls => ls.filter(l => l.id !== record.eventId));
-    }
-    setWeekConfirmations(c => {
-      const next = { ...c };
-      delete next[reopenableWeekIdx];
-      return next;
-    });
+    const nextLogs = record?.eventId != null ? logs.filter(l => l.id !== record.eventId) : logs;
+    const nextWeekConfirmations = { ...weekConfirmations };
+    delete nextWeekConfirmations[reopenableWeekIdx];
+    setLogs(nextLogs);
+    setWeekConfirmations(nextWeekConfirmations);
+    savePersistedStateNow({ weekConfirmations: nextWeekConfirmations, logs: nextLogs });
     setConfirmDismissed(false);  // ensure the modal pops back open
     setToolSheetOpen(false);     // close the admin sheet so the modal is visible
-  }, [reopenableWeekIdx, weekConfirmations]);
+  }, [reopenableWeekIdx, weekConfirmations, logs, savePersistedStateNow]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);
@@ -1070,27 +1191,26 @@ export default function App() {
   const bufferPerWeek = (config.bufferEnabled ?? true)
     ? (config.paycheckBuffer ?? 50) * (checksPerYear / 52)
     : 0;
-  const weeklyIncome = projectedAnnualNet / 52 - bufferPerWeek;
+  // weeklyIncome is meant to read as "what a typical active week nets you" —
+  // dividing by a flat 52 instead of the weeks actually active this fiscal
+  // year silently diluted it by every inactive week before firstActiveIdx.
+  // For a brand-new or just-reactivated (Back to Work) account that's most
+  // of the year, so the "typical week" figure came out a fraction of a real
+  // paycheck (TODO §15 Job Loss Mode investigation, 2026-07-19). For a
+  // full-year account (firstActiveIdx 0) this is byte-identical to /52.
+  const activeWeeksThisYear = resolveActiveWeeksThisYear(config.firstActiveIdx);
+  const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - bufferPerWeek;
 
   // ── Previous week's actual paycheck (what you'll receive this payday) ──
   // Shows the specific prior week's computeNet (high vs low week), not an annual
   // average. Adjusted for any event log entries confirmed for that week
-  // (e.g. missed shifts logged via WeekConfirmModal). Falls back to weeklyIncome
-  // average when no past weeks exist (first week of fiscal year).
-  const prevWeekNet = useMemo(() => {
-    const pastWeeks = allWeeks.filter(w => w.active && toLocalIso(w.weekEnd) < effectiveToday);
-    if (!pastWeeks.length) return weeklyIncome;
-    const prevWeek = pastWeeks[pastWeeks.length - 1];
-    const baseNet = computeNet(prevWeek, config, taxDerived.extraPerCheck, showExtra) - bufferPerWeek;
-    // Apply any confirmed event log adjustments specific to this week
-    const weekAdjustment = logs
-      .filter(e => e.weekIdx === prevWeek.idx)
-      .reduce((sum, e) => {
-        const impact = calcEventImpact(e, config, prevWeek);
-        return sum + impact.netGained - impact.netLost;
-      }, 0);
-    return baseNet + weekAdjustment;
-  }, [allWeeks, effectiveToday, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs]);
+  // (e.g. missed shifts logged via WeekConfirmModal). Falls back to the current
+  // active week's real net (not the diluted weeklyIncome average) when there's
+  // no past active week yet — see resolvePrevWeekNet's doc comment.
+  const prevWeekNet = useMemo(() => resolvePrevWeekNet({
+    allWeeks, todayIso: effectiveToday, config, extraPerCheck: taxDerived.extraPerCheck,
+    showExtra, bufferPerWeek, weeklyIncome, logs, currentWeek,
+  }), [allWeeks, effectiveToday, config, taxDerived, showExtra, bufferPerWeek, weeklyIncome, logs, currentWeek]);
 
   const weekNetLookup = useMemo(() => {
     const adjustments = eventImpact.weeklyNetAdjustments || {};
@@ -1179,6 +1299,17 @@ export default function App() {
   // ─────────────────────────────────────────────────────────────────────────────────
   const futureEventDeductions = eventImpact.futureEventDeductionsByWeek;
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SetupWizard exit animation — triggers fold-lift exit, waits 180ms, then unmounts
+  // ─────────────────────────────────────────────────────────────────────────────
+  function closeWizardWithAnimation() {
+    setWizardExiting(true);
+    setTimeout(() => {
+      setWizardEntry(null);
+      setWizardExiting(false);
+    }, 180);
+  }
+
   function handleWizardComplete(mergedConfig) {
     // §19: wizard flows are the one path that passes an explicit effective date
     // (the job start / change date anchor); plain edits default to today.
@@ -1186,8 +1317,70 @@ export default function App() {
       source: wizardEntry === false ? "setup_wizard" : `life_event:${wizardEntry}`,
       effectiveFrom: mergedConfig.startDate ?? undefined,
     };
-    setConfig(mergedConfig);
-    setWizardEntry(null);
+    // §15.H4: Back to Work's structure_change flow is how a jobless-started user
+    // first fills in real pay structure. Clear the flag on success so future Life
+    // Events (and the §15.H5 banner copy) stop treating this as a no-prior-history
+    // account — otherwise a later job loss would incorrectly show the "no prior pay
+    // history" banner even though real pay data exists now.
+    const finalConfig = (wizardEntry === "structure_change" && mergedConfig.startedUnemployed === true)
+      ? { ...mergedConfig, startedUnemployed: false }
+      : mergedConfig;
+    setConfig(finalConfig);
+    closeWizardWithAnimation();
+    // §15.H3: a first-run signup that ended in Job Loss Mode skipped the Deductions/
+    // Tax steps entirely and has no real income yet — defer the pinned Food default
+    // to the user's first expense-triage pass instead of seeding it unseen. Passed
+    // into the save overrides directly (not a separate setExpenses call) so the
+    // eager save below doesn't race React's not-yet-flushed state — same pattern
+    // savePersistedStateNow's own doc comment calls out.
+    const skipFoodSeed = wizardEntry === false && finalConfig.jobLossMode === true;
+    if (skipFoodSeed) setExpenses([]);
+    // §15.H4: the reverse of the skip above — Back to Work is exactly when a
+    // jobless-started account gets real income again, so the mandatory Food
+    // expense (the only real mandatory expense that exists today — §25's planned
+    // Rent expense isn't built yet) needs to come back. ensureInitialFoodExpense
+    // is a no-op if the user already has one (e.g. added manually via Triage).
+    const restoredExpenses = (wizardEntry === "structure_change" && mergedConfig.startedUnemployed === true)
+      ? ensureInitialFoodExpense(expenses)
+      : null;
+    if (restoredExpenses) setExpenses(restoredExpenses);
+    // Eager save — a completed wizard run is the single most expensive thing
+    // to lose to a backgrounded/reclaimed mobile tab; don't leave it sitting
+    // in the 800ms debounce window. configHistoryMetaRef is already set above.
+    savePersistedStateNow({
+      config: finalConfig,
+      ...(skipFoodSeed ? { expenses: [] } : {}),
+      ...(restoredExpenses ? { expenses: restoredExpenses } : {}),
+    });
+  }
+
+  // TODO §15 nav/panel restructuring — shared by the Job Loss banner's "Back to
+  // Work" button and the new Account panel entry point (setup wizard rewrite,
+  // 2026-07-18), so there's exactly one place that resets the job-loss fields.
+  function handleBackToWork() {
+    // Auto-reactivate flagged expenses on exit (§15.C3).
+    setExpenses(prev => prev.map(exp => {
+      const status = exp.jobLossStatus ?? "active";
+      const auto = exp.autoReactivateOnIncome ?? true;
+      if (status !== "active" && auto) {
+        return { ...exp, jobLossStatus: "active" };
+      }
+      return exp;
+    }));
+    setConfig(prev => ({
+      ...prev,
+      jobLossMode: false,
+      jobLossDate: null,
+      unemploymentEnabled: null,
+      unemploymentWeekly: null,
+      unemploymentDurationWeeks: null,
+      unemploymentWaitingWeek: false,
+      // §15.C6: projected return date is moot once they're actually
+      // re-employed via the wizard. Job application log stays as
+      // user history.
+      returnToWorkDate: null,
+    }));
+    setWizardEntry("structure_change");
   }
 
   function handleSelectInvestorAccount(n) {
@@ -1231,17 +1424,6 @@ export default function App() {
     );
   }
 
-  // No valid session — show login / create account screen.
-  if (!authedUser) {
-    return (
-      <LoginScreen
-        onInvestorVerified={code => setInvestorSession({ code })}
-        oauthCallbackFailed={oauthCallbackFailed}
-        onOauthRetry={() => setOauthCallbackFailed(false)}
-      />
-    );
-  }
-
   // Supabase PASSWORD_RECOVERY event — user clicked a reset link, show set-new-password form.
   if (pendingPasswordReset) {
     return <LoginScreen recoveryMode onRecoveryDone={() => setPendingPasswordReset(false)} />;
@@ -1251,6 +1433,17 @@ export default function App() {
   // successful revival charge (subscription active → effect above) clears this.
   if (revivalInfo) {
     return <ReviveScreen revival={revivalInfo} checkoutReturn={checkoutReturn} />;
+  }
+
+  // No valid session — show login / create account screen (unless in post-login fade).
+  if (!authedUser && !postLoginFade) {
+    return (
+      <LoginScreen
+        onInvestorVerified={code => setInvestorSession({ code })}
+        oauthCallbackFailed={oauthCallbackFailed}
+        onOauthRetry={() => setOauthCallbackFailed(false)}
+      />
+    );
   }
 
   if (loading) {
@@ -1284,32 +1477,46 @@ export default function App() {
 
   const activePanel = (
     <>
-      {currentView === "home" && <HomePanel
-        navigate={navigate}
-        onLocalSignOut={handleLocalSignOut}
-        weeklyIncome={weeklyIncome}
-        adjustedTakeHome={logTotals.adjustedTakeHome}
-        remainingSpend={remainingSpend}
-        goals={goals}
-        setGoals={setGoals}
-        setConfig={setConfig}
-        futureWeeks={futureWeeks}
-        futureWeekNets={futureWeekNets}
-        timelineWeekNets={futureWeekNetsRaw}
-        expenses={expenses}
-        config={config}
-        logNetLost={logTotals.netLost}
-        logNetGained={logTotals.netGained}
-        futureEventDeductions={futureEventDeductions}
-        prevWeekNet={prevWeekNet}
-        currentWeek={currentWeek}
-        fiscalWeekInfo={currentWeekNumber}
-        today={effectiveToday}
-        fundedGoalSpend={fundedGoalSpend}
-        isAdmin={isAdmin}
-        isTester={isTester}
-        readOnly={isExpiredReadOnly}
-      />}
+      {currentView === "home" && (config.jobLossMode ? (
+        <JobLossHomePanel
+          config={config}
+          setConfig={setConfig}
+          saveConfigNow={saveConfigNow}
+          expenses={expenses}
+          effectiveToday={effectiveToday}
+          includeBenefits={jobLossIncludeBenefits}
+          readOnly={isExpiredReadOnly}
+        />
+      ) : (
+        <HomePanel
+          navigate={navigate}
+          onLocalSignOut={handleLocalSignOut}
+          weeklyIncome={weeklyIncome}
+          adjustedTakeHome={logTotals.adjustedTakeHome}
+          remainingSpend={remainingSpend}
+          goals={goals}
+          setGoals={setGoals}
+          onSaveGoalsNow={(newGoals) => savePersistedStateNow({ goals: newGoals })}
+          setConfig={setConfig}
+          saveConfigNow={saveConfigNow}
+          futureWeeks={futureWeeks}
+          futureWeekNets={futureWeekNets}
+          timelineWeekNets={futureWeekNetsRaw}
+          expenses={expenses}
+          config={config}
+          logNetLost={logTotals.netLost}
+          logNetGained={logTotals.netGained}
+          futureEventDeductions={futureEventDeductions}
+          prevWeekNet={prevWeekNet}
+          currentWeek={currentWeek}
+          fiscalWeekInfo={currentWeekNumber}
+          today={effectiveToday}
+          fundedGoalSpend={fundedGoalSpend}
+          isAdmin={isAdmin}
+          isTester={isTester}
+          readOnly={isExpiredReadOnly}
+        />
+      ))}
       {currentView === "income" && (isExpiredReadOnly ? <UpgradePanel tab="income" /> : <IncomePanel
         allWeeks={allWeeks} config={config} setConfig={setConfig}
         showExtra={showExtra} setShowExtra={setShowExtra}
@@ -1322,29 +1529,47 @@ export default function App() {
         today={effectiveToday}
         weekNetLookup={weekNetLookup}
         onWeekInspect={isAdmin ? setInspectedWeek : null}
+        saveConfigNow={saveConfigNow}
       />)}
-      {currentView === "budget" && <BudgetPanel
-        expenses={expenses} setExpenses={setExpenses}
-        weeklyIncome={weeklyIncome}
-        prevWeekNet={prevWeekNet}
-        futureWeeks={futureWeeks}
-        futureWeekNets={futureWeekNets}
-        currentWeek={currentWeek}
-        fiscalWeekInfo={currentWeekNumber}
-        today={effectiveToday}
-        userPaySchedule={config.userPaySchedule ?? "weekly"}
-        fundedGoalSpend={fundedGoalSpend}
-        config={config}
-        bufferPerWeek={bufferPerWeek}
-        isAdmin={isAdmin}
-        taxProjectionsEnabled={taxProjectionsEnabled}
-        isTester={isTester}
-        readOnly={isExpiredReadOnly}
-      />}
+      {currentView === "budget" && (config.jobLossMode ? (
+        <JobLossBudgetPanel
+          config={config}
+          setConfig={setConfig}
+          saveConfigNow={saveConfigNow}
+          expenses={expenses}
+          setExpenses={setExpenses}
+          onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
+          effectiveToday={effectiveToday}
+          includeBenefits={jobLossIncludeBenefits}
+          setIncludeBenefits={setJobLossIncludeBenefits}
+          readOnly={isExpiredReadOnly}
+        />
+      ) : (
+        <BudgetPanel
+          expenses={expenses} setExpenses={setExpenses}
+          onSaveExpensesNow={(newExpenses) => savePersistedStateNow({ expenses: newExpenses })}
+          weeklyIncome={weeklyIncome}
+          prevWeekNet={prevWeekNet}
+          futureWeeks={futureWeeks}
+          futureWeekNets={futureWeekNets}
+          currentWeek={currentWeek}
+          fiscalWeekInfo={currentWeekNumber}
+          today={effectiveToday}
+          userPaySchedule={config.userPaySchedule ?? "weekly"}
+          fundedGoalSpend={fundedGoalSpend}
+          config={config}
+          bufferPerWeek={bufferPerWeek}
+          isAdmin={isAdmin}
+          taxProjectionsEnabled={taxProjectionsEnabled}
+          isTester={isTester}
+          readOnly={isExpiredReadOnly}
+        />
+      ))}
       {currentView === "log" && (isExpiredReadOnly ? <UpgradePanel tab="log" /> : <LogPanel
         logs={logs} setLogs={setLogs} config={config} isEmployerDHL={isEmployerDHL} isAdmin={isAdmin}
+        onSaveLogsNow={(newLogs) => savePersistedStateNow({ logs: newLogs })}
         effectiveToday={effectiveToday}
-        setConfig={setConfig} weekConfirmations={weekConfirmations}
+        setConfig={setConfig} saveConfigNow={saveConfigNow} weekConfirmations={weekConfirmations}
         projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}
@@ -1358,6 +1583,7 @@ export default function App() {
         logPTOHoursLost={logTotals.ptoHoursLost}
         ptoGoal={ptoGoal}
         setPtoGoal={setPtoGoal}
+        onSavePtoGoalNow={(next) => savePersistedStateNow({ ptoGoal: next })}
         goals={goals}
         fundedGoalSpend={fundedGoalSpend}
         bucketModel={bucketModel}
@@ -1379,12 +1605,15 @@ export default function App() {
         weekConfirmations={weekConfirmations}
         onInstallClick={isStandalone ? null : openPwaModal}
         onOpenLifeEvents={() => setLifeEventMenu(true)}
+        onBackToWork={handleBackToWork}
         subscription={subscription}
       />}
     </>
   );
 
-  return (
+  // Post-login fade animation: render both LoginScreen (fading out) and App shell
+  // (fading in) during the 340ms transition. After fade completes, render only shell.
+  const shellContent = (
       <div className="app-shell" style={{ background: "var(--color-bg-gradient)", minHeight: "100vh", color: "var(--color-text-primary)", display: "flex" }}>
         <style>{`
           /* DEBUG: redundant overflow guard — index.css sets this on html/body/#root
@@ -1570,7 +1799,7 @@ export default function App() {
         </div>
         <nav style={{ marginTop: "8px", flex: 1 }}>
           <SidebarNavItem item={{ key: "home", label: "Home" }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
-          {NAV_ITEMS.map(item => (
+          {effectiveNavItems.map(item => (
             <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
           {/* ── Life Events (re-entry wizard) ── */}
@@ -1949,6 +2178,7 @@ export default function App() {
               onDismiss={() => setUpdateBannerDismissed(true)}
             />
           )}
+          {saveError && <SaveFailedBanner message={saveError} onRetry={retryFailedSave} onDismiss={dismissSaveError} />}
           {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
           {config.jobLossMode && !jobLossBannerDismissed && (() => {
             // Compute benefits-end date when duration is set, so the banner can
@@ -1983,11 +2213,19 @@ export default function App() {
                   Job Loss Mode
                 </div>
                 <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
-                  Projections show $0 earned income from{" "}
-                  <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>
-                    {config.jobLossDate ?? "—"}
-                  </span>{" "}
-                  forward.
+                  {/* §15.H5: users who started jobless have no real pay history to compare
+                      against — say so plainly instead of implying a job was actually lost. */}
+                  {config.startedUnemployed === true ? (
+                    "Started in Job Loss Mode — no prior pay history."
+                  ) : (
+                    <>
+                      Projections show $0 earned income from{" "}
+                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>
+                        {config.jobLossDate ?? "—"}
+                      </span>{" "}
+                      forward.
+                    </>
+                  )}
                   {benefitsEndDate && (
                     <>
                       {" "}Unemployment runs out on{" "}
@@ -2000,8 +2238,11 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {/* TODO §15 mode rebuild — triage now lives inline on Budget
+                    itself (JobLossBudgetPanel), not a separate modal, so this
+                    button just jumps there instead of opening one. */}
                 <Pressable
-                  onClick={() => setExpenseTriageOpen(true)}
+                  onClick={() => navigateDirect("budget")}
                   style={{
                     background: "transparent",
                     color: "var(--color-warning)",
@@ -2012,34 +2253,10 @@ export default function App() {
                     fontWeight: 700, cursor: "pointer",
                   }}
                 >
-                  Triage Expenses
+                  Go to Budget
                 </Pressable>
                 <Pressable
-                  onClick={() => {
-                    // Auto-reactivate flagged expenses on exit (§15.C3).
-                    setExpenses(prev => prev.map(exp => {
-                      const status = exp.jobLossStatus ?? "active";
-                      const auto = exp.autoReactivateOnIncome ?? true;
-                      if (status !== "active" && auto) {
-                        return { ...exp, jobLossStatus: "active" };
-                      }
-                      return exp;
-                    }));
-                    setConfig(prev => ({
-                      ...prev,
-                      jobLossMode: false,
-                      jobLossDate: null,
-                      unemploymentEnabled: null,
-                      unemploymentWeekly: null,
-                      unemploymentDurationWeeks: null,
-                      unemploymentWaitingWeek: false,
-                      // §15.C6: projected return date is moot once they're actually
-                      // re-employed via the wizard. Job application log stays as
-                      // user history.
-                      returnToWorkDate: null,
-                    }));
-                    setWizardEntry("structure_change");
-                  }}
+                  onClick={handleBackToWork}
                   style={{
                     background: "var(--color-warning)",
                     color: "var(--color-bg-base)",
@@ -2072,15 +2289,10 @@ export default function App() {
             </div>
             );
           })()}
-          {/* ── Job Loss Dashboard (TODO §15.C4 + C6) ── */}
-          {config.jobLossMode && (
-            <JobLossDashboard
-              config={config}
-              setConfig={setConfig}
-              expenses={expenses}
-              effectiveToday={effectiveToday}
-            />
-          )}
+          {/* TODO §15 mode rebuild (2026-07-18) — the standalone pinned dashboard
+              card is gone; its content now lives in JobLossHomePanel/
+              JobLossBudgetPanel, which render in place of the normal Home/Budget
+              panels above instead of being layered on top of them. */}
           {isAdmin && adminDemoView !== null
             ? <DemoAccountTree
                 key={adminDemoView}
@@ -2160,7 +2372,7 @@ export default function App() {
         {/* Drawer nav items */}
         <nav style={{ marginTop: "12px", flex: 1 }}>
           <SidebarNavItem item={{ key: "home", label: "Home" }} active={currentView === "home"} onClick={() => navigateDirect("home")} />
-          {NAV_ITEMS.map(item => (
+          {effectiveNavItems.map(item => (
             <SidebarNavItem key={item.key} item={item} active={currentView === item.key} onClick={() => navigateDirect(item.key)} />
           ))}
           {/* ── Life Events (re-entry wizard) ── */}
@@ -3079,43 +3291,53 @@ export default function App() {
             // record so we don't duplicate the log blob in persistence.
             const firstWeek = confirmation.firstWeek ?? null;
             const { firstWeek: _omitFirstWeek, ...payWeekConfirmation } = confirmation;
-            setWeekConfirmations(c => {
-              const next = { ...c, [confirmTriggerWeek.idx]: payWeekConfirmation };
-              if (firstWeek) {
-                // The modal collected the first week explicitly — store its record.
-                next[firstWeek.idx] = firstWeek.confirmation;
-              } else if ((config.userPaySchedule === "biweekly" || config.userPaySchedule === "salary") && confirmTriggerWeek.idx > 0) {
-                // Salary (and biweekly first-period fallback): auto-confirm the
-                // paired non-paycheck week (the one before) as clean.
-                const priorIdx = confirmTriggerWeek.idx - 1;
-                if (!next[priorIdx]) {
-                  const prior = allWeeks.find(w => w.idx === priorIdx);
-                  if (prior?.active) {
-                    next[priorIdx] = {
-                      confirmedAt, autoConfirmed: true, eventId: null,
-                      dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, prior.workedDayNames?.includes(d) ? true : null])),
-                      scheduledDays: prior.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
-                    };
-                  }
+            // Computed synchronously (not a setState updater) so the exact same
+            // value can go to setState AND the eager save below — same pattern
+            // ProfilePanel's saveConfigNow call sites already use.
+            const next = { ...weekConfirmations, [confirmTriggerWeek.idx]: payWeekConfirmation };
+            if (firstWeek) {
+              // The modal collected the first week explicitly — store its record.
+              next[firstWeek.idx] = firstWeek.confirmation;
+            } else if ((config.userPaySchedule === "biweekly" || config.userPaySchedule === "salary") && confirmTriggerWeek.idx > 0) {
+              // Salary (and biweekly first-period fallback): auto-confirm the
+              // paired non-paycheck week (the one before) as clean.
+              const priorIdx = confirmTriggerWeek.idx - 1;
+              if (!next[priorIdx]) {
+                const prior = allWeeks.find(w => w.idx === priorIdx);
+                if (prior?.active) {
+                  next[priorIdx] = {
+                    confirmedAt, autoConfirmed: true, eventId: null,
+                    dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, prior.workedDayNames?.includes(d) ? true : null])),
+                    scheduledDays: prior.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
+                  };
                 }
               }
-              // Monthly: auto-confirm all other weeks in the same month as clean
-              if (config.userPaySchedule === "monthly") {
-                const m = confirmTriggerWeek.weekEnd.getMonth(), y = confirmTriggerWeek.weekEnd.getFullYear();
-                for (const w of allWeeks) {
-                  if (w.active && w.idx !== confirmTriggerWeek.idx && w.weekEnd.getMonth() === m && w.weekEnd.getFullYear() === y && !next[w.idx]) {
-                    next[w.idx] = {
-                      confirmedAt, autoConfirmed: true, eventId: null,
-                      dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, w.workedDayNames?.includes(d) ? true : null])),
-                      scheduledDays: w.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
-                    };
-                  }
+            }
+            // Monthly: auto-confirm all other weeks in the same month as clean
+            if (config.userPaySchedule === "monthly") {
+              const m = confirmTriggerWeek.weekEnd.getMonth(), y = confirmTriggerWeek.weekEnd.getFullYear();
+              for (const w of allWeeks) {
+                if (w.active && w.idx !== confirmTriggerWeek.idx && w.weekEnd.getMonth() === m && w.weekEnd.getFullYear() === y && !next[w.idx]) {
+                  next[w.idx] = {
+                    confirmedAt, autoConfirmed: true, eventId: null,
+                    dayToggles: Object.fromEntries(DAY_NAMES_ORDER.map(d => [d, w.workedDayNames?.includes(d) ? true : null])),
+                    scheduledDays: w.workedDayNames ?? [], missedScheduledDays: [], pickupDays: [], netShiftDelta: 0,
+                  };
                 }
               }
-              return next;
-            });
-            if (logEntry) setLogs(p => [...p, logEntry]);
-            if (firstWeek?.logEntry) setLogs(p => [...p, firstWeek.logEntry]);
+            }
+            const newLogs = [
+              ...logs,
+              ...(logEntry ? [logEntry] : []),
+              ...(firstWeek?.logEntry ? [firstWeek.logEntry] : []),
+            ];
+            setWeekConfirmations(next);
+            setLogs(newLogs);
+            // Eager save — a completed weekly check-in is exactly the kind of
+            // work that shouldn't sit in the 800ms debounce window; a
+            // backgrounded/reclaimed mobile tab before it fires meant the
+            // confirmation was silently lost and the modal popped right back up.
+            savePersistedStateNow({ weekConfirmations: next, logs: newLogs });
           }}
           onDismiss={() => setConfirmDismissed(true)}
         />
@@ -3136,6 +3358,14 @@ export default function App() {
           currentWeek={currentWeek}
           today={effectiveToday}
           logs={logs}
+          futureWeeks={futureWeeks}
+          timelineWeekNets={futureWeekNetsRaw}
+          futureWeekNets={futureWeekNets}
+          logNetLost={logTotals.netLost}
+          logNetGained={logTotals.netGained}
+          futureEventDeductions={futureEventDeductions}
+          prevWeekNet={prevWeekNet}
+          allWeeks={allWeeks}
         />
       )}
 
@@ -3145,6 +3375,7 @@ export default function App() {
         onClose={() => setLifeEventMenu(false)}
         onSelect={(route) => {
           if (route === "job_loss") setJobLossEntryOpen(true);
+          else if (route === "rate_update") setRateUpdateOpen(true);
           else setWizardEntry(route);
         }}
       />
@@ -3152,36 +3383,83 @@ export default function App() {
       <JobLossEntry
         open={jobLossEntryOpen}
         onClose={() => setJobLossEntryOpen(false)}
-        onActivate={(patch) => {
+        expenses={expenses}
+        config={config}
+        onActivate={(patch, updatedExpenses) => {
           configHistoryMetaRef.current = { source: "life_event:lost_job", effectiveFrom: patch.jobLossDate ?? undefined };
-          setConfig(prev => ({ ...prev, ...patch }));
+          const nextConfig = { ...config, ...patch };
+          setConfig(nextConfig);
+          if (updatedExpenses) setExpenses(updatedExpenses);
+          // historySource omitted — configHistoryMetaRef is already set above with the
+          // more specific life_event:lost_job + effectiveFrom pair savePersistedStateNow's
+          // `??=` would otherwise leave untouched anyway.
+          savePersistedStateNow(updatedExpenses ? { config: nextConfig, expenses: updatedExpenses } : { config: nextConfig });
         }}
       />
-      {/* ── Expense triage (TODO §15.C3 + C5 needs-coverage sort) ── */}
-      <ExpenseTriage
-        open={expenseTriageOpen}
-        onClose={() => setExpenseTriageOpen(false)}
-        expenses={expenses}
-        setExpenses={setExpenses}
+      {/* ── Quick Rate Update (TODO §15.D) ── */}
+      <RateUpdateModal
+        open={rateUpdateOpen}
+        onClose={() => setRateUpdateOpen(false)}
         config={config}
-        effectiveToday={effectiveToday}
+        onActivate={(patch) => {
+          configHistoryMetaRef.current = { source: "life_event:rate_update", effectiveFrom: patch.effectiveFrom };
+          const nextConfig = { ...config, baseRate: patch.baseRate };
+          setConfig(nextConfig);
+          // historySource omitted — configHistoryMetaRef is already set above (mirrors
+          // JobLossEntry's onActivate just above).
+          savePersistedStateNow({ config: nextConfig });
+        }}
       />
       {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}
-      {wizardEntry !== null && (
+      {(wizardEntry !== null || wizardExiting) && (
         <SetupWizard
           config={config}
           onComplete={handleWizardComplete}
           onCancel={
             wizardEntry !== false
-              ? () => setWizardEntry(null)
+              ? () => closeWizardWithAnimation()
               : config.isInvestor
-                ? () => { setWizardEntry(null); setActiveInvestorAccount(1); }
+                ? () => { closeWizardWithAnimation(); setActiveInvestorAccount(1); }
                 : undefined
           }
           lifeEvent={wizardEntry === false ? null : wizardEntry}
           isInvestor={config.isInvestor}
+          isExiting={wizardExiting}
         />
       )}
     </div>
   );
+
+  // During post-login fade (340ms after sign-in), render both LoginScreen (fading out)
+  // and authenticated shell (fading in) at the same time for a smooth crossfade.
+  if (postLoginFade) {
+    return (
+      <div style={{ position: "relative" }}>
+        {/* LoginScreen fading out (absolute, behind) */}
+        <div
+          className="fold-lift"
+          data-fold="exiting"
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        >
+          <LoginScreen
+            onInvestorVerified={code => setInvestorSession({ code })}
+            oauthCallbackFailed={oauthCallbackFailed}
+            onOauthRetry={() => setOauthCallbackFailed(false)}
+          />
+        </div>
+        {/* Authenticated shell fading in (relative, in front) */}
+        <div className="fold-lift" data-fold="entering" style={{ position: "relative", zIndex: 1 }}>
+          {shellContent}
+        </div>
+      </div>
+    );
+  }
+
+  // Normal render: either LoginScreen (if not authed) or authenticated shell
+  return shellContent;
 }

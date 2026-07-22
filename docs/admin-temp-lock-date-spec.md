@@ -113,7 +113,7 @@ Lock Date                                      (label, 9px, text-secondary, uppe
 - Divider: `borderTop: "1px solid var(--color-border-subtle)", marginTop: "8px", paddingTop: "8px"`
 - Section label: `fontSize: "10px"`, `letterSpacing: "2px"`, `color: "var(--color-accent-primary)"`, teal left-bar 3px
 - Date input: uses `iS` spread from `ui.jsx`, `type="date"`, `value={tempLockDate ?? ""}`, full width
-- Set button: gold/teal bg, 10px uppercase, disabled if no value in draft
+- Set button: teal/teal bg, 10px uppercase, disabled if no value in draft
 - Clear button: only shown when `tempLockDate` is set; bg-raised, text-secondary, red on hover
 - Local draft state within this section: `dateInputDraft` (string) — follows numeric input standard, no coerce on change
 - On "Set": validate it's a parseable date, call `setTempLockDate(dateInputDraft)`
@@ -186,7 +186,7 @@ shows a live indicator:
 ```
 ⚠ ADMIN TOOLS — LOCKED: Apr 15
 ```
-Color stays teal for the section label; append the date in gold/warning to indicate an
+Color stays teal for the section label; append the date in teal/warning to indicate an
 active override.
 
 This gives a second visible cue inside the drawer itself so the user knows the lock is on

@@ -61,7 +61,7 @@ glance. Much faster than scrolling the Tax Plan list to orient yourself.
 - Teal fill — taxed, future
 - Dark fill — untaxed, future
 - Gray — past (taxed or not)
-- Gold border — current week
+- teal border — current week
 - Red dot — has a `pastWeekTaxStatusOverride`
 
 Cells are display-only for `isAdmin`. Edit capability is owner-only (Phase 2).

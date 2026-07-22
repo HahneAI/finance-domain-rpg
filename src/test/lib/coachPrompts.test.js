@@ -56,6 +56,50 @@ describe("ASK_COACH_SYSTEM_PROMPT", () => {
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/mirror it exactly rather than defaulting to "week" out of habit/i);
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/"paycheck n" or "month n" instead/i);
   });
+
+  // Regression: "Give me a full rundown of my Home panel" produced a
+  // two-screen wall of text — Coach explained what every tile meant *in
+  // addition to* stating it, and that explanatory clause compounded across
+  // seven-plus tiles. Narrow single-metric questions earned that depth in
+  // earlier tests; a broad "everything" question shouldn't repeat it seven
+  // times over.
+  it("instructs compressed treatment for broad multi-topic questions, with narrow questions still getting full explanations", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/do not explain what each metric means or walk every tile in turn/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/invite a follow-up for whatever you didn't cover/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/only a narrow \*scope\* \(one number, one panel\) earns the fuller per-item explanation/i);
+  });
+
+  // Regression: re-tested as "Break down my home panel please" — still a
+  // two-screen wall, because the trigger condition was written as a list of
+  // example phrases ("everything," "full rundown," "how am I doing overall")
+  // that didn't literally include this rephrasing. The condition now keys off
+  // scope (touches most/all tiles) rather than exact wording, and explicitly
+  // overrides the user's own verb ("break down," "explain") when the scope
+  // is still broad.
+  it("keys the broad-question trigger off scope, not exact phrasing, and overrides the user's own verb", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/break down my Home panel/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/this holds even when the user's own wording says "break down," "explain," or "walk me through"/i);
+  });
+
+  // Regression: re-tested "Break down my home panel please" after the
+  // compression fix landed — length was fixed, but the goal timeline mentions
+  // regressed to vague relative phrasing ("in about a week," "around late
+  // December") instead of the paired date/period format required elsewhere.
+  // The compression instruction was silent on precision, so the model traded
+  // it away along with length. Clarify that compression trims tile coverage
+  // and per-item explanation, not date-pairing precision.
+  it("clarifies that broad-answer compression doesn't loosen date-pairing precision", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/not loosening precision on the dates you do state/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/still gets the same full date-pairing treatment as a narrow one/i);
+  });
+
+  // Regression: asked for the most expensive line item, Coach stated Gas
+  // ($85) as the biggest, then mid-message: "Food is actually your highest,
+  // my mistake" — a real comparison slip, made worse by narrating it aloud.
+  it("instructs silent self-correction instead of narrating a caught mistake", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/never narrate the correction to the user/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/"my mistake," "actually, wait"/);
+  });
 });
 
 describe("buildNetWorthSystemPrompt", () => {

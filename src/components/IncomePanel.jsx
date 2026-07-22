@@ -260,7 +260,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
             </div>
             <div style={{ borderTop: "1px solid var(--color-border-subtle)", paddingTop: "8px", display: "flex", justifyContent: "space-between", gap: "8px" }}>
               <span style={{ color: "var(--color-text-secondary)" }}>Adjusted net shown on card</span>
-              <strong style={{ color: "var(--color-gold)" }}>{f(adjustedTakeHome)}</strong>
+              <strong style={{ color: "var(--color-teal)" }}>{f(adjustedTakeHome)}</strong>
             </div>
           </div>
           <div style={{ fontSize: "10px", color: "var(--color-text-disabled)" }}>
@@ -291,11 +291,11 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
         borderRadius: "8px",
       }}>
         <div style={{ fontSize: "11px", color: "var(--color-text-secondary)" }}>
-          Tax rates are <strong style={{ color: "var(--color-gold)" }}>estimated</strong> — net figures are approximate until you confirm from a paystub.
+          Tax rates are <strong style={{ color: "var(--color-teal)" }}>estimated</strong> — net figures are approximate until you confirm from a paystub.
         </div>
         <Pressable onClick={() => setShowSharpener(true)} style={{
           fontSize: "9px", letterSpacing: "2px", textTransform: "uppercase",
-          background: "transparent", color: "var(--color-gold)",
+          background: "transparent", color: "var(--color-teal)",
           border: "1px solid rgba(0,200,150,0.28)", borderRadius: "10px",
           padding: "5px 12px", cursor: "pointer", flexShrink: 0,
         }}>
@@ -351,7 +351,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
                 : `${rollingMonthCards.length} months`}
             </div>
           </div>
-          <Pressable onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-gold)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase", flexShrink: 0 }}>⊞ Full Detail</Pressable>
+          <Pressable onClick={() => setShowWeekDetail(true)} style={{ fontSize: "10px", letterSpacing: "1px", padding: "4px 10px", borderRadius: "12px", cursor: "pointer", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.25)", textTransform: "uppercase", flexShrink: 0 }}>⊞ Full Detail</Pressable>
         </div>
       </div>
 
@@ -373,14 +373,14 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
                 {/* Month header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-gold)" }}>{m.name}</span>
+                    <span style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-teal)" }}>{m.name}</span>
                     {m.isCurrentMonth && <span style={{ fontSize: "8px", color: "var(--color-green)", letterSpacing: "1px" }}>← now</span>}
                   </div>
                   <span style={{
                     fontSize: "9px", padding: "2px 7px", borderRadius: "12px",
                     background: m.ex === m.n ? "#1e4a30" : m.tx === m.n ? "#1e1e3a" : "rgba(0,200,150,0.10)",
-                    color: m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)",
-                    border: "1px solid " + (m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-gold)"),
+                    color: m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-teal)",
+                    border: "1px solid " + (m.ex === m.n ? "var(--color-green)" : m.tx === m.n ? "#7a8bbf" : "var(--color-teal)"),
                   }}>
                     {m.ex === m.n ? "EXEMPT" : m.tx === m.n ? "TAXED" : "MIXED"}
                   </span>
@@ -394,7 +394,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
                   const isPast = toLocalIso(w.weekEnd) < todayIso;
                   const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-accent-primary)" : "var(--color-green)");
                   const rotationDisplay = formatRotationDisplay(w, { isAdmin });
-                  const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-secondary)";
+                  const rotationColor = w.rotation === "6-Day" ? "var(--color-teal)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-secondary)";
                   const displayNet = resolveWeekNet(w) * perCheckFactor;
                   return (
                     <div key={w.idx} style={{ marginBottom: "8px", opacity: isPastMonth ? 1 : (isPast ? 0.65 : 1), cursor: onWeekInspect ? "pointer" : "default" }} onClick={onWeekInspect ? () => onWeekInspect(w) : undefined}>
@@ -438,7 +438,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
         </ScrollSnapRow>
       ) : (
         <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: `${12 * weeklyDensityScale}px` }}>
-          <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+          <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-teal)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
             <th style={{ textAlign: "left", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>{isBiweekly ? "Pay Period End" : "Wk End"}</th>
             <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Gross</th>
             <th style={{ textAlign: "right", padding: "8px 4px", position: "sticky", top: 0, zIndex: 4, background: "var(--color-bg-base)", boxShadow: "0 6px 10px rgba(0,0,0,0.18)" }}>Take Home</th>
@@ -453,7 +453,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
               const displayNet = w.active ? f2(resolveWeekNet(w) * perCheckFactor) : "—";
               const displayGross = w.active ? f2(w.grossPay * perCheckFactor) : "—";
               const rotationDisplay = formatRotationDisplay(w, { isAdmin });
-              const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-disabled)";
+              const rotationColor = w.rotation === "6-Day" ? "var(--color-teal)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-disabled)";
               return (
                 <tr
                   key={w.idx}
@@ -502,11 +502,11 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
     {weekDetailFold.mounted && createPortal(<div className="fold-backdrop" data-fold={weekDetailFold.fold} onClick={() => setShowWeekDetail(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
       <div className="fold-modal" data-fold={weekDetailFold.fold} onClick={e => e.stopPropagation()} style={{ background: "var(--color-bg-surface)", borderRadius: "8px", maxWidth: "860px", width: "100%", maxHeight: "90dvh", display: "flex", flexDirection: "column", overflow: "hidden", padding: "16px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexShrink: 0 }}>
-          <span style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase" }}>{isBiweekly ? "Pay Period Breakdown" : isMonthlyPay ? "Monthly Breakdown" : "Weekly Breakdown"} — Active Window Detail</span>
+          <span style={{ fontSize: "11px", letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase" }}>{isBiweekly ? "Pay Period Breakdown" : isMonthlyPay ? "Monthly Breakdown" : "Weekly Breakdown"} — Active Window Detail</span>
           <Pressable onClick={() => setShowWeekDetail(false)} style={{ background: "transparent", border: "none", color: "var(--color-text-primary)", fontSize: "16px", cursor: "pointer", padding: "4px 8px" }}>✕</Pressable>
         </div>
         <div style={{ overflow: "auto", minHeight: 0, WebkitOverflowScrolling: "touch" }}><table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "680px" }}>
-          <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+          <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-teal)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
             <th style={{ textAlign: "left", padding: "8px 4px" }}>{isBiweekly ? "Period End" : "Wk End"}</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Rot</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Hrs</th><th style={{ textAlign: "center", padding: "8px 4px" }}>OT</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Wknd</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th><th style={{ textAlign: "right", padding: "8px 4px" }}>Take Home</th><th style={{ textAlign: "center", padding: "8px 4px" }}>Status</th>
           </tr></thead>
           <tbody>{(isBiweekly ? weeklyRows.filter(isPaycheckWeek) : weeklyRows).map(w => {
@@ -516,7 +516,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
             const hoverBg = isCurrent ? "#1e3018" : isPast ? "#1a1a1a" : "var(--color-bg-surface)";
             const netColor = isPast ? "var(--color-text-disabled)" : (w.taxedBySchedule ? "var(--color-text-primary)" : "var(--color-green)");
             const rotationDisplay = formatRotationDisplay(w, { isAdmin });
-            const rotationColor = w.rotation === "6-Day" ? "var(--color-gold)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-disabled)";
+            const rotationColor = w.rotation === "6-Day" ? "var(--color-teal)" : w.rotation === "4-Day" ? "#7a8bbf" : "var(--color-text-disabled)";
             return (
               <tr
                 key={w.idx}
@@ -532,7 +532,7 @@ export function IncomePanel({ allWeeks, config, setConfig, saveConfigNow, showEx
                 <td style={{ padding: "7px 4px", textAlign: "center", fontSize: "10px", color: rotationColor }}>{rotationDisplay}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center", color: "var(--color-text-secondary)" }}>{w.active ? w.totalHours : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.overtimeHours > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{w.active && w.overtimeHours > 0 ? w.overtimeHours : "—"}</td>
-                <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "var(--color-gold)" : "var(--color-text-primary)" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>
+                <td style={{ padding: "7px 4px", textAlign: "center", color: w.active && w.weekendHours > 0 ? "var(--color-teal)" : "var(--color-text-primary)" }}>{w.active && w.weekendHours > 0 ? w.weekendHours : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "right", color: isPast ? "var(--color-text-disabled)" : "var(--color-text-primary)" }}>{w.active ? f2(w.grossPay * perCheckFactor) : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "right", color: netColor }}>{w.active ? f2(resolveWeekNet(w) * perCheckFactor) : "—"}</td>
                 <td style={{ padding: "7px 4px", textAlign: "center" }}>

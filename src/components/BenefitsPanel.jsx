@@ -19,7 +19,7 @@ const fmtDate  = iso => {
 };
 
 const SH = ({ children }) => (
-  <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "12px" }}>
+  <div style={{ fontSize: "10px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "12px" }}>
     {children}
   </div>
 );
@@ -154,12 +154,12 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
         <Card label="Proj. Your Contributions" val={f(bE)} rawVal={bE} color="#7a8bbf" size="18px" />
         <Card label="Proj. Employer Match" val={f(bM)} rawVal={bM} color="var(--color-green)" size="18px" />
-        <Card label="Proj. Year-End Balance" val={f(bE + bM)} rawVal={bE + bM} color="var(--color-gold)" size="18px" />
+        <Card label="Proj. Year-End Balance" val={f(bE + bM)} rawVal={bE + bM} color="var(--color-teal)" size="18px" />
       </div>
       {(logK401kLost > 0 || logK401kMatchLost > 0 || logK401kGained > 0 || logK401kMatchGained > 0) && <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px", marginBottom: "20px" }}>
         <Card label="Proj. Your Contributions (adj.)" val={f(aE)} rawVal={aE} sub={[logK401kLost > 0 && `-${f(logK401kLost)} lost`, logK401kGained > 0 && `+${f(logK401kGained)} bonus`].filter(Boolean).join(" · ")} color="#7a8bbf" size="18px" />
         <Card label="Proj. Employer Match (adj.)" val={f(aM)} rawVal={aM} sub={[logK401kMatchLost > 0 && `-${f(logK401kMatchLost)} lost`, logK401kMatchGained > 0 && `+${f(logK401kMatchGained)} bonus`].filter(Boolean).join(" · ")} color="var(--color-green)" size="18px" />
-        <Card label="Proj. Year-End Balance (adj.)" val={f(aE + aM)} rawVal={aE + aM} color="var(--color-gold)" size="18px" />
+        <Card label="Proj. Year-End Balance (adj.)" val={f(aE + aM)} rawVal={aE + aM} color="var(--color-teal)" size="18px" />
       </div>}
 
       {/* Monthly breakdown table */}
@@ -180,7 +180,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
         return (
           <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%" }}>
             <table className="data-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "360px" }}>
-              <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-gold)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
+              <thead><tr style={{ borderBottom: "1px solid var(--color-accent-primary)", color: "var(--color-teal)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase" }}>
                 <th style={{ textAlign: "left", padding: "8px 4px" }}>Month</th>
                 <th style={{ textAlign: "right", padding: "8px 4px" }}>Gross</th>
                 <th style={{ textAlign: "right", padding: "8px 4px" }}>Your {(config.k401Rate * 100).toFixed(0)}%</th>
@@ -190,15 +190,15 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
               </tr></thead>
               <tbody>{rows.map(m => (
                 <tr key={m.name} style={{ borderBottom: "1px solid #161616" }} onMouseEnter={e => e.currentTarget.style.background = "var(--color-bg-surface)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                  <td style={{ padding: "7px 4px", fontWeight: "bold", color: "var(--color-gold)" }}>{m.name}</td>
+                  <td style={{ padding: "7px 4px", fontWeight: "bold", color: "var(--color-teal)" }}>{m.name}</td>
                   <td style={{ padding: "7px 4px", textAlign: "right" }}>{f(m.gross)}</td>
                   <td style={{ padding: "7px 4px", textAlign: "right", color: "#7a8bbf" }}>{f2(m.k4E)}</td>
                   <td style={{ padding: "7px 4px", textAlign: "right", color: "var(--color-green)" }}>{f2(m.k4M)}</td>
                   <td style={{ padding: "7px 4px", textAlign: "right" }}>{f2(m.k4E + m.k4M)}</td>
-                  <td style={{ padding: "7px 4px", textAlign: "right", color: "var(--color-gold)", fontWeight: "bold" }}>{f2(m.running)}</td>
+                  <td style={{ padding: "7px 4px", textAlign: "right", color: "var(--color-teal)", fontWeight: "bold" }}>{f2(m.running)}</td>
                 </tr>
               ))}</tbody>
-              <tfoot><tr style={{ borderTop: "2px solid var(--color-accent-primary)", fontWeight: "bold", color: "var(--color-gold)" }}>
+              <tfoot><tr style={{ borderTop: "2px solid var(--color-accent-primary)", fontWeight: "bold", color: "var(--color-teal)" }}>
                 <td colSpan={2} style={{ padding: "10px 4px" }}>Year-End Total</td>
                 <td style={{ padding: "10px 4px", textAlign: "right", color: "#7a8bbf" }}>{f(bE)}</td>
                 <td style={{ padding: "10px 4px", textAlign: "right", color: "var(--color-green)" }}>{f(bM)}</td>
@@ -247,7 +247,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
                   }
                   setEditingPto(false);
                 }}
-                c="var(--color-bg-base)" bg="var(--color-gold)"
+                c="var(--color-bg-base)" bg="var(--color-teal)"
               >Save</SmBtn>
               <SmBtn onClick={() => setEditingPto(false)} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Cancel</SmBtn>
             </div>
@@ -283,9 +283,9 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
                 />
               )}
               {config.ptoHoursOverride != null
-                ? <Card label={`Proj. Total by ${fmtDate(ptoGoal.targetDate)}`} val={`~${goalProjected.toFixed(1)} hrs`} sub={`${effectiveAdjP.toFixed(1)} base + ${ptoProjectedFromOverrideToGoal.toFixed(1)} earned`} color="var(--color-gold)" size="18px" />
+                ? <Card label={`Proj. Total by ${fmtDate(ptoGoal.targetDate)}`} val={`~${goalProjected.toFixed(1)} hrs`} sub={`${effectiveAdjP.toFixed(1)} base + ${ptoProjectedFromOverrideToGoal.toFixed(1)} earned`} color="var(--color-teal)" size="18px" />
                 : logPTOHoursLost > 0
-                  ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-gold)" size="18px" />
+                  ? <Card label={`Proj. Accrued by ${fmtDate(ptoGoal.targetDate)}`} val={`~${effectiveAdjP.toFixed(1)} hrs`} sub={`-${(logPTOHoursLost / 20).toFixed(1)} hrs from events`} color="var(--color-teal)" size="18px" />
                   : <Card label="Negative Balance Cap" val={`${negCap} hrs (after 90d)`} color="#888" size="14px" />
               }
             </>
@@ -332,7 +332,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
             <div style={{ fontSize: "12px", color: "var(--color-text-secondary)" }}>
               No PTO leave goal set. Add one to track your accrual progress toward a leave target.
             </div>
-            <SmBtn onClick={openAdd} c="var(--color-gold)" bg="var(--color-bg-raised)">Set Goal</SmBtn>
+            <SmBtn onClick={openAdd} c="var(--color-teal)" bg="var(--color-bg-raised)">Set Goal</SmBtn>
           </div>
         )}
 
@@ -408,7 +408,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
               <Pressable
                 onClick={saveForm}
                 disabled={!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate}
-                style={{ background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", fontWeight: "bold", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", opacity: (!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate) ? 0.4 : 1 }}
+                style={{ background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", padding: "8px 16px", fontSize: "10px", fontWeight: "bold", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", opacity: (!formVals.label.trim() || !formVals.hoursNeeded || !formVals.targetDate) ? 0.4 : 1 }}
               >
                 Save
               </Pressable>
@@ -422,7 +422,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
     {bucketModel && (() => {
       const bm = bucketModel;
       const cap = config.bucketCap ?? 128;
-      const bandColor = bm.status === "safe" ? "var(--color-green)" : bm.status === "caution" ? "var(--color-gold)" : "var(--color-deduction)";
+      const bandColor = bm.status === "safe" ? "var(--color-green)" : bm.status === "caution" ? "var(--color-teal)" : "var(--color-deduction)";
       const bandBg    = bm.status === "safe" ? "#1a2d1e"  : bm.status === "caution" ? "#2d2710"  : "#2d1a1a";
       const pct = Math.min((bm.currentBalance / cap) * 100, 100);
       return (
@@ -464,7 +464,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
                     }
                     setEditingBalance(false);
                   }}
-                  c="var(--color-bg-base)" bg="var(--color-gold)"
+                  c="var(--color-bg-base)" bg="var(--color-teal)"
                 >Save</SmBtn>
                 <SmBtn onClick={() => setEditingBalance(false)} c="var(--color-text-secondary)" bg="var(--color-bg-raised)">Cancel</SmBtn>
               </div>
@@ -488,7 +488,7 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
           <div style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "10px 14px", marginBottom: "10px", fontSize: "11px" }}>
             <span style={{ color: "var(--color-text-secondary)", marginRight: "8px" }}>{fmtMonth(currentMonthStr)} — Tier {bm.currentTier}</span>
             {bm.currentTier === 1 && <span style={{ color: "var(--color-green)" }}>perfect so far · any unapproved absence changes tier</span>}
-            {bm.currentTier === 2 && <span style={{ color: "var(--color-gold)" }}>{bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
+            {bm.currentTier === 2 && <span style={{ color: "var(--color-teal)" }}>{bm.currentM}h unapproved · {bm.hoursToNextTier}h to next tier drop</span>}
             {bm.currentTier === 3 && <span style={{ color: "var(--color-deduction)" }}>{bm.currentM}h unapproved · {bm.hoursToNextTier}h to worst tier</span>}
             {bm.currentTier === 4 && <span style={{ color: "var(--color-deduction)" }}>worst tier · {bm.currentM}h unapproved this month</span>}
           </div>
@@ -512,11 +512,11 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
                     <td style={{ padding: "7px 8px", textAlign: "right", color: row.M > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{row.M > 0 ? `${row.M}h` : "—"}</td>
                     <td style={{ padding: "7px 8px", textAlign: "right", color: row.net >= 0 ? "var(--color-green)" : "var(--color-deduction)" }}>{row.net >= 0 ? "+" : ""}{row.net}h</td>
                     <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-secondary)" }}>{row.closingBalance}h</td>
-                    <td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "var(--color-gold)" : "var(--color-text-primary)" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td>
+                    <td style={{ padding: "7px 12px", textAlign: "right", color: row.payout > 0 ? "var(--color-teal)" : "var(--color-text-primary)" }}>{row.payout > 0 ? f2(row.payout) : "—"}</td>
                   </tr>
                 ))}
                 <tr style={{ borderBottom: "1px solid #252525", background: "var(--color-bg-surface)" }}>
-                  <td style={{ padding: "7px 12px", color: "var(--color-gold)" }}>{fmtMonth(currentMonthStr)} <span style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>in progress</span></td>
+                  <td style={{ padding: "7px 12px", color: "var(--color-teal)" }}>{fmtMonth(currentMonthStr)} <span style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>in progress</span></td>
                   <td style={{ padding: "7px 8px", textAlign: "right", color: bm.currentM > 0 ? "var(--color-deduction)" : "var(--color-text-primary)" }}>{bm.currentM > 0 ? `${bm.currentM}h` : "—"}</td>
                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>—</td>
                   <td style={{ padding: "7px 8px", textAlign: "right", color: "var(--color-text-primary)" }}>{bm.currentBalance}h</td>
@@ -539,11 +539,11 @@ export function BenefitsPanel({ allWeeks, config, setConfig, isEmployerDHL, isAd
           <div style={{ background: bandBg, border: `1px solid ${bandColor}33`, borderRadius: "6px", padding: "12px 14px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "5px 16px", fontSize: "11px", alignItems: "center" }}>
               <span style={{ color: "var(--color-text-secondary)" }}>Realized overflow payout:</span>
-              <span style={{ textAlign: "right", color: bm.realizedPayout > 0 ? "var(--color-gold)" : "var(--color-text-primary)" }}>{f2(bm.realizedPayout)}</span>
+              <span style={{ textAlign: "right", color: bm.realizedPayout > 0 ? "var(--color-teal)" : "var(--color-text-primary)" }}>{f2(bm.realizedPayout)}</span>
               <span style={{ color: "var(--color-text-secondary)" }}>Projected (perfect attendance):</span>
               <span style={{ textAlign: "right", color: "var(--color-green)" }}>{f2(bm.projectedPayout)}</span>
               <span style={{ color: "var(--color-text-primary)", fontWeight: "bold", borderTop: "1px solid #ffffff11", paddingTop: "6px" }}>Total projected bonus income:</span>
-              <span style={{ textAlign: "right", color: "var(--color-gold)", fontWeight: "bold", borderTop: "1px solid #ffffff11", paddingTop: "6px" }}>{f2(bm.totalProjectedBonus)}</span>
+              <span style={{ textAlign: "right", color: "var(--color-teal)", fontWeight: "bold", borderTop: "1px solid #ffffff11", paddingTop: "6px" }}>{f2(bm.totalProjectedBonus)}</span>
             </div>
           </div>
         </div>

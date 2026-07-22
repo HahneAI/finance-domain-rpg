@@ -61,7 +61,7 @@ export function UpgradeCard({ onClose, tagline } = {}) {
           {tagline}
         </div>
       )}
-      <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-gold)", marginBottom: "8px" }}>
+      <div style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-teal)", marginBottom: "8px" }}>
         Authority Finance Premium
       </div>
       <div style={{ fontSize: "20px", fontWeight: "bold", color: "var(--color-text-primary)", marginBottom: "10px" }}>
@@ -77,7 +77,7 @@ export function UpgradeCard({ onClose, tagline } = {}) {
             {checkoutState.plan === "monthly" ? "Redirecting…" : "$14.99/mo"}
           </div>
         </Pressable>
-        <Pressable onClick={() => handleCheckout("annual")} disabled={checkoutState.plan !== null} style={planBtnStyle("annual", "var(--color-gold)", "var(--color-bg-base)")}>
+        <Pressable onClick={() => handleCheckout("annual")} disabled={checkoutState.plan !== null} style={planBtnStyle("annual", "var(--color-teal)", "var(--color-bg-base)")}>
           <div style={{ fontSize: "14px", fontWeight: "bold" }}>Annual — Best Value</div>
           <div style={{ fontSize: "12px" }}>
             {checkoutState.plan === "annual" ? "Redirecting…" : "$10.00/mo billed annually ($120/yr)"}

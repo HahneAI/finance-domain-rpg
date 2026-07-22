@@ -204,10 +204,18 @@ export function JobLossBudgetPanel({
           placeholder="e.g. 1,023"
           style={{ ...iS, marginTop: "6px" }}
         />
-        <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5, marginBottom: "14px" }}>
+        <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
           Saved to your account — also editable from Home. Extra income logged
           on Home (${Math.round(huntIncome).toLocaleString()} so far) is added automatically.
         </div>
+        {dash?.pendingCheck && (
+          <div style={{ marginTop: "10px", fontSize: "11px", color: "var(--color-green)", lineHeight: 1.5 }}>
+            Pending check: ${Math.round(dash.pendingCheck.amount).toLocaleString()} arriving{" "}
+            {dash.pendingCheck.daysOut === 0 ? "today" : `in ${dash.pendingCheck.daysOut} ${dash.pendingCheck.daysOut === 1 ? "day" : "days"}`}
+            {" "}({new Date(dash.pendingCheck.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })})
+          </div>
+        )}
+        <div style={{ marginBottom: "14px" }} />
 
         {hasBenefits && dash && (
           <>
@@ -222,7 +230,7 @@ export function JobLossBudgetPanel({
                     style={{
                       padding: "7px 12px", fontSize: "10px", letterSpacing: "1.5px", textTransform: "uppercase",
                       background: active ? "rgba(0,200,150,0.10)" : "var(--color-bg-raised)",
-                      color: active ? "var(--color-gold)" : "var(--color-text-secondary)",
+                      color: active ? "var(--color-teal)" : "var(--color-text-secondary)",
                       border: `1px solid ${active ? "rgba(0,200,150,0.32)" : "var(--color-border-subtle)"}`,
                       borderRadius: "10px", cursor: "pointer", fontWeight: active ? 700 : 500,
                     }}
@@ -352,7 +360,7 @@ export function JobLossBudgetPanel({
                       {isLoan && (
                         <span style={{
                           fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
-                          color: "var(--color-bg-base)", background: "var(--color-gold)",
+                          color: "var(--color-bg-base)", background: "var(--color-teal)",
                           padding: "2px 6px", borderRadius: "3px", fontWeight: "bold",
                         }}>
                           Loan

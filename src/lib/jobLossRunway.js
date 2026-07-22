@@ -32,6 +32,56 @@ export function sumJobHuntIncome(cfg) {
   return (cfg?.jobHuntIncomeLog ?? []).reduce((s, entry) => s + (entry.amount ?? 0), 0);
 }
 
+// ── Pending/final paycheck (TODO §15.H15) ────────────────────────────────
+// A job loss rarely lines up with a pay period boundary — there's usually one
+// more check still owed for days actually worked before the loss date. None
+// of the above modeled this: buildYear() zeroes the whole fiscal week
+// containing jobLossDate (not prorated), and the runway calc only knew about
+// cash-on-hand + gig income, both "already in hand" today. This resolves the
+// two JobLossEntry wizard questions (days worked in the final week; which
+// day-of-week checks normally arrive) into a concrete estimated amount +
+// date, computed once at Activate time and stored on config — mirrors
+// DueDatePicker's resolve-to-a-concrete-value-at-confirm pattern rather than
+// storing the raw picker state.
+
+// The pay period the user was mid-way through when they lost their job ends
+// on the first occurrence of payPeriodEndDay on/after jobLossDate — true
+// regardless of period length (weekly vs. biweekly both just repeat that same
+// weekday every N weeks), so no separate biweekly branch is needed. Monthly
+// has no "day of week" concept — falls back to the calendar month's last day.
+export function resolveLastPayPeriodEnd(jobLossDateIso, payPeriodEndDay, userPaySchedule) {
+  const jobLossDate = new Date(jobLossDateIso + "T00:00:00");
+  if (userPaySchedule === "monthly") {
+    return new Date(jobLossDate.getFullYear(), jobLossDate.getMonth() + 1, 0);
+  }
+  const targetDow = payPeriodEndDay ?? 0;
+  const d = new Date(jobLossDate);
+  d.setDate(d.getDate() + ((targetDow - d.getDay() + 7) % 7));
+  return d;
+}
+
+// First occurrence of arrivalDow strictly after periodEndDate — payroll always
+// lands at least a day after the period it covers actually closes.
+export function resolvePendingCheckArrivalDate(periodEndDate, arrivalDow) {
+  const d = new Date(periodEndDate);
+  d.setDate(d.getDate() + 1);
+  d.setDate(d.getDate() + ((arrivalDow - d.getDay() + 7) % 7));
+  return d;
+}
+
+// Rough net estimate for the final check — same flat-rate sketch
+// ReemploymentTracker.jsx uses for its target-income preview (gross minus
+// fed/state/FICA/401k rates already on file). Not a full computeNet pass:
+// this is a one-time estimate for a check that predates Job Loss Mode
+// zeroing income, not a week buildYear will ever actually compute.
+export function estimatePendingCheckAmount(workedDaysCount, cfg) {
+  if (!workedDaysCount) return 0;
+  const grossPerDay = (cfg?.shiftHours ?? 8) * (cfg?.baseRate ?? 0);
+  const gross = workedDaysCount * grossPerDay;
+  const rate = (cfg?.fedRateLow ?? 0) + (cfg?.stateRateLow ?? 0) + (cfg?.ficaRate ?? 0.0765) + (cfg?.k401Rate ?? 0);
+  return Math.max(0, gross * (1 - rate));
+}
+
 /**
  * Computes the runway/burn numbers Job Loss Home + Budget both render.
  * `savings` is the combined cash figure (manual "additional savings" draft +
@@ -64,6 +114,22 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, savings
     0,
   );
 
+  // Lifestyle spend (TODO §15.H14 bullet 2): still tracked/active rows in this
+  // category are deliberately excluded from weeklyBurn above ("focuses on
+  // survival spend"), but a user who keeps them checked is still actually
+  // paying for them — surfaced separately so the runway UI can caption it
+  // instead of letting the headline number silently omit real spend.
+  const lifestyleActive = (expenses ?? []).filter(exp => {
+    const status = exp.jobLossStatus ?? "active";
+    const flexible = exp.category === "Lifestyle";
+    const tracked = exp.trackDuringJobLoss !== false;
+    return status === "active" && flexible && tracked;
+  });
+  const lifestyleWeeklySpend = lifestyleActive.reduce(
+    (sum, exp) => sum + getEffectiveAmount(exp, todayDate, phaseIdx),
+    0,
+  );
+
   const jobLossStartMs = new Date(config.jobLossDate + "T00:00:00").getTime();
   const weeksSinceLoss = Math.max(0, Math.floor((todayDate.getTime() - jobLossStartMs) / (7 * 86400000)));
 
@@ -83,7 +149,26 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, savings
   const withBenefitsCash = safeSavings + projectedUnemploymentTotal;
   const withoutBenefitsCash = safeSavings;
 
-  const daysFromCash = (cash) => weeklyBurn > 0 ? (cash / weeklyBurn) * 7 : Infinity;
+  // Pending check (TODO §15.H15): a known future inflow, landing on a specific
+  // day rather than already-in-hand cash — so it extends the runway from the
+  // day it's due, not from today. If cash runs dry before that day, the check
+  // hasn't helped yet — the cliff lands at the dry-out point, same as if it
+  // didn't exist; the piecewise math below only "un-dries" the runway once the
+  // check's own arrival day is reached.
+  const pendingAmount = Math.max(0, config.jobLossPendingCheckAmount ?? 0);
+  const pendingDateIso = config.jobLossPendingCheckDate ?? null;
+  const pendingDaysOut = (pendingAmount > 0 && pendingDateIso)
+    ? Math.max(0, Math.round((new Date(pendingDateIso + "T00:00:00").getTime() - todayDate.getTime()) / 86400000))
+    : null;
+
+  const daysFromCash = (cash) => {
+    if (weeklyBurn <= 0) return Infinity;
+    const dailyBurn = weeklyBurn / 7;
+    if (pendingDaysOut == null) return (cash / weeklyBurn) * 7;
+    const cashAtPending = cash - dailyBurn * pendingDaysOut;
+    if (cashAtPending <= 0) return cash / dailyBurn;
+    return pendingDaysOut + (cashAtPending + pendingAmount) / dailyBurn;
+  };
   const cliffFromDays = (days) => {
     if (!Number.isFinite(days)) return null;
     const d = new Date(todayDate);
@@ -94,8 +179,12 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, savings
   return {
     weeklyBurn,
     essentialCount: essentialActive.length,
+    lifestyleWeeklySpend,
     benefitsRemainingWeeks,
     projectedUnemploymentTotal,
+    pendingCheck: pendingDaysOut != null
+      ? { amount: pendingAmount, date: pendingDateIso, daysOut: pendingDaysOut }
+      : null,
     withBenefits: {
       cash: withBenefitsCash,
       days: daysFromCash(withBenefitsCash),
@@ -107,4 +196,24 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, savings
       cliff: cliffFromDays(daysFromCash(withoutBenefitsCash)),
     },
   };
+}
+
+/**
+ * Selects the single "primary" runway day count from a computeJobLossRunway()
+ * result — with or without unemployment benefits folded in — matching the
+ * exact `hasBenefits && includeBenefits` selection JobLossHomePanel.jsx and
+ * JobLossBudgetPanel.jsx each do inline for their headline tile. Pulled out
+ * so any *other* consumer (Coach's trigger/context) quoting "the" runway
+ * number can't independently drift from what those two panels show (the
+ * drift-app-warden §21 F24/quarantine-2 fix). If the two panels' inline
+ * selection logic ever changes, update this to match.
+ *
+ * Returns null when there's no dash (not in Job Loss Mode) or burn is zero
+ * (infinite runway — nothing meaningful to report as a day count).
+ */
+export function resolvePrimaryRunwayDays(dash, config, includeBenefits = true) {
+  if (!dash) return null;
+  const hasBenefits = Boolean(config?.unemploymentEnabled) && dash.projectedUnemploymentTotal > 0;
+  const primary = (hasBenefits && includeBenefits) ? dash.withBenefits : dash.withoutBenefits;
+  return Number.isFinite(primary.days) ? primary.days : null;
 }

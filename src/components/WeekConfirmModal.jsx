@@ -665,13 +665,13 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase" }}>
                   {isBiweeklySchedule ? "Pay Period Check-In" : isMonthlySchedule ? "Monthly Check-In" : `Week ${targetWeek.idx} Check-In`}
                 </div>
                 {isBiweeklyTwoWeek && (
                   <span style={{
                     fontSize: "8px", letterSpacing: "1.5px", textTransform: "uppercase",
-                    color: "var(--color-bg-base)", background: "var(--color-gold)",
+                    color: "var(--color-bg-base)", background: "var(--color-teal)",
                     padding: "2px 7px", borderRadius: "3px", fontWeight: "bold",
                   }}>
                     Week {subWeek} of 2
@@ -773,7 +773,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                       <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                         <div style={{ fontSize: "11px", fontWeight: "bold", color: isScheduled ? "var(--color-text-primary)" : "var(--color-text-disabled)", letterSpacing: "1px" }}>{day}</div>
                         {isPayStart && (
-                          <span style={{ fontSize: "7px", letterSpacing: "1.5px", color: "var(--color-gold)", textTransform: "uppercase", opacity: 0.7 }}>pay start</span>
+                          <span style={{ fontSize: "7px", letterSpacing: "1.5px", color: "var(--color-teal)", textTransform: "uppercase", opacity: 0.7 }}>pay start</span>
                         )}
                       </div>
                       <div style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>{fmtDate(date)}</div>
@@ -1104,7 +1104,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     {isBiweeklySchedule ? "Clean Period" : isMonthlySchedule ? "Clean Month" : "Confirm Clean"}
                   </Pressable>
                   <Pressable onClick={handleLogSwap} disabled={logSwapDisabled} style={{
-                    background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
+                    background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase",
                     cursor: logSwapDisabled ? "not-allowed" : "pointer",
@@ -1116,7 +1116,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                 </div>
               ) : (
                 <Pressable onClick={handleSave} disabled={otSelectionMissing} style={{
-                  background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
+                  background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none",
                   borderRadius: "4px", padding: "9px 22px", fontSize: "10px",
                   letterSpacing: "2px", textTransform: "uppercase",
                   cursor: otSelectionMissing ? "not-allowed" : "pointer",
@@ -1245,7 +1245,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                       const h = parseFloat(eventVals.hoursLost) || 0;
                       const expected = s * config.shiftHours;
                       return expected > 0 && Math.abs(h - expected) > 0.01 ? (
-                        <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-gold)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
+                        <div style={{ gridColumn: "1/-1", fontSize: "9px", color: "var(--color-teal)", padding: "4px 8px", background: "rgba(0,200,150,0.07)", borderRadius: "4px" }}>
                           ⚠ Hours overridden — expected {s} × {config.shiftHours}h = {expected}h
                         </div>
                       ) : (
@@ -1326,7 +1326,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     <div style={{ color: "var(--color-text-secondary)" }}>Projected week</div>
                     <div style={{ textAlign: "right", color: "var(--color-text-secondary)" }}>{f2(previewImpact.baseGross)}</div>
                     <div style={{ color: "var(--color-text-secondary)" }}>Estimated actual</div>
-                    <div style={{ textAlign: "right", color: "var(--color-gold)" }}>{f2(previewImpact.netLost > 0 ? previewImpact.baseGross - previewImpact.grossLost : previewImpact.baseGross + previewImpact.grossGained)}</div>
+                    <div style={{ textAlign: "right", color: "var(--color-teal)" }}>{f2(previewImpact.netLost > 0 ? previewImpact.baseGross - previewImpact.grossLost : previewImpact.baseGross + previewImpact.grossGained)}</div>
                     <div style={{ gridColumn: "1/-1", borderTop: "1px solid var(--color-border-subtle)", paddingTop: "5px", marginTop: "2px", display: "flex", justifyContent: "space-between", color: previewImpact.netLost > 0 ? "var(--color-deduction)" : "var(--color-green)", fontWeight: "bold" }}>
                       <span>Net {previewImpact.netLost > 0 ? "lost" : "gained"}</span>
                       <span>{previewImpact.netLost > 0 ? "−" : "+"}{f2(previewImpact.netLost || previewImpact.netGained)}</span>
@@ -1358,8 +1358,8 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                           <div><span style={{ color: "var(--color-text-disabled)" }}>Shifts missed:</span> <span style={{ color: "var(--color-text-primary)" }}>{s}</span></div>
                           <div>
                             <span style={{ color: "var(--color-text-disabled)" }}>Hours missed:</span>{" "}
-                            <span style={{ color: overridden ? "var(--color-gold)" : "var(--color-text-primary)" }}>{h}h</span>
-                            {overridden && <span style={{ color: "var(--color-gold)", fontSize: "9px", marginLeft: "6px" }}>⚠ manually overridden (expected {expected}h)</span>}
+                            <span style={{ color: overridden ? "var(--color-teal)" : "var(--color-text-primary)" }}>{h}h</span>
+                            {overridden && <span style={{ color: "var(--color-teal)", fontSize: "9px", marginLeft: "6px" }}>⚠ manually overridden (expected {expected}h)</span>}
                           </div>
                           {(eventVals.missedDays ?? []).length > 0 && <div><span style={{ color: "var(--color-text-disabled)" }}>Days:</span> {eventVals.missedDays.join(", ")}</div>}
                         </>
@@ -1433,7 +1433,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
           return (
             <div style={{ display: "flex", flexDirection: "column", flex: 1, overflowY: "auto" }}>
               <div style={{ padding: "20px", flex: 1 }}>
-                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "10px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "10px" }}>
                   Second week of pay period
                 </div>
                 <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--color-text-primary)", lineHeight: "1.5", marginBottom: "14px" }}>
@@ -1470,7 +1470,7 @@ export function WeekConfirmModal({ week, config, logs = [], onConfirm, onDismiss
                     No — different days
                   </button>
                   <button onClick={handleSameDaysYes} style={{
-                    background: "var(--color-gold)", color: "var(--color-bg-base)", border: "none",
+                    background: "var(--color-teal)", color: "var(--color-bg-base)", border: "none",
                     borderRadius: "4px", padding: "9px 16px", fontSize: "10px",
                     letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: "bold",
                   }}>

@@ -36,6 +36,7 @@ import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
 import { canAccessAiFeatures } from "./lib/entitlements.js";
+import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./lib/jobLossRunway.js";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -107,7 +108,7 @@ function SidebarNavItem({ item, active, onClick }) {
         textTransform: "uppercase",
        
         background: active ? "var(--color-bg-surface)" : "transparent",
-        color: active ? "var(--color-gold)" : "var(--color-text-primary)",
+        color: active ? "var(--color-teal)" : "var(--color-text-primary)",
         borderLeft: active ? "3px solid #c8a84b" : "3px solid transparent",
         border: "none",
         cursor: "pointer",
@@ -1055,17 +1056,15 @@ export default function App() {
   const handleReopenLastCheckIn = useCallback(() => {
     if (reopenableWeekIdx == null) return;
     const record = weekConfirmations[reopenableWeekIdx];
-    if (record?.eventId != null) {
-      setLogs(ls => ls.filter(l => l.id !== record.eventId));
-    }
-    setWeekConfirmations(c => {
-      const next = { ...c };
-      delete next[reopenableWeekIdx];
-      return next;
-    });
+    const nextLogs = record?.eventId != null ? logs.filter(l => l.id !== record.eventId) : logs;
+    const nextWeekConfirmations = { ...weekConfirmations };
+    delete nextWeekConfirmations[reopenableWeekIdx];
+    setLogs(nextLogs);
+    setWeekConfirmations(nextWeekConfirmations);
+    savePersistedStateNow({ weekConfirmations: nextWeekConfirmations, logs: nextLogs });
     setConfirmDismissed(false);  // ensure the modal pops back open
     setToolSheetOpen(false);     // close the admin sheet so the modal is visible
-  }, [reopenableWeekIdx, weekConfirmations]);
+  }, [reopenableWeekIdx, weekConfirmations, logs, savePersistedStateNow]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
   const currentWeekNumber = useMemo(() => getFiscalWeekInfo(currentWeek), [currentWeek]);
@@ -1255,6 +1254,19 @@ export default function App() {
   const remainingSpend = useMemo(() => computeRemainingSpend(projectableExpenses, futureWeeks), [projectableExpenses, futureWeeks]);
   const fundedGoalSpend = useMemo(() => getFundedGoalSpend(goals, effectiveToday), [goals, effectiveToday]);
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
+
+  // Real runway for Ask Coach (drift-app-warden §21 quarantine-2 fix) — was
+  // never wired at all before, so a Job Loss Mode user asking Coach about
+  // runway got a bare "Job Loss Mode: active" with no number. Same
+  // computeJobLossRunway()/resolvePrimaryRunwayDays() pair CoachNetWorthCard
+  // now uses, and the real (not defaulted) jobLossIncludeBenefits toggle, so
+  // Ask Coach agrees with whatever the Job Loss panels are showing.
+  const coachRunwayDays = useMemo(() => {
+    if (!config.jobLossMode) return null;
+    const savings = (config.jobLossCashOnHand ?? 0) + sumJobHuntIncome(config);
+    const dash = computeJobLossRunway({ config, expenses, effectiveToday, savings });
+    return resolvePrimaryRunwayDays(dash, config, jobLossIncludeBenefits);
+  }, [config, expenses, effectiveToday, jobLossIncludeBenefits]);
 
   // ── Event log cascade ──
   const logTotals = useMemo(() => ({
@@ -1585,6 +1597,7 @@ export default function App() {
         logPTOHoursLost={logTotals.ptoHoursLost}
         ptoGoal={ptoGoal}
         setPtoGoal={setPtoGoal}
+        onSavePtoGoalNow={(next) => savePersistedStateNow({ ptoGoal: next })}
         goals={goals}
         fundedGoalSpend={fundedGoalSpend}
         bucketModel={bucketModel}
@@ -1758,7 +1771,7 @@ export default function App() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <div>
-                <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                <div style={{ fontSize: "10px", letterSpacing: "4px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
                 <div style={{ fontSize: "13px", fontWeight: "bold", lineHeight: "1.3", marginBottom: "8px" }}>Authority Finance</div>
               </div>
             </div>
@@ -2046,7 +2059,7 @@ export default function App() {
             style={{
               background: "transparent",
               border: "none",
-              color: "var(--color-gold)",
+              color: "var(--color-teal)",
               cursor: "pointer",
               width: "44px",
               height: "44px",
@@ -2068,7 +2081,7 @@ export default function App() {
           <div style={{ flex: 1, minWidth: 0, paddingLeft: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1px" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+                <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
                 {currentWeekNumber && <div style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "1px 6px", background: "rgba(0,200,150,0.14)", color: "var(--color-green)", border: "1px solid rgba(0,200,150,0.32)", borderRadius: "3px", flexShrink: 0 }}>{currentWeekLabel}</div>}
                 {isAdmin && tempLockDate && (
                   <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "1px 4px 1px 6px", flexShrink: 0 }}>
@@ -2345,7 +2358,7 @@ export default function App() {
         {/* Drawer header */}
         <div className="drawer-header" style={{ padding: "16px 18px", borderBottom: "1px solid var(--color-border-subtle)", display: "flex", alignItems: "flex-start", justifyContent: "space-between", minHeight: "56px" }}>
           <div>
-            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-gold)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
+            <div style={{ fontSize: "9px", letterSpacing: "3px", color: "var(--color-teal)", textTransform: "uppercase", marginBottom: "3px" }}>{config.employerPreset === "DHL" ? "DHL / P&G" : (config.employerPreset || "Finance")}</div>
             <div style={{ fontSize: "15px", fontWeight: "bold" }}>Authority Finance</div>
           </div>
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
@@ -2651,7 +2664,7 @@ export default function App() {
 
         {/* Active section indicator at bottom */}
         <div style={{ padding: "16px 20px", borderTop: "1px solid #1e1e1e", fontSize: "10px", color: "var(--color-text-primary)", letterSpacing: "1px", textTransform: "uppercase" }}>
-          Viewing: <span style={{ color: "var(--color-gold)" }}>{currentView}</span>
+          Viewing: <span style={{ color: "var(--color-teal)" }}>{currentView}</span>
         </div>
       </div>
 
@@ -2914,9 +2927,9 @@ export default function App() {
               {/* Badges */}
               <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "4px" }}>
                 {[
-                  [w.rotation, w.isHighWeek ? "var(--color-gold)" : "var(--color-text-secondary)"],
+                  [w.rotation, w.isHighWeek ? "var(--color-teal)" : "var(--color-text-secondary)"],
                   [w.taxedBySchedule ? "Taxed" : "Exempt", w.taxedBySchedule ? "var(--color-green)" : "var(--color-text-disabled)"],
-                  [w.isHighWeek ? "High Week" : "Low Week", w.isHighWeek ? "var(--color-gold)" : "var(--color-text-disabled)"],
+                  [w.isHighWeek ? "High Week" : "Low Week", w.isHighWeek ? "var(--color-teal)" : "var(--color-text-disabled)"],
                   [w.active ? "Active" : "Inactive", w.active ? "var(--color-green)" : "var(--color-text-disabled)"],
                   ...(conf ? [["Confirmed", "var(--color-accent-primary)"]] : [["Unconfirmed", "var(--color-text-disabled)"]]),
                 ].map(([label, color]) => (
@@ -2930,7 +2943,7 @@ export default function App() {
               <Row label="Total Hours" val={w.totalHours ?? "—"} />
               <Row label="Regular Hours" val={w.regularHours ?? "—"} />
               <Row label="Overtime Hours" val={w.overtimeHours > 0 ? w.overtimeHours : "—"} color={w.overtimeHours > 0 ? "var(--color-deduction)" : undefined} />
-              <Row label="Weekend Hours" val={w.weekendHours > 0 ? w.weekendHours : "—"} color={w.weekendHours > 0 ? "var(--color-gold)" : undefined} />
+              <Row label="Weekend Hours" val={w.weekendHours > 0 ? w.weekendHours : "—"} color={w.weekendHours > 0 ? "var(--color-teal)" : undefined} />
 
               {/* Pay */}
               <SH>Pay</SH>
@@ -3367,6 +3380,7 @@ export default function App() {
           futureEventDeductions={futureEventDeductions}
           prevWeekNet={prevWeekNet}
           allWeeks={allWeeks}
+          runwayDays={coachRunwayDays}
         />
       )}
 
@@ -3385,6 +3399,7 @@ export default function App() {
         open={jobLossEntryOpen}
         onClose={() => setJobLossEntryOpen(false)}
         expenses={expenses}
+        config={config}
         onActivate={(patch, updatedExpenses) => {
           configHistoryMetaRef.current = { source: "life_event:lost_job", effectiveFrom: patch.jobLossDate ?? undefined };
           const nextConfig = { ...config, ...patch };
@@ -3403,7 +3418,11 @@ export default function App() {
         config={config}
         onActivate={(patch) => {
           configHistoryMetaRef.current = { source: "life_event:rate_update", effectiveFrom: patch.effectiveFrom };
-          setConfig(prev => ({ ...prev, baseRate: patch.baseRate }));
+          const nextConfig = { ...config, baseRate: patch.baseRate };
+          setConfig(nextConfig);
+          // historySource omitted — configHistoryMetaRef is already set above (mirrors
+          // JobLossEntry's onActivate just above).
+          savePersistedStateNow({ config: nextConfig });
         }}
       />
       {/* ── Setup wizard — first-run (wizardEntry===false) or re-entry (life event string) ── */}

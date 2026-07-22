@@ -96,7 +96,7 @@ A single full-width block rendered above the expense list in `BudgetPanel`. It r
 - Quarter blocks: 4 equal-width columns, each tappable, spanning their 3 months
 - Active month: teal (`--color-accent-primary`) background, dark text
 - Active quarter: teal bottom border + teal label; dimmed if a specific month within it is active
-- Current month/quarter: subtle gold dot indicator
+- Current month/quarter: subtle teal dot indicator
 
 ### Props
 
@@ -379,7 +379,7 @@ May 2026  ·  4 pay periods  ·  $87.50/wk avg  ·  $350.00/mo
 - [x] Save button routes to `saveMonthEdit` (month mode) or `saveEditExp` (quarter mode)
 - [x] Button label: `SAVE FROM MAY +` in month mode; `SAVE` in quarter mode
 - [x] Context note: "Applies from MAY onward — earlier months unchanged" shown in month mode
-- [x] Override indicator: gold `◆` on month pills that have at least one `monthlyOverride` entry
+- [x] Override indicator: teal `◆` on month pills that have at least one `monthlyOverride` entry
 
 ### Phase 4 — Delete flow ✅ COMPLETE
 - [x] Replace `delExpId` with `pendingDelete: { id, mode: "month"|"quarter" } | null`

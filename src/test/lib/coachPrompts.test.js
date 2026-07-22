@@ -66,7 +66,19 @@ describe("ASK_COACH_SYSTEM_PROMPT", () => {
   it("instructs compressed treatment for broad multi-topic questions, with narrow questions still getting full explanations", () => {
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/do not explain what each metric means or walk every tile in turn/i);
     expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/invite a follow-up for whatever you didn't cover/i);
-    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/still earns the fuller explanation it's asking for/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/only a narrow \*scope\* \(one number, one panel\) earns the fuller per-item explanation/i);
+  });
+
+  // Regression: re-tested as "Break down my home panel please" — still a
+  // two-screen wall, because the trigger condition was written as a list of
+  // example phrases ("everything," "full rundown," "how am I doing overall")
+  // that didn't literally include this rephrasing. The condition now keys off
+  // scope (touches most/all tiles) rather than exact wording, and explicitly
+  // overrides the user's own verb ("break down," "explain") when the scope
+  // is still broad.
+  it("keys the broad-question trigger off scope, not exact phrasing, and overrides the user's own verb", () => {
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/break down my Home panel/i);
+    expect(ASK_COACH_SYSTEM_PROMPT).toMatch(/this holds even when the user's own wording says "break down," "explain," or "walk me through"/i);
   });
 
   // Regression: asked for the most expensive line item, Coach stated Gas

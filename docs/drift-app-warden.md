@@ -273,7 +273,7 @@ section). **All sixteen are done** (T1–T10 surface tiers 2026-07-19; Spines A�
 - [x] **T6 — Log Panel** — §13 below (surgical pass 2026-07-19)
 - [x] **T7 — Auth System** — §14 below (surgical pass 2026-07-19)
 - [x] **T8 — Login System** — §15 below (surgical pass 2026-07-19)
-- [x] **T9 — Paywall System** — §16 below (surgical pass 2026-07-19; found DW-7, the investigation's highest-severity defect)
+- [x] **T9 — Paywall System** — §16 below (surgical pass 2026-07-19; found DW-7, the investigation's highest-severity defect — fixed 2026-07-22)
 - [x] **T10 — UI-UX** — §17 below (surgical pass 2026-07-19)
 - [x] **Spine A — Fiscal Math** — §18 below (spine pass 2026-07-20)
 - [x] **Spine B — Persistence & Save Integrity** — §19 below (spine pass 2026-07-20)
@@ -1851,7 +1851,7 @@ hardcoded hex colors (Spine E debt, TODO §10).
 modals (`3a2e04f`), request-derived redirect origins (`1a12dd6`), the lifecycle cron
 (`97d1ee4`), archive-then-delete wiring (`1f94022`), and cancel-on-delete hardening
 (`8a2683c`). This pass found the investigation's most serious defect — **DW-7**, the
-dead tester exemption in the cron (F86).
+dead tester exemption in the cron (F86) — since fixed (§16.4).
 
 **Scope:** `lib/subscription.js` (the Spine-C engine's enforcement half),
 `App.jsx` gating + checkout-return plumbing, `UpgradeCard/Modal/Panel.jsx`,
@@ -1940,13 +1940,16 @@ trial start → grace/expired warnings on a 2-day throttle keyed off
 (`:110–114`), the row SELECT (`:133–139`), per-row loop with
 `archiveAndDeleteAccount:38` taking precedence over a same-run deletion warning
 (`:153–160`), summary counters — **[G]**
-⚠ **DW-7.** The SELECT fetches `is_admin, is_investor` but **not `is_tester`** — the
-engine's tester exemption reads `undefined` and never fires. A tester's lapsed 6-month
+**DW-7 (fixed).** The SELECT fetched `is_admin, is_investor` but **not `is_tester`** — the
+engine's tester exemption read `undefined` and never fired. A tester's lapsed 6-month
 window → real dunning → archive+delete. The engine is unit-tested with hand-built rows;
-the select list sits outside that seam, which is how it slipped.
+the select list sat outside that seam, which is how it slipped. Fixed by adding `is_tester`
+to the SELECT (`:137`) plus `src/test/api/cronLifecycleSelectColumns.test.js`, a structural
+regression test that reads the real runtime `.select()` argument and asserts it's a superset
+of every `row.*` field `_lifecycleEngine.js` reads — kills the class, not just the instance.
 > **IF** the engine gains any new row-field read, **THEN** the SELECT must grow in the
-> same commit — the fix for DW-7 should add a shell-level test asserting every field
-> the engine destructures appears in the query string, making this class structural.
+> same commit, or `cronLifecycleSelectColumns.test.js` fails — the field-coverage test this
+> entry called for now exists and enforces this automatically.
 
 **F87 · Email layer** — `_lifecycleEmails.js` (templates; disclosure rule per F85),
 `_email.js` (Resend via plain fetch; `RESEND_API_KEY` fallback name `71d2692`;
@@ -1961,7 +1964,7 @@ the select list sits outside that seam, which is how it slipped.
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
 |---|---|---|---|
 | `getEntitlement` shape/states (Spine C) | F81 fork, F85 engine, TrialBanner/Sub-card/explainer copy, Live Inspector Sub Phase | One account through all five states; all surfaces agree; `subscription.test.js` | D1 |
-| `subscription` column set (migration 017+) | `db.js#mapSubscription`, the cron SELECT (F86/DW-7 class), webhook writers, admin DB Row viewer | The F86 field-coverage test once it exists; `db.test.js` mapping cases | D2/D4 |
+| `subscription` column set (migration 017+) | `db.js#mapSubscription`, the cron SELECT (F86/DW-7 class), webhook writers, admin DB Row viewer | `cronLifecycleSelectColumns.test.js` (the F86 field-coverage test); `db.test.js` mapping cases | D2/D4 |
 | Trial/grace timestamps or seeding (`seed-trial`, migration 021 trigger) | F80 phase math, F85 nudge days, T8 explainer, tester 6-month semantics | Fresh signup + tester flip walked through day-7/12/14/21/28 with a clock mock | D1 |
 | Tier bypass semantics (§23) | F81's deliberate tester **non**-bypass vs F86's cron exemption — two halves of one promise; breaking either strands testers (paywall) or deletes them (cron) | Expired tester account: sees paywall, never dunned/deleted | D4 |
 | Webhook event set / Stripe API version | F84 cases + idempotency table + revival restore path | Replay-twice test; Stripe CLI fixture run | D2 |
@@ -1973,11 +1976,11 @@ the select list sits outside that seam, which is how it slipped.
 | Dimension | Cells | Expected behavior |
 |---|---|---|
 | Entitlement state | trial / grace / active / expired / none | Banner countdown / banner "ended" copy (no grace mention) / nothing / enforcement fork / nothing (unseeded) |
-| Tier at expiry | plain / admin / investor / tester | Enforcement / bypassed / bypassed / **enforced** (real paywall, by design §23) — protection is cron-side only (DW-7 pending) |
+| Tier at expiry | plain / admin / investor / tester | Enforcement / bypassed / bypassed / **enforced** (real paywall, by design §23) — cron-side protection fixed (DW-7) |
 | Surface under `isExpiredReadOnly` | Home / Budget / Income / Log / Account | readOnly shadow / readOnly shadow / UpgradePanel replace / UpgradePanel replace / fully live |
 | Checkout return | success (webhook landed) / success (webhook late) / cancel | Immediate flip / poll up to 10s then flip / cancel notice, no state change |
 | Revival | tombstone match + charge / tombstone consumed / no tombstone | Restore + `revived_at` stamp / normal account behavior / normal checkout |
-| Cron row | admin/investor / tester / carded / active / trial day 7/12 / grace / expired / expired+7d | none / **should be none — currently dunned (DW-7)** / reset-or-none / reset-or-none / nudge / 2-day warnings / 2-day warnings / archive+delete |
+| Cron row | admin/investor / tester / carded / active / trial day 7/12 / grace / expired / expired+7d | none / **none (DW-7 fixed)** / reset-or-none / reset-or-none / nudge / 2-day warnings / 2-day warnings / archive+delete |
 
 ### 16.4 Block 4 — Case law & findings
 
@@ -1991,12 +1994,16 @@ the select list sits outside that seam, which is how it slipped.
   don't keep billing; live-verification items parked in §21's known gaps.
 - *Archive-then-delete wiring* (`1f94022`) — the cron's delete is the only archiving
   delete (T5 F52's invariant is the other half).
+- *Dead tester exemption in the cron (F86), fixed in this pass* — `DW-7`, this
+  investigation's highest-severity defect: the SELECT omitted `is_tester`, so the
+  engine's exemption gate read `undefined` and lapsed beta testers were dunned and
+  due for auto-deletion on the real schedule ~6 months after flag flip. Fixed by
+  adding `is_tester` to the SELECT plus `cronLifecycleSelectColumns.test.js`, a
+  structural field-coverage test (not a one-off assertion) that fails on any future
+  engine read the cron's SELECT doesn't cover.
 
-**Standing findings from this pass (open — decisions owed):**
-1. **Dead tester exemption in the cron (F86)** *(queued as DW-7 — HIGH)*: the SELECT
-   omits `is_tester`, so the engine's exemption gate reads `undefined` and beta
-   testers are dunned and auto-deleted on the real schedule ~6 months after flag
-   flip. One-line fix + a field-coverage shell test to kill the class.
+**Standing findings from this pass:** none open. DW-7 (above) was this pass's one
+defect and is now fixed.
 
 ---
 
@@ -2705,18 +2712,19 @@ Three pure functions, one base:
 A server-side gate is only as strong as the query that feeds its inputs. Two server gates read
 tier flags off a fetched row: `api/coach.js` gates AI on `userRow.is_admin`/`is_tester`
 (its SELECT supplies both — correct); the lifecycle engine exempts `row.is_admin ||
-row.is_investor || row.is_tester` (`:44`) but the **cron's SELECT omits `is_tester`**
-(`:135–137`), so the tester exemption reads `undefined` and never fires — **DW-7**, this
+row.is_investor || row.is_tester` (`:44`) and the **cron's SELECT once omitted `is_tester`**
+(`:135–137`), so the tester exemption read `undefined` and never fired — **DW-7**, this
 investigation's highest-severity defect (silent auto-deletion of testers ~6 months after
-flag flip).
+flag flip), fixed in this pass.
 > **IF** any server gate reads a row field, **THEN** the SELECT that produced the row MUST
 > include that column — a gate whose input column is missing evaluates against `undefined`
-> and silently fails *open or closed* with no error. The fix template (queued in DW-7): add
-> `is_tester` to the cron SELECT **and** a shell-level test asserting every column the engine
-> destructures appears in the query string, making the class structural rather than
-> whack-a-mole. Check: grep each `api/*` gate's field reads against its own `.select(...)`
-> string; unit tests that hand-build rows (as `lifecycleEngine.test.js` does) will NOT catch
-> this — the seam is the query, not the pure function.
+> and silently fails *open or closed* with no error. The fix template DW-7 applied: add
+> `is_tester` to the cron SELECT **and** a shell-level test (`cronLifecycleSelectColumns.test.js`)
+> asserting every column the engine destructures appears in the query string, making the class
+> structural rather than whack-a-mole. Check: grep each `api/*` gate's field reads against its
+> own `.select(...)` string; unit tests that hand-build rows (as `lifecycleEngine.test.js` does)
+> will NOT catch this — the seam is the query, not the pure function — which is exactly why
+> the fix is a runtime test against the actual `.select()` call, not another hand-built-row test.
 
 **Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
 F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
@@ -2751,7 +2759,7 @@ with no server gate is a D4 finding.
 | **`canAccessAiFeatures`** | `isAdmin \|\| isTester` | `is_admin`, `is_tester` | `App.jsx:878` (Coach net-worth trigger), `:3350` (Ask Coach panel), `HomePanel.jsx:1358` (Coach card, F24) | `api/coach.js:63` — re-checks on `userRow.is_admin`/`is_tester` before streaming (the model server gate) |
 | **`canAccessTaxPlan`** | `isAdmin \|\| isTester \|\| taxProjectionsEnabled` | `is_admin`, `is_tester`, `tax_projections_enabled` | `BudgetPanel.jsx:82` (`taxFeatureUnlocked`, F43), `ProfilePanel.jsx:1900` (`canSeeTaxPlan`, F45/F50) | none direct — tax writes go through `config` (F50), RLS-owned via migration 019; the gate is display-only. **No server action to re-gate** (writes are the user's own config row) |
 | **`getEntitlement` → `paywallBypassed`** | `isAdmin \|\| config.isInvestor` (F81) | `is_admin`, `is_investor` | `App.jsx:1463` → `isExpiredReadOnly` fork (F81) drives readOnly shadows + panel replacement | Server side is Stripe/webhook truth + the lifecycle cron (F85/F86); the client fork is UX over server-authoritative subscription columns |
-| **Lifecycle exemption** | `is_admin \|\| is_investor \|\| is_tester` (`_lifecycleEngine.js:44`) | all three flags | — (server-only) | **the gate itself** — but its SELECT omits `is_tester` (DW-7, F112/F86) |
+| **Lifecycle exemption** | `is_admin \|\| is_investor \|\| is_tester` (`_lifecycleEngine.js:44`) | all three flags | — (server-only) | **the gate itself** — SELECT now supplies `is_tester` (DW-7 fixed, F112/F86); field-coverage regression test enforces it stays that way |
 | **`isAdmin` toolkit** | `user_data.is_admin` (F67 map) | `is_admin` | Admin Tools sheet, Week Inspector, Reopen, per-entry breakdown (Spine F) | Data the tools read is the user's own RLS-scoped row; write-capable Phase-2 tools are `isOwner`-gated (not built) |
 | **`isAdmin` investor codes** | `user_data.is_admin` | `is_admin` | `ProfilePanel.jsx:2019` (ListRow), route `:1944` (**row-gate only** — DW-W2) | `InvestorAdminPanel` data calls are RLS-gated server-side (why DW-W2 is unexploitable today) |
 | **`isInvestor` demo tree** | `user_data.is_investor` / `config.isInvestor` | `is_investor` | `DemoAccountTree`, investor signup path (F70) | `createInvestorAccount`/demo storage RLS-scoped; `is_investor` grants **no** AI (§23 firewall) |
@@ -2763,7 +2771,7 @@ with no server gate is a D4 finding.
 |---|---|---|---|---|---|
 | plain user | ✗ | ✗ (opt-in alone ✗) | ✗ | **enforced** | ✗ |
 | `taxProjectionsEnabled` | ✗ | ✓ | ✗ | enforced | ✗ |
-| `is_tester` | ✓ | ✓ | ✗ (firewall) | **enforced** (real 6-mo trial; cron-exempt — DW-7) | ✗ |
+| `is_tester` | ✓ | ✓ | ✗ (firewall) | **enforced** (real 6-mo trial; cron-exempt — DW-7 fixed) | ✗ |
 | `is_investor` | ✗ (firewall) | ✗ | ✓ | bypassed | ✗ |
 | `is_admin` | ✓ | ✓ | ✗ (unless also investor) | bypassed | ✓ |
 | `is_owner` (future) | ✓ | ✓ | — | bypassed | ✓ + Phase-2 write tools |
@@ -2783,11 +2791,12 @@ with no server gate is a D4 finding.
 - *Migration 024* (`8f34def`/`a93dcad`) — a tier/permission migration can pass in SQL and
   still break writes; F69's checklist item.
 
-**Standing findings from this pass:** none new filed. The spine's one open defect is **DW-7**
-(the cron SELECT omits `is_tester`, killing the lifecycle exemption) — surfaced in the T9
-pass, generalized here into F112 as a *class* (server gate vs. its feeding query) rather than
-a one-off, and restated in the gate registry and tier matrix so the tester row's "enforced /
-cron-exempt (DW-7)" status is unmissable. **DW-W2** (the `investorcodes` route lacking the
+**Standing findings from this pass:** none new filed. **DW-7** (the cron SELECT once omitted
+`is_tester`, killing the lifecycle exemption) — surfaced in the T9 pass, generalized here into
+F112 as a *class* (server gate vs. its feeding query) rather than a one-off, and now fixed
+(SELECT + `cronLifecycleSelectColumns.test.js`) — is restated in the gate registry and tier
+matrix so the tester row's "enforced / cron-exempt (DW-7 fixed)" status is unmissable.
+**DW-W2** (the `investorcodes` route lacking the
 route-level re-check `taxplan` has) remains queue-visible and is captured in the registry's
 "row-gate only" note; it is not promoted because `activeSection` is tap-only state and the
 underlying data is RLS-gated (F45's IF/THEN is the tripwire). No D5 corrections owed — the

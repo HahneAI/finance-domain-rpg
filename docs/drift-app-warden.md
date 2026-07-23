@@ -2604,6 +2604,28 @@ investor display fields, wizard gate flags) is noise and must never trigger a ro
 > capture is broad by design (Master Timeline, TODO §19). Check: `configHistory.test.js`; DB
 > Row Viewer's config-history line after a sensitive edit.
 
+**F120 · Encryption trigger — no field-level encryption exists today** — `configHistory.js`
+(`HISTORY_SENSITIVE_FIELDS`), `database/migrations/`, `lib/supabase.js`, `db.js` — **[G]**
+Every persisted `user_data` field (§19.3 authority table) currently relies entirely on TLS in
+transit (Supabase's HTTPS endpoint) + RLS for access control (migration 019) — there is no
+field-level encryption anywhere in the stack: no `pgcrypto`, no application-layer AES/cipher, no
+encrypted column of any kind. This is a **documented-intended current gap, not a defect** — every
+field the app collects today (income, schedule, budget, goals, deductions) sits below the
+sensitivity threshold where RLS-only protection is inadequate. Full writeup and TODO tracking:
+`docs/TODO.md` §27.
+> **IF** a new persisted field is proposed that falls into a genuinely high-sensitivity class —
+> SSN, date of birth, bank account/routing number, government ID, or anything else a reasonable
+> user would expect encrypted-at-rest beyond Supabase's platform default — **THEN** it must NOT
+> simply join `HISTORY_SENSITIVE_FIELDS` (F108) or ride the plain F110 four-site procedure like an
+> ordinary field. An explicit encryption decision is required *before* the migration lands:
+> application-layer encrypt-before-write / decrypt-after-read (the `db.js` write path /
+> `loadUserData`, F67) or a `pgcrypto`-backed column via a dedicated migration — never a bare
+> `TEXT`/`JSONB` column relying on RLS alone. Name the sensitivity class in the migration's own
+> comment, and update CLAUDE.md's Persistence section with a pointer back to this entry (kept
+> current the same way the migration-number note is, per F109 below). Check: before any field in
+> that class is added, confirm an explicit encryption decision was documented — "column exists,
+> RLS covers it" is not sufficient for this class of data.
+
 **F109 · Migration-folder rules** — `database/migrations/` — **[G]**
 Ordered, numbered SQL. **BOOKMARK files are never migrations** — `022_BOOKMARK_schema_snapshot_2026-07-10.sql`
 is a full-schema recap (schema state through 021) that exists so a session reads one file
@@ -2661,6 +2683,7 @@ F20 (readOnly noop shadow).
 | `saveConfigSnapshot` row shape (`snapshot`/`changed_fields`/`effective_from`) | `extractBaseRateHistory` filter (F10, `db.js:19`), Master-Timeline future readers | A `baseRate` edit produces a readable row; future-dated rate shows old rate pre-effective (Week Inspector) | D2 |
 | `useLocalStorage` scope (F107) | `coachNetWorthSignal` throttle (F24) — device-local by design | Grep keys stay ephemeral; no account truth added; `useLocalStorage.test.js` | D3 |
 | `user_data` column set (any migration, F109) | F110 sites, BOOKMARK freshness, CLAUDE.md migration-number note, RLS grants (F69) | Next number skips BOOKMARKs (025); append BOOKMARK + update note same PR; F69 checklist | D2/D5 |
+| A new field carrying regulated/high-sensitivity data — SSN, DOB, bank/routing, gov ID (F120) | Must NOT reuse the plain F110 four-site procedure alone; needs an explicit encryption decision first | Confirm app-layer or `pgcrypto` encryption chosen and documented before the migration lands; CLAUDE.md Persistence section updated; `docs/TODO.md` §27 | D2/D5 |
 | Debounce interval / dep array (F106) | Continuous-edit persistence; must NOT gain a discrete-action dependency that should be eager instead | 800ms after typing writes once; a Save button does not rely on it | D3 |
 
 ### 19.3 Block 3 — Authority table (persisted field → write paths → readers)
@@ -2715,6 +2738,13 @@ now self-warns (T7 pass). `useLocalStorage`'s device-local scope (F107) is docum
 (the localStorage→Supabase vestige), not a defect — filed as a standing note, not a DW row,
 because nothing account-critical routes through it today; it would **promote to a defect** the
 moment any money/time/account field is stored through it instead of `user_data`.
+
+**No field-level encryption exists today (F120)** — every persisted field currently relies on
+TLS + RLS only, no `pgcrypto`/application-layer encryption anywhere. Documented-intended for the
+app's current data surface (no SSN/DOB/bank/gov-ID fields collected) — filed as a standing note,
+not a DW row, same treatment as F107 above. It would **promote to a defect** the moment a field in
+that sensitivity class is added without an explicit encryption decision (see F120's IF/THEN and
+`docs/TODO.md` §27).
 
 ---
 

@@ -3636,3 +3636,169 @@ to building from an assumed category list.*
 - [ ] **Keep the existing free-text path** — quick-select is additive; a user with an expense
   outside the preset list must still be able to type a custom label the way the editor already
   works today.
+
+---
+
+## 26. In-App Tutorials, Onboarding & Help
+
+*New workstream (2026-07-22), scoped from a codebase status review — not yet started, no design
+decisions made. Pure greenfield: nothing below is a partial build to finish.*
+
+**The gap.** `SetupWizard.jsx` covers account *setup* (pay structure, schedule, deductions) but
+there is no in-app system that teaches a user how to *use* the app once setup is done — no
+tooltip layer, no coachmark/walkthrough, no "?" help modal anywhere in `src/components/`. The one
+real step-by-step tutorial in the codebase is `PwaInstallModal.jsx`'s 5-step "Add to Home Screen"
+walkthrough — install-specific, not feature education. The closest thing to a help surface is the
+AI Coach (`AskCoachPanel.jsx` + `coachFeatureGuide.js`'s hand-written feature reference), but it's
+gated to `isAdmin`/`isTester` only and is Q&A, not guided onboarding — not available to the
+regular user population that would need it most.
+
+- [ ] **Decide the mechanism** — first-run feature tour (coachmarks over Home/Income/Budget on
+  first login post-setup), a persistent "?" help affordance per panel, or opening up
+  `coachFeatureGuide.js`'s content to non-admin users through a lightweight non-AI help sheet
+  (cheapest to ship — the copy already exists, written in-voice, and is prompt-cache-friendly
+  precisely because it's static).
+  - [ ] **Preferred first artifact — commit `coachFeatureGuide.js` to plain user copy.**
+    `docs/product/help/panel-help-copy.md` is created here as the canonical draft doc, seeded
+    directly from `coachFeatureGuide.js`'s five panel writeups. This is a real deliverable, not a
+    placeholder: rendering that doc's content as a static "?" help sheet per panel is buildable
+    without any Coach/AI gate at all, which is why it's called out ahead of the tour-vs-tooltip
+    decision below — even if the interactive-tour question stays open, the copy work does not need
+    to wait on it. Move product copywriting/iteration on that content into the linked doc rather
+    than back into this TODO once it exists.
+- [ ] **Where it would hook in** — `App.jsx` root shell already coordinates overlay modals via
+  imperative refs (see `PwaInstallModal`'s `open(triggerEl)` pattern); a feature tour would follow
+  the same shape. A first-run tour's natural trigger point is `SetupWizard`'s `onComplete`
+  callback (`setupComplete: true` transition) rather than a separate "have you seen this before"
+  flag.
+- [ ] **Scope the audience** — decide whether this is truly for every user (most likely, since
+  onboarding is a pre-paywall/pre-tier concern) or whether some depth is reserved behind
+  `isTester`/`isAdmin` the way Coach currently is — these are different products (a UI tour vs. an
+  AI explainer) and shouldn't inherit Coach's gate by default just because the content originated
+  there.
+- [ ] **Mobile checklist applies** — any tooltip/coachmark overlay must clear the existing Mobile
+  Checklist (CLAUDE.md) — 44×44px targets, no horizontal scroll at 375/390px, safe-area insets —
+  since a first-run tour is exactly the kind of feature that gets prototyped on desktop and ships
+  broken on an iPhone notch.
+
+---
+
+## 27. Data Encryption & At-Rest Security Posture
+
+*New workstream (2026-07-22), scoped from a codebase status review — not yet started. Read
+`docs/drift-app-warden.md` §19 F120 before touching any persisted field that might fall into a
+higher sensitivity class than what the app collects today — that entry is the authoritative
+trigger check for this whole section.*
+
+**The gap.** There is no field-level encryption anywhere in the app — no `pgcrypto`, no
+application-layer AES/cipher, nothing beyond Supabase/Postgres's platform-level defaults.
+Protection today is entirely: TLS in transit (Supabase's HTTPS endpoint, Vercel's `api/*`
+functions) + RLS for access control (`019_enable_user_data_rls.sql`, 84 policy references across
+`database/migrations/`) + the service-role write boundary for privileged columns (`db.js`'s
+`saveUserData` destructure whitelist, CLAUDE.md's Persistence section). That's a reasonable
+posture **today** because nothing currently collected (income, schedule, budget, goals) is
+regulated/high-sensitivity data — but there's no infrastructure in place if that changes.
+
+- [ ] **No action needed on current fields.** This section is a readiness/gap flag, not a
+  "go encrypt `user_data`" ticket — don't build anything here speculatively (see CLAUDE.md's
+  no-speculative-abstraction rule). The actionable trigger is §19 F120: a *new* field in a
+  genuinely high-sensitivity class (SSN, DOB, bank account/routing, government ID).
+- [ ] **If/when that trigger fires** — decide app-layer encrypt-before-write /
+  decrypt-after-read (in the `db.js` write path / `loadUserData`, F67) vs. a `pgcrypto`-backed
+  column via a dedicated migration, before the migration lands, not after. Update this section
+  with the decision once made rather than leaving it silently resolved in a migration file only.
+- [ ] **Session/token storage note (lower priority, informational only)** — `lib/supabase.js`'s
+  `sharedStorage` shim dual-writes the Supabase auth session to `localStorage` **and** a
+  same-origin cookie (`Secure` + `SameSite=Lax`, not `HttpOnly` — can't be, it's client-set) to
+  work around iOS PWA storage-partition isolation. This is inherent to Supabase's client-side
+  session model, not a defect, but worth a second look if the app's threat model ever changes
+  (e.g. if XSS surface grows with third-party scripts).
+- [ ] **Audit cadence** — no recurring security-posture review currently exists; consider whether
+  this section should be re-visited whenever a new `user_data` field is proposed (tying it to the
+  existing F110 four-site procedure checklist) rather than left as a one-time flag.
+
+---
+
+## 28. Irregular / Flexible Shift Hours Support
+
+*New workstream (2026-07-22), scoped from a codebase status review — not yet started. Touches the
+core fiscal engine (`finance.js` `buildYear` and friends) — read `docs/drift-app-warden.md` §18
+(Spine A — Fiscal Math) before starting; this is exactly the kind of change that class of section
+exists to gate.*
+
+**The gap.** The income engine is built around a single fixed `shiftHours` value per user
+(`config.shiftHours` — 12 for the DHL preset, defaults to 8 for base users); every hour
+computation in `finance.js` is `shiftCount × shiftHours`, not per-day actual hours. The existing
+"flexible" tiers are all still shift-count-based:
+- DHL preset — rotation-derived days/hours (`DHL_PRESET.rotation`).
+- DHL/base "custom hours" — a flat weekly target (`customWeeklyHours`, or the DHL-only
+  `customWeeklyHoursLong`/`customWeeklyHoursShort` pair) that back-derives how many *additional
+  fixed-length shifts* are needed to hit it (`finance.js` — see `getDhlPlannedPattern` and the
+  `customHrs ?? maxWeeklyHours ?? standardWeeklyHours` fallback chain, several call sites e.g.
+  `finance.js:162`, `:560-561`, `:1274`).
+- Base user ceiling — `maxWeeklyHours`, still assuming uniform shift blocks.
+- `config.scheduleIsVariable` exists but only toggles between two paystub-rate tiers (long/short
+  week), not per-day hour variability.
+- `WeekConfirmModal.jsx` lets users mark shifts missed/added/partial, but every override is still
+  expressed in units of `config.shiftHours` (e.g. "3 shifts × 12h" — see `hoursLost`/`hoursGained`
+  computations throughout the file).
+
+**Net effect:** anyone whose real schedule doesn't decompose into whole multiples of one
+`shiftHours` value — a retail/service worker logging 5.5h Monday, 3h Tuesday, 8h Thursday, or any
+gig-style variable-hours pattern — doesn't fit the model today.
+
+- [ ] **Scope the target user first** — this is a bigger product decision than a bug fix: does
+  "irregular hours" mean (a) a per-day hour input replacing the shift-count model entirely for
+  opted-in users, (b) a third schedule tier alongside DHL-preset/custom-weekly-hours that accepts
+  a per-weekday hour array, or (c) something narrower? Needs a decision before touching
+  `buildYear`.
+- [ ] **Identify every `shiftHours`-multiplication call site** — `finance.js` has this pattern
+  repeated across gross-pay, OT-threshold, and week-total calculations; `WeekConfirmModal.jsx` has
+  it again for missed/pickup-shift hour math. A per-day-hours model would need all of these
+  re-derived from a day-level source of truth instead of `shiftCount × shiftHours`, not patched
+  individually (the drift risk §18 exists to catch).
+- [ ] **OT-threshold interaction** — `otThreshold`/`otMultiplier` math currently assumes a known
+  shift-count-derived weekly total; per-day variable hours changes how OT is detected (running
+  daily/weekly total vs. a precomputed shift count) and needs its own design pass, not an
+  assumption that the existing OT logic "just works" once hours become variable.
+- [ ] **WeekConfirmModal UX** — the day-grid confirm flow would need a per-day hour input instead
+  of (or alongside) the current missed/pickup shift-toggle UX — a real UI redesign for that
+  screen, not a data-model-only change.
+
+---
+
+## 29. Tip Income Tracking
+
+*New workstream (2026-07-22), scoped from a codebase status review — not yet started.*
+
+**The gap.** There is no field, wizard question, or log-entry type for tip/gratuity income
+anywhere in the app — confirmed empty across `constants/config.js`, `finance.js`,
+`SetupWizard.jsx`, `WeekConfirmModal.jsx`, and `EVENT_TYPES` (`LogPanel.jsx`'s event types top out
+at `bonus`/`missed_unpaid`/`pto`/etc. — no tip-shaped entry). Precedent exists for "variable income
+on top of base pay" (`config.commissionMonthly` — a flat monthly average) and for one-off logged
+income (`EVENT_TYPES.bonus`, and the Job-Loss-mode-only `jobHuntIncomeLog` "Log Extra Income"
+widget) but neither is wired for recurring, per-shift, tax-treated tip income, and the latter is
+scoped to Job Loss Mode only.
+
+- [ ] **Decide the income shape** — tips are usually per-shift and often cash (no automatic tax
+  withholding the way payroll wages have), which is a materially different tax-treatment question
+  than `commissionMonthly`'s flat average. Needs a decision on whether tips flow through the same
+  `computeNet`/withholding pipeline as wages or get modeled separately (e.g. logged post-tax,
+  reducing `targetOwedAtFiling` headroom instead of running through `fedRateLow`/`stateRateLow`).
+- [ ] **Decide the entry point** — a new `EVENT_TYPES` entry (fits the existing "log real life,
+  see the dollar effect" Log panel pattern, `LogPanel.jsx`) vs. a new per-week field alongside pay
+  structure in `SetupWizard`/`WeekConfirmModal` (fits if tips are a near-every-shift occurrence for
+  the target user, not an occasional event). The Log-panel route is the lower-lift start given the
+  existing `EVENT_TYPES`/Log Effect Summary infrastructure already generalizes to "a dollar-impact
+  event type."
+  - [ ] **If a new field lands in `config` or a week record** — this is a "new persisted field"
+    for `docs/drift-app-warden.md` §19 F110's four-site procedure (the destructure sites, the ref,
+    the drift badge) — run that checklist, don't hand-roll persistence for it.
+- [ ] **Tax-plan interaction** — if tips are ever pulled into the withholding model, this needs to
+  be reconciled with the existing `taxExemptOptIn`/`canAccessTaxPlan` liability-hold decision
+  (`entitlements.js`, drift-app-warden §20 F111) rather than adding a second, parallel tax-estimate
+  path.
+- [ ] **Rolling income view** — `IncomePanel`'s week-by-week gross/net breakdown would need a line
+  for tip income distinct from base gross, so the "receipt behind every dollar" framing
+  (`coachFeatureGuide.js`'s own description of the Income panel) stays true once a second income
+  stream exists.

@@ -7,6 +7,7 @@ import {
   FISCAL_YEAR_START,
 } from "../constants/config.js";
 import { buildLoanHistory } from "./finance.js";
+import { isTrackedBetaTester } from "./entitlements.js";
 
 const FOOD_DEFAULT_MONTHLY = 400;
 const FOOD_DEFAULT_WEEKLY = FOOD_DEFAULT_MONTHLY / 4;
@@ -112,6 +113,7 @@ export async function loadUserData() {
       isEmployerDHL:              false,
       isAdmin:            false,
       isTester:           false,
+      betaCodeUsed:       null,
       taxProjectionsEnabled: false,
       subscription:       DEFAULT_SUBSCRIPTION,
     };
@@ -121,7 +123,7 @@ export async function loadUserData() {
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, is_tester, pto_goal, is_investor, tax_projections_enabled")
+    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, is_tester, beta_code_used, pto_goal, is_investor, tax_projections_enabled")
     .eq("user_id", userId)
     .single();
 
@@ -193,6 +195,7 @@ export async function loadUserData() {
       isEmployerDHL:              false,
       isAdmin:            false,
       isTester:           false,
+      betaCodeUsed:       null,
       taxProjectionsEnabled: false,
       subscription:       DEFAULT_SUBSCRIPTION,
     };
@@ -370,6 +373,7 @@ export async function loadUserData() {
     isEmployerDHL:                data.is_employer_dhl      ?? false,
     isAdmin:              data.is_admin    ?? false,
     isTester:             data.is_tester   ?? false,
+    betaCodeUsed:         data.beta_code_used ?? null,
     taxProjectionsEnabled: data.tax_projections_enabled ?? false,
     ptoGoal:              data.pto_goal    ?? null,
     isInvestor:           data.is_investor ?? false,
@@ -905,4 +909,28 @@ export async function checkRevival() {
     console.warn("checkRevival failed:", err.message);
     return null;
   }
+}
+
+/**
+ * Beta usage-tracking event log (docs/TODO.md — beta usage scoring;
+ * database/migrations/026_add_beta_activity_events.sql).
+ *
+ * Gate lives here, once, rather than at each of the three call sites (App.jsx
+ * login, HomePanel goal actions, BudgetPanel expense actions) — every caller
+ * passes the same isTester/betaCodeUsed pair through isTrackedBetaTester()
+ * instead of re-deriving the check inline, so the friends/family exclusion
+ * can't drift call-site by call-site. A no-op (not an error) for any account
+ * that isn't a tracked beta tester — this is expected to be called
+ * unconditionally from UI event handlers, not pre-guarded by callers.
+ */
+export async function logBetaEvent({ isTester, betaCodeUsed, eventType }) {
+  if (!isTrackedBetaTester({ isTester, betaCodeUsed })) return;
+  const userId = await getCurrentUserId();
+  if (!userId) return;
+
+  const { error } = await supabase
+    .from("beta_activity_events")
+    .insert({ user_id: userId, event_type: eventType });
+
+  if (error) console.warn("logBetaEvent failed:", error.message);
 }

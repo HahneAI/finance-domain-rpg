@@ -1,5 +1,15 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+
+// HomePanel and BudgetPanel pull in lib/db.js (logBetaEvent) → the real
+// Supabase singleton (created at module load from env vars) — mock it out so
+// no real client spins up.
+vi.mock('../../lib/supabase.js', () => ({
+  supabase: { from: vi.fn(), auth: { getSession: vi.fn() } },
+  getCurrentUserId: vi.fn().mockResolvedValue('test-user-id'),
+  getCachedAuthSnapshot: vi.fn().mockReturnValue({ accessToken: 'tok-123', userId: 'test-user-id' }),
+}))
+
 import { IncomePanel } from '../../components/IncomePanel.jsx'
 import { BenefitsPanel } from '../../components/BenefitsPanel.jsx'
 import { BudgetPanel } from '../../components/BudgetPanel.jsx'

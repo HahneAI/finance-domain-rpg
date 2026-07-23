@@ -4,6 +4,7 @@ import { computeGoalTimeline, fiscalMonthLabel, estimateGoalNextYear, fmtFullDat
 import { NetWorthHealthTips } from "./NetWorthHealthTips.jsx";
 import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { canAccessAiFeatures } from "../lib/entitlements.js";
+import { logBetaEvent } from "../lib/db.js";
 import { FISCAL_YEAR_START, PAYCHECKS_PER_YEAR } from "../constants/config.js";
 import { FISCAL_WEEKS_PER_YEAR, formatFiscalWeekLabel, getFiscalWeekNumber, formatPayPeriodLabel, weekNumToPaycheckNum, weeksToChecksRemaining, payPeriodUnit, getNextPayWeek, resolveActiveWeeksThisYear } from "../lib/fiscalWeek.js";
 import { deriveRollingTimelineMonths, progressiveScale } from "../lib/rollingTimeline.js";
@@ -63,6 +64,7 @@ export function HomePanel({
   fundedGoalSpend = 0,
   isAdmin = false,
   isTester = false,
+  betaCodeUsed = null,
   readOnly = false,
 }) {
   // Paywall-expired read-only mode (docs/TODO.md §17.E): shadow the mutation
@@ -465,6 +467,7 @@ export function HomePanel({
     setGoals(next);
     onSaveGoalsNow?.(next);
     setEditGoalId(null);
+    logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_updated" });
   };
   const addGoal = () => {
     if (!setGoals) return;
@@ -480,6 +483,7 @@ export function HomePanel({
     onSaveGoalsNow?.(next);
     setAddingGoal(false);
     setNewGoal({ label: "", target: "", note: "" });
+    logBetaEvent({ isTester, betaCodeUsed, eventType: "goal_created" });
   };
   const deleteGoal = (id) => {
     if (!setGoals) return;

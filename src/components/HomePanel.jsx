@@ -1358,6 +1358,8 @@ export function HomePanel({
       {canAccessAiFeatures({ isAdmin, isTester }) && (
         <CoachNetWorthCard
           config={config}
+          setConfig={setConfig}
+          saveConfigNow={saveConfigNow}
           expenses={expenses}
           goals={goals}
           weeklyIncome={weeklyIncome}

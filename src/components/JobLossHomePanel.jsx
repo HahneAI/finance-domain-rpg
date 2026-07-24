@@ -25,12 +25,13 @@ import { canAccessAiFeatures } from "../lib/entitlements.js";
  * Also mounts CoachNetWorthCard (DW-8 fix, docs/BUG_FIX_TODO.md): the Red
  * tier ("Job Loss Mode, runway under 30 days") was structurally unreachable
  * because this panel replaces HomePanel entirely and never rendered the card
- * — same isAdmin/isTester gate as HomePanel's own mount, same localStorage
- * rate-limit state (shared across both mount sites by design, one message
- * per fiscal week per tier per account). Amber/Green tiers still won't fire
- * here (they need HomePanel's netWorthHealth, a normal-mode-only concept, not
- * passed through) — only Red is reachable from this panel, which matches
- * what Red actually means.
+ * — same isAdmin/isTester gate as HomePanel's own mount, same config-backed
+ * rate-limit state (DW-9 fix — shared across both mount sites by design, one
+ * message per fiscal week per tier per account, durable per-account rather
+ * than per-device). Amber/Green tiers still won't fire here (they need
+ * HomePanel's netWorthHealth, a normal-mode-only concept, not passed through)
+ * — only Red is reachable from this panel, which matches what Red actually
+ * means.
  */
 export function JobLossHomePanel({
   config, setConfig: setConfigProp, saveConfigNow: saveConfigNowProp,
@@ -253,6 +254,8 @@ export function JobLossHomePanel({
       {canAccessAiFeatures({ isAdmin, isTester }) && (
         <CoachNetWorthCard
           config={config}
+          setConfig={setConfig}
+          saveConfigNow={saveConfigNow}
           expenses={expenses}
           currentWeek={currentWeek}
           today={effectiveToday}

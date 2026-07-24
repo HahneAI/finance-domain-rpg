@@ -20,6 +20,12 @@ import { decideLifecycleAction } from "./_lifecycleEngine.js";
 import { buildLifecycleEmail } from "./_lifecycleEmails.js";
 import { sendEmail, isEmailConfigured } from "./_email.js";
 import { STRIPE_CLIENTS, cancelStripeSubscription } from "./_stripeClient.js";
+import { isTrackedBetaTester } from "../src/lib/entitlements.js";
+
+// docs/TODO.md §37 — beta program halfway nudge threshold. A throttle column
+// (halfway_email_sent_at) makes exact-day precision unnecessary: this only
+// needs to be "at least 5 weeks in and never sent before," not "exactly day 35."
+const BETA_HALFWAY_MS = 5 * 7 * 24 * 60 * 60 * 1000;
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
@@ -134,7 +140,8 @@ export default async function handler(req, res) {
     .select(
       "user_id, subscription_status, stripe_subscription_id, trial_started_at, trial_ends_at, " +
         "access_ends_at, card_on_file, last_dunning_email_at, dunning_email_count, " +
-        "current_period_end, is_admin, is_investor, is_tester"
+        "current_period_end, is_admin, is_investor, is_tester, beta_code_used, beta_started_at, " +
+        "halfway_email_sent_at"
     )
     .not("trial_started_at", "is", null);
   if (fetchError) {
@@ -144,7 +151,7 @@ export default async function handler(req, res) {
 
   const now = new Date();
   const appUrl = env.APP_URL ? env.APP_URL.replace(/\/+$/, "") : "";
-  const summary = { checked: rows.length, sent: 0, reset: 0, deleteDue: 0, deleted: 0, errors: 0 };
+  const summary = { checked: rows.length, sent: 0, reset: 0, deleteDue: 0, deleted: 0, errors: 0, betaHalfwaySent: 0 };
 
   for (const row of rows) {
     try {
@@ -158,6 +165,36 @@ export default async function handler(req, res) {
         summary.deleted += 1;
         console.log(`cron-subscription-lifecycle: user ${row.user_id} archived + deleted (non-payment, day 21+7)`);
         continue;
+      }
+
+      // docs/TODO.md §37 — independent of the trial/grace/deletion action above;
+      // a row can get both its own lifecycle email this run AND the beta
+      // halfway nudge, since they're unrelated concerns for the same account.
+      if (
+        isTrackedBetaTester({ isTester: row.is_tester, betaCodeUsed: row.beta_code_used })
+        && row.beta_started_at
+        && !row.halfway_email_sent_at
+        && (now.getTime() - new Date(row.beta_started_at).getTime()) >= BETA_HALFWAY_MS
+      ) {
+        try {
+          const { data: betaUserData, error: betaUserError } = await adminClient.auth.admin.getUserById(row.user_id);
+          const betaEmail = betaUserData?.user?.email;
+          if (betaUserError || !betaEmail) {
+            throw new Error(`no email for user: ${betaUserError?.message ?? "auth row missing"}`);
+          }
+          const halfwayMessage = buildLifecycleEmail("beta_halfway", { appUrl });
+          await sendEmail({ to: betaEmail, ...halfwayMessage });
+          const { error: halfwayStampError } = await adminClient
+            .from("user_data")
+            .update({ halfway_email_sent_at: now.toISOString() })
+            .eq("user_id", row.user_id);
+          if (halfwayStampError) throw new Error(`halfway stamp failed: ${halfwayStampError.message}`);
+          summary.betaHalfwaySent += 1;
+        } catch (err) {
+          // Independent failure — must not abort this row's own lifecycle action below.
+          summary.errors += 1;
+          console.error(`cron-subscription-lifecycle: beta halfway email failed for ${row.user_id}:`, err.message);
+        }
       }
 
       if (action.type === "reset") {

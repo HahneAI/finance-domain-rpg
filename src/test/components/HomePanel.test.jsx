@@ -1,11 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
-// HomePanel pulls in CoachNetWorthCard.jsx → lib/claude.js → the real Supabase
-// singleton (created at module load from env vars) — mock it out so no real
-// client spins up. isAdmin defaults to false in these tests anyway, so the
-// card never renders; this only prevents the import chain from crashing.
+// HomePanel pulls in CoachNetWorthCard.jsx → lib/claude.js AND lib/db.js
+// (logBetaEvent) → the real Supabase singleton (created at module load from
+// env vars) — mock both out so no real client spins up. isAdmin defaults to
+// false in these tests anyway, so the card never renders; this only prevents
+// the import chain from crashing.
 vi.mock('../../lib/claude.js', () => ({ chatWithCoach: vi.fn() }))
+vi.mock('../../lib/supabase.js', () => ({
+  supabase: { from: vi.fn(), auth: { getSession: vi.fn() } },
+  getCurrentUserId: vi.fn().mockResolvedValue('test-user-id'),
+  getCachedAuthSnapshot: vi.fn().mockReturnValue({ accessToken: 'tok-123', userId: 'test-user-id' }),
+}))
 
 import { HomePanel } from '../../components/HomePanel.jsx'
 

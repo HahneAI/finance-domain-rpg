@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canAccessTaxPlan, canAccessAiFeatures } from '../../lib/entitlements.js'
+import { canAccessTaxPlan, canAccessAiFeatures, isTrackedBetaTester } from '../../lib/entitlements.js'
 
 describe('canAccessTaxPlan', () => {
   it('is hidden by default (no admin, no manual flag)', () => {
@@ -65,5 +65,39 @@ describe('canAccessAiFeatures', () => {
   it('coerces truthy/falsy inputs to a real boolean', () => {
     expect(canAccessAiFeatures({ isTester: undefined })).toBe(false)
     expect(canAccessAiFeatures({ isAdmin: 1 })).toBe(true)
+  })
+})
+
+describe('isTrackedBetaTester', () => {
+  it('is false by default (no tester flag, no code)', () => {
+    expect(isTrackedBetaTester({})).toBe(false)
+    expect(isTrackedBetaTester()).toBe(false)
+  })
+
+  it('requires BOTH is_tester and a beta code — neither alone is enough', () => {
+    expect(isTrackedBetaTester({ isTester: true, betaCodeUsed: null })).toBe(false)
+    expect(isTrackedBetaTester({ isTester: false, betaCodeUsed: 'BETA10W' })).toBe(false)
+  })
+
+  it('the real beta cohort: is_tester true AND a beta code present', () => {
+    expect(isTrackedBetaTester({ isTester: true, betaCodeUsed: 'BETA10W' })).toBe(true)
+  })
+
+  // Friends/family testers: is_tester true, no code — keep their standing 6-month
+  // window but must NOT be tracked by the beta scoring system.
+  it('friends/family testers (is_tester true, no code) are not tracked', () => {
+    expect(isTrackedBetaTester({ isTester: true, betaCodeUsed: null })).toBe(false)
+    expect(isTrackedBetaTester({ isTester: true })).toBe(false)
+  })
+
+  // isAdmin must NOT grant this on its own — admins aren't part of the beta cohort,
+  // and this function doesn't even accept an isAdmin param.
+  it('does not grant tracking via isAdmin — the function does not accept it', () => {
+    expect(isTrackedBetaTester({ isAdmin: true, betaCodeUsed: 'BETA10W' })).toBe(false)
+  })
+
+  it('coerces truthy/falsy inputs to a real boolean', () => {
+    expect(isTrackedBetaTester({ isTester: 1, betaCodeUsed: 'x' })).toBe(true)
+    expect(isTrackedBetaTester({ isTester: true, betaCodeUsed: '' })).toBe(false)
   })
 })

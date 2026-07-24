@@ -6,6 +6,7 @@ import { buildCascadedWeekly, latestPastEntry as latestPastEntryPure, applyMonth
 import { formatFiscalWeekLabel, formatPayPeriodLabel, getNextPayWeek } from "../lib/fiscalWeek.js";
 import { formatRotationDisplay } from "../lib/rotation.js";
 import { canAccessTaxPlan } from "../lib/entitlements.js";
+import { logBetaEvent } from "../lib/db.js";
 import { Card, VT, SmBtn, Pressable, useFoldTransition, SH, SectionHeader, PanelHero, iS, lS } from "./ui.jsx";
 import { LiquidGlass } from "./LiquidGlass.jsx";
 import { MonthQuarterSelector } from "./MonthQuarterSelector.jsx";
@@ -75,7 +76,7 @@ function scrollCategoryHeaderNearTop(cat) {
 }
 
 
-export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false, taxProjectionsEnabled = false, isTester = false, readOnly = false }) {
+export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpensesNow: onSaveExpensesNowProp, weeklyIncome, prevWeekNet, futureWeeks, futureWeekNets, currentWeek, today, fiscalWeekInfo, userPaySchedule, config, bufferPerWeek = 0, isAdmin = false, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, readOnly = false }) {
   // Tax-exempt projection UI (e.g. the TAXED/EXEMPT badge) is gated behind the
   // manual feature unlock, not config.taxExemptOptIn alone — so clicking "Unlock
   // projections" in setup never surfaces it to a normal user. See canAccessTaxPlan.
@@ -95,8 +96,16 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   // changes from setExpenses to this.
   const applyExpenseUpdate = (updater) => {
     let next;
-    setExpenses(prev => { next = updater(prev); return next; });
+    let prevLen;
+    setExpenses(prev => { prevLen = prev.length; next = updater(prev); return next; });
     onSaveExpensesNow?.(next);
+    // Beta usage tracking: a length increase is a create (expense or loan — both
+    // live in this same array), anything else is treated as an update. `next` is
+    // only undefined when readOnly's noop shadow swallowed the call — nothing
+    // actually mutated, so there's nothing to log.
+    if (next) {
+      logBetaEvent({ isTester, betaCodeUsed, eventType: next.length > prevLen ? "expense_created" : "expense_updated" });
+    }
   };
   // TODAY_ISO from App — reactive, advances at midnight automatically
   const TODAY_ISO = today;

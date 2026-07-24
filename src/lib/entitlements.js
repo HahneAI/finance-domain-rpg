@@ -45,3 +45,20 @@ export function canAccessTaxPlan({ isAdmin = false, taxProjectionsEnabled = fals
 export function canAccessAiFeatures({ isAdmin = false, isTester = false } = {}) {
   return hasTesterAccess({ isAdmin, isTester });
 }
+
+/**
+ * Beta usage-tracking eligibility (docs/TODO.md — beta usage scoring;
+ * database/migrations/025_add_beta_code_used.sql).
+ *
+ * Deliberately NOT built on hasTesterAccess — this is not a feature-access gate,
+ * it decides whether an account's activity gets logged to beta_activity_events.
+ * isAdmin does NOT grant this: admin accounts aren't part of the beta cohort.
+ *
+ * Two populations both carry is_tester = true:
+ *   • Real 10-week beta cohort — is_tester true AND a beta_code_used value present.
+ *   • Friends/family testers — is_tester true, no beta_code_used. Keep their
+ *     standing 6-month trial window; NOT tracked here, at least not initially.
+ */
+export function isTrackedBetaTester({ isTester = false, betaCodeUsed = null } = {}) {
+  return Boolean(isTester && betaCodeUsed);
+}

@@ -117,3 +117,20 @@ export async function validateInvestorCode(code) {
   if (error) return false;
   return data !== null;
 }
+
+/**
+ * Validates a beta program access code against the beta_codes table
+ * (docs/TODO.md §32, database/migrations/028_add_beta_codes.sql). Same shape
+ * as validateInvestorCode — client-side check for instant UI feedback only;
+ * api/seed-beta.js re-validates server-side before granting anything.
+ */
+export async function validateBetaCode(code) {
+  const { data, error } = await supabase
+    .from("beta_codes")
+    .select("id")
+    .eq("code", code.trim().toLowerCase())
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) return false;
+  return data !== null;
+}

@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent } from "./lib/db.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -35,7 +35,7 @@ import { JobLossBudgetPanel } from "./components/JobLossBudgetPanel.jsx";
 import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
-import { canAccessAiFeatures } from "./lib/entitlements.js";
+import { canAccessAiFeatures, isTrackedBetaTester } from "./lib/entitlements.js";
 import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./lib/jobLossRunway.js";
 
 const NAV_ITEMS = [
@@ -234,6 +234,11 @@ export default function App() {
   // manually via SQL, never client-writable. Grants AI features only; NOT an
   // investor-equivalent (no demo accounts, no investor code path).
   const [isTester, setIsTester] = useState(false);
+  // Distinguishes the tracked 10-week beta cohort (is_tester true + a redeemed
+  // beta code) from friends/family testers (is_tester true, no code) — see
+  // database/migrations/025_add_beta_code_used.sql and entitlements.js
+  // isTrackedBetaTester. Read-only from the client, same as is_tester.
+  const [betaCodeUsed, setBetaCodeUsed] = useState(null);
   // Per-user unlock for the Tax Plan feature — granted via SQL to select non-admins.
   const [taxProjectionsEnabled, setTaxProjectionsEnabled] = useState(false);
   const [ptoGoal, setPtoGoal] = useState(null);
@@ -421,6 +426,10 @@ export default function App() {
   // Tracks which user id we've already run the revival/trial-seed/reload chain
   // for below — see the SIGNED_IN guard for why this exists.
   const signedInChainRanForRef = useRef(null);
+  // Dedupes the beta "login" activity event the same way — one row per real
+  // sign-in, not per data-load. Reset on SIGNED_OUT alongside the ref above so
+  // a genuine later sign-in (same tab, sign out then back in) logs again.
+  const loginLoggedForRef = useRef(null);
   useEffect(() => {
     // Rely solely on onAuthStateChange rather than calling getSession() first.
     // getSession() resolves before Supabase has exchanged the OAuth code from the URL,
@@ -430,7 +439,10 @@ export default function App() {
     return onAuthChange((event, user) => {
       if (event === "PASSWORD_RECOVERY") setPendingPasswordReset(true);
       else setPendingPasswordReset(false);
-      if (event === "SIGNED_OUT") signedInChainRanForRef.current = null;
+      if (event === "SIGNED_OUT") {
+        signedInChainRanForRef.current = null;
+        loginLoggedForRef.current = null;
+      }
       // Seed user_data row + sync OAuth profile metadata on every sign-in.
       // Critical for Google OAuth users who have no row yet; safe no-op for email users.
       // §17.I: the revival check MUST run first — an OAuth sign-in with a
@@ -541,6 +553,16 @@ export default function App() {
       setIsEmployerDHL(data.isEmployerDHL);
       setIsAdmin(data.isAdmin);
       setIsTester(data.isTester);
+      setBetaCodeUsed(data.betaCodeUsed);
+      // Beta usage tracking: log one "login" event per real sign-in, only for the
+      // tracked beta cohort (isTrackedBetaTester — is_tester + a beta code, not
+      // friends/family testers). Guarded so a data reload later in the same
+      // session (checkout return, revival, etc.) doesn't log a second login.
+      if (isTrackedBetaTester({ isTester: data.isTester, betaCodeUsed: data.betaCodeUsed })
+        && loginLoggedForRef.current !== authedUser?.id) {
+        loginLoggedForRef.current = authedUser?.id;
+        logBetaEvent({ isTester: data.isTester, betaCodeUsed: data.betaCodeUsed, eventType: "login" });
+      }
       setTaxProjectionsEnabled(data.taxProjectionsEnabled);
       setPtoGoal(data.ptoGoal);
       setSubscription(data.subscription);
@@ -1527,6 +1549,7 @@ export default function App() {
           fundedGoalSpend={fundedGoalSpend}
           isAdmin={isAdmin}
           isTester={isTester}
+          betaCodeUsed={betaCodeUsed}
           readOnly={isExpiredReadOnly}
         />
       ))}
@@ -1575,6 +1598,7 @@ export default function App() {
           isAdmin={isAdmin}
           taxProjectionsEnabled={taxProjectionsEnabled}
           isTester={isTester}
+          betaCodeUsed={betaCodeUsed}
           readOnly={isExpiredReadOnly}
         />
       ))}
@@ -1616,6 +1640,7 @@ export default function App() {
         isAdmin={isAdmin}
         taxProjectionsEnabled={taxProjectionsEnabled}
         isTester={isTester}
+        betaCodeUsed={betaCodeUsed}
         today={effectiveToday}
         weekConfirmations={weekConfirmations}
         onInstallClick={isStandalone ? null : openPwaModal}

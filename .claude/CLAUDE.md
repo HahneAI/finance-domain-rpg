@@ -312,6 +312,15 @@ never grant Demo Account Tree access or the investor code path, and `is_investor
 grant AI features. Full detail: `docs/active-systems.md` §23 (Beta Tester Accounts) and §18
 (Investor & Demo Accounts).
 
+**Two populations both carry `is_tester = true`** — `user_data.beta_code_used` (migration
+`025_add_beta_code_used.sql`, manual SQL, never client-writable) tells them apart: a non-null
+value means the account is part of the tracked 10-week beta cohort (usage-logged to
+`beta_activity_events`, migration `026`, scored via `api/admin-beta-report.js`); a null value
+means an ad hoc friends/family tester, who keeps the standing 6-month trial window but is not
+usage-tracked. Set both fields together for a real beta-cohort account — `is_tester` alone is
+the friends/family case. Gate: `entitlements.js` `isTrackedBetaTester({ isTester, betaCodeUsed })`
+— deliberately not built on `hasTesterAccess`, since `isAdmin` does not imply beta-cohort tracking.
+
 ---
 
 ## Admin Diagnostic Toolkit

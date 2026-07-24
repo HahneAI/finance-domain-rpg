@@ -3906,27 +3906,21 @@ in `db.js`) — this app already has a working, tested pattern for "redeem a cod
 
 ## 33. Beta Program — In-App Feedback Channel
 
-*New workstream (2026-07-24). Complements the quantitative usage tracking already shipped —
-`beta_activity_events` answers "what did they do," this answers "why," which matters for scoring
-against a rubric that presumably isn't purely click-counting.*
+*Shipped 2026-07-24 (built as Option A, upgraded to Option B same day once the beta scoring rubric
+made it non-optional — "Feedback Submitted — 25 pts, frequency + specificity" can't be scored from a
+mailto link, which produces zero queryable data).*
 
-**Scoping — start with the cheapest version, not a new table.** Two options, cheapest first:
-
-- [ ] **Option A (recommended to start): a "Send Feedback" affordance that emails the admin directly**
-  — a button in `ProfilePanel.jsx` (the natural home; same place Life Events and other account-level
-  actions live), gated on `isTrackedBetaTester({ isTester, betaCodeUsed })` so only real beta testers
-  see it. Simplest implementation is a `mailto:` link (zero backend work); a slightly more polished
-  version posts to a small new `api/beta-feedback.js` route that sends via the existing email
-  infrastructure (`api/_email.js` already has a working sender used by the lifecycle-email system —
-  reuse it rather than standing up a second email path).
-- [ ] **Option B (upgrade path, only if Option A proves not enough): store feedback alongside the
-  activity log** — add a nullable `note TEXT` column to `beta_activity_events` (or a separate
-  `beta_feedback` table if free-text volume grows) so feedback shows up next to usage data in
-  `api/admin-beta-report.js`'s CSV instead of living only in an inbox. Don't build this up front —
-  only worth it if Option A's email volume becomes hard to correlate with specific users/weeks.
-- [ ] **Decide the ask** — a free-text box invites rambling; a short structured prompt ("one thing
-  that confused you this week," "one thing you'd change") produces more scoring-useful signal for a
-  rubric. Worth deciding the exact prompt before building the UI, not after.
+- [x] **Option A: `mailto:` link** — built first, then replaced same-day.
+- [x] **Option B: logged, readable submissions** — `beta_activity_events` gained a `feedback`
+  event_type + nullable `note TEXT` column (migration `030_add_beta_feedback.sql`). `ProfilePanel.jsx`'s
+  "Send Feedback" row now opens `BetaFeedbackDetail` (a real textarea, 4000-char client-side cap, no
+  DB-level length constraint — ~40 known trusted users), which calls `logBetaFeedback()` (`db.js`) —
+  same `isTrackedBetaTester` gate as everything else. `api/admin-beta-report.js` gained a
+  `feedback_count` column on the summary CSV plus a separate `?format=feedback` export (one row per
+  submission — free text with a possible multiple-per-user count doesn't fit the summary's
+  one-row-per-user shape).
+- [x] **The prompt** — "What's working (or not)?" placeholder copy; free-text, not a structured
+  multi-question form. Revisit only if submissions turn out too rambling to score.
 
 ---
 
@@ -3954,31 +3948,31 @@ quiet requires eyeballing raw timestamps; nothing calls it out.
 
 ## 35. Beta Program — Offboarding Decision (End of Week 10)
 
-*New workstream (2026-07-24). A decision to make now, not a system to build — the "right" answer
-determines whether any code is needed at all.*
+*Resolved 2026-07-24 — superseded by an actual scoring rubric (100 pts: App Usage 50 w/ 30-pt floor,
+Feedback 25, Call Attendance 15, Longevity 10 → three outcome tiers), not the earlier three
+free-standing options below. Execution script shipped: `database/beta-offboarding-day71.sql`.*
 
-**The gap.** Nothing currently defines what happens to a tracked beta tester's flags once the 10
-weeks end. `is_tester = true` also grants AI features and Tax Plan access (per CLAUDE.md's Account
-Tiers table) — those don't automatically expire, and the `beta_code_used` value doesn't self-clear.
+**Outcome mapping, applied per-account at day 71 (not automated — run by hand once):**
+- **70–100, floor met → Lifetime access + frontline feedback club.** `is_tester` stays true,
+  `beta_code_used` cleared, `trial_ends_at`/`access_ends_at` pushed ~50 years out. "Feedback club" is a
+  non-technical/community perk, nothing to apply in-app.
+- **60–69, floor met → 6 months free.** Same shape, but `trial_ends_at`/`access_ends_at` reset to a
+  *fresh* +6 months from day 71 — **not** simply left alone. Important subtlety found while building
+  this: `is_tester`'s window was already stamped once on redemption day (migration 021's trigger), so
+  by day 71 only ~4 months of it are left; leaving it untouched would under-deliver the reward. Also:
+  `is_tester` does **not** bypass the paywall on its own — confirmed `App.jsx`'s
+  `paywallBypassed = isAdmin || config.isInvestor` has no `isTester` — actual access is gated purely by
+  `trial_ends_at`/`access_ends_at` via `getEntitlement()`. Toggling `is_tester` alone would not have
+  delivered either reward tier; both fields must be set together.
+- **Floor not met, or 0–59 → No perk.** `is_tester` off (drops AI/Tax Plan too, not just billing),
+  `beta_code_used` cleared, `trial_ends_at`/`access_ends_at` set to now so nothing from the original
+  window lingers.
 
-**Three options, recommending the first:**
-- [ ] **(Recommended) Clear `beta_code_used` only, leave `is_tester` true.** This is a one-line manual
-  SQL sweep at the end of the program — `update user_data set beta_code_used = null where
-  beta_code_used is not null and beta_started_at < now() - interval '10 weeks';` — and requires **zero
-  new code**. The account silently becomes an ordinary friends/family tester: keeps AI/Tax Plan access
-  and the 6-month rolling trial window as a thank-you, and `isTrackedBetaTester` naturally stops
-  counting their activity from that point on (matches the intended two-population split this whole
-  system was built around).
-- [ ] **(Alternative) Flip `is_tester` off entirely** — revokes AI/Tax Plan access too. Only choose
-  this if the beta grant was explicitly framed as time-limited access, not a thank-you; would need the
-  same kind of manual SQL sweep (or, if ever done repeatedly, a scheduled job similar to
-  `cron-subscription-lifecycle.js`'s pattern — overkill for a one-time 40-person program).
-- [ ] **(Alternative) Leave everything as-is forever.** Zero effort, but `is_tester`/`beta_code_used`
-  stay permanently "true," meaning a stale report run months later would still (harmlessly, but
-  confusingly) treat these accounts as an active beta cohort. Only fine if nobody's ever going to run
-  `api/admin-beta-report.js` again after week 10.
-- [ ] **Whichever option is chosen, do it manually for 40 accounts** — this doesn't need automation
-  built for a one-time cohort; automating it is only worth it if beta programs like this repeat.
+**How to compile the per-tier account lists** — `api/admin-beta-report.js` (usage + feedback_count)
+`?format=feedback` (readable feedback content for the "specificity" judgment call) + your externally-
+tracked call attendance (this app has no record of scheduled calls — deliberately left external, see
+§ discussion 2026-07-24). Scoring itself stays manual, matching this whole system's "reviewed by a
+human" premise — no auto-scoring formula was built.
 
 ---
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
-import { redeemBetaCode } from "../lib/db.js";
+import { redeemBetaCode, logBetaFeedback } from "../lib/db.js";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH } from "./ui.jsx";
@@ -1894,11 +1894,6 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-// docs/TODO.md §33 — feedback destination for the tracked 10-week beta cohort.
-// No shared support inbox exists yet; points at the account owner directly.
-// Swap this if/when a dedicated beta inbox is set up.
-const BETA_FEEDBACK_EMAIL = "anthonyhahne20@gmail.com";
-
 // docs/TODO.md §32 — self-serve redemption for an already-signed-in account.
 // Mirrors the investor code flow's client-side validate-then-redeem shape
 // (LoginScreen.jsx's investorCode handling), but simpler: this upgrades an
@@ -1969,6 +1964,73 @@ function BetaRedeemDetail({ onBack }) {
   );
 }
 
+// docs/TODO.md §33 — replaces the earlier mailto: link. The beta scoring
+// rubric needs feedback to be both countable ("frequency") and readable
+// ("specificity"), which a mailto link can never supply — this logs the
+// actual text via logBetaFeedback (migration 030_add_beta_feedback.sql)
+// instead of handing it off to the user's mail client.
+function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack }) {
+  const [note, setNote] = useState("");
+  const [status, setStatus] = useState({ loading: false, error: null, success: false });
+
+  const handleSubmit = async () => {
+    if (!note.trim() || status.loading) return;
+    setStatus({ loading: true, error: null, success: false });
+    const result = await logBetaFeedback({ isTester, betaCodeUsed, note });
+    if (result.ok) {
+      setStatus({ loading: false, error: null, success: true });
+      setNote("");
+    } else {
+      setStatus({ loading: false, error: result.error || "Couldn't submit feedback", success: false });
+    }
+  };
+
+  return (
+    <>
+      <BackBar onBack={onBack} title="Send Feedback" />
+      <DetailCard>
+        <div style={{ padding: "13px 16px" }}>
+          {status.success ? (
+            <>
+              <div style={{ fontSize: "13px", color: "var(--color-teal)", marginBottom: "12px" }}>
+                Thanks — got it.
+              </div>
+              <Pressable
+                onClick={onBack}
+                style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+              >
+                Done
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <label style={lSp}>What's working (or not)?</label>
+              <textarea
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                placeholder="Tell us what you're noticing during the beta..."
+                maxLength={4000}
+                rows={6}
+                style={{ ...iS, marginTop: "6px", marginBottom: "10px", resize: "vertical", fontFamily: "inherit" }}
+              />
+              {status.error && (
+                <div style={{ fontSize: "11px", color: "var(--color-red)", marginBottom: "10px" }}>{status.error}</div>
+              )}
+              <Pressable
+                onClick={handleSubmit}
+                disabled={status.loading || !note.trim()}
+                style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: (status.loading || !note.trim()) ? "default" : "pointer", opacity: !note.trim() ? 0.45 : 1 }}
+              >
+                {status.loading ? "Sending…" : "Submit"}
+              </Pressable>
+            </>
+          )}
+        </div>
+      </DetailCard>
+    </>
+  );
+}
+
 export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription }) {
   // Tax Plan unlock is manual-only for now (admin, beta tester, or the per-user
   // tax_projections_enabled flag). The setup wizard's "Unlock projections" choice
@@ -2025,6 +2087,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   }
   if (activeSection === "betaredeem") {
     return <BetaRedeemDetail onBack={() => setActiveSection(null)} />;
+  }
+  if (activeSection === "betafeedback") {
+    return <BetaFeedbackDetail isTester={isTester} betaCodeUsed={betaCodeUsed} onBack={() => setActiveSection(null)} />;
   }
 
   // ── Main list ─────────────────────────────────────────────────────────────
@@ -2123,10 +2188,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
           <ListRow
             label="Send Feedback"
             summary="Tell us what's working (or not) during the 10-week beta"
-            onPress={() => {
-              const subject = encodeURIComponent("Authority Finance beta feedback");
-              window.location.href = `mailto:${BETA_FEEDBACK_EMAIL}?subject=${subject}`;
-            }}
+            onPress={() => setActiveSection("betafeedback")}
             last
           />
         ) : (

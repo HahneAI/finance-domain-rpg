@@ -3802,3 +3802,229 @@ scoped to Job Loss Mode only.
   for tip income distinct from base gross, so the "receipt behind every dollar" framing
   (`coachFeatureGuide.js`'s own description of the Income panel) stays true once a second income
   stream exists.
+
+---
+
+## 30. Beta Program — Per-User Beta Window (Report Scoping)
+
+*New workstream (2026-07-24), scoped from a codebase status review. Builds directly on the
+already-shipped beta usage-tracking system (migrations `025_add_beta_code_used.sql`,
+`026_add_beta_activity_events.sql`, `entitlements.js` `isTrackedBetaTester`, `api/admin-beta-report.js`)
+— not a redesign, a scoping fix for it.*
+
+**The gap.** `beta_code_used` carries no timestamp. `api/admin-beta-report.js` currently sums
+**all-time** activity for every tracked beta tester, not "their 10 weeks." That's silently wrong the
+moment codes go out staggered (tester A redeems week 1, tester B redeems week 4 — B's report window
+should not be measured against A's calendar) or if the program's actual end date slips past 10 weeks
+for some accounts. This is the single highest-value fix in this list because it's the one gap that
+would quietly distort the actual scoring numbers, not just leave a nice-to-have on the table.
+
+- [ ] **Migration `027_add_beta_started_at.sql`** — add `beta_started_at TIMESTAMPTZ` to `user_data`,
+  alongside `beta_code_used` (025) and `beta_activity_events` (026). Same client-write protection as
+  every other tester/admin column (never added to the `authenticated` column-grant list).
+- [ ] **Auto-stamp it, don't rely on remembering a third manual field** — add a trigger mirroring
+  `set_tester_trial_window()` (migration `021_add_is_tester_beta_flag.sql`'s pattern exactly): on
+  `user_data` INSERT/UPDATE, when `beta_code_used` transitions from null to non-null, stamp
+  `beta_started_at = now()`. This closes the same "two fields must be set together" risk that
+  migration 025's own comment flags for `is_tester`/`beta_code_used` — now it's one manual field
+  (`beta_code_used`) plus one trigger-derived one, not three fields to remember by hand.
+- [ ] **`db.js` read mapping** — add `beta_started_at` to `loadUserData()`'s SELECT and the
+  `betaStartedAt` return-object mapping, same pattern as `betaCodeUsed` (`db.js` — read-only, never in
+  `saveUserData`/`flushUserDataKeepalive`'s destructure).
+- [ ] **`api/admin-beta-report.js` scoping** — fetch `beta_started_at` in the existing `betaUsers`
+  query (`.select("user_id, display_name, beta_code_used")` → add `beta_started_at`), then filter each
+  user's event aggregation to `created_at >= beta_started_at` (and optionally
+  `< beta_started_at + 10 weeks` once the program has a hard end date per user, or just `<= now()`
+  while it's still running). Add a `beta_started_at`/`beta_week_number` column to the CSV output so
+  the reviewer can see which week of *their* program each user is currently on at a glance.
+
+---
+
+## 31. Beta Program — Pre-Launch Dry Run Checklist
+
+*New workstream (2026-07-24). Not a code change — a verification checklist to run once before
+handing out any of the 40 real beta codes, using the infrastructure already shipped in this session.*
+
+**Why this matters.** The whole usage-tracking system (migrations 025/026, the login/goal/expense
+hooks in `App.jsx`/`HomePanel.jsx`/`BudgetPanel.jsx`, `api/admin-beta-report.js`) has not been
+exercised against a live Supabase instance yet — the migrations haven't been run (per the prior
+conversation, that's being handled separately). A silently-broken hook (a typo in an event_type, a
+missed RLS grant, a report query that returns zero rows) discovered at week 10 is much worse than the
+same bug caught in five minutes before day 1.
+
+- [ ] **Run migrations 025 + 026** against the target Supabase project (tracked separately, listed
+  here so this checklist isn't attempted before they've landed).
+- [ ] **Manually flip one real (or disposable test) account** to the tracked-beta state:
+  `update user_data set is_tester = true, beta_code_used = 'DRYRUN' where user_id = '<test account>';`
+- [ ] **Sign in as that account** and confirm a `login` row appears in `beta_activity_events`
+  (Supabase table editor, or `select * from beta_activity_events where user_id = '<test account>'
+  order by created_at desc;`).
+- [ ] **Add a goal, edit a goal, add an expense, edit an expense** — confirm all four corresponding
+  event rows land (`goal_created`, `goal_updated`, `expense_created`, `expense_updated`).
+- [ ] **Confirm a friends/family-style account does NOT log** — flip a second test account to
+  `is_tester = true` with `beta_code_used` left `null`, repeat the actions above, confirm **zero**
+  rows land for that account (`isTrackedBetaTester`'s gate working as intended).
+- [ ] **Hit `api/admin-beta-report.js`** as an admin account (`Authorization: Bearer <token>`) and
+  confirm the CSV includes the dry-run account with the expected counts, and excludes the
+  friends/family test account entirely.
+- [ ] **Clean up** the dry-run test account's rows/flags before real codes go out, so it doesn't
+  pollute the real cohort's report.
+
+---
+
+## 32. Beta Program — Code Redemption Flow
+
+*New workstream (2026-07-24). This is the "orchestrated later" piece explicitly deferred during the
+usage-tracking build — `is_tester`/`beta_code_used` are manual-SQL-only today. Scoped here so it's
+ready to pick up whenever the beta program is ready to self-serve invites instead of hand-running SQL
+for 40 accounts.*
+
+**The gap.** Every beta account currently requires a human to run `update user_data set is_tester =
+true, beta_code_used = '<code>' ...` by hand. Fine for a one-time 40-person cohort, tedious and
+error-prone for anything larger or repeated.
+
+**Scoping — mirror the existing investor-code flow almost exactly** (migrations `010_add_investor_codes.sql`/
+`011_add_investor_users.sql`, `InvestorRegister.jsx`, `api/seed-investor.js`, `createInvestorAccount()`
+in `db.js`) — this app already has a working, tested pattern for "redeem a code, get flagged":
+
+- [ ] **`beta_codes` table** (new migration) — `id`, `code` (unique), `label`, `is_active`, `notes`,
+  `created_at`; same shape as `investor_codes`. Decide single-use vs. multi-redemption up front (an
+  `is_active` toggle per code, like investor codes, is probably sufficient for 40 users on a handful
+  of codes rather than one code per person).
+- [ ] **Redemption UI** — either a code field added to `LoginScreen.jsx`'s sign-up flow (same spot
+  the investor access code lives) or a small dedicated screen mirroring `InvestorRegister.jsx`.
+- [ ] **`api/seed-beta.js`** (new service-role route, mirroring `api/seed-investor.js` and
+  `api/seed-trial.js` exactly) — verifies the caller's Bearer token, re-validates the code against
+  `beta_codes.is_active` server-side (never trust the client's validation), then atomically sets
+  `is_tester = true`, `beta_code_used = '<code>'`, and (once §30 lands) `beta_started_at = now()` in
+  one write — closing the "two/three fields set together" risk at the source instead of relying on a
+  human to remember every field on every manual SQL run.
+- [ ] **Client wiring** — a new `redeemBetaCode()` in `db.js` that POSTs to `api/seed-beta.js`, called
+  from the redemption UI, same shape as `createInvestorAccount()`'s call to `seed-investor.js`.
+
+---
+
+## 33. Beta Program — In-App Feedback Channel
+
+*New workstream (2026-07-24). Complements the quantitative usage tracking already shipped —
+`beta_activity_events` answers "what did they do," this answers "why," which matters for scoring
+against a rubric that presumably isn't purely click-counting.*
+
+**Scoping — start with the cheapest version, not a new table.** Two options, cheapest first:
+
+- [ ] **Option A (recommended to start): a "Send Feedback" affordance that emails the admin directly**
+  — a button in `ProfilePanel.jsx` (the natural home; same place Life Events and other account-level
+  actions live), gated on `isTrackedBetaTester({ isTester, betaCodeUsed })` so only real beta testers
+  see it. Simplest implementation is a `mailto:` link (zero backend work); a slightly more polished
+  version posts to a small new `api/beta-feedback.js` route that sends via the existing email
+  infrastructure (`api/_email.js` already has a working sender used by the lifecycle-email system —
+  reuse it rather than standing up a second email path).
+- [ ] **Option B (upgrade path, only if Option A proves not enough): store feedback alongside the
+  activity log** — add a nullable `note TEXT` column to `beta_activity_events` (or a separate
+  `beta_feedback` table if free-text volume grows) so feedback shows up next to usage data in
+  `api/admin-beta-report.js`'s CSV instead of living only in an inbox. Don't build this up front —
+  only worth it if Option A's email volume becomes hard to correlate with specific users/weeks.
+- [ ] **Decide the ask** — a free-text box invites rambling; a short structured prompt ("one thing
+  that confused you this week," "one thing you'd change") produces more scoring-useful signal for a
+  rubric. Worth deciding the exact prompt before building the UI, not after.
+
+---
+
+## 34. Beta Program — Attrition Visibility Mid-Program
+
+*New workstream (2026-07-24). The smallest addition in this list — purely additive to
+`api/admin-beta-report.js`, no schema change, no new hook points.*
+
+**The gap.** The report already computes `lastAt` (the most recent event timestamp) per user during
+aggregation — it's just not surfaced as an actionable column. Right now, spotting a tester who's gone
+quiet requires eyeballing raw timestamps; nothing calls it out.
+
+- [ ] **Add a `days_since_last_active` column** to `api/admin-beta-report.js`'s CSV output — computed
+  from the `lastAt` value already tracked in the per-user aggregation loop
+  (`Math.round((Date.now() - new Date(lastAt)) / 86400000)`), zero new data collection required.
+- [ ] **Consider running the report weekly during the program**, not just once at week 10 — the
+  column is only useful for catching a dropping-off tester in time to do something about it if it's
+  actually looked at before the program ends. This is a process suggestion, not a code requirement —
+  the report endpoint already supports being hit any time.
+- [ ] **Optional: sort/highlight** — if the CSV is opened in a spreadsheet each week anyway, a simple
+  descending sort by `days_since_last_active` puts the most-at-risk testers at the top with zero extra
+  code (a spreadsheet-side sort, not an app change).
+
+---
+
+## 35. Beta Program — Offboarding Decision (End of Week 10)
+
+*New workstream (2026-07-24). A decision to make now, not a system to build — the "right" answer
+determines whether any code is needed at all.*
+
+**The gap.** Nothing currently defines what happens to a tracked beta tester's flags once the 10
+weeks end. `is_tester = true` also grants AI features and Tax Plan access (per CLAUDE.md's Account
+Tiers table) — those don't automatically expire, and the `beta_code_used` value doesn't self-clear.
+
+**Three options, recommending the first:**
+- [ ] **(Recommended) Clear `beta_code_used` only, leave `is_tester` true.** This is a one-line manual
+  SQL sweep at the end of the program — `update user_data set beta_code_used = null where
+  beta_code_used is not null and beta_started_at < now() - interval '10 weeks';` — and requires **zero
+  new code**. The account silently becomes an ordinary friends/family tester: keeps AI/Tax Plan access
+  and the 6-month rolling trial window as a thank-you, and `isTrackedBetaTester` naturally stops
+  counting their activity from that point on (matches the intended two-population split this whole
+  system was built around).
+- [ ] **(Alternative) Flip `is_tester` off entirely** — revokes AI/Tax Plan access too. Only choose
+  this if the beta grant was explicitly framed as time-limited access, not a thank-you; would need the
+  same kind of manual SQL sweep (or, if ever done repeatedly, a scheduled job similar to
+  `cron-subscription-lifecycle.js`'s pattern — overkill for a one-time 40-person program).
+- [ ] **(Alternative) Leave everything as-is forever.** Zero effort, but `is_tester`/`beta_code_used`
+  stay permanently "true," meaning a stale report run months later would still (harmlessly, but
+  confusingly) treat these accounts as an active beta cohort. Only fine if nobody's ever going to run
+  `api/admin-beta-report.js` again after week 10.
+- [ ] **Whichever option is chosen, do it manually for 40 accounts** — this doesn't need automation
+  built for a one-time cohort; automating it is only worth it if beta programs like this repeat.
+
+---
+
+## 36. Beta Program — In-App "Beta Tester" Badge
+
+*New workstream (2026-07-24). Purely cosmetic/motivational — no data flow changes, fully isolated
+from the tracking system itself.*
+
+**The idea.** A small visual acknowledgment (a pill/label near the account display name) for
+participants — the kind of lightweight social signal that tends to nudge engagement quality up for
+exactly zero risk, since it touches no finance logic and no persisted data.
+
+- [ ] **Where it lives** — `ProfilePanel.jsx`, near existing account info, gated on
+  `isTrackedBetaTester({ isTester, betaCodeUsed })` (already threaded as props into the panels that
+  would need it, or trivially addable to `ProfilePanel` the same way `isTester` already is). Friends/
+  family testers (no `beta_code_used`) should NOT see this badge — it's specifically "you're in the
+  10-week program," not "you have tester access."
+- [ ] **Style it as a genuinely small addition** — reuse an existing pill/tag pattern already in the
+  design system (`ui.jsx`'s primitives, or the style already used for status badges elsewhere) rather
+  than inventing new visual language for a one-off.
+- [ ] **Decide the copy** — "Beta Tester," "10-Week Beta," or something on-brand; a two-minute decision,
+  not worth its own design pass.
+
+---
+
+## 37. Beta Program — Week-5 "Halfway" Nudge Email
+
+*New workstream (2026-07-24). Reuses existing lifecycle-email infrastructure rather than standing up
+a new send pathway. Depends on §30 (`beta_started_at`) as the anchor date — build that first.*
+
+**The idea.** A single motivational touchpoint at the program's midpoint, reusing the same
+infrastructure that already sends trial/dunning emails (`api/_email.js`'s sender, the
+`api/_lifecycleEmails.js` template pattern, `api/cron-subscription-lifecycle.js`'s daily-cron shape) —
+not a new email system.
+
+- [ ] **Scope it as an addition to the existing daily cron**, not a new standalone job —
+  `api/cron-subscription-lifecycle.js` already runs daily and already reads `user_data` rows; add an
+  independent check alongside its existing lifecycle-phase logic: for each row where `is_tester` and
+  `beta_code_used` are both set (the tracked cohort) and `now() - beta_started_at` has just crossed the
+  5-week mark, send the halfway email.
+- [ ] **Avoid resending** — either a narrow enough daily window check (only fire on the exact day the
+  account crosses 5 weeks, not "5 weeks or more") or, more robustly, a new `halfway_email_sent_at`
+  column stamped on send and checked before sending again — same throttle pattern already used for
+  `last_dunning_email_at`/`dunning_email_count` (migration `017_add_subscription_fields.sql`).
+- [ ] **New template in `api/_lifecycleEmails.js`** — short, motivational, references the program by
+  name; follow the existing template function pattern (`buildLifecycleEmail` or equivalent) rather than
+  hand-rolling a one-off send.
+- [ ] **Low priority relative to §30–34** — this is pure polish; the report and its scoping fix matter
+  more to the program's actual goal (scoring 40 people against a rubric) than a reminder email does.

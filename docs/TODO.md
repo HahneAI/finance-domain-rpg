@@ -861,18 +861,23 @@ is written, since model lineups move.*
 
 #### Open product questions (need your call, not research)
 
-- [x] **Entry point — resolved 2026-07-11:** gated bottom-nav item, same mechanism as the existing
-  admin-only `__tools__` slot — `effectiveBottomNav` appends a "Coach" tab only when
-  `canAccessAiFeatures({isAdmin, isTester})` is true, so a non-gated user's nav stays unchanged at
-  5 items. Opens `AskCoachPanel.jsx`, a full-screen overlay (built 2026-07-11, Phase A scope: no
-  persistence, no history sidebar yet).
-- [ ] **Free vs. paid — direction set 2026-07-11, not yet built:** the general Ask Coach Q&A (§B)
-  and a baseline insight (Net Worth Trigger, §C) are meant to ship as part of the regular paid
-  subscription (trial included); the deeper, section-specific Coach surfaces (Statements Insights
-  §D, Job Hunt Assistant §E + Job Scout §I, Application Assistant §F, Tax Interview §J) are the
-  planned upsell — reusing the existing §17.E paywall/readOnly gate at trial-conversion rather than
-  inventing a separate Coach-tier flag. Not implemented — today everything is still isAdmin/isTester
-  gated regardless of subscription state; this only matters once Coach leaves admin-only.
+- [x] **Entry point — resolved 2026-07-11, gate widened 2026-07-24:** gated bottom-nav item, same
+  mechanism as the existing admin-only `__tools__` slot — `effectiveBottomNav` appends a "Coach"
+  tab when `canAccessAskCoachGeneral({isAdmin, isTester, entitlement})` is true (admin/tester, OR
+  a real trial/grace/active entitlement — see the free-vs-paid bullet below), so a fully
+  non-entitled user's nav stays unchanged at 5 items. Opens `AskCoachPanel.jsx`, a full-screen
+  overlay (built 2026-07-11, Phase A scope: no persistence, no history sidebar yet).
+- [x] **Free vs. paid — direction set 2026-07-11, built 2026-07-24:** the general Ask Coach Q&A
+  (§B) and the Net Worth Trigger (§C) now ship as part of the regular paid subscription, trial
+  included — `lib/entitlements.js`'s `canAccessAskCoachGeneral()` grants access via isAdmin/isTester
+  (unchanged) OR `entitlement.isEntitled` from `lib/subscription.js`'s `getEntitlement()`, checked
+  independently server-side in `api/coach.js` (never trusting a client-supplied flag). Deliberately
+  a separate function from `canAccessAiFeatures`, which stays the narrow admin/tester-only gate for
+  every other, not-yet-built Coach surface — the deeper, section-specific ones (Statements Insights
+  §D, Job Hunt Assistant §E + Job Scout §I, Application Assistant §F, Tax Interview §J) are still
+  the planned paid-conversion upsell once they exist, reusing the existing §17.E paywall/readOnly
+  gate rather than inventing a separate Coach-tier flag. Full write-up:
+  `docs/coach-entry-points.md` §§1–2.
 - [ ] **Mascot production** — who produces the §A mark (generated, commissioned, or hand-rolled
   SVG in the Flow palette)? Phase A can ship admin-only with a placeholder, but the public
   entry point wants the real avatar.

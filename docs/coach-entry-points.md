@@ -11,18 +11,18 @@ Matrix Rubric." Right now only one part of that rubric (how much boxing-style la
 uses) has actually been scored and locked in; the rest is a skeleton waiting to be filled in
 mode by mode. Any new Coach surface should match that rubric's voice, not invent its own.
 
-**The one rule that applies to everything below:** every single Coach feature — live or
-planned — is currently locked to Anthony's admin account and a short manual list of approved
-beta testers. Nobody else in the app can see or trigger any of it yet. The current plan is to
-open up **the first two sections below together** — the Ask Coach chat *and* the Net Worth
-Check-In card — to the full user base, while keeping every other section locked exactly where
-it is. That means the single lock those two features currently share has to be split apart
-from the rest first, so opening those two doesn't accidentally open anything else riding on
-the same switch.
+**The one rule that applies to sections 3 and up:** every Coach feature beyond the first two
+below is still locked to Anthony's admin account and a short manual list of approved beta
+testers, and stays that way until each one is individually built and separated the same way
+sections 1–2 just were. **As of 2026-07-24, sections 1 and 2 are no longer part of that lock**
+— the Ask Coach chat and the Net Worth Check-In card have been split off onto their own gate and
+now open to any signed-in user on a real free trial or a paid subscription, not just admins and
+testers. Nothing else quietly opened alongside them.
 
-**This document doubles as that splitting checklist.** Each section below is meant to become
-its own separately-switchable piece — before any section changes who can see it, this is the
-place to check what else might be quietly sharing its lock.
+**This document doubles as the splitting checklist for whatever comes next.** Each remaining
+section is meant to become its own separately-switchable piece the same way — before any
+section changes who can see it, this is the place to check what else might be quietly sharing
+its lock.
 
 **A second, separate distinction: free trial vs. paid.** Once the admin/tester lock is split
 apart, most of what's below is meant to be a reason to *convert* from the free trial to a paid
@@ -41,15 +41,12 @@ how to log something, and Coach answers using that person's real numbers — nev
 answer. Coach explicitly won't give tax, legal, or investment advice; it sticks to explaining
 the app.
 
-**Status:** 🟢 **Live and working**, for the locked-down group only. Right now every
-conversation is temporary — closing the chat forgets it. There's also no memory of a
-conversation the user had earlier; each open is a fresh start.
+**Status:** 🟢 **Live and open to the full user base** (2026-07-24) — no longer admin/tester
+locked. Right now every conversation is temporary — closing the chat forgets it. There's also
+no memory of a conversation the user had earlier; each open is a fresh start.
 
 **Free trial access: ✅ Yes.** Included from day one of the free trial — a trial user gets
 the exact same chat a paying subscriber does, not a limited preview of it.
-
-**This is one of the two features slated to open to everyone next** (see the Net Worth
-Check-In card below for the other), once the two items below are done.
 
 **Next up:** Give it a memory. Right now the chat only ever holds one exchange in view —
 nothing is saved. The next build phase adds: multi-turn conversations that stay on-topic
@@ -62,10 +59,11 @@ the Claude mobile app.
 hardcoded — the Haiku/Sonnet split described in the plan isn't actually wired up yet) · System
 prompt: `ASK_COACH_SYSTEM_PROMPT` in `src/lib/coachPrompts.js` (shared Coach voice + Ask-Coach
 answering rules + the app feature guide from `src/lib/coachFeatureGuide.js`, all frozen
-together into one prompt). Planned gate for the flip: `entitlement.isEntitled` (true for
-`"trial"`, `"grace"`, and `"active"` — see `src/lib/subscription.js`) in place of
-`canAccessAiFeatures({isAdmin, isTester})`, at every mount point (bottom nav, panel render,
-and the server-side check in `api/coach.js`) — trial is included on purpose, not excluded.
+together into one prompt). Gate: `canAccessAskCoachGeneral({isAdmin, isTester, entitlement})` in
+`src/lib/entitlements.js` — true for isAdmin/isTester (unchanged) or a real
+`"trial"`/`"grace"`/`"active"` entitlement from `src/lib/subscription.js`. Checked at every
+mount point (bottom nav, panel render) and independently re-verified server-side in
+`api/coach.js` from the DB row, never trusted from the client.
 
 ---
 
@@ -78,19 +76,15 @@ genuinely critical (namely, a job loss with under a month of runway left), and a
 acknowledgment when things turn around after a rough stretch. It only ever says something once
 per week per situation, so it can't nag.
 
-**Status:** 🟢 **Live and working**, for the locked-down group only. This card shows up on
-the regular Home screen and, as of this week, also on the separate Job Loss Mode Home screen —
-previously it could only ever say the calm "things turned around" message or the gentle
-heads-up there, never the critical one, because it simply wasn't present on that screen at all.
+**Status:** 🟢 **Live and open to the full user base** (2026-07-24) — no longer admin/tester
+locked. This card shows up on the regular Home screen and also on the separate Job Loss Mode
+Home screen — it previously could only ever say the calm "things turned around" message or the
+gentle heads-up there, never the critical one, because it simply wasn't present on that screen
+at all.
 
 **Free trial access: ✅ Yes.** Included from day one of the free trial, same as the chat
 above — the critical-warning tier especially is exactly the moment someone still deciding
 whether to subscribe needs to hear from Coach, not a reason to make them pay first.
-
-**This is the other of the two features slated to open to everyone next**, at the same time as
-the Ask Coach chat above — the critical-warning message in particular (job loss + under a
-month of runway) is exactly the moment a base user, not just an admin or tester, most needs to
-hear from Coach.
 
 **Next up:** The wording behind the gentle heads-up and the calm recovery message hasn't been
 scored against the personality rubric yet — only the critical warning has been tuned in detail.
@@ -102,9 +96,9 @@ due for a rewrite so it sounds like Coach instead of a leftover placeholder.
 **Technical reference:** API route `POST /api/coach` (same route as the chat above) · Model:
 **Haiku** (`claude-haiku-4-5`) · System prompt: `buildNetWorthSystemPrompt(tier)` in
 `src/lib/coachPrompts.js` — picks one of three short tier-specific prompts (gentle / critical /
-recovery), each built on the same shared Coach voice as the chat above. Planned gate for the
-flip: same as the chat above — `entitlement.isEntitled`, checked at both mount points
-(`HomePanel.jsx` and `JobLossHomePanel.jsx`) in place of `canAccessAiFeatures`.
+recovery), each built on the same shared Coach voice as the chat above. Gate: same as the chat
+above — `canAccessAskCoachGeneral({isAdmin, isTester, entitlement})`, checked at both mount
+points (`HomePanel.jsx` and `JobLossHomePanel.jsx`).
 
 ---
 

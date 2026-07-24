@@ -965,3 +965,32 @@ export async function logBetaEvent({ isTester, betaCodeUsed, eventType }) {
 
   if (error) console.warn("logBetaEvent failed:", error.message);
 }
+
+/**
+ * Beta feedback submission (docs/TODO.md §33, migration
+ * 030_add_beta_feedback.sql) — a 'feedback' event carrying the actual text in
+ * `note`, so it's both countable (rubric's "frequency") and readable (rubric's
+ * "specificity"), unlike the mailto link this replaces.
+ *
+ * Unlike logBetaEvent (fire-and-forget background logging from UI actions
+ * that already succeeded), this is a user-initiated submit the caller needs
+ * to confirm — returns { ok, error } the same shape as redeemBetaCode, so
+ * ProfilePanel can show a real success/error state.
+ */
+export async function logBetaFeedback({ isTester, betaCodeUsed, note }) {
+  if (!isTrackedBetaTester({ isTester, betaCodeUsed })) {
+    return { ok: false, error: "Not part of the tracked beta cohort" };
+  }
+  const trimmed = (note ?? "").trim();
+  if (!trimmed) return { ok: false, error: "Feedback can't be empty" };
+
+  const userId = await getCurrentUserId();
+  if (!userId) return { ok: false, error: "Not signed in" };
+
+  const { error } = await supabase
+    .from("beta_activity_events")
+    .insert({ user_id: userId, event_type: "feedback", note: trimmed });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}

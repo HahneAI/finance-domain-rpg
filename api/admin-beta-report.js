@@ -16,6 +16,11 @@ import { createClient } from "@supabase/supabase-js";
 // per-week breakdown was deliberately left out (no canonical "week 1" anchor
 // date exists per user) rather than guessing a bucketing scheme.
 //
+// GET ?format=feedback returns a second shape instead: one row PER FEEDBACK
+// SUBMISSION (user_id, display_name, email, created_at, note) rather than
+// per-user aggregates — free text with a possible multiple-per-user count
+// doesn't fit the summary CSV's one-row-per-user shape.
+//
 // docs/TODO.md §30 — each user's aggregate is scoped to THEIR OWN 10-week
 // window (beta_started_at .. beta_started_at + 10 weeks, migration
 // 027_add_beta_started_at.sql), not all-time activity. Staggered code
@@ -35,7 +40,7 @@ function csvEscape(value) {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-const EVENT_TYPES = ["login", "goal_created", "goal_updated", "expense_created", "expense_updated"];
+const EVENT_TYPES = ["login", "goal_created", "goal_updated", "expense_created", "expense_updated", "feedback"];
 const BETA_PROGRAM_WEEKS = 10;
 const BETA_PROGRAM_MS = BETA_PROGRAM_WEEKS * 7 * 24 * 60 * 60 * 1000;
 
@@ -92,7 +97,7 @@ export default async function handler(req, res) {
   const userIds = betaUsers.map(u => u.user_id);
   const { data: events, error: eventsError } = await adminClient
     .from("beta_activity_events")
-    .select("user_id, event_type, created_at")
+    .select("user_id, event_type, created_at, note")
     .in("user_id", userIds)
     .order("created_at", { ascending: true });
   if (eventsError) {
@@ -111,6 +116,12 @@ export default async function handler(req, res) {
   for (const row of events ?? []) {
     (eventsByUser[row.user_id] ??= []).push(row);
   }
+
+  // docs/TODO.md §33 — feedback text doesn't fit the one-row-per-user summary
+  // (a user can submit multiple times, and free text needs room to read), so
+  // it's collected separately here and served as its own export
+  // (?format=feedback) instead of crammed into the summary CSV.
+  const feedbackRows = [];
 
   const summaryRows = betaUsers.map((u) => {
     const windowStart = u.beta_started_at;
@@ -135,6 +146,15 @@ export default async function handler(req, res) {
       activeDays.add(e.created_at.slice(0, 10));
       if (!firstAt || e.created_at < firstAt) firstAt = e.created_at;
       if (!lastAt || e.created_at > lastAt) lastAt = e.created_at;
+      if (e.event_type === "feedback") {
+        feedbackRows.push({
+          user_id: u.user_id,
+          display_name: u.display_name ?? "",
+          email: emailById[u.user_id] ?? "",
+          created_at: e.created_at,
+          note: e.note ?? "",
+        });
+      }
     }
 
     const betaWeekNumber = windowStart
@@ -160,6 +180,7 @@ export default async function handler(req, res) {
       goal_updated: counts.goal_updated,
       expense_created: counts.expense_created,
       expense_updated: counts.expense_updated,
+      feedback_count: counts.feedback,
       active_days: activeDays.size,
       first_event_at: firstAt ?? "",
       last_event_at: lastAt ?? "",
@@ -167,9 +188,21 @@ export default async function handler(req, res) {
     };
   });
 
+  if (req.query?.format === "feedback") {
+    feedbackRows.sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
+    const feedbackHeader = ["user_id", "display_name", "email", "created_at", "note"];
+    const feedbackCsv = [
+      feedbackHeader.join(","),
+      ...feedbackRows.map(r => feedbackHeader.map(k => csvEscape(r[k])).join(",")),
+    ].join("\n");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="beta-feedback.csv"');
+    return res.status(200).send(feedbackCsv);
+  }
+
   const header = [
     "user_id", "display_name", "email", "beta_code_used", "beta_started_at", "beta_week_number",
-    "login_count", "goal_created", "goal_updated", "expense_created", "expense_updated",
+    "login_count", "goal_created", "goal_updated", "expense_created", "expense_updated", "feedback_count",
     "active_days", "first_event_at", "last_event_at", "days_since_last_active",
   ];
   const csv = [

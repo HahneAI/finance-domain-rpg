@@ -1639,6 +1639,7 @@ export default function App() {
         isAdmin={isAdmin}
         taxProjectionsEnabled={taxProjectionsEnabled}
         isTester={isTester}
+        betaCodeUsed={betaCodeUsed}
         today={effectiveToday}
         weekConfirmations={weekConfirmations}
         onInstallClick={isStandalone ? null : openPwaModal}

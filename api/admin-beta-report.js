@@ -15,6 +15,14 @@ import { createClient } from "@supabase/supabase-js";
 // ~40 users, reviewed manually once at the end of the 10-week program; a
 // per-week breakdown was deliberately left out (no canonical "week 1" anchor
 // date exists per user) rather than guessing a bucketing scheme.
+//
+// docs/TODO.md §30 — each user's aggregate is scoped to THEIR OWN 10-week
+// window (beta_started_at .. beta_started_at + 10 weeks, migration
+// 027_add_beta_started_at.sql), not all-time activity. Staggered code
+// redemption means "week 1" is a different calendar date per user; counting
+// all-time would let a tester who redeemed early (and kept using the app
+// afterward as an ordinary user) silently inflate their score relative to one
+// who redeemed on day 1 of the program.
 
 const env = globalThis.process?.env ?? {};
 const supabaseUrl = env.VITE_SUPABASE_URL || env.SUPABASE_URL;
@@ -28,6 +36,8 @@ function csvEscape(value) {
 }
 
 const EVENT_TYPES = ["login", "goal_created", "goal_updated", "expense_created", "expense_updated"];
+const BETA_PROGRAM_WEEKS = 10;
+const BETA_PROGRAM_MS = BETA_PROGRAM_WEEKS * 7 * 24 * 60 * 60 * 1000;
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -69,7 +79,7 @@ export default async function handler(req, res) {
 
   const { data: betaUsers, error: betaUsersError } = await adminClient
     .from("user_data")
-    .select("user_id, display_name, beta_code_used")
+    .select("user_id, display_name, beta_code_used, beta_started_at")
     .eq("is_tester", true)
     .not("beta_code_used", "is", null);
   if (betaUsersError) {
@@ -103,7 +113,19 @@ export default async function handler(req, res) {
   }
 
   const summaryRows = betaUsers.map((u) => {
-    const userEvents = eventsByUser[u.user_id] ?? [];
+    const windowStart = u.beta_started_at;
+    const windowEnd = windowStart
+      ? new Date(new Date(windowStart).getTime() + BETA_PROGRAM_MS).toISOString()
+      : null;
+    // Accounts with no beta_started_at predate migration 027 (or had
+    // beta_code_used set before the trigger existed) — fall back to counting
+    // all-time rather than silently dropping them from the report, and flag
+    // it via the empty beta_started_at/beta_week columns below.
+    const allUserEvents = eventsByUser[u.user_id] ?? [];
+    const userEvents = windowStart
+      ? allUserEvents.filter(e => e.created_at >= windowStart && e.created_at <= windowEnd)
+      : allUserEvents;
+
     const counts = Object.fromEntries(EVENT_TYPES.map(t => [t, 0]));
     const activeDays = new Set();
     let firstAt = null;
@@ -114,11 +136,25 @@ export default async function handler(req, res) {
       if (!firstAt || e.created_at < firstAt) firstAt = e.created_at;
       if (!lastAt || e.created_at > lastAt) lastAt = e.created_at;
     }
+
+    const betaWeekNumber = windowStart
+      ? Math.min(BETA_PROGRAM_WEEKS, Math.max(1, Math.ceil((Date.now() - new Date(windowStart).getTime()) / (7 * 24 * 60 * 60 * 1000))))
+      : "";
+
+    // docs/TODO.md §34 — surfaces attrition directly in the report instead of
+    // requiring the reviewer to eyeball raw timestamps; zero new data collection,
+    // derived from lastAt which was already being tracked.
+    const daysSinceLastActive = lastAt
+      ? Math.round((Date.now() - new Date(lastAt).getTime()) / (24 * 60 * 60 * 1000))
+      : "";
+
     return {
       user_id: u.user_id,
       display_name: u.display_name ?? "",
       email: emailById[u.user_id] ?? "",
       beta_code_used: u.beta_code_used,
+      beta_started_at: windowStart ?? "",
+      beta_week_number: betaWeekNumber,
       login_count: counts.login,
       goal_created: counts.goal_created,
       goal_updated: counts.goal_updated,
@@ -127,13 +163,14 @@ export default async function handler(req, res) {
       active_days: activeDays.size,
       first_event_at: firstAt ?? "",
       last_event_at: lastAt ?? "",
+      days_since_last_active: daysSinceLastActive,
     };
   });
 
   const header = [
-    "user_id", "display_name", "email", "beta_code_used", "login_count",
-    "goal_created", "goal_updated", "expense_created", "expense_updated",
-    "active_days", "first_event_at", "last_event_at",
+    "user_id", "display_name", "email", "beta_code_used", "beta_started_at", "beta_week_number",
+    "login_count", "goal_created", "goal_updated", "expense_created", "expense_updated",
+    "active_days", "first_event_at", "last_event_at", "days_since_last_active",
   ];
   const csv = [
     header.join(","),

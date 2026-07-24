@@ -35,7 +35,7 @@ function layout({ heading, bodyHtml, ctaLabel, appUrl, headingColor = BRAND.acce
 }
 
 /**
- * @param {"trial_nudge"|"grace_warning"|"deletion_warning"} template
+ * @param {"trial_nudge"|"grace_warning"|"deletion_warning"|"beta_halfway"} template
  * @param {{ trialDaysLeft?: number, appUrl?: string }} params
  * @returns {{ subject: string, html: string, text: string }}
  */
@@ -93,6 +93,28 @@ export function buildLifecycleEmail(template, { trialDaysLeft = 0, appUrl = "" }
       text:
         `Your free trial of Authority Finance ended and there is no payment method on your account. ` +
         `Your account and all of its data will be permanently deleted soon. Add a payment method now to keep your account.` +
+        (appUrl ? ` ${appUrl}` : ""),
+    };
+  }
+
+  // docs/TODO.md §37 — beta program halfway nudge. Not part of the trial/grace/
+  // deletion state machine above (doesn't gate access, purely motivational), so
+  // it's thrown separately from cron-subscription-lifecycle.js rather than woven
+  // into decideLifecycleAction's single-action return shape.
+  if (template === "beta_halfway") {
+    return {
+      subject: "You're halfway through the Authority Finance beta — thank you",
+      html: layout({
+        heading: "You're halfway through the beta",
+        bodyHtml:
+          `<p style="margin:0 0 12px;">You're 5 weeks into the 10-week Authority Finance beta program — thank you for using the app and helping us shape it.</p>` +
+          `<p style="margin:0;">Keep doing what you've been doing: log in, work your budget and goals, and use the app the way you normally would. If anything's confusing or broken, we want to hear about it — send us feedback any time from the Account tab.</p>`,
+        ctaLabel: "Open Authority Finance",
+        appUrl,
+      }),
+      text:
+        `You're 5 weeks into the 10-week Authority Finance beta program — thank you for using the app and helping us shape it. ` +
+        `Keep doing what you've been doing, and send us feedback any time from the Account tab.` +
         (appUrl ? ` ${appUrl}` : ""),
     };
   }

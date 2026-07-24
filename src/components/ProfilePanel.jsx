@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
+import { redeemBetaCode } from "../lib/db.js";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH } from "./ui.jsx";
 import { formatRotationDisplay } from "../lib/rotation.js";
-import { canAccessTaxPlan } from "../lib/entitlements.js";
+import { canAccessTaxPlan, isTrackedBetaTester } from "../lib/entitlements.js";
 import { getEntitlement } from "../lib/subscription.js";
 import { InvestorAdminPanel } from "./InvestorAdminPanel.jsx";
 
@@ -1893,11 +1894,89 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, isTester = false, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription }) {
+// docs/TODO.md §33 — feedback destination for the tracked 10-week beta cohort.
+// No shared support inbox exists yet; points at the account owner directly.
+// Swap this if/when a dedicated beta inbox is set up.
+const BETA_FEEDBACK_EMAIL = "anthonyhahne20@gmail.com";
+
+// docs/TODO.md §32 — self-serve redemption for an already-signed-in account.
+// Mirrors the investor code flow's client-side validate-then-redeem shape
+// (LoginScreen.jsx's investorCode handling), but simpler: this upgrades an
+// existing account in place rather than routing into a separate registration
+// form, so a full-page reload after success is the simplest correct way to
+// pick up the new is_tester/beta_code_used values (loadUserData's read-only
+// mapping) without threading a new reload-trigger callback through App.jsx
+// for a one-time, rarely-used action.
+function BetaRedeemDetail({ onBack }) {
+  const [code, setCode] = useState("");
+  const [status, setStatus] = useState({ loading: false, error: null, success: false });
+
+  const handleRedeem = async () => {
+    const trimmed = code.trim();
+    if (!trimmed || status.loading) return;
+    setStatus({ loading: true, error: null, success: false });
+    const result = await redeemBetaCode(trimmed);
+    if (result.ok) {
+      setStatus({ loading: false, error: null, success: true });
+    } else {
+      setStatus({ loading: false, error: result.error || "Invalid or inactive beta code", success: false });
+    }
+  };
+
+  return (
+    <>
+      <BackBar onBack={onBack} title="Redeem Beta Code" />
+      <DetailCard>
+        <div style={{ padding: "13px 16px" }}>
+          {status.success ? (
+            <>
+              <div style={{ fontSize: "13px", color: "var(--color-teal)", marginBottom: "12px" }}>
+                Code accepted — welcome to the beta.
+              </div>
+              <Pressable
+                onClick={() => window.location.reload()}
+                style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+              >
+                Continue
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <label style={lSp}>Beta Access Code</label>
+              <input
+                type="text"
+                autoComplete="off"
+                value={code}
+                onChange={e => setCode(e.target.value)}
+                placeholder="enter access code"
+                style={{ ...iS, marginTop: "6px", marginBottom: "10px" }}
+              />
+              {status.error && (
+                <div style={{ fontSize: "11px", color: "var(--color-red)", marginBottom: "10px" }}>{status.error}</div>
+              )}
+              <Pressable
+                onClick={handleRedeem}
+                disabled={status.loading || !code.trim()}
+                style={{ width: "100%", padding: "9px 0", background: "var(--color-accent-primary)", border: "none", borderRadius: "12px", color: "var(--color-bg-base)", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: (status.loading || !code.trim()) ? "default" : "pointer", opacity: !code.trim() ? 0.45 : 1 }}
+              >
+                {status.loading ? "Checking…" : "Redeem"}
+              </Pressable>
+            </>
+          )}
+        </div>
+      </DetailCard>
+    </>
+  );
+}
+
+export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onLocalSignOut, allWeeks, taxDerived, showExtra, setShowExtra, isAdmin, taxProjectionsEnabled = false, isTester = false, betaCodeUsed = null, today, weekConfirmations = {}, onInstallClick, onOpenLifeEvents, onBackToWork, subscription }) {
   // Tax Plan unlock is manual-only for now (admin, beta tester, or the per-user
   // tax_projections_enabled flag). The setup wizard's "Unlock projections" choice
   // intentionally does NOT reveal it — see canAccessTaxPlan for why.
   const canSeeTaxPlan = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled, isTester });
+  // docs/TODO.md §33/§36 — the real 10-week cohort only (isAdmin does NOT count,
+  // same distinction isTrackedBetaTester enforces everywhere else).
+  const isBetaTester = isTrackedBetaTester({ isTester, betaCodeUsed });
   const [activeSection, setActiveSection] = useState(null);
   const [showLocalSignOutConfirm, setShowLocalSignOutConfirm] = useState(false);
   const signOutFold = useFoldTransition(showLocalSignOutConfirm, { ms: 340 });
@@ -1943,6 +2022,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   }
   if (activeSection === "investorcodes") {
     return <InvestorAdminPanel onBack={() => setActiveSection(null)} />;
+  }
+  if (activeSection === "betaredeem") {
+    return <BetaRedeemDetail onBack={() => setActiveSection(null)} />;
   }
 
   // ── Main list ─────────────────────────────────────────────────────────────
@@ -2021,6 +2103,37 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
             label="Investor Codes"
             summary="Manage access codes and view registrations"
             onPress={() => setActiveSection("investorcodes")}
+            last
+          />
+        )}
+      </div>
+
+      {/* Beta Program group (docs/TODO.md §32/§33/§36) — one section that adapts
+          to redemption state instead of two near-duplicate UI elements. Before
+          redemption: a "Redeem Beta Code" entry point visible to every user,
+          same always-visible-regardless-of-invite pattern LoginScreen already
+          uses for the investor access code. After redemption (tracked 10-week
+          cohort only — never friends/family testers, is_tester true with no
+          beta_code_used): the section header itself doubles as the "badge," a
+          passive acknowledgment every time this panel opens, paired with the
+          feedback row. */}
+      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Beta Program</div>
+      <div style={{ background: "var(--color-bg-surface)", borderRadius: "12px", border: "1px solid var(--color-border-subtle)", overflow: "hidden", marginBottom: "20px" }}>
+        {isBetaTester ? (
+          <ListRow
+            label="Send Feedback"
+            summary="Tell us what's working (or not) during the 10-week beta"
+            onPress={() => {
+              const subject = encodeURIComponent("Authority Finance beta feedback");
+              window.location.href = `mailto:${BETA_FEEDBACK_EMAIL}?subject=${subject}`;
+            }}
+            last
+          />
+        ) : (
+          <ListRow
+            label="Redeem Beta Code"
+            summary="Have a beta program access code? Enter it here"
+            onPress={() => setActiveSection("betaredeem")}
             last
           />
         )}

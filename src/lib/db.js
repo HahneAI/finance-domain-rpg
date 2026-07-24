@@ -114,6 +114,7 @@ export async function loadUserData() {
       isAdmin:            false,
       isTester:           false,
       betaCodeUsed:       null,
+      betaStartedAt:      null,
       taxProjectionsEnabled: false,
       subscription:       DEFAULT_SUBSCRIPTION,
     };
@@ -123,7 +124,7 @@ export async function loadUserData() {
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, is_tester, beta_code_used, pto_goal, is_investor, tax_projections_enabled")
+    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, is_tester, beta_code_used, beta_started_at, pto_goal, is_investor, tax_projections_enabled")
     .eq("user_id", userId)
     .single();
 
@@ -196,6 +197,7 @@ export async function loadUserData() {
       isAdmin:            false,
       isTester:           false,
       betaCodeUsed:       null,
+      betaStartedAt:      null,
       taxProjectionsEnabled: false,
       subscription:       DEFAULT_SUBSCRIPTION,
     };
@@ -374,6 +376,7 @@ export async function loadUserData() {
     isAdmin:              data.is_admin    ?? false,
     isTester:             data.is_tester   ?? false,
     betaCodeUsed:         data.beta_code_used ?? null,
+    betaStartedAt:        data.beta_started_at ?? null,
     taxProjectionsEnabled: data.tax_projections_enabled ?? false,
     ptoGoal:              data.pto_goal    ?? null,
     isInvestor:           data.is_investor ?? false,
@@ -908,6 +911,34 @@ export async function checkRevival() {
   } catch (err) {
     console.warn("checkRevival failed:", err.message);
     return null;
+  }
+}
+
+/**
+ * Redeems a beta program access code on the CALLER's own already-existing
+ * account (docs/TODO.md §32) — unlike investor codes, this doesn't create a
+ * new account, it upgrades one that's already signed in. POSTs to
+ * api/seed-beta.js, same shape as syncUserProfile's call to api/seed-trial.
+ * Returns { ok: true } on success, { ok: false, error } otherwise — the
+ * caller (ProfilePanel) is responsible for reloading state after success,
+ * since is_tester/beta_code_used are read-only fields loadUserData maps in.
+ */
+export async function redeemBetaCode(code) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) return { ok: false, error: "Not signed in" };
+
+  try {
+    const res = await fetch("/api/seed-beta", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Invalid or inactive beta code" };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
   }
 }
 

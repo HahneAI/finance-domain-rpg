@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { canAccessAiFeatures } from "../src/lib/entitlements.js";
+import { canAccessAskCoachGeneral } from "../src/lib/entitlements.js";
+import { getEntitlement } from "../src/lib/subscription.js";
 
 // §18.G — proxies Claude API calls through a Vercel function so
 // ANTHROPIC_API_KEY stays server-side. Same auth pattern as delete-account.js:
@@ -59,18 +60,38 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Invalid or expired session" });
   }
 
-  // Standing constraint (docs/TODO.md §18 header): every AI feature is
-  // isAdmin/isTester-gated for now, client AND server side — this is the
-  // server side. Beta testers (user_data.is_tester) are NOT investors — this
-  // check must never expand to include is_investor. See
-  // docs/active-systems.md "Beta Tester Accounts".
+  // Ask Coach chat + Net Worth Check-In card (docs/coach-entry-points.md
+  // §§1–2) left the isAdmin/isTester-only standing constraint — this is the
+  // server-side half of that gate, re-verified independently of anything the
+  // client claims (never trust a client-supplied entitlement flag). Beta
+  // testers (user_data.is_tester) are NOT investors — this check must never
+  // expand to include is_investor. See docs/active-systems.md "Beta Tester
+  // Accounts". Every OTHER Coach surface (none built yet) must stay on the
+  // narrower canAccessAiFeatures — do not widen this route's gate further
+  // without also giving that future surface its own admin/tester-only check.
   const { data: userRow, error: userRowError } = await userClient
     .from("user_data")
-    .select("is_admin, is_tester")
+    .select(
+      "is_admin, is_tester, subscription_status, trial_ends_at, access_ends_at, " +
+      "current_period_end, stripe_subscription_id"
+    )
     .eq("user_id", authData.user.id)
     .single();
-  if (userRowError || !canAccessAiFeatures({ isAdmin: userRow?.is_admin, isTester: userRow?.is_tester })) {
-    return res.status(403).json({ error: "Coach is admin/beta-tester-only for now" });
+  // `now` is always the real wall-clock time here — there's no admin Lock
+  // Date concept server-side, so this can't accidentally extend a trial the
+  // way a simulated date would (see lib/subscription.js's own warning).
+  const entitlement = getEntitlement(
+    {
+      status: userRow?.subscription_status ?? null,
+      trialEndsAt: userRow?.trial_ends_at ?? null,
+      accessEndsAt: userRow?.access_ends_at ?? null,
+      currentPeriodEnd: userRow?.current_period_end ?? null,
+      stripeSubscriptionId: userRow?.stripe_subscription_id ?? null,
+    },
+    new Date()
+  );
+  if (userRowError || !canAccessAskCoachGeneral({ isAdmin: userRow?.is_admin, isTester: userRow?.is_tester, entitlement })) {
+    return res.status(403).json({ error: "Coach requires an active trial or subscription" });
   }
 
   const { messages, systemPrompt, contextBlock, model } = req.body ?? {};

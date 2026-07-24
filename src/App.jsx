@@ -35,7 +35,7 @@ import { JobLossBudgetPanel } from "./components/JobLossBudgetPanel.jsx";
 import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
-import { canAccessAiFeatures } from "./lib/entitlements.js";
+import { canAccessAskCoachGeneral } from "./lib/entitlements.js";
 import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./lib/jobLossRunway.js";
 
 const NAV_ITEMS = [
@@ -866,6 +866,13 @@ export default function App() {
     [isAdmin, tempLockDate, today]
   );
 
+  // Trial/subscription gate (docs/TODO.md §17.D/E). `now` is always the real
+  // wall-clock time, never effectiveToday/tempLockDate — see the disclosure
+  // note in lib/subscription.js: admin Lock Date must not extend a trial or
+  // the hidden grace window. Computed here (rather than nearer isExpiredReadOnly
+  // below) so effectiveBottomNav's canAccessAskCoachGeneral check can read it too.
+  const entitlement = getEntitlement(subscription, new Date());
+
   const effectiveBottomNav = useMemo(() => {
     // TODO §15 nav restructuring — Income and Log both assume an active pay
     // structure (projected income, per-paycheck event log) that a Job Loss
@@ -874,9 +881,11 @@ export default function App() {
     const items = config.jobLossMode
       ? BOTTOM_NAV.filter(i => i.key === "home" || i.key === "budget" || i.key === "profile")
       : [...BOTTOM_NAV];
-    // §18 standing constraint: Ask Coach stays isAdmin/isTester-gated until
-    // Coach leaves admin-only (docs/TODO.md §18.0 build order).
-    if (canAccessAiFeatures({ isAdmin, isTester })) {
+    // Ask Coach general chat left the admin/tester-only standing constraint
+    // (docs/coach-entry-points.md §1) — now also opens for a real trial/paid
+    // entitlement, not just isAdmin/isTester. Every OTHER Coach surface stays
+    // on canAccessAiFeatures (docs/TODO.md §18.0 build order).
+    if (canAccessAskCoachGeneral({ isAdmin, isTester, entitlement })) {
       items.push({
         key: "__coach__",
         label: "Coach",
@@ -899,7 +908,7 @@ export default function App() {
       });
     }
     return items;
-  }, [isAdmin, isTester, config.jobLossMode]);
+  }, [isAdmin, isTester, entitlement.isEntitled, config.jobLossMode]);
 
   // Desktop sidebar counterpart to effectiveBottomNav's Job Loss Mode trim —
   // same Income/Log exclusion, kept as a separate memo since NAV_ITEMS (unlike
@@ -1463,11 +1472,6 @@ export default function App() {
     return <FullScreenLoadingState />;
   }
 
-  // Trial/subscription gate (docs/TODO.md §17.D/E). `now` is always the real
-  // wall-clock time, never effectiveToday/tempLockDate — see the disclosure
-  // note in lib/subscription.js: admin Lock Date must not extend a trial or
-  // the hidden grace window.
-  const entitlement = getEntitlement(subscription, new Date());
   // Investors/demo accounts and admins never hit the paywall — they either
   // aren't real paying customers (investors) or need unrestricted access to
   // support other users (admins).
@@ -1502,6 +1506,7 @@ export default function App() {
           currentWeek={currentWeek}
           isAdmin={isAdmin}
           isTester={isTester}
+          entitlement={entitlement}
         />
       ) : (
         <HomePanel
@@ -1530,6 +1535,7 @@ export default function App() {
           fundedGoalSpend={fundedGoalSpend}
           isAdmin={isAdmin}
           isTester={isTester}
+          entitlement={entitlement}
           readOnly={isExpiredReadOnly}
         />
       ))}
@@ -3363,8 +3369,9 @@ export default function App() {
       {/* ── PWA install instructions (§16) — single instance, opened from drawer + Account panel ── */}
       <PwaInstallModal ref={pwaModalRef} />
 
-      {/* ── Ask Coach (§18.B Phase A) — isAdmin/isTester-gated per the §18 standing constraint ── */}
-      {askCoachOpen && canAccessAiFeatures({ isAdmin, isTester }) && (
+      {/* ── Ask Coach (§18.B) — left admin/tester-only; now also open to a real
+          trial/paid entitlement (docs/coach-entry-points.md §1) ── */}
+      {askCoachOpen && canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
         <AskCoachPanel
           onClose={() => setAskCoachOpen(false)}
           config={config}

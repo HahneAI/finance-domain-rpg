@@ -598,6 +598,35 @@ describe('JobLossHomePanel', () => {
       )
       expect(await screen.findByText('Coach — Critical')).toBeTruthy()
     })
+
+    // docs/coach-entry-points.md §2 — the Net Worth Check-In card (including
+    // its Red tier, the one this panel can reach) left the admin/tester-only
+    // gate; a real trial/paid entitlement now also opens it, same as HomePanel.
+    it('renders the Red tier for a non-admin/non-tester account with a real trial entitlement', async () => {
+      coachMocks.chatWithCoach.mockImplementation(chunkGenerator(['Runway is tight — here is what to do.']))
+      render(
+        <JobLossHomePanel
+          config={RUNWAY_UNDER_30} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits={false} currentWeek={{ idx: 10 }}
+          isAdmin={false} isTester={false}
+          entitlement={{ isEntitled: true, state: 'trial' }}
+        />
+      )
+      expect(await screen.findByText('Coach — Critical')).toBeTruthy()
+    })
+
+    it('does not render the card for a non-admin/non-tester account with an expired entitlement', () => {
+      render(
+        <JobLossHomePanel
+          config={RUNWAY_UNDER_30} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits currentWeek={{ idx: 10 }}
+          isAdmin={false} isTester={false}
+          entitlement={{ isEntitled: false, state: 'expired' }}
+        />
+      )
+      expect(screen.queryByText('Coach — Critical')).toBeNull()
+      expect(coachMocks.chatWithCoach).not.toHaveBeenCalled()
+    })
   })
 })
 

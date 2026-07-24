@@ -1,11 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 
 // HomePanel pulls in CoachNetWorthCard.jsx → lib/claude.js → the real Supabase
 // singleton (created at module load from env vars) — mock it out so no real
-// client spins up. isAdmin defaults to false in these tests anyway, so the
-// card never renders; this only prevents the import chain from crashing.
-vi.mock('../../lib/claude.js', () => ({ chatWithCoach: vi.fn() }))
+// client spins up. isAdmin/isTester/entitlement all default to "not entitled"
+// in baseProps, so the card never renders in most tests below; the async
+// generator implementation only matters for the gate tests that do open it.
+const { mocks } = vi.hoisted(() => ({ mocks: { chatWithCoach: vi.fn() } }))
+vi.mock('../../lib/claude.js', () => ({ chatWithCoach: mocks.chatWithCoach }))
 
 import { HomePanel } from '../../components/HomePanel.jsx'
 
@@ -34,5 +36,38 @@ describe('HomePanel', () => {
   it('does not show a sign-out action on Home', () => {
     render(<HomePanel {...baseProps} />)
     expect(screen.queryByRole('button', { name: /sign out/i })).toBeNull()
+  })
+
+  // docs/coach-entry-points.md §2 — the Net Worth Check-In card left the
+  // admin/tester-only gate; a real trial/paid entitlement now also opens it.
+  describe('CoachNetWorthCard gate (canAccessAskCoachGeneral)', () => {
+    const coachProps = {
+      ...baseProps,
+      config: { jobLossMode: false },
+      expenses: [],
+      goals: [],
+      fundedGoalSpend: 0,
+      currentWeek: { idx: 10 },
+    }
+
+    it('does not mount the card for a non-admin/non-tester account with no entitlement', () => {
+      render(<HomePanel {...coachProps} isAdmin={false} isTester={false} entitlement={{ isEntitled: false, state: 'none' }} />)
+      expect(screen.queryByText(/Coach — /)).toBeNull()
+    })
+
+    it('mounts the card for a non-admin/non-tester account with a real trial entitlement', async () => {
+      mocks.chatWithCoach.mockImplementation(async function* () { yield 'trial user check-in' })
+      render(
+        <HomePanel
+          {...coachProps}
+          isAdmin={false}
+          isTester={false}
+          entitlement={{ isEntitled: true, state: 'trial' }}
+          weeklyIncome={100}
+          remainingSpend={{ avgWeeklySpend: 500 }}
+        />
+      )
+      await waitFor(() => expect(screen.getByText('trial user check-in')).toBeTruthy())
+    })
   })
 })

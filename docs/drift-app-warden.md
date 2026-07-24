@@ -1353,9 +1353,9 @@ the paywall gate; the comment at `:269–277` records it).
 - *Tax Plan unlock chain* (`342d2ae`→`09c7609`→`a430fbf`→`a643153`) — manual-only
   unlock, wizard opt-in never reveals, `isAdmin` structurally ⊇ `isTester`.
 - *Dropped-prop crash* (`04b246c`) — `onInstallClick` was dropped in a refactor and
-  crashed the whole Account tab; ProfilePanel's 18-prop signature makes it the most
-  prop-fragile component in the app — treat any App.jsx wiring change here as
-  crash-risk until rendered once.
+  crashed the whole Account tab; ProfilePanel's prop signature (18 at this pass, now 19
+  after `betaCodeUsed` was added 2026-07-24) makes it the most prop-fragile component in
+  the app — treat any App.jsx wiring change here as crash-risk until rendered once.
 - *Google-only password form* (`6e123e8`) — identity-gated forms, F52.
 
 **Standing findings from this pass:** none filed as DW defects. The `investorcodes`
@@ -1364,6 +1364,18 @@ tap-only state and the InvestorAdminPanel's data calls are RLS-gated server-side
 becomes a real gap only if sub-view state ever gains an external setter, which its
 IF/THEN now guards. Queue-visible as watch item **DW-W2** in `BUG_FIX_TODO.md`. The
 D5 correction (active-systems §17 sub-view list) was applied in-pass per protocol.
+
+**Cross-reference (2026-07-24, beta program work):** two new sub-views added —
+`betaredeem` (`BetaRedeemDetail`) and `betafeedback` (`BetaFeedbackDetail`), routed the
+same tap-only way as every other `activeSection` case. `betaredeem`'s row is intentionally
+**always visible** (not `isAdmin`-gated like `investorcodes`) — same "always-visible
+regardless of invite" posture LoginScreen's investor-code box already uses; reachability
+carries no privilege since `api/seed-beta.js` re-validates the code server-side regardless
+of how the form was opened. `betafeedback`'s row IS gated (`isBetaTester` only), inheriting
+the exact F45/DW-W2 asymmetry already accepted for `investorcodes` — not a new instance to
+track separately. The real boundary for both is server-side (`api/seed-beta.js`'s
+re-validation; migration 031's insert-eligibility trigger for feedback), consistent with
+why DW-W2 was filed as a watch item, not a defect.
 
 ---
 
@@ -2066,6 +2078,14 @@ of every `row.*` field `_lifecycleEngine.js` reads — kills the class, not just
 **Standing findings from this pass:** none open. DW-7 (above) was this pass's one
 defect and is now fixed.
 
+**Cross-reference (2026-07-24, beta program work):** the day-71 outcome-application script
+(`database/beta-offboarding-day71.sql`, docs/TODO.md §35) explicitly resets
+`trial_ends_at`/`access_ends_at` for every tier rather than toggling `is_tester` alone —
+confirmed while building it that this is required, not optional, precisely *because* F81
+already establishes `is_tester` doesn't bypass the paywall. Cited here as the concrete
+artifact proving F81's design intent held under a real, separate feature built later — not a
+new finding, a confirmation.
+
 ---
 
 ## 17. T10 — UI-UX Drift Map
@@ -2664,6 +2684,33 @@ back on read, with a `DEFAULT_CONFIG` default so old rows get it.
 > and the ref share one field set would make this class structural. Check: kill-tab test on
 > the new field's discrete action; DB Row drift badge clean after save.
 
+**F121 · Beta program fields — a DIFFERENT category than F110, not a variant of it** —
+`user_data.beta_code_used`/`beta_started_at`/`halfway_email_sent_at` (migrations
+025/027/029), `beta_activity_events`, `beta_codes` — **[L]**
+F110's four-site procedure governs fields the **client writes** via the debounce/eager-save
+machinery. None of these fields are client-written at all: `beta_code_used` is set only by
+manual SQL or `api/seed-beta.js` (service role); `beta_started_at`/`halfway_email_sent_at`
+are trigger/cron-stamped; `beta_activity_events` rows are inserted directly by the client
+(`db.js` `logBetaEvent`/`logBetaFeedback`) but never touch `saveUserData`/
+`flushUserDataKeepalive` at all — a wholly separate write path from the F105/F106 primitive.
+Running F110's checklist against these fields would be checking the wrong procedure entirely.
+> **IF** a new beta-program field is added, **THEN** the correct checklist is: (a) is it
+> client-writable? If yes, it needs a RLS policy AND a column grant, and probably belongs in
+> F110 after all. If no (privileged/derived), it must be **excluded** from
+> `saveUserData`/`flushUserDataKeepalive`'s destructure (same as `is_tester`/`is_admin`) and
+> present in `loadUserData`'s read mapping (F67) with a safe default. (b) if it's written by a
+> trigger, does the trigger run `SECURITY DEFINER`? 021's original trigger shipped without it
+> and needed migration 024 to fix — 027's and 031's triggers got it right from the start by
+> citing that exact precedent in their own migration comments. (c) if it's an
+> `beta_activity_events` write gated by a client-side predicate
+> (`isTrackedBetaTester`), **THEN** per §20's cardinal rule ("every gate exists twice or not
+> at all") the real boundary must also exist server-side — migration 031's
+> `check_beta_activity_event_eligibility` trigger is that boundary; a future write path to
+> this table that bypasses the trigger (e.g. a new service-role route inserting on a user's
+> behalf without re-checking) would silently reopen the gap the trigger closed. Check:
+> attempt an insert as a non-tracked authenticated user (own `user_id`, no tester flags) —
+> must fail with the trigger's raised exception, not silently succeed.
+
 **Reverse index — surface F-entries already covering Spine-B consumers (do not restate):**
 F8 (wizard `savePersistedStateNow`), F9/F10 (config-history watcher effect + baseRate read
 chain), F35 (`applyExpenseUpdate` wrapper), F46 (ProfilePanel card pattern), F31 (check-in
@@ -2682,6 +2729,7 @@ F20 (readOnly noop shadow).
 | `HISTORY_SENSITIVE_FIELDS` / `diffSensitiveFields` semantics (F108) | F9 watcher, `DIFF_FIELDS` (§7 F7), §22 read slice (F10) | Sensitive edit → DB Row config-history line; undefined→null edit records nothing; `configHistory.test.js` | D5/D2 |
 | `saveConfigSnapshot` row shape (`snapshot`/`changed_fields`/`effective_from`) | `extractBaseRateHistory` filter (F10, `db.js:19`), Master-Timeline future readers | A `baseRate` edit produces a readable row; future-dated rate shows old rate pre-effective (Week Inspector) | D2 |
 | `useLocalStorage` scope (F107) | `coachNetWorthSignal` throttle (F24) — device-local by design | Grep keys stay ephemeral; no account truth added; `useLocalStorage.test.js` | D3 |
+| A new beta-program field/write path (F121) | Client-writable → F110 instead; privileged/derived → excluded from F68 destructure + present in F67 read map; trigger-written → `SECURITY DEFINER`; gated table insert → server-side trigger enforcement, not just client JS | Confirm which category before applying any checklist; non-eligible insert attempt must fail server-side | D3/D4 |
 | `user_data` column set (any migration, F109) | F110 sites, BOOKMARK freshness, CLAUDE.md migration-number note, RLS grants (F69) | Next number skips BOOKMARKs (025); append BOOKMARK + update note same PR; F69 checklist | D2/D5 |
 | A new field carrying regulated/high-sensitivity data — SSN, DOB, bank/routing, gov ID (F120) | Must NOT reuse the plain F110 four-site procedure alone; needs an explicit encryption decision first | Confirm app-layer or `pgcrypto` encryption chosen and documented before the migration lands; CLAUDE.md Persistence section updated; `docs/TODO.md` §27 | D2/D5 |
 | Debounce interval / dep array (F106) | Continuous-edit persistence; must NOT gain a discrete-action dependency that should be eager instead | 800ms after typing writes once; a Save button does not rely on it | D3 |
@@ -2819,6 +2867,34 @@ flag flip), fixed in this pass.
 > will NOT catch this — the seam is the query, not the pure function — which is exactly why
 > the fix is a runtime test against the actual `.select()` call, not another hand-built-row test.
 
+**F122 · `isTrackedBetaTester` — a tracking-eligibility predicate, not a feature gate** —
+`entitlements.js` — **[G]**
+Deliberately does NOT build on `hasTesterAccess` (F111's rule — "every feature gate is built
+on `hasTesterAccess`" — applies to *feature-access* gates; this isn't one). It decides
+whether an account's activity gets logged to `beta_activity_events`
+(`isTester && betaCodeUsed`), not whether a feature is visible. `isAdmin` does NOT grant this
+on its own — the function doesn't even accept an `isAdmin` param — because admin accounts
+aren't part of the scored beta cohort, unlike every other gate in this file where `isAdmin`
+is structurally a superset. Client-side callers: `App.jsx` (login event), `HomePanel.jsx`
+(goal events), `BudgetPanel.jsx` (expense events), `ProfilePanel.jsx`'s `BetaFeedbackDetail`
+(feedback events). Server-side enforcement: migration `031`'s
+`check_beta_activity_event_eligibility` trigger re-derives the same
+`is_tester AND beta_code_used IS NOT NULL` condition directly against `user_data`, closing
+the gap where — until that migration — this predicate was checked only in client JS
+(§20's cardinal rule 1 violation, found and fixed in the same drift pass that added this
+entry).
+> **IF** a new client call site logs to `beta_activity_events`, **THEN** it must gate through
+> `isTrackedBetaTester` (never re-derive `isTester && betaCodeUsed` inline — same
+> inline-re-derivation drift F111 already warns about for `hasTesterAccess`) — but note the
+> client-side gate is now UX-only, not the real boundary; migration 031's trigger is. **IF**
+> the trigger's eligibility condition changes, **THEN** `isTrackedBetaTester` must change to
+> match — two expressions of one rule, in two languages (JS + plpgsql), with no shared source;
+> a future edit to one without the other silently reopens either a false-reject (trigger
+> stricter than the client checks for, legitimate testers' events start failing) or the
+> original client-only-gate gap (trigger looser than intended). Check: `entitlements.test.js`
+> covers the JS half; migration 031's own verification block covers the SQL half — no single
+> automated test spans both today.
+
 **Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
 F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
 `isExpiredReadOnly` enforcement fork), F82 (upgrade surfaces), F85/F86 (lifecycle engine +
@@ -2839,6 +2915,7 @@ F71 (trial seeding), F78 (TrialExplainer gate).
 | Tier-flag mapping (`is_admin`/`is_tester`/`is_investor` → camelCase, F67) | Client reads via mapping, never writes; every gate's inputs; `config.isInvestor` (paywall bypass) vs `row.is_investor` (cron) — two spellings of one fact | `db.test.js` mapping cases; DB Row Viewer tier columns | D1/D4 |
 | Tester 6-month window semantics (§23, migration 021 trigger) | F81 non-bypass (testers ride the real paywall) **and** F86 cron exemption (DW-7) — two halves of one promise | Expired tester: sees paywall in-app, never dunned/deleted by cron | D4 |
 | A new tier flag / privileged column | F69 full checklist (migration RLS grant + service-role route + F67 read map + F68 write exclusion + gate on `hasTesterAccess` + cron exemption decision) | Post-migration: plain client upsert still works, new column rejects client writes | D4 |
+| `isTrackedBetaTester`'s eligibility condition (F122) | Migration 031's trigger — same rule, two languages, no shared source | Change both together; non-eligible insert attempt still fails after either-side edit | D4 |
 
 ### 20.3 Block 3 — The one-page gate registry
 

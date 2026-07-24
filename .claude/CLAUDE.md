@@ -249,9 +249,13 @@ number in sequence expecting it to run. They exist purely so a session can read 
 of the entire migrations folder to understand current DB shape. The `BOOKMARK` tag and all-caps
 make them impossible to mistake for a pending migration. Latest bookmark:
 `022_BOOKMARK_schema_snapshot_2026-07-10.sql` (schema state through migration 021).
-Real migrations continue past it: 023 (coach_chats) and 024 (user_data write-permission
-fix) exist — **the next real migration is 025.** Verify against the folder before
-numbering; this note has gone stale once already (drift-app-warden §14).
+Real migrations continue past it: 023 (coach_chats), 024 (user_data write-permission fix),
+025–030 (beta program — `beta_code_used`, `beta_started_at`, `beta_codes`,
+`beta_halfway_email_sent_at`, `beta_activity_events` + its `feedback` event type) exist —
+**the next real migration is 031.** Verify against the folder before numbering; this note
+has now gone stale twice (drift-app-warden §14, and again across the beta-program migrations
+until this fix — a fresh BOOKMARK compiling schema state through 030 is now overdue; the
+existing `022` snapshot is stale for the same reason).
 
 ---
 
@@ -330,7 +334,7 @@ the friends/family case. Gate: `entitlements.js` `isTrackedBetaTester({ isTester
 
 **How to use in a session:** ask the user to open the Admin Tools sheet (Tools icon in mobile bottom nav), run the relevant tool, and paste or describe the output here.
 
-### Phase 1 — isAdmin (all 8 live ✓)
+### Phase 1 — isAdmin (all 9 live ✓)
 
 | Tool | How to invoke | What to ask for |
 |------|--------------|-----------------|
@@ -342,6 +346,7 @@ the friends/family case. Gate: `entitlements.js` `isTrackedBetaTester({ isTester
 | **Tax Weeks Grid** | Tools sheet → Tax Weeks → View ↓ | 52-cell grid. Teal = taxed/future · dark = untaxed/future · gray = past · teal border = current week · red dot = `pastWeekTaxStatusOverride`. Ask: "open Tax Weeks and describe any red dots or unexpected cell colors." |
 | **Live State Inspector** | Amber "Live" pill fixed bottom-right corner | Tap to expand a real-time card showing: `effectiveToday` (amber if lock-offset), week idx + label, futureWeeks.length, unconfirmedCount, extraPerCheck, totalGap, taxedWeekCount, fundedGoalSpend, bufferPerWeek, weeklyIncome, projectedAnnualNet, plus (§17.F) the resolved subscription phase (`Sub Phase` — trial/grace/active/expired/none, with the raw Stripe status as its sub-label), `Trial Ends`, `Access Ends` (the hidden day-21 cutoff — admin-only, never shown elsewhere), `Period End`, and `Card / Dunning`. Ask: "open Live and paste all 16 values." **Session insight:** Surfaced the $3,690 tax gap, $65/wk surplus, and $0 goal funding in a single read — ask for this early in any diagnostic where the complaint is about a number shown on screen, since it reflects exactly what the app is computing right now. |
 | **Week Inspector** | Tap any week row in Income panel | Full-screen modal. Shows every field on the week object: schedule (workedDayNames, hours, OT, weekend), pay (grossPay, taxableGross, deductions, 401k, live computeNet), net lookup (baseNet, adjustment, spendable), confirmation record, and all log entries touching this week with net impact. Ask: "tap week [N] and describe the Pay and Net Lookup sections." **Session insight:** Confirmed per-week income math was correct and isolated a 401k employer match display bug ($14.96 shown despite `k401MatchRate: 0`) — use this when the issue is a specific wrong number on a paycheck or week, or to rule out income math as the cause of a broader trend problem. |
+| **Beta Report** | Tools sheet → Beta Report → Usage CSV / Feedback CSV | Downloads `api/admin-beta-report.js`'s two exports (per-user usage summary; raw feedback submissions) with the current admin session's token. The only in-app trigger for that endpoint — same data as hitting it directly with a Bearer token, just without crafting the request by hand. Ask for this when scoring the beta program against the rubric (`docs/TODO.md` §35, `database/beta-offboarding-day71.sql`). |
 
 **Per-entry impact breakdown** (Log panel): tap the ▼ chevron on any log entry (admin-only) to expand an inline breakdown of that entry's exact impact — gross, net, 401k employee + match, PTO hours, bucket deduction, fiscal week idx, past/future classification.
 

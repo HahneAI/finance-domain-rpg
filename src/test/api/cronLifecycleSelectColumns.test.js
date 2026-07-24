@@ -11,6 +11,14 @@
 // the real column-list gap. This test inspects the actual string passed to
 // Supabase's .select() at runtime, so it fails the moment the two drift
 // apart again, for any field, not just this one.
+//
+// Extended for the beta-halfway check (docs/TODO.md §37) — that block reads
+// row.is_tester/beta_code_used/beta_started_at/halfway_email_sent_at directly
+// in cron-subscription-lifecycle.js itself, OUTSIDE decideLifecycleAction, so
+// scanning only _lifecycleEngine.js would leave it structurally unprotected —
+// exactly the DW-7 bug class, just in a new spot. Scans both files' `row.*`
+// reads and unions them, so this stays the one place that class of bug dies,
+// not a per-instance fix.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -58,7 +66,7 @@ beforeEach(() => {
 });
 
 describe("cron-subscription-lifecycle — SELECT column completeness", () => {
-  it("selects every user_data column decideLifecycleAction() reads off `row`", async () => {
+  it("selects every user_data column read off `row` by the engine OR the cron handler itself", async () => {
     let requestedSelect = null;
     // Empty result set: the handler returns right after the list query, so no
     // other Supabase/email/Stripe calls need mocking for this assertion.
@@ -78,15 +86,16 @@ describe("cron-subscription-lifecycle — SELECT column completeness", () => {
 
     const selectedColumns = new Set(requestedSelect.split(",").map((c) => c.trim()));
 
-    const engineSrc = readFileSync(
-      path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../api/_lifecycleEngine.js"),
-      "utf8"
-    );
-    const readColumns = [...new Set([...engineSrc.matchAll(/\brow\.([a-zA-Z_]+)/g)].map((m) => m[1]))];
-    // Sanity check the extraction itself actually found the known exemption
-    // flags — if this regex ever stops matching anything, the test would
-    // otherwise pass vacuously.
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    const engineSrc = readFileSync(path.join(dir, "../../../api/_lifecycleEngine.js"), "utf8");
+    const cronSrc = readFileSync(path.join(dir, "../../../api/cron-subscription-lifecycle.js"), "utf8");
+    const extractRowColumns = (src) => [...new Set([...src.matchAll(/\brow\.([a-zA-Z_]+)/g)].map((m) => m[1]))];
+    const readColumns = [...new Set([...extractRowColumns(engineSrc), ...extractRowColumns(cronSrc)])];
+    // Sanity check the extraction itself actually found known reads from both
+    // files — if this regex ever stops matching anything in either source,
+    // the test would otherwise pass vacuously.
     expect(readColumns).toEqual(expect.arrayContaining(["is_admin", "is_investor", "is_tester"]));
+    expect(readColumns).toEqual(expect.arrayContaining(["beta_started_at", "halfway_email_sent_at"]));
 
     const missing = readColumns.filter((c) => !selectedColumns.has(c));
     expect(missing).toEqual([]);

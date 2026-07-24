@@ -840,6 +840,40 @@ export default function App() {
     setTimeout(() => setSyncStatus(null), 4000);
   }, [setConfig, setShowExtra, setLogs, setExpenses, setGoals, setWeekConfirmations, setBaseRateHistory, setPtoGoal]);
 
+  // docs/TODO.md — until now api/admin-beta-report.js was only reachable via a
+  // manually-crafted authenticated HTTP request (curl/Postman); this is the
+  // in-app trigger. Fetches with the current admin session's token rather than
+  // a plain link, since the endpoint requires a Bearer token and window.open
+  // can't set custom headers — Blob + a throwaway <a> is the standard pattern
+  // for triggering a download from a fetch response.
+  const [betaReportStatus, setBetaReportStatus] = useState(null); // { loading, error } | null
+  const handleDownloadBetaReport = useCallback(async (format) => {
+    setBetaReportStatus({ loading: true, error: null });
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error("Not signed in");
+      const url = format === "feedback" ? "/api/admin-beta-report?format=feedback" : "/api/admin-beta-report";
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || `Request failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = format === "feedback" ? "beta-feedback.csv" : "beta-usage-report.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+      setBetaReportStatus({ loading: false, error: null });
+    } catch (err) {
+      setBetaReportStatus({ loading: false, error: err.message });
+    }
+  }, []);
+
   const handleFetchRow = useCallback(async () => {
     setRowFetching(true);
     try {
@@ -2004,6 +2038,18 @@ export default function App() {
                 })()}
               </div>
 
+              {/* Beta Report — docs/TODO.md, admin-only usage/feedback CSV export */}
+              <div style={{ padding: "0 20px 12px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Beta Report</div>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <Pressable onClick={() => handleDownloadBetaReport("summary")} disabled={betaReportStatus?.loading} style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "6px 0", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Usage CSV</Pressable>
+                  <Pressable onClick={() => handleDownloadBetaReport("feedback")} disabled={betaReportStatus?.loading} style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "6px 0", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Feedback CSV</Pressable>
+                </div>
+                {betaReportStatus?.error && (
+                  <div style={{ fontSize: "9px", color: "var(--color-red)", marginTop: "4px" }}>{betaReportStatus.error}</div>
+                )}
+              </div>
+
               {/* Demo account editing — admin only */}
               <div style={{ padding: "0 20px 12px" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
@@ -2645,6 +2691,18 @@ export default function App() {
               })()}
             </div>
 
+            {/* Beta Report — docs/TODO.md, admin-only usage/feedback CSV export */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Beta Report</div>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <Pressable onClick={() => handleDownloadBetaReport("summary")} disabled={betaReportStatus?.loading} style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "8px 0", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Usage CSV</Pressable>
+                <Pressable onClick={() => handleDownloadBetaReport("feedback")} disabled={betaReportStatus?.loading} style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "8px 0", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Feedback CSV</Pressable>
+              </div>
+              {betaReportStatus?.error && (
+                <div style={{ fontSize: "9px", color: "var(--color-red)", marginTop: "6px" }}>{betaReportStatus.error}</div>
+              )}
+            </div>
+
             {/* Demo account editing — admin only */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
@@ -3277,6 +3335,30 @@ export default function App() {
                     </>
                   );
                 })()}
+              </div>
+
+              {/* ── Beta Report ── docs/TODO.md, admin-only usage/feedback CSV export */}
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Beta Report</div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <Pressable
+                    onClick={() => handleDownloadBetaReport("summary")}
+                    disabled={betaReportStatus?.loading}
+                    style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer", minHeight: "44px" }}
+                  >
+                    {betaReportStatus?.loading ? "…" : "Usage CSV"}
+                  </Pressable>
+                  <Pressable
+                    onClick={() => handleDownloadBetaReport("feedback")}
+                    disabled={betaReportStatus?.loading}
+                    style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer", minHeight: "44px" }}
+                  >
+                    {betaReportStatus?.loading ? "…" : "Feedback CSV"}
+                  </Pressable>
+                </div>
+                {betaReportStatus?.error && (
+                  <div style={{ fontSize: "10px", color: "var(--color-red)", marginTop: "6px" }}>{betaReportStatus.error}</div>
+                )}
               </div>
 
               {/* ── Demo Accounts ── */}

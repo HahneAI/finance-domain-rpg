@@ -233,4 +233,75 @@ describe("coach — Anthropic proxy", () => {
     expect(res.statusCode).toBe(502);
     expect(res.writes.length).toBe(0);
   });
+
+  // DW-9 — multi-turn conversations used to resend the entire prior history
+  // uncached on every turn; only system/context had a cache_control marker.
+  it("marks only the last message with cache_control, converting a string content into a text block", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = mkRes();
+    await handler(
+      mkReq({
+        body: {
+          messages: [
+            { role: "user", content: "earlier turn" },
+            { role: "assistant", content: "earlier reply" },
+            { role: "user", content: "latest question" },
+          ],
+        },
+      }),
+      res
+    );
+
+    const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sentBody.messages[0]).toEqual({ role: "user", content: "earlier turn" });
+    expect(sentBody.messages[1]).toEqual({ role: "assistant", content: "earlier reply" });
+    expect(sentBody.messages[2]).toEqual({
+      role: "user",
+      content: [{ type: "text", text: "latest question", cache_control: { type: "ephemeral" } }],
+    });
+  });
+
+  it("leaves non-string content on the last message untouched instead of double-wrapping it", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: sseStreamOf([]) });
+    vi.stubGlobal("fetch", fetchMock);
+    const structuredContent = [{ type: "text", text: "already a block" }];
+
+    const res = mkRes();
+    await handler(mkReq({ body: { messages: [{ role: "user", content: structuredContent }] } }), res);
+
+    const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sentBody.messages[0].content).toEqual(structuredContent);
+  });
+});
+
+describe("coach — cost telemetry (DW-9)", () => {
+  it("logs a single usage line with real token counts and a computed cost estimate, even when VERCEL_ENV is production", async () => {
+    const prevEnv = globalThis.process.env.VERCEL_ENV;
+    globalThis.process.env.VERCEL_ENV = "production";
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      body: sseStreamOf([
+        { type: "message_start", message: { usage: { input_tokens: 1000, cache_read_input_tokens: 500, cache_creation_input_tokens: 200 } } },
+        { type: "message_delta", usage: { output_tokens: 100 } },
+      ]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await handler(mkReq(), mkRes());
+
+    const usageLine = logSpy.mock.calls.map((args) => args[0]).find((line) => line.startsWith("[coach:usage]"));
+    expect(usageLine).toBeTruthy();
+    expect(usageLine).toContain("input=1000");
+    expect(usageLine).toContain("cache_read=500");
+    expect(usageLine).toContain("cache_write=200");
+    expect(usageLine).toContain("output=100");
+    // 1000*1.00 + 500*1.00*0.1 + 200*1.00*1.25 + 100*5.00 = 1000+50+250+500 = 1800 -> $0.0018
+    expect(usageLine).toContain("est_cost_usd=0.001800");
+
+    logSpy.mockRestore();
+    globalThis.process.env.VERCEL_ENV = prevEnv;
+  });
 });

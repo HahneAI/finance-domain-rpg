@@ -452,7 +452,7 @@ Order: the two large ones first, then the two smaller.
 |-----------|------|--------|-------|
 | JobLossEntry | `src/components/JobLossEntry.jsx` | ✅ | 3-step modal (date + expenses + due date assignment). All buttons `Pressable`. Uses `fold-backdrop` + `fold-modal` with proper `data-fold` lifecycle. |
 | LifeEventMenu | `src/components/LifeEventMenu.jsx` | ✅ | Life event selector modal. Close X + all route tiles use `Pressable`. Standardized fold animation. |
-| RateUpdateModal | `src/components/RateUpdateModal.jsx` | ⚠️ | **Inconsistency:** uses custom `"weekCardIn 220ms ease-out"` animation instead of `fold-modal`. Missing `fold-backdrop` class. All buttons are `Pressable` ✅. **Recommendation:** refactor to use `fold-modal` + `fold-backdrop` for consistency with other modals. |
+| RateUpdateModal | `src/components/RateUpdateModal.jsx` | ✅ | Migrated to `fold-modal` + `fold-backdrop` (was custom `weekCardIn`). Uses `useFoldTransition` hook for consistent lifecycle. All buttons `Pressable`. Unified with other modals. |
 
 **Panels (panel mode, rendered via FoldSwitch):**
 | Component | File | Status | All buttons Pressable? |
@@ -471,22 +471,10 @@ Order: the two large ones first, then the two smaller.
 |---|---|---|---|---|---|
 | **Modal open/close** | JobLossEntry | JobLossEntry.jsx | `fold-modal` + `fold-backdrop` + `data-fold={fold.fold}` | 280ms modal, 240ms backdrop | ✅ |
 | **Modal open/close** | LifeEventMenu | LifeEventMenu.jsx | `fold-modal` + `fold-backdrop` + `data-fold={fold.fold}` | 280ms modal, 240ms backdrop | ✅ |
-| **Modal open/close** | RateUpdateModal | RateUpdateModal.jsx | Custom `weekCardIn` (⚠️ non-standard) | 220ms | ⚠️ *See refactor note* |
-| **Button press** | All Job Loss modals | JobLossEntry.jsx, LifeEventMenu.jsx | `Pressable` + press feedback | 180ms fill + spring | ✅ |
+| **Modal open/close** | RateUpdateModal | RateUpdateModal.jsx | `fold-modal` + `fold-backdrop` + `data-fold={fold.fold}` | 280ms modal, 240ms backdrop | ✅ |
+| **Button press** | All Job Loss modals | JobLossEntry.jsx, LifeEventMenu.jsx, RateUpdateModal.jsx | `Pressable` + press feedback | 180ms fill + spring | ✅ |
 | **Button press** | All Job Loss panels | JobLossHomePanel.jsx, JobLossBudgetPanel.jsx | `Pressable` + press feedback | 180ms fill + spring | ✅ |
 | **Panel enter/exit** | JobLossHomePanel, JobLossBudgetPanel | App.jsx (FoldSwitch) | `fold-lift` + fade | 340ms enter, 180ms exit | ✅ |
-
-### Refactor recommendation
-
-**RateUpdateModal** should be migrated to use the standardized fold system for consistency:
-```jsx
-// Before (custom):
-animation: "weekCardIn 220ms ease-out"
-
-// After (standardized):
-className="fold-modal" data-fold={fold.fold}
-```
-with `fold-backdrop` wrapper. This removes the one non-standard animation in the Job Loss flow and simplifies the codebase. Not urgent (UI behavior unchanged), but recommended in the next minor polish pass.
 
 ### Test coverage  
 Job Loss Mode features are exercised in:

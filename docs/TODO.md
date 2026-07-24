@@ -4028,3 +4028,188 @@ not a new email system.
   hand-rolling a one-off send.
 - [ ] **Low priority relative to §30–34** — this is pure polish; the report and its scoping fix matter
   more to the program's actual goal (scoring 40 people against a rubric) than a reminder email does.
+
+---
+
+## 38. Camera / Barcode / OCR Features — Mobile-First Income & Expense Capture
+
+*New workstream (2026-07-24), scoped from investigative pass — not yet started, no design decisions made. Pure greenfield. Six candidate features identified; all depend on shared infrastructure (BarcodeDetector API or OCR engine). This section is a parking lot for feasibility and grouping logic; buildout decisions to come.*
+
+**The gap.** The app is currently 100% manual data entry. A smartphone has a camera and the web platform has access to it (via `getUserMedia` + device sensors); no camera-based quick-entry path exists today. Use cases: snapping a paystub to skip SetupWizard field entry, tapping a receipt to log an expense, scanning a product barcode to check affordability against the week's remaining budget.
+
+**Infrastructure dependencies (the critical path blocker):**
+- **BarcodeDetector API** (native, no new dependency) — Chrome/Edge 83+, Safari limited, Firefox no. Supports EAN-13, UPC, and others. Needed by features #1, #2.
+- **OCR engine** (Tesseract.js client-side vs. cloud API decision) — all three major choices have tradeoffs:
+  - **Tesseract.js** (Apache 2.0 licensed, WASM-based): ~2.3 MB minified, runs client-side, no credentials/cost, accuracy ~85–90% on clean images, slower (seconds per image on mobile). Paystub/receipt parsing will need fallback to manual entry for unusual formats.
+  - **Cloud API** (Google Cloud Vision, AWS Textract, Azure): faster (100ms API call), better accuracy (95%+), but requires credentials, cost scales with usage, adds backend routing complexity. GDPR/privacy consideration if images leave the device.
+  - **Hybrid:** Tesseract for quick preview/demo, cloud API for production with fallback if rate-limited.
+  Needed by features #3, #4, #5.
+- **ML-based text detection** (TextDetection API or TensorFlow.js) — feature #6 only, not critical path. TextDetection API unavailable in Safari/Firefox. TensorFlow.js adds ~200 MB to bundle for a model. Defer this one.
+
+### Feature Inventory
+
+#### 1. "Can I afford this?" Barcode Scan
+
+*User snaps a product barcode at the shelf → app detects UPC → looks up price → checks against weekly surplus → shows "✓ Yes, $X left after" or "⚠ No, over by $Y".*
+
+- **Mechanism:** BarcodeDetector API (native) + external UPC/product database (e.g., Barcode Lookup API, UPC database, or roll-your-own if only targeting a specific retailer).
+- **T-shirt:** **S-M** (40–80 hours)
+- **Tech stack:** Needs new dependency: UPC/EAN database service (API key, usage tier). BarcodeDetector is native.
+- **Blocked by:** None — can build independently.
+- **Unblocks:** Feature #2 (goal-linked purchase).
+- **Notes:** 
+  - UPC lookup is a third-party service (Barcode Lookup free tier limited, or build own DB). Cost/privacy decision needed.
+  - Affordability check reuses existing weekly-surplus computation (`estimateWeeklyNet` in SetupWizard; `buildYear` in finance.js).
+  - Mobile-first: assume 44×44px viewfinder button in bottom nav or Budget panel (clears Mobile Checklist).
+  - Fallback: if barcode scan fails, allow manual UPC entry or product name search.
+
+#### 2. Goal-Linked Purchase Logging
+
+*After scanning a product barcode (feature #1), user can optionally "Log this against a goal" instead of dumping it as a generic expense category. Taps into an existing goal, reduces its "funded" amount.*
+
+- **Mechanism:** BarcodeDetector (from #1) + goal picker UI + LogPanel entry type.
+- **T-shirt:** **S-M** (20–40 hours, UI-only)
+- **Tech stack:** Reuses feature #1's barcode infrastructure + existing goal list from HomePanel/BudgetPanel. New LogPanel `EVENT_TYPES` entry.
+- **Blocked by:** Feature #1 (barcode scan).
+- **Unblocks:** None directly, but polishes #1.
+- **Notes:**
+  - One new `EVENT_TYPES` entry (e.g., `goal_purchase: { label: "Goal Purchase", icon: "🎯" }`).
+  - Log Effect Summary (`LogPanel.jsx`) already generalizes to arbitrary event types — no new fiscal math needed.
+  - UI: "You scanned [product], found $X. Log it against which goal?" → goal chips + Confirm.
+  - Stretch variant: auto-suggest the most-relevant goal (goal due soonest, or goal scope matching category — e.g., "Furniture" purchase → "Apartment Setup" goal).
+
+#### 3. Paystub Onboarding Shortcut
+
+*User snaps a photo of a paystub during SetupWizard. OCR extracts gross pay, tax withholding, deductions, pay date. Auto-fills the "Pay Structure" wizard step (step 1) so the user doesn't type all the numbers manually.*
+
+- **Mechanism:** Camera snap + OCR (Tesseract.js or cloud API) + structured field extraction + SetupWizard step rewiring.
+- **T-shirt:** **L** (80–160 hours)
+- **Tech stack:** 
+  - Tesseract.js (2.3 MB, ships with app, privacy-first) — lower cost, but accuracy risk on unusual paystub formats.
+  - Cloud API (Google Vision, AWS Textract) — better accuracy, privacy tradeoff, cost/rate-limiting, needs backend routing.
+  - Hybrid: Tesseract preview, cloud fallback if confidence is low.
+- **Blocked by:** OCR engine decision (Tesseract vs. cloud).
+- **Unblocks:** Features #4, #5 (both use same OCR).
+- **Critical notes:**
+  - **High format variability:** paystubs vary wildly by employer (ADP, Workday, Gusto, etc.) + international formats. OCR alone won't extract structured data reliably — needs post-OCR parsing (regex, NLP, or handcrafted field matchers per format).
+  - **Fallback required:** If confidence is low or parse fails, revert to manual entry in the wizard. Do NOT auto-fill a wrong gross-pay number.
+  - **SetupWizard rewiring:** Step 1 (Pay Structure) needs "Snap Paystub" button → camera snap flow → parse → auto-fill fields → let user review/correct before Next.
+  - **Testing:** Will need fixtures (photos of real paystubs from major payroll providers, sanitized). Privacy concern — can't store/train on real paystubs without consent.
+  - **Field extraction targets:** gross pay, net pay, tax withholding (federal, state, FICA), deductions (401k, insurance, etc.), pay period end date, pay frequency (weekly/biweekly/monthly).
+
+#### 4. Receipt-to-Expense-Category Snap
+
+*User snaps a receipt with their phone. OCR extracts the total amount + merchant name. Auto-fills "Add Expense" form with amount + suggested category (e.g., "Whole Foods" → Food/Dining; "CVS Pharmacy" → Pharmacy/Health).*
+
+- **Mechanism:** Camera snap + OCR (Tesseract.js or cloud API) + merchant/amount parsing + category inference.
+- **T-shirt:** **M-L** (60–120 hours)
+- **Tech stack:** 
+  - OCR engine (same choice as feature #3).
+  - Post-OCR parsing: regex or hardcoded merchant patterns (e.g., "Whole Foods", "Trader Joe's", "Sprouts" → category "Food"). Alternatively, lightweight ML classifier or LLM call via Coach API (`api/coach.js` pattern) for one-shot inference ("What spending category is this receipt from [merchant]?").
+  - BudgetPanel expense UI already exists — just pre-fill the form fields.
+- **Blocked by:** OCR engine decision.
+- **Unblocks:** None directly.
+- **Notes:**
+  - **Merchant name extraction:** not every receipt has a clear header (some print the address or website URL instead). OCR + NLP to find the merchant name. Fallback: let user confirm/correct.
+  - **Amount extraction:** usually the last number on the receipt, but sales tax complicates this. Heuristic: take the largest number that looks like a dollar amount; let user confirm.
+  - **Category inference:** 
+    - **Option A (hardcoded):** Build a merchant-to-category lookup table (Whole Foods → "Groceries", "Starbucks" → "Food", "Exxon" → "Gas", etc.). Scales poorly.
+    - **Option B (ML lightweight):** Train a small classifier or use Coach API one-shot inference: "What category is this merchant: [name]?" Falls through to manual category pick if API is unavailable/rate-limited.
+    - **Option C (UI default):** Pre-fill category as "Other" or "Uncategorized", user picks from category chips. Lowest friction for MVP.
+  - **Receipt image quality:** phone photos in dim lighting will OCR poorly. Consider adding a "take better photo" hint or a pre-snap UI that guides composition (frame detection).
+
+#### 5. Pay-Cycle Change Detection
+
+*User snaps a new paystub. OCR extracts key fields. App compares against the most recent stored paystub, flags what changed (gross pay up/down, tax rate shift, new deduction, etc.), and recalculates the income model accordingly.*
+
+- **Mechanism:** Camera snap + OCR (same as #3) + paystub storage in `user_data` + field-level diff + `buildYear` recompute.
+- **T-shirt:** **M** (40–80 hours)
+- **Tech stack:** 
+  - OCR engine (shared with #3, #4).
+  - New field: `lastPaystubSnapshot` in `user_data` (JSON blob storing parsed paystub fields from last snap: gross, net, tax breakdown, deductions, pay date). Needs a migration.
+  - Diff logic: simple field-by-field comparison (gross pay ≠ last gross? flag it).
+  - Recompute: if `shiftHours`, `otThreshold`, `federalRate`, etc. changed, call `buildYear` to recompute weekly net/goals/timeline.
+  - LogPanel entry type: `pay_change: { label: "Pay Changed", icon: "📊" }` with an inline diff summary.
+- **Blocked by:** OCR engine decision + Tesseract's paystub field extraction (feature #3).
+- **Unblocks:** None directly.
+- **Drift warning:** `buildYear` is a critical fiscal engine (drift-app-warden §18 Spine A). Any change to how it's triggered needs to be audited carefully. The recompute path here is straightforward (user snappped a new paystub, we re-derived income model), but add a manual "Review Changes" step before auto-applying to `config` so the user sees what changed.
+- **Notes:**
+  - **Storage:** `lastPaystubSnapshot` lives in `user_data.config` JSON? Or a separate column? Leaning toward a separate column (keeps config schema clean) — requires a new migration. Follow `docs/drift-app-warden.md` §19 F110's four-site procedure (destructure + ref + drift badge + eager-save).
+  - **Privacy:** storing paystub data locally. Reassure in UX: "This stays on your device and is only used to detect changes."
+  - **Accuracy fallback:** if OCR confidence is low, prompt user to review extracted fields before storing.
+
+#### 6. Shelf-Tag Price Capture (Stretch / Defer)
+
+*User snaps printed price tags on a shelf (not barcodes — the paper tag with a price and SKU). App OCRs the price, adds to a running tally as they shop, warns if total approaches weekly budget limit. UX: "Milk ($4.29) + Bread ($2.99) + Coffee ($8.49) = $15.77 — $X left in your week."*
+
+- **Mechanism:** Live/repeated text detection (OCR or TextDetection API) + running calculator UI.
+- **T-shirt:** **L-XL** (120–240+ hours, flagged as higher friction / stretch)
+- **Tech stack:** 
+  - **TextDetection API** (native, like BarcodeDetector) — Chrome/Edge only, not in Safari/Firefox. Not viable as a required path.
+  - **TensorFlow.js + COCO-SSD or similar** — adds ~200 MB to bundle, real-time performance risk on older mobile phones (frames drop, battery drain).
+  - **Fallback:** accept numeric input + photo as proof-of-price (lower automation, higher accuracy).
+- **Blocked by:** ML engine decision (TextDetection not viable; TensorFlow.js adds cost).
+- **Unblocks:** None.
+- **Recommendation:** **Defer this one.** It's a polish feature, not a core workflow. Start with features #1–#5 (all lower friction, higher ROI). Revisit if/when browser text-detection APIs mature or if user feedback specifically asks for in-store price tracking.
+- **Notes:**
+  - **Real-time performance:** Continuous camera preview + frame-by-frame OCR is battery-intensive. Require explicit "Scan Price" button per item, not continuous scanning.
+  - **Accuracy:** Text detection on printed tags is harder than barcodes or clean paystubs (angles, blur, reflections, multiple prices/SKUs in frame).
+  - **UX complexity:** a running total UI with "Add", "Undo", "Clear" buttons; integration with the weekly budget guardrail system.
+  - **If this is prioritized later:** prototype with manual numeric input first, then layer on OCR as a time-saver.
+
+### Implementation Roadmap (Proposed Grouping)
+
+**Phase A: Barcode Infrastructure**
+- [ ] Decide on UPC/product database service (Barcode Lookup free tier, roll-your-own, or third-party API key).
+- [ ] Add `<CameraCapture>` utility component (video element + BarcodeDetector + error handling).
+- [ ] Add "Can I afford this?" entry point to BudgetPanel (button in nav, triggers barcode scan, shows affordability check).
+- [ ] Feature #2 (goal-linked purchase) is a free add-on once #1 lands.
+
+**Phase B: OCR Foundation**
+- [ ] **Critical decision:** Tesseract.js vs. cloud API vs. hybrid. This gates all of #3, #4, #5.
+- [ ] If Tesseract: ship with app (2.3 MB added to bundle). If cloud: add backend routing (`api/ocr-proxy.js` or similar) + credential management.
+- [ ] Add `<ImageCapture>` utility component (camera snap + image preview/confirm before OCR).
+- [ ] Feature #3 (paystub onboarding) — integrate into SetupWizard step 1.
+
+**Phase C: Expense & Income Automation**
+- [ ] Feature #4 (receipt-to-expense) — snap flow + category inference.
+- [ ] Feature #5 (pay-cycle detection) — requires `lastPaystubSnapshot` migration + diff logic.
+
+**Phase D: Defer**
+- [ ] Feature #6 (shelf-tag price capture) — revisit if user research confirms the need or browser text-detection APIs improve.
+
+### Interdependencies & Shared Infrastructure
+
+```
+Feature #1 (Barcode)
+  ├─ BarcodeDetector (native API)
+  ├─ Product DB service
+  └─ Affordability check (existing fiscal math)
+      └─ unblocks Feature #2 (goal-linked purchase)
+
+Feature #3 (Paystub OCR)
+  ├─ OCR engine decision (Tesseract vs. cloud)
+  ├─ Paystub field extraction (post-OCR parsing)
+  ├─ SetupWizard integration (step 1 rewire)
+  └─ unblocks Features #4 & #5
+
+Feature #4 (Receipt snap)
+  ├─ OCR engine (from #3 decision)
+  ├─ Merchant/category inference
+  └─ BudgetPanel form pre-fill (existing UI)
+
+Feature #5 (Pay-cycle detection)
+  ├─ OCR engine (from #3 decision)
+  ├─ lastPaystubSnapshot migration
+  ├─ Diff logic
+  └─ buildYear recompute (drift-app-warden §18 audit required)
+
+Feature #6 (Shelf-tag capture) — isolated, deferred
+  ├─ TextDetection API (not viable) OR TensorFlow.js (high cost)
+  └─ Real-time performance risk
+```
+
+---
+
+**Next step:** Confirm OCR engine choice (Tesseract vs. cloud API) — this is the critical blocker. All feasibility estimates above assume this decision is made. Once that's settled, Phase A (barcode) can proceed in parallel with Phase B (OCR foundation).
+

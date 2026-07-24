@@ -24,6 +24,13 @@ the same switch.
 its own separately-switchable piece — before any section changes who can see it, this is the
 place to check what else might be quietly sharing its lock.
 
+**A second, separate distinction: free trial vs. paid.** Once the admin/tester lock is split
+apart, most of what's below is meant to be a reason to *convert* from the free trial to a paid
+subscription — not something a trial user gets for free. The Ask Coach chat and the Net Worth
+Check-In card are the deliberate exception: both are included from day one of the free trial,
+same as a paying subscriber, no reduced version. Every section below now carries its own
+**Free trial access** line so this is never ambiguous section by section.
+
 ---
 
 ## 1. Ask Coach — the general chat
@@ -37,6 +44,9 @@ the app.
 **Status:** 🟢 **Live and working**, for the locked-down group only. Right now every
 conversation is temporary — closing the chat forgets it. There's also no memory of a
 conversation the user had earlier; each open is a fresh start.
+
+**Free trial access: ✅ Yes.** Included from day one of the free trial — a trial user gets
+the exact same chat a paying subscriber does, not a limited preview of it.
 
 **This is one of the two features slated to open to everyone next** (see the Net Worth
 Check-In card below for the other), once the two items below are done.
@@ -52,7 +62,10 @@ the Claude mobile app.
 hardcoded — the Haiku/Sonnet split described in the plan isn't actually wired up yet) · System
 prompt: `ASK_COACH_SYSTEM_PROMPT` in `src/lib/coachPrompts.js` (shared Coach voice + Ask-Coach
 answering rules + the app feature guide from `src/lib/coachFeatureGuide.js`, all frozen
-together into one prompt).
+together into one prompt). Planned gate for the flip: `entitlement.isEntitled` (true for
+`"trial"`, `"grace"`, and `"active"` — see `src/lib/subscription.js`) in place of
+`canAccessAiFeatures({isAdmin, isTester})`, at every mount point (bottom nav, panel render,
+and the server-side check in `api/coach.js`) — trial is included on purpose, not excluded.
 
 ---
 
@@ -70,6 +83,10 @@ the regular Home screen and, as of this week, also on the separate Job Loss Mode
 previously it could only ever say the calm "things turned around" message or the gentle
 heads-up there, never the critical one, because it simply wasn't present on that screen at all.
 
+**Free trial access: ✅ Yes.** Included from day one of the free trial, same as the chat
+above — the critical-warning tier especially is exactly the moment someone still deciding
+whether to subscribe needs to hear from Coach, not a reason to make them pay first.
+
 **This is the other of the two features slated to open to everyone next**, at the same time as
 the Ask Coach chat above — the critical-warning message in particular (job loss + under a
 month of runway) is exactly the moment a base user, not just an admin or tester, most needs to
@@ -85,7 +102,9 @@ due for a rewrite so it sounds like Coach instead of a leftover placeholder.
 **Technical reference:** API route `POST /api/coach` (same route as the chat above) · Model:
 **Haiku** (`claude-haiku-4-5`) · System prompt: `buildNetWorthSystemPrompt(tier)` in
 `src/lib/coachPrompts.js` — picks one of three short tier-specific prompts (gentle / critical /
-recovery), each built on the same shared Coach voice as the chat above.
+recovery), each built on the same shared Coach voice as the chat above. Planned gate for the
+flip: same as the chat above — `entitlement.isEntitled`, checked at both mount points
+(`HomePanel.jsx` and `JobLossHomePanel.jsx`) in place of `canAccessAiFeatures`.
 
 ---
 
@@ -97,6 +116,9 @@ appear next to his messages, and the full voice-and-tone rulebook.
 **Status:** 📝 **Paperwork only.** The name "Coach" is decided and the voice rulebook exists,
 but there's no avatar or icon built yet, and the voice rulebook itself is only one-fifth
 filled in (see the note in section 1 above).
+
+**Free trial access: — Not applicable.** This isn't a feature a user gets access to on its
+own; it's the voice every gated feature above speaks in, trial or paid.
 
 **Next up:** Design a small icon Coach can use everywhere he speaks, and finish scoring the
 rest of the voice rulebook so every future feature inherits one consistent personality instead
@@ -116,8 +138,12 @@ summarizing what it finds in his own voice, instead of a plain data table.
 
 **Status:** ⚪ **Not started.** No code exists for this yet — it's a written plan only.
 
+**Free trial access: ❌ No (planned).** The original plan already marks every feature in
+sections 4–9 as a paid-conversion upsell, not a trial perk — someone would need to convert to
+a paying subscriber to reach any of these, once built.
+
 **Next up:** This is first in line among the "not started" features.
-*Reference: `docs/TODO.md` §18.D (Statements AI Insights).*
+*Reference: `docs/TODO.md` §18.D (Statements AI Insights) and §18.0's free-vs-paid note.*
 
 **Technical reference:** None yet — no route, model, or prompt exists in code.
 
@@ -129,6 +155,9 @@ summarizing what it finds in his own voice, instead of a plain data table.
 search itself, not just the household numbers.
 
 **Status:** ⚪ **Not started.**
+
+**Free trial access: ❌ No (planned).** Paid-conversion upsell, same as section 4 above —
+not a trial-included feature once built.
 
 **Next up:** *Reference: `docs/TODO.md` §18.E (Job Hunt AI Assistant).*
 
@@ -144,6 +173,8 @@ improvements.
 **Status:** ⚪ **Not started.** This one has been scoped out on paper in more detail than the
 others, but literally nothing has been built.
 
+**Free trial access: ❌ No (planned).** Paid-conversion upsell — not trial-included once built.
+
 **Next up:** *Reference: `docs/TODO.md` §18.E1 (Résumé upload / skill-gap analysis).*
 
 **Technical reference:** None yet.
@@ -158,6 +189,8 @@ cover letters, prep, tracking where they've applied.
 **Status:** ⚪ **Not started.** This one is also waiting on a separate, unrelated piece of the
 app (job board integrations) before it can even begin.
 
+**Free trial access: ❌ No (planned).** Paid-conversion upsell — not trial-included once built.
+
 **Next up:** *Reference: `docs/TODO.md` §18.F (Application Assistant).*
 
 **Technical reference:** None yet.
@@ -169,6 +202,8 @@ app (job board integrations) before it can even begin.
 **What it is:** A location-based search where Coach helps someone find employers hiring nearby.
 
 **Status:** ⚪ **Not started.**
+
+**Free trial access: ❌ No (planned).** Paid-conversion upsell — not trial-included once built.
 
 **Next up:** *Reference: `docs/TODO.md` §18.I (Job Scout — Location-Based Employer Search).*
 
@@ -183,6 +218,8 @@ a paystub instead of asking them to type every number in by hand.
 
 **Status:** ⚪ **Not started.** This one is also waiting on a full accountant review of the
 app's tax math before it can be built, regardless of the AI piece.
+
+**Free trial access: ❌ No (planned).** Paid-conversion upsell — not trial-included once built.
 
 **Next up:** *Reference: `docs/TODO.md` §18.J (Tax Onboarding Interview).*
 
@@ -219,6 +256,9 @@ Coach could go is in one place, not scattered across a brainstorm document nobod
 **Next up:** None of this has a start point yet — it's pre-planning. If any single idea above
 gets picked up seriously, it should first get its own numbered write-up (the way sections 4–9
 already have one) before any code is written.
+
+**Free trial access: — Not applicable.** Nothing here is built or scoped enough to have a
+tier decision yet.
 
 **Technical reference:** None — brainstorm only.
 

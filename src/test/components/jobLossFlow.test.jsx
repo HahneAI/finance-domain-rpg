@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { JobLossEntry } from '../../components/JobLossEntry.jsx'
 import { LifeEventMenu } from '../../components/LifeEventMenu.jsx'
@@ -9,6 +9,17 @@ import { ReemploymentTracker } from '../../components/ReemploymentTracker.jsx'
 import { DEFAULT_CONFIG, INITIAL_EXPENSES } from '../../constants/config.js'
 import { resolveLastPayPeriodEnd, resolvePendingCheckArrivalDate, estimatePendingCheckAmount } from '../../lib/jobLossRunway.js'
 import { toLocalIso } from '../../lib/finance.js'
+
+// CoachNetWorthCard (mounted inside JobLossHomePanel per the DW-8 fix) calls
+// chatWithCoach — mocked here the same way CoachNetWorthCard.test.jsx does,
+// so these tests never touch the network/API key.
+const { coachMocks } = vi.hoisted(() => ({ coachMocks: { chatWithCoach: vi.fn() } }))
+vi.mock('../../lib/claude.js', () => ({ chatWithCoach: coachMocks.chatWithCoach }))
+function chunkGenerator(chunks) {
+  return async function* () {
+    for (const c of chunks) yield c
+  }
+}
 
 const JOB_LOSS_CONFIG = {
   ...DEFAULT_CONFIG,
@@ -549,6 +560,43 @@ describe('JobLossHomePanel', () => {
       const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }
       render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits readOnly />)
       expect(screen.getByPlaceholderText('e.g. 1,023')).toBeDisabled()
+    })
+  })
+
+  // DW-8 (docs/BUG_FIX_TODO.md) — CoachNetWorthCard's Red tier ("Job Loss
+  // Mode, runway under 30 days") was structurally unreachable because this
+  // panel replaces HomePanel entirely and never mounted the card at all.
+  describe('Coach presence (DW-8 fix)', () => {
+    beforeEach(() => {
+      localStorage.clear()
+      coachMocks.chatWithCoach.mockReset()
+    })
+
+    // Zero cash on hand + real weekly burn from INITIAL_EXPENSES puts runway
+    // well under 30 days for this fixture — the Red tier's own condition.
+    const RUNWAY_UNDER_30 = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 0 }
+
+    it('does not render the card for a non-admin/non-tester account', () => {
+      render(
+        <JobLossHomePanel
+          config={RUNWAY_UNDER_30} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits currentWeek={{ idx: 10 }}
+        />
+      )
+      expect(screen.queryByText('Coach — Critical')).toBeNull()
+      expect(coachMocks.chatWithCoach).not.toHaveBeenCalled()
+    })
+
+    it('renders the Red tier for an admin account when runway is under 30 days', async () => {
+      coachMocks.chatWithCoach.mockImplementation(chunkGenerator(['Runway is tight — here is what to do.']))
+      render(
+        <JobLossHomePanel
+          config={RUNWAY_UNDER_30} setConfig={() => {}} expenses={INITIAL_EXPENSES}
+          effectiveToday="2026-06-15" includeBenefits={false} currentWeek={{ idx: 10 }}
+          isAdmin
+        />
+      )
+      expect(await screen.findByText('Coach — Critical')).toBeTruthy()
     })
   })
 })

@@ -1499,6 +1499,9 @@ export default function App() {
           effectiveToday={effectiveToday}
           includeBenefits={jobLossIncludeBenefits}
           readOnly={isExpiredReadOnly}
+          currentWeek={currentWeek}
+          isAdmin={isAdmin}
+          isTester={isTester}
         />
       ) : (
         <HomePanel

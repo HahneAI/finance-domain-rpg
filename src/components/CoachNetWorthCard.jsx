@@ -37,6 +37,7 @@ export function CoachNetWorthCard({
   netWorthHealth,
   currentWeek,
   today,
+  includeBenefits = true,
 }) {
   const [signalState, setSignalState] = useLocalStorage("coachNetWorthSignal", {
     lastFiredTier: null,
@@ -48,16 +49,17 @@ export function CoachNetWorthCard({
 
   // Real runway, not the old independent estimate — computeJobLossRunway()
   // is the same function the Job Loss panels use, so this can't understate
-  // runway vs. what those panels show (drift-app-warden §21 F24).
-  // includeBenefits defaults true here, matching App.jsx's own default for
-  // the session-only toggle (this card only ever renders inside HomePanel,
-  // which doesn't mount during Job Loss Mode, so there's no live toggle to
-  // thread through yet).
+  // runway vs. what those panels show (drift-app-warden §21 F24). Now that
+  // this card also mounts inside JobLossHomePanel (DW-8 fix), includeBenefits
+  // is threaded through as a real prop instead of hardcoded — the default
+  // stays true only for the plain HomePanel call site, which has no toggle
+  // of its own and where computeJobLossRunway() returns null anyway
+  // (config.jobLossMode is false there).
   const runwayDays = useMemo(() => {
     const savings = (config?.jobLossCashOnHand ?? 0) + sumJobHuntIncome(config);
     const dash = computeJobLossRunway({ config, expenses, effectiveToday: today, savings });
-    return resolvePrimaryRunwayDays(dash, config, true);
-  }, [config, expenses, today]);
+    return resolvePrimaryRunwayDays(dash, config, includeBenefits);
+  }, [config, expenses, today, includeBenefits]);
   const weekIdx = currentWeek?.idx ?? null;
   const tier = resolveNetWorthSignalTier({ netWorthHealth, runwayDays, previousTier: signalState.lastFiredTier });
 

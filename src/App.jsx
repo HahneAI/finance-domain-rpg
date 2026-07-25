@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats } from "./lib/db.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -93,6 +93,25 @@ const BOTTOM_NAV = [
     ),
   },
 ];
+
+// §18.H4 — shapes loadCoachChats() output into the DB Row Viewer's "Coach Chats" line.
+// Pure function (not inline in handleFetchRow) so the count/label logic is testable without
+// touching Supabase. Type breakdown only lists types that actually have rows — today that's
+// always just ask_coach (job_scout/job_hunt/statement_summary have no UI caller yet), but this
+// stays accurate automatically once one does, rather than hardcoding a fixed 3-slot format.
+const COACH_CHAT_TYPE_LABELS = { ask_coach: "ask coach", job_scout: "job scout", job_hunt: "job hunt", statement_summary: "statement" };
+function deriveCoachChatsMeta(chats) {
+  const byType = {};
+  for (const c of chats) byType[c.chatType] = (byType[c.chatType] ?? 0) + 1;
+  const breakdown = Object.entries(byType)
+    .map(([type, n]) => `${n} ${COACH_CHAT_TYPE_LABELS[type] ?? type}`)
+    .join(" / ");
+  return {
+    count: chats.length,
+    breakdown,
+    recentTitles: chats.slice(0, 5).map((c) => c.title || "(untitled)"),
+  };
+}
 
 function SidebarNavItem({ item, active, onClick }) {
   return (
@@ -278,12 +297,18 @@ export default function App() {
   const [configViewOpen, setConfigViewOpen] = useState(false);
   const [toolSheetOpen, setToolSheetOpen] = useState(false);
   const [askCoachOpen, setAskCoachOpen] = useState(false);
+  // askCoachExiting: true while the Ask Coach panel is animating out (180ms
+  // foldLiftOut) — mirrors wizardExiting's pattern so the panel stays mounted
+  // through its exit instead of vanishing on the close tap.
+  const [askCoachExiting, setAskCoachExiting] = useState(false);
   const [sheetDragY, setSheetDragY] = useState(0);
   const sheetDragStartY = useRef(null);
   const [rowViewOpen, setRowViewOpen] = useState(false);
   const [rowData, setRowData] = useState(null);
   const [rowFetching, setRowFetching] = useState(false);
   const [historyMeta, setHistoryMeta] = useState(null); // §19 config-history line in DB Row viewer
+  const [coachChatsMeta, setCoachChatsMeta] = useState(null); // §18.H4 Coach Chats line in DB Row viewer
+  const [coachChatsListOpen, setCoachChatsListOpen] = useState(false);
   const [taxGridOpen, setTaxGridOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectedWeek, setInspectedWeek] = useState(null);
@@ -885,6 +910,7 @@ export default function App() {
         .single();
       setRowData(error ? { __error: error.message } : data);
       setHistoryMeta(await fetchConfigHistoryMeta()); // §19 snapshot count + latest
+      setCoachChatsMeta(deriveCoachChatsMeta(await loadCoachChats())); // §18.H4 Coach Chats line
     } catch (e) {
       setRowData({ __error: e.message });
     }
@@ -1000,6 +1026,14 @@ export default function App() {
     const fields = latest?.changed_fields?.length ? ` · ${latest.changed_fields.join(", ")}` : "";
     return `config history: ${count} snapshot${count === 1 ? "" : "s"} · latest ${latest?.effective_from ?? "?"}${src}${fields}`;
   }, [historyMeta]);
+
+  // §18.H4 — "Coach Chats" line in the DB Row viewer.
+  const coachChatsLine = useMemo(() => {
+    if (!coachChatsMeta) return null;
+    const { count, breakdown } = coachChatsMeta;
+    if (!count) return "Coach Chats: 0 saved chats";
+    return `Coach Chats: ${count} saved chat${count === 1 ? "" : "s"}${breakdown ? ` (${breakdown})` : ""}`;
+  }, [coachChatsMeta]);
 
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config, baseRateHistory), [config, baseRateHistory]);
@@ -1324,11 +1358,12 @@ export default function App() {
   // runway got a bare "Job Loss Mode: active" with no number. Same
   // computeJobLossRunway()/resolvePrimaryRunwayDays() pair CoachNetWorthCard
   // now uses, and the real (not defaulted) jobLossIncludeBenefits toggle, so
-  // Ask Coach agrees with whatever the Job Loss panels are showing.
+  // Ask Coach agrees with whatever the Job Loss panels are showing. Raw
+  // jobLossCashOnHand is read internally by computeJobLossRunway (and
+  // timeline-decayed per §15.H17) — extraCash is just the gig-income log.
   const coachRunwayDays = useMemo(() => {
     if (!config.jobLossMode) return null;
-    const savings = (config.jobLossCashOnHand ?? 0) + sumJobHuntIncome(config);
-    const dash = computeJobLossRunway({ config, expenses, effectiveToday, savings });
+    const dash = computeJobLossRunway({ config, expenses, effectiveToday, extraCash: sumJobHuntIncome(config) });
     return resolvePrimaryRunwayDays(dash, config, jobLossIncludeBenefits);
   }, [config, expenses, effectiveToday, jobLossIncludeBenefits]);
 
@@ -1385,6 +1420,17 @@ export default function App() {
     setTimeout(() => {
       setWizardEntry(null);
       setWizardExiting(false);
+    }, 180);
+  }
+
+  // Ask Coach exit animation — same fold-lift-out timing/pattern as the
+  // wizard above, so closing the chat panel matches every other full-screen
+  // takeover's exit instead of vanishing instantly.
+  function closeAskCoachWithAnimation() {
+    setAskCoachExiting(true);
+    setTimeout(() => {
+      setAskCoachOpen(false);
+      setAskCoachExiting(false);
     }, 180);
   }
 
@@ -2012,6 +2058,24 @@ export default function App() {
                           {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
                           {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
                           {historyLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
+                          {coachChatsLine && (
+                            <div style={{ marginBottom: "4px" }}>
+                              <Pressable
+                                onClick={() => setCoachChatsListOpen(v => !v)}
+                                disabled={!coachChatsMeta?.count}
+                                style={{ background: "transparent", border: "none", padding: "0", fontSize: "9px", color: "var(--color-text-secondary)", cursor: coachChatsMeta?.count ? "pointer" : "default", textAlign: "left" }}
+                              >
+                                {coachChatsLine}{coachChatsMeta?.count > 0 ? (coachChatsListOpen ? " ▲" : " ▼") : ""}
+                              </Pressable>
+                              {coachChatsListOpen && coachChatsMeta?.count > 0 && (
+                                <div style={{ marginTop: "2px", paddingLeft: "8px", display: "flex", flexDirection: "column", gap: "1px" }}>
+                                  {coachChatsMeta.recentTitles.map((t, i) => (
+                                    <div key={i} style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>· {t}</div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "160px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                             {JSON.stringify(rowData, null, 2)}
                           </pre>
@@ -2665,6 +2729,24 @@ export default function App() {
                         {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
                         {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
                         {historyLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
+                        {coachChatsLine && (
+                          <div style={{ marginBottom: "4px" }}>
+                            <Pressable
+                              onClick={() => setCoachChatsListOpen(v => !v)}
+                              disabled={!coachChatsMeta?.count}
+                              style={{ background: "transparent", border: "none", padding: "0", fontSize: "9px", color: "var(--color-text-secondary)", cursor: coachChatsMeta?.count ? "pointer" : "default", textAlign: "left" }}
+                            >
+                              {coachChatsLine}{coachChatsMeta?.count > 0 ? (coachChatsListOpen ? " ▲" : " ▼") : ""}
+                            </Pressable>
+                            {coachChatsListOpen && coachChatsMeta?.count > 0 && (
+                              <div style={{ marginTop: "2px", paddingLeft: "8px", display: "flex", flexDirection: "column", gap: "1px" }}>
+                                {coachChatsMeta.recentTitles.map((t, i) => (
+                                  <div key={i} style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>· {t}</div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                           {JSON.stringify(rowData, null, 2)}
                         </pre>
@@ -3293,7 +3375,23 @@ export default function App() {
                           {rowData.updated_at && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</span>}
                           {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)" }}>Drift: {rowDiff.join(", ")}</span>}
                           {historyLine && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)" }}>{historyLine}</span>}
+                          {coachChatsLine && (
+                            <Pressable
+                              as="span"
+                              onClick={() => coachChatsMeta?.count > 0 && setCoachChatsListOpen(v => !v)}
+                              style={{ background: "transparent", border: "none", padding: "0", fontSize: "9px", color: "var(--color-text-secondary)", cursor: coachChatsMeta?.count ? "pointer" : "default" }}
+                            >
+                              {coachChatsLine}{coachChatsMeta?.count > 0 ? (coachChatsListOpen ? " ▲" : " ▼") : ""}
+                            </Pressable>
+                          )}
                         </div>
+                        {coachChatsListOpen && coachChatsMeta?.count > 0 && (
+                          <div style={{ marginBottom: "8px", paddingLeft: "8px", display: "flex", flexDirection: "column", gap: "1px" }}>
+                            {coachChatsMeta.recentTitles.map((t, i) => (
+                              <div key={i} style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>· {t}</div>
+                            ))}
+                          </div>
+                        )}
                         <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                           {JSON.stringify(rowData, null, 2)}
                         </pre>
@@ -3478,9 +3576,10 @@ export default function App() {
 
       {/* ── Ask Coach (§18.B) — left admin/tester-only; now also open to a real
           trial/paid entitlement (docs/coach-entry-points.md §1) ── */}
-      {askCoachOpen && canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
+      {(askCoachOpen || askCoachExiting) && canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
         <AskCoachPanel
-          onClose={() => setAskCoachOpen(false)}
+          onClose={closeAskCoachWithAnimation}
+          isExiting={askCoachExiting}
           config={config}
           expenses={expenses}
           goals={goals}

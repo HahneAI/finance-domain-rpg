@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, PanelHero, SectionHeader, iS, lS } from "./ui.jsx";
 import { DueDatePicker } from "./DueDatePicker.jsx";
+import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 import { CATEGORY_COLORS, FISCAL_YEAR_START } from "../constants/config.js";
 import { perPaycheckFromCycle, getNextDueDate, resolveDueDateAnchor, getExpenseDisplayAmount } from "../lib/expense.js";
 import { computeJobLossRunway, firstUnemploymentPaymentDate, sumJobHuntIncome } from "../lib/jobLossRunway.js";
@@ -17,14 +18,15 @@ const isFlexibleCategory = (cat) => cat === "Lifestyle";
  * JobLossBudgetPanel — Job Loss Mode's own Budget view (TODO §15 mode rebuild).
  *
  * Replaces BudgetPanel entirely while `config.jobLossMode` is true. The cash
- * on hand input (persisted `config.jobLossCashOnHand`, TODO §15.H13) is
- * editable here AND on JobLossHomePanel — both commit to the same config
- * field via eager save, so there's no single "owner" to drift from; the
- * benefit-scenario toggle (session-only, unrelated) still lives here only,
- * with Home reading it read-only. Both feed the shared runway calc
- * (lib/jobLossRunway.js). Also owns expense add/remove/triage, all inline in
- * one view rather than a separate modal (the old ExpenseTriage.jsx) plus a
- * jump back to the normal, quarter-scoped BudgetPanel.
+ * on hand figure (persisted `config.jobLossCashOnHand`, TODO §15.H13,
+ * timeline-aware per §15.H17) is editable here AND on JobLossHomePanel via
+ * the same CashOnHandSheet — both commit to the same config fields via eager
+ * save, so there's no single "owner" to drift from; the benefit-scenario
+ * toggle (session-only, unrelated) still lives here only, with Home reading
+ * it read-only. Both feed the shared runway calc (lib/jobLossRunway.js).
+ * Also owns expense add/remove/triage, all inline in one view rather than a
+ * separate modal (the old ExpenseTriage.jsx) plus a jump back to the normal,
+ * quarter-scoped BudgetPanel.
  *
  * Deliberately simpler than the normal BudgetPanel's add-expense flow (no
  * month/quarter scoping, no history editing) — job-loss expense management is
@@ -59,38 +61,22 @@ export function JobLossBudgetPanel({
   const [newExp, setNewExp] = useState({ label: "", category: "Needs", amount: "" });
   const [newExpDueDate, setNewExpDueDate] = useState(null);
   const [addAttempted, setAddAttempted] = useState(false);
+  const [cashSheetOpen, setCashSheetOpen] = useState(false);
 
-  // Numeric Input Standard (CLAUDE.md): string draft state, only parseFloat
-  // at commit. Re-synced from the persisted value via React's documented
-  // "adjust state during render" pattern (react.dev — not a useEffect, which
-  // would fire an extra render and trip react-hooks/set-state-in-effect) —
-  // only when it actually changes elsewhere (e.g. edited on Home), never
-  // clobbering in-progress typing here.
-  const [lastSyncedCash, setLastSyncedCash] = useState(config.jobLossCashOnHand);
-  const [cashDraft, setCashDraft] = useState(() => (
-    config.jobLossCashOnHand != null ? String(config.jobLossCashOnHand) : ""
-  ));
-  if (config.jobLossCashOnHand !== lastSyncedCash) {
-    setLastSyncedCash(config.jobLossCashOnHand);
-    setCashDraft(config.jobLossCashOnHand != null ? String(config.jobLossCashOnHand) : "");
-  }
-
-  const manualSavings = cashDraft === "" ? 0 : Math.max(0, parseFloat(cashDraft) || 0);
   const huntIncome = sumJobHuntIncome(config);
 
-  // Eager-save on blur, not on every keystroke — same discrete-commit pattern
-  // as JobLossHomePanel's identical input on the same persisted field.
-  const commitCashOnHand = () => {
-    const parsed = cashDraft === "" ? 0 : Math.max(0, parseFloat(cashDraft) || 0);
-    if (parsed === (config.jobLossCashOnHand ?? 0)) return;
-    const next = { ...config, jobLossCashOnHand: parsed };
+  const dash = useMemo(() => computeJobLossRunway({
+    config, expenses, effectiveToday, extraCash: huntIncome,
+  }), [config, expenses, effectiveToday, huntIncome]);
+
+  // Same shared editor as JobLossHomePanel's Cash On Hand card (TODO
+  // §15.H17) — confirming a value here resets the decay clock the same way,
+  // since both surfaces commit to the identical config fields.
+  const saveCashOnHand = (parsedValue) => {
+    const next = { ...config, jobLossCashOnHand: parsedValue, jobLossCashOnHandAsOf: effectiveToday };
     setConfig(next);
     saveConfigNow?.(next);
   };
-
-  const dash = useMemo(() => computeJobLossRunway({
-    config, expenses, effectiveToday, savings: manualSavings + huntIncome,
-  }), [config, expenses, effectiveToday, manualSavings, huntIncome]);
 
   // Only expenses the user chose to track during Job Loss Mode (TODO §15
   // expense review step) show up anywhere on this panel — untracked ones
@@ -195,15 +181,41 @@ export function JobLossBudgetPanel({
         borderRadius: "14px", padding: "16px", marginBottom: "20px",
       }}>
         <label style={lS}>Current savings / cash on hand</label>
-        <input
-          type="number" min="0" step="50" inputMode="decimal"
-          value={cashDraft}
-          onChange={(e) => setCashDraft(e.target.value)}
-          onBlur={commitCashOnHand}
+        <Pressable
+          onClick={() => setCashSheetOpen(true)}
           disabled={readOnly}
-          placeholder="e.g. 1,023"
-          style={{ ...iS, marginTop: "6px" }}
+          aria-label="Update cash on hand"
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
+            marginTop: "6px", padding: "10px 12px",
+            background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)",
+            borderRadius: "10px", cursor: readOnly ? "default" : "pointer",
+          }}
+        >
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "16px", fontWeight: 700, color: "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>
+            ${Math.round(dash?.effectiveCashOnHand ?? 0).toLocaleString()}
+          </span>
+          <span style={{
+            width: "26px", height: "26px", borderRadius: "50%",
+            background: "rgba(0,200,150,0.12)", border: "1px solid rgba(0,200,150,0.32)",
+            display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-teal)", flexShrink: 0,
+          }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+            </svg>
+          </span>
+        </Pressable>
+        <CashOnHandSheet
+          open={cashSheetOpen}
+          onClose={() => setCashSheetOpen(false)}
+          currentValue={dash?.effectiveCashOnHand ?? 0}
+          onSave={saveCashOnHand}
         />
+        {dash && Math.round(dash.billsDueSinceAsOf) > 0 && (
+          <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
+            − ${Math.round(dash.billsDueSinceAsOf).toLocaleString()} in bills since you last updated this
+          </div>
+        )}
         <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
           Saved to your account — also editable from Home. Extra income logged
           on Home (${Math.round(huntIncome).toLocaleString()} so far) is added automatically.

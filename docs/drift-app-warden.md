@@ -162,9 +162,9 @@ nothing is orphaned).
 | # | Top Section | Cat | Primary files | Absorbs active-systems | Spines consumed |
 |---|------------|-----|---------------|------------------------|-----------------|
 | T1 | **Setup Wizard** | G | `SetupWizard.jsx`, `LifeEventMenu.jsx`, `JobLossEntry.jsx`, `RateUpdateModal.jsx`, `constants/config.js` | §9 · §10 (entry flows) · §11 (employer preset convention — born here, enforced everywhere) | A, B, F |
-| T2 | **Home Panel** | G | `HomePanel.jsx`, `JobLossHomePanel.jsx`, `NetWorthHealthTips.jsx`, `CoachNetWorthCard.jsx`, `ReemploymentTracker.jsx` | §14 · §10 (Job Loss home surface) · §4 (the *entire* goals surface — cards, CRUD, reorder, timeline bar; moved off Budget 2026-05-12) · §16 (sprints 3/5) | A, B, C, D, E |
+| T2 | **Home Panel** | G | `HomePanel.jsx`, `JobLossHomePanel.jsx`, `NetWorthHealthTips.jsx`, `CoachNetWorthCard.jsx`, `ReemploymentTracker.jsx`, `CashOnHandSheet.jsx` (shared with T4, §15.H17) | §14 · §10 (Job Loss home surface) · §4 (the *entire* goals surface — cards, CRUD, reorder, timeline bar; moved off Budget 2026-05-12) · §16 (sprints 3/5) | A, B, C, D, E |
 | T3 | **Income Panel** | L | `IncomePanel.jsx`, `WeekConfirmModal.jsx` | §1 (display surface) · §2 · §12 · §16 (sprint 2, unshipped) | A, B, E, F |
-| T4 | **Budget Panel** | L | `BudgetPanel.jsx`, `JobLossBudgetPanel.jsx`, `BulkEditPanel.jsx`, `MonthQuarterSelector.jsx`, `DueDatePicker.jsx` | §3 · §5 · §10 (Job Loss budget surface) · Tax Plan gate (§23 consumer; §4 goals moved to T2 — corrected in T4 pass) | A, B, C |
+| T4 | **Budget Panel** | L | `BudgetPanel.jsx`, `JobLossBudgetPanel.jsx`, `BulkEditPanel.jsx`, `MonthQuarterSelector.jsx`, `DueDatePicker.jsx`, `CashOnHandSheet.jsx` (shared with T2, §15.H17) | §3 · §5 · §10 (Job Loss budget surface) · Tax Plan gate (§23 consumer; §4 goals moved to T2 — corrected in T4 pass) | A, B, C |
 | T5 | **Account Panel** (redefined 2026-07-19 — was "Benefits Panel", see §11: `BenefitsPanel.jsx` is dead code; the fifth nav panel is Account) | G | `ProfilePanel.jsx` (all sub-views: Employment, Pay Structure cards, Retirement & Benefits `BenefitsDetail`, App Preferences, Tax Plan writers, Investor Codes, Life Events row, Account/auth actions UI) | §17 (account-management surface) · §6 (settings side; displays → T6) · Tax Plan write path (§23 consumer) | A, B, C |
 | T6 | **Log Panel** | L | `LogPanel.jsx` | §8 · §7 (attendance surfaces) · §13 (per-entry admin breakdown) | A, B, F |
 | T7 | **Auth System** | G | `lib/supabase.js`, `db.js` (account mapping, `loadUserData`/`saveUserData`), migrations (RLS, tier columns), `DemoAccountTree.jsx`, `InvestorRegister.jsx`, `InvestorAdminPanel.jsx` | §17 (session + identity/tier truth; the ProfilePanel UI surface is T5) · §18 · §23 | B, C |
@@ -198,7 +198,7 @@ Notes on deliberate placements:
 | **A — Fiscal Math** | L | `finance.js` (40 exports), `fiscalWeek.js`, `rollingTimeline.js`, `expense.js`, `goalFunding.js`, `jobLossRunway.js`, `stateTaxTable.js` | §1 · §2 · §7 (math) · §14 (math) | The single source of numeric truth. Every panel number must trace to an export here; `buildYear → computeNet → calcEventImpact → computeGoalTimeline` is the trunk — a change to any stage re-verifies every consumer surface (T2–T6) *and* Spine D's context fields. |
 | **B — Persistence & Save Integrity** | L | `db.js`, `useLocalStorage.js`, `supabase.js`, eager-save pattern (`savePersistedStateNow` + the four `saveXNow` wrappers), `configHistory.js`, `database/migrations/` | §22 | Every discrete mutation follows the eager-save pattern (D3); every sensitive config change must hit the `HISTORY_SENSITIVE_FIELDS` watcher; schema changes ride numbered migrations (BOOKMARK files are never migrations; next real number: 023 — verify against the folder, this doc does not track it). |
 | **C — Entitlement & Gating** | G | `subscription.js` (`getEntitlement`), `entitlements.js` (`canAccessAiFeatures`, `canAccessTaxPlan`, `hasTesterAccess` base), tier flags (`is_admin`/`is_tester`/`is_investor`/future `is_owner`) | §23 · §18 (flag semantics) · §21 (engine) | One entitlement resolver, one gate module. `isAdmin` stays a strict superset of `isTester` *by construction* (build every new gate on `hasTesterAccess`); tester⇔investor never overlap; the day-21 `access_ends_at` grace is never disclosed in user-facing strings. |
-| **D — AI Layer & Context Grounding** | L | `aiContext.js` (`buildCoachContext`), `coachPrompts.js`, `coachFeatureGuide.js`, `coachTriggers.js`, `claude.js`, `api/coach.js`, `AskCoachPanel.jsx` | §24 | Every context field resolves through the same authoritative Spine-A function the UI displays that number with — never a parallel approximation (D1). Goal labels stay excluded (privacy rule). Gate is checked client *and* server side (Spine C). `coachTriggers.js#estimateRunwayDays` is a known standing D1 violation — quarantined, cite it, don't extend it. |
+| **D — AI Layer & Context Grounding** | L | `aiContext.js` (`buildCoachContext`), `coachPrompts.js`, `coachFeatureGuide.js`, `coachTriggers.js`, `claude.js`, `api/coach.js`, `AskCoachPanel.jsx` | §24 | Every context field resolves through the same authoritative Spine-A function the UI displays that number with — never a parallel approximation (D1). Goal labels stay excluded (privacy rule). Gate is checked client *and* server side (Spine C). `coachTriggers.js#estimateRunwayDays` — the runway D1 violation this table used to flag — was deleted outright (`3267286`, 2026-07-22); Coach's runway now converges on `computeJobLossRunway` like every other consumer. |
 | **E — Design System & Motion** | G | `index.css` `@theme` tokens, `ui.jsx` primitives, `LiquidGlass.jsx` (`ALLOWED_PURPOSES`), animation rules, numeric-input standard, Pulse token reservation | §15 · §16 (primitives) | No raw hex for accent/green/red; Pulse tokens never on Flow elements; Liquid Glass only on whitelisted purposes; no bounce/spin/scale-up, ≤500ms; string-draft numeric inputs, parse at commit only. |
 | **F — Admin Diagnostic Toolkit** | G | Toolkit in `App.jsx` (8 Phase-1 tools), per-entry breakdown in `LogPanel.jsx` | §13 | The Warden's own instrument panel — drift *checks* are executed through it (Live Inspector, Week Inspector, DB Row drift badge, Config Raw View). A change that breaks a toolkit tool blinds every other drift check; Phase 2 (`isOwner`) tools are write-capable and get L-grade scrutiny when built. |
 
@@ -248,8 +248,11 @@ G: the full flag/mode grid the section branches on, with expected outcome per ce
 L: each displayed/stored value → its single source-of-truth function → known consumers.
 
 **Block 4 — Case law & quarantine.** Past drift incidents that occurred *in this section*
-(cite commit or active-systems §), plus any standing known-drift quarantines (e.g. Spine D's
-`estimateRunwayDays`) so the Warden flags extensions of them rather than rediscovering.
+(cite commit or active-systems §), plus any standing known-drift quarantines (e.g. Spine A's
+flat-config `buildYear` zone, §18.4) so the Warden flags extensions of them rather than
+rediscovering. Move an entry from quarantine to case-law the moment it closes, with the
+closing commit — Spine D's `estimateRunwayDays` sat mislabeled "open" for three days past
+its actual fix (`3267286`) before a later pass caught it; don't repeat that.
 
 **Maintenance covenant:** a drift-map entry is itself subject to D5. Whenever a listed
 trigger's blast radius changes, the entry is updated *in the same PR* — an entry more than
@@ -426,7 +429,7 @@ slice." `extractBaseRateHistory` keeps only rows where `changed_fields` includes
 > history (D2 re-opened). Check: `db.test.js` baseRateHistory cases + a future-dated rate
 > update showing the *old* rate on weeks before the effective date (Week Inspector).
 
-**F11 · `handleBackToWork()`** — `App.jsx:1362–1386` — **[G]**
+**F11 · `handleBackToWork()`** — `App.jsx:1454–1478` — **[G]**
 The single reset point for leaving Job Loss Mode: auto-reactivates flagged expenses,
 nulls the `jobLoss*`/unemployment/`returnToWorkDate` fields, routes into
 `structure_change`.
@@ -434,8 +437,8 @@ nulls the `jobLoss*`/unemployment/`returnToWorkDate` fields, routes into
 > it must be reset here — or it leaks into the re-employed state and every consumer that
 > gates on it misfires. Check: grep new field name; confirm it appears in this reset patch.
 
-**F12 · `LifeEventMenu` routing + `JobLossEntry` activation** — `App.jsx:3374–3382` /
-`:3384–3398` — **[G]**
+**F12 · `LifeEventMenu` routing + `JobLossEntry` activation** — `App.jsx:3526–3531` /
+`:3533–3548` — **[G]**
 Three routes: `job_loss` → `JobLossEntry` modal (not the wizard), `rate_update` →
 `RateUpdateModal`, anything else → `setWizardEntry(route)`. `JobLossEntry.onActivate`
 tags history (`life_event:lost_job`, `effectiveFrom: jobLossDate`), computes
@@ -618,7 +621,7 @@ because a celebration `setTimeout` delays it — outer closure would be stale).
 > `Prop` suffix usage below line 76 — should be zero.
 
 **F20 · `readOnly` noop shadow** — `HomePanel.jsx:72–76` (and the same pattern at
-`JobLossHomePanel.jsx:29–31`) — **[G]**
+`JobLossHomePanel.jsx:46–48`) — **[G]**
 Paywall-expired accounts get all four mutation channels (`setGoals`, `setConfig`,
 `onSaveGoalsNow`, `saveConfigNow`) shadowed to no-ops in one place.
 > **IF** a new mutation-capable prop is threaded into HomePanel or JobLossHomePanel,
@@ -638,20 +641,31 @@ when the year-end simulation shape omits it — `ec53450`).
 > "this-year slice" and "full target" — a wrong Outlook with no error. Check: a goal
 > whose ETA lands next year must subtract only its this-year slice from Outlook.
 
-**F22 · Job Loss home surface** — mode fork `App.jsx:1482` (Home) / `:1536` (Budget);
-`JobLossHomePanel.jsx`: `commitCashOnHand:57–63`, runway consumption `:65–67` (via
-`computeJobLossRunway`), `logIncome:92–103`, `removeEntry:107–110`, embedded
-`ReemploymentTracker` `:225` with its `applyConfigUpdate` wrapper
-(`ReemploymentTracker.jsx:104–108`) — **[G→L]**
+**F22 · Job Loss home surface** — mode fork `App.jsx:1570` (Home) / `:1630` (Budget);
+`JobLossHomePanel.jsx`: `dash` runway memo `:56–58` (via `computeJobLossRunway`,
+`extraCash: huntIncome`), `saveCashOnHand:65–69` (writes `jobLossCashOnHand` +
+`jobLossCashOnHandAsOf`, called from the pencil-badged Cash On Hand card + its shared
+`CashOnHandSheet.jsx` editor — §15.H17), `logIncome:94–105`, `removeEntry:109–113`,
+embedded `ReemploymentTracker:264` with its `applyConfigUpdate` wrapper
+(`ReemploymentTracker.jsx:104–108`), embedded `CoachNetWorthCard:267` (DW-8 fix,
+`docs/BUG_FIX_TODO.md`) behind `canAccessAskCoachGeneral` — **[G→L]**
 `config.jobLossMode` *replaces* HomePanel with JobLossHomePanel (post-§15.H7 architecture
 — the pre-H7 overlay components are deleted; don't resurrect). All panel numbers resolve
 through `computeJobLossRunway()` / `sumJobHuntIncome()` — the one authoritative runway
-pair. Every mutation eager-saves; `jobLossCashOnHand` is persisted and mandatory
-(§15.H13).
+pair; `computeJobLossRunway` itself reads `jobLossCashOnHand` internally now and decays it
+by every essential bill's due-date occurrence since `jobLossCashOnHandAsOf`
+(`sumBillsDueSince()`, §15.H17) — the displayed `effectiveCashOnHand` is not the raw
+persisted number. Every mutation eager-saves; `jobLossCashOnHand` is persisted and
+mandatory (§15.H13); `jobLossCashOnHandAsOf` is re-stamped every time it's edited.
 > **IF** the panel needs a new burn/savings/runway number, **THEN** it comes from
-> `jobLossRunway.js` — a second in-component derivation is the exact D1 shape quarantined
-> in F24. **IF** a new `jobLoss*` field is added here, **THEN** it also joins
-> `handleBackToWork`'s reset list (§7 F11). Check: `jobLossFlow.test.jsx`.
+> `jobLossRunway.js` — a second in-component derivation is the exact D1 shape F24
+> quarantined and closed (`3267286`). **IF** a new `jobLoss*` field is added here,
+> **THEN** it also joins `handleBackToWork`'s reset list (§7 F11) — note
+> `jobLossCashOnHand`/`jobLossCashOnHandAsOf`/`jobLossPendingCheck*` are deliberately
+> **not** in that list today (left stale/unused once `jobLossMode` flips false, since
+> `computeJobLossRunway` short-circuits on `!config.jobLossMode` before ever reading
+> them) — that's existing precedent, not an oversight to "fix" reflexively. Check:
+> `jobLossFlow.test.jsx`, `jobLossRunway.test.js`.
 
 **F23 · Net Worth Health cue** — `netWorthHealthStatus` (`finance.js:1407`,
 threshold const `:1405`), suppression `HomePanel.jsx:117–118`
@@ -665,20 +679,24 @@ forward slot for a Coach-generated insight.
 > `belowThreshold` as its amber proxy) — they must fire on the same condition or the
 > Coach warns about a cushion the Home tile calls healthy.
 
-**F24 · Coach Net Worth trigger chain** — gate `HomePanel.jsx:1358` (`canAccessAiFeatures`);
-`CoachNetWorthCard.jsx:48–53` (computes `runwayDays` via **quarantined**
-`estimateRunwayDays`, resolves tier); `coachTriggers.js`: `estimateRunwayDays:27–49`
-[quarantine], `resolveNetWorthSignalTier:56–61`, `shouldFireForTier:67–71` (one message
-per tier per fiscal week) — **[G + quarantined L]**
-Admin/tester-gated proactive Coach message. Red tier keys off `estimateRunwayDays` — the
-app's documented standing D1 violation (independent runway math that ignores persisted
-`jobLossCashOnHand` and job-hunt income; always ≤ the real runway).
-> **IF** touching anything in this chain, **THEN** do not extend `estimateRunwayDays` —
-> converge it on `computeJobLossRunway()` (its doc comment now says exactly this) — and
-> note the *knock-on*: its too-low runway flows into `buildCoachContext`
-> (`CoachNetWorthCard.jsx:78`), so the Coach can claim less runway than the Job Loss
-> panel shows on the same screen. **IF** the gate changes, **THEN** it must remain
-> `canAccessAiFeatures({isAdmin, isTester})` — never fold in `isInvestor` (§23 division).
+**F24 · Coach Net Worth trigger chain** — gate `HomePanel.jsx`/`JobLossHomePanel.jsx`
+(`canAccessAskCoachGeneral` — widened from `canAccessAiFeatures` in the Coach gate-flip,
+2026-07-24: admin/tester **or** a real trial/paid entitlement, never `isInvestor`);
+`CoachNetWorthCard.jsx` computes `runwayDays` via `computeJobLossRunway()` +
+`resolvePrimaryRunwayDays()` directly (`jobLossRunway.js`) — **not** a local estimate;
+`coachTriggers.js`: `resolveNetWorthSignalTier`, `shouldFireForTier` (one message per
+tier per fiscal week) — **[G + L, both converged]**
+Proactive Coach message, now reachable from both `HomePanel` (Amber/Green/Red) and
+`JobLossHomePanel` (Red only — DW-8 fix, `docs/BUG_FIX_TODO.md`; Amber/Green need
+`netWorthHealth`, a normal-mode-only concept not threaded through the Job Loss mount).
+Red tier's runway number is guaranteed to equal the Job Loss panels' own headline —
+same function, same call — since the standing quarantine below closed (commit
+`3267286`, 2026-07-22).
+> **IF** touching anything in this chain, **THEN** do not reintroduce a second runway
+> formula — everything routes through `computeJobLossRunway()`/`resolvePrimaryRunwayDays()`
+> (Spine A). **IF** the gate changes, **THEN** it must stay `canAccessAskCoachGeneral`
+> — never fold in `isInvestor` (§23 division). Check: `jobLossFlow.test.jsx`'s "Coach
+> presence (DW-8 fix)" block, `CoachNetWorthCard.test.jsx`.
 
 ### 8.2 Block 2 — Drift trigger map (cross-boundary)
 
@@ -691,7 +709,7 @@ app's documented standing D1 violation (independent runway math that ignores per
 | `eventImpact.totalNetAdjustment` composition (Spine A) | `adjustedTakeHome` (F17) → Home Year-End + IncomePanel Year Summary (both read `logTotals.adjustedTakeHome` — single value, keep it that way) | Log a missed shift; both panels move by the same amount | D1 |
 | A new mutation prop threaded into Home/JobLossHome | F20 shadow lists | Prop appears in the shadow block; expired-account test: mutation is a no-op end-to-end | D4 |
 | `netWorthHealthStatus` / threshold | F23 cue **and** F24 amber tier | Both fire on the same account state | D1 |
-| `computeJobLossRunway` / `sumJobHuntIncome` signature | F22 panel consumption, `JobLossBudgetPanel` (T4), and the F24 quarantine's convergence target | `jobLossFlow.test.jsx`; runway headline equals Budget-side runway | D1 |
+| `computeJobLossRunway` / `sumJobHuntIncome` / `sumBillsDueSince` signature | F22/F44 panel consumption (both now read `effectiveCashOnHand`, not raw `jobLossCashOnHand`), `CoachNetWorthCard`/`App.jsx`'s Ask Coach wiring (F24) | `jobLossFlow.test.jsx`, `jobLossRunway.test.js`; runway headline equals Budget-side runway; a tracked essential bill's due date passing decreases the Cash On Hand card by the same amount on both panels | D1 |
 | `PAYCHECKS_PER_YEAR` / a new pay schedule (Spine A) | `perCheckFactor` display scaling (F16), `bufferPerWeek` (F14), Wrap Up preview (§7 F6) | Biweekly test account: tile values are 2× weekly, labels say "Check" not "Week" | D1 |
 
 ### 8.3 Block 3 — Gate matrix
@@ -721,17 +739,26 @@ app's documented standing D1 violation (independent runway math that ignores per
 - *Pre-§15.H7 Job Loss overlay* (`7375c36`) — `JobLossDashboard.jsx`/`ExpenseTriage.jsx`
   deleted; mode now swaps whole panels. Any PR re-introducing an overlay-on-HomePanel
   Job Loss surface is reviving deleted architecture.
-
-**Standing quarantine (open):**
-1. **`estimateRunwayDays` (F24)** — known-drifted second runway formula; its too-low
-   number feeds both the Red-tier trigger and Coach context. Convergence target:
-   `computeJobLossRunway()`. Its doc comment now carries the quarantine notice
-   (corrected this pass — it cited the deleted JobLossDashboard and called cash-on-hand
-   "session-only", both stale since §15.H7/H13).
-2. **`runwayDays` never wired to `AskCoachPanel`** — `App.jsx:3351–3368` passes no
-   `runwayDays`, so `aiContext.js:200` renders bare "Job Loss Mode: active" (documented
-   §10 known gap). When wiring it, use `computeJobLossRunway`, not the F24 quarantine —
-   and then both Coach entry points must quote the same runway.
+- *`estimateRunwayDays` quarantine, closed* (`3267286`, 2026-07-22) — the second,
+  independent runway formula that ignored persisted `jobLossCashOnHand` and job-hunt
+  income (always ≤ the real runway, so Coach could claim less runway than the Job Loss
+  panels on the same account) was **deleted outright**, not patched — `coachTriggers.js`
+  no longer exports it. `CoachNetWorthCard.jsx` now calls `computeJobLossRunway()` +
+  the new shared `resolvePrimaryRunwayDays()` (`jobLossRunway.js`) directly, same
+  function the two Job Loss panels use. Same commit also closed the sibling quarantine
+  below (`runwayDays` wiring) — filed and fixed together since both converge on the
+  same target function.
+- *`runwayDays` wired to `AskCoachPanel`, closed* (`3267286`, 2026-07-22) — `App.jsx`
+  now computes `coachRunwayDays` via `computeJobLossRunway()`/`resolvePrimaryRunwayDays()`
+  (using the real `jobLossIncludeBenefits` toggle, not a hardcoded default) and passes
+  it into `AskCoachPanel`'s `runwayDays` prop → `aiContext.js`'s Job Loss context line
+  now renders the real number instead of a bare `"Job Loss Mode: active"` string.
+  **Drift-in-drift correction (2026-07-25):** this section previously listed both items
+  above as "Standing quarantine (open)" for three days after they'd actually closed —
+  a live instance of the exact D5 pattern this document exists to prevent, caught while
+  investigating an unrelated Job Loss Mode documentation pass. If you find a warden
+  entry that looks stale, verify against the code before trusting the doc's own
+  "open"/"closed" label.
 
 ---
 
@@ -956,7 +983,7 @@ and the §4.1 hierarchy rows accordingly.
 ### 10.1 Block 1 — Critical inventory (function by function)
 
 **F35 · `applyExpenseUpdate(updater)`** — `BudgetPanel.jsx:96–100`, twin at
-`JobLossBudgetPanel.jsx:53–56` (and `ReemploymentTracker`'s `applyConfigUpdate`, §8 F22) — **[L]**
+`JobLossBudgetPanel.jsx:55–58` (and `ReemploymentTracker`'s `applyConfigUpdate`, §8 F22) — **[L]**
 The canonical eager-save wrapper: captures the functional updater's result and passes
 the same value to `setExpenses` **and** `onSaveExpensesNow`. Every expense/loan mutation
 in both files routes through it — that's what makes the whole surface D3-safe with ~30
@@ -1057,19 +1084,27 @@ Multi-expense edit/delete/add in one pass, anchored to `displayMonthKey`'s month
 > superset of `isTester` (`a643153`, built on `hasTesterAccess`). Check: tester
 > account sees Tax Plan in both places; plain user with `taxExemptOptIn` sees neither.
 
-**F44 · Job Loss budget surface** — `JobLossBudgetPanel.jsx`: triage `setStatus:152`,
-`toggleAutoReactivate:153`, `pauseAllFlexible:156`, `removeExpense:159`, inline add
-`:171–176` (stamps `trackDuringJobLoss: true` + `dueDateAnchor`); `upcomingBills`
-`:116–130` (due-date countdowns, active bills only); runway via `computeJobLossRunway`
-`:91`; benefit-scenario toggle `includeBenefits` lifted to App state (**session-only,
-deliberately unpersisted**, shared with JobLossHomePanel so both quote one scenario) — **[G→L]**
+**F44 · Job Loss budget surface** — `JobLossBudgetPanel.jsx`: triage `setStatus:138`,
+`toggleAutoReactivate:139`, `pauseAllFlexible:142`, `removeExpense:145`, inline add
+`:157–162` (stamps `trackDuringJobLoss: true` + `dueDateAnchor`); `upcomingBills:102–116`
+(due-date countdowns, active bills only); runway via `computeJobLossRunway:68–70`
+(`extraCash: huntIncome`); the same pencil-badged Cash On Hand row + shared
+`CashOnHandSheet.jsx` as F22 (`saveCashOnHand:74–78`, §15.H17 — writes
+`jobLossCashOnHand` + re-stamps `jobLossCashOnHandAsOf`, so editing from *either* panel
+resets the decay clock identically); benefit-scenario toggle `includeBenefits` lifted to
+App state (**session-only, deliberately unpersisted**, shared with JobLossHomePanel so
+both quote one scenario) — **[G→L]**
 > **IF** triage status values (`active`/`paused`/`cancelled`) or `trackDuringJobLoss`
-> semantics change, **THEN** check every reader: `weeklyBurn` (Needs-only, active-only —
-> `jobLossRunway.js`), `upcomingBills` filter, Back to Work auto-reactivation (§7 F11),
-> and the F24 quarantine's filter drift. **IF** `includeBenefits` is ever persisted,
-> **THEN** that's a product decision reversal — its session-only nature is documented
-> intent (`:23` comment), not an oversight. Check: toggling the scenario on one panel
-> changes the other; kill-tab keeps triage states but resets the scenario toggle.
+> semantics change, **THEN** check every reader: `weeklyBurn` **and** `sumBillsDueSince`'s
+> essential-bill filter (both `jobLossRunway.js`, kept in sync via the shared
+> `isTrackedActiveEssential` predicate — do not let a future edit fork them back apart),
+> `upcomingBills` filter, Back to Work auto-reactivation (§7 F11). F24's runway
+> quarantines are closed (`3267286`) — no filter-drift risk from that direction anymore.
+> **IF** `includeBenefits` is ever persisted, **THEN** that's a product decision reversal
+> — its session-only nature is documented intent, not an oversight. Check: toggling the
+> scenario on one panel changes the other; kill-tab keeps triage states but resets the
+> scenario toggle; editing Cash On Hand from Budget updates Home's card figure and vice
+> versa (single source of truth, `jobLossFlow.test.jsx`).
 
 ### 10.2 Block 2 — Drift trigger map (cross-boundary)
 
@@ -2468,7 +2503,7 @@ instead of calling the named function is a D1 finding by definition (§3 cardina
 | Expense unit conversions | `expense.js` layer (F101) | Budget cards/breakdown (F37/F42), food floor (F39), Coach |
 | Goal ETA / funding week | `computeGoalTimeline` (F18) with `config.goalTimelineEpochIdx ?? null` | Home goal cards (F18), Year-End draw (F21), Coach goal lines, T4 bar |
 | Completed-goal spend | `getFundedGoalSpend` (`goalFunding.js`) | `annualSavings` (F16), `adjustedTakeHome` (F17), Live Inspector |
-| Job Loss runway / burn | `computeJobLossRunway` + `sumJobHuntIncome` (`jobLossRunway.js`) | JobLossHome (F22), JobLossBudget (F44), Coach (convergence target for F24 quarantine) |
+| Job Loss runway / burn | `computeJobLossRunway` + `sumJobHuntIncome` (`jobLossRunway.js`) | JobLossHome (F22), JobLossBudget (F44), Coach (`CoachNetWorthCard`, `AskCoachPanel` — F24, both converged since `3267286`) |
 | Net-worth health status | `netWorthHealthStatus` + `NET_WORTH_HEALTH_THRESHOLD` (F23) | Home cue (F23), Coach amber tier (F24) |
 | 401k employee / employer | `buildYear` `k401kEmployee`/`k401kEmployer` (F97), `dhlEmployerMatchRate` | LogPanel 401k block (F58), Week Inspector |
 | Bucket balance / hours | `computeBucketModel` (F100) | LogPanel bucket (F61), hero card, `calcEventImpact` `bucketHoursDeducted` (F57) |
@@ -2500,10 +2535,11 @@ instead of calling the named function is a D1 finding by definition (§3 cardina
    (deferred Master Timeline, TODO §19). Do not add a consumer assuming past-week accuracy.
 2. **`buildLoanHistory` regeneration D2 (F103)** — same root cause, loan side; tracked as
    **DW-W1**. Convergence target: expense-style `history[]` (TODO §19).
-3. **`estimateRunwayDays` D1 (F24, `coachTriggers.js`)** — a second runway formula that ignores
-   persisted `jobLossCashOnHand`/job-hunt income; always ≤ the real `computeJobLossRunway`.
-   Owned in Spine D; noted here because its convergence target *is* this spine's
-   `computeJobLossRunway`.
+
+**Closed since this pass:** *`estimateRunwayDays` D1 (F24, `coachTriggers.js`)* — the second
+runway formula that ignored persisted `jobLossCashOnHand`/job-hunt income was deleted outright
+(commit `3267286`, 2026-07-22), not patched. `CoachNetWorthCard.jsx` now calls this spine's
+`computeJobLossRunway()` directly. Owned in Spine D (§21) — full write-up there.
 
 **Standing findings from this pass:** none new. The two D2 zones above are pre-existing,
 owned, and queue-visible (DW-W1 + the §22/Master-Timeline roadmap); no new DW defect surfaced
@@ -2591,20 +2627,25 @@ when `pendingSaveRef` is set** — a clean state doesn't flush.
 > field.
 
 **F107 · `useLocalStorage(key, initialValue)`** — `hooks/useLocalStorage.js:3–20` — **[L/G]**
-A `useState` seeded from `localStorage.getItem` (JSON-parsed, try/catch to `initialValue`)
-plus a write-back effect (try/catch swallows quota/private-mode failures). **Not dead legacy:**
-its one live consumer is `CoachNetWorthCard.jsx:40` (`coachNetWorthSignal`) — the per-tier/
-per-fiscal-week Coach message throttle (F24). That means the "one proactive Coach message per
-tier per fiscal week" guarantee is **device-local**, entirely outside the Supabase net
-(debounce, eager save, keepalive all bypass it): a user on a second device gets the message
-again, and clearing browser storage re-arms it.
-> **IF** any *account* truth (not ephemeral UI/signal state) is ever stored through this hook,
-> **THEN** it silently won't sync across devices and won't survive a storage clear — this hook
-> is the localStorage→Supabase migration's vestige and must stay scoped to device-local UI
-> state only (dismissals, signal throttles). Check: grep `useLocalStorage(` — every key is
-> ephemeral display/throttle state, never money/time/account data. **IF** the parse/stringify
-> guards change, **THEN** a corrupt value must still fall back to `initialValue`, never throw
-> into a render (`useLocalStorage.test.js` covers this).
+**Stale as of this pass (2026-07-25) — now orphaned, not "not dead legacy."** This entry
+previously named `CoachNetWorthCard.jsx:40`'s `coachNetWorthSignal` key as the hook's one
+live consumer, with the Job Loss/Home Coach message throttle being device-local as a
+result. That was fixed by **DW-9** (`docs/BUG_FIX_TODO.md`): the signal state moved to
+`config.coachSignalState`, eager-saved through the normal `setConfig`/`saveConfigNow`
+channel — durable per-account like every other config field, no longer device-scoped.
+`grep -rln "useLocalStorage(" src/components/ src/hooks/` now returns **only the hook's
+own file** — zero consumers anywhere in `src/`. The hook is dead code (same shape as
+**DW-4**'s `BenefitsPanel.jsx` finding) as of this reading, not yet filed as its own DW
+item — flagged here rather than deleted outright, since removing a hook is a smaller
+decision than removing a whole panel but still deserves its own pass rather than a
+drive-by deletion during a documentation sweep.
+> **IF** a future change reintroduces a `useLocalStorage(` consumer, **THEN** re-verify
+> it's genuinely device-local/ephemeral state (dismissals, UI throttles) — never account
+> truth — before relying on it; the original warning still holds for *any future* use,
+> it's just that none exists today. **IF** no consumer appears before the next cleanup
+> pass, **THEN** delete `useLocalStorage.js` + `useLocalStorage.test.js` and drop this
+> entry, mirroring DW-4's procedure exactly (confirm via the same import-graph grep before
+> deleting).
 
 **F108 · `configHistory.js` — whitelist + `diffSensitiveFields`** — `configHistory.js:14–63` — **[L]**
 The pure half of the config-history watcher (F9 owns the App.jsx effect). `HISTORY_SENSITIVE_FIELDS`
@@ -2651,7 +2692,7 @@ Ordered, numbered SQL. **BOOKMARK files are never migrations** — `022_BOOKMARK
 is a full-schema recap (schema state through 021) that exists so a session reads one file
 instead of the whole folder; the `BOOKMARK` tag + all-caps make it unmistakable, and assigning
 one the next real number expecting it to run is the trap CLAUDE.md warns about. Real migrations
-continue past it: **023** (`coach_chats`, unwired — Spine D), **024** (`user_data` write-
+continue past it: **023** (`coach_chats`, wired 2026-07-25 — Spine D F123), **024** (`user_data` write-
 permission fix — the F69 case law). **The next real migration is 025** — verify against the
 folder before numbering; this note has gone stale once already (this doc's own §14 caught it).
 > **IF** a migration is added, **THEN** it (a) takes the next real number skipping BOOKMARKs
@@ -2728,7 +2769,7 @@ F20 (readOnly noop shadow).
 | `latestPersistedStateRef` sync-render update or the flush trio (F106) | Keepalive path (F64/F68), pending-save guard (F66) | Background the tab mid-edit; edit survives reload; ref list = debounce deps = destructure | D3 |
 | `HISTORY_SENSITIVE_FIELDS` / `diffSensitiveFields` semantics (F108) | F9 watcher, `DIFF_FIELDS` (§7 F7), §22 read slice (F10) | Sensitive edit → DB Row config-history line; undefined→null edit records nothing; `configHistory.test.js` | D5/D2 |
 | `saveConfigSnapshot` row shape (`snapshot`/`changed_fields`/`effective_from`) | `extractBaseRateHistory` filter (F10, `db.js:19`), Master-Timeline future readers | A `baseRate` edit produces a readable row; future-dated rate shows old rate pre-effective (Week Inspector) | D2 |
-| `useLocalStorage` scope (F107) | `coachNetWorthSignal` throttle (F24) — device-local by design | Grep keys stay ephemeral; no account truth added; `useLocalStorage.test.js` | D3 |
+| `useLocalStorage` scope (F107) | Currently no consumer (DW-9 moved the Coach signal throttle to `config.coachSignalState`) — hook is dead code as of this pass, candidate for a DW-4-style deletion | Grep keys stay ephemeral if a consumer returns; no account truth added; `useLocalStorage.test.js` | D3 |
 | A new beta-program field/write path (F121) | Client-writable → F110 instead; privileged/derived → excluded from F68 destructure + present in F67 read map; trigger-written → `SECURITY DEFINER`; gated table insert → server-side trigger enforcement, not just client JS | Confirm which category before applying any checklist; non-eligible insert attempt must fail server-side | D3/D4 |
 | `user_data` column set (any migration, F109) | F110 sites, BOOKMARK freshness, CLAUDE.md migration-number note, RLS grants (F69) | Next number skips BOOKMARKs (025); append BOOKMARK + update note same PR; F69 checklist | D2/D5 |
 | A new field carrying regulated/high-sensitivity data — SSN, DOB, bank/routing, gov ID (F120) | Must NOT reuse the plain F110 four-site procedure alone; needs an explicit encryption decision first | Confirm app-layer or `pgcrypto` encryption chosen and documented before the migration lands; CLAUDE.md Persistence section updated; `docs/TODO.md` §27 | D2/D5 |
@@ -2758,7 +2799,7 @@ destructure is the enforcing whitelist (migration 019 RLS is the server half).
 
 **Separate table (not `user_data`):** `account_history` (migration 020, write-only via
 `saveConfigSnapshot`, read-only via `extractBaseRateHistory` — the §22 narrow slice);
-`coach_chats` (migration 023, **unwired** — Spine D); `stripe_webhook_events` (migration 018,
+`coach_chats` (migration 023, wired — Spine D F123); `stripe_webhook_events` (migration 018,
 idempotency — Spine C/T9); `deleted_accounts` (cron tombstones — T9).
 
 ### 19.4 Block 4 — Case law & findings
@@ -2782,10 +2823,13 @@ live proof of the F110 four-site procedure's necessity and is now the reference 
 procedure closing a gap end-to-end (App wrapper + prop + both call sites + CLAUDE.md table +
 regression test). No D5 corrections owed — `active-systems.md` §22 already carries the
 F10 read-path annotation applied during the T7 pass, and the migration-number note in CLAUDE.md
-now self-warns (T7 pass). `useLocalStorage`'s device-local scope (F107) is documented-intended
-(the localStorage→Supabase vestige), not a defect — filed as a standing note, not a DW row,
-because nothing account-critical routes through it today; it would **promote to a defect** the
-moment any money/time/account field is stored through it instead of `user_data`.
+now self-warns (T7 pass). `useLocalStorage`'s device-local scope (F107) was documented-intended
+(the localStorage→Supabase vestige) when this note was first written — **stale as of
+2026-07-25**: DW-9 moved its one real consumer (the Coach signal throttle) to
+`config.coachSignalState`, so the hook is now genuinely orphaned rather than just
+scoped-on-purpose. Still not filed as its own DW row (deletion is a smaller, lower-risk
+call than a defect fix), but see F107's own entry for the DW-4-style cleanup this now
+sets up.
 
 **No field-level encryption exists today (F120)** — every persisted field currently relies on
 TLS + RLS only, no `pgcrypto`/application-layer encryption anywhere. Documented-intended for the
@@ -3051,24 +3095,56 @@ context; it trusts the block's content.
 > a non-admin/non-tester request returns 403 before any Anthropic call; the client cannot
 > escalate access by editing the POST body.
 
-**F116 · Dormant `coach_chats` persistence layer** — `db.js:531–620` (`loadCoachChats`/
-`saveCoachChat`/`deleteCoachChat`), migration `023_add_coach_chats.sql` — **[L/G]**
-The DB functions and table exist and are unit-tested (`dbCoachChats.test.js`) but have
-**zero UI callers** — `AskCoachPanel.jsx:11` explicitly defers wiring ("coach_chats wiring
-lands as its own pass once this feels right"). Chat history is currently session-only
-(in-component `messages` state, lost on close). This is *built infrastructure awaiting
-activation*, not dead code.
-> **IF** anyone wires these functions into the Coach UI, **THEN** it earns its own drift-map
-> entry first (it becomes an eager-save concern — Spine B: chat writes are discrete Add/Delete
-> actions needing the F110 four-site treatment and a `readOnly`/gate decision), and the RLS
-> policy on `coach_chats` must be verified own-row-scoped (F69). Until then, do not assume any
-> Coach conversation persists across sessions or devices. Check: grep the three function names
-> for UI callers — currently only `db.js` and its test reference them.
+**F116 · `coach_chats` persistence layer — now wired (superseded, see F123)** — `db.js:531–620`
+(`loadCoachChats`/`saveCoachChat`/`deleteCoachChat`), migration `023_add_coach_chats.sql` —
+**[L/G]**
+Was dormant as of the 2026-07-20 spine pass (unit-tested, zero UI callers). **As of 2026-07-25,
+`AskCoachPanel.jsx` is a live caller** of all three functions — multi-turn Ask Coach chats now
+persist, and a chat-history list resumes a saved conversation. This entry's own IF/THEN fired
+and was actioned: see **F123** for the earned drift-map entry covering the wiring itself. Kept
+here only so anything still citing "F116 dormant" gets redirected instead of relying on a stale
+fact.
+
+**F123 · `AskCoachPanel` chat persistence + retention (activates F116)** — `AskCoachPanel.jsx`
+(`persistChat`, `refreshHistory`, `finalizeSummary`, `endCurrentSession`), `coachPrompts.js`
+(`COACH_CHAT_SUMMARY_PROMPT`) — **[L/G]**
+Each completed Ask Coach turn (success *or* the request failing mid-stream) is upserted into
+`coach_chats` immediately after the turn resolves — an eager save, not a debounce, per the
+same reasoning as Spine B's config/goals/expenses/logs sites (F110 class), because a
+backgrounded tab could otherwise lose an in-progress exchange. `chatType` is hardcoded
+`"ask_coach"` — this entry does not cover `job_scout`/`job_hunt`/`statement_summary`, none of
+which have a UI caller yet. Retention is capped at the 3 most recent `ask_coach` rows
+(`MAX_SAVED_CHATS`); `refreshHistory` prunes anything older, **except** the row the user
+currently has open, which is never deleted out from under an active session even if it's the
+oldest of the three. A short Haiku-generated summary (`COACH_CHAT_SUMMARY_PROMPT`, a separate,
+narrower prompt than `ASK_COACH_SYSTEM_PROMPT` — no feature guide, third-person, history-row
+voice, never user-facing) is written best-effort when a session ends (panel closed, New Chat
+started over an in-progress chat, or a different saved chat resumed) — never blocks the UI
+action that triggered it. Gate: unchanged — persistence rides on the same
+`canAccessAskCoachGeneral` mount-time gate as the rest of Ask Coach (§18 F115); no separate
+entitlement check was added because saving a conversation isn't a new surface, just durability
+for an already-gated one. RLS: `coach_chats`'s own-row `SELECT`/`INSERT`/`UPDATE`/`DELETE`
+policies (migration 023) were verified against this new call pattern — the client never
+supplies `user_id`, `saveCoachChat` always writes it from the session (F69-class own-row
+scoping holds).
+> **IF** a second `chat_type` (`job_scout`, etc.) gets a UI caller, **THEN** it needs its own
+> retention/summary decision — do not assume `MAX_SAVED_CHATS = 3` or the summary trigger
+> generalize automatically; `AskCoachPanel`'s history list also filters to `chatType ===
+> "ask_coach"` explicitly and will silently hide any other type until taught about it. **IF**
+> `saveCoachChat`'s payload shape changes (new column, renamed field), **THEN** `persistChat`
+> and `finalizeSummary` are both named callers — update both or they'll upsert an incomplete
+> row. **IF** the retention cap or the "never prune the active chat" guard is touched, **THEN**
+> re-verify a chat open in one tab can't be deleted by a save happening in another (the guard
+> keys off `activeChatIdRef`, not anything server-enforced — this is a UI-level courtesy, not a
+> hard guarantee across concurrent sessions). Check: `AskCoachPanel.test.jsx` covers persistence
+> after a turn (success and failure paths), chat-id reuse across turns, retention pruning that
+> spares the active chat, resume-from-history, and delete.
 
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
-F24 (Coach net-worth trigger chain + `estimateRunwayDays` quarantine + `resolveNetWorthSignalTier`/
-`shouldFireForTier`), F22/F44 (`computeJobLossRunway` — the convergence target for the
-quarantine), F13 (`resolveActiveWeeksThisYear`), F15 (`resolvePrevWeekNet`), F18
+F24 (Coach net-worth trigger chain, converged on `computeJobLossRunway` +
+`resolveNetWorthSignalTier`/`shouldFireForTier`), F22/F44 (`computeJobLossRunway` — the
+convergence target both Coach entry points and the two Job Loss panels share), F13
+(`resolveActiveWeeksThisYear`), F15 (`resolvePrevWeekNet`), F18
 (`computeGoalTimeline` epoch parity), F23 (`netWorthHealthStatus`), F38/F102 (expense
 resolvers), F81/F111 (the AI gate, Spine C).
 
@@ -3081,9 +3157,9 @@ resolvers), F81/F111 (the AI gate, Spine C).
 | `computeGoalTimeline` epoch handling (F18) | Coach goal line **and** Home goal cards — both pass `config?.goalTimelineEpochIdx ?? null` | Grep `computeGoalTimeline(` for epoch-arg parity; goal ETA on card = Coach answer | D1 |
 | Goal breakdown line / any goal-surfacing line (F114) | The privacy rule — no `goal.label` interpolation | `aiContext.test.js` no-goal-name assertion; grep builder for label refs | D5/privacy |
 | `canAccessAiFeatures` inputs or `api/coach.js` SELECT (F115) | Server gate must supply every column the gate reads (F112); client callers pass a valid `model` key | Non-entitled request → 403 pre-Anthropic; `entitlements.test.js` | D4 |
-| `estimateRunwayDays` (F24 quarantine, `coachTriggers.js`) | Its too-low runway feeds `CoachNetWorthCard` context (`:78`) → Coach can claim less runway than the Job Loss panel shows | Do **not** extend it — converge on `computeJobLossRunway`; then both Coach entry points quote one runway | D1 |
-| `runwayDays` wiring to `AskCoachPanel` (§8 quarantine 2) | App.jsx passes no `runwayDays` → `aiContext.js:200` renders bare "Job Loss Mode: active" | When wiring, use `computeJobLossRunway` (not the quarantine); both Coach entry points agree | D4 |
-| `coach_chats` db functions get a UI caller (F116) | New eager-save + gate + RLS concern — needs its own map entry first | Grep the three fn names for callers; verify RLS own-row scope | D3/D4 |
+| `computeJobLossRunway`/`resolvePrimaryRunwayDays` signature (converged target — both former F24 quarantines closed `3267286`, 2026-07-22) | `CoachNetWorthCard.jsx` (Red tier) and `App.jsx`'s `coachRunwayDays` → `AskCoachPanel` both call it directly now — a signature change must be verified against both, not just the two Job Loss panels | `jobLossFlow.test.jsx`'s "Coach presence (DW-8 fix)" block + `CoachNetWorthCard.test.jsx`; Job Loss Home headline, Coach card, and Ask Coach's stated runway must all agree on one account | D1 |
+| `coach_chats` db functions get a second `chat_type` UI caller (F116/F123) | Retention cap, summary trigger, and the history-list filter are `ask_coach`-specific and won't generalize on their own | Confirm the new type gets its own retention/summary decision; grep `AskCoachPanel.jsx` for `"ask_coach"` filters | D3/D4 |
+| `saveCoachChat`'s payload shape (columns, field names) | `persistChat` and `finalizeSummary` (F123) — both build the upsert payload independently | Update both call sites together; `AskCoachPanel.test.jsx` persistence assertions | D1 |
 | `EVENT_TYPES`/`PAYCHECKS_PER_YEAR` (`constants/config.js`) | The context's most-recent-log label (`:178`) and `checksPerYear`/`perCheckFactor` scaling | Add/rename a type → context label resolves; biweekly account → per-check scaling correct | D1 |
 
 ### 21.3 Block 3 — Authority table (context line → source function → UI twin it must match)
@@ -3105,7 +3181,7 @@ other way is a §24 grounding violation (D1) by definition.
 | Expense breakdown (label + cost) | `getEffectiveAmountForMonth`/`getEffectiveAmount` (F38/F102) | Budget cards (F36/F38) |
 | Current period / periods left | `getFiscalWeekNumber`, `weeksToChecksRemaining`, `payPeriodUnit`, `getPayPeriodBounds` (`fiscalWeek.js`) | App header chip, Income period label |
 | Most recent log | `EVENT_TYPES[type].label`, `fmtFullDate` | Log panel entries (T6) |
-| Job Loss runway | `runwayDays` → **should** be `computeJobLossRunway` (F22/F44) | Job Loss Home headline (F22) — **currently divergent** (F24 quarantine + §8 quarantine 2) |
+| Job Loss runway | `runwayDays` → `computeJobLossRunway`/`resolvePrimaryRunwayDays` (F22/F44) | Job Loss Home headline (F22) — converged since `3267286` (2026-07-22) |
 
 ### 21.4 Block 4 — Case law & quarantine
 
@@ -3121,26 +3197,43 @@ other way is a §24 grounding violation (D1) by definition.
   names; F114 is the standing rule.
 - *Week-vs-check terminology* (`836921d`) — context lines hardcoded "week" regardless of pay
   schedule until routed through `payPeriodUnit`; date mentions widened for larger pay periods.
+- *Job Loss Mode mechanism fabrication* (2026-07-25) — asked "tell me about job loss mode,"
+  Coach invented a plausible-sounding auto-trigger ("activates automatically when your Income
+  panel shows zero or negative income") that doesn't exist anywhere in the app. Root cause: a
+  variant of D1, but for **static feature knowledge, not a computed context line** —
+  `coachFeatureGuide.js` had a `runwayDays` *data point* wired in (`aiContext.js:199-200`) but
+  zero prose describing the feature itself, so the model filled the gap with an invented
+  mechanism instead of admitting it didn't know. The real mechanism (`JobLossEntry.jsx`,
+  `active-systems.md` §10): the user deliberately switches it on via Life Events → "Lost My
+  Job," never automatically off a low/zero paycheck. Fix: `coachFeatureGuide.js` now carries a
+  short, plain "## Job Loss Mode" section stating the real trigger and exit path, plus an
+  explicit instruction to keep answers on this topic brief — test-fenced in
+  `coachFeatureGuide.test.js`. **Generalized rule:** a data point wired into `buildCoachContext`
+  (F113) is not a substitute for the corresponding feature description in
+  `coachFeatureGuide.js` — if Coach can be asked "how does X work" about a feature whose data
+  reaches the context block, that feature needs its own guide paragraph before the data point
+  ships, not after a live fabrication surfaces one.
+- **Both F24 runway quarantines, closed** (`3267286`, 2026-07-22) — 1) `estimateRunwayDays`
+  (`coachTriggers.js`), the second runway formula that ignored `jobLossCashOnHand`/job-hunt
+  income and always ran ≤ the real runway, was deleted outright; `CoachNetWorthCard.jsx` now
+  calls `computeJobLossRunway()` directly. 2) `runwayDays` is now actually threaded into
+  `AskCoachPanel` — `App.jsx`'s `coachRunwayDays` (using the real `jobLossIncludeBenefits`
+  toggle) feeds `aiContext.js`'s Job Loss context line, which no longer renders the bare
+  `"Job Loss Mode: active"` string. New shared `resolvePrimaryRunwayDays()`
+  (`jobLossRunway.js`) is what keeps all three call sites (two panels + Coach) from
+  independently drifting on which of the with/without-benefits figures is "the" runway.
+  **This entry itself was stale for three days** — the *Job Loss Mode mechanism fabrication*
+  precedent immediately above was logged 2026-07-25 still citing both quarantines as open,
+  three days after `3267286` closed them; caught during an unrelated Job Loss Mode
+  documentation investigation on the same date. Full write-up: §8.4 (T2 Home Panel pass).
 
-**Standing quarantines (open — cite, don't extend):**
-1. **`estimateRunwayDays` D1 (F24, `coachTriggers.js:27–49`)** — a second runway formula that
-   ignores persisted `jobLossCashOnHand` and job-hunt income; always ≤ the real
-   `computeJobLossRunway`. Feeds both the Red-tier trigger and `CoachNetWorthCard`'s context,
-   so the Coach can claim less runway than the Job Loss panel shows on the same screen.
-   Convergence target: `computeJobLossRunway` (Spine A / F22). Its doc comment carries the
-   quarantine notice.
-2. **`runwayDays` never wired to `AskCoachPanel` (§8 Block 4.2)** — App passes no `runwayDays`,
-   so `aiContext.js:200` renders bare "Job Loss Mode: active" (documented §10 gap). When
-   wiring, use `computeJobLossRunway`, not quarantine #1 — and both Coach entry points must
-   then quote the same runway.
-
-**Standing findings from this pass:** none new filed. The two quarantines above are
-pre-existing and owned (F24 / §8); both converge on the same Spine-A function
-(`computeJobLossRunway`), which is why Spine A's §18.4 lists quarantine #3 pointing back here.
-The dormant `coach_chats` layer (F116) is infrastructure-awaiting-activation, not a defect —
-filed as a standing note with an explicit "earns its own map entry before wiring" gate, not a
-DW row. No D5 corrections owed — `active-systems.md` §24 already documents the grounding
-pattern and was reconciled during the surface passes.
+**Standing findings from this pass:** none new filed. Both former quarantines above are
+closed and converged on the same Spine-A function (`computeJobLossRunway`) — Spine A's §18.4
+now marks its own pointer closed too. The `coach_chats` layer (F116) is no longer dormant —
+wired 2026-07-25 per F123, which is now the live entry for its eager-save/gate/RLS shape.
+No further D5 corrections owed this pass beyond the quarantine staleness just corrected above
+— `active-systems.md` §24 already documents the grounding pattern and was reconciled during
+the surface passes.
 
 ---
 
@@ -3334,7 +3427,7 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 | **Reopen Last Check-In** | `reopenableWeekIdx` + `weekConfirmations[idx]` + its spawned log entry | F32 (**DW-3 fixed**: deletes now eager-save), F26 (projections independent of confirmations premise) |
 | **Force Sync** (push/pull) | `handleForcePush`/`handleForcePull` — flush/reload `latestPersistedStateRef` | Any save-path check (Spine B F105/F106); before/after a save bug |
 | **Config Raw View** | full `config` JSON | F7 (three-way sensitive-field audit), F43/F50 (tax elections), F49 (benefit config) |
-| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), **DW-6 fixed** (`ptoGoal` now eager-saves; no more drift-badge exposure) |
+| **DB Row Viewer** | raw `user_data` row + `updated_at` + drift badge (in-memory ≠ DB per column) + config-history line + Coach Chats line (2026-07-25, F123) | F67/F68/F110 (drift-badge = 4th save site), F9/F10 (history line), F34/F46 (edit captured), F123 (Coach Chats count/breakdown — reads `loadCoachChats()` directly, a separate table from `user_data`, so its own fetch call in `handleFetchRow`, not a `user_data` column), **DW-6 fixed** (`ptoGoal` now eager-saves; no more drift-badge exposure) |
 | **Tax Weeks Grid** | `taxedWeeks` (teal/dark) + `pastWeekTaxStatusOverrides` (red dots) + current-week border | F28 (schedule vs remediation), F50 (override writers), F104 (liability inputs) |
 | **Live State Inspector** | ~16 live values: `effectiveToday`, week idx, `extraPerCheck`, `totalGap`, `taxedWeekCount`, `weeklyIncome`, `bufferPerWeek`, `projectedAnnualNet`, Sub Phase/Trial/Access Ends… | F14 (`weeklyIncome`), F28 (`extraPerCheck`/`totalGap`), F51 (`bufferPerWeek`), F53/F80 (Sub Phase — real clock), F113 (Coach numbers cross-check) |
 | **Week Inspector** | one week object verbatim: schedule, pay (`grossPay`/`taxableGross`/deductions/401k), live `computeNet`, net lookup (baseNet/adjustment/spendable), confirmation record, log entries | F15 (prev-week net), F29 (net tiers), F57 (per-entry vs hero), F58 (401k match), F96/F97/F98 (week shape/net), F99 (DHL rotation), F103 (loan) |

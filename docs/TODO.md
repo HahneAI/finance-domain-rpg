@@ -981,11 +981,15 @@ trend, and the static copy is rewritten to match Coach's voice.*
 `HomePanel.jsx` alongside (not replacing) the existing static tips, `isAdmin`-gated per the §18
 standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 
-- [ ] **Copy audit — static tips rewrite** — rewrite all existing "Financial Breakthrough" tips
-  in `NetWorthHealthTips.jsx` to match Coach's voice: direct, supportive, data-grounded; remove
-  generic affirmations; every tip should reference a real lever the user can pull inside the app
-  (adjust an expense, fund a goal, run the Budget panel, etc.) — **deferred**, copy-only, no API
-  cost, can be done anytime independent of the rest of this section
+- [x] **Copy audit — static tips rewrite** — done 2026-07-25. All 6 tips in `NetWorthHealthTips.jsx`
+  rewritten to match Coach's voice (first person, direct) and each now names a real in-app lever
+  instead of a generic affirmation: Budget (trim a Lifestyle expense), Home (reorder goal
+  priority), Account (paycheck buffer), Log (log a change immediately), Home again (Net Worth
+  Trend direction), Income (check next week's net). The "Financial Breakthrough" eyebrow label,
+  intro paragraph, and closing support-resource line were rewritten too — deliberately kept at
+  near-zero boxing metaphor, mirroring `coachPrompts.js`'s Red-tier restraint, since this fires at
+  exactly the kind of thin-cushion moment where plainness should outrank flavor. Copy-only, no
+  API cost — the rubric's un-scored axes (directness, warmth, etc.) weren't needed for this pass.
 - [x] **Trigger conditions (formalize)** — implemented as proxies against data that already
   exists rather than the literal candidates below, since two of them need a persisted weekly
   net-worth history this app doesn't store yet (see `src/lib/coachTriggers.js` header comment
@@ -1075,6 +1079,14 @@ have to re-derive them or, worse, write a fourth parallel runway calc:*
   `runwayDays` into `buildCoachContext` at all (`lib/aiContext.js:199-201` has the parameter and the
   context line ready, just never wired) — Coach's Job Loss Mode context today is the bare string
   `"Job Loss Mode: active"`, no numbers. Full write-up: `docs/TODO.md` §15.H14.
+  **Closed, 2026-07-22 (§15.H17):** both paragraphs above are now stale — `coachTriggers.js`'s
+  `estimateRunwayDays` was deleted outright (not retrofitted), and every runway consumer
+  (`CoachNetWorthCard.jsx`, `App.jsx`'s `coachRunwayDays`) now calls `computeJobLossRunway()`
+  directly, so there is no second drifted calc left to reconcile. `runwayDays` is also now wired
+  into Coach's context (`App.jsx` → `buildCoachContext`), not the bare `"Job Loss Mode: active"`
+  string. See `docs/BUG_FIX_TODO.md` DW-8/DW-9 and `drift-app-warden.md` §21 F24 for the fix
+  history — this stale note is left in place (not deleted) as the historical record of the drift
+  this feature would otherwise have needed to fix.
 
 - [ ] **Job Hunt Chat panel** — dedicated sub-view in Job Loss Dashboard; powered by Coach (Claude
   API) with a system prompt including: current role title, prior income, runway days, target income,
@@ -1259,39 +1271,53 @@ CREATE INDEX coach_chats_user_id_created_at
   camelCase. Tests: `src/test/lib/dbCoachChats.test.js`
 - [x] **`saveCoachChat(chat)`** — built 2026-07-10. Upserts by `id`; omitting `chat.id` lets the
   DB generate one for a new chat (returned to the caller so it can keep upserting into the same
-  row). `user_id` always comes from the session, never the caller. **Not yet wired to a
-  debounced-on-append / immediate-on-close call site** — that needs the Ask Coach chat UI
-  (§18.B, not built yet) to call it from
-- [ ] **`deleteCoachChat(id)`** — [x] function built (`db.js` + tests), [ ] swipe-to-delete/
-  long-press UI still needs §18.H3's history list to exist
-- [ ] **In-memory shape** — `coachChats` array is a peer of `config`, `logs`, `goals` in App state;
-  passed down only to the Coach panel — **deferred**: no Coach panel exists yet to receive it
-  (§18.B); wiring `loadCoachChats()` into `App.jsx`'s auth-load effect now would be dead state
-  with no consumer. Do this alongside §18.B, not before it.
+  row). `user_id` always comes from the session, never the caller. **Wired 2026-07-25** —
+  `AskCoachPanel.jsx`'s `persistChat` calls it immediately after every completed turn (eager
+  save, not debounced — see §18.H drift note below).
+- [x] **`deleteCoachChat(id)`** — function built (`db.js` + tests) 2026-07-10; UI wired
+  2026-07-25 — a trash-icon button per history row (`AskCoachPanel.jsx`), not swipe/long-press
+  as originally sketched — simpler and equally reachable at the 44px mobile tap-target standard.
+- [x] **In-memory shape — deliberate deviation from the spec above.** `coachChats` is *not* a
+  peer of `config`/`logs`/`goals` in `App.jsx` state; it lives entirely inside `AskCoachPanel.jsx`
+  (`historyChats` state, loaded via its own `useEffect` on mount) since the panel is still the
+  only consumer — hoisting it into `App.jsx` would add global state with a single reader. Revisit
+  if a second surface (Job Scout, the bottom-nav badge, etc.) needs the same list.
 
 #### H3. Chat history UI
 
-- [ ] **History list panel** — within the Ask Coach panel, a scrollable list of past chats grouped
-  by date (Today / This Week / Older); each row shows: `title` (or first user message truncated),
-  `summary` preview, `chat_type` chip, and `created_at` relative date
-- [ ] **Tap to resume** — tapping a history row loads the full `messages` array back into the
-  active chat view so the user can continue the conversation
-- [ ] **New Chat button** — always visible at the top of the history list; starts a fresh
-  `coach_chats` row with `messages: []` and focuses the input
-- [ ] **Job Scout entries** — `chat_type: 'job_scout'` rows render a compact result-count preview
-  ("Found 14 employers") instead of a message preview; tapping opens the Job Scout results view
-  (§18.I) rather than the chat view
+- [x] **History list panel** — built 2026-07-25. Within the Ask Coach panel (a "Chat History"
+  view toggled by a header icon), grouped by date (Today / This Week / Older); each row shows
+  `title` (or first user message truncated), `summary` preview when one exists, and `created_at`
+  relative date. **No `chat_type` chip** — every row is `ask_coach` today (the list explicitly
+  filters to that type), so a chip would say the same word on every row; add it when a second
+  type gets a UI caller (see drift-app-warden §21 F123).
+- [x] **Tap to resume** — built 2026-07-25. Loads the chat's full `messages` array back into the
+  active view.
+- [x] **New Chat button** — built 2026-07-25. Header icon, not inline atop the history list as
+  originally sketched — reachable from both the chat and history views so starting fresh doesn't
+  require opening history first. Resets to `messages: []` and focuses the input.
+- [ ] **Job Scout entries** — not applicable yet; Job Scout (§18.I) isn't built, so no
+  `chat_type: 'job_scout'` rows exist to render.
 
 #### H4. Summary + insight generation
 
-- [ ] **End-of-session summary** — after session idle (10 min) or explicit "End Chat", fire a
-  Haiku call: system prompt instructs Coach to summarize the conversation in 1–3 sentences;
-  result written to `coach_chats.summary` and `updated_at` bumped
-- [ ] **Statement insight extraction** — for `chat_type: 'statement_summary'` rows, write
-  structured key findings into `insights` JSONB so the Statements panel can display them inline
-  without re-calling the API on every render
-- [ ] **Admin diagnostic** — DB Row Viewer → add a "Coach Chats" count line: "N saved chats
-  (M job scout / K ask_coach / J statement)"; tapping the count shows the 5 most recent titles
+- [x] **End-of-session summary — built 2026-07-25, on a different trigger than spec'd.** No
+  10-minute idle timer; fires (best-effort, non-blocking) when a session actually ends from the
+  user's action — panel closed, New Chat started over an in-progress conversation, or a different
+  saved chat resumed. A short Haiku call (`COACH_CHAT_SUMMARY_PROMPT` in `coachPrompts.js` — its
+  own narrow prompt, not `ASK_COACH_SYSTEM_PROMPT`) writes 1–3 sentences to `coach_chats.summary`.
+  An idle-timeout trigger could still be added later as a belt-and-suspenders case (someone who
+  leaves the tab open indefinitely without an explicit close), but user-initiated session-end
+  covers the common path.
+- [ ] **Statement insight extraction** — not applicable yet; no `statement_summary` chat type has
+  a UI caller.
+- [x] **Admin diagnostic** — built 2026-07-25. DB Row Viewer (all 3 render sites — sidebar,
+  drawer, mobile sheet) → "Coach Chats: N saved chats (breakdown)" line, populated by
+  `handleFetchRow` alongside the existing config-history line. Breakdown only lists chat types
+  that actually have rows (today always just `ask_coach`, since job_scout/job_hunt/
+  statement_summary have no UI caller) rather than the spec's fixed 3-slot format, so it stays
+  accurate once a second type ships instead of needing another edit. Tapping the line expands
+  the 5 most recent titles (`deriveCoachChatsMeta` in `App.jsx`).
 
 ---
 
@@ -2460,6 +2486,12 @@ how directly each one touches "is the runway number on screen actually correct."
   (`runwayDays` into Coach, the Lifestyle-spend caption) since they're small and don't require a
   design decision, before touching the pending-paycheck field or the two-runway-calc unification,
   which both need the user's input on scope/design first.
+- **All four `[ ]` gaps above closed, 2026-07-22 (H15/H16/H17) — checkboxes left unticked
+  intentionally, as the historical record of what this birdseye pass actually found.** Pending
+  paycheck → H15. Lifestyle-spend invisibility → H16. The two-runway-calc drift → H17 deleted
+  `estimateRunwayDays` outright rather than retrofitting it (cleaner than either option this list
+  proposed). `runwayDays` into Coach's context → wired the same pass. Only the AI-gating/business
+  question (bullet above) and the résumé spec (already `[x]`) remain genuinely open.
 
 #### H15. Pending/final paycheck — the first H14 gap, built, 2026-07-22 — DONE
 
@@ -2548,6 +2580,80 @@ runway math itself.*
 - **Still open from H14:** the `estimateRunwayDays`/Coach drift items and the AI-gating/résumé
   scoping bullets — all explicitly out of scope per the user ("runway bugs are already being
   worked on").
+
+#### H17. Cash On Hand card + timeline-aware decay, 2026-07-22 — DONE
+
+*User ask, not from the H14 list: the plain Cash On Hand input "looks lame and crappy" — wanted
+its own prominent card above the Runway tile, a visible pencil icon signaling it's editable, a
+bottom-sheet editor matching the expense editor's up-from-bottom/slide-down animation, and —
+separately — for the displayed figure to decrease automatically as Needs bills come due, feeding
+that decay into the runway instead of the number silently going stale between manual updates.*
+
+- [x] **`components/CashOnHandSheet.jsx`** (new) — single-line bottom-sheet editor shared by both
+  panels. Uses the existing `useFoldTransition` hook + a new `.fold-sheet` CSS class (index.css)
+  rather than BudgetPanel's own expense-detail sheet, which only ever had an entrance animation
+  (`expSheetSlideUp`) and unmounted instantly on close — no matching exit. `.fold-sheet` gives this
+  the first bottom sheet in the app with a real symmetric enter (up-from-bottom, matching that
+  sheet's existing curve) / exit (slide back down, `--ease-fold-exit`, no bounce) pair.
+- [x] **`components/JobLossHomePanel.jsx`** — the plain input + `SectionHeader` replaced with a
+  full-width pressable card *above* the Runway/Weekly Burn/Extra Income grid: big tabular-nums
+  dollar figure, a visible circular pencil badge (top-right, same edit-icon glyph as
+  `ReemploymentTracker`'s Edit button), tap-anywhere-on-card to open the sheet (`scale(0.97)` press
+  feedback, `disabled` when `readOnly` — native `disabled` blocks the click entirely, no separate
+  guard needed). The pending-check line moved here from the old input's helper box (its natural
+  home now).
+- [x] **`components/JobLossBudgetPanel.jsx`** — same sheet, compact pressable row (value + pencil
+  badge) inside the existing "Savings & Benefits" card instead of the plain input — kept visually
+  smaller since Budget has no Runway-card layout context to match, but functionally identical
+  (same sheet, same fields, same decay-reset-on-save behavior). Removed the old
+  `cashDraft`/`lastSyncedCash` render-time resync entirely — no longer needed once cash is only
+  ever committed through the sheet's explicit Save.
+- [x] **`lib/jobLossRunway.js`** — timeline-aware decay, kept centralized (single source of truth,
+  not duplicated per-panel per drift-app-warden D1). New `jobLossCashOnHandAsOf` config field
+  (stamped by `JobLossEntry`'s Activate and both panels' `CashOnHandSheet` saves) anchors
+  `sumBillsDueSince(expenses, fromExclusive, throughInclusive)` — walks each essential bill's real
+  due-date occurrences one at a time via `getNextDueDate` (the underlying cycle math only exposes
+  "next due on/after a date," not a closed-form occurrence count) and sums their actual payment
+  amounts (`getExpenseDisplayAmount`), floored at 0 against `jobLossCashOnHand` to produce
+  `effectiveCashOnHand` — the figure both cards display and the number that now feeds the
+  runway/cliff math (`withBenefits`/`withoutBenefits.cash`). Falls back to `jobLossDate` as the
+  decay anchor for pre-§15.H17 accounts that never got a real `jobLossCashOnHandAsOf` stamp.
+  `computeJobLossRunway`'s `savings` param renamed to `extraCash` (now just gig income —
+  `sumJobHuntIncome()` — since raw cash is read from `config` internally instead of pre-summed by
+  the caller) — forced every call site to be touched deliberately rather than silently
+  reinterpreting the same param name. Also de-duplicated three copy-pasted
+  active+tracked+category filters (`essentialActive`, `lifestyleActive`, and the new bills-due
+  filter) into two shared predicates, `isTrackedActiveEssential`/`isTrackedActiveLifestyle`.
+- [x] **External consumers updated for the `extraCash` rename** (drift-app-warden Spine A / D1
+  check — `computeJobLossRunway` is a mapped LEDGER item, cross-checked against every call site,
+  not just the two panels): `components/CoachNetWorthCard.jsx`'s Red-tier runway trigger and
+  `App.jsx`'s Ask Coach `coachRunwayDays` memo (both closed drift-app-warden §21 quarantines from
+  earlier work) each used to pre-sum `jobLossCashOnHand + sumJobHuntIncome()` into a local
+  `savings` var — both now pass `extraCash: sumJobHuntIncome(config)` only, and both automatically
+  gained decay-awareness for free since `computeJobLossRunway` now reads cash internally.
+- [x] **`constants/config.js`** — `jobLossCashOnHandAsOf: null` added to `DEFAULT_CONFIG`
+  (snapshot updated, `npx vitest run -u`).
+- [x] **`docs/active-systems.md` §10** — updated in the same pass (drift-app-warden: doc/spec drift
+  is its own quarantined failure class, D5) — was still describing the pre-H15/H16 3-step wizard
+  and the raw-sum `savings` formula; now reflects the 4-step wizard, the pending-check/Lifestyle-
+  caption features, and the card/sheet + decay architecture.
+- [x] Tests — `src/test/lib/jobLossRunway.test.js`: new `describe('sumBillsDueSince')` (8 cases —
+  window boundaries, Lifestyle/paused/untracked exclusion, loan inclusion, multi-occurrence
+  summing, missing-boundary guard) and `describe('computeJobLossRunway — timeline-aware cash on
+  hand')` (5 cases — decay math, floor-at-0, `jobLossDate` fallback, no-decay-when-nothing-due,
+  `extraCash` still additive on top). `src/test/components/jobLossFlow.test.jsx`: both panels'
+  old plain-input describe blocks rewritten for the card/sheet interaction (prefill, save +
+  asOf-stamp, cancel-without-saving — the cancel case needed `waitFor` since the sheet stays
+  mounted through its animated exit, not an instant unmount), plus new dedicated decay describe
+  blocks per panel; `JobLossEntry`'s existing Activate test extended to assert
+  `jobLossCashOnHandAsOf === jobLossDate`. Full suite: 1175 tests, all green (including the
+  previously-flagged `LoginScreen.test.jsx` full-suite-ordering flake, which also passed clean this
+  run). Lint diffed against a `git stash` baseline: zero new errors/warnings (diff was pure
+  line-number drift on pre-existing unrelated errors from removed lines above them). Production
+  build green.
+- **Scope note:** `sumBillsDueSince` only decays against essential (Needs + loan) bills, matching
+  the same category gate `weeklyBurn` already uses — Lifestyle spend still isn't part of any cash
+  figure, consistent with §15.H16's deliberate exclusion, not an oversight.
 
 ---
 
@@ -4212,3 +4318,147 @@ Feature #6 (Shelf-tag capture) — isolated, deferred
 
 **Next step:** Confirm OCR engine choice (Tesseract vs. cloud API) — this is the critical blocker. All feasibility estimates above assume this decision is made. Once that's settled, Phase A (barcode) can proceed in parallel with Phase B (OCR foundation).
 
+---
+
+## 39. UI Cohesion — Cross-Panel Header/Accent Consistency
+
+*New workstream (2026-07-25), scoped from a design-system read + code audit requested to discuss
+making the app's sections "feel more cohesive and interlocked." `docs/authority-design-system`
+already specifies one repeating page-header pattern (eyebrow + big title + underline, via the
+`PanelHero` component) and cites Chime/Cash App's "one primary number, everything else behind
+progressive disclosure" as the Flow reference model — but two of the five tabs don't actually
+follow either the component or the naming convention. Backed by UX research on why this class of
+drift specifically damages first-time orientation (see Sources below) — nothing here is subjective
+taste, each item is a concrete divergence from the app's own documented spec.*
+
+**Sources consulted for this pass:**
+- [What Is Progressive Disclosure in UX? (2026) — UXPin](https://www.uxpin.com/studio/blog/what-is-progressive-disclosure/) — "start simple, reveal complexity only as needed"; Chime cited as the reference pattern the app's own design doc already points to.
+- [Fintech UX Best Practices 2026 — Eleken](https://www.eleken.co/blog-posts/fintech-ux-best-practices) — first-value-first onboarding for financial apps.
+- [Design Consistency Guide — UXPin](https://www.uxpin.com/studio/blog/guide-design-consistency-best-practices-ui-ux-designers/) — visual/functional/verbal consistency as three distinct axes that must all hold for a product to feel "reliable."
+- [Why UX design consistency matters — uxstudio](https://www.uxstudioteam.com/ux-blog/ux-design-consistency) — nav labels and page identity mismatches specifically named as trust-eroding.
+
+### A. Home and Income don't identify themselves by their own nav label
+
+**The gap.** All five tabs are supposed to open with the shared `PanelHero` pattern
+(`src/components/ui.jsx:629` — eyebrow + big title + underline). Budget, Log, and Account do:
+their hero titles are "Budget," "Event Log," and "Account" respectively, matching (or closely
+matching) the `BOTTOM_NAV` label a user just tapped (`src/App.jsx:49-95`). Home and Income don't:
+
+- **Home** (`src/components/HomePanel.jsx:613`) opens with a hero titled **"Goals"** —
+  the first thing a user sees after tapping the "Home" nav icon is a page that says it's
+  something else. A second, differently-styled hero further down (`:1317`) says
+  **"Financial Health"** — nothing on the page ever says "Home."
+- **Income** (`src/components/IncomePanel.jsx:307-309`) opens with eyebrow "Income Overview"
+  and hero title **"Year Summary"** — not "Income."
+
+**Why it matters (research-backed).** This is exactly the "functional/verbal consistency"
+failure mode the UXPin/uxstudio pieces above call out as trust-damaging: the nav promises one
+identity, the destination delivers another. It costs almost nothing once a user has built a
+mental model of the app, but it's precisely the kind of signal that makes a *first* open feel
+disorienting — and Home/Income are the two most-visited tabs, so it's the most-seen instance
+of the problem, not the least.
+
+- [ ] Give Home and Income a page-identity heading that says "Home" / "Income" (either promote
+      a proper top-of-page hero above "Goals"/"Year Summary," or fold the nav-matching identity
+      into the existing hero's eyebrow line) — resolve alongside item B below since both panels
+      need their hero markup touched anyway.
+
+### B. `PanelHero` exists as a shared component but Home/Income hand-roll copies that have drifted
+
+**The gap.** `PanelHero` (`src/components/ui.jsx:629-637`) is the one component meant to render
+every panel's page title. Budget (`BudgetPanel.jsx:1307`), Log (`LogPanel.jsx:578`), and Account
+(`ProfilePanel.jsx:2134`) call it directly. Home and Income instead paste the same visual recipe
+inline as raw JSX, and the three copies no longer agree with each other or with the real
+component:
+
+| Location | Title size | Underline width / opacity | Eyebrow present? |
+|---|---|---|---|
+| `PanelHero` (the real component) | 32px | 28px / 0.45 | yes (required prop) |
+| Home "Goals" hero (`HomePanel.jsx:613-628`) | 52px | 40px / 0.55 | yes ("Authority Finance") |
+| Home "Financial Health" hero (`HomePanel.jsx:1317-1329`) | 32px | 28px / 0.45 | **no eyebrow at all** |
+| Income "Year Summary" hero (`IncomePanel.jsx:307-327`) | 32px | 28px / 0.45 | yes ("Income Overview") |
+
+Three different title sizes and an inconsistent eyebrow presence, for what is supposed to be one
+repeating pattern app-wide. This is the same class of issue `docs/drift-app-warden.md` §17
+(F88, T10 UI-UX) already tracks for untokenized hex — component-copy drift instead of
+raw-value drift, same root cause (a shared visual contract re-implemented by hand instead of
+reused), just not yet caught because F88's grep-for-hex procedure doesn't catch duplicated JSX.
+
+- [ ] Replace Home's and Income's hand-rolled hero markup with actual `PanelHero` calls (folding
+      in whatever eyebrow/title text item A above resolves on). Removes the drift permanently
+      instead of re-syncing the copies by hand.
+- [ ] Decide whether Home's "Goals" section legitimately warrants the larger 52px treatment (a
+      deliberate emphasis choice) or whether it should drop to the standard 32px `PanelHero` — if
+      the former, that's a second, intentional "large hero" variant that `PanelHero` should grow
+      a prop for (e.g. `size="lg"`) rather than staying as a one-off inline copy.
+
+### C. Untokenized gold accent (`#c8a84b`) used five times for "current/now" semantics, never declared
+
+**The gap.** `#c8a84b` (a gold, distinct from the design doc's teal `--color-accent-primary`
+`#00C896`) appears five times in `src/App.jsx`, consistently meaning "this is the current point
+in time" — not a random one-off, a real recurring semantic:
+- `App.jsx:112` — desktop sidebar's active-nav-item left border (`SidebarNavItem`)
+- `App.jsx:2041`, `:2694`, `:3323` — "current week" cell border in three different Tax Weeks Grid
+  renderings (mobile/tablet/admin sizes)
+- `App.jsx:3341` — the grid's own legend swatch for "current week"
+
+None of these five route through `src/index.css`'s `@theme` token block, and the design doc
+(`docs/authority-design-system:25-44`) doesn't list a gold token at all — `--color-gold` is
+defined only as "Legacy alias — maps to accent-primary" (i.e. teal, `#00C896`), which is a
+*different* color than the `#c8a84b` actually in use. This is a new instance of the same
+untokenized-hex debt class `docs/drift-app-warden.md` §17 F88 already tracks for
+`WeekConfirmModal.jsx`/`LoginScreen.jsx`/`ProfilePanel.jsx` (also `CLAUDE.md`'s "Known Cleanup"
+list) — just not yet added to that list, and in a file (`App.jsx`) none of those three cover.
+
+- [ ] Formalize `#c8a84b` as a real design token (e.g. `--color-time-anchor` or
+      `--color-signal-gold`) in `src/index.css`'s `@theme` block, replace all five `App.jsx`
+      call sites, and add it to `docs/authority-design-system`'s color table so "gold = current
+      point in time, teal = active/primary" is a documented rule instead of an implicit one five
+      hardcoded hex strings happen to agree on today.
+- [ ] Add `App.jsx`'s five `#c8a84b` sites to the untokenized-hex debt list in `CLAUDE.md`'s
+      "Known Cleanup" section and `docs/drift-app-warden.md` §17 F88 (currently lists only
+      `WeekConfirmModal.jsx`/`LoginScreen.jsx`/`ProfilePanel.jsx`) in the same commit that
+      resolves the token, so the drift map stays accurate per the doc's own "keep it current in
+      the same PR" rule.
+
+### D. Not yet investigated — parking lot for the next pass
+
+Raised in the original discussion but out of scope for this pass (design-doc read + static code
+audit only, no runtime/visual walkthrough performed):
+- The transition/motion *feel* between tabs specifically (as opposed to the fold-motion
+  *mechanics* §17 F90 already covers) — does switching Home → Income → Budget feel like moving
+  through one connected app, or five independently-built screens stitched together?
+- How the Setup Wizard visually hands off into Home on first completion (first-run-specific;
+  the wizard itself was already decluttered per items elsewhere in this doc, but the *landing*
+  moment right after "Finish" hasn't been looked at for continuity with what Home now looks like).
+
+---
+
+## 40. Dev Infrastructure — Claude Code on the web headless UI testing
+
+*Built 2026-07-22: `.claude/hooks/session-start.sh` + `.claude/hooks/drive-app.mjs` (see commit
+`90dc305`). Web sessions previously had no way to satisfy CLAUDE.md's "start the dev server and use
+the feature in a browser" rule — the dev server booted straight into a crash (`supabaseUrl is
+required`, no Supabase config anywhere in the container) and Playwright wasn't available. The hook
+now installs deps, and — only once the environment variables below are configured on the Claude
+Code on the web environment itself (never in this repo) — wires up a real login screen and a
+headless-login driver script.*
+
+- [ ] **Pending setup (blocks this from doing anything beyond "no crash") — configure on the
+  Claude Code on the web environment (Environment settings), not in this repo or any `.env` file:**
+  - [ ] `VITE_SUPABASE_URL` — same value as production. Safe to store here: it's public by design.
+  - [ ] `VITE_SUPABASE_ANON_KEY` — same value as production. Also safe to store: Supabase's anon
+    key is meant to be client-embedded (protected by RLS, not secrecy) — it's already sitting in
+    the deployed production JS bundle today.
+  - [ ] `TEST_ACCOUNT_EMAIL` / `TEST_ACCOUNT_PASSWORD` — a **dedicated test/dummy account**, not
+    anthonyhahne20@gmail.com or any real user. Deliberately not `VITE_`-prefixed so these can never
+    end up in the client bundle — only `drive-app.mjs` reads them, straight from `process.env`.
+  - [ ] Once all four are set, confirm with: `CLAUDE_CODE_REMOTE=true .claude/hooks/session-start.sh`
+    should log `.env.local` written + test account present (not the "not set" fallback lines), then
+    `npm run dev &` + `node .claude/hooks/drive-app.mjs` should log in and screenshot the post-login
+    shell instead of exiting with the missing-credentials error.
+- [ ] **Once merged to `master`,** every future Claude Code on the web session on this repo picks
+  the hook up automatically — no per-session setup beyond the one-time env vars above.
+- [ ] **Test account should have Job Loss Mode data seeded** (or get it seeded once logged in) so a
+  session can actually drive the §15.H15/H16 screens this hook was built to unblock testing for —
+  worth doing as part of the same setup pass, not a separate task.

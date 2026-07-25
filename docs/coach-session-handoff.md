@@ -11,13 +11,17 @@ document (and the rest of this session's likely work) make sense faster.
 
 ---
 
-## Where things stand right now (as of 2026-07-24)
+## Where things stand right now (as of 2026-07-25)
 
 Two Coach surfaces are **live and open to the full user base**, trial included:
 
 1. **Ask Coach — the general chat.** A full-screen chat opened from a "Coach" tab in the
-   bottom nav. Answers questions about how the app works using the user's real numbers. No
-   memory yet — closing it forgets the conversation.
+   bottom nav. Answers questions about how the app works using the user's real numbers.
+   **As of 2026-07-25, it has memory:** every completed turn is saved immediately (not
+   debounced, and not only on close), a "Chat History" view (header icon) lists the last 3
+   saved conversations grouped by date with a short Coach-written summary, tapping one resumes
+   it, and older conversations beyond the last 3 are pruned automatically (never the one
+   currently open). Full detail: `docs/TODO.md` §18.H3–H4, `docs/drift-app-warden.md` §21 F123.
 2. **The Net Worth Check-In card.** A small card on the Home screen (both the normal Home and
    the separate Job Loss Mode Home) that proactively speaks up about savings trends — a gentle
    heads-up, a critical job-loss warning, or a recovery acknowledgment.
@@ -125,15 +129,25 @@ screen said, or a stale one. Read this section before wiring any new data into C
 
 ## What's next
 
-The next task on deck, in order, per the standing plan:
+Multi-turn chat + memory (formerly the next task on deck) **shipped 2026-07-25** — see "Where
+things stand" above. Two deliberate scope decisions worth knowing before touching this area
+again:
 
-1. **Multi-turn chat + memory.** Right now Ask Coach forgets everything the moment it's
-   closed. Give it real back-and-forth conversation continuity, plus save a person's **last
-   three conversations** so they can reopen and re-read one instead of starting from zero.
-2. **Chat-history UI**, modeled on the Claude mobile app's conversation list.
-3. Backend groundwork for both of the above **already exists** — a `coach_chats` table
-   (migration 023) and load/save/delete functions in `db.js` — but nothing calls them yet. This
-   is a wiring-and-UI task, not a from-scratch build.
+- **In-memory shape deviates from the original TODO spec.** `coachChats` is *not* a peer of
+  `config`/`logs`/`goals` in `App.jsx` state — it lives entirely inside `AskCoachPanel.jsx`,
+  since the panel is still the only consumer. Revisit only if a second surface needs the same
+  list (see next point).
+- **Retention (3 chats) and the end-of-session summary are `ask_coach`-specific.** If Job
+  Scout, résumé help, or statement insights ever get a UI caller using a different
+  `coach_chats.chat_type`, that type needs its own retention/summary decision — don't assume
+  today's behavior generalizes. `drift-app-warden.md` §21 F123 has the full IF/THEN.
+
+Remaining, not yet built:
+1. **Admin diagnostic** — a "Coach Chats" count line in the DB Row Viewer tool
+   (`docs/TODO.md` §18.H4's last bullet).
+2. Everything else in `docs/coach-entry-points.md` sections 3–10 (character/avatar, statement
+   insights, Job Hunt Assistant, résumé help, Application Assistant, Job Scout, guided tax
+   setup) — unchanged, still not started.
 
 Full reference: `docs/TODO.md` §18.H, subsections H3 (chat history UI) and H4 (summary
 generation).
@@ -155,7 +169,8 @@ generation).
 - `src/lib/coachTriggers.js` — tier resolution + rate-limit logic for the trigger card
 - `src/lib/jobLossRunway.js` — the one authoritative runway/burn calculation Coach's Job Loss
   context must always read through (see the drift-warden rule above)
-- `db.js` — `loadCoachChats`/`saveCoachChat`/`deleteCoachChat` (built, not yet wired to any UI)
+- `db.js` — `loadCoachChats`/`saveCoachChat`/`deleteCoachChat` (wired into `AskCoachPanel.jsx`
+  as of 2026-07-25)
 
 ## One unrelated heads-up
 

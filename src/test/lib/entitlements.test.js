@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canAccessTaxPlan, canAccessAiFeatures, isTrackedBetaTester } from '../../lib/entitlements.js'
+import { canAccessTaxPlan, canAccessAiFeatures, isTrackedBetaTester, canAccessAskCoachGeneral } from '../../lib/entitlements.js'
 
 describe('canAccessTaxPlan', () => {
   it('is hidden by default (no admin, no manual flag)', () => {
@@ -99,5 +99,45 @@ describe('isTrackedBetaTester', () => {
   it('coerces truthy/falsy inputs to a real boolean', () => {
     expect(isTrackedBetaTester({ isTester: 1, betaCodeUsed: 'x' })).toBe(true)
     expect(isTrackedBetaTester({ isTester: true, betaCodeUsed: '' })).toBe(false)
+  })
+})
+
+// docs/coach-entry-points.md sections 1–2 — the first two Coach surfaces to
+// leave the admin/tester-only gate, gaining trial/paid entitlement as a
+// second path in. Deliberately a separate function from canAccessAiFeatures
+// (see its own docstring) so every other, not-yet-built Coach surface stays
+// admin/tester-only by default.
+describe('canAccessAskCoachGeneral', () => {
+  it('is hidden by default (no admin, no tester, no entitlement)', () => {
+    expect(canAccessAskCoachGeneral({})).toBe(false)
+    expect(canAccessAskCoachGeneral()).toBe(false)
+  })
+
+  it('admins always see it, even with no real subscription state', () => {
+    expect(canAccessAskCoachGeneral({ isAdmin: true, entitlement: { isEntitled: false } })).toBe(true)
+    expect(canAccessAskCoachGeneral({ isAdmin: true })).toBe(true)
+  })
+
+  it('beta testers always see it, even with no real subscription state', () => {
+    expect(canAccessAskCoachGeneral({ isTester: true, entitlement: { isEntitled: false } })).toBe(true)
+  })
+
+  it('a real trial/grace/active entitlement grants access on its own', () => {
+    expect(canAccessAskCoachGeneral({ entitlement: { isEntitled: true, state: 'trial' } })).toBe(true)
+    expect(canAccessAskCoachGeneral({ entitlement: { isEntitled: true, state: 'grace' } })).toBe(true)
+    expect(canAccessAskCoachGeneral({ entitlement: { isEntitled: true, state: 'active' } })).toBe(true)
+  })
+
+  it('an expired or non-existent entitlement does not grant access on its own', () => {
+    expect(canAccessAskCoachGeneral({ entitlement: { isEntitled: false, state: 'expired' } })).toBe(false)
+    expect(canAccessAskCoachGeneral({ entitlement: { isEntitled: false, state: 'none' } })).toBe(false)
+  })
+
+  it('tolerates a missing entitlement object entirely', () => {
+    expect(canAccessAskCoachGeneral({ isAdmin: false, isTester: false, entitlement: undefined })).toBe(false)
+  })
+
+  it('does not grant access via isInvestor — same crucial division as canAccessAiFeatures', () => {
+    expect(canAccessAskCoachGeneral({ isInvestor: true, entitlement: { isEntitled: false } })).toBe(false)
   })
 })

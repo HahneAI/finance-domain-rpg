@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable } from "./ui.jsx";
-import { useLocalStorage } from "../hooks/useLocalStorage.js";
 import { chatWithCoach } from "../lib/claude.js";
 import { buildCoachContext } from "../lib/aiContext.js";
 import { buildNetWorthSystemPrompt } from "../lib/coachPrompts.js";
@@ -19,16 +18,39 @@ const TIER_LABEL = {
   green: "Coach — Recovery",
 };
 
+const DEFAULT_SIGNAL_STATE = {
+  lastFiredTier: null,
+  lastFiredWeekIdx: null,
+  lastMessage: "",
+  dismissedTier: null,
+  dismissedWeekIdx: null,
+};
+
 /**
  * §18.C — Net Worth Trend Mental Health Trigger. Admin-gated at the call site
- * in HomePanel.jsx (docs/TODO.md §18 standing constraint — every AI feature
- * stays isAdmin-only for now). Rate-limits to one Coach message per fiscal
- * week per signal tier, and caches the message text in localStorage so a
- * reload within the same week/tier replays it instead of re-calling the API —
- * both the correctness requirement in the spec and a real credit-saver.
+ * in HomePanel.jsx/JobLossHomePanel.jsx (docs/TODO.md §18 standing constraint
+ * — every AI feature stays isAdmin/isTester-only for now). Rate-limits to one
+ * Coach message per fiscal week per signal tier, and caches the message text
+ * so a reload within the same week/tier replays it instead of re-calling the
+ * API — both the correctness requirement in the spec and a real credit-saver.
+ *
+ * DW-9 fix (docs/BUG_FIX_TODO.md): this state used to live in localStorage
+ * only — device/session-scoped, so a new device, a cleared cache, or a PWA
+ * reinstall reset it and could re-fire a tier the account had already "used
+ * up." Persisted through `config.coachSignalState` instead (the existing
+ * eager-save channel every other config field already uses), so the rate
+ * limit is durable per-account like everything else, with no new schema.
+ * `setConfig`/`saveConfigNow` must be the same readOnly-shadowed no-ops the
+ * call site already threads to its other eager-save props (CLAUDE.md's
+ * readOnly gate) — this is a Save-shaped discrete action (a tier firing or
+ * being dismissed), not continuous typing, so it follows the Eager Save
+ * Pattern: compute the next value synchronously, pass it to both setConfig
+ * and saveConfigNow.
  */
 export function CoachNetWorthCard({
   config,
+  setConfig,
+  saveConfigNow,
   expenses = [],
   goals = [],
   weeklyIncome = 0,
@@ -37,27 +59,28 @@ export function CoachNetWorthCard({
   netWorthHealth,
   currentWeek,
   today,
+  includeBenefits = true,
 }) {
-  const [signalState, setSignalState] = useLocalStorage("coachNetWorthSignal", {
-    lastFiredTier: null,
-    lastFiredWeekIdx: null,
-    lastMessage: "",
-    dismissedTier: null,
-    dismissedWeekIdx: null,
-  });
+  const signalState = config?.coachSignalState ?? DEFAULT_SIGNAL_STATE;
+  const updateSignalState = (patch) => {
+    const next = { ...config, coachSignalState: { ...signalState, ...patch } };
+    setConfig?.(next);
+    saveConfigNow?.(next);
+  };
 
   // Real runway, not the old independent estimate — computeJobLossRunway()
   // is the same function the Job Loss panels use, so this can't understate
-  // runway vs. what those panels show (drift-app-warden §21 F24).
-  // includeBenefits defaults true here, matching App.jsx's own default for
-  // the session-only toggle (this card only ever renders inside HomePanel,
-  // which doesn't mount during Job Loss Mode, so there's no live toggle to
-  // thread through yet).
+  // runway vs. what those panels show (drift-app-warden §21 F24). Now that
+  // this card also mounts inside JobLossHomePanel (DW-8 fix), includeBenefits
+  // is threaded through as a real prop instead of hardcoded — the default
+  // stays true only for the plain HomePanel call site, which has no toggle
+  // of its own and where computeJobLossRunway() returns null anyway
+  // (config.jobLossMode is false there).
   const runwayDays = useMemo(() => {
     const savings = (config?.jobLossCashOnHand ?? 0) + sumJobHuntIncome(config);
     const dash = computeJobLossRunway({ config, expenses, effectiveToday: today, savings });
-    return resolvePrimaryRunwayDays(dash, config, true);
-  }, [config, expenses, today]);
+    return resolvePrimaryRunwayDays(dash, config, includeBenefits);
+  }, [config, expenses, today, includeBenefits]);
   const weekIdx = currentWeek?.idx ?? null;
   const tier = resolveNetWorthSignalTier({ netWorthHealth, runwayDays, previousTier: signalState.lastFiredTier });
 
@@ -98,12 +121,7 @@ export function CoachNetWorthCard({
           setLiveMessage(accumulated);
         }
         if (!cancelled) {
-          setSignalState((prev) => ({
-            ...prev,
-            lastFiredTier: tier,
-            lastFiredWeekIdx: weekIdx,
-            lastMessage: accumulated,
-          }));
+          updateSignalState({ lastFiredTier: tier, lastFiredWeekIdx: weekIdx, lastMessage: accumulated });
         }
       } catch {
         if (!cancelled) setErrored(true);
@@ -119,7 +137,7 @@ export function CoachNetWorthCard({
   if (!tier || dismissed) return null;
   if (errored) return null; // fail quiet — this is a background nudge, not a core flow
 
-  const dismiss = () => setSignalState((prev) => ({ ...prev, dismissedTier: tier, dismissedWeekIdx: weekIdx }));
+  const dismiss = () => updateSignalState({ dismissedTier: tier, dismissedWeekIdx: weekIdx });
 
   return (
     <div

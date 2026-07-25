@@ -241,12 +241,18 @@ the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` 
   wizard as `structure_change` and restores the mandatory Food expense if it was skipped at
   first-run. Entry point also lives in the Account panel (`ProfilePanel` "Life Events" row → same
   `LifeEventMenu`).
-- **Known gaps** (full write-up: `docs/TODO.md` §15.H14): no pending/final-paycheck concept in the
-  runway calc; Lifestyle spend excluded from `weeklyBurn` with no UI callout; `coachTriggers.js`'s
-  `estimateRunwayDays` is a second, drifted runway calc (doesn't know about `trackDuringJobLoss` or
-  `jobLossCashOnHand`); Coach's Job Loss context line never actually receives `runwayDays` from
-  `App.jsx` (renders as bare `"Job Loss Mode: active"`); AI features (Coach, Job Hunt Assistant,
-  Job Scout) are `is_admin`/`is_tester`-gated, so most real Job Loss Mode users can't reach them.
+- **Known gaps** (full write-up: `docs/TODO.md` §15.H14): AI features (Coach, Job Hunt Assistant,
+  Job Scout) are `is_admin`/`is_tester`-gated, so most real Job Loss Mode users can't reach any of
+  them yet — Job Hunt Assistant and Job Scout are still unbuilt entirely (see
+  `docs/coach-entry-points.md`). **Stale-note correction (2026-07-24):** this list previously also
+  named four gaps that have since closed and should no longer be treated as open — a pending/final
+  paycheck is now modeled in the runway calc (§15.H15, `lib/jobLossRunway.js`); Lifestyle spend gets
+  an explicit UI callout instead of silently vanishing from `weeklyBurn` (§15.H16); the independent,
+  drifted `coachTriggers.js#estimateRunwayDays` was deleted outright, not just fixed — every caller
+  now goes through `computeJobLossRunway()`/`resolvePrimaryRunwayDays()`; and Coach's Job Loss
+  context line receives a real, computed `runwayDays` from `App.jsx` (`coachRunwayDays`), not a bare
+  `"Job Loss Mode: active"` string. See `docs/BUG_FIX_TODO.md`'s Fixed table (DW-8, DW-9) and
+  `drift-app-warden.md` §21 F24 for the fix history.
 
 ---
 

@@ -65,22 +65,22 @@ describe('NetWorthHealthTips', () => {
   it('starts collapsed with a calm teaser line', () => {
     render(<NetWorthHealthTips />)
     expect(screen.getByText(/tap to read/i)).toBeTruthy()
-    expect(screen.queryByText('Start impossibly small')).toBeNull()
+    expect(screen.queryByText('Pick one number, not the whole budget')).toBeNull()
   })
 
   it('shows three tips once expanded', () => {
     render(<NetWorthHealthTips />)
     expand()
-    expect(screen.getByText('Start impossibly small')).toBeTruthy()
-    expect(screen.getByText('Pick one tiny win')).toBeTruthy()
-    expect(screen.getByText('Automate the boring part')).toBeTruthy()
+    expect(screen.getByText('Pick one number, not the whole budget')).toBeTruthy()
+    expect(screen.getByText('Put your easiest goal first')).toBeTruthy()
+    expect(screen.getByText('Check your buffer, not just your balance')).toBeTruthy()
   })
 
   it('rotates the tip window based on the seed', () => {
     render(<NetWorthHealthTips seed={1} />)
     expand()
-    expect(screen.queryByText('Start impossibly small')).toBeNull()
-    expect(screen.getByText('Pick one tiny win')).toBeTruthy()
+    expect(screen.queryByText('Pick one number, not the whole budget')).toBeNull()
+    expect(screen.getByText('Put your easiest goal first')).toBeTruthy()
   })
 
   it('wraps seeds past the end of the tip list and tolerates bad seeds', () => {

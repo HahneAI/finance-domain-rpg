@@ -3153,6 +3153,22 @@ other way is a §24 grounding violation (D1) by definition.
   names; F114 is the standing rule.
 - *Week-vs-check terminology* (`836921d`) — context lines hardcoded "week" regardless of pay
   schedule until routed through `payPeriodUnit`; date mentions widened for larger pay periods.
+- *Job Loss Mode mechanism fabrication* (2026-07-25) — asked "tell me about job loss mode,"
+  Coach invented a plausible-sounding auto-trigger ("activates automatically when your Income
+  panel shows zero or negative income") that doesn't exist anywhere in the app. Root cause: a
+  variant of D1, but for **static feature knowledge, not a computed context line** —
+  `coachFeatureGuide.js` had a `runwayDays` *data point* wired in (`aiContext.js:199-200`) but
+  zero prose describing the feature itself, so the model filled the gap with an invented
+  mechanism instead of admitting it didn't know. The real mechanism (`JobLossEntry.jsx`,
+  `active-systems.md` §10): the user deliberately switches it on via Life Events → "Lost My
+  Job," never automatically off a low/zero paycheck. Fix: `coachFeatureGuide.js` now carries a
+  short, plain "## Job Loss Mode" section stating the real trigger and exit path, plus an
+  explicit instruction to keep answers on this topic brief — test-fenced in
+  `coachFeatureGuide.test.js`. **Generalized rule:** a data point wired into `buildCoachContext`
+  (F113) is not a substitute for the corresponding feature description in
+  `coachFeatureGuide.js` — if Coach can be asked "how does X work" about a feature whose data
+  reaches the context block, that feature needs its own guide paragraph before the data point
+  ships, not after a live fabrication surfaces one.
 
 **Standing quarantines (open — cite, don't extend):**
 1. **`estimateRunwayDays` D1 (F24, `coachTriggers.js:27–49`)** — a second runway formula that

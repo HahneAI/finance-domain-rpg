@@ -1328,11 +1328,12 @@ export default function App() {
   // runway got a bare "Job Loss Mode: active" with no number. Same
   // computeJobLossRunway()/resolvePrimaryRunwayDays() pair CoachNetWorthCard
   // now uses, and the real (not defaulted) jobLossIncludeBenefits toggle, so
-  // Ask Coach agrees with whatever the Job Loss panels are showing.
+  // Ask Coach agrees with whatever the Job Loss panels are showing. Raw
+  // jobLossCashOnHand is read internally by computeJobLossRunway (and
+  // timeline-decayed per §15.H17) — extraCash is just the gig-income log.
   const coachRunwayDays = useMemo(() => {
     if (!config.jobLossMode) return null;
-    const savings = (config.jobLossCashOnHand ?? 0) + sumJobHuntIncome(config);
-    const dash = computeJobLossRunway({ config, expenses, effectiveToday, savings });
+    const dash = computeJobLossRunway({ config, expenses, effectiveToday, extraCash: sumJobHuntIncome(config) });
     return resolvePrimaryRunwayDays(dash, config, jobLossIncludeBenefits);
   }, [config, expenses, effectiveToday, jobLossIncludeBenefits]);
 

@@ -119,6 +119,15 @@ export const DEFAULT_CONFIG = {
   // both JobLossHomePanel and JobLossBudgetPanel, persisted via eager save —
   // NOT session-only like the old draft-only version of this field.
   jobLossCashOnHand: null,
+  // Timestamp the cash-on-hand figure was last confirmed by the user (TODO
+  // §15.H17) — stamped alongside jobLossCashOnHand every time it's edited
+  // (JobLossEntry Activate, or either panel's CashOnHandSheet). From that
+  // date forward, computeJobLossRunway automatically subtracts every
+  // essential bill due date that passes, so the displayed figure decays on
+  // its own instead of going stale until the user re-checks their balance.
+  // null = never explicitly stamped (pre-§15.H17 accounts) — falls back to
+  // jobLossDate.
+  jobLossCashOnHandAsOf: null,  // "YYYY-MM-DD"
   // Pending/final paycheck still owed from the lost job (TODO §15.H15) —
   // optional, skippable in the wizard (unlike cash on hand). Resolved once at
   // Activate time from "days worked in your final week" + "which day checks

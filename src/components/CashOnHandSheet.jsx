@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, useFoldTransition } from "./ui.jsx";
 
 /**
@@ -26,11 +26,22 @@ export function CashOnHandSheet({ open, onClose, currentValue, onSave }) {
   const [draft, setDraft] = useState("");
   const [attempted, setAttempted] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    setDraft(currentValue != null ? String(Math.round(currentValue)) : "");
-    setAttempted(false);
-  }, [open, currentValue]);
+  // Re-prefill on the closed→open transition only — React's documented
+  // "adjust state during render" pattern (react.dev), not a useEffect (which
+  // would fire an extra render and, since this effect would do nothing but
+  // mirror props into state with no real external system, trips
+  // react-hooks/set-state-in-effect). Tracking `open` itself (not a synced
+  // copy of `currentValue`) means the draft is only reset when the sheet
+  // actually (re)opens — a `currentValue` change while already open (e.g.
+  // the decay recompute ticking over) never clobbers in-progress typing.
+  const [lastOpen, setLastOpen] = useState(open);
+  if (open !== lastOpen) {
+    setLastOpen(open);
+    if (open) {
+      setDraft(currentValue != null ? String(Math.round(currentValue)) : "");
+      setAttempted(false);
+    }
+  }
 
   const fold = useFoldTransition(open, { ms: 280 });
   if (!fold.mounted) return null;

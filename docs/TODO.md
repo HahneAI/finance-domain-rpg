@@ -1044,6 +1044,15 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 
 *Requires Job Loss Mode (§15.C) to be live first.*
 
+**AI-gating decision resolved, 2026-07-25 (user directive) — build tracked in a separate
+session, not here.** Ships behind the same narrow `canAccessAiFeatures` (`isAdmin`/`isTester`)
+gate every other AI surface uses today; the plan is to move it to a paid-tier gate once the
+feature is finished, mirroring the precedent Coach's own gate-flip already set
+(`canAccessAskCoachGeneral`, widened 2026-07-24 — admin/tester **or** a real trial/paid
+entitlement, never `isInvestor`; see `drift-app-warden.md` F24). Until that flip happens for
+Job Hunt Assistant specifically, treat the checklist below as informational — the actual build
+is happening in another session, so don't duplicate work here without checking in first.
+
 *Job Loss Mode's §15.H/H7-H9 rebuild (2026-07-18) already produces most of the outputs this
 feature will need to read — noting the exact files/functions now so whoever builds this doesn't
 have to re-derive them or, worse, write a fourth parallel runway calc:*
@@ -1149,9 +1158,9 @@ scope — documentation only, nothing below is implemented.*
   (already a jsonb column, already used for "statement insight keys" — no schema change needed
   beyond the chat_type enum value) alongside a written review in `messages`.
 - **Entitlement gating — same `canAccessAiFeatures` gate as every other Coach surface,** no new
-  gate needed. H14 bullet 5's finding still applies unchanged: real users can't reach this without
-  the broader AI-features rollout question being resolved first — worth noting again here, not a
-  blocker to scoping, but a real blocker to shipping this to anyone but admins/testers.
+  gate needed. **Resolved 2026-07-25 (§E header):** stays `canAccessAiFeatures`
+  (`isAdmin`/`isTester`) until Job Hunt Assistant ships, then moves to a paid-tier gate — same
+  plan as the parent feature, not a separate decision for the résumé piece.
 - **Recommended phasing:**
   - **v1** — `resume_profile` table + RLS; a "Resume" card in `ReemploymentTracker` (or its own
     section in the Job Loss Dashboard) with a paste-text textarea + "Get skill-gap review" button;
@@ -2492,6 +2501,12 @@ how directly each one touches "is the runway number on screen actually correct."
   `estimateRunwayDays` outright rather than retrofitting it (cleaner than either option this list
   proposed). `runwayDays` into Coach's context → wired the same pass. Only the AI-gating/business
   question (bullet above) and the résumé spec (already `[x]`) remain genuinely open.
+- **AI-gating question resolved, 2026-07-25 (user directive) — see §18.E header for the full
+  note.** Stays `canAccessAiFeatures` (`isAdmin`/`isTester`) until Job Hunt Assistant ships, then
+  moves to a paid-tier gate (mirrors Coach's own `canAccessAskCoachGeneral` gate-flip,
+  2026-07-24). The Job Hunt Assistant build itself is being tracked in a separate session —
+  checkbox above left unticked as the historical record of what was open at the time of this
+  birdseye pass, not because the question is still live.
 
 #### H15. Pending/final paycheck — the first H14 gap, built, 2026-07-22 — DONE
 

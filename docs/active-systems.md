@@ -257,11 +257,16 @@ the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` 
   wizard as `structure_change` and restores the mandatory Food expense if it was skipped at
   first-run. Entry point also lives in the Account panel (`ProfilePanel` "Life Events" row → same
   `LifeEventMenu`).
-- **Known gaps** (full write-up: `docs/TODO.md` §15.H14, closed items now in §15.H15–H17): AI
-  features (Coach, Job Hunt Assistant, Job Scout) are `is_admin`/`is_tester`-gated, so most real
-  Job Loss Mode users can't reach any of them yet — Job Hunt Assistant and Job Scout are still
-  unbuilt entirely (see `docs/coach-entry-points.md`); résumé/skill-gap analysis is scoped
-  (§18.E1) but not built. **Stale-note correction (2026-07-24):** this list previously also named
+- **Known gaps** (full write-up: `docs/TODO.md` §15.H14, closed items now in §15.H15–H17):
+  Job Hunt Assistant and Job Scout are still unbuilt entirely (see `docs/coach-entry-points.md`,
+  and note the Job Hunt Assistant build is now tracked in a separate session, not this doc's
+  worklist); résumé/skill-gap analysis is scoped (§18.E1) but not built. **Stale-note correction
+  (2026-07-25):** Coach itself is no longer `is_admin`/`is_tester`-only — its gate widened to
+  `canAccessAskCoachGeneral` (admin/tester **or** a real trial/paid entitlement, never
+  `isInvestor`) on 2026-07-24. Job Hunt Assistant/Job Scout/résumé review stay behind the
+  narrower `canAccessAiFeatures` (`isAdmin`/`isTester`) gate until each ships, then move to the
+  same paid-tier gate Coach already has — a resolved decision (`docs/TODO.md` §18.E), not an open
+  question. **Earlier stale-note correction (2026-07-24):** this list previously also named
   four gaps that have since closed and should no longer be treated as open — a pending/final
   paycheck is now modeled in the runway calc (§15.H15, `lib/jobLossRunway.js`); Lifestyle spend gets
   an explicit UI callout instead of silently vanishing from `weeklyBurn` (§15.H16); the independent,

@@ -41,6 +41,11 @@ export function canAccessTaxPlan({ isAdmin = false, taxProjectionsEnabled = fals
  * CRUCIAL — beta testers are NOT investors. Do not fold isInvestor into this
  * OR list: is_tester grants AI features only, never demo-account access or
  * the investor code path. See docs/active-systems.md "Beta Tester Accounts".
+ *
+ * This is the *narrow*, admin/tester-only gate — every Coach surface still
+ * used it until the split below. Any future admin-only-for-now Coach surface
+ * (i.e. anything in docs/coach-entry-points.md sections 4+) should keep
+ * gating on this function, not on canAccessAskCoachGeneral.
  */
 export function canAccessAiFeatures({ isAdmin = false, isTester = false } = {}) {
   return hasTesterAccess({ isAdmin, isTester });
@@ -61,4 +66,30 @@ export function canAccessAiFeatures({ isAdmin = false, isTester = false } = {}) 
  */
 export function isTrackedBetaTester({ isTester = false, betaCodeUsed = null } = {}) {
   return Boolean(isTester && betaCodeUsed);
+}
+
+/**
+ * Ask Coach general chat + Net Worth Check-In card visibility
+ * (docs/coach-entry-points.md sections 1–2 — the first two Coach surfaces to
+ * leave the admin/tester-only standing constraint). Ships with the regular
+ * paid subscription, trial included, per docs/TODO.md §18.0's free-vs-paid
+ * note — so a real trial/grace/active entitlement grants access exactly like
+ * an admin or manually-flagged tester does.
+ *
+ * Deliberately a *separate* function from canAccessAiFeatures rather than a
+ * change to it: every other Coach surface (none built yet) must stay on the
+ * narrow admin/tester-only gate above, or building one later would silently
+ * inherit this wider trial/paid gate the day it ships.
+ *
+ * isAdmin/isTester always pass regardless of `entitlement` — an admin or a
+ * manually-flagged tester account may carry no real subscription state at
+ * all (entitlement.state === "none": investor/demo accounts, or a row that
+ * predates the trial-window migration), and must not lose Coach access
+ * because of that.
+ *
+ * @param {object} entitlement - the object from lib/subscription.js's
+ *   getEntitlement() — only `.isEntitled` is read here.
+ */
+export function canAccessAskCoachGeneral({ isAdmin = false, isTester = false, entitlement } = {}) {
+  return hasTesterAccess({ isAdmin, isTester }) || Boolean(entitlement?.isEntitled);
 }

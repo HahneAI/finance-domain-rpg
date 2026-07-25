@@ -1075,6 +1075,14 @@ have to re-derive them or, worse, write a fourth parallel runway calc:*
   `runwayDays` into `buildCoachContext` at all (`lib/aiContext.js:199-201` has the parameter and the
   context line ready, just never wired) — Coach's Job Loss Mode context today is the bare string
   `"Job Loss Mode: active"`, no numbers. Full write-up: `docs/TODO.md` §15.H14.
+  **Closed, 2026-07-22 (§15.H17):** both paragraphs above are now stale — `coachTriggers.js`'s
+  `estimateRunwayDays` was deleted outright (not retrofitted), and every runway consumer
+  (`CoachNetWorthCard.jsx`, `App.jsx`'s `coachRunwayDays`) now calls `computeJobLossRunway()`
+  directly, so there is no second drifted calc left to reconcile. `runwayDays` is also now wired
+  into Coach's context (`App.jsx` → `buildCoachContext`), not the bare `"Job Loss Mode: active"`
+  string. See `docs/BUG_FIX_TODO.md` DW-8/DW-9 and `drift-app-warden.md` §21 F24 for the fix
+  history — this stale note is left in place (not deleted) as the historical record of the drift
+  this feature would otherwise have needed to fix.
 
 - [ ] **Job Hunt Chat panel** — dedicated sub-view in Job Loss Dashboard; powered by Coach (Claude
   API) with a system prompt including: current role title, prior income, runway days, target income,
@@ -2470,6 +2478,12 @@ how directly each one touches "is the runway number on screen actually correct."
   (`runwayDays` into Coach, the Lifestyle-spend caption) since they're small and don't require a
   design decision, before touching the pending-paycheck field or the two-runway-calc unification,
   which both need the user's input on scope/design first.
+- **All four `[ ]` gaps above closed, 2026-07-22 (H15/H16/H17) — checkboxes left unticked
+  intentionally, as the historical record of what this birdseye pass actually found.** Pending
+  paycheck → H15. Lifestyle-spend invisibility → H16. The two-runway-calc drift → H17 deleted
+  `estimateRunwayDays` outright rather than retrofitting it (cleaner than either option this list
+  proposed). `runwayDays` into Coach's context → wired the same pass. Only the AI-gating/business
+  question (bullet above) and the résumé spec (already `[x]`) remain genuinely open.
 
 #### H15. Pending/final paycheck — the first H14 gap, built, 2026-07-22 — DONE
 

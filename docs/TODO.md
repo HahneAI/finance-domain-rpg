@@ -1151,6 +1151,12 @@ scope — documentation only, nothing below is implemented.*
   gate needed. H14 bullet 5's finding still applies unchanged: real users can't reach this without
   the broader AI-features rollout question being resolved first — worth noting again here, not a
   blocker to scoping, but a real blocker to shipping this to anyone but admins/testers.
+- **Locked decision (2026-07-25) for when this leaves the admin/tester gate: paid-only, not
+  trial-included.** Both this feature and §18.E (Job Hunt Assistant) are a real, post-card-charge
+  subscription only (`entitlement.state === "active"`) — deliberately narrower than
+  `canAccessAskCoachGeneral`'s trial/grace/active check that sections 1–2 use. Do not reuse
+  `canAccessAskCoachGeneral` when splitting this off; see `coach-entry-points.md` §5/§6 and
+  `drift-app-warden.md` §21 F124.
 - **Recommended phasing:**
   - [x] **v1 — built 2026-07-25.** `resume_profile` table + RLS (migration `032_add_resume_profile.sql`,
     `user_id` as the primary key, not a surrogate `id` — genuinely 1:1 per account, unlike

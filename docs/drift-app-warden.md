@@ -3123,10 +3123,14 @@ that table's check constraint by the same migration) via the existing `saveCoach
 new serverless route, both modes reuse `api/coach.js` on Sonnet (§18.G's cost split). **v1
 scope, deliberately incomplete:** both panels are single-session — no chat-history/retention
 system yet, the same stage `AskCoachPanel` was in before F123 landed persistence for it.
-> **IF** either mode's gate is ever changed to `canAccessAskCoachGeneral`, **THEN** that's a
-> deliberate widening decision (trial/paid users gaining access to an admin/tester-only surface)
-> and needs the same explicit splitting-checklist treatment `coach-entry-points.md` describes for
-> sections 1–2 — never a silent copy-paste of the wider gate. **IF** `buildJobHuntContext`'s
+> **IF** either mode's gate is ever changed off `canAccessAiFeatures`, **THEN** the locked
+> decision (`coach-entry-points.md`, 2026-07-25) is **paid-only, not trial-included** — a real
+> post-card-charge subscription (`entitlement.state === "active"`), never
+> `canAccessAskCoachGeneral`, which also opens for trial/grace and would silently hand a
+> paid-conversion feature to every trial user. This needs a new, narrower entitlement function
+> (or an explicit `state === "active"` check) plus the same splitting-checklist treatment
+> `coach-entry-points.md` describes for sections 1–2 — never a silent copy-paste of either
+> existing gate function. **IF** `buildJobHuntContext`'s
 > fields are extended, **THEN** they must resolve through the same authoritative function the
 > on-screen Job Loss panels use, per F113's rule — this function is exempt from `buildCoachContext`
 > itself but not from the grounding rule that governs it. **IF** persistence/retention/summary

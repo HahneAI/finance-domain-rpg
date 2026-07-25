@@ -174,6 +174,14 @@ separated.
 only) per the §18 sections-4+ standing constraint — unlike sections 1–2, this hasn't been
 individually split off yet.
 
+**Locked decision (2026-07-25), don't re-litigate when this splits off:** unlike sections 1–2,
+this is **paid-only, not trial-included** — a real, post-card-charge subscription
+(`entitlement.state === "active"`), not `canAccessAskCoachGeneral`'s wider trial/grace/active
+check. When this eventually leaves the admin/tester gate, it needs a new, narrower entitlement
+function (or an explicit `entitlement.state === "active"` check) — reusing
+`canAccessAskCoachGeneral` here would silently hand it to every trial user, which is the
+opposite of the intent.
+
 **Next up:** Chat-history/retention (mirroring §18.H's `coach_chats` wiring for Ask Coach) once
 this mode has been live-tested. The rest of the original checklist (per-mode UI shortcuts like a
 dedicated "Prep me for [company] interview" button) is supported today via open-ended chat
@@ -206,7 +214,9 @@ target role (defaults to the most recent logged job application's role), tap "Ge
 Review." The review is saved automatically, both to the résumé's own profile row and as a
 `coach_chats` entry.
 
-**Free trial access: ❌ No.** Same narrow `canAccessAiFeatures` gate as section 5.
+**Free trial access: ❌ No.** Same narrow `canAccessAiFeatures` gate as section 5, and the same
+**paid-only, not trial-included** locked decision (2026-07-25) — see section 5's note. When
+this splits off, gate on a real post-card-charge subscription, not `canAccessAskCoachGeneral`.
 
 **Next up:** File upload as a v2, only if this shows real usage. A history browser for past
 reviews (today only the most recent review is shown in the UI, though every review is saved).

@@ -513,7 +513,7 @@ export default function App() {
       // The loadUserData() effect below fires in parallel off the same
       // authedUser?.id change, racing this chain's checkRevival→syncUserProfile
       // (which upserts trial_started_at/trial_ends_at/access_ends_at via
-      // /api/seed-trial). On a brand-new signup the row doesn't exist yet, so
+      // /api/seed, type: "trial"). On a brand-new signup the row doesn't exist yet, so
       // loadUserData() usually wins the race and reads DEFAULT_SUBSCRIPTION
       // (all-null trial fields) — getEntitlement() then permanently reports
       // state "none" ("No subscription required for this account") since

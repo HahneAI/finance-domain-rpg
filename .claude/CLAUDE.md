@@ -18,12 +18,23 @@
 | PWA | vite-plugin-pwa (manifest + service worker active) |
 | Hosting | Vercel |
 
-**No standalone backend server** — but no longer "pure frontend": `api/` holds 15 Vercel
+**No standalone backend server** — but no longer "pure frontend": `api/` holds 11 Vercel
 serverless functions (Stripe checkout/webhook/portal/revive, Coach streaming proxy, daily
-subscription-lifecycle cron + email engine, delete-account, revival-lookup, trial/investor
-seeding, admin-changelog for the "What's New" authoring surface). All privileged writes (tier
-flags, subscription columns, changelog entries) go through these service-role routes — the
-client never writes them (RLS migration 019).
+subscription-lifecycle cron + email engine, delete-account, revival-lookup, admin-changelog for
+the "What's New" authoring surface, plus `api/seed.js` — a single route dispatched on
+`body.type` ("beta" | "investor" | "trial") that consolidates what used to be three separate
+seed-beta/seed-investor/seed-trial functions). All privileged writes (tier flags, subscription
+columns, changelog entries) go through these service-role routes — the client never writes them
+(RLS migration 019).
+
+**Vercel Hobby-plan function cap:** a deployment can include **at most 12 Serverless Functions**
+(one per non-`_`-prefixed file in `api/`) on the free Hobby plan — exceeding it fails the build
+outright ("No more than 12 Serverless Functions can be added to a Deployment on the Hobby plan").
+This repo hit 13 once (adding `admin-changelog.js` tipped it over) and was brought back under the
+cap by merging seed-beta/seed-investor/seed-trial into the one `api/seed.js` above — same fix to
+reach for again if a future route addition trips this same failure, rather than assuming it's a
+rate limit or a real Vercel outage. Consolidation candidates if it happens again: the three
+`stripe-*.js` routes are the next most mergeable group (same shape, different Stripe action).
 
 ---
 

@@ -677,7 +677,9 @@ export async function createInvestorAccount({ name, email, password, company, ci
   // Step 3 — user_data row seeded with investor config. is_investor itself is
   // NOT written here — it's a privileged column (migration
   // 019_enable_user_data_rls.sql) the client can no longer set directly; it's
-  // granted below via the service-role api/seed-investor route instead.
+  // granted below via the service-role api/seed.js route instead (type: "investor" —
+  // consolidated from the former api/seed-investor.js to stay under Vercel's
+  // Hobby-plan 12-function-per-deployment cap).
   const investorConfig = {
     ...DEFAULT_CONFIG,
     isInvestor:      true,
@@ -710,13 +712,13 @@ export async function createInvestorAccount({ name, email, password, company, ci
   // this table that migration 019 introduces regardless of this function).
   if (authData.session?.access_token) {
     try {
-      const res = await fetch("/api/seed-investor", {
+      const res = await fetch("/api/seed", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${authData.session.access_token}`,
         },
-        body: JSON.stringify({ code: codeUsed }),
+        body: JSON.stringify({ type: "investor", code: codeUsed }),
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
@@ -850,12 +852,14 @@ export async function saveDemoAccount(accountNumber, { config, expenses, goals, 
  *      ProfilePanel can surface them without a separate API call. display_name/
  *      avatar_url are client-writable, so this stays a direct upsert.
  *   2. Seeds the trial window (trial_started_at/trial_ends_at/access_ends_at,
- *      subscription_status="trialing") via the service-role api/seed-trial
- *      route — those columns are privileged (migration
- *      019_enable_user_data_rls.sql revokes client write access to them), so
- *      the client can no longer set them directly. The route itself decides
- *      whether this is a brand-new user (keyed off trial_started_at IS NULL)
- *      and no-ops for returning users.
+ *      subscription_status="trialing") via the service-role api/seed.js
+ *      route (type: "trial" — consolidated from the former api/seed-trial.js
+ *      to stay under Vercel's Hobby-plan 12-function-per-deployment cap) —
+ *      those columns are privileged (migration 019_enable_user_data_rls.sql
+ *      revokes client write access to them), so the client can no longer set
+ *      them directly. The route itself decides whether this is a brand-new
+ *      user (keyed off trial_started_at IS NULL) and no-ops for returning
+ *      users.
  * Safe to call for email/password users — no-op if no metadata present.
  */
 export async function syncUserProfile(user) {
@@ -876,9 +880,10 @@ export async function syncUserProfile(user) {
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
     if (!accessToken) return;
-    const res = await fetch("/api/seed-trial", {
+    const res = await fetch("/api/seed", {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "trial" }),
     });
     if (!res.ok) console.warn("syncUserProfile trial seed failed:", res.status);
   } catch (err) {
@@ -917,11 +922,13 @@ export async function checkRevival() {
 /**
  * Redeems a beta program access code on the CALLER's own already-existing
  * account (docs/TODO.md §32) — unlike investor codes, this doesn't create a
- * new account, it upgrades one that's already signed in. POSTs to
- * api/seed-beta.js, same shape as syncUserProfile's call to api/seed-trial.
- * Returns { ok: true } on success, { ok: false, error } otherwise — the
- * caller (ProfilePanel) is responsible for reloading state after success,
- * since is_tester/beta_code_used are read-only fields loadUserData maps in.
+ * new account, it upgrades one that's already signed in. POSTs to api/seed.js
+ * (type: "beta" — consolidated from the former api/seed-beta.js, api/seed-investor.js,
+ * and api/seed-trial.js into one route to stay under Vercel's Hobby-plan
+ * 12-function-per-deployment cap). Returns { ok: true } on success,
+ * { ok: false, error } otherwise — the caller (ProfilePanel) is responsible
+ * for reloading state after success, since is_tester/beta_code_used are
+ * read-only fields loadUserData maps in.
  */
 export async function redeemBetaCode(code) {
   const { data: sessionData } = await supabase.auth.getSession();
@@ -929,10 +936,10 @@ export async function redeemBetaCode(code) {
   if (!accessToken) return { ok: false, error: "Not signed in" };
 
   try {
-    const res = await fetch("/api/seed-beta", {
+    const res = await fetch("/api/seed", {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ type: "beta", code }),
     });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: payload?.error || "Invalid or inactive beta code" };

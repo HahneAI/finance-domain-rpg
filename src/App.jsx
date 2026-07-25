@@ -278,6 +278,10 @@ export default function App() {
   const [configViewOpen, setConfigViewOpen] = useState(false);
   const [toolSheetOpen, setToolSheetOpen] = useState(false);
   const [askCoachOpen, setAskCoachOpen] = useState(false);
+  // askCoachExiting: true while the Ask Coach panel is animating out (180ms
+  // foldLiftOut) — mirrors wizardExiting's pattern so the panel stays mounted
+  // through its exit instead of vanishing on the close tap.
+  const [askCoachExiting, setAskCoachExiting] = useState(false);
   const [sheetDragY, setSheetDragY] = useState(0);
   const sheetDragStartY = useRef(null);
   const [rowViewOpen, setRowViewOpen] = useState(false);
@@ -1385,6 +1389,17 @@ export default function App() {
     setTimeout(() => {
       setWizardEntry(null);
       setWizardExiting(false);
+    }, 180);
+  }
+
+  // Ask Coach exit animation — same fold-lift-out timing/pattern as the
+  // wizard above, so closing the chat panel matches every other full-screen
+  // takeover's exit instead of vanishing instantly.
+  function closeAskCoachWithAnimation() {
+    setAskCoachExiting(true);
+    setTimeout(() => {
+      setAskCoachOpen(false);
+      setAskCoachExiting(false);
     }, 180);
   }
 
@@ -3478,9 +3493,10 @@ export default function App() {
 
       {/* ── Ask Coach (§18.B) — left admin/tester-only; now also open to a real
           trial/paid entitlement (docs/coach-entry-points.md §1) ── */}
-      {askCoachOpen && canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
+      {(askCoachOpen || askCoachExiting) && canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
         <AskCoachPanel
-          onClose={() => setAskCoachOpen(false)}
+          onClose={closeAskCoachWithAnimation}
+          isExiting={askCoachExiting}
           config={config}
           expenses={expenses}
           goals={goals}

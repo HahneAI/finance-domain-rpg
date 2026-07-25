@@ -78,6 +78,7 @@ function FeatherIcon({ children, size = 16 }) {
  */
 export function AskCoachPanel({
   onClose,
+  isExiting = false,
   config,
   expenses = [],
   goals = [],
@@ -112,6 +113,17 @@ export function AskCoachPanel({
   const summaryGeneratedRef = useRef(false);
   const messagesRef = useRef([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // Body fold-lift: replays a lift-in on every History/Back/New Chat switch
+  // between the chat and history views, using the same fold-lift system as
+  // the panel's own open/close — but skipped on first mount so it doesn't
+  // stack with the panel's own entrance animation.
+  const [bodyFold, setBodyFold] = useState(null);
+  const isFirstViewRenderRef = useRef(true);
+  useEffect(() => {
+    if (isFirstViewRenderRef.current) { isFirstViewRenderRef.current = false; return; }
+    setBodyFold("entering");
+  }, [view]);
 
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ block: "end" });
@@ -265,6 +277,8 @@ export function AskCoachPanel({
 
   return (
     <div
+      className="fold-lift"
+      data-fold={isExiting ? "exiting" : "entering"}
       style={{
         position: "fixed",
         inset: 0,
@@ -313,7 +327,7 @@ export function AskCoachPanel({
       </div>
 
       {view === "history" ? (
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "18px" }}>
+        <div className="fold-lift" data-fold={bodyFold ?? undefined} style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "18px" }}>
           {historyLoading && (
             <div style={{ color: "var(--color-text-secondary)", fontSize: "13px" }}>Loading conversations…</div>
           )}
@@ -382,7 +396,7 @@ export function AskCoachPanel({
           ))}
         </div>
       ) : (
-        <>
+        <div className="fold-lift" data-fold={bodyFold ?? undefined} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
           <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "10px" }}>
             {messages.length === 0 && (
               <div style={{ color: "var(--color-text-secondary)", fontSize: "13px", lineHeight: 1.5 }}>
@@ -463,7 +477,7 @@ export function AskCoachPanel({
               }}
             >Send</Pressable>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

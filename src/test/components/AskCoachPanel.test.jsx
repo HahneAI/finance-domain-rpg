@@ -166,3 +166,40 @@ describe("AskCoachPanel — history", () => {
     expect(screen.getByText(/Ask me anything about how Authority Finance works/)).toBeTruthy();
   });
 });
+
+describe("AskCoachPanel — fold-lift animation wiring (ux-animations-tasks.md)", () => {
+  it("mounts the panel on the shared fold-lift system, entering by default", async () => {
+    const { container } = render(<AskCoachPanel {...baseProps()} />);
+    await waitFor(() => expect(mocks.loadCoachChats).toHaveBeenCalled());
+    const root = container.firstChild;
+    expect(root).toHaveClass("fold-lift");
+    expect(root).toHaveAttribute("data-fold", "entering");
+  });
+
+  it("switches to the exiting fold-lift state when the parent drives isExiting", async () => {
+    const { container } = render(<AskCoachPanel {...baseProps({ isExiting: true })} />);
+    await waitFor(() => expect(mocks.loadCoachChats).toHaveBeenCalled());
+    expect(container.firstChild).toHaveAttribute("data-fold", "exiting");
+  });
+
+  it("does not fold-lift the body on first mount (avoids stacking with the panel's own entrance)", async () => {
+    render(<AskCoachPanel {...baseProps()} />);
+    await waitFor(() => expect(mocks.loadCoachChats).toHaveBeenCalled());
+    const body = screen.getByPlaceholderText("Ask Coach…").closest('[class~="fold-lift"]');
+    expect(body).not.toHaveAttribute("data-fold");
+  });
+
+  it("fold-lifts the body in on History / New Chat / Back — same system, replayed per switch", async () => {
+    mocks.loadCoachChats.mockResolvedValue([]);
+    render(<AskCoachPanel {...baseProps()} />);
+
+    fireEvent.click(screen.getByLabelText("Chat history"));
+    await waitFor(() => expect(screen.getByText(/No saved conversations yet/)).toBeTruthy());
+    const historyBody = screen.getByText(/No saved conversations yet/).closest('[class~="fold-lift"]');
+    expect(historyBody).toHaveAttribute("data-fold", "entering");
+
+    fireEvent.click(screen.getByLabelText("Back to chat"));
+    const chatBody = screen.getByPlaceholderText("Ask Coach…").closest('[class~="fold-lift"]');
+    expect(chatBody).toHaveAttribute("data-fold", "entering");
+  });
+});

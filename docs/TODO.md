@@ -981,11 +981,15 @@ trend, and the static copy is rewritten to match Coach's voice.*
 `HomePanel.jsx` alongside (not replacing) the existing static tips, `isAdmin`-gated per the §18
 standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 
-- [ ] **Copy audit — static tips rewrite** — rewrite all existing "Financial Breakthrough" tips
-  in `NetWorthHealthTips.jsx` to match Coach's voice: direct, supportive, data-grounded; remove
-  generic affirmations; every tip should reference a real lever the user can pull inside the app
-  (adjust an expense, fund a goal, run the Budget panel, etc.) — **deferred**, copy-only, no API
-  cost, can be done anytime independent of the rest of this section
+- [x] **Copy audit — static tips rewrite** — done 2026-07-25. All 6 tips in `NetWorthHealthTips.jsx`
+  rewritten to match Coach's voice (first person, direct) and each now names a real in-app lever
+  instead of a generic affirmation: Budget (trim a Lifestyle expense), Home (reorder goal
+  priority), Account (paycheck buffer), Log (log a change immediately), Home again (Net Worth
+  Trend direction), Income (check next week's net). The "Financial Breakthrough" eyebrow label,
+  intro paragraph, and closing support-resource line were rewritten too — deliberately kept at
+  near-zero boxing metaphor, mirroring `coachPrompts.js`'s Red-tier restraint, since this fires at
+  exactly the kind of thin-cushion moment where plainness should outrank flavor. Copy-only, no
+  API cost — the rubric's un-scored axes (directness, warmth, etc.) weren't needed for this pass.
 - [x] **Trigger conditions (formalize)** — implemented as proxies against data that already
   exists rather than the literal candidates below, since two of them need a persisted weekly
   net-worth history this app doesn't store yet (see `src/lib/coachTriggers.js` header comment
@@ -1299,9 +1303,13 @@ CREATE INDEX coach_chats_user_id_created_at
   covers the common path.
 - [ ] **Statement insight extraction** — not applicable yet; no `statement_summary` chat type has
   a UI caller.
-- [ ] **Admin diagnostic** — DB Row Viewer → add a "Coach Chats" count line: "N saved chats
-  (M job scout / K ask_coach / J statement)"; tapping the count shows the 5 most recent titles.
-  Not built this pass.
+- [x] **Admin diagnostic** — built 2026-07-25. DB Row Viewer (all 3 render sites — sidebar,
+  drawer, mobile sheet) → "Coach Chats: N saved chats (breakdown)" line, populated by
+  `handleFetchRow` alongside the existing config-history line. Breakdown only lists chat types
+  that actually have rows (today always just `ask_coach`, since job_scout/job_hunt/
+  statement_summary have no UI caller) rather than the spec's fixed 3-slot format, so it stays
+  accurate once a second type ships instead of needing another edit. Tapping the line expands
+  the 5 most recent titles (`deriveCoachChatsMeta` in `App.jsx`).
 
 ---
 

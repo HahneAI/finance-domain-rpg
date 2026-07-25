@@ -53,10 +53,11 @@ the exact same chat a paying subscriber does, not a limited preview of it.
 
 **Next up:** A chat-history screen modeled on the Claude mobile app now exists inside the panel
 itself (a header icon toggles it), rather than as a separate full screen — revisit if that
-should become its own destination as the feature grows. Still open: an admin diagnostic count
-line on saved chats (DB Row Viewer), and — if a second `chat_type` (Job Scout, statement
-insights, etc.) ever gets a UI caller — that type needs its own retention/summary decision,
-since today's 3-chat retention cap and end-of-session summary are `ask_coach`-specific.
+should become its own destination as the feature grows. The admin diagnostic count line on
+saved chats shipped 2026-07-25 (DB Row Viewer → "Coach Chats" line, tap to expand the 5 most
+recent titles). Still open: if a second `chat_type` (Job Scout, statement insights, etc.) ever
+gets a UI caller, that type needs its own retention/summary decision, since today's 3-chat
+retention cap and end-of-session summary are `ask_coach`-specific.
 *Reference: `docs/TODO.md` §18.H (Chat & Search History Persistence), subsections H3–H4;
 `docs/drift-app-warden.md` §21 F123.*
 
@@ -95,12 +96,16 @@ at all.
 above — the critical-warning tier especially is exactly the moment someone still deciding
 whether to subscribe needs to hear from Coach, not a reason to make them pay first.
 
-**Next up:** The wording behind the gentle heads-up and the calm recovery message hasn't been
-scored against the personality rubric yet — only the critical warning has been tuned in detail.
-Separately, an older static tip box that still shows on Home in its own voice (not Coach's) is
-due for a rewrite so it sounds like Coach instead of a leftover placeholder.
-*Reference: `docs/TODO.md` §18.C (its copy-audit note) and `docs/coach-personality-rubric.md`
-(axes 2 and onward, still blank).*
+**Next up:** The older static tip box that used to show on Home in its own voice (not Coach's)
+was rewritten 2026-07-25 — see `NetWorthHealthTips.jsx`; every tip now names a real in-app lever
+instead of a generic affirmation. Still open: the *live, AI-generated* wording for the gentle
+heads-up and the calm recovery tier (`TIER_ADDENDA.amber`/`.green` in `coachPrompts.js`) hasn't
+been formally scored against the personality rubric — only the critical warning has. That's a
+bigger lift than the static-copy pass was: the rubric's axes 2+ (directness, warmth, sentence
+economy, urgency escalation) are still undefined skeleton, and real tuning needs live-testing
+per mode, not a one-shot rewrite — see the can-of-worms discussion in this session's history.
+*Reference: `docs/TODO.md` §18.C and `docs/coach-personality-rubric.md` (axes 2 and onward,
+still blank).*
 
 **Technical reference:** API route `POST /api/coach` (same route as the chat above) · Model:
 **Haiku** (`claude-haiku-4-5`) · System prompt: `buildNetWorthSystemPrompt(tier)` in

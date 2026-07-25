@@ -1057,17 +1057,6 @@ export default function App() {
         ),
       });
     }
-    if (isAdmin) {
-      items.push({
-        key: "__tools__",
-        label: "Tools",
-        icon: (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/>
-          </svg>
-        ),
-      });
-    }
     return items;
   }, [isAdmin, isTester, entitlement.isEntitled, config.jobLossMode]);
 
@@ -2985,12 +2974,10 @@ export default function App() {
           {/* Sliding tab indicator — 2px teal bar that moves to the active tab.
               Contained within the pill via overflow:hidden on LiquidGlass. */}
           {(() => {
-            const toolsActive = toolSheetOpen && isAdmin;
             const coachActive = askCoachOpen;
             const baseIdx = effectiveBottomNav.findIndex(i => i.key === currentView);
-            const toolsIdx = effectiveBottomNav.findIndex(i => i.key === "__tools__");
             const coachIdx = effectiveBottomNav.findIndex(i => i.key === "__coach__");
-            const activeIdx = toolsActive ? toolsIdx : coachActive ? coachIdx : Math.max(baseIdx, 0);
+            const activeIdx = coachActive ? coachIdx : Math.max(baseIdx, 0);
             const pct = 100 / effectiveBottomNav.length;
             return (
               <div style={{
@@ -2999,30 +2986,23 @@ export default function App() {
                 left: `${activeIdx * pct}%`,
                 width: `${pct}%`,
                 height: "2px",
-                background: toolsActive ? "var(--color-warning)" : "var(--color-accent-primary)",
+                background: "var(--color-accent-primary)",
                 transition: "left 0.3s ease, background 0.2s ease",
                 borderRadius: "0 0 1px 1px",
               }} />
             );
           })()}
           {effectiveBottomNav.map(item => {
-            const isToolsBtn = item.key === "__tools__";
             const isCoachBtn = item.key === "__coach__";
-            const active = isToolsBtn ? toolSheetOpen : isCoachBtn ? askCoachOpen : (currentView === item.key && !toolSheetOpen && !askCoachOpen);
+            const active = isCoachBtn ? askCoachOpen : (currentView === item.key && !askCoachOpen);
             return (
               <Pressable
                 key={item.key}
                 onClick={() => {
-                  if (isToolsBtn) {
-                    setToolSheetOpen(v => !v);
-                    setAskCoachOpen(false);
-                    setDrawerOpen(false);
-                  } else if (isCoachBtn) {
+                  if (isCoachBtn) {
                     setAskCoachOpen(v => !v);
-                    setToolSheetOpen(false);
                     setDrawerOpen(false);
                   } else {
-                    setToolSheetOpen(false);
                     setAskCoachOpen(false);
                     navigateDirect(item.key);
                   }
@@ -3032,9 +3012,7 @@ export default function App() {
                   height: "100%",
                   background: "transparent",
                   border: "none",
-                  color: active
-                    ? (isToolsBtn ? "var(--color-warning)" : "var(--color-accent-primary)")
-                    : "var(--color-text-disabled)",
+                  color: active ? "var(--color-accent-primary)" : "var(--color-text-disabled)",
                   cursor: "pointer",
                   display: "flex",
                   flexDirection: "column",

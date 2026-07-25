@@ -691,10 +691,15 @@ Proactive Coach message, now reachable from both `HomePanel` (Amber/Green/Red) a
 `netWorthHealth`, a normal-mode-only concept not threaded through the Job Loss mount).
 Red tier's runway number is guaranteed to equal the Job Loss panels' own headline —
 same function, same call — since the standing quarantine below closed (commit
-`3267286`, 2026-07-22).
+`3267286`, 2026-07-22). **§15.I (2026-07-25):** `App.jsx`'s `coachRunwayDays` memo now
+derives from a shared `jobLossDash` memo (one `computeJobLossRunway()` call per render,
+not two) — the Live State Inspector's three new Job Loss rows (`Job Loss Date`,
+`Unemployment Wkly`, `Unemployment Wks Left`) read `jobLossDash.benefitsRemainingWeeks`
+from that same memo, isAdmin-gated diagnostic display only, no new call site.
 > **IF** touching anything in this chain, **THEN** do not reintroduce a second runway
 > formula — everything routes through `computeJobLossRunway()`/`resolvePrimaryRunwayDays()`
-> (Spine A). **IF** the gate changes, **THEN** it must stay `canAccessAskCoachGeneral`
+> (Spine A), now including the admin Live State Inspector via the shared `jobLossDash`
+> memo. **IF** the gate changes, **THEN** it must stay `canAccessAskCoachGeneral`
 > — never fold in `isInvestor` (§23 division). Check: `jobLossFlow.test.jsx`'s "Coach
 > presence (DW-8 fix)" block, `CoachNetWorthCard.test.jsx`.
 
@@ -709,7 +714,7 @@ same function, same call — since the standing quarantine below closed (commit
 | `eventImpact.totalNetAdjustment` composition (Spine A) | `adjustedTakeHome` (F17) → Home Year-End + IncomePanel Year Summary (both read `logTotals.adjustedTakeHome` — single value, keep it that way) | Log a missed shift; both panels move by the same amount | D1 |
 | A new mutation prop threaded into Home/JobLossHome | F20 shadow lists | Prop appears in the shadow block; expired-account test: mutation is a no-op end-to-end | D4 |
 | `netWorthHealthStatus` / threshold | F23 cue **and** F24 amber tier | Both fire on the same account state | D1 |
-| `computeJobLossRunway` / `sumJobHuntIncome` / `sumBillsDueSince` signature | F22/F44 panel consumption (both now read `effectiveCashOnHand`, not raw `jobLossCashOnHand`), `CoachNetWorthCard`/`App.jsx`'s Ask Coach wiring (F24) | `jobLossFlow.test.jsx`, `jobLossRunway.test.js`; runway headline equals Budget-side runway; a tracked essential bill's due date passing decreases the Cash On Hand card by the same amount on both panels | D1 |
+| `computeJobLossRunway` / `sumJobHuntIncome` / `sumBillsDueSince` signature | F22/F44 panel consumption (both now read `effectiveCashOnHand`, not raw `jobLossCashOnHand`), `CoachNetWorthCard`/`App.jsx`'s Ask Coach wiring (F24), admin Live State Inspector's Job Loss rows (§15.I, via the same `jobLossDash` memo as Ask Coach — no separate call) | `jobLossFlow.test.jsx`, `jobLossRunway.test.js`; runway headline equals Budget-side runway; a tracked essential bill's due date passing decreases the Cash On Hand card by the same amount on both panels | D1 |
 | `PAYCHECKS_PER_YEAR` / a new pay schedule (Spine A) | `perCheckFactor` display scaling (F16), `bufferPerWeek` (F14), Wrap Up preview (§7 F6) | Biweekly test account: tile values are 2× weekly, labels say "Check" not "Week" | D1 |
 
 ### 8.3 Block 3 — Gate matrix

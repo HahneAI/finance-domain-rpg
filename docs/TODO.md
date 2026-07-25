@@ -2657,22 +2657,29 @@ that decay into the runway instead of the number silently going stale between ma
 
 ---
 
-### I. Admin Toolkit updates for §15 work
+### I. Admin Toolkit updates for §15 work — BUILT 2026-07-25
 
-- [ ] **Live State Inspector — Job Loss Mode pill**
-  - [ ] Amber pill when `config.jobLossMode === true`
-  - [ ] Add three values: `jobLossDate`, `unemploymentWeekly`, `unemploymentRemainingWeeks`
-- [ ] **Week Inspector — unemployment income row**
-  - [ ] When `w.unemploymentIncome > 0`, show "Unemployment" line in Pay section
-  - [ ] When `inJobLoss && w.unemploymentIncome === 0`, surface "Job Loss Mode — outside benefit window"
-- [ ] **DB Row Viewer — expense triage summary**
-  - [ ] One-liner: "Triage: X active · Y paused · Z cancelled"
-  - [ ] Flag any expense where `autoReactivateOnIncome === false`
-- [ ] **Config Raw View — Life Events header**
-  - [ ] Short header above JSON listing only §15-relevant fields with values
-- [ ] **CLAUDE.md update**
-  - [ ] Append Job Loss state to "Diagnostic request templates"
-  - [ ] Document per-week `unemploymentIncome` annotation on `buildYear` output
+- [x] **Live State Inspector — Job Loss Mode pill**
+  - [x] Amber dot on the pill (top-right corner) when `config.jobLossMode === true`, visible without opening the card
+  - [x] Three amber-highlighted rows in the expanded card: `Job Loss Date`, `Unemployment Wkly`, `Unemployment Wks Left` (the last reads `computeJobLossRunway()`'s `benefitsRemainingWeeks` via a shared `jobLossDash` memo — same call Coach's `coachRunwayDays` uses, no second derivation, per F24)
+- [x] **Week Inspector — unemployment income row**
+  - [x] `w.unemploymentIncome > 0` → green "Unemployment" row in the Pay section
+  - [x] Job Loss window with no benefit paid that week → "Unemployment — Job Loss Mode — outside benefit window" (window boundary mirrors buildYear's `inJobLoss` check — `jobLossDate`/`returnToWorkDate` — diagnostic-only, never feeds math, same pattern as `resolveBaseRateForWeek`)
+- [x] **DB Row Viewer — expense triage summary**
+  - [x] "Triage: X active · Y paused · Z cancelled" line (only shown when something's actually paused/cancelled/flagged)
+  - [x] Flags expense count where `autoReactivateOnIncome === false`
+- [x] **Config Raw View — Life Events header**
+  - [x] "Life Events" header above the JSON dump, listing only §15 fields that currently carry a value
+- [x] **CLAUDE.md update**
+  - [x] Appended Job Loss state (§7 in Diagnostic request templates)
+  - [x] Documented per-week `unemploymentIncome` annotation on `buildYear` output (Week Inspector + template §7 entries)
+- All four admin surfaces are duplicated three times in `App.jsx` (desktop sidebar, mobile
+  hamburger drawer, mobile bottom sheet) — pre-existing architecture, not introduced by this
+  pass. Computed once via shared memos (`jobLossDash`, `expenseTriageLine`,
+  `lifeEventsConfigFields`) and rendered into all three so the triplication stays presentation-
+  only, not a fourth parallel calculation. 1231 tests passing (no new tests — pure admin-only
+  diagnostic surface, isAdmin-gated, no math path exercised); lint diff-clean vs. baseline;
+  production build green.
 
 ---
 

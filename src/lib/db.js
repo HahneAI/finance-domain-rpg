@@ -994,3 +994,89 @@ export async function logBetaFeedback({ isTester, betaCodeUsed, note }) {
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
+
+/**
+ * Admin-managed "What's New" changelog (database/migrations/032_add_changelog_entries.sql).
+ * Paired with UpdateAvailableBanner — see App.jsx's changelog-fetch effect.
+ *
+ * Reads the single most recent PUBLISHED entry directly via the client (RLS
+ * policy on changelog_entries restricts this to published_at IS NOT NULL —
+ * no draft ever leaks through this path). Returns null on any error so a
+ * transient failure here degrades to "no changelog," never a crash — this is
+ * a nice-to-have banner enhancement, not core functionality.
+ */
+export async function fetchLatestPublishedChangelog() {
+  const { data, error } = await supabase
+    .from("changelog_entries")
+    .select("id, version_label, title, body, published_at")
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data;
+}
+
+async function changelogAuthHeaders() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) return null;
+  return { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" };
+}
+
+/**
+ * Admin authoring list — every entry (drafts included), via api/admin-changelog.js's
+ * service-role GET. Never call this for the ordinary "is there something new"
+ * check; use fetchLatestPublishedChangelog for that (draft rows must never
+ * reach a non-admin surface).
+ */
+export async function fetchAllChangelogEntries() {
+  const headers = await changelogAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in", entries: [] };
+  try {
+    const res = await fetch("/api/admin-changelog", { method: "GET", headers });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to load entries", entries: [] };
+    return { ok: true, entries: payload.entries ?? [] };
+  } catch (err) {
+    return { ok: false, error: err.message, entries: [] };
+  }
+}
+
+/**
+ * Create (no id) or update (id present) a changelog entry. `published` toggles
+ * draft<->published — api/admin-changelog.js owns the published_at timestamp
+ * logic (preserves the original publish time on a stays-published re-save).
+ */
+export async function saveChangelogEntry({ id, versionLabel, title, body, published }) {
+  const headers = await changelogAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in" };
+  try {
+    const res = await fetch("/api/admin-changelog", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ id, versionLabel, title, body, published }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to save entry" };
+    return { ok: true, entry: payload.entry };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function deleteChangelogEntry(id) {
+  const headers = await changelogAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in" };
+  try {
+    const res = await fetch(`/api/admin-changelog?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers,
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to delete entry" };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}

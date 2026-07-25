@@ -437,6 +437,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
         </div>
       </DetailCard>
 
+      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Security</div>
       <DetailCard>
         {!showEmailForm ? (
           <Pressable
@@ -576,22 +577,37 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
 // than a standalone destination.
 function EmploymentCard({ config, setConfig, onSaveConfig }) {
   const isEmployerDHL = config.employerPreset === "DHL";
-  const isBaseUser = !isEmployerDHL;
+  // The only fields this card can ever change: Job Start (one-time, only
+  // while unset) and DHL Team (DHL only). Once startDate is set on a base
+  // (non-DHL) account there's nothing left to edit — no Edit button in that
+  // case, same "editing" convention PaySectionHeader already uses elsewhere.
+  const hasEditableFields = !config.startDate || isEmployerDHL;
 
-  // Start date: only editable if not already set
+  const [editing, setEditing] = useState(false);
   const [startDate, setStartDate] = useState(config.startDate || "");
-  const [startDateDirty, setStartDateDirty] = useState(false);
-
-  // DHL team: always editable
   const [dhlTeam, setDhlTeam] = useState(config.dhlTeam || "");
-  const [teamDirty, setTeamDirty]   = useState(false);
+  const [teamDirty, setTeamDirty] = useState(false);
 
-  const canSave = (startDateDirty && startDate) || teamDirty;
+  const startDateDirty = !config.startDate && startDate !== "";
+  const canSave = startDateDirty || teamDirty;
+
+  function startEditing() {
+    setStartDate(config.startDate || "");
+    setDhlTeam(config.dhlTeam || "");
+    setTeamDirty(false);
+    setEditing(true);
+  }
+  function cancelEditing() {
+    setStartDate(config.startDate || "");
+    setDhlTeam(config.dhlTeam || "");
+    setTeamDirty(false);
+    setEditing(false);
+  }
 
   function handleSave() {
     if (!canSave) return;
     const newConfig = { ...config };
-    if (startDateDirty && startDate) {
+    if (startDateDirty) {
       newConfig.startDate = startDate;
     }
     if (teamDirty && dhlTeam) {
@@ -603,69 +619,73 @@ function EmploymentCard({ config, setConfig, onSaveConfig }) {
     }
     setConfig(newConfig);
     onSaveConfig?.(newConfig);
-    setStartDateDirty(false);
     setTeamDirty(false);
+    setEditing(false);
   }
 
   const employer = isEmployerDHL ? "DHL / P&G" : (config.employerPreset || "Independent");
 
   return (
     <>
-      <PaySectionHeader title="Employment" editing />
-      <DetailCard>
-        <DetailRow label="Employer" value={employer} />
-        <DetailRow label="State"    value={config.userState || "—"} last={isBaseUser && !!config.startDate} />
-        {/* Start date — read-only if already set, editable if not */}
-        {config.startDate ? (
-          <DetailRow label="Job Start" value={fmt(config.startDate)} last={isBaseUser} />
-        ) : (
-          <div style={{ padding: "13px 16px", borderTop: "1px solid #1e1e1e" }}>
-            <label style={lSp}>Job Start Date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={e => { setStartDate(e.target.value); setStartDateDirty(true); }}
-              style={iS}
-            />
-          </div>
-        )}
-        {/* DHL Team — always editable for DHL users */}
-        {isEmployerDHL && (
-          <div style={{ padding: "13px 16px", borderTop: "1px solid #1e1e1e" }}>
-            <label style={lSp}>DHL Team</label>
-            <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-              {["A", "B"].map(t => (
-                <Pressable
-                  key={t}
-                  onClick={() => { setDhlTeam(t); setTeamDirty(t !== config.dhlTeam); }}
-                  style={{
-                    flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid",
-                    borderColor: dhlTeam === t ? "var(--color-teal)" : "var(--color-border-subtle)",
-                    background: dhlTeam === t ? "rgba(0,200,150,0.10)" : "var(--color-bg-base)",
-                    color: dhlTeam === t ? "var(--color-teal)" : "var(--color-text-secondary)",
-                    fontWeight: "bold", fontSize: "14px", cursor: "pointer",
-                  }}
-                >
-                  Team {t}
-                </Pressable>
-              ))}
-            </div>
-            {teamDirty && (
-              <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "6px" }}>
-                Rotation will update — save to apply.
+      <PaySectionHeader title="Employment" editing={editing || !hasEditableFields} onEdit={startEditing} />
+      {!editing ? (
+        <DetailCard>
+          <DetailRow label="Employer" value={employer} />
+          <DetailRow label="State" value={config.userState || "—"} last={!config.startDate && !isEmployerDHL} />
+          {config.startDate && (
+            <DetailRow label="Job Start" value={fmt(config.startDate)} last={!isEmployerDHL} />
+          )}
+          {isEmployerDHL && (
+            <DetailRow label="DHL Team" value={config.dhlTeam ? `Team ${config.dhlTeam}` : "—"} last />
+          )}
+        </DetailCard>
+      ) : (
+        <DetailCard>
+          <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            {/* Start date — only ever editable while unset; a one-time action, not
+                a recurring edit, so it always shows here rather than behind a
+                second gate. */}
+            {!config.startDate && (
+              <div>
+                <label style={lSp}>Job Start Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  style={iS}
+                />
               </div>
             )}
+            {isEmployerDHL && (
+              <div>
+                <label style={lSp}>DHL Team</label>
+                <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                  {["A", "B"].map(t => (
+                    <Pressable
+                      key={t}
+                      onClick={() => { setDhlTeam(t); setTeamDirty(t !== config.dhlTeam); }}
+                      style={{
+                        flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid",
+                        borderColor: dhlTeam === t ? "var(--color-teal)" : "var(--color-border-subtle)",
+                        background: dhlTeam === t ? "rgba(0,200,150,0.10)" : "var(--color-bg-base)",
+                        color: dhlTeam === t ? "var(--color-teal)" : "var(--color-text-secondary)",
+                        fontWeight: "bold", fontSize: "14px", cursor: "pointer",
+                      }}
+                    >
+                      Team {t}
+                    </Pressable>
+                  ))}
+                </div>
+                {teamDirty && (
+                  <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "6px" }}>
+                    Rotation will update — save to apply.
+                  </div>
+                )}
+              </div>
+            )}
+            <PaySectionActions error={null} onSave={handleSave} onCancel={cancelEditing} />
           </div>
-        )}
-      </DetailCard>
-
-      {canSave && (
-        <Pressable
-          onClick={handleSave}
-          style={{ width: "100%", padding: "13px 16px", marginBottom: "20px", background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
-        >
-          Save
-        </Pressable>
+        </DetailCard>
       )}
     </>
   );
@@ -1306,7 +1326,9 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
   const k401StartColor = k401StartSource === "benefits" ? "var(--color-teal)" : undefined;
   const enrolledConfig = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
 
-  const [editing, setEditing]   = useState(true);
+  // Collapsed by default, same as every other Job & Pay / Retirement card —
+  // this used to default to true and open straight into the full edit form.
+  const [editing, setEditing]   = useState(false);
   const [selectedBenefits, setSelectedBenefits] = useState(new Set(enrolledConfig));
   const [k401Rate, setK401Rate] = useState(String(config.k401Rate ?? ""));
   const [k401Match, setK401Match] = useState(String(config.k401MatchRate ?? ""));
@@ -1317,6 +1339,23 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
       .filter(b => b.type === "weekly")
       .reduce((acc, b) => ({ ...acc, [b.field]: String(config[b.field] ?? "") }), {})
   );
+
+  // Re-sync the draft from the latest saved config each time Edit is opened —
+  // now that editing no longer starts true, a stale draft from a prior
+  // cancel-without-save would otherwise resurface on the next Edit tap.
+  function startEditing() {
+    setSelectedBenefits(new Set(enrolledConfig));
+    setK401Rate(String(config.k401Rate ?? ""));
+    setK401Match(String(config.k401MatchRate ?? ""));
+    setK401Start(config.k401StartDate ?? "");
+    setBenefitsStartDate(config.benefitsStartDate ?? "");
+    setWeeklyValues(
+      BENEFIT_OPTIONS
+        .filter(b => b.type === "weekly")
+        .reduce((acc, b) => ({ ...acc, [b.field]: String(config[b.field] ?? "") }), {})
+    );
+    setEditing(true);
+  }
 
   function handleSave() {
     const nextSelected = [...selectedBenefits];
@@ -1350,13 +1389,15 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
     <>
       <BackBar onBack={onBack} title="Retirement & Benefits" />
 
-      {/* 401k section */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-        <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", paddingLeft: "4px" }}>401k</div>
-        {!editing && (
-          <Pressable onClick={() => setEditing(true)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
-        )}
-      </div>
+      {/* 401k + benefits enrollment — one card, so the read-only summary and
+          the enrolled-plans chips aren't two separate stacked cards covering
+          overlapping ground. No repeated section label here — BackBar's
+          title already says "Retirement & Benefits" for this whole screen. */}
+      {!editing && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+          <Pressable onClick={startEditing} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
+        </div>
+      )}
 
       {!editing ? (
         <DetailCard>
@@ -1375,7 +1416,34 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
           {isEmployerDHL && has401k && (
             <DetailRow label="Employer Match" value="Tiered (DHL formula)" valueColor="var(--color-green)" />
           )}
-          <DetailRow label="Contribution Start" value={k401StartLabel} valueColor={k401StartColor} last />
+          <DetailRow label="Contribution Start" value={k401StartLabel} valueColor={k401StartColor} />
+          {config.benefitsStartDate && (
+            <DetailRow label="Benefits Start" value={fmt(config.benefitsStartDate)} />
+          )}
+          <DetailRow
+            label="Enrolled"
+            value={enrolledConfig.length > 0 ? `${enrolledConfig.length} plan${enrolledConfig.length !== 1 ? "s" : ""}` : "None enrolled"}
+            valueColor={enrolledConfig.length > 0 ? undefined : "var(--color-text-disabled)"}
+            last={enrolledConfig.length === 0 && !isEmployerDHL}
+          />
+          {(enrolledConfig.length > 0 || isEmployerDHL) && (
+            <div style={{ padding: "10px 16px 14px" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {enrolledConfig.map(id => (
+                  <span key={id} style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(76,175,125,0.08)", color: "var(--color-green)", border: "1px solid rgba(76,175,125,0.2)", borderRadius: "12px" }}>
+                    {BENEFIT_LABELS[id] ?? id}
+                  </span>
+                ))}
+                {isEmployerDHL && (
+                  <>
+                    <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>PTO Accrual ✦</span>
+                    <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>Attendance Bucket ✦</span>
+                  </>
+                )}
+              </div>
+              {isEmployerDHL && <div style={{ fontSize: "9px", color: "var(--color-text-primary)", marginTop: "6px" }}>✦ Auto-enabled for DHL employees</div>}
+            </div>
+          )}
         </DetailCard>
       ) : (
         <DetailCard>
@@ -1456,38 +1524,6 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
           </div>
         </DetailCard>
       )}
-
-      {/* Benefits enrollment (read-only) */}
-      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px", marginTop: "20px" }}>Benefits Enrollment</div>
-      <DetailCard>
-        {config.benefitsStartDate && (
-          <DetailRow label="Benefits Start" value={fmt(config.benefitsStartDate)} />
-        )}
-        <DetailRow
-          label="Enrolled"
-          value={enrolledConfig.length > 0 ? `${enrolledConfig.length} plan${enrolledConfig.length !== 1 ? "s" : ""}` : "None enrolled"}
-          valueColor={enrolledConfig.length > 0 ? undefined : "var(--color-text-disabled)"}
-          last={enrolledConfig.length === 0}
-        />
-        {(enrolledConfig.length > 0 || isEmployerDHL) && (
-          <div style={{ padding: "10px 16px 14px" }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-              {enrolledConfig.map(id => (
-                <span key={id} style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(76,175,125,0.08)", color: "var(--color-green)", border: "1px solid rgba(76,175,125,0.2)", borderRadius: "12px" }}>
-                  {BENEFIT_LABELS[id] ?? id}
-                </span>
-              ))}
-              {isEmployerDHL && (
-                <>
-                  <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>PTO Accrual ✦</span>
-                  <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>Attendance Bucket ✦</span>
-                </>
-              )}
-            </div>
-            {isEmployerDHL && <div style={{ fontSize: "9px", color: "var(--color-text-primary)", marginTop: "6px" }}>✦ Auto-enabled for DHL employees</div>}
-          </div>
-        )}
-      </DetailCard>
     </>
   );
 }

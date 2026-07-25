@@ -49,7 +49,23 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
  */
 export async function getCurrentUserId() {
   const { data } = await supabase.auth.getUser();
-  return data.user?.id ?? null;
+  if (data.user?.id) return data.user.id;
+  // getUser() hit the network (/auth/v1/user) and returned no user. That is NOT
+  // proof the account is signed out: right after a deploy reload the access token
+  // can be mid-refresh, or the round-trip can transiently fail, and getUser()
+  // surfaces either as a null user WITHOUT throwing. Trusting that null made
+  // loadUserData() fall through to its brand-new-account branch (DEFAULT_CONFIG,
+  // setupComplete:false), reopening the setup wizard for an existing user — and
+  // overwriting their real saved row if they completed it. This is the same
+  // destructive "existing account mistaken for new" failure the PGRST116 guard in
+  // loadUserData() closed for query errors, reached through the auth probe instead.
+  // Fall back to the persisted session (a local storage read — the same source of
+  // truth the auth gate uses via onAuthStateChange): if a real session exists, the
+  // user IS signed in regardless of the getUser() blip, and the data queries below
+  // still enforce identity through RLS on the access token. Only a genuinely absent
+  // session (real sign-out — supabase-js clears storage on SIGNED_OUT) returns null.
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.id ?? null;
 }
 
 // Kept in sync via onAuthStateChange so db.js's unload-time save
@@ -94,6 +110,23 @@ export function onAuthChange(callback) {
 export async function validateInvestorCode(code) {
   const { data, error } = await supabase
     .from("investor_codes")
+    .select("id")
+    .eq("code", code.trim().toLowerCase())
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) return false;
+  return data !== null;
+}
+
+/**
+ * Validates a beta program access code against the beta_codes table
+ * (docs/TODO.md §32, database/migrations/028_add_beta_codes.sql). Same shape
+ * as validateInvestorCode — client-side check for instant UI feedback only;
+ * api/seed-beta.js re-validates server-side before granting anything.
+ */
+export async function validateBetaCode(code) {
+  const { data, error } = await supabase
+    .from("beta_codes")
     .select("id")
     .eq("code", code.trim().toLowerCase())
     .eq("is_active", true)

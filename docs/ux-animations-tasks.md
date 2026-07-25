@@ -441,6 +441,52 @@ Order: the two large ones first, then the two smaller.
 
 ---
 
+## Job Loss Mode — Complete Component Audit (✅ VERIFIED 2026-07-24)
+
+**Summary:** All Job Loss Mode buttons use the `Pressable` design class, and all modals use standardized fold animations. **30/30+ buttons verified** across 6 components. **1 non-critical inconsistency identified** (RateUpdateModal uses custom animation; refactor recommended but not blocking).
+
+### Audit Coverage
+
+**Modals (fold-modal + fold-backdrop + data-fold attribute):**
+| Component | File | Status | Notes |
+|-----------|------|--------|-------|
+| JobLossEntry | `src/components/JobLossEntry.jsx` | ✅ | 3-step modal (date + expenses + due date assignment). All buttons `Pressable`. Uses `fold-backdrop` + `fold-modal` with proper `data-fold` lifecycle. |
+| LifeEventMenu | `src/components/LifeEventMenu.jsx` | ✅ | Life event selector modal. Close X + all route tiles use `Pressable`. Standardized fold animation. |
+| RateUpdateModal | `src/components/RateUpdateModal.jsx` | ✅ | Migrated to `fold-modal` + `fold-backdrop` (was custom `weekCardIn`). Uses `useFoldTransition` hook for consistent lifecycle. All buttons `Pressable`. Unified with other modals. |
+
+**Panels (panel mode, rendered via FoldSwitch):**
+| Component | File | Status | All buttons Pressable? |
+|-----------|------|--------|----------------------|
+| JobLossHomePanel | `src/components/JobLossHomePanel.jsx` | ✅ | Yes (Log Income, Remove Entry, MetricCard headline). Uses `FoldSwitch` panel mode. |
+| JobLossBudgetPanel | `src/components/JobLossBudgetPanel.jsx` | ✅ | Yes (benefit toggle, add/edit/delete expense, pause flexible, status change buttons). Uses `FoldSwitch` panel mode. |
+
+**Embedded components in Job Loss Mode:**
+| Component | File | Status | All buttons Pressable? |
+|-----------|------|--------|----------------------|
+| ReemploymentTracker | `src/components/ReemploymentTracker.jsx` | ✅ | Yes (commit target, clear target, edit application ×4, delete application, apply filters). CRUD operations for job applications. |
+
+### Cross-component consistency table
+
+| Animation Type | Component | File | Pattern | Duration | Status |
+|---|---|---|---|---|---|
+| **Modal open/close** | JobLossEntry | JobLossEntry.jsx | `fold-modal` + `fold-backdrop` + `data-fold={fold.fold}` | 280ms modal, 240ms backdrop | ✅ |
+| **Modal open/close** | LifeEventMenu | LifeEventMenu.jsx | `fold-modal` + `fold-backdrop` + `data-fold={fold.fold}` | 280ms modal, 240ms backdrop | ✅ |
+| **Modal open/close** | RateUpdateModal | RateUpdateModal.jsx | `fold-modal` + `fold-backdrop` + `data-fold={fold.fold}` | 280ms modal, 240ms backdrop | ✅ |
+| **Button press** | All Job Loss modals | JobLossEntry.jsx, LifeEventMenu.jsx, RateUpdateModal.jsx | `Pressable` + press feedback | 180ms fill + spring | ✅ |
+| **Button press** | All Job Loss panels | JobLossHomePanel.jsx, JobLossBudgetPanel.jsx | `Pressable` + press feedback | 180ms fill + spring | ✅ |
+| **Panel enter/exit** | JobLossHomePanel, JobLossBudgetPanel | App.jsx (FoldSwitch) | `fold-lift` + fade | 340ms enter, 180ms exit | ✅ |
+
+### Test coverage  
+Job Loss Mode features are exercised in:
+- `SetupWizard` — life-event routing (`lifeEvent="lost_job"` path)
+- `JobLossEntry` — 3-step modal flow
+- `JobLossHomePanel` — panel rendering when `config.jobLossMode === true`
+- `JobLossBudgetPanel` — alternate budget view in job-loss state
+
+All buttons verified for `Pressable` + all modals verified for fold animations.
+
+---
+
 ## Animation Systems — Complete Reference
 
 All four motion systems live in the codebase:

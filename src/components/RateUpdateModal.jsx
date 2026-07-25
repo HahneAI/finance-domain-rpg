@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pressable } from "./ui.jsx";
+import { Pressable, useFoldTransition } from "./ui.jsx";
 import { estimateWeeklyNet } from "../lib/finance.js";
 
 /**
@@ -16,6 +16,7 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
   const today = new Date().toISOString().slice(0, 10);
   const [rateDraft, setRateDraft] = useState("");
   const [date, setDate] = useState(today);
+  const fold = useFoldTransition(open, { ms: 340 });
 
   useEffect(() => {
     if (!open) return;
@@ -27,7 +28,7 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose, today, config?.baseRate]);
 
-  if (!open) return null;
+  if (!fold.mounted) return null;
 
   const oldRate = config?.baseRate ?? 0;
   const newRate = rateDraft === "" ? null : Math.max(0, parseFloat(rateDraft) || 0);
@@ -59,23 +60,21 @@ export function RateUpdateModal({ open, onClose, config, onActivate }) {
 
   return (
     <div
+      className="fold-backdrop"
+      data-fold={fold.fold}
       onClick={onClose}
       style={{
-        position: "fixed", inset: 0, zIndex: 80,
-        background: "rgba(0,0,0,0.78)",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: "16px",
       }}
     >
       <div
+        className="fold-modal"
+        data-fold={fold.fold}
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border-subtle)",
-          borderRadius: "14px",
           width: "100%", maxWidth: "440px",
           maxHeight: "90vh", display: "flex", flexDirection: "column",
-          animation: "weekCardIn 220ms ease-out",
           overflow: "hidden",
         }}
       >

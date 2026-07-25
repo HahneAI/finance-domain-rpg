@@ -7,6 +7,7 @@ import {
   FISCAL_YEAR_START,
 } from "../constants/config.js";
 import { buildLoanHistory } from "./finance.js";
+import { isTrackedBetaTester } from "./entitlements.js";
 
 const FOOD_DEFAULT_MONTHLY = 400;
 const FOOD_DEFAULT_WEEKLY = FOOD_DEFAULT_MONTHLY / 4;
@@ -112,6 +113,8 @@ export async function loadUserData() {
       isEmployerDHL:              false,
       isAdmin:            false,
       isTester:           false,
+      betaCodeUsed:       null,
+      betaStartedAt:      null,
       taxProjectionsEnabled: false,
       subscription:       DEFAULT_SUBSCRIPTION,
     };
@@ -121,7 +124,7 @@ export async function loadUserData() {
   // column (migration not yet run) doesn't blow up the entire load.
   const { data, error } = await supabase
     .from("user_data")
-    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, is_tester, pto_goal, is_investor, tax_projections_enabled")
+    .select("config, expenses, goals, logs, show_extra, is_employer_dhl, is_admin, is_tester, beta_code_used, beta_started_at, pto_goal, is_investor, tax_projections_enabled")
     .eq("user_id", userId)
     .single();
 
@@ -193,6 +196,8 @@ export async function loadUserData() {
       isEmployerDHL:              false,
       isAdmin:            false,
       isTester:           false,
+      betaCodeUsed:       null,
+      betaStartedAt:      null,
       taxProjectionsEnabled: false,
       subscription:       DEFAULT_SUBSCRIPTION,
     };
@@ -370,6 +375,8 @@ export async function loadUserData() {
     isEmployerDHL:                data.is_employer_dhl      ?? false,
     isAdmin:              data.is_admin    ?? false,
     isTester:             data.is_tester   ?? false,
+    betaCodeUsed:         data.beta_code_used ?? null,
+    betaStartedAt:        data.beta_started_at ?? null,
     taxProjectionsEnabled: data.tax_projections_enabled ?? false,
     ptoGoal:              data.pto_goal    ?? null,
     isInvestor:           data.is_investor ?? false,
@@ -905,4 +912,85 @@ export async function checkRevival() {
     console.warn("checkRevival failed:", err.message);
     return null;
   }
+}
+
+/**
+ * Redeems a beta program access code on the CALLER's own already-existing
+ * account (docs/TODO.md §32) — unlike investor codes, this doesn't create a
+ * new account, it upgrades one that's already signed in. POSTs to
+ * api/seed-beta.js, same shape as syncUserProfile's call to api/seed-trial.
+ * Returns { ok: true } on success, { ok: false, error } otherwise — the
+ * caller (ProfilePanel) is responsible for reloading state after success,
+ * since is_tester/beta_code_used are read-only fields loadUserData maps in.
+ */
+export async function redeemBetaCode(code) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) return { ok: false, error: "Not signed in" };
+
+  try {
+    const res = await fetch("/api/seed-beta", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Invalid or inactive beta code" };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * Beta usage-tracking event log (docs/TODO.md — beta usage scoring;
+ * database/migrations/026_add_beta_activity_events.sql).
+ *
+ * Gate lives here, once, rather than at each of the three call sites (App.jsx
+ * login, HomePanel goal actions, BudgetPanel expense actions) — every caller
+ * passes the same isTester/betaCodeUsed pair through isTrackedBetaTester()
+ * instead of re-deriving the check inline, so the friends/family exclusion
+ * can't drift call-site by call-site. A no-op (not an error) for any account
+ * that isn't a tracked beta tester — this is expected to be called
+ * unconditionally from UI event handlers, not pre-guarded by callers.
+ */
+export async function logBetaEvent({ isTester, betaCodeUsed, eventType }) {
+  if (!isTrackedBetaTester({ isTester, betaCodeUsed })) return;
+  const userId = await getCurrentUserId();
+  if (!userId) return;
+
+  const { error } = await supabase
+    .from("beta_activity_events")
+    .insert({ user_id: userId, event_type: eventType });
+
+  if (error) console.warn("logBetaEvent failed:", error.message);
+}
+
+/**
+ * Beta feedback submission (docs/TODO.md §33, migration
+ * 030_add_beta_feedback.sql) — a 'feedback' event carrying the actual text in
+ * `note`, so it's both countable (rubric's "frequency") and readable (rubric's
+ * "specificity"), unlike the mailto link this replaces.
+ *
+ * Unlike logBetaEvent (fire-and-forget background logging from UI actions
+ * that already succeeded), this is a user-initiated submit the caller needs
+ * to confirm — returns { ok, error } the same shape as redeemBetaCode, so
+ * ProfilePanel can show a real success/error state.
+ */
+export async function logBetaFeedback({ isTester, betaCodeUsed, note }) {
+  if (!isTrackedBetaTester({ isTester, betaCodeUsed })) {
+    return { ok: false, error: "Not part of the tracked beta cohort" };
+  }
+  const trimmed = (note ?? "").trim();
+  if (!trimmed) return { ok: false, error: "Feedback can't be empty" };
+
+  const userId = await getCurrentUserId();
+  if (!userId) return { ok: false, error: "Not signed in" };
+
+  const { error } = await supabase
+    .from("beta_activity_events")
+    .insert({ user_id: userId, event_type: "feedback", note: trimmed });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }

@@ -861,18 +861,23 @@ is written, since model lineups move.*
 
 #### Open product questions (need your call, not research)
 
-- [x] **Entry point — resolved 2026-07-11:** gated bottom-nav item, same mechanism as the existing
-  admin-only `__tools__` slot — `effectiveBottomNav` appends a "Coach" tab only when
-  `canAccessAiFeatures({isAdmin, isTester})` is true, so a non-gated user's nav stays unchanged at
-  5 items. Opens `AskCoachPanel.jsx`, a full-screen overlay (built 2026-07-11, Phase A scope: no
-  persistence, no history sidebar yet).
-- [ ] **Free vs. paid — direction set 2026-07-11, not yet built:** the general Ask Coach Q&A (§B)
-  and a baseline insight (Net Worth Trigger, §C) are meant to ship as part of the regular paid
-  subscription (trial included); the deeper, section-specific Coach surfaces (Statements Insights
-  §D, Job Hunt Assistant §E + Job Scout §I, Application Assistant §F, Tax Interview §J) are the
-  planned upsell — reusing the existing §17.E paywall/readOnly gate at trial-conversion rather than
-  inventing a separate Coach-tier flag. Not implemented — today everything is still isAdmin/isTester
-  gated regardless of subscription state; this only matters once Coach leaves admin-only.
+- [x] **Entry point — resolved 2026-07-11, gate widened 2026-07-24:** gated bottom-nav item, same
+  mechanism as the existing admin-only `__tools__` slot — `effectiveBottomNav` appends a "Coach"
+  tab when `canAccessAskCoachGeneral({isAdmin, isTester, entitlement})` is true (admin/tester, OR
+  a real trial/grace/active entitlement — see the free-vs-paid bullet below), so a fully
+  non-entitled user's nav stays unchanged at 5 items. Opens `AskCoachPanel.jsx`, a full-screen
+  overlay (built 2026-07-11, Phase A scope: no persistence, no history sidebar yet).
+- [x] **Free vs. paid — direction set 2026-07-11, built 2026-07-24:** the general Ask Coach Q&A
+  (§B) and the Net Worth Trigger (§C) now ship as part of the regular paid subscription, trial
+  included — `lib/entitlements.js`'s `canAccessAskCoachGeneral()` grants access via isAdmin/isTester
+  (unchanged) OR `entitlement.isEntitled` from `lib/subscription.js`'s `getEntitlement()`, checked
+  independently server-side in `api/coach.js` (never trusting a client-supplied flag). Deliberately
+  a separate function from `canAccessAiFeatures`, which stays the narrow admin/tester-only gate for
+  every other, not-yet-built Coach surface — the deeper, section-specific ones (Statements Insights
+  §D, Job Hunt Assistant §E + Job Scout §I, Application Assistant §F, Tax Interview §J) are still
+  the planned paid-conversion upsell once they exist, reusing the existing §17.E paywall/readOnly
+  gate rather than inventing a separate Coach-tier flag. Full write-up:
+  `docs/coach-entry-points.md` §§1–2.
 - [ ] **Mascot production** — who produces the §A mark (generated, commissioned, or hand-rolled
   SVG in the Flow palette)? Phase A can ship admin-only with a placeholder, but the public
   entry point wants the real avatar.
@@ -3636,3 +3641,574 @@ to building from an assumed category list.*
 - [ ] **Keep the existing free-text path** — quick-select is additive; a user with an expense
   outside the preset list must still be able to type a custom label the way the editor already
   works today.
+
+---
+
+## 26. In-App Tutorials, Onboarding & Help
+
+*New workstream (2026-07-22), scoped from a codebase status review — not yet started, no design
+decisions made. Pure greenfield: nothing below is a partial build to finish.*
+
+**The gap.** `SetupWizard.jsx` covers account *setup* (pay structure, schedule, deductions) but
+there is no in-app system that teaches a user how to *use* the app once setup is done — no
+tooltip layer, no coachmark/walkthrough, no "?" help modal anywhere in `src/components/`. The one
+real step-by-step tutorial in the codebase is `PwaInstallModal.jsx`'s 5-step "Add to Home Screen"
+walkthrough — install-specific, not feature education. The closest thing to a help surface is the
+AI Coach (`AskCoachPanel.jsx` + `coachFeatureGuide.js`'s hand-written feature reference), but it's
+gated to `isAdmin`/`isTester` only and is Q&A, not guided onboarding — not available to the
+regular user population that would need it most.
+
+- [ ] **Decide the mechanism** — first-run feature tour (coachmarks over Home/Income/Budget on
+  first login post-setup), a persistent "?" help affordance per panel, or opening up
+  `coachFeatureGuide.js`'s content to non-admin users through a lightweight non-AI help sheet
+  (cheapest to ship — the copy already exists, written in-voice, and is prompt-cache-friendly
+  precisely because it's static).
+  - [ ] **Preferred first artifact — commit `coachFeatureGuide.js` to plain user copy.**
+    `docs/product/help/panel-help-copy.md` is created here as the canonical draft doc, seeded
+    directly from `coachFeatureGuide.js`'s five panel writeups. This is a real deliverable, not a
+    placeholder: rendering that doc's content as a static "?" help sheet per panel is buildable
+    without any Coach/AI gate at all, which is why it's called out ahead of the tour-vs-tooltip
+    decision below — even if the interactive-tour question stays open, the copy work does not need
+    to wait on it. Move product copywriting/iteration on that content into the linked doc rather
+    than back into this TODO once it exists.
+- [ ] **Where it would hook in** — `App.jsx` root shell already coordinates overlay modals via
+  imperative refs (see `PwaInstallModal`'s `open(triggerEl)` pattern); a feature tour would follow
+  the same shape. A first-run tour's natural trigger point is `SetupWizard`'s `onComplete`
+  callback (`setupComplete: true` transition) rather than a separate "have you seen this before"
+  flag.
+- [ ] **Scope the audience** — decide whether this is truly for every user (most likely, since
+  onboarding is a pre-paywall/pre-tier concern) or whether some depth is reserved behind
+  `isTester`/`isAdmin` the way Coach currently is — these are different products (a UI tour vs. an
+  AI explainer) and shouldn't inherit Coach's gate by default just because the content originated
+  there.
+- [ ] **Mobile checklist applies** — any tooltip/coachmark overlay must clear the existing Mobile
+  Checklist (CLAUDE.md) — 44×44px targets, no horizontal scroll at 375/390px, safe-area insets —
+  since a first-run tour is exactly the kind of feature that gets prototyped on desktop and ships
+  broken on an iPhone notch.
+
+---
+
+## 27. Data Encryption & At-Rest Security Posture
+
+*New workstream (2026-07-22), scoped from a codebase status review — not yet started. Read
+`docs/drift-app-warden.md` §19 F120 before touching any persisted field that might fall into a
+higher sensitivity class than what the app collects today — that entry is the authoritative
+trigger check for this whole section.*
+
+**The gap.** There is no field-level encryption anywhere in the app — no `pgcrypto`, no
+application-layer AES/cipher, nothing beyond Supabase/Postgres's platform-level defaults.
+Protection today is entirely: TLS in transit (Supabase's HTTPS endpoint, Vercel's `api/*`
+functions) + RLS for access control (`019_enable_user_data_rls.sql`, 84 policy references across
+`database/migrations/`) + the service-role write boundary for privileged columns (`db.js`'s
+`saveUserData` destructure whitelist, CLAUDE.md's Persistence section). That's a reasonable
+posture **today** because nothing currently collected (income, schedule, budget, goals) is
+regulated/high-sensitivity data — but there's no infrastructure in place if that changes.
+
+- [ ] **No action needed on current fields.** This section is a readiness/gap flag, not a
+  "go encrypt `user_data`" ticket — don't build anything here speculatively (see CLAUDE.md's
+  no-speculative-abstraction rule). The actionable trigger is §19 F120: a *new* field in a
+  genuinely high-sensitivity class (SSN, DOB, bank account/routing, government ID).
+- [ ] **If/when that trigger fires** — decide app-layer encrypt-before-write /
+  decrypt-after-read (in the `db.js` write path / `loadUserData`, F67) vs. a `pgcrypto`-backed
+  column via a dedicated migration, before the migration lands, not after. Update this section
+  with the decision once made rather than leaving it silently resolved in a migration file only.
+- [ ] **Session/token storage note (lower priority, informational only)** — `lib/supabase.js`'s
+  `sharedStorage` shim dual-writes the Supabase auth session to `localStorage` **and** a
+  same-origin cookie (`Secure` + `SameSite=Lax`, not `HttpOnly` — can't be, it's client-set) to
+  work around iOS PWA storage-partition isolation. This is inherent to Supabase's client-side
+  session model, not a defect, but worth a second look if the app's threat model ever changes
+  (e.g. if XSS surface grows with third-party scripts).
+- [ ] **Audit cadence** — no recurring security-posture review currently exists; consider whether
+  this section should be re-visited whenever a new `user_data` field is proposed (tying it to the
+  existing F110 four-site procedure checklist) rather than left as a one-time flag.
+
+---
+
+## 28. Irregular / Flexible Shift Hours Support
+
+*New workstream (2026-07-22), scoped from a codebase status review — not yet started. Touches the
+core fiscal engine (`finance.js` `buildYear` and friends) — read `docs/drift-app-warden.md` §18
+(Spine A — Fiscal Math) before starting; this is exactly the kind of change that class of section
+exists to gate.*
+
+**The gap.** The income engine is built around a single fixed `shiftHours` value per user
+(`config.shiftHours` — 12 for the DHL preset, defaults to 8 for base users); every hour
+computation in `finance.js` is `shiftCount × shiftHours`, not per-day actual hours. The existing
+"flexible" tiers are all still shift-count-based:
+- DHL preset — rotation-derived days/hours (`DHL_PRESET.rotation`).
+- DHL/base "custom hours" — a flat weekly target (`customWeeklyHours`, or the DHL-only
+  `customWeeklyHoursLong`/`customWeeklyHoursShort` pair) that back-derives how many *additional
+  fixed-length shifts* are needed to hit it (`finance.js` — see `getDhlPlannedPattern` and the
+  `customHrs ?? maxWeeklyHours ?? standardWeeklyHours` fallback chain, several call sites e.g.
+  `finance.js:162`, `:560-561`, `:1274`).
+- Base user ceiling — `maxWeeklyHours`, still assuming uniform shift blocks.
+- `config.scheduleIsVariable` exists but only toggles between two paystub-rate tiers (long/short
+  week), not per-day hour variability.
+- `WeekConfirmModal.jsx` lets users mark shifts missed/added/partial, but every override is still
+  expressed in units of `config.shiftHours` (e.g. "3 shifts × 12h" — see `hoursLost`/`hoursGained`
+  computations throughout the file).
+
+**Net effect:** anyone whose real schedule doesn't decompose into whole multiples of one
+`shiftHours` value — a retail/service worker logging 5.5h Monday, 3h Tuesday, 8h Thursday, or any
+gig-style variable-hours pattern — doesn't fit the model today.
+
+- [ ] **Scope the target user first** — this is a bigger product decision than a bug fix: does
+  "irregular hours" mean (a) a per-day hour input replacing the shift-count model entirely for
+  opted-in users, (b) a third schedule tier alongside DHL-preset/custom-weekly-hours that accepts
+  a per-weekday hour array, or (c) something narrower? Needs a decision before touching
+  `buildYear`.
+- [ ] **Identify every `shiftHours`-multiplication call site** — `finance.js` has this pattern
+  repeated across gross-pay, OT-threshold, and week-total calculations; `WeekConfirmModal.jsx` has
+  it again for missed/pickup-shift hour math. A per-day-hours model would need all of these
+  re-derived from a day-level source of truth instead of `shiftCount × shiftHours`, not patched
+  individually (the drift risk §18 exists to catch).
+- [ ] **OT-threshold interaction** — `otThreshold`/`otMultiplier` math currently assumes a known
+  shift-count-derived weekly total; per-day variable hours changes how OT is detected (running
+  daily/weekly total vs. a precomputed shift count) and needs its own design pass, not an
+  assumption that the existing OT logic "just works" once hours become variable.
+- [ ] **WeekConfirmModal UX** — the day-grid confirm flow would need a per-day hour input instead
+  of (or alongside) the current missed/pickup shift-toggle UX — a real UI redesign for that
+  screen, not a data-model-only change.
+
+---
+
+## 29. Tip Income Tracking
+
+*New workstream (2026-07-22), scoped from a codebase status review — not yet started.*
+
+**The gap.** There is no field, wizard question, or log-entry type for tip/gratuity income
+anywhere in the app — confirmed empty across `constants/config.js`, `finance.js`,
+`SetupWizard.jsx`, `WeekConfirmModal.jsx`, and `EVENT_TYPES` (`LogPanel.jsx`'s event types top out
+at `bonus`/`missed_unpaid`/`pto`/etc. — no tip-shaped entry). Precedent exists for "variable income
+on top of base pay" (`config.commissionMonthly` — a flat monthly average) and for one-off logged
+income (`EVENT_TYPES.bonus`, and the Job-Loss-mode-only `jobHuntIncomeLog` "Log Extra Income"
+widget) but neither is wired for recurring, per-shift, tax-treated tip income, and the latter is
+scoped to Job Loss Mode only.
+
+- [ ] **Decide the income shape** — tips are usually per-shift and often cash (no automatic tax
+  withholding the way payroll wages have), which is a materially different tax-treatment question
+  than `commissionMonthly`'s flat average. Needs a decision on whether tips flow through the same
+  `computeNet`/withholding pipeline as wages or get modeled separately (e.g. logged post-tax,
+  reducing `targetOwedAtFiling` headroom instead of running through `fedRateLow`/`stateRateLow`).
+- [ ] **Decide the entry point** — a new `EVENT_TYPES` entry (fits the existing "log real life,
+  see the dollar effect" Log panel pattern, `LogPanel.jsx`) vs. a new per-week field alongside pay
+  structure in `SetupWizard`/`WeekConfirmModal` (fits if tips are a near-every-shift occurrence for
+  the target user, not an occasional event). The Log-panel route is the lower-lift start given the
+  existing `EVENT_TYPES`/Log Effect Summary infrastructure already generalizes to "a dollar-impact
+  event type."
+  - [ ] **If a new field lands in `config` or a week record** — this is a "new persisted field"
+    for `docs/drift-app-warden.md` §19 F110's four-site procedure (the destructure sites, the ref,
+    the drift badge) — run that checklist, don't hand-roll persistence for it.
+- [ ] **Tax-plan interaction** — if tips are ever pulled into the withholding model, this needs to
+  be reconciled with the existing `taxExemptOptIn`/`canAccessTaxPlan` liability-hold decision
+  (`entitlements.js`, drift-app-warden §20 F111) rather than adding a second, parallel tax-estimate
+  path.
+- [ ] **Rolling income view** — `IncomePanel`'s week-by-week gross/net breakdown would need a line
+  for tip income distinct from base gross, so the "receipt behind every dollar" framing
+  (`coachFeatureGuide.js`'s own description of the Income panel) stays true once a second income
+  stream exists.
+
+---
+
+## 30. Beta Program — Per-User Beta Window (Report Scoping)
+
+*New workstream (2026-07-24), scoped from a codebase status review. Builds directly on the
+already-shipped beta usage-tracking system (migrations `025_add_beta_code_used.sql`,
+`026_add_beta_activity_events.sql`, `entitlements.js` `isTrackedBetaTester`, `api/admin-beta-report.js`)
+— not a redesign, a scoping fix for it.*
+
+**The gap.** `beta_code_used` carries no timestamp. `api/admin-beta-report.js` currently sums
+**all-time** activity for every tracked beta tester, not "their 10 weeks." That's silently wrong the
+moment codes go out staggered (tester A redeems week 1, tester B redeems week 4 — B's report window
+should not be measured against A's calendar) or if the program's actual end date slips past 10 weeks
+for some accounts. This is the single highest-value fix in this list because it's the one gap that
+would quietly distort the actual scoring numbers, not just leave a nice-to-have on the table.
+
+- [ ] **Migration `027_add_beta_started_at.sql`** — add `beta_started_at TIMESTAMPTZ` to `user_data`,
+  alongside `beta_code_used` (025) and `beta_activity_events` (026). Same client-write protection as
+  every other tester/admin column (never added to the `authenticated` column-grant list).
+- [ ] **Auto-stamp it, don't rely on remembering a third manual field** — add a trigger mirroring
+  `set_tester_trial_window()` (migration `021_add_is_tester_beta_flag.sql`'s pattern exactly): on
+  `user_data` INSERT/UPDATE, when `beta_code_used` transitions from null to non-null, stamp
+  `beta_started_at = now()`. This closes the same "two fields must be set together" risk that
+  migration 025's own comment flags for `is_tester`/`beta_code_used` — now it's one manual field
+  (`beta_code_used`) plus one trigger-derived one, not three fields to remember by hand.
+- [ ] **`db.js` read mapping** — add `beta_started_at` to `loadUserData()`'s SELECT and the
+  `betaStartedAt` return-object mapping, same pattern as `betaCodeUsed` (`db.js` — read-only, never in
+  `saveUserData`/`flushUserDataKeepalive`'s destructure).
+- [ ] **`api/admin-beta-report.js` scoping** — fetch `beta_started_at` in the existing `betaUsers`
+  query (`.select("user_id, display_name, beta_code_used")` → add `beta_started_at`), then filter each
+  user's event aggregation to `created_at >= beta_started_at` (and optionally
+  `< beta_started_at + 10 weeks` once the program has a hard end date per user, or just `<= now()`
+  while it's still running). Add a `beta_started_at`/`beta_week_number` column to the CSV output so
+  the reviewer can see which week of *their* program each user is currently on at a glance.
+
+---
+
+## 31. Beta Program — Pre-Launch Dry Run Checklist
+
+*New workstream (2026-07-24). Not a code change — a verification checklist to run once before
+handing out any of the 40 real beta codes, using the infrastructure already shipped in this session.*
+
+**Why this matters.** The whole usage-tracking system (migrations 025/026, the login/goal/expense
+hooks in `App.jsx`/`HomePanel.jsx`/`BudgetPanel.jsx`, `api/admin-beta-report.js`) has not been
+exercised against a live Supabase instance yet — the migrations haven't been run (per the prior
+conversation, that's being handled separately). A silently-broken hook (a typo in an event_type, a
+missed RLS grant, a report query that returns zero rows) discovered at week 10 is much worse than the
+same bug caught in five minutes before day 1.
+
+- [ ] **Run migrations 025 + 026** against the target Supabase project (tracked separately, listed
+  here so this checklist isn't attempted before they've landed).
+- [ ] **Manually flip one real (or disposable test) account** to the tracked-beta state:
+  `update user_data set is_tester = true, beta_code_used = 'DRYRUN' where user_id = '<test account>';`
+- [ ] **Sign in as that account** and confirm a `login` row appears in `beta_activity_events`
+  (Supabase table editor, or `select * from beta_activity_events where user_id = '<test account>'
+  order by created_at desc;`).
+- [ ] **Add a goal, edit a goal, add an expense, edit an expense** — confirm all four corresponding
+  event rows land (`goal_created`, `goal_updated`, `expense_created`, `expense_updated`).
+- [ ] **Confirm a friends/family-style account does NOT log** — flip a second test account to
+  `is_tester = true` with `beta_code_used` left `null`, repeat the actions above, confirm **zero**
+  rows land for that account (`isTrackedBetaTester`'s gate working as intended).
+- [ ] **Hit `api/admin-beta-report.js`** as an admin account (`Authorization: Bearer <token>`) and
+  confirm the CSV includes the dry-run account with the expected counts, and excludes the
+  friends/family test account entirely.
+- [ ] **Clean up** the dry-run test account's rows/flags before real codes go out, so it doesn't
+  pollute the real cohort's report.
+
+---
+
+## 32. Beta Program — Code Redemption Flow
+
+*New workstream (2026-07-24). This is the "orchestrated later" piece explicitly deferred during the
+usage-tracking build — `is_tester`/`beta_code_used` are manual-SQL-only today. Scoped here so it's
+ready to pick up whenever the beta program is ready to self-serve invites instead of hand-running SQL
+for 40 accounts.*
+
+**The gap.** Every beta account currently requires a human to run `update user_data set is_tester =
+true, beta_code_used = '<code>' ...` by hand. Fine for a one-time 40-person cohort, tedious and
+error-prone for anything larger or repeated.
+
+**Scoping — mirror the existing investor-code flow almost exactly** (migrations `010_add_investor_codes.sql`/
+`011_add_investor_users.sql`, `InvestorRegister.jsx`, `api/seed-investor.js`, `createInvestorAccount()`
+in `db.js`) — this app already has a working, tested pattern for "redeem a code, get flagged":
+
+- [ ] **`beta_codes` table** (new migration) — `id`, `code` (unique), `label`, `is_active`, `notes`,
+  `created_at`; same shape as `investor_codes`. Decide single-use vs. multi-redemption up front (an
+  `is_active` toggle per code, like investor codes, is probably sufficient for 40 users on a handful
+  of codes rather than one code per person).
+- [ ] **Redemption UI** — either a code field added to `LoginScreen.jsx`'s sign-up flow (same spot
+  the investor access code lives) or a small dedicated screen mirroring `InvestorRegister.jsx`.
+- [ ] **`api/seed-beta.js`** (new service-role route, mirroring `api/seed-investor.js` and
+  `api/seed-trial.js` exactly) — verifies the caller's Bearer token, re-validates the code against
+  `beta_codes.is_active` server-side (never trust the client's validation), then atomically sets
+  `is_tester = true`, `beta_code_used = '<code>'`, and (once §30 lands) `beta_started_at = now()` in
+  one write — closing the "two/three fields set together" risk at the source instead of relying on a
+  human to remember every field on every manual SQL run.
+- [ ] **Client wiring** — a new `redeemBetaCode()` in `db.js` that POSTs to `api/seed-beta.js`, called
+  from the redemption UI, same shape as `createInvestorAccount()`'s call to `seed-investor.js`.
+
+---
+
+## 33. Beta Program — In-App Feedback Channel
+
+*Shipped 2026-07-24 (built as Option A, upgraded to Option B same day once the beta scoring rubric
+made it non-optional — "Feedback Submitted — 25 pts, frequency + specificity" can't be scored from a
+mailto link, which produces zero queryable data).*
+
+- [x] **Option A: `mailto:` link** — built first, then replaced same-day.
+- [x] **Option B: logged, readable submissions** — `beta_activity_events` gained a `feedback`
+  event_type + nullable `note TEXT` column (migration `030_add_beta_feedback.sql`). `ProfilePanel.jsx`'s
+  "Send Feedback" row now opens `BetaFeedbackDetail` (a real textarea, 4000-char client-side cap, no
+  DB-level length constraint — ~40 known trusted users), which calls `logBetaFeedback()` (`db.js`) —
+  same `isTrackedBetaTester` gate as everything else. `api/admin-beta-report.js` gained a
+  `feedback_count` column on the summary CSV plus a separate `?format=feedback` export (one row per
+  submission — free text with a possible multiple-per-user count doesn't fit the summary's
+  one-row-per-user shape).
+- [x] **The prompt** — "What's working (or not)?" placeholder copy; free-text, not a structured
+  multi-question form. Revisit only if submissions turn out too rambling to score.
+
+---
+
+## 34. Beta Program — Attrition Visibility Mid-Program
+
+*New workstream (2026-07-24). The smallest addition in this list — purely additive to
+`api/admin-beta-report.js`, no schema change, no new hook points.*
+
+**The gap.** The report already computes `lastAt` (the most recent event timestamp) per user during
+aggregation — it's just not surfaced as an actionable column. Right now, spotting a tester who's gone
+quiet requires eyeballing raw timestamps; nothing calls it out.
+
+- [ ] **Add a `days_since_last_active` column** to `api/admin-beta-report.js`'s CSV output — computed
+  from the `lastAt` value already tracked in the per-user aggregation loop
+  (`Math.round((Date.now() - new Date(lastAt)) / 86400000)`), zero new data collection required.
+- [ ] **Consider running the report weekly during the program**, not just once at week 10 — the
+  column is only useful for catching a dropping-off tester in time to do something about it if it's
+  actually looked at before the program ends. This is a process suggestion, not a code requirement —
+  the report endpoint already supports being hit any time.
+- [ ] **Optional: sort/highlight** — if the CSV is opened in a spreadsheet each week anyway, a simple
+  descending sort by `days_since_last_active` puts the most-at-risk testers at the top with zero extra
+  code (a spreadsheet-side sort, not an app change).
+
+---
+
+## 35. Beta Program — Offboarding Decision (End of Week 10)
+
+*Resolved 2026-07-24 — superseded by an actual scoring rubric (100 pts: App Usage 50 w/ 30-pt floor,
+Feedback 25, Call Attendance 15, Longevity 10 → three outcome tiers), not the earlier three
+free-standing options below. Execution script shipped: `database/beta-offboarding-day71.sql`.*
+
+**Outcome mapping, applied per-account at day 71 (not automated — run by hand once):**
+- **70–100, floor met → Lifetime access + frontline feedback club.** `is_tester` stays true,
+  `beta_code_used` cleared, `trial_ends_at`/`access_ends_at` pushed ~50 years out. "Feedback club" is a
+  non-technical/community perk, nothing to apply in-app.
+- **60–69, floor met → 6 months free.** Same shape, but `trial_ends_at`/`access_ends_at` reset to a
+  *fresh* +6 months from day 71 — **not** simply left alone. Important subtlety found while building
+  this: `is_tester`'s window was already stamped once on redemption day (migration 021's trigger), so
+  by day 71 only ~4 months of it are left; leaving it untouched would under-deliver the reward. Also:
+  `is_tester` does **not** bypass the paywall on its own — confirmed `App.jsx`'s
+  `paywallBypassed = isAdmin || config.isInvestor` has no `isTester` — actual access is gated purely by
+  `trial_ends_at`/`access_ends_at` via `getEntitlement()`. Toggling `is_tester` alone would not have
+  delivered either reward tier; both fields must be set together.
+- **Floor not met, or 0–59 → No perk.** `is_tester` off (drops AI/Tax Plan too, not just billing),
+  `beta_code_used` cleared, `trial_ends_at`/`access_ends_at` set to now so nothing from the original
+  window lingers.
+
+**How to compile the per-tier account lists** — `api/admin-beta-report.js` (usage + feedback_count)
+`?format=feedback` (readable feedback content for the "specificity" judgment call) + your externally-
+tracked call attendance (this app has no record of scheduled calls — deliberately left external, see
+§ discussion 2026-07-24). Scoring itself stays manual, matching this whole system's "reviewed by a
+human" premise — no auto-scoring formula was built.
+
+---
+
+## 36. Beta Program — In-App "Beta Tester" Badge
+
+*New workstream (2026-07-24). Purely cosmetic/motivational — no data flow changes, fully isolated
+from the tracking system itself.*
+
+**The idea.** A small visual acknowledgment (a pill/label near the account display name) for
+participants — the kind of lightweight social signal that tends to nudge engagement quality up for
+exactly zero risk, since it touches no finance logic and no persisted data.
+
+- [ ] **Where it lives** — `ProfilePanel.jsx`, near existing account info, gated on
+  `isTrackedBetaTester({ isTester, betaCodeUsed })` (already threaded as props into the panels that
+  would need it, or trivially addable to `ProfilePanel` the same way `isTester` already is). Friends/
+  family testers (no `beta_code_used`) should NOT see this badge — it's specifically "you're in the
+  10-week program," not "you have tester access."
+- [ ] **Style it as a genuinely small addition** — reuse an existing pill/tag pattern already in the
+  design system (`ui.jsx`'s primitives, or the style already used for status badges elsewhere) rather
+  than inventing new visual language for a one-off.
+- [ ] **Decide the copy** — "Beta Tester," "10-Week Beta," or something on-brand; a two-minute decision,
+  not worth its own design pass.
+
+---
+
+## 37. Beta Program — Week-5 "Halfway" Nudge Email
+
+*New workstream (2026-07-24). Reuses existing lifecycle-email infrastructure rather than standing up
+a new send pathway. Depends on §30 (`beta_started_at`) as the anchor date — build that first.*
+
+**The idea.** A single motivational touchpoint at the program's midpoint, reusing the same
+infrastructure that already sends trial/dunning emails (`api/_email.js`'s sender, the
+`api/_lifecycleEmails.js` template pattern, `api/cron-subscription-lifecycle.js`'s daily-cron shape) —
+not a new email system.
+
+- [ ] **Scope it as an addition to the existing daily cron**, not a new standalone job —
+  `api/cron-subscription-lifecycle.js` already runs daily and already reads `user_data` rows; add an
+  independent check alongside its existing lifecycle-phase logic: for each row where `is_tester` and
+  `beta_code_used` are both set (the tracked cohort) and `now() - beta_started_at` has just crossed the
+  5-week mark, send the halfway email.
+- [ ] **Avoid resending** — either a narrow enough daily window check (only fire on the exact day the
+  account crosses 5 weeks, not "5 weeks or more") or, more robustly, a new `halfway_email_sent_at`
+  column stamped on send and checked before sending again — same throttle pattern already used for
+  `last_dunning_email_at`/`dunning_email_count` (migration `017_add_subscription_fields.sql`).
+- [ ] **New template in `api/_lifecycleEmails.js`** — short, motivational, references the program by
+  name; follow the existing template function pattern (`buildLifecycleEmail` or equivalent) rather than
+  hand-rolling a one-off send.
+- [ ] **Low priority relative to §30–34** — this is pure polish; the report and its scoping fix matter
+  more to the program's actual goal (scoring 40 people against a rubric) than a reminder email does.
+
+---
+
+## 38. Camera / Barcode / OCR Features — Mobile-First Income & Expense Capture
+
+*New workstream (2026-07-24), scoped from investigative pass — not yet started, no design decisions made. Pure greenfield. Six candidate features identified; all depend on shared infrastructure (BarcodeDetector API or OCR engine). This section is a parking lot for feasibility and grouping logic; buildout decisions to come.*
+
+**The gap.** The app is currently 100% manual data entry. A smartphone has a camera and the web platform has access to it (via `getUserMedia` + device sensors); no camera-based quick-entry path exists today. Use cases: snapping a paystub to skip SetupWizard field entry, tapping a receipt to log an expense, scanning a product barcode to check affordability against the week's remaining budget.
+
+**Infrastructure dependencies (the critical path blocker):**
+- **BarcodeDetector API** (native, no new dependency) — Chrome/Edge 83+, Safari limited, Firefox no. Supports EAN-13, UPC, and others. Needed by features #1, #2.
+- **OCR engine** (Tesseract.js client-side vs. cloud API decision) — all three major choices have tradeoffs:
+  - **Tesseract.js** (Apache 2.0 licensed, WASM-based): ~2.3 MB minified, runs client-side, no credentials/cost, accuracy ~85–90% on clean images, slower (seconds per image on mobile). Paystub/receipt parsing will need fallback to manual entry for unusual formats.
+  - **Cloud API** (Google Cloud Vision, AWS Textract, Azure): faster (100ms API call), better accuracy (95%+), but requires credentials, cost scales with usage, adds backend routing complexity. GDPR/privacy consideration if images leave the device.
+  - **Hybrid:** Tesseract for quick preview/demo, cloud API for production with fallback if rate-limited.
+  Needed by features #3, #4, #5.
+- **ML-based text detection** (TextDetection API or TensorFlow.js) — feature #6 only, not critical path. TextDetection API unavailable in Safari/Firefox. TensorFlow.js adds ~200 MB to bundle for a model. Defer this one.
+
+### Feature Inventory
+
+#### 1. "Can I afford this?" Barcode Scan
+
+*User snaps a product barcode at the shelf → app detects UPC → looks up price → checks against weekly surplus → shows "✓ Yes, $X left after" or "⚠ No, over by $Y".*
+
+- **Mechanism:** BarcodeDetector API (native) + external UPC/product database (e.g., Barcode Lookup API, UPC database, or roll-your-own if only targeting a specific retailer).
+- **T-shirt:** **S-M** (40–80 hours)
+- **Tech stack:** Needs new dependency: UPC/EAN database service (API key, usage tier). BarcodeDetector is native.
+- **Blocked by:** None — can build independently.
+- **Unblocks:** Feature #2 (goal-linked purchase).
+- **Notes:** 
+  - UPC lookup is a third-party service (Barcode Lookup free tier limited, or build own DB). Cost/privacy decision needed.
+  - Affordability check reuses existing weekly-surplus computation (`estimateWeeklyNet` in SetupWizard; `buildYear` in finance.js).
+  - Mobile-first: assume 44×44px viewfinder button in bottom nav or Budget panel (clears Mobile Checklist).
+  - Fallback: if barcode scan fails, allow manual UPC entry or product name search.
+
+#### 2. Goal-Linked Purchase Logging
+
+*After scanning a product barcode (feature #1), user can optionally "Log this against a goal" instead of dumping it as a generic expense category. Taps into an existing goal, reduces its "funded" amount.*
+
+- **Mechanism:** BarcodeDetector (from #1) + goal picker UI + LogPanel entry type.
+- **T-shirt:** **S-M** (20–40 hours, UI-only)
+- **Tech stack:** Reuses feature #1's barcode infrastructure + existing goal list from HomePanel/BudgetPanel. New LogPanel `EVENT_TYPES` entry.
+- **Blocked by:** Feature #1 (barcode scan).
+- **Unblocks:** None directly, but polishes #1.
+- **Notes:**
+  - One new `EVENT_TYPES` entry (e.g., `goal_purchase: { label: "Goal Purchase", icon: "🎯" }`).
+  - Log Effect Summary (`LogPanel.jsx`) already generalizes to arbitrary event types — no new fiscal math needed.
+  - UI: "You scanned [product], found $X. Log it against which goal?" → goal chips + Confirm.
+  - Stretch variant: auto-suggest the most-relevant goal (goal due soonest, or goal scope matching category — e.g., "Furniture" purchase → "Apartment Setup" goal).
+
+#### 3. Paystub Onboarding Shortcut
+
+*User snaps a photo of a paystub during SetupWizard. OCR extracts gross pay, tax withholding, deductions, pay date. Auto-fills the "Pay Structure" wizard step (step 1) so the user doesn't type all the numbers manually.*
+
+- **Mechanism:** Camera snap + OCR (Tesseract.js or cloud API) + structured field extraction + SetupWizard step rewiring.
+- **T-shirt:** **L** (80–160 hours)
+- **Tech stack:** 
+  - Tesseract.js (2.3 MB, ships with app, privacy-first) — lower cost, but accuracy risk on unusual paystub formats.
+  - Cloud API (Google Vision, AWS Textract) — better accuracy, privacy tradeoff, cost/rate-limiting, needs backend routing.
+  - Hybrid: Tesseract preview, cloud fallback if confidence is low.
+- **Blocked by:** OCR engine decision (Tesseract vs. cloud).
+- **Unblocks:** Features #4, #5 (both use same OCR).
+- **Critical notes:**
+  - **High format variability:** paystubs vary wildly by employer (ADP, Workday, Gusto, etc.) + international formats. OCR alone won't extract structured data reliably — needs post-OCR parsing (regex, NLP, or handcrafted field matchers per format).
+  - **Fallback required:** If confidence is low or parse fails, revert to manual entry in the wizard. Do NOT auto-fill a wrong gross-pay number.
+  - **SetupWizard rewiring:** Step 1 (Pay Structure) needs "Snap Paystub" button → camera snap flow → parse → auto-fill fields → let user review/correct before Next.
+  - **Testing:** Will need fixtures (photos of real paystubs from major payroll providers, sanitized). Privacy concern — can't store/train on real paystubs without consent.
+  - **Field extraction targets:** gross pay, net pay, tax withholding (federal, state, FICA), deductions (401k, insurance, etc.), pay period end date, pay frequency (weekly/biweekly/monthly).
+
+#### 4. Receipt-to-Expense-Category Snap
+
+*User snaps a receipt with their phone. OCR extracts the total amount + merchant name. Auto-fills "Add Expense" form with amount + suggested category (e.g., "Whole Foods" → Food/Dining; "CVS Pharmacy" → Pharmacy/Health).*
+
+- **Mechanism:** Camera snap + OCR (Tesseract.js or cloud API) + merchant/amount parsing + category inference.
+- **T-shirt:** **M-L** (60–120 hours)
+- **Tech stack:** 
+  - OCR engine (same choice as feature #3).
+  - Post-OCR parsing: regex or hardcoded merchant patterns (e.g., "Whole Foods", "Trader Joe's", "Sprouts" → category "Food"). Alternatively, lightweight ML classifier or LLM call via Coach API (`api/coach.js` pattern) for one-shot inference ("What spending category is this receipt from [merchant]?").
+  - BudgetPanel expense UI already exists — just pre-fill the form fields.
+- **Blocked by:** OCR engine decision.
+- **Unblocks:** None directly.
+- **Notes:**
+  - **Merchant name extraction:** not every receipt has a clear header (some print the address or website URL instead). OCR + NLP to find the merchant name. Fallback: let user confirm/correct.
+  - **Amount extraction:** usually the last number on the receipt, but sales tax complicates this. Heuristic: take the largest number that looks like a dollar amount; let user confirm.
+  - **Category inference:** 
+    - **Option A (hardcoded):** Build a merchant-to-category lookup table (Whole Foods → "Groceries", "Starbucks" → "Food", "Exxon" → "Gas", etc.). Scales poorly.
+    - **Option B (ML lightweight):** Train a small classifier or use Coach API one-shot inference: "What category is this merchant: [name]?" Falls through to manual category pick if API is unavailable/rate-limited.
+    - **Option C (UI default):** Pre-fill category as "Other" or "Uncategorized", user picks from category chips. Lowest friction for MVP.
+  - **Receipt image quality:** phone photos in dim lighting will OCR poorly. Consider adding a "take better photo" hint or a pre-snap UI that guides composition (frame detection).
+
+#### 5. Pay-Cycle Change Detection
+
+*User snaps a new paystub. OCR extracts key fields. App compares against the most recent stored paystub, flags what changed (gross pay up/down, tax rate shift, new deduction, etc.), and recalculates the income model accordingly.*
+
+- **Mechanism:** Camera snap + OCR (same as #3) + paystub storage in `user_data` + field-level diff + `buildYear` recompute.
+- **T-shirt:** **M** (40–80 hours)
+- **Tech stack:** 
+  - OCR engine (shared with #3, #4).
+  - New field: `lastPaystubSnapshot` in `user_data` (JSON blob storing parsed paystub fields from last snap: gross, net, tax breakdown, deductions, pay date). Needs a migration.
+  - Diff logic: simple field-by-field comparison (gross pay ≠ last gross? flag it).
+  - Recompute: if `shiftHours`, `otThreshold`, `federalRate`, etc. changed, call `buildYear` to recompute weekly net/goals/timeline.
+  - LogPanel entry type: `pay_change: { label: "Pay Changed", icon: "📊" }` with an inline diff summary.
+- **Blocked by:** OCR engine decision + Tesseract's paystub field extraction (feature #3).
+- **Unblocks:** None directly.
+- **Drift warning:** `buildYear` is a critical fiscal engine (drift-app-warden §18 Spine A). Any change to how it's triggered needs to be audited carefully. The recompute path here is straightforward (user snappped a new paystub, we re-derived income model), but add a manual "Review Changes" step before auto-applying to `config` so the user sees what changed.
+- **Notes:**
+  - **Storage:** `lastPaystubSnapshot` lives in `user_data.config` JSON? Or a separate column? Leaning toward a separate column (keeps config schema clean) — requires a new migration. Follow `docs/drift-app-warden.md` §19 F110's four-site procedure (destructure + ref + drift badge + eager-save).
+  - **Privacy:** storing paystub data locally. Reassure in UX: "This stays on your device and is only used to detect changes."
+  - **Accuracy fallback:** if OCR confidence is low, prompt user to review extracted fields before storing.
+
+#### 6. Shelf-Tag Price Capture (Stretch / Defer)
+
+*User snaps printed price tags on a shelf (not barcodes — the paper tag with a price and SKU). App OCRs the price, adds to a running tally as they shop, warns if total approaches weekly budget limit. UX: "Milk ($4.29) + Bread ($2.99) + Coffee ($8.49) = $15.77 — $X left in your week."*
+
+- **Mechanism:** Live/repeated text detection (OCR or TextDetection API) + running calculator UI.
+- **T-shirt:** **L-XL** (120–240+ hours, flagged as higher friction / stretch)
+- **Tech stack:** 
+  - **TextDetection API** (native, like BarcodeDetector) — Chrome/Edge only, not in Safari/Firefox. Not viable as a required path.
+  - **TensorFlow.js + COCO-SSD or similar** — adds ~200 MB to bundle, real-time performance risk on older mobile phones (frames drop, battery drain).
+  - **Fallback:** accept numeric input + photo as proof-of-price (lower automation, higher accuracy).
+- **Blocked by:** ML engine decision (TextDetection not viable; TensorFlow.js adds cost).
+- **Unblocks:** None.
+- **Recommendation:** **Defer this one.** It's a polish feature, not a core workflow. Start with features #1–#5 (all lower friction, higher ROI). Revisit if/when browser text-detection APIs mature or if user feedback specifically asks for in-store price tracking.
+- **Notes:**
+  - **Real-time performance:** Continuous camera preview + frame-by-frame OCR is battery-intensive. Require explicit "Scan Price" button per item, not continuous scanning.
+  - **Accuracy:** Text detection on printed tags is harder than barcodes or clean paystubs (angles, blur, reflections, multiple prices/SKUs in frame).
+  - **UX complexity:** a running total UI with "Add", "Undo", "Clear" buttons; integration with the weekly budget guardrail system.
+  - **If this is prioritized later:** prototype with manual numeric input first, then layer on OCR as a time-saver.
+
+### Implementation Roadmap (Proposed Grouping)
+
+**Phase A: Barcode Infrastructure**
+- [ ] Decide on UPC/product database service (Barcode Lookup free tier, roll-your-own, or third-party API key).
+- [ ] Add `<CameraCapture>` utility component (video element + BarcodeDetector + error handling).
+- [ ] Add "Can I afford this?" entry point to BudgetPanel (button in nav, triggers barcode scan, shows affordability check).
+- [ ] Feature #2 (goal-linked purchase) is a free add-on once #1 lands.
+
+**Phase B: OCR Foundation**
+- [ ] **Critical decision:** Tesseract.js vs. cloud API vs. hybrid. This gates all of #3, #4, #5.
+- [ ] If Tesseract: ship with app (2.3 MB added to bundle). If cloud: add backend routing (`api/ocr-proxy.js` or similar) + credential management.
+- [ ] Add `<ImageCapture>` utility component (camera snap + image preview/confirm before OCR).
+- [ ] Feature #3 (paystub onboarding) — integrate into SetupWizard step 1.
+
+**Phase C: Expense & Income Automation**
+- [ ] Feature #4 (receipt-to-expense) — snap flow + category inference.
+- [ ] Feature #5 (pay-cycle detection) — requires `lastPaystubSnapshot` migration + diff logic.
+
+**Phase D: Defer**
+- [ ] Feature #6 (shelf-tag price capture) — revisit if user research confirms the need or browser text-detection APIs improve.
+
+### Interdependencies & Shared Infrastructure
+
+```
+Feature #1 (Barcode)
+  ├─ BarcodeDetector (native API)
+  ├─ Product DB service
+  └─ Affordability check (existing fiscal math)
+      └─ unblocks Feature #2 (goal-linked purchase)
+
+Feature #3 (Paystub OCR)
+  ├─ OCR engine decision (Tesseract vs. cloud)
+  ├─ Paystub field extraction (post-OCR parsing)
+  ├─ SetupWizard integration (step 1 rewire)
+  └─ unblocks Features #4 & #5
+
+Feature #4 (Receipt snap)
+  ├─ OCR engine (from #3 decision)
+  ├─ Merchant/category inference
+  └─ BudgetPanel form pre-fill (existing UI)
+
+Feature #5 (Pay-cycle detection)
+  ├─ OCR engine (from #3 decision)
+  ├─ lastPaystubSnapshot migration
+  ├─ Diff logic
+  └─ buildYear recompute (drift-app-warden §18 audit required)
+
+Feature #6 (Shelf-tag capture) — isolated, deferred
+  ├─ TextDetection API (not viable) OR TensorFlow.js (high cost)
+  └─ Real-time performance risk
+```
+
+---
+
+**Next step:** Confirm OCR engine choice (Tesseract vs. cloud API) — this is the critical blocker. All feasibility estimates above assume this decision is made. Once that's settled, Phase A (barcode) can proceed in parallel with Phase B (OCR foundation).
+

@@ -1,0 +1,44 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 025_add_beta_code_used.sql
+--
+-- Distinguishes two populations that both carry is_tester = true:
+--   • Real 10-week beta cohort — is_tester = true AND beta_code_used IS NOT NULL.
+--     These are the accounts the beta usage-scoring system (beta_activity_events,
+--     migration 026) actually logs events for.
+--   • Friends & family testers — is_tester = true, beta_code_used IS NULL. Existing
+--     accounts granted tester access ad hoc, outside the 10-week program. They keep
+--     their standing 6-month app-side trial window (migration 021's trigger) and are
+--     NOT tracked by the beta scoring system — at least not initially.
+--
+-- Column is intentionally free-text, not a foreign key into a codes table: there is
+-- no self-service beta-code redemption flow yet ("orchestrated later" per the beta
+-- program plan). For now this is set by hand alongside is_tester, exactly like
+-- is_tester itself is today. IMPORTANT — the two fields must be set TOGETHER for a
+-- real beta-cohort account:
+--
+--   update user_data set is_tester = true, beta_code_used = '<some code/label>'
+--     where user_id = '<account>';
+--
+-- Setting is_tester alone (no beta_code_used) is the correct move for a friends/
+-- family tester — do not backfill beta_code_used for those accounts.
+--
+-- When the beta-code redemption flow is eventually built (likely mirroring the
+-- investor_codes/investor_users pattern — migrations 010/011), it should write
+-- BOTH is_tester = true and this column together, the same as the manual SQL path
+-- does now — no schema change anticipated at that point, just a new writer.
+--
+-- Column privilege: added after migration 019's RLS lockdown and deliberately never
+-- added to the authenticated column-grant list — same client-write protection as
+-- is_admin/is_investor/is_tester itself. No extra policy needed.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+alter table user_data
+  add column if not exists beta_code_used text;
+
+-- ── Verification (run after applying) ────────────────────────────────────────
+--   update user_data set is_tester = true, beta_code_used = 'BETA10W'
+--     where user_id = '<some existing tester account>';
+--   select is_tester, beta_code_used from user_data where user_id = '<same user>';
+--     -> both should reflect the update
+--   As authenticated (not service role), attempt to write beta_code_used directly:
+--     -> must fail (no column grant), same as is_tester

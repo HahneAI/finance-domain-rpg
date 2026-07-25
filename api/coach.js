@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { canAccessAiFeatures } from "../src/lib/entitlements.js";
+import { canAccessAskCoachGeneral } from "../src/lib/entitlements.js";
+import { getEntitlement } from "../src/lib/subscription.js";
 
 // §18.G — proxies Claude API calls through a Vercel function so
 // ANTHROPIC_API_KEY stays server-side. Same auth pattern as delete-account.js:
@@ -23,6 +24,15 @@ console.log(`[coach] outbound calls use ${MODE.toUpperCase()} Anthropic key`);
 const MODEL_IDS = {
   haiku: "claude-haiku-4-5",
   sonnet: "claude-sonnet-5",
+};
+
+// §18.G / DW-9 cost telemetry — $ per million tokens, current published
+// rates. Used only to print an estimated cost alongside the real usage
+// numbers in the log line below; never sent to Anthropic. Keep in sync with
+// docs/BUG_FIX_TODO.md DW-9 if pricing changes.
+const PRICE_PER_MTOK = {
+  [MODEL_IDS.haiku]: { input: 1.00, output: 5.00 },
+  [MODEL_IDS.sonnet]: { input: 3.00, output: 15.00 },
 };
 
 export default async function handler(req, res) {
@@ -50,18 +60,38 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Invalid or expired session" });
   }
 
-  // Standing constraint (docs/TODO.md §18 header): every AI feature is
-  // isAdmin/isTester-gated for now, client AND server side — this is the
-  // server side. Beta testers (user_data.is_tester) are NOT investors — this
-  // check must never expand to include is_investor. See
-  // docs/active-systems.md "Beta Tester Accounts".
+  // Ask Coach chat + Net Worth Check-In card (docs/coach-entry-points.md
+  // §§1–2) left the isAdmin/isTester-only standing constraint — this is the
+  // server-side half of that gate, re-verified independently of anything the
+  // client claims (never trust a client-supplied entitlement flag). Beta
+  // testers (user_data.is_tester) are NOT investors — this check must never
+  // expand to include is_investor. See docs/active-systems.md "Beta Tester
+  // Accounts". Every OTHER Coach surface (none built yet) must stay on the
+  // narrower canAccessAiFeatures — do not widen this route's gate further
+  // without also giving that future surface its own admin/tester-only check.
   const { data: userRow, error: userRowError } = await userClient
     .from("user_data")
-    .select("is_admin, is_tester")
+    .select(
+      "is_admin, is_tester, subscription_status, trial_ends_at, access_ends_at, " +
+      "current_period_end, stripe_subscription_id"
+    )
     .eq("user_id", authData.user.id)
     .single();
-  if (userRowError || !canAccessAiFeatures({ isAdmin: userRow?.is_admin, isTester: userRow?.is_tester })) {
-    return res.status(403).json({ error: "Coach is admin/beta-tester-only for now" });
+  // `now` is always the real wall-clock time here — there's no admin Lock
+  // Date concept server-side, so this can't accidentally extend a trial the
+  // way a simulated date would (see lib/subscription.js's own warning).
+  const entitlement = getEntitlement(
+    {
+      status: userRow?.subscription_status ?? null,
+      trialEndsAt: userRow?.trial_ends_at ?? null,
+      accessEndsAt: userRow?.access_ends_at ?? null,
+      currentPeriodEnd: userRow?.current_period_end ?? null,
+      stripeSubscriptionId: userRow?.stripe_subscription_id ?? null,
+    },
+    new Date()
+  );
+  if (userRowError || !canAccessAskCoachGeneral({ isAdmin: userRow?.is_admin, isTester: userRow?.is_tester, entitlement })) {
+    return res.status(403).json({ error: "Coach requires an active trial or subscription" });
   }
 
   const { messages, systemPrompt, contextBlock, model } = req.body ?? {};
@@ -74,6 +104,23 @@ export default async function handler(req, res) {
   if (systemPrompt) system.push({ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } });
   if (contextBlock) system.push({ type: "text", text: contextBlock, cache_control: { type: "ephemeral" } });
 
+  // DW-9 — cache the growing conversation history too, not just the frozen
+  // system prompt. Without this, every turn of a multi-turn Ask Coach chat
+  // re-sends and re-prices the *entire* prior exchange at full input rate;
+  // the breakpoint on the last (newest) message lets the next turn read
+  // everything through this point from cache instead. Per Anthropic's
+  // prompt-caching guidance, the multi-turn breakpoint belongs on the last
+  // content block of the most-recently-appended turn — that's always
+  // `messages[messages.length - 1]` here, since the client only ever calls
+  // this route with the latest user turn appended.
+  const cachedMessages = messages.map((m, i) => {
+    if (i !== messages.length - 1) return m;
+    const content = typeof m.content === "string"
+      ? [{ type: "text", text: m.content, cache_control: { type: "ephemeral" } }]
+      : m.content;
+    return { ...m, content };
+  });
+
   const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -85,7 +132,7 @@ export default async function handler(req, res) {
       model: modelId,
       max_tokens: 1024,
       system,
-      messages,
+      messages: cachedMessages,
       stream: true,
     }),
   });
@@ -100,12 +147,17 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
-  // §18.G cost controls — log token counts per call type outside production.
+  // DW-9 cost telemetry — was dev/preview-only before (`if (VERCEL_ENV ===
+  // "production") continue`), which meant the one place real user cost would
+  // show up was exactly the environment that skipped logging it. Now runs in
+  // every environment and prints one structured line per call (not two) with
+  // a computed cost estimate, so it reads directly out of Vercel's log
+  // viewer without needing a spreadsheet to interpret raw token counts.
   const decoder = new TextDecoder();
   let carry = "";
+  const usage = { input_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 0 };
   for await (const chunk of anthropicRes.body) {
     res.write(chunk);
-    if (env.VERCEL_ENV === "production") continue;
     carry += decoder.decode(chunk, { stream: true });
     const lines = carry.split("\n");
     carry = lines.pop() ?? "";
@@ -114,15 +166,22 @@ export default async function handler(req, res) {
       try {
         const event = JSON.parse(line.slice(6));
         if (event.type === "message_start") {
-          const usage = event.message.usage;
-          console.log(`[coach:${modelId}] input_tokens=${usage.input_tokens} cache_read=${usage.cache_read_input_tokens ?? 0} cache_write=${usage.cache_creation_input_tokens ?? 0}`);
+          Object.assign(usage, event.message.usage);
         } else if (event.type === "message_delta") {
-          console.log(`[coach:${modelId}] output_tokens=${event.usage.output_tokens}`);
+          usage.output_tokens = event.usage.output_tokens;
         }
       } catch {
         // partial or non-JSON line — wait for more chunks
       }
     }
   }
+  const price = PRICE_PER_MTOK[modelId] ?? PRICE_PER_MTOK[MODEL_IDS.haiku];
+  const estCostUsd = (
+    usage.input_tokens * price.input
+    + usage.cache_read_input_tokens * price.input * 0.1
+    + usage.cache_creation_input_tokens * price.input * 1.25
+    + usage.output_tokens * price.output
+  ) / 1_000_000;
+  console.log(`[coach:usage] model=${modelId} input=${usage.input_tokens} cache_read=${usage.cache_read_input_tokens} cache_write=${usage.cache_creation_input_tokens} output=${usage.output_tokens} est_cost_usd=${estCostUsd.toFixed(6)}`);
   res.end();
 }

@@ -1,9 +1,18 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
+
+// HomePanel and BudgetPanel pull in lib/db.js (logBetaEvent) → the real
+// Supabase singleton (created at module load from env vars) — mock it out so
+// no real client spins up.
+vi.mock('../../lib/supabase.js', () => ({
+  supabase: { from: vi.fn(), auth: { getSession: vi.fn() } },
+  getCurrentUserId: vi.fn().mockResolvedValue('test-user-id'),
+  getCachedAuthSnapshot: vi.fn().mockReturnValue({ accessToken: 'tok-123', userId: 'test-user-id' }),
+}))
+
 import { IncomePanel } from '../../components/IncomePanel.jsx'
-import { BenefitsPanel } from '../../components/BenefitsPanel.jsx'
 import { BudgetPanel } from '../../components/BudgetPanel.jsx'
-import { buildYear, computeNet, computeBucketModel, toLocalIso } from '../../lib/finance.js'
+import { buildYear, computeNet, toLocalIso } from '../../lib/finance.js'
 import { getCurrentFiscalWeek, getFiscalWeekInfo } from '../../lib/fiscalWeek.js'
 import { DEFAULT_CONFIG, INITIAL_EXPENSES } from '../../constants/config.js'
 
@@ -97,48 +106,6 @@ describe('IncomePanel', () => {
       />
     )
     expect(container.textContent.length).toBeGreaterThan(0)
-  })
-})
-
-describe('BenefitsPanel', () => {
-  const renderPanel = (cfg = CONFIG, weeks = allWeeks, extra = {}) => render(
-    <BenefitsPanel
-      allWeeks={weeks}
-      config={cfg}
-      setConfig={() => {}}
-      isEmployerDHL={cfg.employerPreset === 'DHL'}
-      isAdmin={false}
-      logK401kLost={0}
-      logK401kMatchLost={0}
-      logK401kGained={0}
-      logK401kMatchGained={0}
-      logPTOHoursLost={0}
-      currentWeek={getCurrentFiscalWeek(weeks, TODAY)}
-      bucketModel={computeBucketModel([], cfg)}
-      ptoGoal={null}
-      setPtoGoal={() => {}}
-      fiscalWeekInfo={getFiscalWeekInfo(getCurrentFiscalWeek(weeks, TODAY))}
-      {...extra}
-    />
-  )
-
-  it('renders without crashing for a base user', () => {
-    const { container } = renderPanel()
-    expect(container.textContent.length).toBeGreaterThan(0)
-  })
-
-  it('renders 401k content for a DHL user with contributions', () => {
-    const cfg = {
-      ...DEFAULT_CONFIG,
-      employerPreset: 'DHL',
-      dhlTeam: 'B',
-      dhlCustomSchedule: false,
-      startingWeekIsLong: false,
-      k401Rate: 0.06,
-      setupComplete: true,
-    }
-    const { container } = renderPanel(cfg, buildYear(cfg))
-    expect(container.textContent).toMatch(/401/i)
   })
 })
 

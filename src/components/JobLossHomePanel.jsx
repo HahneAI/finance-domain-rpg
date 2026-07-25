@@ -2,6 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import { MetricCard, Pressable, PanelHero, SectionHeader, iS, lS } from "./ui.jsx";
 import { computeJobLossRunway, sumJobHuntIncome } from "../lib/jobLossRunway.js";
 import { ReemploymentTracker } from "./ReemploymentTracker.jsx";
+import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
+import { canAccessAskCoachGeneral } from "../lib/entitlements.js";
 
 /**
  * JobLossHomePanel — Job Loss Mode's own Home view (TODO §15 mode rebuild).
@@ -19,10 +21,23 @@ import { ReemploymentTracker } from "./ReemploymentTracker.jsx";
  * runway's savings side), and the Re-employment Tracker (target income +
  * application log). The benefit-scenario toggle still lives on
  * JobLossBudgetPanel only, passed in here read-only (see lib/jobLossRunway.js).
+ *
+ * Also mounts CoachNetWorthCard (DW-8 fix, docs/BUG_FIX_TODO.md): the Red
+ * tier ("Job Loss Mode, runway under 30 days") was structurally unreachable
+ * because this panel replaces HomePanel entirely and never rendered the card
+ * — same canAccessAskCoachGeneral gate as HomePanel's own mount (isAdmin/
+ * isTester or a real trial/paid entitlement — docs/coach-entry-points.md §2),
+ * same config-backed rate-limit state (DW-9 fix — shared across both mount
+ * sites by design, one message per fiscal week per tier per account, durable
+ * per-account rather than per-device). Amber/Green tiers still won't fire
+ * here (they need HomePanel's netWorthHealth, a normal-mode-only concept,
+ * not passed through) — only Red is reachable from this panel, which
+ * matches what Red actually means.
  */
 export function JobLossHomePanel({
   config, setConfig: setConfigProp, saveConfigNow: saveConfigNowProp,
   expenses, effectiveToday, includeBenefits, readOnly = false,
+  currentWeek, isAdmin, isTester, entitlement,
 }) {
   // Paywall-expired read-only mode, same shadow pattern as HomePanel/BudgetPanel
   // (docs/TODO.md §17.E): every setConfig()/saveConfigNow() below becomes a no-op.
@@ -236,6 +251,18 @@ export function JobLossHomePanel({
       </div>
 
       {setConfig && <ReemploymentTracker config={config} setConfig={setConfig} saveConfigNow={saveConfigNow} />}
+
+      {canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
+        <CoachNetWorthCard
+          config={config}
+          setConfig={setConfig}
+          saveConfigNow={saveConfigNow}
+          expenses={expenses}
+          currentWeek={currentWeek}
+          today={effectiveToday}
+          includeBenefits={includeBenefits}
+        />
+      )}
     </div>
   );
 }

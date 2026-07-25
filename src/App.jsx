@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES } from "./constants/config.js";
-import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
+import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent } from "./lib/db.js";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -35,7 +35,7 @@ import { JobLossBudgetPanel } from "./components/JobLossBudgetPanel.jsx";
 import { PwaInstallModal } from "./components/PwaInstallModal.jsx";
 import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
-import { canAccessAiFeatures } from "./lib/entitlements.js";
+import { isTrackedBetaTester, canAccessAskCoachGeneral } from "./lib/entitlements.js";
 import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./lib/jobLossRunway.js";
 
 const NAV_ITEMS = [
@@ -234,6 +234,11 @@ export default function App() {
   // manually via SQL, never client-writable. Grants AI features only; NOT an
   // investor-equivalent (no demo accounts, no investor code path).
   const [isTester, setIsTester] = useState(false);
+  // Distinguishes the tracked 10-week beta cohort (is_tester true + a redeemed
+  // beta code) from friends/family testers (is_tester true, no code) — see
+  // database/migrations/025_add_beta_code_used.sql and entitlements.js
+  // isTrackedBetaTester. Read-only from the client, same as is_tester.
+  const [betaCodeUsed, setBetaCodeUsed] = useState(null);
   // Per-user unlock for the Tax Plan feature — granted via SQL to select non-admins.
   const [taxProjectionsEnabled, setTaxProjectionsEnabled] = useState(false);
   const [ptoGoal, setPtoGoal] = useState(null);
@@ -421,6 +426,10 @@ export default function App() {
   // Tracks which user id we've already run the revival/trial-seed/reload chain
   // for below — see the SIGNED_IN guard for why this exists.
   const signedInChainRanForRef = useRef(null);
+  // Dedupes the beta "login" activity event the same way — one row per real
+  // sign-in, not per data-load. Reset on SIGNED_OUT alongside the ref above so
+  // a genuine later sign-in (same tab, sign out then back in) logs again.
+  const loginLoggedForRef = useRef(null);
   useEffect(() => {
     // Rely solely on onAuthStateChange rather than calling getSession() first.
     // getSession() resolves before Supabase has exchanged the OAuth code from the URL,
@@ -430,7 +439,10 @@ export default function App() {
     return onAuthChange((event, user) => {
       if (event === "PASSWORD_RECOVERY") setPendingPasswordReset(true);
       else setPendingPasswordReset(false);
-      if (event === "SIGNED_OUT") signedInChainRanForRef.current = null;
+      if (event === "SIGNED_OUT") {
+        signedInChainRanForRef.current = null;
+        loginLoggedForRef.current = null;
+      }
       // Seed user_data row + sync OAuth profile metadata on every sign-in.
       // Critical for Google OAuth users who have no row yet; safe no-op for email users.
       // §17.I: the revival check MUST run first — an OAuth sign-in with a
@@ -541,6 +553,16 @@ export default function App() {
       setIsEmployerDHL(data.isEmployerDHL);
       setIsAdmin(data.isAdmin);
       setIsTester(data.isTester);
+      setBetaCodeUsed(data.betaCodeUsed);
+      // Beta usage tracking: log one "login" event per real sign-in, only for the
+      // tracked beta cohort (isTrackedBetaTester — is_tester + a beta code, not
+      // friends/family testers). Guarded so a data reload later in the same
+      // session (checkout return, revival, etc.) doesn't log a second login.
+      if (isTrackedBetaTester({ isTester: data.isTester, betaCodeUsed: data.betaCodeUsed })
+        && loginLoggedForRef.current !== authedUser?.id) {
+        loginLoggedForRef.current = authedUser?.id;
+        logBetaEvent({ isTester: data.isTester, betaCodeUsed: data.betaCodeUsed, eventType: "login" });
+      }
       setTaxProjectionsEnabled(data.taxProjectionsEnabled);
       setPtoGoal(data.ptoGoal);
       setSubscription(data.subscription);
@@ -818,6 +840,40 @@ export default function App() {
     setTimeout(() => setSyncStatus(null), 4000);
   }, [setConfig, setShowExtra, setLogs, setExpenses, setGoals, setWeekConfirmations, setBaseRateHistory, setPtoGoal]);
 
+  // docs/TODO.md — until now api/admin-beta-report.js was only reachable via a
+  // manually-crafted authenticated HTTP request (curl/Postman); this is the
+  // in-app trigger. Fetches with the current admin session's token rather than
+  // a plain link, since the endpoint requires a Bearer token and window.open
+  // can't set custom headers — Blob + a throwaway <a> is the standard pattern
+  // for triggering a download from a fetch response.
+  const [betaReportStatus, setBetaReportStatus] = useState(null); // { loading, error } | null
+  const handleDownloadBetaReport = useCallback(async (format) => {
+    setBetaReportStatus({ loading: true, error: null });
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error("Not signed in");
+      const url = format === "feedback" ? "/api/admin-beta-report?format=feedback" : "/api/admin-beta-report";
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload?.error || `Request failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = format === "feedback" ? "beta-feedback.csv" : "beta-usage-report.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+      setBetaReportStatus({ loading: false, error: null });
+    } catch (err) {
+      setBetaReportStatus({ loading: false, error: err.message });
+    }
+  }, []);
+
   const handleFetchRow = useCallback(async () => {
     setRowFetching(true);
     try {
@@ -866,6 +922,13 @@ export default function App() {
     [isAdmin, tempLockDate, today]
   );
 
+  // Trial/subscription gate (docs/TODO.md §17.D/E). `now` is always the real
+  // wall-clock time, never effectiveToday/tempLockDate — see the disclosure
+  // note in lib/subscription.js: admin Lock Date must not extend a trial or
+  // the hidden grace window. Computed here (rather than nearer isExpiredReadOnly
+  // below) so effectiveBottomNav's canAccessAskCoachGeneral check can read it too.
+  const entitlement = getEntitlement(subscription, new Date());
+
   const effectiveBottomNav = useMemo(() => {
     // TODO §15 nav restructuring — Income and Log both assume an active pay
     // structure (projected income, per-paycheck event log) that a Job Loss
@@ -874,9 +937,11 @@ export default function App() {
     const items = config.jobLossMode
       ? BOTTOM_NAV.filter(i => i.key === "home" || i.key === "budget" || i.key === "profile")
       : [...BOTTOM_NAV];
-    // §18 standing constraint: Ask Coach stays isAdmin/isTester-gated until
-    // Coach leaves admin-only (docs/TODO.md §18.0 build order).
-    if (canAccessAiFeatures({ isAdmin, isTester })) {
+    // Ask Coach general chat left the admin/tester-only standing constraint
+    // (docs/coach-entry-points.md §1) — now also opens for a real trial/paid
+    // entitlement, not just isAdmin/isTester. Every OTHER Coach surface stays
+    // on canAccessAiFeatures (docs/TODO.md §18.0 build order).
+    if (canAccessAskCoachGeneral({ isAdmin, isTester, entitlement })) {
       items.push({
         key: "__coach__",
         label: "Coach",
@@ -899,7 +964,7 @@ export default function App() {
       });
     }
     return items;
-  }, [isAdmin, isTester, config.jobLossMode]);
+  }, [isAdmin, isTester, entitlement.isEntitled, config.jobLossMode]);
 
   // Desktop sidebar counterpart to effectiveBottomNav's Job Loss Mode trim —
   // same Income/Log exclusion, kept as a separate memo since NAV_ITEMS (unlike
@@ -1079,8 +1144,7 @@ export default function App() {
     const grossDeltaByWeek = {};
 
     logs.forEach(e => {
-      const eIdx = Number(e.weekIdx);
-      const weekMeta = Number.isFinite(eIdx) ? (allWeeks.find(w => w.idx === eIdx) ?? null) : null;
+      const { weekIdx: eIdx, weekMeta } = resolveEventWeekMeta(e, allWeeks);
       const i = calcEventImpact(e, config, weekMeta);
       nL += i.netLost; nG += i.netGained;
       if ((e.type === "missed_unpaid" || e.type === "missed_unapproved") && i.netLost) {
@@ -1090,7 +1154,7 @@ export default function App() {
       k4G += i.k401kGained; k4MG += i.k401kMatchGained;
       ptoL += i.hoursLostForPTO; bucket += i.bucketHoursDeducted;
 
-      if (!Number.isFinite(eIdx)) return;
+      if (eIdx == null) return;
       const netDelta = (i.netGained || 0) - (i.netLost || 0);
       if (netDelta !== 0) weeklyNetAdjustments[eIdx] = (weeklyNetAdjustments[eIdx] || 0) + netDelta;
       const grossDelta = (i.grossGained || 0) - (i.grossLost || 0);
@@ -1144,7 +1208,7 @@ export default function App() {
     const fWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? fedHigh : fedLow), 0);
     const mWB = activeWeeks.filter(remediationTaxedForWeek).reduce((s, w) => s + (adjustedTaxableGrossByWeek.get(w.idx) ?? 0) * (w.isHighWeek ? stHigh : stLow), 0);
     const fG = fL - fWB, mG = mL - mWB, tG = fG + mG, tET = Math.max(tG - config.targetOwedAtFiling, 0);
-    const remainingTaxedChecks = activeWeeks.filter(w => toLocalIso(w.weekEnd) >= today && w.taxedBySchedule).length;
+    const remainingTaxedChecks = activeWeeks.filter(w => toLocalIso(w.weekEnd) >= effectiveToday && w.taxedBySchedule).length;
 
     // How much events have shifted total taxable gross (+ = bonus/pickup, - = missed shifts)
     const eventGrossDelta = activeWeeks.reduce((s, w) => s + (eventImpact.grossDeltaByWeek[w.idx] || 0), 0);
@@ -1166,7 +1230,7 @@ export default function App() {
       fedLiabilityEventDelta,
       moLiabilityEventDelta,
     };
-  }, [allWeeks, config, eventImpact.grossDeltaByWeek, today]);
+  }, [allWeeks, config, eventImpact.grossDeltaByWeek, effectiveToday]);
 
   // ── Live projected net from income engine ──
   const projectedAnnualNet = useMemo(() =>
@@ -1464,11 +1528,6 @@ export default function App() {
     return <FullScreenLoadingState />;
   }
 
-  // Trial/subscription gate (docs/TODO.md §17.D/E). `now` is always the real
-  // wall-clock time, never effectiveToday/tempLockDate — see the disclosure
-  // note in lib/subscription.js: admin Lock Date must not extend a trial or
-  // the hidden grace window.
-  const entitlement = getEntitlement(subscription, new Date());
   // Investors/demo accounts and admins never hit the paywall — they either
   // aren't real paying customers (investors) or need unrestricted access to
   // support other users (admins).
@@ -1500,6 +1559,10 @@ export default function App() {
           effectiveToday={effectiveToday}
           includeBenefits={jobLossIncludeBenefits}
           readOnly={isExpiredReadOnly}
+          currentWeek={currentWeek}
+          isAdmin={isAdmin}
+          isTester={isTester}
+          entitlement={entitlement}
         />
       ) : (
         <HomePanel
@@ -1528,6 +1591,8 @@ export default function App() {
           fundedGoalSpend={fundedGoalSpend}
           isAdmin={isAdmin}
           isTester={isTester}
+          betaCodeUsed={betaCodeUsed}
+          entitlement={entitlement}
           readOnly={isExpiredReadOnly}
         />
       ))}
@@ -1576,6 +1641,7 @@ export default function App() {
           isAdmin={isAdmin}
           taxProjectionsEnabled={taxProjectionsEnabled}
           isTester={isTester}
+          betaCodeUsed={betaCodeUsed}
           readOnly={isExpiredReadOnly}
         />
       ))}
@@ -1584,7 +1650,6 @@ export default function App() {
         onSaveLogsNow={(newLogs) => savePersistedStateNow({ logs: newLogs })}
         effectiveToday={effectiveToday}
         setConfig={setConfig} saveConfigNow={saveConfigNow} weekConfirmations={weekConfirmations}
-        projectedAnnualNet={projectedAnnualNet}
         baseWeeklyUnallocated={baseWeeklyUnallocated}
         futureWeeks={futureWeeks}
         allWeeks={allWeeks}
@@ -1595,6 +1660,9 @@ export default function App() {
         logK401kGained={logTotals.k401kGained}
         logK401kMatchGained={logTotals.k401kMatchGained}
         logPTOHoursLost={logTotals.ptoHoursLost}
+        logNetLost={logTotals.netLost}
+        logNetGained={logTotals.netGained}
+        adjustedTakeHome={logTotals.adjustedTakeHome}
         ptoGoal={ptoGoal}
         setPtoGoal={setPtoGoal}
         onSavePtoGoalNow={(next) => savePersistedStateNow({ ptoGoal: next })}
@@ -1615,6 +1683,7 @@ export default function App() {
         isAdmin={isAdmin}
         taxProjectionsEnabled={taxProjectionsEnabled}
         isTester={isTester}
+        betaCodeUsed={betaCodeUsed}
         today={effectiveToday}
         weekConfirmations={weekConfirmations}
         onInstallClick={isStandalone ? null : openPwaModal}
@@ -1977,6 +2046,18 @@ export default function App() {
                     </div>
                   );
                 })()}
+              </div>
+
+              {/* Beta Report — docs/TODO.md, admin-only usage/feedback CSV export */}
+              <div style={{ padding: "0 20px 12px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Beta Report</div>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <Pressable onClick={() => handleDownloadBetaReport("summary")} disabled={betaReportStatus?.loading} style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "6px 0", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Usage CSV</Pressable>
+                  <Pressable onClick={() => handleDownloadBetaReport("feedback")} disabled={betaReportStatus?.loading} style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "6px 0", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Feedback CSV</Pressable>
+                </div>
+                {betaReportStatus?.error && (
+                  <div style={{ fontSize: "9px", color: "var(--color-red)", marginTop: "4px" }}>{betaReportStatus.error}</div>
+                )}
               </div>
 
               {/* Demo account editing — admin only */}
@@ -2620,6 +2701,18 @@ export default function App() {
               })()}
             </div>
 
+            {/* Beta Report — docs/TODO.md, admin-only usage/feedback CSV export */}
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Beta Report</div>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <Pressable onClick={() => handleDownloadBetaReport("summary")} disabled={betaReportStatus?.loading} style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "8px 0", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Usage CSV</Pressable>
+                <Pressable onClick={() => handleDownloadBetaReport("feedback")} disabled={betaReportStatus?.loading} style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "8px 0", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer" }}>Feedback CSV</Pressable>
+              </div>
+              {betaReportStatus?.error && (
+                <div style={{ fontSize: "9px", color: "var(--color-red)", marginTop: "6px" }}>{betaReportStatus.error}</div>
+              )}
+            </div>
+
             {/* Demo account editing — admin only */}
             <div style={{ marginTop: "12px" }}>
               <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "6px" }}>Demo Accounts</div>
@@ -2883,7 +2976,7 @@ export default function App() {
         const conf = weekConfirmations[w.idx] ?? null;
         const wLookup = weekNetLookup[w.idx] ?? null;
         const netVal = computeNet(w, config, taxDerived.extraPerCheck, showExtra);
-        const weekLogs = logs.filter(e => Number(e.weekIdx) === w.idx);
+        const weekLogs = logs.filter(e => resolveEventWeekMeta(e, allWeeks).weekIdx === w.idx);
         const fC = n => (n ?? 0).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const fN = n => n != null ? fC(n) : "—";
         const Row = ({ label, val, mono = true, color }) => (
@@ -3254,6 +3347,30 @@ export default function App() {
                 })()}
               </div>
 
+              {/* ── Beta Report ── docs/TODO.md, admin-only usage/feedback CSV export */}
+              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Beta Report</div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <Pressable
+                    onClick={() => handleDownloadBetaReport("summary")}
+                    disabled={betaReportStatus?.loading}
+                    style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer", minHeight: "44px" }}
+                  >
+                    {betaReportStatus?.loading ? "…" : "Usage CSV"}
+                  </Pressable>
+                  <Pressable
+                    onClick={() => handleDownloadBetaReport("feedback")}
+                    disabled={betaReportStatus?.loading}
+                    style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer", minHeight: "44px" }}
+                  >
+                    {betaReportStatus?.loading ? "…" : "Feedback CSV"}
+                  </Pressable>
+                </div>
+                {betaReportStatus?.error && (
+                  <div style={{ fontSize: "10px", color: "var(--color-red)", marginTop: "6px" }}>{betaReportStatus.error}</div>
+                )}
+              </div>
+
               {/* ── Demo Accounts ── */}
               <div style={{ padding: "14px 0" }}>
                 <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
@@ -3359,8 +3476,9 @@ export default function App() {
       {/* ── PWA install instructions (§16) — single instance, opened from drawer + Account panel ── */}
       <PwaInstallModal ref={pwaModalRef} />
 
-      {/* ── Ask Coach (§18.B Phase A) — isAdmin/isTester-gated per the §18 standing constraint ── */}
-      {askCoachOpen && canAccessAiFeatures({ isAdmin, isTester }) && (
+      {/* ── Ask Coach (§18.B) — left admin/tester-only; now also open to a real
+          trial/paid entitlement (docs/coach-entry-points.md §1) ── */}
+      {askCoachOpen && canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
         <AskCoachPanel
           onClose={() => setAskCoachOpen(false)}
           config={config}

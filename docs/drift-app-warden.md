@@ -797,11 +797,15 @@ minus `targetOwedAtFiling` — across remaining taxed checks as `extraPerCheck`.
 > and every net in the app move together; verify via Live State Inspector
 > (`extraPerCheck`, `totalGap`, `taxedWeekCount`) against the Tax Weeks Grid's cell
 > states, and the Year Summary card.
-> **⚠ Known stale-dep finding (this pass):** the memo *uses* `effectiveToday` (`:1127`,
-> past/future split) but its dep array (`:1170`) lists only `today` — and `:1148` uses
-> real `today` for `remainingTaxedChecks`. Under admin Lock Date, the override
-> remediation split does not recompute when the lock changes (until another dep moves),
-> and the two lines disagree about what "now" is. See Block 4, finding 1.
+> **Stale-dep finding — fixed.** The memo *uses* `effectiveToday` (past/future split) but
+> its dep array listed only `today`, and `remainingTaxedChecks` used real `today` outright
+> — so under admin Lock Date the override-remediation split didn't recompute when the lock
+> changed, and the two lines disagreed about what "now" was. Fixed per F118's own rule
+> ("every 'now'-derived number reads `effectiveToday` unless it's entitlement/billing" —
+> tax withholding isn't): `remainingTaxedChecks` now filters on `effectiveToday`, and the
+> dep array lists `effectiveToday` (not `today`, which the body no longer reads). Lock
+> Date now fully — and consistently — simulates the Tax Plan gap calc, same as every
+> other schedule-derived number in the app. See Block 4, finding 1.
 
 **F29 · Net derivation tiers** — `projectedAnnualNet` `App.jsx:1173–1175`,
 `weekNetLookup` `:1217–1233`, `futureWeekNetsRaw`/`futureWeekNets` `:1235–1242` — **[L]**
@@ -913,15 +917,16 @@ same patch, clears `taxRatesEstimated`, compute-then-eager-saves (compliant).
 - *Tax-toggle eager saves* (`debc0cb`) — per-week taxed/exempt toggles were on the
   debounce; now every toggle saves immediately.
 
-**Standing findings from this pass (open — decisions owed):**
-1. **Stale memo dep in `taxDerived` (F28)** *(queued as DW-2 in `docs/BUG_FIX_TODO.md`)*:
-   uses `effectiveToday` at `App.jsx:1127` but
-   deps at `:1170` list only `today`; `:1148` independently uses real `today`. Under
-   admin Lock Date the remediation split lags until an unrelated dep changes, and
-   "remaining taxed checks" ignores the lock entirely — the Lock Date tool's core promise
-   (simulate a date and read these exact numbers) is weakened. Admin-only blast radius.
-   Fix candidates: add `effectiveToday` to deps and decide whether `:1148` should honor
-   it; needs owner intent on Lock Date's scope over tax math.
+**Standing findings from this pass:**
+1. **Stale memo dep in `taxDerived` (F28) — fixed.** *(DW-2 in `docs/BUG_FIX_TODO.md`)*:
+   used `effectiveToday` for the past/future remediation split but
+   deps listed only `today`; `remainingTaxedChecks` independently used real `today`. Under
+   admin Lock Date the remediation split lagged until an unrelated dep changed, and
+   "remaining taxed checks" ignored the lock entirely — the Lock Date tool's core promise
+   (simulate a date and read these exact numbers) was weakened. Admin-only blast radius.
+   Resolved per F118's rule (tax math isn't entitlement/billing, so it should honor the
+   simulated date like everything else does): `remainingTaxedChecks` now filters on
+   `effectiveToday`, and the dep array lists `effectiveToday` in place of `today`.
 2. **Reopen Last Check-In lacks eager save (F32) — fixed.** *(DW-3 in
    `docs/BUG_FIX_TODO.md`)*: deletion of the confirmation record +
    its log entry rode the 800ms debounce (bare functional `setState`s), contrary to the
@@ -1159,13 +1164,19 @@ weekly premium fields) are written by the wizard (§7, Step 3) and by `BenefitsD
 (T5), and read by Spine A (`weeklyBenefitDeductions`, `buildYear`) and LogPanel (T6) —
 that write-two-read-two square is the drift surface that remains real.
 
-### 11.3 Cleanup queued
+### 11.3 Cleanup — done
 
-Deleting `BenefitsPanel.jsx` (and its coverage tests) is the owner's call — queued as
-**DW-4** in `docs/BUG_FIX_TODO.md` (owner-scheduled dead-code cleanup pass: delete the
-file + tests and import-graph-sweep for any other orphans in the same investigation)
-and mirrored in CLAUDE.md's Known Cleanup list. The risk being managed isn't runtime —
-it's someone "fixing" or extending the dead file believing it ships.
+**DW-4 (fixed).** `BenefitsPanel.jsx` and its coverage tests (`panels.test.jsx`'s
+`describe('BenefitsPanel', ...)` block) are deleted, on owner sign-off. Before deleting,
+re-ran the import-graph sweep the finding called for across all of `src/components/`
+(35 files) and `src/lib/` (18 files) — `BenefitsPanel.jsx` was the only module reachable
+from nothing but its own test; no other orphans turned up. (Noted in passing, not part of
+this fix: `formatFiscalWeekLabel` — a `fiscalWeek.js` export superseded per its own
+in-file comment — is imported-but-uncalled in four files, `App.jsx`/`LogPanel.jsx`/
+`BudgetPanel.jsx`/`HomePanel.jsx`, though still genuinely called from
+`DemoAccountTree.jsx`. That's dead-import cruft on a still-live export, a different and
+smaller class than DW-4's whole-module orphan — left for a future lint-debt pass.)
+CLAUDE.md's file-structure map and Known Cleanup list updated in the same commit.
 
 ---
 
@@ -1342,9 +1353,9 @@ the paywall gate; the comment at `:269–277` records it).
 - *Tax Plan unlock chain* (`342d2ae`→`09c7609`→`a430fbf`→`a643153`) — manual-only
   unlock, wizard opt-in never reveals, `isAdmin` structurally ⊇ `isTester`.
 - *Dropped-prop crash* (`04b246c`) — `onInstallClick` was dropped in a refactor and
-  crashed the whole Account tab; ProfilePanel's 18-prop signature makes it the most
-  prop-fragile component in the app — treat any App.jsx wiring change here as
-  crash-risk until rendered once.
+  crashed the whole Account tab; ProfilePanel's prop signature (18 at this pass, now 19
+  after `betaCodeUsed` was added 2026-07-24) makes it the most prop-fragile component in
+  the app — treat any App.jsx wiring change here as crash-risk until rendered once.
 - *Google-only password form* (`6e123e8`) — identity-gated forms, F52.
 
 **Standing findings from this pass:** none filed as DW defects. The `investorcodes`
@@ -1353,6 +1364,18 @@ tap-only state and the InvestorAdminPanel's data calls are RLS-gated server-side
 becomes a real gap only if sub-view state ever gains an external setter, which its
 IF/THEN now guards. Queue-visible as watch item **DW-W2** in `BUG_FIX_TODO.md`. The
 D5 correction (active-systems §17 sub-view list) was applied in-pass per protocol.
+
+**Cross-reference (2026-07-24, beta program work):** two new sub-views added —
+`betaredeem` (`BetaRedeemDetail`) and `betafeedback` (`BetaFeedbackDetail`), routed the
+same tap-only way as every other `activeSection` case. `betaredeem`'s row is intentionally
+**always visible** (not `isAdmin`-gated like `investorcodes`) — same "always-visible
+regardless of invite" posture LoginScreen's investor-code box already uses; reachability
+carries no privilege since `api/seed-beta.js` re-validates the code server-side regardless
+of how the form was opened. `betafeedback`'s row IS gated (`isBetaTester` only), inheriting
+the exact F45/DW-W2 asymmetry already accepted for `investorcodes` — not a new instance to
+track separately. The real boundary for both is server-side (`api/seed-beta.js`'s
+re-validation; migration 031's insert-eligibility trigger for feedback), consistent with
+why DW-W2 was filed as a watch item, not a defect.
 
 ---
 
@@ -1370,19 +1393,27 @@ BenefitsPanel).
 
 ### 13.1 Block 1 — Critical inventory (function by function)
 
-**F54 · Log Effect Summary local reduce** — `LogPanel.jsx:72–84` — **[L]**
-⚠ **DW-5.** The summary card's `adjTH`/`adjWA`/`projS` are re-derived from a local
+**F54 · Log Effect Summary** — `LogPanel.jsx:73–86` — **[L]**
+**DW-5 (fixed).** The summary card's `adjTH`/`adjWA`/`projS` were re-derived from a local
 `logs.reduce` calling `calcEventImpact(e, config)` — **without `weekMeta`** — while the
 values Income/Home display come from App's `eventImpact` memo (`App.jsx:1075–1119`),
 which resolves each event's real week (`weekMeta.isHighWeek`, actual `grossPay`).
-Second divergence vector: App's `totalNetAdjustment` counts only events with a finite
-`weekIdx` (`:1094–1096`); the local reduce counts everything. So the Log tab's
-"Adjusted Take-Home" and Income's Year Summary can disagree on the same screen.
-> **IF** touching either derivation, **THEN** converge them instead: thread
-> `logTotals.adjustedTakeHome` (and the needed aggregates) into LogPanel the way the
-> 401k aggregates already are (`App.jsx:1581–1585`), or pass a weekMeta resolver down.
-> Check: log a missed shift on a high week; Log summary and Income Year Summary move by
-> the identical amount.
+Second divergence vector: App's `totalNetAdjustment` counted only events with a real
+(non-`""`/`null`) `weekIdx`; the local reduce counted everything. A third, undocumented
+until this fix: `adjTH` never subtracted `fundedGoalSpend` even though Income's
+`adjustedTakeHome` does and LogPanel already receives that prop. Fixed by converging on
+one fact per number: `adjustedTakeHome`, `logNetLost`, `logNetGained` are now threaded
+down from `App.jsx`'s `logTotals` (same pattern as the existing `logK401kLost` props) and
+consumed directly — "Adjusted Take-Home," "Total Net Lost," "401k Lost," and "PTO Accrual
+Lost" all read the authoritative prop, not a local recomputation. Only `grossLost`/
+`grossGained`/`bucketHoursDeducted` (no App-level aggregate exists for these) stay locally
+reduced — but now via `resolveEventWeekMeta(e, allWeeks)` (F57), so they use the event's
+real week when one exists.
+> **IF** a new Log Effect Summary tile is added, **THEN** it must consume the matching
+> `logTotals.*` prop if App already computes an equivalent aggregate — a fresh local
+> reduce reopens DW-5. If no App-level equivalent exists, resolve `weekMeta` via
+> `resolveEventWeekMeta` rather than omitting it. Check: `LogPanel.test.jsx` "Log Effect
+> Summary — reads authoritative props" + "Total Gross Lost — resolves the real week."
 
 **F55 · Event CRUD cluster** — add `:275–290`, `saveEdit:299–314`, delete `:753`,
 entry schema (`blank`, `:45–50`), type filter `:399–404` — **[L/G]**
@@ -1406,14 +1437,20 @@ and the check-in linkage (`record.eventId`) depends on id uniqueness.
 > load-bearing, keep it on any new week-changing path.
 
 **F57 · `calcEventImpact` consumption contract** — authoritative: `finance.js:1264`
-(3-arg, `weekMeta` grounds `isWeek2` + `baseGross`); weekMeta-aware caller:
-`App.jsx:1082–1085`; weekMeta-**less** callers: `LogPanel.jsx:74` (F54) and `:644`
-(admin per-entry breakdown) — **[L]**
-> **IF** `calcEventImpact`'s fallback path (rotation-string matching,
-> `projectedGross`) changes, **THEN** the weekMeta-less callers shift while App's
-> numbers don't — widening DW-5. Any new caller must pass `weekMeta` when the event
-> has a resolvable `weekIdx`. Check: per-entry breakdown (admin chevron) matches the
-> hero cards for the same entry.
+(3-arg, `weekMeta` grounds `isWeek2` + `baseGross`); resolver: `resolveEventWeekMeta(event,
+allWeeks)` (`finance.js`, added for the DW-5 fix — "" and null `weekIdx` return `null`,
+never coerce to week 0 via `Number()`); every caller (App's `eventImpact` memo, LogPanel's
+`tot` reduce and its per-entry `imp` — F62, `App.jsx`'s Week Inspector `weekLogs` filter,
+`DemoAccountTree.jsx`'s mirrored `eventImpact`) now goes through it — **[L]**
+`calcEventImpact` itself also had the same `Number(event.weekIdx)` coercion bug internally
+(its `pastWeekTaxStatusOverrides`/`taxedWeeks` lookup), fixed in the same pass: an event
+with no real week no longer borrows week 0's tax status.
+> **IF** a new caller reads `event.weekIdx`, **THEN** it must go through
+> `resolveEventWeekMeta` rather than `Number(e.weekIdx)` directly — that's the one place
+> "does this event have a real week" is answered (CLAUDE.md's cardinal L rule). Check:
+> `finance.test.js`'s `resolveEventWeekMeta` suite + the "weekIdx must not be coerced to
+> week 0" `calcEventImpact` suite; per-entry breakdown (admin chevron) matches the hero
+> cards for the same entry.
 
 **F58 · 401k display block (ported)** — `:86–98`; gates `has401k:159` (DHL: enrollment
 **and** rate; base: rate only) — **[L]**
@@ -1462,13 +1499,13 @@ thresholds, display-only vs. configured warn/terminate) — **[L/G]**
 > deliberately-simpler mechanism active-systems §7 documents — product decision,
 > surface it.
 
-**F62 · Admin per-entry breakdown** — `:644+` (chevron-expanded `calcEventImpact`
-output per entry), `isAdmin`-gated — **[G]**
-Shares F57's weekMeta-less caveat. The breakdown is the Warden's own instrument for
-event-impact verification (Spine F) — its numbers must match the hero-card aggregates.
-> **IF** DW-5's fix converges the derivations, **THEN** update this call site in the
-> same commit — leaving it weekMeta-less would make the diagnostic tool the last liar
-> in the room.
+**F62 · Admin per-entry breakdown** — `:653` (chevron-expanded `calcEventImpact`
+output per entry, now via `resolveEventWeekMeta`), `isAdmin`-gated — **[G]**
+**DW-5 (fixed, same commit as F54/F57).** Previously shared F57's weekMeta-less caveat.
+The breakdown is the Warden's own instrument for event-impact verification (Spine F) —
+its numbers must match the hero-card aggregates, and now do: the same
+`resolveEventWeekMeta(entry, allWeeks)` call that grounds the aggregate reduce (F54)
+grounds this per-entry call too.
 
 ### 13.2 Block 2 — Drift trigger map (cross-boundary)
 
@@ -1477,7 +1514,7 @@ event-impact verification (Spine F) — its numbers must match the hero-card agg
 | `calcEventImpact` signature/branches (Spine A) | F54/F57/F62 callers, App's `eventImpact`, WeekConfirmModal Layer-2 pre-fills, per-week `weeklyNetAdjustments` → goal funding (§9 F29) | `finance.test.js` + one event of each type; hero cards = per-entry breakdown = Income delta | D1 |
 | Event schema (`blank` shape) | F55's three writers (LogPanel CRUD, check-in spawns, F30 mirror), `record.eventId` linkage, `sumJobHuntIncome` (reads `jobHuntIncomeLog`, *separate* log — don't conflate) | Schema greps + `WeekConfirmModal.test.jsx` | D1 |
 | `EVENT_TYPES` (`constants/config.js`) | F55 filter gates, `calcEventImpact` branch coverage, hero-card groupings, attendance history month grouping | Add/rename type → every switch handles it or explicitly ignores | D1 |
-| `logTotals` threading (`App.jsx:1581–1585`) | F58's adjusted 401k figures; DW-5's fix will widen this contract to net totals | Prop list vs. `eventImpact` return shape | D3 |
+| `logTotals` threading (`App.jsx:1578–1587`) | F58's adjusted 401k figures + F54's net/adjustedTakeHome figures (widened by the DW-5 fix) | Prop list vs. `eventImpact` return shape — `DemoAccountTree.jsx`'s mirrored `<LogPanel>` call must carry the same prop set | D3 |
 | `ptoGoal`/`ptoHoursOverride`/bucket override fields | F59/F60/F61 + `db.js` `pto_goal` column + DB Row drift badge | Kill-tab tests per mutation; drift badge clean | D3 |
 | `allWeeks` 401k columns (`k401kEmployee`/`k401kEmployer`, Spine A) | F58 sums + Week Inspector's 401k display + the known `$14.96 match with matchRate 0` incident class (CLAUDE.md Week Inspector notes) | Week Inspector vs. this block on one week | D1 |
 | UpgradePanel replacement (T9) | Like Income (§9), this panel has **no readOnly shadow** — replaced wholesale when expired (`App.jsx:1570`) | If expired-mode ever renders LogPanel, every mutation is live | D4 |
@@ -1503,14 +1540,23 @@ event-impact verification (Spine F) — its numbers must match the hero-card agg
   assumptions regressing into them is the watch.
 - *Rolling pay-week dropdown* (`7532c86`, `e7e5faa`) — dropdown order/labels are
   deliberate UX; the week-change reset (F56) shipped with it.
+- *Parallel adjusted-take-home derivation (F54/F57/F62), fixed* — `DW-5`: LogPanel
+  re-derived net totals weekMeta-less while Income/Home read App's weekMeta-aware
+  `logTotals` — same-screen disagreement was possible, plus a third undocumented
+  divergence (Log's `adjTH` never subtracted `fundedGoalSpend`). Fixed by threading
+  `logTotals.adjustedTakeHome`/`netLost`/`netGained` down (the 401k aggregates already
+  set the pattern) and by extracting `resolveEventWeekMeta` (`finance.js`) so every
+  `calcEventImpact` caller — App's `eventImpact`, LogPanel's aggregate and per-entry
+  calls, the Week Inspector's `weekLogs` filter, `DemoAccountTree.jsx`'s mirrored
+  `eventImpact` — resolves the same real week the same way. Also fixed a sharper sibling
+  bug found while tracing this: `Number("")` and `Number(null)` both evaluate to `0`, so
+  the old `Number(e.weekIdx)` coercion (in App's `eventImpact`, the Week Inspector filter,
+  and inside `calcEventImpact`'s own tax-status lookup) silently misattributed an
+  unresolved-week event to week 0 instead of excluding it. `resolveEventWeekMeta` closes
+  that for good — `""`/`null` now resolve to `weekIdx: null`, never `0`.
 
 **Standing findings from this pass:**
-1. **Parallel adjusted-take-home derivation (F54/F57/F62)** *(queued as DW-5 in
-   `docs/BUG_FIX_TODO.md`, still open)*: LogPanel re-derives net totals weekMeta-less while
-   Income/Home read App's weekMeta-aware `logTotals` — same-screen disagreement
-   possible; fix by threading `logTotals` down (the 401k aggregates already set the
-   pattern).
-2. **`ptoGoal` lacks eager save (F60) — fixed** *(DW-6)*: Save/Clear rode the
+1. **`ptoGoal` lacks eager save (F60) — fixed** *(DW-6)*: Save/Clear rode the
    debounce; it was the only rule exception on this surface, and a gap in the `764da5b`
    audit's coverage. `onSavePtoGoalNow` added to App + CLAUDE.md's eager-save table;
    both call sites now eager-save.
@@ -1556,6 +1602,26 @@ get no time to await `getSession()`.
 > exact class `168cc4b` fixed. The snapshot must stay listener-maintained, never
 > promise-fetched at flush time.
 
+**F120 · `getCurrentUserId` session fallback** — `supabase.js:50–70` — **[L]**
+The identity primitive every `db.js` load/save/flush path resolves through. It probes
+`auth.getUser()` first (a `/auth/v1/user` network round-trip) but **falls back to the
+persisted session (`getSession()`, a local read) when `getUser()` returns a null user
+without throwing** — which is exactly what happens right after a deploy reload, when the
+access token is mid-refresh or the round-trip transiently fails. This is the **third
+door** to the `cc227ad` wizard-reset failure, alongside F66's load-failure path and
+`db.js:170–181`'s PGRST116 query rule: a transiently-null `userId` sends `loadUserData`
+into its `if (!userId)` branch (`db.js:103–118`) → `DEFAULT_CONFIG` (`setupComplete:false`)
+→ setup wizard reopens for a signed-in user, overwriting the real row if completed. The
+build/deploy reload is the trigger that opened this door in production; the getUser→session
+fallback closes it because the load effect only runs once `authedUser` (session-derived) is
+set, so the session is always in storage by then.
+> **IF** this probe order changes, or a caller starts trusting `getUser()`'s null
+> directly, **THEN** the wizard-reset-over-real-data bug returns through the identity
+> layer even with F66 and the PGRST116 rule intact. The `getUser()`-succeeds path must
+> stay behaviorally unchanged (session fallback is null-only); only a genuinely absent
+> session (real SIGNED_OUT — supabase-js clears storage) may resolve null. Check:
+> `supabaseAuth.test.js`'s three cases (normal id, null-user→session fallback, both empty).
+
 **F65 · Auth boot chain** — `App.jsx:422–479` (`onAuthChange` effect) — **[G]**
 Four load-bearing guards, each with its own incident history:
 (1) **No `getSession()` pre-check** — INITIAL_SESSION is the `authChecked` gate,
@@ -1586,7 +1652,8 @@ fields when `pendingSaveRef` is set (a load must not revert an edit made in the 
 800ms) but always applies tier flags/subscription. Failure path: retry once after
 1.5s, **never fall back to defaults** — conflating failure with "new account" is the
 `cc227ad` wizard-re-trigger bug (and `db.js:170–181`'s PGRST116 rule is the same law
-on the query side).
+on the query side; F120's `getCurrentUserId` session fallback is the same law on the
+identity side — three doors, one failure).
 > **IF** the dep list, the pending-save guard, or the retry policy changes, **THEN**
 > walk the same incident set as F65 plus: transient offline reload on an existing
 > account must show a retry/loading state, never the setup wizard. Check:
@@ -2011,6 +2078,14 @@ of every `row.*` field `_lifecycleEngine.js` reads — kills the class, not just
 **Standing findings from this pass:** none open. DW-7 (above) was this pass's one
 defect and is now fixed.
 
+**Cross-reference (2026-07-24, beta program work):** the day-71 outcome-application script
+(`database/beta-offboarding-day71.sql`, docs/TODO.md §35) explicitly resets
+`trial_ends_at`/`access_ends_at` for every tier rather than toggling `is_tester` alone —
+confirmed while building it that this is required, not optional, precisely *because* F81
+already establishes `is_tester` doesn't bypass the paywall. Cited here as the concrete
+artifact proving F81's design intent held under a real, separate feature built later — not a
+new finding, a confirmation.
+
 ---
 
 ## 17. T10 — UI-UX Drift Map
@@ -2366,7 +2441,7 @@ migrations that touch expense/loan history).
 | `getEffectiveAmount`/`getEffectiveAmountForMonth`/`getPhaseIndex` resolution (F102/F38) | F38's four consumers + `computeGoalTimeline` per-week spend + `computeJobLossRunway` burn + Coach grounding | One expense (override + history): all surfaces + goal ETA + runway agree | D1 |
 | `expense.js` conversion factors / `CHECKS_PER_MONTH` (F101) | F36/F37/F42 Budget, F39 food floor, breakdown rows, Coach per-expense lines | `expense.test.js`; monthly-cycle bill same cost on card/breakdown/Coach | D1 |
 | `computeGoalTimeline` epoch handling / return shape (`remainingAtEnd`) | F18 (Home cards + epoch arg), F21 (`yearEndGoalDraw` fallback), Coach goal lines, T4 timeline bar | Grep `computeGoalTimeline(` for epoch-arg parity; next-year-ETA goal subtracts only this-year slice | D1 |
-| `calcEventImpact` branch/fallback (F57) | App `eventImpact` memo, F54 (Log summary — weekMeta-less, DW-5), F62 (per-entry breakdown), goal-funding `weeklyNetAdjustments` (F29) | `finance.test.js` one event per type; hero cards = per-entry breakdown = Income delta | D1 |
+| `calcEventImpact` branch/fallback (F57) | App `eventImpact` memo, F54 (Log summary — now weekMeta-grounded via `resolveEventWeekMeta`, DW-5 fixed), F62 (per-entry breakdown), goal-funding `weeklyNetAdjustments` (F29) | `finance.test.js` one event per type; hero cards = per-entry breakdown = Income delta | D1 |
 | `buildLoanHistory` regeneration (F103) | F41 zone (DW-W1) — Budget cards, JobLossEntry due-date, F67 load regen | `finance.test.js` loan cases; mid-quarter payoff manual check; **do not** add past-week-truth consumer | D2 |
 | Tax primitives (`fedTax`/`stateTax`/state table, F104) | F28 gap math → `extraPerCheck` → every net (F98) | Live Inspector `totalGap`/`extraPerCheck` vs Tax Weeks Grid; MO DHL resolves `moFlatRate` | D1 |
 | `resolveActiveWeeksThisYear` (F13) / `FISCAL_WEEKS_PER_YEAR` | F14 `weeklyIncome`, F16 `annualSavings`, Coach savings line, DemoAccountTree — all four share it | Grep consumer count (only grows); mid-year `firstActiveIdx` account: Home tile = Ask Coach | D1 |
@@ -2386,7 +2461,7 @@ instead of calling the named function is a D1 finding by definition (§3 cardina
 | "Typical weekly income" | `weeklyIncome` = `projectedAnnualNet / activeWeeksThisYear − bufferPerWeek` (F14, App.jsx) | Home (F16), Coach (Spine D), Live Inspector, Job Loss panels |
 | Projected annual net | `projectedAnnualNet` (App.jsx, sums `computeNet` over active weeks) (F29) | Home Year-End (F17), Income Year Summary (F33) |
 | Active weeks this year | `resolveActiveWeeksThisYear` (`fiscalWeek.js`, F13) | `weeklyIncome` (F14), `annualSavings` (F16), Coach, DemoAccountTree |
-| Adjusted take-home (event-folded) | `logTotals.adjustedTakeHome` from App `eventImpact` memo (F17/F33) — **one value** | Home Year-End (F17), Income Year Summary (F33), Log summary target (F54/DW-5) |
+| Adjusted take-home (event-folded) | `logTotals.adjustedTakeHome` from App `eventImpact` memo (F17/F33) — **one value** | Home Year-End (F17), Income Year Summary (F33), Log summary (F54, threaded down directly since the DW-5 fix) |
 | Withholding gap / `extraPerCheck` | `taxDerived` (App.jsx, F28) over `fedTax`/`stateTax` (F104) | Income tax card, Tax Weeks Grid, `computeNet` `showExtra` term (F98) |
 | Event net impact (missed/PTO/bonus) | `calcEventImpact` (F57) | App `eventImpact`, Log cards (F54), per-entry breakdown (F62), goal funding (F29) |
 | Expense cost in month M | `getEffectiveAmountForMonth` (F38/F102) | Budget cards (F36), `computeRemainingSpend`, budget health, Coach |
@@ -2549,6 +2624,28 @@ investor display fields, wizard gate flags) is noise and must never trigger a ro
 > capture is broad by design (Master Timeline, TODO §19). Check: `configHistory.test.js`; DB
 > Row Viewer's config-history line after a sensitive edit.
 
+**F120 · Encryption trigger — no field-level encryption exists today** — `configHistory.js`
+(`HISTORY_SENSITIVE_FIELDS`), `database/migrations/`, `lib/supabase.js`, `db.js` — **[G]**
+Every persisted `user_data` field (§19.3 authority table) currently relies entirely on TLS in
+transit (Supabase's HTTPS endpoint) + RLS for access control (migration 019) — there is no
+field-level encryption anywhere in the stack: no `pgcrypto`, no application-layer AES/cipher, no
+encrypted column of any kind. This is a **documented-intended current gap, not a defect** — every
+field the app collects today (income, schedule, budget, goals, deductions) sits below the
+sensitivity threshold where RLS-only protection is inadequate. Full writeup and TODO tracking:
+`docs/TODO.md` §27.
+> **IF** a new persisted field is proposed that falls into a genuinely high-sensitivity class —
+> SSN, date of birth, bank account/routing number, government ID, or anything else a reasonable
+> user would expect encrypted-at-rest beyond Supabase's platform default — **THEN** it must NOT
+> simply join `HISTORY_SENSITIVE_FIELDS` (F108) or ride the plain F110 four-site procedure like an
+> ordinary field. An explicit encryption decision is required *before* the migration lands:
+> application-layer encrypt-before-write / decrypt-after-read (the `db.js` write path /
+> `loadUserData`, F67) or a `pgcrypto`-backed column via a dedicated migration — never a bare
+> `TEXT`/`JSONB` column relying on RLS alone. Name the sensitivity class in the migration's own
+> comment, and update CLAUDE.md's Persistence section with a pointer back to this entry (kept
+> current the same way the migration-number note is, per F109 below). Check: before any field in
+> that class is added, confirm an explicit encryption decision was documented — "column exists,
+> RLS covers it" is not sufficient for this class of data.
+
 **F109 · Migration-folder rules** — `database/migrations/` — **[G]**
 Ordered, numbered SQL. **BOOKMARK files are never migrations** — `022_BOOKMARK_schema_snapshot_2026-07-10.sql`
 is a full-schema recap (schema state through 021) that exists so a session reads one file
@@ -2587,6 +2684,33 @@ back on read, with a `DEFAULT_CONFIG` default so old rows get it.
 > and the ref share one field set would make this class structural. Check: kill-tab test on
 > the new field's discrete action; DB Row drift badge clean after save.
 
+**F121 · Beta program fields — a DIFFERENT category than F110, not a variant of it** —
+`user_data.beta_code_used`/`beta_started_at`/`halfway_email_sent_at` (migrations
+025/027/029), `beta_activity_events`, `beta_codes` — **[L]**
+F110's four-site procedure governs fields the **client writes** via the debounce/eager-save
+machinery. None of these fields are client-written at all: `beta_code_used` is set only by
+manual SQL or `api/seed-beta.js` (service role); `beta_started_at`/`halfway_email_sent_at`
+are trigger/cron-stamped; `beta_activity_events` rows are inserted directly by the client
+(`db.js` `logBetaEvent`/`logBetaFeedback`) but never touch `saveUserData`/
+`flushUserDataKeepalive` at all — a wholly separate write path from the F105/F106 primitive.
+Running F110's checklist against these fields would be checking the wrong procedure entirely.
+> **IF** a new beta-program field is added, **THEN** the correct checklist is: (a) is it
+> client-writable? If yes, it needs a RLS policy AND a column grant, and probably belongs in
+> F110 after all. If no (privileged/derived), it must be **excluded** from
+> `saveUserData`/`flushUserDataKeepalive`'s destructure (same as `is_tester`/`is_admin`) and
+> present in `loadUserData`'s read mapping (F67) with a safe default. (b) if it's written by a
+> trigger, does the trigger run `SECURITY DEFINER`? 021's original trigger shipped without it
+> and needed migration 024 to fix — 027's and 031's triggers got it right from the start by
+> citing that exact precedent in their own migration comments. (c) if it's an
+> `beta_activity_events` write gated by a client-side predicate
+> (`isTrackedBetaTester`), **THEN** per §20's cardinal rule ("every gate exists twice or not
+> at all") the real boundary must also exist server-side — migration 031's
+> `check_beta_activity_event_eligibility` trigger is that boundary; a future write path to
+> this table that bypasses the trigger (e.g. a new service-role route inserting on a user's
+> behalf without re-checking) would silently reopen the gap the trigger closed. Check:
+> attempt an insert as a non-tracked authenticated user (own `user_id`, no tester flags) —
+> must fail with the trigger's raised exception, not silently succeed.
+
 **Reverse index — surface F-entries already covering Spine-B consumers (do not restate):**
 F8 (wizard `savePersistedStateNow`), F9/F10 (config-history watcher effect + baseRate read
 chain), F35 (`applyExpenseUpdate` wrapper), F46 (ProfilePanel card pattern), F31 (check-in
@@ -2605,7 +2729,9 @@ F20 (readOnly noop shadow).
 | `HISTORY_SENSITIVE_FIELDS` / `diffSensitiveFields` semantics (F108) | F9 watcher, `DIFF_FIELDS` (§7 F7), §22 read slice (F10) | Sensitive edit → DB Row config-history line; undefined→null edit records nothing; `configHistory.test.js` | D5/D2 |
 | `saveConfigSnapshot` row shape (`snapshot`/`changed_fields`/`effective_from`) | `extractBaseRateHistory` filter (F10, `db.js:19`), Master-Timeline future readers | A `baseRate` edit produces a readable row; future-dated rate shows old rate pre-effective (Week Inspector) | D2 |
 | `useLocalStorage` scope (F107) | `coachNetWorthSignal` throttle (F24) — device-local by design | Grep keys stay ephemeral; no account truth added; `useLocalStorage.test.js` | D3 |
+| A new beta-program field/write path (F121) | Client-writable → F110 instead; privileged/derived → excluded from F68 destructure + present in F67 read map; trigger-written → `SECURITY DEFINER`; gated table insert → server-side trigger enforcement, not just client JS | Confirm which category before applying any checklist; non-eligible insert attempt must fail server-side | D3/D4 |
 | `user_data` column set (any migration, F109) | F110 sites, BOOKMARK freshness, CLAUDE.md migration-number note, RLS grants (F69) | Next number skips BOOKMARKs (025); append BOOKMARK + update note same PR; F69 checklist | D2/D5 |
+| A new field carrying regulated/high-sensitivity data — SSN, DOB, bank/routing, gov ID (F120) | Must NOT reuse the plain F110 four-site procedure alone; needs an explicit encryption decision first | Confirm app-layer or `pgcrypto` encryption chosen and documented before the migration lands; CLAUDE.md Persistence section updated; `docs/TODO.md` §27 | D2/D5 |
 | Debounce interval / dep array (F106) | Continuous-edit persistence; must NOT gain a discrete-action dependency that should be eager instead | 800ms after typing writes once; a Save button does not rely on it | D3 |
 
 ### 19.3 Block 3 — Authority table (persisted field → write paths → readers)
@@ -2660,6 +2786,13 @@ now self-warns (T7 pass). `useLocalStorage`'s device-local scope (F107) is docum
 (the localStorage→Supabase vestige), not a defect — filed as a standing note, not a DW row,
 because nothing account-critical routes through it today; it would **promote to a defect** the
 moment any money/time/account field is stored through it instead of `user_data`.
+
+**No field-level encryption exists today (F120)** — every persisted field currently relies on
+TLS + RLS only, no `pgcrypto`/application-layer encryption anywhere. Documented-intended for the
+app's current data surface (no SSN/DOB/bank/gov-ID fields collected) — filed as a standing note,
+not a DW row, same treatment as F107 above. It would **promote to a defect** the moment a field in
+that sensitivity class is added without an explicit encryption decision (see F120's IF/THEN and
+`docs/TODO.md` §27).
 
 ---
 
@@ -2734,6 +2867,34 @@ flag flip), fixed in this pass.
 > will NOT catch this — the seam is the query, not the pure function — which is exactly why
 > the fix is a runtime test against the actual `.select()` call, not another hand-built-row test.
 
+**F122 · `isTrackedBetaTester` — a tracking-eligibility predicate, not a feature gate** —
+`entitlements.js` — **[G]**
+Deliberately does NOT build on `hasTesterAccess` (F111's rule — "every feature gate is built
+on `hasTesterAccess`" — applies to *feature-access* gates; this isn't one). It decides
+whether an account's activity gets logged to `beta_activity_events`
+(`isTester && betaCodeUsed`), not whether a feature is visible. `isAdmin` does NOT grant this
+on its own — the function doesn't even accept an `isAdmin` param — because admin accounts
+aren't part of the scored beta cohort, unlike every other gate in this file where `isAdmin`
+is structurally a superset. Client-side callers: `App.jsx` (login event), `HomePanel.jsx`
+(goal events), `BudgetPanel.jsx` (expense events), `ProfilePanel.jsx`'s `BetaFeedbackDetail`
+(feedback events). Server-side enforcement: migration `031`'s
+`check_beta_activity_event_eligibility` trigger re-derives the same
+`is_tester AND beta_code_used IS NOT NULL` condition directly against `user_data`, closing
+the gap where — until that migration — this predicate was checked only in client JS
+(§20's cardinal rule 1 violation, found and fixed in the same drift pass that added this
+entry).
+> **IF** a new client call site logs to `beta_activity_events`, **THEN** it must gate through
+> `isTrackedBetaTester` (never re-derive `isTester && betaCodeUsed` inline — same
+> inline-re-derivation drift F111 already warns about for `hasTesterAccess`) — but note the
+> client-side gate is now UX-only, not the real boundary; migration 031's trigger is. **IF**
+> the trigger's eligibility condition changes, **THEN** `isTrackedBetaTester` must change to
+> match — two expressions of one rule, in two languages (JS + plpgsql), with no shared source;
+> a future edit to one without the other silently reopens either a false-reject (trigger
+> stricter than the client checks for, legitimate testers' events start failing) or the
+> original client-only-gate gap (trigger looser than intended). Check: `entitlements.test.js`
+> covers the JS half; migration 031's own verification block covers the SQL half — no single
+> automated test spans both today.
+
 **Reverse index — surface F-entries already covering Spine-C consumers (do not restate):**
 F80 (`getEntitlement` state machine + real-clock rule), F81 (`paywallBypassed`/
 `isExpiredReadOnly` enforcement fork), F82 (upgrade surfaces), F85/F86 (lifecycle engine +
@@ -2754,6 +2915,7 @@ F71 (trial seeding), F78 (TrialExplainer gate).
 | Tier-flag mapping (`is_admin`/`is_tester`/`is_investor` → camelCase, F67) | Client reads via mapping, never writes; every gate's inputs; `config.isInvestor` (paywall bypass) vs `row.is_investor` (cron) — two spellings of one fact | `db.test.js` mapping cases; DB Row Viewer tier columns | D1/D4 |
 | Tester 6-month window semantics (§23, migration 021 trigger) | F81 non-bypass (testers ride the real paywall) **and** F86 cron exemption (DW-7) — two halves of one promise | Expired tester: sees paywall in-app, never dunned/deleted by cron | D4 |
 | A new tier flag / privileged column | F69 full checklist (migration RLS grant + service-role route + F67 read map + F68 write exclusion + gate on `hasTesterAccess` + cron exemption decision) | Post-migration: plain client upsert still works, new column rejects client writes | D4 |
+| `isTrackedBetaTester`'s eligibility condition (F122) | Migration 031's trigger — same rule, two languages, no shared source | Change both together; non-eligible insert attempt still fails after either-side edit | D4 |
 
 ### 20.3 Block 3 — The one-page gate registry
 
@@ -3111,9 +3273,9 @@ access or extend the hidden grace).
 > **IF** a new "now"-derived number is added, **THEN** it should read `effectiveToday` (so Lock
 > Date can simulate it) **unless** it's entitlement/billing (which must read real wall-clock —
 > the F53/F80 rule). **IF** a tool's read source drifts from what it claims to show, **THEN**
-> every drift check that "asks the user to run [tool]" is now reading a lie — DW-2 is the live
-> specimen: `taxDerived` (F28) *uses* `effectiveToday` but its dep array omits it, so the Lock
-> Date tool's tax-simulation promise silently breaks. **The instrument-panel rule:** any change
+> every drift check that "asks the user to run [tool]" is now reading a lie — DW-2 was the
+> specimen: `taxDerived` (F28) *used* `effectiveToday` but its dep array omitted it, so the Lock
+> Date tool's tax-simulation promise silently broke (fixed — see F28). **The instrument-panel rule:** any change
 > to a tool's read path re-verifies every F-entry that names that tool in its "Check:" (the
 > §23.3 registry is that index). Check: set Lock Date; Live Inspector's Effective Today +
 > `extraPerCheck` + week idx all move together and match the Tax Weeks Grid / Week Inspector.
@@ -3143,8 +3305,8 @@ in a surface F-entry:
 
 **Reverse index — surface F-entries that wire/verify through the toolkit (do not restate):**
 F25 (Lock Date hour-gate bypass in `isPayPeriodPast`), F26 (auto-confirm seed — the reset-all
-landmine), F28 (`taxDerived` — DW-2 stale-dep weakens Lock Date), F32 (Reopen Last Check-In —
-DW-3), F57/F62 (per-entry breakdown — weekMeta-less caveat, DW-5), F68/F110 (DB Row drift
+landmine), F28 (`taxDerived` — DW-2 fixed, stale-dep no longer weakens Lock Date), F32 (Reopen Last Check-In —
+DW-3 fixed), F57/F62 (per-entry breakdown — DW-5 fixed, now weekMeta-grounded), F68/F110 (DB Row drift
 badge columns), F9/F10 (config-history line in DB Row viewer), F53/F80 (Live Inspector Sub
 Phase — real-clock rule), plus the Week Inspector "Check:" in F15/F29/F96/F97/F98/F99/F103 and
 the Live Inspector "Check:" in F14/F51.
@@ -3154,7 +3316,7 @@ the Live Inspector "Check:" in F14/F51.
 | If X is updated/altered… | …check Y for drift | How (concrete procedure) | Class |
 |---|---|---|---|
 | `effectiveToday` fork or a tool's read source (F118) | Every F-entry naming that tool in its "Check:" (§23.3 registry) | Set Lock Date; the tool's displayed values move consistently and match a second tool | D4 |
-| A tool stops reading the authoritative function it displays | The tool becomes a lying instrument — DW-2 (Lock Date/`taxDerived`), DW-5 (per-entry breakdown weakMeta-less) are the specimens | The tool's value = the authoritative function's value on the same account | D1 |
+| A tool stops reading the authoritative function it displays | The tool becomes a lying instrument — DW-2 (Lock Date/`taxDerived`) and DW-5 (per-entry breakdown) are the fixed specimens | The tool's value = the authoritative function's value on the same account | D1 |
 | A new persisted field (F110) | DB Row drift-badge column list — the 4th of the four sites | DB Row Fetch shows the new column in the drift comparison | D3 |
 | `getEntitlement`/subscription surfaces | Must stay on real `new Date()`, never `effectiveToday` (F53/F80/F118 boundary) | Live Inspector Sub Phase unaffected by Lock Date; billing card uses wall-clock | D4 |
 | Week-object shape (F97) / `computeNet` (F98) | Week Inspector displays the object + Net Lookup verbatim — it must render every field | Tap a week; Pay + Net Lookup sections show the real fields, no `undefined` | D1 |
@@ -3168,7 +3330,7 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 
 | Tool | What it reads | F-entries that verify through it |
 |---|---|---|
-| **Lock Date** (`effectiveToday` override) | `tempLockDate` → `effectiveToday` (F118), fed into F25/F26/F27/F28/futureWeeks | F25 (hour-gate bypass), F26/F27 (eligibility sim), F28 (tax split — **DW-2 weakens it**) |
+| **Lock Date** (`effectiveToday` override) | `tempLockDate` → `effectiveToday` (F118), fed into F25/F26/F27/F28/futureWeeks | F25 (hour-gate bypass), F26/F27 (eligibility sim), F28 (tax split — **DW-2 fixed**, `remainingTaxedChecks` and the dep array both honor it now) |
 | **Reopen Last Check-In** | `reopenableWeekIdx` + `weekConfirmations[idx]` + its spawned log entry | F32 (**DW-3 fixed**: deletes now eager-save), F26 (projections independent of confirmations premise) |
 | **Force Sync** (push/pull) | `handleForcePush`/`handleForcePull` — flush/reload `latestPersistedStateRef` | Any save-path check (Spine B F105/F106); before/after a save bug |
 | **Config Raw View** | full `config` JSON | F7 (three-way sensitive-field audit), F43/F50 (tax elections), F49 (benefit config) |
@@ -3176,7 +3338,7 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 | **Tax Weeks Grid** | `taxedWeeks` (teal/dark) + `pastWeekTaxStatusOverrides` (red dots) + current-week border | F28 (schedule vs remediation), F50 (override writers), F104 (liability inputs) |
 | **Live State Inspector** | ~16 live values: `effectiveToday`, week idx, `extraPerCheck`, `totalGap`, `taxedWeekCount`, `weeklyIncome`, `bufferPerWeek`, `projectedAnnualNet`, Sub Phase/Trial/Access Ends… | F14 (`weeklyIncome`), F28 (`extraPerCheck`/`totalGap`), F51 (`bufferPerWeek`), F53/F80 (Sub Phase — real clock), F113 (Coach numbers cross-check) |
 | **Week Inspector** | one week object verbatim: schedule, pay (`grossPay`/`taxableGross`/deductions/401k), live `computeNet`, net lookup (baseNet/adjustment/spendable), confirmation record, log entries | F15 (prev-week net), F29 (net tiers), F57 (per-entry vs hero), F58 (401k match), F96/F97/F98 (week shape/net), F99 (DHL rotation), F103 (loan) |
-| **Per-entry breakdown** (LogPanel chevron) | per-event `calcEventImpact` output (weekMeta-**less**) | F57/F62 (**DW-5**: must match hero-card aggregates — currently can't) |
+| **Per-entry breakdown** (LogPanel chevron) | per-event `calcEventImpact` output, via `resolveEventWeekMeta` | F57/F62 (**DW-5 fixed**: matches the hero-card aggregates) |
 
 **Gate matrix (who sees the toolkit):**
 
@@ -3185,7 +3347,7 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 | `isAdmin` | false / true | true: tool sheet (mobile nav Tools icon), Week Inspector on row tap, Reopen, Live pill, per-entry chevron; false: none render |
 | `isOwner` (future) | false / true | true (never grantable via UI): Phase-2 write tools (F119); false: Phase-1 read/sim tools only |
 | Lock Date | unset / set | set: `effectiveToday` drives all "now"-relative reads (F118); **billing stays real-clock** (F53/F80) |
-| Tool integrity | tool reads authoritative fn / tool has drifted | drifted = the instrument lies (DW-2, DW-5) — an L-grade defect despite the toolkit being a Gateway |
+| Tool integrity | tool reads authoritative fn / tool has drifted | drifted = the instrument lies (DW-2, DW-5 — both fixed) — an L-grade defect despite the toolkit being a Gateway |
 
 ### 23.4 Block 4 — Case law & findings
 
@@ -3198,15 +3360,18 @@ A change that breaks the "reads" column blinds every entry in the "verifies" col
 **Standing findings from this pass:** none new filed. Three DW items were
 **tool-integrity defects** — the toolkit's own instruments lying — and are restated here so the
 "a broken tool blinds every check" stance is concrete:
-1. **DW-2** — `taxDerived`'s stale memo dep (F28) means the **Lock Date** tool's tax simulation
-   doesn't recompute when the lock changes; the instrument silently disagrees with the Tax
-   Weeks Grid it's meant to be cross-checked against. Still open.
+1. **DW-2 — fixed.** `taxDerived`'s stale memo dep (F28) meant the **Lock Date** tool's tax
+   simulation didn't recompute when the lock changed; the instrument silently disagreed with
+   the Tax Weeks Grid it's meant to be cross-checked against. Also fixed the accompanying
+   design gap — `remainingTaxedChecks` now honors `effectiveToday` too, per F118's own rule
+   that only entitlement/billing gets the real-clock carve-out.
 2. **DW-3 — fixed.** **Reopen Last Check-In** (F32) deleted without an eager save; the tool
    could lose its own mutation on a backgrounded tab. Now computes both next values
    synchronously and eager-saves them alongside the `setState`s.
-3. **DW-5** — the **per-entry breakdown** (F62) is weekMeta-less, so the admin's own
-   event-impact instrument can disagree with the hero cards it's used to verify — "the
-   diagnostic tool the last liar in the room" (F62's phrasing). Still open.
+3. **DW-5 — fixed.** The **per-entry breakdown** (F62) was weekMeta-less, so the admin's own
+   event-impact instrument could disagree with the hero cards it's used to verify — "the
+   diagnostic tool the last liar in the room" (F62's phrasing). Now grounded via
+   `resolveEventWeekMeta`, same as every other `calcEventImpact` caller.
 No new defect surfaced; the Phase-2 landmines (F119) are pre-build warnings, not live bugs (the
 tools don't exist yet). No D5 corrections owed — CLAUDE.md's Admin Diagnostic Toolkit section
 and active-systems §13 both describe the tools accurately; this section maps how the Warden

@@ -4336,3 +4336,33 @@ audit only, no runtime/visual walkthrough performed):
   the wizard itself was already decluttered per items elsewhere in this doc, but the *landing*
   moment right after "Finish" hasn't been looked at for continuity with what Home now looks like).
 
+---
+
+## 40. Dev Infrastructure — Claude Code on the web headless UI testing
+
+*Built 2026-07-22: `.claude/hooks/session-start.sh` + `.claude/hooks/drive-app.mjs` (see commit
+`90dc305`). Web sessions previously had no way to satisfy CLAUDE.md's "start the dev server and use
+the feature in a browser" rule — the dev server booted straight into a crash (`supabaseUrl is
+required`, no Supabase config anywhere in the container) and Playwright wasn't available. The hook
+now installs deps, and — only once the environment variables below are configured on the Claude
+Code on the web environment itself (never in this repo) — wires up a real login screen and a
+headless-login driver script.*
+
+- [ ] **Pending setup (blocks this from doing anything beyond "no crash") — configure on the
+  Claude Code on the web environment (Environment settings), not in this repo or any `.env` file:**
+  - [ ] `VITE_SUPABASE_URL` — same value as production. Safe to store here: it's public by design.
+  - [ ] `VITE_SUPABASE_ANON_KEY` — same value as production. Also safe to store: Supabase's anon
+    key is meant to be client-embedded (protected by RLS, not secrecy) — it's already sitting in
+    the deployed production JS bundle today.
+  - [ ] `TEST_ACCOUNT_EMAIL` / `TEST_ACCOUNT_PASSWORD` — a **dedicated test/dummy account**, not
+    anthonyhahne20@gmail.com or any real user. Deliberately not `VITE_`-prefixed so these can never
+    end up in the client bundle — only `drive-app.mjs` reads them, straight from `process.env`.
+  - [ ] Once all four are set, confirm with: `CLAUDE_CODE_REMOTE=true .claude/hooks/session-start.sh`
+    should log `.env.local` written + test account present (not the "not set" fallback lines), then
+    `npm run dev &` + `node .claude/hooks/drive-app.mjs` should log in and screenshot the post-login
+    shell instead of exiting with the missing-credentials error.
+- [ ] **Once merged to `master`,** every future Claude Code on the web session on this repo picks
+  the hook up automatically — no per-session setup beyond the one-time env vars above.
+- [ ] **Test account should have Job Loss Mode data seeded** (or get it seeded once logged in) so a
+  session can actually drive the §15.H15/H16 screens this hook was built to unblock testing for —
+  worth doing as part of the same setup pass, not a separate task.

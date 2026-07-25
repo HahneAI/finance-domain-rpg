@@ -256,7 +256,10 @@ describe('SetupWizard — DHL hidden defaults', () => {
     clickNext()
     fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
     expect(screen.getByText(/overtime threshold/i)).toBeTruthy()
-    expect(screen.getByText(/ot multiplier/i)).toBeTruthy()
+    // OT multiplier lives inside the collapsed "Advanced Pay Rules" disclosure.
+    expect(screen.queryByText(/^ot multiplier$/i)).toBeNull()
+    fireEvent.click(screen.getByText(/advanced pay rules/i))
+    expect(screen.getByText(/^ot multiplier$/i)).toBeTruthy()
   })
 
   it('hides pay-period selector for DHL users on Schedule step', () => {

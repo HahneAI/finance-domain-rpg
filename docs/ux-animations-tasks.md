@@ -171,11 +171,11 @@ App (authenticated shell)
 ├── Modals / Overlays
 │   ├── WeekConfirmModal
 │   ├── LifeEventMenu
-│   ├── JobLossEntry
-│   ├── ExpenseTriage
+│   ├── JobLossEntry            (up to 4 steps as of §15.H15)
+│   ├── CashOnHandSheet         (bottom sheet, §15.H17 — shared by Job Loss Home + Budget)
 │   ├── SetupWizard            (first-run + life-event re-entry)
 │   ├── PwaInstallModal
-│   └── Job Loss banner + JobLossDashboard (inline, not modal)
+│   └── Job Loss banner (inline, not modal — "Go to Budget" / "Back to Work" / dismiss)
 ├── Investor / Demo surfaces
 │   ├── DemoAccountTree        (investor accounts 1–2, admin demo edit)
 │   └── Investor account pills (drawer)
@@ -253,11 +253,11 @@ App (authenticated shell)
 |-------|------|----------------|
 | WeekConfirmModal | `WeekConfirmModal.jsx` | day toggles, confirm, skip, backdrop |
 | LifeEventMenu | `LifeEventMenu.jsx` | life-event route options, close |
-| JobLossEntry | `JobLossEntry.jsx` | activate, fields, close |
-| ExpenseTriage | `ExpenseTriage.jsx` | per-expense pause/cancel/keep, close |
+| JobLossEntry | `JobLossEntry.jsx` | date/cash/benefits, pending-check step (§15.H15), expense review, due dates, activate, close |
+| CashOnHandSheet | `CashOnHandSheet.jsx` | draft input, Save, Cancel, backdrop (§15.H17 — bottom sheet, not `fold-modal`) |
 | SetupWizard | `SetupWizard.jsx` | step Next/Back, pills, toggles, benefit cards (~63 sites) |
 | PwaInstallModal | `PwaInstallModal.jsx` | dismiss, platform steps |
-| Job Loss banner | `App.jsx` inline | Triage Expenses · Back to Work · dismiss |
+| Job Loss banner | `App.jsx` inline | Go to Budget · Back to Work · dismiss |
 
 ---
 
@@ -356,8 +356,8 @@ close tween. So this is **not** pure CSS; it needs a small React helper:
 | Admin tools sheet | `App.jsx:2682` (z24, slide-up) | keep drag-to-dismiss |
 | Mobile drawer | `App.jsx` `.drawer-slide` | slides on X — likely leave as-is (not a fold) |
 | Life Events menu | `LifeEventMenu.jsx:72` (z70) | |
-| Expense triage | `ExpenseTriage.jsx:115` (z80) | |
-| Job-loss entry | `JobLossEntry.jsx:78` (z80) | |
+| Job-loss entry | `JobLossEntry.jsx:78` (z80) | up to 4 steps as of §15.H15; `ExpenseTriage.jsx` (this row used to also list it) was deleted in the §15.H7 rebuild — triage is now inline in `JobLossBudgetPanel`, a panel not a modal |
+| Cash On Hand sheet | `CashOnHandSheet.jsx` (z90) | §15.H17 — new `.fold-sheet` class, not `fold-modal` |
 | Upgrade modal | `UpgradeModal.jsx:11` (z1000, portal) | VC feature |
 | Reorder goals | `HomePanel.jsx` (portal) | |
 | Reset timeline | `HomePanel.jsx` (portal) | |
@@ -397,7 +397,11 @@ bottom, 340ms enter w/ gentle overshoot, 180ms exit).
 - ✅ BudgetPanel: check-info
 - ✅ ProfilePanel: delete-account, local sign-out confirm
 - ✅ HomePanel: reorder goals, reset timeline
-- ✅ LifeEventMenu · JobLossEntry · ExpenseTriage
+- ✅ LifeEventMenu · JobLossEntry (`ExpenseTriage` deleted in the §15.H7 rebuild — triage is
+  now inline in `JobLossBudgetPanel`, not a modal)
+- ✅ **CashOnHandSheet** (§15.H17) — a new fifth motion system, not `fold-modal`: bottom sheet
+  using the new `.fold-sheet` class (up-from-bottom entrance / slide-down exit), shared by
+  JobLossHomePanel + JobLossBudgetPanel
 - ✅ **AskCoachPanel** (2026-07-25) — full-screen surface, not a centered dialog, so it took the
   `fold-lift` treatment (open/close) instead of `fold-modal`/`fold-backdrop`, same as
   SetupWizard/LoginScreen (see the "External / full-screen surfaces" section below). Close is
@@ -455,29 +459,35 @@ Order: the two large ones first, then the two smaller.
 
 ---
 
-## Job Loss Mode — Complete Component Audit (✅ VERIFIED 2026-07-24)
+## Job Loss Mode — Complete Component Audit (✅ VERIFIED 2026-07-24, updated 2026-07-25)
 
-**Summary:** All Job Loss Mode buttons use the `Pressable` design class, and all modals use standardized fold animations. **30/30+ buttons verified** across 6 components. **1 non-critical inconsistency identified** (RateUpdateModal uses custom animation; refactor recommended but not blocking).
+**Summary:** All Job Loss Mode buttons use the `Pressable` design class, and all modals/sheets use standardized fold animations. **Updated 2026-07-25** to add §15.H15's pending-check wizard step, §15.H17's `CashOnHandSheet` (the first bottom sheet in the app with a real animated exit, not just entrance), and DW-8's `CoachNetWorthCard` mount inside `JobLossHomePanel` — none of these existed at the original 2026-07-24 audit. **1 non-critical inconsistency** from the original pass (RateUpdateModal's custom animation) has since been refactored onto the standard fold system (`e25b7b4`) and is no longer open.
 
 ### Audit Coverage
 
 **Modals (fold-modal + fold-backdrop + data-fold attribute):**
 | Component | File | Status | Notes |
 |-----------|------|--------|-------|
-| JobLossEntry | `src/components/JobLossEntry.jsx` | ✅ | 3-step modal (date + expenses + due date assignment). All buttons `Pressable`. Uses `fold-backdrop` + `fold-modal` with proper `data-fold` lifecycle. |
+| JobLossEntry | `src/components/JobLossEntry.jsx` | ✅ | Up to 4-step modal (date/cash/benefits → pending-check, §15.H15 → expense review → due dates; steps 2–3 skip with no expenses). All buttons `Pressable`. Uses `fold-backdrop` + `fold-modal` with proper `data-fold` lifecycle. |
 | LifeEventMenu | `src/components/LifeEventMenu.jsx` | ✅ | Life event selector modal. Close X + all route tiles use `Pressable`. Standardized fold animation. |
-| RateUpdateModal | `src/components/RateUpdateModal.jsx` | ✅ | Migrated to `fold-modal` + `fold-backdrop` (was custom `weekCardIn`). Uses `useFoldTransition` hook for consistent lifecycle. All buttons `Pressable`. Unified with other modals. |
+| RateUpdateModal | `src/components/RateUpdateModal.jsx` | ✅ | On `fold-modal` + `fold-backdrop` via `useFoldTransition`. All buttons `Pressable`. |
+
+**Bottom sheets (fold-sheet + fold-backdrop + data-fold attribute — new class, §15.H17):**
+| Component | File | Status | Notes |
+|-----------|------|--------|-------|
+| CashOnHandSheet | `src/components/CashOnHandSheet.jsx` | ✅ | Single-line editor shared by JobLossHomePanel's Cash On Hand card and JobLossBudgetPanel's equivalent row. Uses the new `.fold-sheet` class (`index.css`) — up-from-bottom entrance (matches `BudgetPanel`'s pre-existing expense-detail sheet curve), slide-down exit (that older sheet never had one — instant unmount on close; this is the first sheet with a real symmetric pair). |
 
 **Panels (panel mode, rendered via FoldSwitch):**
 | Component | File | Status | All buttons Pressable? |
 |-----------|------|--------|----------------------|
-| JobLossHomePanel | `src/components/JobLossHomePanel.jsx` | ✅ | Yes (Log Income, Remove Entry, MetricCard headline). Uses `FoldSwitch` panel mode. |
-| JobLossBudgetPanel | `src/components/JobLossBudgetPanel.jsx` | ✅ | Yes (benefit toggle, add/edit/delete expense, pause flexible, status change buttons). Uses `FoldSwitch` panel mode. |
+| JobLossHomePanel | `src/components/JobLossHomePanel.jsx` | ✅ | Yes (Cash On Hand card §15.H17, Log Income, Remove Entry, MetricCard headline, embedded CoachNetWorthCard's dismiss — DW-8). Uses `FoldSwitch` panel mode. |
+| JobLossBudgetPanel | `src/components/JobLossBudgetPanel.jsx` | ✅ | Yes (Cash On Hand row §15.H17, benefit toggle, add/edit/delete expense, pause flexible, status change buttons). Uses `FoldSwitch` panel mode. |
 
 **Embedded components in Job Loss Mode:**
 | Component | File | Status | All buttons Pressable? |
 |-----------|------|--------|----------------------|
 | ReemploymentTracker | `src/components/ReemploymentTracker.jsx` | ✅ | Yes (commit target, clear target, edit application ×4, delete application, apply filters). CRUD operations for job applications. |
+| CoachNetWorthCard | `src/components/CoachNetWorthCard.jsx` | ✅ | Yes (dismiss). Mounted inside `JobLossHomePanel` since DW-8 (`docs/BUG_FIX_TODO.md`) — Red tier only from this mount; no own open/close animation (renders inline, unmounts via the tier condition). |
 
 ### Cross-component consistency table
 
@@ -486,33 +496,39 @@ Order: the two large ones first, then the two smaller.
 | **Modal open/close** | JobLossEntry | JobLossEntry.jsx | `fold-modal` + `fold-backdrop` + `data-fold={fold.fold}` | 280ms modal, 240ms backdrop | ✅ |
 | **Modal open/close** | LifeEventMenu | LifeEventMenu.jsx | `fold-modal` + `fold-backdrop` + `data-fold={fold.fold}` | 280ms modal, 240ms backdrop | ✅ |
 | **Modal open/close** | RateUpdateModal | RateUpdateModal.jsx | `fold-modal` + `fold-backdrop` + `data-fold={fold.fold}` | 280ms modal, 240ms backdrop | ✅ |
-| **Button press** | All Job Loss modals | JobLossEntry.jsx, LifeEventMenu.jsx, RateUpdateModal.jsx | `Pressable` + press feedback | 180ms fill + spring | ✅ |
+| **Sheet open/close** | CashOnHandSheet | CashOnHandSheet.jsx | `fold-sheet` + `fold-backdrop` + `data-fold={fold.fold}` | 320ms enter, 240ms exit | ✅ |
+| **Button press** | All Job Loss modals/sheets | JobLossEntry.jsx, LifeEventMenu.jsx, RateUpdateModal.jsx, CashOnHandSheet.jsx | `Pressable` + press feedback | 180ms fill + spring | ✅ |
 | **Button press** | All Job Loss panels | JobLossHomePanel.jsx, JobLossBudgetPanel.jsx | `Pressable` + press feedback | 180ms fill + spring | ✅ |
 | **Panel enter/exit** | JobLossHomePanel, JobLossBudgetPanel | App.jsx (FoldSwitch) | `fold-lift` + fade | 340ms enter, 180ms exit | ✅ |
 
-### Test coverage  
+### Test coverage
 Job Loss Mode features are exercised in:
 - `SetupWizard` — life-event routing (`lifeEvent="lost_job"` path)
-- `JobLossEntry` — 3-step modal flow
-- `JobLossHomePanel` — panel rendering when `config.jobLossMode === true`
-- `JobLossBudgetPanel` — alternate budget view in job-loss state
+- `JobLossEntry` — up to 4-step modal flow, including the §15.H15 pending-check step
+- `JobLossHomePanel` — panel rendering when `config.jobLossMode === true`, Cash On Hand
+  card + sheet (§15.H17), Coach presence (DW-8)
+- `JobLossBudgetPanel` — alternate budget view in job-loss state, Cash On Hand row + sheet
+- Full suite (all of `jobLossFlow.test.jsx` + `jobLossRunway.test.js`): 100+ Job Loss Mode
+  tests, part of the app-wide 1231/1231 passing as of 2026-07-25 (see full-suite count
+  below — this per-feature count is a floor, not the whole file's total).
 
-All buttons verified for `Pressable` + all modals verified for fold animations.
+All buttons verified for `Pressable` + all modals/sheets verified for fold animations.
 
 ---
 
 ## Animation Systems — Complete Reference
 
-All four motion systems live in the codebase:
+Five motion systems live in the codebase:
 
 | System | Purpose | Key Components | Duration | Files |
 |--------|---------|-----------------|----------|-------|
 | **Press Feedback** | Tactile response on every clickable | `Pressable` component (ui.jsx); `usePressFeedback()` hook; `pressScaleStyle()` utility | 180ms fill, scale spring ~200ms | `src/components/ui.jsx`, `src/index.css` (.press-fill, .press-scale) |
 | **Fold Transitions** | Page enters/exits, modals, dropdowns | `useFoldTransition()` hook, `FoldSwitch` wrapper, fold-* keyframes | 340ms enter, 180ms exit | `src/components/ui.jsx`, `src/index.css` (@keyframes foldLiftIn/Out, foldScaleIn/Out, etc.) |
+| **Bottom Sheets** *(new, §15.H17)* | Single-purpose editors that slide up from the bottom edge | `useFoldTransition()` (same hook, new `.fold-sheet` class) | 320ms enter, 240ms exit | `src/components/CashOnHandSheet.jsx`, `src/index.css` (@keyframes foldSheetIn/Out) — `BudgetPanel.jsx`'s older expense-detail sheet still uses a bespoke inline `<style>` keyframe with entrance only, not yet migrated onto this class |
 | **SetupWizard Lifecycle** | Onboarding flow animations | `StepSlide` component (direction-aware), `wizardExiting` state, `closeWizardWithAnimation()` | 300ms steps, 340ms enter, 180ms exit, 400ms shake | `src/components/SetupWizard.jsx`, `src/App.jsx` (wizardExiting state), `src/index.css` (.validation-shake) |
 | **LoginScreen Transitions** | Auth form and handoff | `ModeFade` component (mode crossfades), `postLoginFade` state | 200ms mode fade, 340ms auth handoff | `src/components/LoginScreen.jsx`, `src/App.jsx` (postLoginFade state), `src/index.css` (.login-fade-in/out) |
 
-**Test coverage:** 1119/1119 tests passing ✅  
+**Test coverage:** 1231/1231 tests passing ✅ (as of 2026-07-25 — see `docs/TODO.md` §15.H17)
 **Ready for:** Manual feature verification (all animations together).
 
 ---

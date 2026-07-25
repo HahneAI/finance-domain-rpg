@@ -4222,3 +4222,117 @@ Feature #6 (Shelf-tag capture) — isolated, deferred
 
 **Next step:** Confirm OCR engine choice (Tesseract vs. cloud API) — this is the critical blocker. All feasibility estimates above assume this decision is made. Once that's settled, Phase A (barcode) can proceed in parallel with Phase B (OCR foundation).
 
+---
+
+## 39. UI Cohesion — Cross-Panel Header/Accent Consistency
+
+*New workstream (2026-07-25), scoped from a design-system read + code audit requested to discuss
+making the app's sections "feel more cohesive and interlocked." `docs/authority-design-system`
+already specifies one repeating page-header pattern (eyebrow + big title + underline, via the
+`PanelHero` component) and cites Chime/Cash App's "one primary number, everything else behind
+progressive disclosure" as the Flow reference model — but two of the five tabs don't actually
+follow either the component or the naming convention. Backed by UX research on why this class of
+drift specifically damages first-time orientation (see Sources below) — nothing here is subjective
+taste, each item is a concrete divergence from the app's own documented spec.*
+
+**Sources consulted for this pass:**
+- [What Is Progressive Disclosure in UX? (2026) — UXPin](https://www.uxpin.com/studio/blog/what-is-progressive-disclosure/) — "start simple, reveal complexity only as needed"; Chime cited as the reference pattern the app's own design doc already points to.
+- [Fintech UX Best Practices 2026 — Eleken](https://www.eleken.co/blog-posts/fintech-ux-best-practices) — first-value-first onboarding for financial apps.
+- [Design Consistency Guide — UXPin](https://www.uxpin.com/studio/blog/guide-design-consistency-best-practices-ui-ux-designers/) — visual/functional/verbal consistency as three distinct axes that must all hold for a product to feel "reliable."
+- [Why UX design consistency matters — uxstudio](https://www.uxstudioteam.com/ux-blog/ux-design-consistency) — nav labels and page identity mismatches specifically named as trust-eroding.
+
+### A. Home and Income don't identify themselves by their own nav label
+
+**The gap.** All five tabs are supposed to open with the shared `PanelHero` pattern
+(`src/components/ui.jsx:629` — eyebrow + big title + underline). Budget, Log, and Account do:
+their hero titles are "Budget," "Event Log," and "Account" respectively, matching (or closely
+matching) the `BOTTOM_NAV` label a user just tapped (`src/App.jsx:49-95`). Home and Income don't:
+
+- **Home** (`src/components/HomePanel.jsx:613`) opens with a hero titled **"Goals"** —
+  the first thing a user sees after tapping the "Home" nav icon is a page that says it's
+  something else. A second, differently-styled hero further down (`:1317`) says
+  **"Financial Health"** — nothing on the page ever says "Home."
+- **Income** (`src/components/IncomePanel.jsx:307-309`) opens with eyebrow "Income Overview"
+  and hero title **"Year Summary"** — not "Income."
+
+**Why it matters (research-backed).** This is exactly the "functional/verbal consistency"
+failure mode the UXPin/uxstudio pieces above call out as trust-damaging: the nav promises one
+identity, the destination delivers another. It costs almost nothing once a user has built a
+mental model of the app, but it's precisely the kind of signal that makes a *first* open feel
+disorienting — and Home/Income are the two most-visited tabs, so it's the most-seen instance
+of the problem, not the least.
+
+- [ ] Give Home and Income a page-identity heading that says "Home" / "Income" (either promote
+      a proper top-of-page hero above "Goals"/"Year Summary," or fold the nav-matching identity
+      into the existing hero's eyebrow line) — resolve alongside item B below since both panels
+      need their hero markup touched anyway.
+
+### B. `PanelHero` exists as a shared component but Home/Income hand-roll copies that have drifted
+
+**The gap.** `PanelHero` (`src/components/ui.jsx:629-637`) is the one component meant to render
+every panel's page title. Budget (`BudgetPanel.jsx:1307`), Log (`LogPanel.jsx:578`), and Account
+(`ProfilePanel.jsx:2134`) call it directly. Home and Income instead paste the same visual recipe
+inline as raw JSX, and the three copies no longer agree with each other or with the real
+component:
+
+| Location | Title size | Underline width / opacity | Eyebrow present? |
+|---|---|---|---|
+| `PanelHero` (the real component) | 32px | 28px / 0.45 | yes (required prop) |
+| Home "Goals" hero (`HomePanel.jsx:613-628`) | 52px | 40px / 0.55 | yes ("Authority Finance") |
+| Home "Financial Health" hero (`HomePanel.jsx:1317-1329`) | 32px | 28px / 0.45 | **no eyebrow at all** |
+| Income "Year Summary" hero (`IncomePanel.jsx:307-327`) | 32px | 28px / 0.45 | yes ("Income Overview") |
+
+Three different title sizes and an inconsistent eyebrow presence, for what is supposed to be one
+repeating pattern app-wide. This is the same class of issue `docs/drift-app-warden.md` §17
+(F88, T10 UI-UX) already tracks for untokenized hex — component-copy drift instead of
+raw-value drift, same root cause (a shared visual contract re-implemented by hand instead of
+reused), just not yet caught because F88's grep-for-hex procedure doesn't catch duplicated JSX.
+
+- [ ] Replace Home's and Income's hand-rolled hero markup with actual `PanelHero` calls (folding
+      in whatever eyebrow/title text item A above resolves on). Removes the drift permanently
+      instead of re-syncing the copies by hand.
+- [ ] Decide whether Home's "Goals" section legitimately warrants the larger 52px treatment (a
+      deliberate emphasis choice) or whether it should drop to the standard 32px `PanelHero` — if
+      the former, that's a second, intentional "large hero" variant that `PanelHero` should grow
+      a prop for (e.g. `size="lg"`) rather than staying as a one-off inline copy.
+
+### C. Untokenized gold accent (`#c8a84b`) used five times for "current/now" semantics, never declared
+
+**The gap.** `#c8a84b` (a gold, distinct from the design doc's teal `--color-accent-primary`
+`#00C896`) appears five times in `src/App.jsx`, consistently meaning "this is the current point
+in time" — not a random one-off, a real recurring semantic:
+- `App.jsx:112` — desktop sidebar's active-nav-item left border (`SidebarNavItem`)
+- `App.jsx:2041`, `:2694`, `:3323` — "current week" cell border in three different Tax Weeks Grid
+  renderings (mobile/tablet/admin sizes)
+- `App.jsx:3341` — the grid's own legend swatch for "current week"
+
+None of these five route through `src/index.css`'s `@theme` token block, and the design doc
+(`docs/authority-design-system:25-44`) doesn't list a gold token at all — `--color-gold` is
+defined only as "Legacy alias — maps to accent-primary" (i.e. teal, `#00C896`), which is a
+*different* color than the `#c8a84b` actually in use. This is a new instance of the same
+untokenized-hex debt class `docs/drift-app-warden.md` §17 F88 already tracks for
+`WeekConfirmModal.jsx`/`LoginScreen.jsx`/`ProfilePanel.jsx` (also `CLAUDE.md`'s "Known Cleanup"
+list) — just not yet added to that list, and in a file (`App.jsx`) none of those three cover.
+
+- [ ] Formalize `#c8a84b` as a real design token (e.g. `--color-time-anchor` or
+      `--color-signal-gold`) in `src/index.css`'s `@theme` block, replace all five `App.jsx`
+      call sites, and add it to `docs/authority-design-system`'s color table so "gold = current
+      point in time, teal = active/primary" is a documented rule instead of an implicit one five
+      hardcoded hex strings happen to agree on today.
+- [ ] Add `App.jsx`'s five `#c8a84b` sites to the untokenized-hex debt list in `CLAUDE.md`'s
+      "Known Cleanup" section and `docs/drift-app-warden.md` §17 F88 (currently lists only
+      `WeekConfirmModal.jsx`/`LoginScreen.jsx`/`ProfilePanel.jsx`) in the same commit that
+      resolves the token, so the drift map stays accurate per the doc's own "keep it current in
+      the same PR" rule.
+
+### D. Not yet investigated — parking lot for the next pass
+
+Raised in the original discussion but out of scope for this pass (design-doc read + static code
+audit only, no runtime/visual walkthrough performed):
+- The transition/motion *feel* between tabs specifically (as opposed to the fold-motion
+  *mechanics* §17 F90 already covers) — does switching Home → Income → Budget feel like moving
+  through one connected app, or five independently-built screens stitched together?
+- How the Setup Wizard visually hands off into Home on first completion (first-run-specific;
+  the wizard itself was already decluttered per items elsewhere in this doc, but the *landing*
+  moment right after "Finish" hasn't been looked at for continuity with what Home now looks like).
+

@@ -251,11 +251,13 @@ make them impossible to mistake for a pending migration. Latest bookmark:
 `022_BOOKMARK_schema_snapshot_2026-07-10.sql` (schema state through migration 021).
 Real migrations continue past it: 023 (coach_chats), 024 (user_data write-permission fix),
 025–030 (beta program — `beta_code_used`, `beta_started_at`, `beta_codes`,
-`beta_halfway_email_sent_at`, `beta_activity_events` + its `feedback` event type) exist —
-**the next real migration is 031.** Verify against the folder before numbering; this note
-has now gone stale twice (drift-app-warden §14, and again across the beta-program migrations
-until this fix — a fresh BOOKMARK compiling schema state through 030 is now overdue; the
-existing `022` snapshot is stale for the same reason).
+`beta_halfway_email_sent_at`, `beta_activity_events` + its `feedback` event type), 031
+(beta_activity_events eligibility trigger), 032 (resume_profile + coach_chats
+`resume_review` chat_type) exist — **the next real migration is 033.** Verify against the
+folder before numbering; this note has now gone stale three times (drift-app-warden §14, across
+the beta-program migrations, and again across 031–032 until this fix — a fresh BOOKMARK
+compiling schema state through 032 is now overdue; the existing `022` snapshot is stale for the
+same reason).
 
 ---
 

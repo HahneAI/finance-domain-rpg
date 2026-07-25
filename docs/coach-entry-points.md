@@ -157,35 +157,69 @@ a paying subscriber to reach any of these, once built.
 
 ---
 
-## 5. Planned, not started — Job Hunt Assistant
+## 5. Job Hunt Assistant
 
 **What it is:** A Coach-guided chat for someone actively job hunting — coaching through the
-search itself, not just the household numbers.
+search itself (application strategy, interview prep, salary negotiation, judging how long to
+hold out for the right offer), not the household numbers Ask Coach covers.
 
-**Status:** ⚪ **Not started.**
+**Status:** 🔒 **Built 2026-07-25, admin/tester-only.** Opens from a "Talk to Coach about the
+search" button on `JobLossHomePanel`. A full-screen chat, grounded in real runway/burn/target-
+income/application-log data — never a generic pep talk. Single-session for now: no chat-history/
+retention system yet, same stage Ask Coach was in before that landed. "Help me with my resume"
+is deliberately redirected to section 6 below rather than answered inline, keeping the two modes
+separated.
 
-**Free trial access: ❌ No (planned).** Paid-conversion upsell, same as section 4 above —
-not a trial-included feature once built.
+**Free trial access: ❌ No.** Still on the narrow `canAccessAiFeatures` gate (admin/tester
+only) per the §18 sections-4+ standing constraint — unlike sections 1–2, this hasn't been
+individually split off yet.
 
-**Next up:** *Reference: `docs/TODO.md` §18.E (Job Hunt AI Assistant).*
+**Next up:** Chat-history/retention (mirroring §18.H's `coach_chats` wiring for Ask Coach) once
+this mode has been live-tested. The rest of the original checklist (per-mode UI shortcuts like a
+dedicated "Prep me for [company] interview" button) is supported today via open-ended chat
+instead — revisit only if usage shows people want the shortcuts specifically.
+*Reference: `docs/TODO.md` §18.E (Job Hunt AI Assistant); `docs/coach-personality-rubric.md`
+(Job Hunt Chat, scored Metaphor Intensity 2 — quieter than Coach's usual default, given the
+stress of an active search under runway pressure).*
 
-**Technical reference:** None yet.
+**Technical reference:** Same shared route as sections 1–2, `POST /api/coach` · Model:
+**Sonnet** (`claude-sonnet-5`, per §18.G's cost split — Haiku for chat/FAQ/triggers, Sonnet for
+job-hunt drafts) · System prompt: `JOB_HUNT_SYSTEM_PROMPT` in `coachPrompts.js` · Context:
+`buildJobHuntContext()` in `aiContext.js`, grounded in `computeJobLossRunway`/
+`resolvePrimaryRunwayDays`/`sumJobHuntIncome` — never a parallel estimate (§21 F113's rule) —
+plus `config.targetIncomeAnnual`/`jobApplications`/`returnToWorkDate`. Gate:
+`canAccessAiFeatures({isAdmin, isTester})`. Component: `JobHuntChatPanel.jsx`.
 
 ---
 
-## 6. Planned, not started — résumé help
+## 6. Résumé Review
 
-**What it is:** Letting someone upload a résumé so Coach can point out gaps or suggest
-improvements.
+**What it is:** Letting someone paste their résumé so Coach can point out gaps against a
+target role and suggest improvements.
 
-**Status:** ⚪ **Not started.** This one has been scoped out on paper in more detail than the
-others, but literally nothing has been built.
+**Status:** 🔒 **v1 built 2026-07-25, admin/tester-only.** Paste-text only, not a file upload
+(`docs/TODO.md` §18.E1's storage decision — a pasted résumé and a PDF-extracted one look
+identical to the analysis pipeline, so upload is deferred to a v2 that's only worth building if
+this proves used). Lives as its own section in `JobLossHomePanel`, below the Job Hunt Assistant
+entry point. A one-shot review, not a back-and-forth chat: paste the résumé, optionally set a
+target role (defaults to the most recent logged job application's role), tap "Get Skill-Gap
+Review." The review is saved automatically, both to the résumé's own profile row and as a
+`coach_chats` entry.
 
-**Free trial access: ❌ No (planned).** Paid-conversion upsell — not trial-included once built.
+**Free trial access: ❌ No.** Same narrow `canAccessAiFeatures` gate as section 5.
 
-**Next up:** *Reference: `docs/TODO.md` §18.E1 (Résumé upload / skill-gap analysis).*
+**Next up:** File upload as a v2, only if this shows real usage. A history browser for past
+reviews (today only the most recent review is shown in the UI, though every review is saved).
+*Reference: `docs/TODO.md` §18.E1 (Résumé upload / skill-gap analysis); `docs/coach-personality-
+rubric.md` (Résumé Review, scored Metaphor Intensity 3 — matches Coach's usual default, unlike
+Job Hunt Chat's dialed-down anchor).*
 
-**Technical reference:** None yet.
+**Technical reference:** Same shared route, `POST /api/coach` · Model: **Sonnet** · System
+prompt: `RESUME_REVIEW_SYSTEM_PROMPT` in `coachPrompts.js` · Storage: `resume_profile` table
+(migration `032_add_resume_profile.sql`, one row per user) via `loadResumeProfile`/
+`saveResumeProfile` in `db.js`; the review conversation itself saves as a `coach_chats` row
+(`chat_type: 'resume_review'`, added to that table's check constraint by the same migration).
+Gate: `canAccessAiFeatures({isAdmin, isTester})`. Component: `ResumeReviewCard.jsx`.
 
 ---
 

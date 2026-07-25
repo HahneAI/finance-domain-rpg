@@ -3096,6 +3096,47 @@ scoping holds).
 > after a turn (success and failure paths), chat-id reuse across turns, retention pruning that
 > spares the active chat, resume-from-history, and delete.
 
+**F124 · Job Hunt Assistant + Résumé Review — first sections-4+ surfaces to actually ship**
+(§18.E/E1) — `JobHuntChatPanel.jsx`, `ResumeReviewCard.jsx`, `aiContext.js`
+(`buildJobHuntContext`), `coachPrompts.js` (`JOB_HUNT_SYSTEM_PROMPT`,
+`RESUME_REVIEW_SYSTEM_PROMPT`), migration `032_add_resume_profile.sql` — **[L/G]**
+Built 2026-07-25. First real occupants of the "sections 4+" admin/tester-only tier the doc
+comments in `entitlements.js` have described since the Ask Coach/Net Worth gate split — both
+gate on `canAccessAiFeatures({isAdmin, isTester})`, the narrow gate, never
+`canAccessAskCoachGeneral`. **Grounding:** `buildJobHuntContext()` is a *separate* function from
+`buildCoachContext` (F113), not a branch on it — reads `computeJobLossRunway`/
+`resolvePrimaryRunwayDays`/`sumJobHuntIncome` (same functions `JobLossHomePanel` itself reads,
+never a parallel estimate) plus `config.targetIncomeAnnual`/`jobApplications`/
+`returnToWorkDate` directly. **Deliberate privacy asymmetry, the opposite of F114's goal-name
+rule:** application company/role names are sent in full, not withheld — Job Hunt Assistant's
+whole point is company-specific coaching ("prep me for the Acme interview"), so withholding the
+name would break the feature rather than protect the user the way withholding a goal name does.
+**Rubric-scored** (docs/coach-personality-rubric.md, 2026-07-25): Job Hunt Chat's own
+`JOB_HUNT_ADDENDUM` dials Metaphor Intensity down to 2 ("trace") from the 3 default — an active
+search under runway pressure gets a lighter touch, mirroring the same "urgency/plainness over
+flavor at a vulnerable moment" pattern already established for the Red tier and
+`NetWorthHealthTips.jsx`; Résumé Review stays at the 3 default, no override, since it reads
+closer to Ask Coach's own tactical register. **Storage:** `resume_profile` (one row per user,
+`user_id` itself is the primary key — genuinely 1:1, unlike `coach_chats`'s 1:many) holds only
+the résumé input; the *review* is a `coach_chats` row (`chat_type: 'resume_review'`, added to
+that table's check constraint by the same migration) via the existing `saveCoachChat` path — no
+new serverless route, both modes reuse `api/coach.js` on Sonnet (§18.G's cost split). **v1
+scope, deliberately incomplete:** both panels are single-session — no chat-history/retention
+system yet, the same stage `AskCoachPanel` was in before F123 landed persistence for it.
+> **IF** either mode's gate is ever changed to `canAccessAskCoachGeneral`, **THEN** that's a
+> deliberate widening decision (trial/paid users gaining access to an admin/tester-only surface)
+> and needs the same explicit splitting-checklist treatment `coach-entry-points.md` describes for
+> sections 1–2 — never a silent copy-paste of the wider gate. **IF** `buildJobHuntContext`'s
+> fields are extended, **THEN** they must resolve through the same authoritative function the
+> on-screen Job Loss panels use, per F113's rule — this function is exempt from `buildCoachContext`
+> itself but not from the grounding rule that governs it. **IF** persistence/retention/summary
+> generation is added for `job_hunt` or `resume_review` chat types, **THEN** it earns its own
+> entry (or an extension of F123) rather than assuming `AskCoachPanel`'s `MAX_SAVED_CHATS = 3`
+> and `ask_coach`-only history filter generalize automatically — F123's own IF/THEN already flags
+> this. Check: `aiContext.test.js`'s `buildJobHuntContext` block, `JobHuntChatPanel.test.jsx`,
+> `ResumeReviewCard.test.jsx`, `jobLossFlow.test.jsx`'s gate-verification block (confirms a real
+> trial entitlement, not just admin/tester, is correctly refused).
+
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain + `estimateRunwayDays` quarantine + `resolveNetWorthSignalTier`/
 `shouldFireForTier`), F22/F44 (`computeJobLossRunway` — the convergence target for the
@@ -3113,10 +3154,12 @@ resolvers), F81/F111 (the AI gate, Spine C).
 | Goal breakdown line / any goal-surfacing line (F114) | The privacy rule — no `goal.label` interpolation | `aiContext.test.js` no-goal-name assertion; grep builder for label refs | D5/privacy |
 | `canAccessAiFeatures` inputs or `api/coach.js` SELECT (F115) | Server gate must supply every column the gate reads (F112); client callers pass a valid `model` key | Non-entitled request → 403 pre-Anthropic; `entitlements.test.js` | D4 |
 | `estimateRunwayDays` (F24 quarantine, `coachTriggers.js`) | Its too-low runway feeds `CoachNetWorthCard` context (`:78`) → Coach can claim less runway than the Job Loss panel shows | Do **not** extend it — converge on `computeJobLossRunway`; then both Coach entry points quote one runway | D1 |
-| `runwayDays` wiring to `AskCoachPanel` (§8 quarantine 2) | App.jsx passes no `runwayDays` → `aiContext.js:200` renders bare "Job Loss Mode: active" | When wiring, use `computeJobLossRunway` (not the quarantine); both Coach entry points agree | D4 |
+| ~~`runwayDays` wiring to `AskCoachPanel` (§8 quarantine 2)~~ **— fixed, this row is stale.** `App.jsx`'s `coachRunwayDays` now passes a real `computeJobLossRunway`-derived value into `buildCoachContext`; the bare `"Job Loss Mode: active"` string this row describes no longer happens. Kept crossed out rather than deleted so anything still citing it gets redirected. | — | — | — |
 | `coach_chats` db functions get a second `chat_type` UI caller (F116/F123) | Retention cap, summary trigger, and the history-list filter are `ask_coach`-specific and won't generalize on their own | Confirm the new type gets its own retention/summary decision; grep `AskCoachPanel.jsx` for `"ask_coach"` filters | D3/D4 |
 | `saveCoachChat`'s payload shape (columns, field names) | `persistChat` and `finalizeSummary` (F123) — both build the upsert payload independently | Update both call sites together; `AskCoachPanel.test.jsx` persistence assertions | D1 |
 | `EVENT_TYPES`/`PAYCHECKS_PER_YEAR` (`constants/config.js`) | The context's most-recent-log label (`:178`) and `checksPerYear`/`perCheckFactor` scaling | Add/rename a type → context label resolves; biweekly account → per-check scaling correct | D1 |
+| `buildJobHuntContext`'s source functions (F124) — `computeJobLossRunway`/`resolvePrimaryRunwayDays`/`sumJobHuntIncome` | `JobHuntChatPanel` context must keep matching `JobLossHomePanel`'s own runway tile | `aiContext.test.js`'s `buildJobHuntContext` block; ask Job Hunt Assistant the runway and diff vs. the Home tile | D1 |
+| `canAccessAiFeatures` gate on `JobHuntChatPanel`/`ResumeReviewCard` (F124) | Must stay narrow (admin/tester) — never silently swapped for `canAccessAskCoachGeneral` | `jobLossFlow.test.jsx`'s gate block: a real trial entitlement alone must NOT render either | D4 |
 
 ### 21.3 Block 3 — Authority table (context line → source function → UI twin it must match)
 

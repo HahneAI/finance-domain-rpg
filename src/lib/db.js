@@ -1080,3 +1080,40 @@ export async function deleteChangelogEntry(id) {
     return { ok: false, error: err.message };
   }
 }
+
+/**
+ * Terms of Service / Privacy Policy consent (database/migrations/033_add_consent_records.sql).
+ * Direct client insert (not routed through an API route like the changelog
+ * admin writes) — RLS restricts this to the caller's own user_id, and the
+ * DB-side trigger forces consented_at, so a raw client insert is safe here:
+ * a malicious client can only ever write a truthful "I agreed" row for
+ * itself, never spoof another user or a fabricated timestamp. Append-only —
+ * no update/delete path exists for this table, by design.
+ */
+export async function recordConsent(userId, policyVersion) {
+  if (!userId || !policyVersion) return { ok: false, error: "Missing userId or policyVersion" };
+  const { error } = await supabase
+    .from("consent_records")
+    .insert({ user_id: userId, policy_version: policyVersion });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Most recent consent record for the CALLER's own account (RLS-scoped, same
+ * as recordConsent). Used by App.jsx's re-consent check — currently only
+ * acted on when constants/legalDocuments.js's ENFORCE_EXISTING_USER_RECONSENT
+ * is true. Returns null (never throws) on any error or missing row, same
+ * "degrade quietly" posture as fetchLatestPublishedChangelog.
+ */
+export async function fetchLatestConsent(userId) {
+  const { data, error } = await supabase
+    .from("consent_records")
+    .select("policy_version, consented_at")
+    .eq("user_id", userId)
+    .order("consented_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data;
+}

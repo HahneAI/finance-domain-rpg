@@ -254,11 +254,12 @@ Real migrations continue past it: 023 (coach_chats), 024 (user_data write-permis
 025–030 (beta program — `beta_code_used`, `beta_started_at`, `beta_codes`,
 `beta_halfway_email_sent_at`, `beta_activity_events` + its `feedback` event type), 031
 (beta_activity_events eligibility trigger), 032 (`changelog_entries` — the admin-managed
-"What's New" table, `api/admin-changelog.js`) exist —
-**the next real migration is 033.** Verify against the folder before numbering; this note
-has now gone stale three times (drift-app-warden §14, again across the beta-program migrations,
-and again across 031/032 — a fresh BOOKMARK compiling schema state through 032 is now overdue;
-the existing `022` snapshot is stale for the same reason).
+"What's New" table, `api/admin-changelog.js`), 033 (`consent_records` — Terms of Service /
+Privacy Policy consent capture, append-only, `LoginScreen.jsx`'s signup gate) exist —
+**the next real migration is 034.** Verify against the folder before numbering; this note
+has now gone stale four times (drift-app-warden §14, again across the beta-program migrations,
+again across 031/032, and again across 033 — a fresh BOOKMARK compiling schema state through
+033 is now overdue; the existing `022` snapshot is stale for the same reason).
 
 ---
 

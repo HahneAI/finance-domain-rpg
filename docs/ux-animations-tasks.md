@@ -363,7 +363,7 @@ close tween. So this is **not** pure CSS; it needs a small React helper:
 | Reset timeline | `HomePanel.jsx` (portal) | |
 | PWA install | `PwaInstallModal.jsx` | opens via ref imperative handle |
 | Setup wizard | `SetupWizard.jsx` | full-screen — evaluate (may want its own step transitions) |
-| Ask Coach panel | `AskCoachPanel.jsx` (`askCoachOpen`) | VC §18.B chat panel |
+| Ask Coach panel | `AskCoachPanel.jsx` (`askCoachOpen`) | VC §18.B chat panel — ✅ converted, `fold-lift` not `fold-modal` (full-screen, not a centered card) |
 | Bulk edit | `BulkEditPanel.jsx` (`bulkEditOpen`) | |
 
 ### C. Dropdowns & expand/collapse reveal panels
@@ -398,8 +398,22 @@ bottom, 340ms enter w/ gentle overshoot, 180ms exit).
 - ✅ ProfilePanel: delete-account, local sign-out confirm
 - ✅ HomePanel: reorder goals, reset timeline
 - ✅ LifeEventMenu · JobLossEntry · ExpenseTriage
+- ✅ **AskCoachPanel** (2026-07-25) — full-screen surface, not a centered dialog, so it took the
+  `fold-lift` treatment (open/close) instead of `fold-modal`/`fold-backdrop`, same as
+  SetupWizard/LoginScreen (see the "External / full-screen surfaces" section below). Close is
+  driven by
+  `App.jsx`'s `askCoachExiting` state + `closeAskCoachWithAnimation()`, mirroring
+  `wizardExiting`/`closeWizardWithAnimation()` exactly. The panel's internal chat↔history view
+  swap (History / Back / New Chat buttons) also got its own `fold-lift` entrance, applied
+  directly via the `fold-lift` class + `data-fold` rather than through `FoldSwitch` — `FoldSwitch`
+  assumes a page that fills its container on its own; AskCoachPanel's chat body is two flex
+  siblings (message list + input bar) that need their column-flex relationship preserved through
+  the swap, which was simpler to get right with a manually-driven `data-fold` than by fitting the
+  content into `FoldSwitch`'s crossfade-overlay layout. Skipped on the view's first mount (a ref
+  flag) so it doesn't double up with the panel's own entrance lift. Tests:
+  `AskCoachPanel.test.jsx`'s "fold-lift animation wiring" block.
 - ⬜ WeekConfirmModal (currently `.wc-modal-in`; migrate) · App Week Inspector · UpgradeModal
-  (parent mounts/unmounts it — needs the toggle to drive `useFoldTransition`) · AskCoachPanel · BulkEditPanel
+  (parent mounts/unmounts it — needs the toggle to drive `useFoldTransition`) · BulkEditPanel
 - ⏭️ **Skip:** admin tools slide-up sheet (keep its drag-dismiss slide) · mobile drawer
   (X-slide) · PwaInstallModal (native `<dialog>`, top layer)
 

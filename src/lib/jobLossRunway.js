@@ -1,4 +1,5 @@
 import { getEffectiveAmount, getPhaseIndex } from "./finance.js";
+import { getNextDueDate, getExpenseDisplayAmount } from "./expense.js";
 
 // TODO §15 mode rebuild — Job Loss Home and Budget are now two separate
 // components (not one "pinned to top" card layered over the normal panels),
@@ -82,15 +83,68 @@ export function estimatePendingCheckAmount(workedDaysCount, cfg) {
   return Math.max(0, gross * (1 - rate));
 }
 
+// ── Timeline-aware cash on hand (TODO §15.H17) ───────────────────────────
+// Shared "does this expense count as an essential/needs bill for Job Loss
+// Mode math" predicate — was three separately copy-pasted inline filters
+// (weeklyBurn's essentialActive, lifestyleWeeklySpend's lifestyleActive, and
+// now this) before being pulled out here; a future change to what counts as
+// "essential" only needs to happen once.
+function isTrackedActiveEssential(exp) {
+  const status = exp.jobLossStatus ?? "active";
+  const flexible = exp.category === "Lifestyle";
+  const tracked = exp.trackDuringJobLoss !== false;
+  return status === "active" && !flexible && tracked;
+}
+function isTrackedActiveLifestyle(exp) {
+  const status = exp.jobLossStatus ?? "active";
+  const flexible = exp.category === "Lifestyle";
+  const tracked = exp.trackDuringJobLoss !== false;
+  return status === "active" && flexible && tracked;
+}
+
+// Sums every essential (Needs-like, active, tracked) bill's real payment
+// amount for each due-date occurrence landing in
+// (fromDateExclusiveIso, throughDateInclusiveIso] — i.e. bills that have
+// come due since the cash-on-hand figure was last confirmed by the user.
+// getNextDueDate only exposes "next due on/after a date," not "how many
+// occurrences between two dates" (the underlying cycle math is a pure
+// advance-forward function, not a closed form) — so this walks one
+// occurrence at a time, advancing the cursor past each hit, same approach
+// JobLossBudgetPanel's upcomingBills list uses for a single occurrence.
+export function sumBillsDueSince(expenses, fromDateExclusiveIso, throughDateInclusiveIso) {
+  if (!fromDateExclusiveIso || !throughDateInclusiveIso) return 0;
+  const through = new Date(throughDateInclusiveIso + "T12:00:00");
+  let total = 0;
+  for (const exp of expenses ?? []) {
+    if (!isTrackedActiveEssential(exp)) continue;
+    const amount = getExpenseDisplayAmount(exp);
+    if (amount <= 0) continue;
+    const cursor = new Date(fromDateExclusiveIso + "T12:00:00");
+    cursor.setDate(cursor.getDate() + 1); // exclusive start
+    // Safety cap — a zero/near-zero cycle length could otherwise loop forever.
+    for (let i = 0; i < 366; i++) {
+      const due = getNextDueDate(exp, cursor);
+      if (!due || due > through) break;
+      total += amount;
+      cursor.setTime(due.getTime());
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+  return total;
+}
+
 /**
  * Computes the runway/burn numbers Job Loss Home + Budget both render.
- * `savings` is the combined cash figure (manual "additional savings" draft +
- * sumJobHuntIncome(config)) — computed by the caller so this stays a pure
- * function of its arguments, not a hook.
+ * `extraCash` is cash beyond the persisted `config.jobLossCashOnHand` figure
+ * — today that's just `sumJobHuntIncome(config)` (gig/odd-job income logged
+ * on Home). The raw cash-on-hand figure itself is read from `config`
+ * directly (not passed in) so it can be timeline-decayed internally — see
+ * `effectiveCashOnHand` below (TODO §15.H17). Computed by the caller so this
+ * stays a pure function of its arguments, not a hook.
  *
  * Returns null when jobLossMode/jobLossDate aren't set (nothing to compute).
  */
-export function computeJobLossRunway({ config, expenses, effectiveToday, savings = 0 }) {
+export function computeJobLossRunway({ config, expenses, effectiveToday, extraCash = 0 }) {
   if (!config?.jobLossMode || !config?.jobLossDate || !effectiveToday) return null;
 
   const todayDate = new Date(effectiveToday + "T12:00:00");
@@ -103,12 +157,7 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, savings
   // stay untouched for normal-mode Budget, just not part of this math.
   // Lifestyle rows still drag on burn when active, but are excluded here so
   // the runway focuses on survival spend.
-  const essentialActive = (expenses ?? []).filter(exp => {
-    const status = exp.jobLossStatus ?? "active";
-    const flexible = exp.category === "Lifestyle";
-    const tracked = exp.trackDuringJobLoss !== false;
-    return status === "active" && !flexible && tracked;
-  });
+  const essentialActive = (expenses ?? []).filter(isTrackedActiveEssential);
   const weeklyBurn = essentialActive.reduce(
     (sum, exp) => sum + getEffectiveAmount(exp, todayDate, phaseIdx),
     0,
@@ -119,12 +168,7 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, savings
   // survival spend"), but a user who keeps them checked is still actually
   // paying for them — surfaced separately so the runway UI can caption it
   // instead of letting the headline number silently omit real spend.
-  const lifestyleActive = (expenses ?? []).filter(exp => {
-    const status = exp.jobLossStatus ?? "active";
-    const flexible = exp.category === "Lifestyle";
-    const tracked = exp.trackDuringJobLoss !== false;
-    return status === "active" && flexible && tracked;
-  });
+  const lifestyleActive = (expenses ?? []).filter(isTrackedActiveLifestyle);
   const lifestyleWeeklySpend = lifestyleActive.reduce(
     (sum, exp) => sum + getEffectiveAmount(exp, todayDate, phaseIdx),
     0,
@@ -145,9 +189,24 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, savings
   }
   const projectedUnemploymentTotal = benefitsRemainingWeeks * (config.unemploymentWeekly ?? 0);
 
-  const safeSavings = Math.max(0, savings || 0);
-  const withBenefitsCash = safeSavings + projectedUnemploymentTotal;
-  const withoutBenefitsCash = safeSavings;
+  // Timeline-aware cash on hand (TODO §15.H17): `jobLossCashOnHand` is a
+  // point-in-time snapshot the user confirms via the Cash On Hand card's
+  // editor, stamped with `jobLossCashOnHandAsOf` at that moment. From then
+  // forward, every essential bill's due date that passes is assumed paid out
+  // of it and subtracted automatically — the displayed figure decreases on
+  // its own as bills come due instead of silently going stale until the user
+  // remembers to re-check their bank balance. Accounts that set cash-on-hand
+  // before this field existed have no `jobLossCashOnHandAsOf` — falls back to
+  // `jobLossDate` (Job Loss Mode's own start), the only other timestamp on
+  // file that's a reasonable "since when has this figure been true" anchor.
+  const rawCashOnHand = Math.max(0, config.jobLossCashOnHand ?? 0);
+  const cashAsOf = config.jobLossCashOnHandAsOf ?? config.jobLossDate;
+  const billsDueSinceAsOf = sumBillsDueSince(expenses, cashAsOf, effectiveToday);
+  const effectiveCashOnHand = Math.max(0, rawCashOnHand - billsDueSinceAsOf);
+
+  const safeExtraCash = Math.max(0, extraCash || 0);
+  const withBenefitsCash = effectiveCashOnHand + safeExtraCash + projectedUnemploymentTotal;
+  const withoutBenefitsCash = effectiveCashOnHand + safeExtraCash;
 
   // Pending check (TODO §15.H15): a known future inflow, landing on a specific
   // day rather than already-in-hand cash — so it extends the runway from the
@@ -182,6 +241,10 @@ export function computeJobLossRunway({ config, expenses, effectiveToday, savings
     lifestyleWeeklySpend,
     benefitsRemainingWeeks,
     projectedUnemploymentTotal,
+    rawCashOnHand,
+    cashAsOf,
+    billsDueSinceAsOf,
+    effectiveCashOnHand,
     pendingCheck: pendingDaysOut != null
       ? { amount: pendingAmount, date: pendingDateIso, daysOut: pendingDaysOut }
       : null,

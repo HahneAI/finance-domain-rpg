@@ -2559,6 +2559,80 @@ runway math itself.*
   scoping bullets — all explicitly out of scope per the user ("runway bugs are already being
   worked on").
 
+#### H17. Cash On Hand card + timeline-aware decay, 2026-07-22 — DONE
+
+*User ask, not from the H14 list: the plain Cash On Hand input "looks lame and crappy" — wanted
+its own prominent card above the Runway tile, a visible pencil icon signaling it's editable, a
+bottom-sheet editor matching the expense editor's up-from-bottom/slide-down animation, and —
+separately — for the displayed figure to decrease automatically as Needs bills come due, feeding
+that decay into the runway instead of the number silently going stale between manual updates.*
+
+- [x] **`components/CashOnHandSheet.jsx`** (new) — single-line bottom-sheet editor shared by both
+  panels. Uses the existing `useFoldTransition` hook + a new `.fold-sheet` CSS class (index.css)
+  rather than BudgetPanel's own expense-detail sheet, which only ever had an entrance animation
+  (`expSheetSlideUp`) and unmounted instantly on close — no matching exit. `.fold-sheet` gives this
+  the first bottom sheet in the app with a real symmetric enter (up-from-bottom, matching that
+  sheet's existing curve) / exit (slide back down, `--ease-fold-exit`, no bounce) pair.
+- [x] **`components/JobLossHomePanel.jsx`** — the plain input + `SectionHeader` replaced with a
+  full-width pressable card *above* the Runway/Weekly Burn/Extra Income grid: big tabular-nums
+  dollar figure, a visible circular pencil badge (top-right, same edit-icon glyph as
+  `ReemploymentTracker`'s Edit button), tap-anywhere-on-card to open the sheet (`scale(0.97)` press
+  feedback, `disabled` when `readOnly` — native `disabled` blocks the click entirely, no separate
+  guard needed). The pending-check line moved here from the old input's helper box (its natural
+  home now).
+- [x] **`components/JobLossBudgetPanel.jsx`** — same sheet, compact pressable row (value + pencil
+  badge) inside the existing "Savings & Benefits" card instead of the plain input — kept visually
+  smaller since Budget has no Runway-card layout context to match, but functionally identical
+  (same sheet, same fields, same decay-reset-on-save behavior). Removed the old
+  `cashDraft`/`lastSyncedCash` render-time resync entirely — no longer needed once cash is only
+  ever committed through the sheet's explicit Save.
+- [x] **`lib/jobLossRunway.js`** — timeline-aware decay, kept centralized (single source of truth,
+  not duplicated per-panel per drift-app-warden D1). New `jobLossCashOnHandAsOf` config field
+  (stamped by `JobLossEntry`'s Activate and both panels' `CashOnHandSheet` saves) anchors
+  `sumBillsDueSince(expenses, fromExclusive, throughInclusive)` — walks each essential bill's real
+  due-date occurrences one at a time via `getNextDueDate` (the underlying cycle math only exposes
+  "next due on/after a date," not a closed-form occurrence count) and sums their actual payment
+  amounts (`getExpenseDisplayAmount`), floored at 0 against `jobLossCashOnHand` to produce
+  `effectiveCashOnHand` — the figure both cards display and the number that now feeds the
+  runway/cliff math (`withBenefits`/`withoutBenefits.cash`). Falls back to `jobLossDate` as the
+  decay anchor for pre-§15.H17 accounts that never got a real `jobLossCashOnHandAsOf` stamp.
+  `computeJobLossRunway`'s `savings` param renamed to `extraCash` (now just gig income —
+  `sumJobHuntIncome()` — since raw cash is read from `config` internally instead of pre-summed by
+  the caller) — forced every call site to be touched deliberately rather than silently
+  reinterpreting the same param name. Also de-duplicated three copy-pasted
+  active+tracked+category filters (`essentialActive`, `lifestyleActive`, and the new bills-due
+  filter) into two shared predicates, `isTrackedActiveEssential`/`isTrackedActiveLifestyle`.
+- [x] **External consumers updated for the `extraCash` rename** (drift-app-warden Spine A / D1
+  check — `computeJobLossRunway` is a mapped LEDGER item, cross-checked against every call site,
+  not just the two panels): `components/CoachNetWorthCard.jsx`'s Red-tier runway trigger and
+  `App.jsx`'s Ask Coach `coachRunwayDays` memo (both closed drift-app-warden §21 quarantines from
+  earlier work) each used to pre-sum `jobLossCashOnHand + sumJobHuntIncome()` into a local
+  `savings` var — both now pass `extraCash: sumJobHuntIncome(config)` only, and both automatically
+  gained decay-awareness for free since `computeJobLossRunway` now reads cash internally.
+- [x] **`constants/config.js`** — `jobLossCashOnHandAsOf: null` added to `DEFAULT_CONFIG`
+  (snapshot updated, `npx vitest run -u`).
+- [x] **`docs/active-systems.md` §10** — updated in the same pass (drift-app-warden: doc/spec drift
+  is its own quarantined failure class, D5) — was still describing the pre-H15/H16 3-step wizard
+  and the raw-sum `savings` formula; now reflects the 4-step wizard, the pending-check/Lifestyle-
+  caption features, and the card/sheet + decay architecture.
+- [x] Tests — `src/test/lib/jobLossRunway.test.js`: new `describe('sumBillsDueSince')` (8 cases —
+  window boundaries, Lifestyle/paused/untracked exclusion, loan inclusion, multi-occurrence
+  summing, missing-boundary guard) and `describe('computeJobLossRunway — timeline-aware cash on
+  hand')` (5 cases — decay math, floor-at-0, `jobLossDate` fallback, no-decay-when-nothing-due,
+  `extraCash` still additive on top). `src/test/components/jobLossFlow.test.jsx`: both panels'
+  old plain-input describe blocks rewritten for the card/sheet interaction (prefill, save +
+  asOf-stamp, cancel-without-saving — the cancel case needed `waitFor` since the sheet stays
+  mounted through its animated exit, not an instant unmount), plus new dedicated decay describe
+  blocks per panel; `JobLossEntry`'s existing Activate test extended to assert
+  `jobLossCashOnHandAsOf === jobLossDate`. Full suite: 1175 tests, all green (including the
+  previously-flagged `LoginScreen.test.jsx` full-suite-ordering flake, which also passed clean this
+  run). Lint diffed against a `git stash` baseline: zero new errors/warnings (diff was pure
+  line-number drift on pre-existing unrelated errors from removed lines above them). Production
+  build green.
+- **Scope note:** `sumBillsDueSince` only decays against essential (Needs + loan) bills, matching
+  the same category gate `weeklyBurn` already uses — Lifestyle spend still isn't part of any cash
+  figure, consistent with §15.H16's deliberate exclusion, not an oversight.
+
 ---
 
 ### I. Admin Toolkit updates for §15 work
@@ -4336,3 +4410,33 @@ audit only, no runtime/visual walkthrough performed):
   the wizard itself was already decluttered per items elsewhere in this doc, but the *landing*
   moment right after "Finish" hasn't been looked at for continuity with what Home now looks like).
 
+---
+
+## 40. Dev Infrastructure — Claude Code on the web headless UI testing
+
+*Built 2026-07-22: `.claude/hooks/session-start.sh` + `.claude/hooks/drive-app.mjs` (see commit
+`90dc305`). Web sessions previously had no way to satisfy CLAUDE.md's "start the dev server and use
+the feature in a browser" rule — the dev server booted straight into a crash (`supabaseUrl is
+required`, no Supabase config anywhere in the container) and Playwright wasn't available. The hook
+now installs deps, and — only once the environment variables below are configured on the Claude
+Code on the web environment itself (never in this repo) — wires up a real login screen and a
+headless-login driver script.*
+
+- [ ] **Pending setup (blocks this from doing anything beyond "no crash") — configure on the
+  Claude Code on the web environment (Environment settings), not in this repo or any `.env` file:**
+  - [ ] `VITE_SUPABASE_URL` — same value as production. Safe to store here: it's public by design.
+  - [ ] `VITE_SUPABASE_ANON_KEY` — same value as production. Also safe to store: Supabase's anon
+    key is meant to be client-embedded (protected by RLS, not secrecy) — it's already sitting in
+    the deployed production JS bundle today.
+  - [ ] `TEST_ACCOUNT_EMAIL` / `TEST_ACCOUNT_PASSWORD` — a **dedicated test/dummy account**, not
+    anthonyhahne20@gmail.com or any real user. Deliberately not `VITE_`-prefixed so these can never
+    end up in the client bundle — only `drive-app.mjs` reads them, straight from `process.env`.
+  - [ ] Once all four are set, confirm with: `CLAUDE_CODE_REMOTE=true .claude/hooks/session-start.sh`
+    should log `.env.local` written + test account present (not the "not set" fallback lines), then
+    `npm run dev &` + `node .claude/hooks/drive-app.mjs` should log in and screenshot the post-login
+    shell instead of exiting with the missing-credentials error.
+- [ ] **Once merged to `master`,** every future Claude Code on the web session on this repo picks
+  the hook up automatically — no per-session setup beyond the one-time env vars above.
+- [ ] **Test account should have Job Loss Mode data seeded** (or get it seeded once logged in) so a
+  session can actually drive the §15.H15/H16 screens this hook was built to unblock testing for —
+  worth doing as part of the same setup pass, not a separate task.

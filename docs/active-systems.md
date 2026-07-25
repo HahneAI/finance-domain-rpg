@@ -218,34 +218,51 @@ the normal panels — `App.jsx` renders `JobLossHomePanel`/`JobLossBudgetPanel` 
 - **`LifeEventMenu.jsx`** — modal, 3 tiles: Pay Structure Changed →
   `SetupWizard(lifeEvent="structure_change")`; Lost My Job → `JobLossEntry.jsx`; Quick Rate
   Update → `RateUpdateModal.jsx`.
-- **`JobLossEntry.jsx`** — 3-step modal: (1) date + mandatory `jobLossCashOnHand` (§15.H13,
-  persisted, accepts 0) + unemployment benefits; (2) expense review checklist, all bills checked
-  by default, unchecking sets `trackDuringJobLoss: false` without touching anything else about the
-  expense; (3) due-date assignment (`DueDatePicker`) for kept non-loan bills — loans auto-attach
-  `loanMeta.firstPaymentDate`. Steps 2–3 skip entirely when there are no expenses. `config.jobLossMode`
-  zeroes earned income from `jobLossDate` forward in `buildYear()` — **not prorated**: the entire
-  fiscal week containing `jobLossDate` zeroes out, including days already worked that week.
+- **`JobLossEntry.jsx`** — up to 4-step modal: (0) date + mandatory `jobLossCashOnHand` (§15.H13,
+  persisted, accepts 0; stamps `jobLossCashOnHandAsOf` alongside it, §15.H17) + unemployment
+  benefits; (1) pending/final paycheck (§15.H15) — skippable "any check still coming?" gate, a
+  worked-days grid, and an arrival-day picker, resolved once into a concrete
+  `jobLossPendingCheckAmount`/`jobLossPendingCheckDate`; (2) expense review checklist, all bills
+  checked by default, unchecking sets `trackDuringJobLoss: false` without touching anything else
+  about the expense; (3) due-date assignment (`DueDatePicker`) for kept non-loan bills — loans
+  auto-attach `loanMeta.firstPaymentDate`. Step 1 always runs; steps 2–3 skip entirely when there
+  are no expenses. `config.jobLossMode` zeroes earned income from `jobLossDate` forward in
+  `buildYear()` — **not prorated**: the entire fiscal week containing `jobLossDate` zeroes out,
+  including days already worked that week (the pending-check step is the bolt-on fix for that, not
+  a general proration).
 - **`lib/jobLossRunway.js`** — `computeJobLossRunway()` is the one authoritative runway/burn
-  function; both panels read it, nothing else should compute a second one (see Known gaps —
-  `coachTriggers.js` already does). `weeklyBurn` only sums **Needs** (and loan) expenses —
-  Lifestyle-category bills are tracked and shown but deliberately excluded from the burn number.
-  `savings` = `jobLossCashOnHand` (persisted, editable from both panels) + `sumJobHuntIncome()`
-  (gig income logged via Home's "Log Extra Income" widget) — no concept of a pending/not-yet-paid
-  final paycheck exists in this calc.
-- **`JobLossHomePanel.jsx`** — runway headline, cash-on-hand input, Log Extra Income widget,
-  embeds `ReemploymentTracker` (target income, return-to-work date, application CRUD with 6
-  statuses). **`JobLossBudgetPanel.jsx`** — savings + benefit-scenario toggle, upcoming-bills
-  countdown, full expense triage (active/paused/cancelled) inline, simplified add-expense form.
-  Both eager-save every mutation (§15.H10).
+  function; both panels, `CoachNetWorthCard`, and `App.jsx`'s Ask Coach wiring all read it —
+  `coachTriggers.js`'s old independent `estimateRunwayDays()` was deleted outright rather than
+  patched, closing that drift source for good. `weeklyBurn` only sums **Needs** (and loan)
+  expenses — Lifestyle-category bills are tracked and shown but
+  deliberately excluded from the burn number, surfaced instead as a separate `lifestyleWeeklySpend`
+  caption on Home (§15.H16). Cash is timeline-aware (§15.H17): `effectiveCashOnHand` = the
+  persisted `jobLossCashOnHand` snapshot minus every essential bill's due-date occurrence that has
+  landed since `jobLossCashOnHandAsOf` (`sumBillsDueSince()`, falls back to `jobLossDate` for
+  accounts predating this field) — the displayed figure decreases on its own as bills come due
+  instead of going stale until the user re-checks their balance. `extraCash` (just
+  `sumJobHuntIncome()`, gig income logged via Home's "Log Extra Income" widget) adds on top,
+  uncounted by the decay. A pending/final paycheck (§15.H15) is folded in piecewise — it only
+  extends the runway once its own arrival date is reached, not lump-summed into today's cash.
+- **`JobLossHomePanel.jsx`** — a pencil-badged Cash On Hand card sits above the runway tiles;
+  tapping it (or the equivalent row on Budget) opens `CashOnHandSheet.jsx`, a shared bottom-sheet
+  editor (up-from-bottom entrance / slide-down exit via the `.fold-sheet` CSS class, index.css) —
+  confirming a value there always re-stamps `jobLossCashOnHandAsOf` to reset the decay clock.
+  Runway headline, Log Extra Income widget, embeds `ReemploymentTracker` (target income,
+  return-to-work date, application CRUD with 6 statuses). **`JobLossBudgetPanel.jsx`** — the same
+  Cash On Hand row/sheet, benefit-scenario toggle, upcoming-bills countdown, full expense triage
+  (active/paused/cancelled) inline, simplified add-expense form. Both eager-save every mutation
+  (§15.H10).
 - **App shell:** persistent amber banner while `jobLossMode` is true; "Back to Work" re-enters the
   wizard as `structure_change` and restores the mandatory Food expense if it was skipped at
   first-run. Entry point also lives in the Account panel (`ProfilePanel` "Life Events" row → same
   `LifeEventMenu`).
-- **Known gaps** (full write-up: `docs/TODO.md` §15.H14): AI features (Coach, Job Hunt Assistant,
-  Job Scout) are `is_admin`/`is_tester`-gated, so most real Job Loss Mode users can't reach any of
-  them yet — Job Hunt Assistant and Job Scout are still unbuilt entirely (see
-  `docs/coach-entry-points.md`). **Stale-note correction (2026-07-24):** this list previously also
-  named four gaps that have since closed and should no longer be treated as open — a pending/final
+- **Known gaps** (full write-up: `docs/TODO.md` §15.H14, closed items now in §15.H15–H17): AI
+  features (Coach, Job Hunt Assistant, Job Scout) are `is_admin`/`is_tester`-gated, so most real
+  Job Loss Mode users can't reach any of them yet — Job Hunt Assistant and Job Scout are still
+  unbuilt entirely (see `docs/coach-entry-points.md`); résumé/skill-gap analysis is scoped
+  (§18.E1) but not built. **Stale-note correction (2026-07-24):** this list previously also named
+  four gaps that have since closed and should no longer be treated as open — a pending/final
   paycheck is now modeled in the runway calc (§15.H15, `lib/jobLossRunway.js`); Lifestyle spend gets
   an explicit UI callout instead of silently vanishing from `weeklyBurn` (§15.H16); the independent,
   drifted `coachTriggers.js#estimateRunwayDays` was deleted outright, not just fixed — every caller

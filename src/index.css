@@ -376,8 +376,18 @@ code {
 .fold-modal[data-fold="entering"] { will-change:transform,opacity; animation: foldScaleIn  var(--fold-ms-modal)          var(--ease-fold-overshoot)   both; }
 .fold-modal[data-fold="exiting"]  { will-change:transform,opacity; animation: foldModalOut  var(--fold-ms-modal-card-out) var(--ease-fold-modal-exit)  both; }
 
+/* Bottom sheets — slide up from bottom (enter) / slide back down (exit). No
+   bounce either direction (unlike fold-modal's overshoot enter): matches the
+   curve BudgetPanel's expense-detail sheet already uses for its entrance
+   (that sheet never had a matching exit — instant unmount on close — this is
+   the first sheet in the app with a real symmetric enter/exit pair). */
+@keyframes foldSheetIn  { from { opacity:0; transform:translateY(100%); } to { opacity:1; transform:translateY(0); } }
+@keyframes foldSheetOut { from { opacity:1; transform:translateY(0); }    to { opacity:0; transform:translateY(100%); } }
+.fold-sheet[data-fold="entering"] { will-change:transform,opacity; animation: foldSheetIn  320ms cubic-bezier(.22,.7,.2,1) both; }
+.fold-sheet[data-fold="exiting"]  { will-change:transform,opacity; animation: foldSheetOut var(--fold-ms-modal-out) var(--ease-fold-exit) both; }
+
 @media (prefers-reduced-motion: reduce) {
-  .fold-lift[data-fold], .fold-scale[data-fold], .fold-modal[data-fold], .fold-backdrop[data-fold] { animation:none; }
+  .fold-lift[data-fold], .fold-scale[data-fold], .fold-modal[data-fold], .fold-sheet[data-fold], .fold-backdrop[data-fold] { animation:none; }
 }
 
 /* ── Wizard step slides — direction-aware push/pop (StepSlide in ui.jsx) ── */

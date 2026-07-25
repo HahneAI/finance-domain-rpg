@@ -299,14 +299,11 @@ export default function App() {
   // null = idle; { op, pending, ok, ts, err } = in-flight or result
   const [syncStatus, setSyncStatus] = useState(null);
   const [configViewOpen, setConfigViewOpen] = useState(false);
-  const [toolSheetOpen, setToolSheetOpen] = useState(false);
   const [askCoachOpen, setAskCoachOpen] = useState(false);
   // askCoachExiting: true while the Ask Coach panel is animating out (180ms
   // foldLiftOut) — mirrors wizardExiting's pattern so the panel stays mounted
   // through its exit instead of vanishing on the close tap.
   const [askCoachExiting, setAskCoachExiting] = useState(false);
-  const [sheetDragY, setSheetDragY] = useState(0);
-  const sheetDragStartY = useRef(null);
   const [rowViewOpen, setRowViewOpen] = useState(false);
   const [rowData, setRowData] = useState(null);
   const [rowFetching, setRowFetching] = useState(false);
@@ -414,39 +411,6 @@ export default function App() {
     setMainContentEl(el);
   }, []);
   const isScrollingDown = useScrollDirection(mainContentEl);
-
-  // Prevent background scroll while the admin sheet is open. On mobile the scroll
-  // container is .main-content (overflow-y:auto) — not <body> — so locking only the
-  // body did nothing and scroll leaked to the dashboard behind the sheet. Lock the
-  // actual container too; the sheet keeps its own overflow so it still scrolls.
-  useEffect(() => {
-    const sc = mainContentRef.current;
-    const lock = () => {
-      document.body.style.overflow = "hidden";
-      document.body.style.overscrollBehavior = "none";
-      if (sc) { sc.style.overflow = "hidden"; sc.style.overscrollBehavior = "none"; }
-    };
-    const unlock = () => {
-      document.body.style.overflow = "";
-      document.body.style.overscrollBehavior = "";
-      if (sc) { sc.style.overflow = ""; sc.style.overscrollBehavior = ""; }
-    };
-    if (toolSheetOpen) lock(); else unlock();
-    return unlock;
-  }, [toolSheetOpen]);
-
-  // ≥44px tap target for the admin Tools sheet "View/Hide/Fetch" toggle links.
-  // They were ~10px tall (padding:0) and sit directly above the Demo Account
-  // buttons, so a missed tap launched the demo view (debug.md §4b). Negative
-  // margins absorb the extra padding into the surrounding 20px gutter so the
-  // header rows stay visually compact while the touch area meets the minimum.
-  const sheetToggleBtnStyle = {
-    background: "transparent", border: "none", color: "var(--color-accent-primary)",
-    fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", cursor: "pointer",
-    padding: "12px 10px", margin: "-10px -10px -10px 0",
-    minWidth: "44px", minHeight: "44px",
-    display: "inline-flex", alignItems: "center", justifyContent: "flex-end",
-  };
 
   const jumpToPanelTop = () => {
     const scrollToTop = () => {
@@ -1230,7 +1194,6 @@ export default function App() {
     setWeekConfirmations(nextWeekConfirmations);
     savePersistedStateNow({ weekConfirmations: nextWeekConfirmations, logs: nextLogs });
     setConfirmDismissed(false);  // ensure the modal pops back open
-    setToolSheetOpen(false);     // close the admin sheet so the modal is visible
   }, [reopenableWeekIdx, weekConfirmations, logs, savePersistedStateNow]);
 
   // ── Fiscal week stamp: raw idx out of 52 (standard calendar year = 52 paychecks) ──
@@ -1834,7 +1797,6 @@ export default function App() {
             .sidebar { display: none !important; }
             .mobile-header { display: flex !important; }
             .mobile-bottom-nav { display: flex !important; }
-            .mobile-admin-sheet { display: flex !important; flex-direction: column !important; }
             .admin-inspector { bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important; }
             /* On mobile the outer shell must have a definite height so the flex
                column inside can act as a scroll container. 100svh = "small viewport
@@ -1870,7 +1832,6 @@ export default function App() {
           @media (min-width: 768px) {
             .mobile-header { display: none !important; }
             .mobile-bottom-nav { display: none !important; }
-            .mobile-admin-sheet { display: none !important; }
             /* DEBUG: overlay also hides on desktop so a half-open drawer doesn't
                ghost behind the sidebar if the user resizes the window. */
             .mobile-drawer-overlay { display: none !important; }
@@ -3241,331 +3202,6 @@ export default function App() {
           </div>
         );
       })()}
-
-      {/* ── Admin Tools slide-up sheet ── */}
-      {isAdmin && (
-        <>
-          {/* Backdrop — also hides the nav pill beneath it */}
-          {toolSheetOpen && (
-            <div
-              onClick={() => { setToolSheetOpen(false); setSheetDragY(0); }}
-              style={{
-                position: "fixed", inset: 0, zIndex: 24,
-                background: "rgba(3, 10, 7, 0.82)",
-                cursor: "pointer",
-                touchAction: "none",
-              }}
-            />
-          )}
-          {/* Sheet */}
-          <div
-            className="mobile-admin-sheet"
-            style={{
-              display: "none",
-              position: "fixed",
-              bottom: 0,
-              left: 0,
-              right: 0,
-              zIndex: 25,
-              transform: toolSheetOpen ? `translateY(${sheetDragY}px)` : "translateY(100%)",
-              transition: sheetDragY > 0 ? "none" : "transform 0.28s ease",
-              borderRadius: "20px 20px 0 0",
-              background: "var(--color-bg-surface)",
-              borderTop: "1px solid var(--color-border-accent)",
-              borderLeft: "1px solid var(--color-border-subtle)",
-              borderRight: "1px solid var(--color-border-subtle)",
-              maxHeight: "82vh",
-              overflowY: "auto",
-              overflowX: "hidden",
-              touchAction: "pan-y",
-            }}
-          >
-            {/* Handle bar — full-width drag zone, min 44px tall */}
-            <div
-              style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "44px", cursor: "grab", touchAction: "none" }}
-              onTouchStart={e => { sheetDragStartY.current = e.touches[0].clientY; }}
-              onTouchMove={e => {
-                if (sheetDragStartY.current === null) return;
-                const dy = e.touches[0].clientY - sheetDragStartY.current;
-                if (dy > 0) setSheetDragY(dy);
-              }}
-              onTouchEnd={() => {
-                if (sheetDragY > 120) {
-                  setToolSheetOpen(false);
-                }
-                setSheetDragY(0);
-                sheetDragStartY.current = null;
-              }}
-            >
-              <div style={{ width: "40px", height: "4px", borderRadius: "2px", background: sheetDragY > 0 ? "rgba(0,200,150,0.6)" : "rgba(0,200,150,0.3)", transition: "background 0.15s ease" }} />
-            </div>
-
-            {/* Header */}
-            <div style={{ padding: "10px 20px 12px", borderBottom: "1px solid var(--color-border-subtle)" }}>
-              {/* Row 1: title + close */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  <span style={{ fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", color: "var(--color-warning)", fontWeight: "bold" }}>
-                    Admin Tools
-                  </span>
-                </div>
-                <Pressable
-                  onClick={() => { setToolSheetOpen(false); setSheetDragY(0); }}
-                  style={{ background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "50%", width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: "18px", lineHeight: 1, flexShrink: 0 }}
-                  aria-label="Close admin tools"
-                >×</Pressable>
-              </div>
-              {/* Row 2: current panel context + active lock pill */}
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>
-                  On: <span style={{ color: "var(--color-text-primary)" }}>{NAV_ITEMS.find(i => i.key === currentView)?.label ?? "Home"}</span>
-                </span>
-                {tempLockDate && (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", borderRadius: "4px", padding: "3px 7px 3px 8px", color: "var(--color-warning)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase" }}>
-                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span>Locked: {new Date(tempLockDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                    <Pressable
-                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                      style={{ background: "transparent", border: "none", color: "var(--color-warning)", fontSize: "12px", lineHeight: 1, cursor: "pointer", padding: "0", marginLeft: "1px" }}
-                      aria-label="Clear lock date"
-                    >×</Pressable>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Tool sections — each separated by a divider */}
-            <div style={{ padding: "0 20px" }}>
-
-              {/* ── Lock Date ── */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Lock Date</div>
-                {tempLockDate ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "13px", color: "var(--color-warning)", fontFamily: "var(--font-mono)", flex: 1 }}>{tempLockDate}</span>
-                    <Pressable
-                      onClick={() => { setTempLockDate(null); setAdminDateDraft(""); }}
-                      style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "6px", color: "var(--color-deduction)", fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
-                    >Clear ×</Pressable>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    <input
-                      type="date"
-                      value={adminDateDraft}
-                      onChange={e => setAdminDateDraft(e.target.value)}
-                      style={{ width: "100%", background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "16px", padding: "10px 12px", fontFamily: "var(--font-mono)", colorScheme: "dark", boxSizing: "border-box" }}
-                    />
-                    <Pressable
-                      onClick={() => { if (adminDateDraft) setTempLockDate(adminDateDraft); }}
-                      disabled={!adminDateDraft}
-                      style={{ width: "100%", background: adminDateDraft ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: "none", borderRadius: "8px", color: adminDateDraft ? "var(--color-bg-base)" : "var(--color-text-disabled)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: adminDateDraft ? "pointer" : "not-allowed", fontWeight: "bold", minHeight: "44px" }}
-                    >Set Lock Date</Pressable>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Force Sync ── */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Sync</div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  {["push", "pull"].map(op => (
-                    <Pressable
-                      key={op}
-                      onClick={op === "push" ? handleForcePush : handleForcePull}
-                      disabled={!!syncStatus?.pending}
-                      style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: syncStatus?.pending ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: syncStatus?.pending ? "not-allowed" : "pointer", minHeight: "44px" }}
-                    >{op === "push" ? "Push ↑" : "Pull ↓"}</Pressable>
-                  ))}
-                </div>
-                {syncStatus && (
-                  <div style={{ fontSize: "10px", marginTop: "8px", letterSpacing: "0.5px", color: syncStatus.pending ? "var(--color-text-secondary)" : syncStatus.ok ? "var(--color-green)" : "var(--color-red)" }}>
-                    {syncStatus.pending
-                      ? (syncStatus.op === "push" ? "Pushing…" : "Pulling…")
-                      : syncStatus.ok
-                        ? `✓ ${syncStatus.op === "push" ? "Pushed" : "Pulled"} · ${syncStatus.ts.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
-                        : `✗ ${syncStatus.op === "push" ? "Push" : "Pull"} failed`}
-                  </div>
-                )}
-              </div>
-
-              {/* ── Reopen Last Check-In ── */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Weekly Check-In</div>
-                <button
-                  onClick={handleReopenLastCheckIn}
-                  disabled={reopenableWeekIdx == null}
-                  style={{ width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: reopenableWeekIdx == null ? "var(--color-text-disabled)" : "var(--color-text-primary)", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: reopenableWeekIdx == null ? "not-allowed" : "pointer", minHeight: "44px", fontWeight: "bold" }}
-                >{reopenableWeekIdx == null ? "No check-in to reopen" : `Reopen Last Check-In · Wk ${reopenableWeekIdx}`}</button>
-                <div style={{ fontSize: "9px", color: "var(--color-text-disabled)", marginTop: "6px", lineHeight: "1.4" }}>
-                  Reopens the most recent confirmed week's modal for review. Income projections are unaffected.
-                </div>
-              </div>
-
-              {/* ── Config JSON ── */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: configViewOpen ? "10px" : "0" }}>
-                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Config JSON</div>
-                  <Pressable
-                    onClick={() => setConfigViewOpen(v => !v)}
-                    style={sheetToggleBtnStyle}
-                  >{configViewOpen ? "Hide ↑" : "View ↓"}</Pressable>
-                </div>
-                {configViewOpen && (
-                  <div>
-                    <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-                      {JSON.stringify(config, null, 2)}
-                    </pre>
-                    <Pressable
-                      onClick={() => navigator.clipboard?.writeText(JSON.stringify(config, null, 2))}
-                      style={{ marginTop: "8px", width: "100%", background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", color: "var(--color-text-primary)", fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "11px 0", cursor: "pointer", minHeight: "44px" }}
-                    >Copy to Clipboard</Pressable>
-                  </div>
-                )}
-              </div>
-
-              {/* ── DB Row Viewer ── */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: rowData && rowViewOpen ? "10px" : "0" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>DB Row</div>
-                    {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)", letterSpacing: "1px" }}>{rowDiff.length} drift</span>}
-                  </div>
-                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                    <Pressable onClick={handleFetchRow} disabled={rowFetching} style={{ ...sheetToggleBtnStyle, cursor: rowFetching ? "not-allowed" : "pointer" }}>{rowFetching ? "…" : "Fetch"}</Pressable>
-                    {rowData && <Pressable onClick={() => setRowViewOpen(v => !v)} style={{ ...sheetToggleBtnStyle, color: "var(--color-text-secondary)" }}>{rowViewOpen ? "Hide ↑" : "View ↓"}</Pressable>}
-                  </div>
-                </div>
-                {rowData && rowViewOpen && (
-                  rowData.__error
-                    ? <div style={{ fontSize: "10px", color: "var(--color-red)" }}>{rowData.__error}</div>
-                    : <>
-                        <div style={{ display: "flex", gap: "12px", marginBottom: "8px", flexWrap: "wrap" }}>
-                          {rowData.updated_at && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</span>}
-                          {rowDiff.length > 0 && <span style={{ fontSize: "9px", color: "var(--color-warning)" }}>Drift: {rowDiff.join(", ")}</span>}
-                          {historyLine && <span style={{ fontSize: "9px", color: "var(--color-text-secondary)" }}>{historyLine}</span>}
-                          {coachChatsLine && (
-                            <Pressable
-                              as="span"
-                              onClick={() => coachChatsMeta?.count > 0 && setCoachChatsListOpen(v => !v)}
-                              style={{ background: "transparent", border: "none", padding: "0", fontSize: "9px", color: "var(--color-text-secondary)", cursor: coachChatsMeta?.count ? "pointer" : "default" }}
-                            >
-                              {coachChatsLine}{coachChatsMeta?.count > 0 ? (coachChatsListOpen ? " ▲" : " ▼") : ""}
-                            </Pressable>
-                          )}
-                        </div>
-                        {coachChatsListOpen && coachChatsMeta?.count > 0 && (
-                          <div style={{ marginBottom: "8px", paddingLeft: "8px", display: "flex", flexDirection: "column", gap: "1px" }}>
-                            {coachChatsMeta.recentTitles.map((t, i) => (
-                              <div key={i} style={{ fontSize: "9px", color: "var(--color-text-disabled)" }}>· {t}</div>
-                            ))}
-                          </div>
-                        )}
-                        <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px 12px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "200px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-                          {JSON.stringify(rowData, null, 2)}
-                        </pre>
-                      </>
-                )}
-              </div>
-
-              {/* ── Tax Weeks Grid ── */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: taxGridOpen ? "10px" : "0" }}>
-                  <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)" }}>Tax Weeks</div>
-                  <Pressable onClick={() => setTaxGridOpen(v => !v)} style={sheetToggleBtnStyle}>{taxGridOpen ? "Hide ↑" : "View ↓"}</Pressable>
-                </div>
-                {taxGridOpen && (() => {
-                  const overrides = config.pastWeekTaxStatusOverrides ?? {};
-                  const activeWeeks = allWeeks.filter(w => w.active);
-                  return (
-                    <>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "3px", marginBottom: "10px" }}>
-                        {activeWeeks.map(w => {
-                          const wIso = toLocalIso(w.weekEnd);
-                          const isPast = wIso < effectiveToday;
-                          const isCurrent = w.idx === currentWeek?.idx;
-                          const hasOverride = overrides[w.idx] !== undefined;
-                          const bg = isPast ? "var(--color-bg-raised)" : w.taxedBySchedule ? "rgba(0,200,150,0.25)" : "var(--color-bg-base)";
-                          return (
-                            <div key={w.idx} title={`Wk ${w.idx}${w.taxedBySchedule ? " · taxed" : ""}${isPast ? " · past" : ""}${hasOverride ? " · override" : ""}`} style={{ position: "relative", width: "20px", height: "20px", borderRadius: "3px", background: bg, border: isCurrent ? "2px solid #c8a84b" : "1px solid var(--color-border-subtle)", flexShrink: 0 }}>
-                              {hasOverride && <div style={{ position: "absolute", top: "2px", right: "2px", width: "5px", height: "5px", borderRadius: "50%", background: "var(--color-red)" }} />}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                        {[
-                          { bg: "rgba(0,200,150,0.25)", label: "Taxed / future" },
-                          { bg: "var(--color-bg-base)", label: "Untaxed / future" },
-                          { bg: "var(--color-bg-raised)", label: "Past" },
-                        ].map(({ bg, label }) => (
-                          <div key={label} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                            <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: bg, border: "1px solid var(--color-border-subtle)", flexShrink: 0 }} />
-                            <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>{label}</span>
-                          </div>
-                        ))}
-                        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                          <div style={{ width: "10px", height: "10px", borderRadius: "2px", background: "var(--color-bg-base)", border: "2px solid #c8a84b", flexShrink: 0 }} />
-                          <span style={{ fontSize: "9px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>Current wk</span>
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-
-              {/* ── Beta Report ── docs/TODO.md, admin-only usage/feedback CSV export */}
-              <div style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border-subtle)" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>Beta Report</div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <Pressable
-                    onClick={() => handleDownloadBetaReport("summary")}
-                    disabled={betaReportStatus?.loading}
-                    style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer", minHeight: "44px" }}
-                  >
-                    {betaReportStatus?.loading ? "…" : "Usage CSV"}
-                  </Pressable>
-                  <Pressable
-                    onClick={() => handleDownloadBetaReport("feedback")}
-                    disabled={betaReportStatus?.loading}
-                    style={{ flex: 1, background: "var(--color-bg-raised)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)", cursor: betaReportStatus?.loading ? "default" : "pointer", minHeight: "44px" }}
-                  >
-                    {betaReportStatus?.loading ? "…" : "Feedback CSV"}
-                  </Pressable>
-                </div>
-                {betaReportStatus?.error && (
-                  <div style={{ fontSize: "10px", color: "var(--color-red)", marginTop: "6px" }}>{betaReportStatus.error}</div>
-                )}
-              </div>
-
-              {/* ── Demo Accounts ── */}
-              <div style={{ padding: "14px 0" }}>
-                <div style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", color: "var(--color-text-secondary)", marginBottom: "8px" }}>
-                  Demo Accounts
-                  {adminDemoView !== null && (
-                    <span style={{ color: "var(--color-warning)", marginLeft: "8px" }}>· Editing Demo {adminDemoView}</span>
-                  )}
-                </div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  {[1, 2].map(n => (
-                    <Pressable
-                      key={n}
-                      onClick={() => { setAdminDemoView(adminDemoView === n ? null : n); setToolSheetOpen(false); }}
-                      style={{ flex: 1, background: adminDemoView === n ? "var(--color-accent-primary)" : "var(--color-bg-raised)", border: adminDemoView === n ? "none" : "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "11px 0", fontSize: "11px", letterSpacing: "1px", textTransform: "uppercase", color: adminDemoView === n ? "var(--color-bg-base)" : "var(--color-text-secondary)", cursor: "pointer", fontWeight: adminDemoView === n ? "bold" : "normal", minHeight: "44px" }}
-                    >
-                      {adminDemoView === n ? "← Exit Demo" : `Demo ${n}`}
-                    </Pressable>
-                  ))}
-                </div>
-              </div>
-
-              {/* Bottom safe-area spacer */}
-              <div style={{ height: "calc(72px + env(safe-area-inset-bottom, 0px))" }} />
-            </div>
-          </div>
-        </>
-      )}
 
       {/* ── Weekly work confirmation modal ──
           Shows when: unconfirmed past week exists AND confirmDismissed is false.

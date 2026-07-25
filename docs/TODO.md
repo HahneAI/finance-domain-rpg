@@ -4462,3 +4462,67 @@ headless-login driver script.*
 - [ ] **Test account should have Job Loss Mode data seeded** (or get it seeded once logged in) so a
   session can actually drive the §15.H15/H16 screens this hook was built to unblock testing for —
   worth doing as part of the same setup pass, not a separate task.
+
+---
+
+## 41. Terms of Service / Privacy Policy Consent Capture
+
+*Built 2026-07-26, scoped from a discussion about data encryption and an "industry standard"
+consent gate before signup. The mechanism is real and live for new signups; the legal content it
+records agreement to is not — see `constants/legalDocuments.js`'s header comment, which is the
+authoritative pointer for what's still outstanding. Ties into §27 (Data Encryption): that section's
+own conclusion stands — no field-level encryption is needed today because nothing currently
+collected is regulated/high-sensitivity data, and this workstream doesn't change that.*
+
+**What's live:**
+- `database/migrations/033_add_consent_records.sql` — `consent_records` table (`user_id`,
+  `policy_version`, `consented_at`). Append-only by design: RLS has no UPDATE/DELETE policy for any
+  client role, and a `BEFORE INSERT` trigger forces `consented_at` to the database's own clock
+  regardless of what the client sends, so a modified client can't backdate a consent record.
+- `LoginScreen.jsx` — a required checkbox ("I have read and agree to the Terms of Service and
+  Privacy Policy") gates **both** signup paths: the email/password form and the "Continue with
+  Google" OAuth button on the Create Account tab. Rejecting either without the box checked shows an
+  inline error and never calls `signUp`/`signInWithOAuth`. The two link spans open
+  `LegalDocumentModal` (reused from the changelog feature's `ChangelogBody` markdown renderer —
+  same token-styled treatment, one renderer for both features' content).
+- Consent recording: email/password path calls `recordConsent` directly (the handler already has
+  the new user's id in hand). The OAuth path can't do this synchronously — clicking "Continue with
+  Google" navigates the whole page away — so it hands the agreed-to version across the redirect via
+  `sessionStorage` (`LoginScreen.jsx`'s `PENDING_CONSENT_STORAGE_KEY`), which `App.jsx`'s
+  `SIGNED_IN` handler reads and clears once the session is confirmed.
+- `src/lib/db.js` — `recordConsent`/`fetchLatestConsent`. Direct client calls (not routed through a
+  service-role API route like the changelog admin writes) — safe because RLS restricts every
+  operation to the caller's own `user_id` and the DB trigger owns the timestamp, so a malicious
+  client can only ever write a truthful "I agreed" row for itself.
+
+**What's built but dormant:**
+- `App.jsx` + `ConsentGateModal.jsx` — a non-dismissible re-consent interstitial for *existing*
+  accounts, shown when the signed-in user's latest `consent_records` row doesn't match
+  `CURRENT_LEGAL_VERSION`. Only "Agree and Continue" (checkbox-gated) or "Sign out instead" — no
+  backdrop-click or ✕ close, matching the "give a real exit, never trap the user" posture
+  `ProfilePanel`'s delete-confirm dialog already follows.
+- Gated behind `constants/legalDocuments.js`'s `ENFORCE_EXISTING_USER_RECONSENT` (currently
+  `false`) — deliberately **not** wired live yet. Flipping it before real text ships would interrupt
+  every current user's next login with a mandatory agree-to-continue gate over placeholder copy.
+  New-signup consent is unaffected by this flag; it's always required regardless, since it only
+  affects brand-new accounts rather than surprising existing ones.
+
+- [ ] **Replace the placeholder legal text.** `constants/legalDocuments.js`'s
+  `TERMS_OF_SERVICE_MARKDOWN`/`PRIVACY_POLICY_MARKDOWN` are structural scaffolding only — every
+  section is marked `[PLACEHOLDER]` inline specifically so nobody mistakes a screenshot or a quick
+  read for the real thing. Needs lawyer-reviewed text before this should be treated as a real
+  compliance record, not just working code.
+- [ ] **Bump `CURRENT_LEGAL_VERSION`** once the real text lands (any string works — it's only ever
+  compared for equality, never parsed) — this alone re-gates brand-new signups against the real
+  text but does **not** retroactively affect existing accounts.
+- [ ] **Flip `ENFORCE_EXISTING_USER_RECONSENT` to `true`** in the same change (or a deliberate
+  follow-up) once the real text is live, so accounts created before it shipped are prompted to
+  (re-)agree on their next login via `ConsentGateModal`.
+- [ ] **Consider whether Terms of Service and Privacy Policy should version independently.** Today
+  both documents share one `CURRENT_LEGAL_VERSION` — simplest possible shape for a first cut, but a
+  real ToS/Policy pair often update on different schedules (e.g. a new payment processor vs. a data
+  retention change). Revisit only if that mismatch actually becomes a problem — don't build
+  independent versioning speculatively.
+- [ ] **`docs/drift-app-warden.md` T7/T8 (Auth/Login) coverage** — this workstream touches
+  `LoginScreen.jsx` and `App.jsx`'s `SIGNED_IN` handler, both mapped surfaces; no drift-map entry
+  was added for it in this pass — worth a look next time either section gets a surgical pass.

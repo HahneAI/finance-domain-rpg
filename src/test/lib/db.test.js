@@ -807,13 +807,14 @@ describe('syncUserProfile — profile metadata + trial seeding (migration 017/01
     vi.unstubAllGlobals()
   })
 
-  it('calls the service-role seed-trial route with the session bearer token', async () => {
+  it('calls the service-role seed route (type: trial) with the session bearer token', async () => {
     setupSyncProfileMock()
     await syncUserProfile({ id: 'test-user-id', user_metadata: {} })
 
-    expect(fetch).toHaveBeenCalledWith('/api/seed-trial', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('/api/seed', expect.objectContaining({
       method: 'POST',
       headers: expect.objectContaining({ Authorization: 'Bearer tok-123' }),
+      body: JSON.stringify({ type: 'trial' }),
     }))
   })
 

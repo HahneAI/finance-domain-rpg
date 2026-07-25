@@ -42,18 +42,23 @@ answer. Coach explicitly won't give tax, legal, or investment advice; it sticks 
 the app.
 
 **Status:** 🟢 **Live and open to the full user base** (2026-07-24) — no longer admin/tester
-locked. Right now every conversation is temporary — closing the chat forgets it. There's also
-no memory of a conversation the user had earlier; each open is a fresh start.
+locked. **As of 2026-07-25, conversations have memory:** each turn is saved automatically as it
+happens (not just on close), a "Chat History" view lists the last 3 saved conversations grouped
+by date with a short Coach-written summary, and tapping one resumes it. Older conversations
+beyond the last 3 are pruned automatically — the one currently open is never pruned out from
+under the person having it.
 
 **Free trial access: ✅ Yes.** Included from day one of the free trial — a trial user gets
 the exact same chat a paying subscriber does, not a limited preview of it.
 
-**Next up:** Give it a memory. Right now the chat only ever holds one exchange in view —
-nothing is saved. The next build phase adds: multi-turn conversations that stay on-topic
-across several back-and-forth messages, and saving a person's last three conversations so they
-can reopen and re-read one instead of starting over — with a chat-history screen modeled on
-the Claude mobile app.
-*Reference: `docs/TODO.md` §18.H (Chat & Search History Persistence), subsections H3–H4.*
+**Next up:** A chat-history screen modeled on the Claude mobile app now exists inside the panel
+itself (a header icon toggles it), rather than as a separate full screen — revisit if that
+should become its own destination as the feature grows. Still open: an admin diagnostic count
+line on saved chats (DB Row Viewer), and — if a second `chat_type` (Job Scout, statement
+insights, etc.) ever gets a UI caller — that type needs its own retention/summary decision,
+since today's 3-chat retention cap and end-of-session summary are `ask_coach`-specific.
+*Reference: `docs/TODO.md` §18.H (Chat & Search History Persistence), subsections H3–H4;
+`docs/drift-app-warden.md` §21 F123.*
 
 **Technical reference:** API route `POST /api/coach` · Model: **Haiku** (`claude-haiku-4-5`,
 hardcoded — the Haiku/Sonnet split described in the plan isn't actually wired up yet) · System
@@ -63,7 +68,11 @@ together into one prompt). Gate: `canAccessAskCoachGeneral({isAdmin, isTester, e
 `src/lib/entitlements.js` — true for isAdmin/isTester (unchanged) or a real
 `"trial"`/`"grace"`/`"active"` entitlement from `src/lib/subscription.js`. Checked at every
 mount point (bottom nav, panel render) and independently re-verified server-side in
-`api/coach.js` from the DB row, never trusted from the client.
+`api/coach.js` from the DB row, never trusted from the client. Persistence: `coach_chats`
+(migration 023) via `loadCoachChats`/`saveCoachChat`/`deleteCoachChat` in `src/lib/db.js`,
+called from `AskCoachPanel.jsx` — every completed turn is an eager save, not debounced. Summary
+generation uses a separate, narrower prompt, `COACH_CHAT_SUMMARY_PROMPT`, that never faces the
+user.
 
 ---
 

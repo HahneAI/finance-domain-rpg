@@ -2651,7 +2651,7 @@ Ordered, numbered SQL. **BOOKMARK files are never migrations** — `022_BOOKMARK
 is a full-schema recap (schema state through 021) that exists so a session reads one file
 instead of the whole folder; the `BOOKMARK` tag + all-caps make it unmistakable, and assigning
 one the next real number expecting it to run is the trap CLAUDE.md warns about. Real migrations
-continue past it: **023** (`coach_chats`, unwired — Spine D), **024** (`user_data` write-
+continue past it: **023** (`coach_chats`, wired 2026-07-25 — Spine D F123), **024** (`user_data` write-
 permission fix — the F69 case law). **The next real migration is 025** — verify against the
 folder before numbering; this note has gone stale once already (this doc's own §14 caught it).
 > **IF** a migration is added, **THEN** it (a) takes the next real number skipping BOOKMARKs
@@ -2758,7 +2758,7 @@ destructure is the enforcing whitelist (migration 019 RLS is the server half).
 
 **Separate table (not `user_data`):** `account_history` (migration 020, write-only via
 `saveConfigSnapshot`, read-only via `extractBaseRateHistory` — the §22 narrow slice);
-`coach_chats` (migration 023, **unwired** — Spine D); `stripe_webhook_events` (migration 018,
+`coach_chats` (migration 023, wired — Spine D F123); `stripe_webhook_events` (migration 018,
 idempotency — Spine C/T9); `deleted_accounts` (cron tombstones — T9).
 
 ### 19.4 Block 4 — Case law & findings
@@ -3051,19 +3051,50 @@ context; it trusts the block's content.
 > a non-admin/non-tester request returns 403 before any Anthropic call; the client cannot
 > escalate access by editing the POST body.
 
-**F116 · Dormant `coach_chats` persistence layer** — `db.js:531–620` (`loadCoachChats`/
-`saveCoachChat`/`deleteCoachChat`), migration `023_add_coach_chats.sql` — **[L/G]**
-The DB functions and table exist and are unit-tested (`dbCoachChats.test.js`) but have
-**zero UI callers** — `AskCoachPanel.jsx:11` explicitly defers wiring ("coach_chats wiring
-lands as its own pass once this feels right"). Chat history is currently session-only
-(in-component `messages` state, lost on close). This is *built infrastructure awaiting
-activation*, not dead code.
-> **IF** anyone wires these functions into the Coach UI, **THEN** it earns its own drift-map
-> entry first (it becomes an eager-save concern — Spine B: chat writes are discrete Add/Delete
-> actions needing the F110 four-site treatment and a `readOnly`/gate decision), and the RLS
-> policy on `coach_chats` must be verified own-row-scoped (F69). Until then, do not assume any
-> Coach conversation persists across sessions or devices. Check: grep the three function names
-> for UI callers — currently only `db.js` and its test reference them.
+**F116 · `coach_chats` persistence layer — now wired (superseded, see F123)** — `db.js:531–620`
+(`loadCoachChats`/`saveCoachChat`/`deleteCoachChat`), migration `023_add_coach_chats.sql` —
+**[L/G]**
+Was dormant as of the 2026-07-20 spine pass (unit-tested, zero UI callers). **As of 2026-07-25,
+`AskCoachPanel.jsx` is a live caller** of all three functions — multi-turn Ask Coach chats now
+persist, and a chat-history list resumes a saved conversation. This entry's own IF/THEN fired
+and was actioned: see **F123** for the earned drift-map entry covering the wiring itself. Kept
+here only so anything still citing "F116 dormant" gets redirected instead of relying on a stale
+fact.
+
+**F123 · `AskCoachPanel` chat persistence + retention (activates F116)** — `AskCoachPanel.jsx`
+(`persistChat`, `refreshHistory`, `finalizeSummary`, `endCurrentSession`), `coachPrompts.js`
+(`COACH_CHAT_SUMMARY_PROMPT`) — **[L/G]**
+Each completed Ask Coach turn (success *or* the request failing mid-stream) is upserted into
+`coach_chats` immediately after the turn resolves — an eager save, not a debounce, per the
+same reasoning as Spine B's config/goals/expenses/logs sites (F110 class), because a
+backgrounded tab could otherwise lose an in-progress exchange. `chatType` is hardcoded
+`"ask_coach"` — this entry does not cover `job_scout`/`job_hunt`/`statement_summary`, none of
+which have a UI caller yet. Retention is capped at the 3 most recent `ask_coach` rows
+(`MAX_SAVED_CHATS`); `refreshHistory` prunes anything older, **except** the row the user
+currently has open, which is never deleted out from under an active session even if it's the
+oldest of the three. A short Haiku-generated summary (`COACH_CHAT_SUMMARY_PROMPT`, a separate,
+narrower prompt than `ASK_COACH_SYSTEM_PROMPT` — no feature guide, third-person, history-row
+voice, never user-facing) is written best-effort when a session ends (panel closed, New Chat
+started over an in-progress chat, or a different saved chat resumed) — never blocks the UI
+action that triggered it. Gate: unchanged — persistence rides on the same
+`canAccessAskCoachGeneral` mount-time gate as the rest of Ask Coach (§18 F115); no separate
+entitlement check was added because saving a conversation isn't a new surface, just durability
+for an already-gated one. RLS: `coach_chats`'s own-row `SELECT`/`INSERT`/`UPDATE`/`DELETE`
+policies (migration 023) were verified against this new call pattern — the client never
+supplies `user_id`, `saveCoachChat` always writes it from the session (F69-class own-row
+scoping holds).
+> **IF** a second `chat_type` (`job_scout`, etc.) gets a UI caller, **THEN** it needs its own
+> retention/summary decision — do not assume `MAX_SAVED_CHATS = 3` or the summary trigger
+> generalize automatically; `AskCoachPanel`'s history list also filters to `chatType ===
+> "ask_coach"` explicitly and will silently hide any other type until taught about it. **IF**
+> `saveCoachChat`'s payload shape changes (new column, renamed field), **THEN** `persistChat`
+> and `finalizeSummary` are both named callers — update both or they'll upsert an incomplete
+> row. **IF** the retention cap or the "never prune the active chat" guard is touched, **THEN**
+> re-verify a chat open in one tab can't be deleted by a save happening in another (the guard
+> keys off `activeChatIdRef`, not anything server-enforced — this is a UI-level courtesy, not a
+> hard guarantee across concurrent sessions). Check: `AskCoachPanel.test.jsx` covers persistence
+> after a turn (success and failure paths), chat-id reuse across turns, retention pruning that
+> spares the active chat, resume-from-history, and delete.
 
 **Reverse index — surface F-entries already covering Spine-D consumers (do not restate):**
 F24 (Coach net-worth trigger chain + `estimateRunwayDays` quarantine + `resolveNetWorthSignalTier`/
@@ -3083,7 +3114,8 @@ resolvers), F81/F111 (the AI gate, Spine C).
 | `canAccessAiFeatures` inputs or `api/coach.js` SELECT (F115) | Server gate must supply every column the gate reads (F112); client callers pass a valid `model` key | Non-entitled request → 403 pre-Anthropic; `entitlements.test.js` | D4 |
 | `estimateRunwayDays` (F24 quarantine, `coachTriggers.js`) | Its too-low runway feeds `CoachNetWorthCard` context (`:78`) → Coach can claim less runway than the Job Loss panel shows | Do **not** extend it — converge on `computeJobLossRunway`; then both Coach entry points quote one runway | D1 |
 | `runwayDays` wiring to `AskCoachPanel` (§8 quarantine 2) | App.jsx passes no `runwayDays` → `aiContext.js:200` renders bare "Job Loss Mode: active" | When wiring, use `computeJobLossRunway` (not the quarantine); both Coach entry points agree | D4 |
-| `coach_chats` db functions get a UI caller (F116) | New eager-save + gate + RLS concern — needs its own map entry first | Grep the three fn names for callers; verify RLS own-row scope | D3/D4 |
+| `coach_chats` db functions get a second `chat_type` UI caller (F116/F123) | Retention cap, summary trigger, and the history-list filter are `ask_coach`-specific and won't generalize on their own | Confirm the new type gets its own retention/summary decision; grep `AskCoachPanel.jsx` for `"ask_coach"` filters | D3/D4 |
+| `saveCoachChat`'s payload shape (columns, field names) | `persistChat` and `finalizeSummary` (F123) — both build the upsert payload independently | Update both call sites together; `AskCoachPanel.test.jsx` persistence assertions | D1 |
 | `EVENT_TYPES`/`PAYCHECKS_PER_YEAR` (`constants/config.js`) | The context's most-recent-log label (`:178`) and `checksPerYear`/`perCheckFactor` scaling | Add/rename a type → context label resolves; biweekly account → per-check scaling correct | D1 |
 
 ### 21.3 Block 3 — Authority table (context line → source function → UI twin it must match)
@@ -3137,10 +3169,9 @@ other way is a §24 grounding violation (D1) by definition.
 **Standing findings from this pass:** none new filed. The two quarantines above are
 pre-existing and owned (F24 / §8); both converge on the same Spine-A function
 (`computeJobLossRunway`), which is why Spine A's §18.4 lists quarantine #3 pointing back here.
-The dormant `coach_chats` layer (F116) is infrastructure-awaiting-activation, not a defect —
-filed as a standing note with an explicit "earns its own map entry before wiring" gate, not a
-DW row. No D5 corrections owed — `active-systems.md` §24 already documents the grounding
-pattern and was reconciled during the surface passes.
+The `coach_chats` layer (F116) is no longer dormant — wired 2026-07-25 per F123, which is now
+the live entry for its eager-save/gate/RLS shape. No D5 corrections owed — `active-systems.md`
+§24 already documents the grounding pattern and was reconciled during the surface passes.
 
 ---
 

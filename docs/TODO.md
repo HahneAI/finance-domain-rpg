@@ -1259,39 +1259,49 @@ CREATE INDEX coach_chats_user_id_created_at
   camelCase. Tests: `src/test/lib/dbCoachChats.test.js`
 - [x] **`saveCoachChat(chat)`** — built 2026-07-10. Upserts by `id`; omitting `chat.id` lets the
   DB generate one for a new chat (returned to the caller so it can keep upserting into the same
-  row). `user_id` always comes from the session, never the caller. **Not yet wired to a
-  debounced-on-append / immediate-on-close call site** — that needs the Ask Coach chat UI
-  (§18.B, not built yet) to call it from
-- [ ] **`deleteCoachChat(id)`** — [x] function built (`db.js` + tests), [ ] swipe-to-delete/
-  long-press UI still needs §18.H3's history list to exist
-- [ ] **In-memory shape** — `coachChats` array is a peer of `config`, `logs`, `goals` in App state;
-  passed down only to the Coach panel — **deferred**: no Coach panel exists yet to receive it
-  (§18.B); wiring `loadCoachChats()` into `App.jsx`'s auth-load effect now would be dead state
-  with no consumer. Do this alongside §18.B, not before it.
+  row). `user_id` always comes from the session, never the caller. **Wired 2026-07-25** —
+  `AskCoachPanel.jsx`'s `persistChat` calls it immediately after every completed turn (eager
+  save, not debounced — see §18.H drift note below).
+- [x] **`deleteCoachChat(id)`** — function built (`db.js` + tests) 2026-07-10; UI wired
+  2026-07-25 — a trash-icon button per history row (`AskCoachPanel.jsx`), not swipe/long-press
+  as originally sketched — simpler and equally reachable at the 44px mobile tap-target standard.
+- [x] **In-memory shape — deliberate deviation from the spec above.** `coachChats` is *not* a
+  peer of `config`/`logs`/`goals` in `App.jsx` state; it lives entirely inside `AskCoachPanel.jsx`
+  (`historyChats` state, loaded via its own `useEffect` on mount) since the panel is still the
+  only consumer — hoisting it into `App.jsx` would add global state with a single reader. Revisit
+  if a second surface (Job Scout, the bottom-nav badge, etc.) needs the same list.
 
 #### H3. Chat history UI
 
-- [ ] **History list panel** — within the Ask Coach panel, a scrollable list of past chats grouped
-  by date (Today / This Week / Older); each row shows: `title` (or first user message truncated),
-  `summary` preview, `chat_type` chip, and `created_at` relative date
-- [ ] **Tap to resume** — tapping a history row loads the full `messages` array back into the
-  active chat view so the user can continue the conversation
-- [ ] **New Chat button** — always visible at the top of the history list; starts a fresh
-  `coach_chats` row with `messages: []` and focuses the input
-- [ ] **Job Scout entries** — `chat_type: 'job_scout'` rows render a compact result-count preview
-  ("Found 14 employers") instead of a message preview; tapping opens the Job Scout results view
-  (§18.I) rather than the chat view
+- [x] **History list panel** — built 2026-07-25. Within the Ask Coach panel (a "Chat History"
+  view toggled by a header icon), grouped by date (Today / This Week / Older); each row shows
+  `title` (or first user message truncated), `summary` preview when one exists, and `created_at`
+  relative date. **No `chat_type` chip** — every row is `ask_coach` today (the list explicitly
+  filters to that type), so a chip would say the same word on every row; add it when a second
+  type gets a UI caller (see drift-app-warden §21 F123).
+- [x] **Tap to resume** — built 2026-07-25. Loads the chat's full `messages` array back into the
+  active view.
+- [x] **New Chat button** — built 2026-07-25. Header icon, not inline atop the history list as
+  originally sketched — reachable from both the chat and history views so starting fresh doesn't
+  require opening history first. Resets to `messages: []` and focuses the input.
+- [ ] **Job Scout entries** — not applicable yet; Job Scout (§18.I) isn't built, so no
+  `chat_type: 'job_scout'` rows exist to render.
 
 #### H4. Summary + insight generation
 
-- [ ] **End-of-session summary** — after session idle (10 min) or explicit "End Chat", fire a
-  Haiku call: system prompt instructs Coach to summarize the conversation in 1–3 sentences;
-  result written to `coach_chats.summary` and `updated_at` bumped
-- [ ] **Statement insight extraction** — for `chat_type: 'statement_summary'` rows, write
-  structured key findings into `insights` JSONB so the Statements panel can display them inline
-  without re-calling the API on every render
+- [x] **End-of-session summary — built 2026-07-25, on a different trigger than spec'd.** No
+  10-minute idle timer; fires (best-effort, non-blocking) when a session actually ends from the
+  user's action — panel closed, New Chat started over an in-progress conversation, or a different
+  saved chat resumed. A short Haiku call (`COACH_CHAT_SUMMARY_PROMPT` in `coachPrompts.js` — its
+  own narrow prompt, not `ASK_COACH_SYSTEM_PROMPT`) writes 1–3 sentences to `coach_chats.summary`.
+  An idle-timeout trigger could still be added later as a belt-and-suspenders case (someone who
+  leaves the tab open indefinitely without an explicit close), but user-initiated session-end
+  covers the common path.
+- [ ] **Statement insight extraction** — not applicable yet; no `statement_summary` chat type has
+  a UI caller.
 - [ ] **Admin diagnostic** — DB Row Viewer → add a "Coach Chats" count line: "N saved chats
-  (M job scout / K ask_coach / J statement)"; tapping the count shows the 5 most recent titles
+  (M job scout / K ask_coach / J statement)"; tapping the count shows the 5 most recent titles.
+  Not built this pass.
 
 ---
 

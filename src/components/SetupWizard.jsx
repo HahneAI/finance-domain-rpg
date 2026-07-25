@@ -1066,6 +1066,58 @@ function BenefitCard({ def, selected, formData, onChange, onToggle, attempted })
   );
 }
 
+// Generic collapsible details group — header row (title + sub-label + chevron)
+// toggles a field cluster. None of the fields these two wrap (attendance unit/
+// thresholds/balance/increment; PTO accrual method/rate/balance/cap) are
+// checked by Step 3's isValid, so hiding them behind a click has no validation
+// impact. Starts expanded only when the account already has a real (non-null)
+// value in one of the wrapped fields — unlike Step 1's diffRate/otMultiplier,
+// none of these carry a DEFAULT_CONFIG preset value, so "has data" is a safe signal.
+function DetailsDisclosure({ title, sub, defaultExpanded, children }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  return (
+    <div style={{
+      border: "1px solid var(--color-border-subtle)",
+      borderRadius: "12px",
+      background: "var(--color-bg-raised)",
+      overflow: "hidden",
+    }}>
+      <Pressable
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center",
+          justifyContent: "space-between", gap: "12px",
+          padding: "12px 14px",
+          background: "transparent", border: "none",
+          cursor: "pointer", textAlign: "left",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+            {title}
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "2px" }}>
+            {sub}
+          </div>
+        </div>
+        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", flexShrink: 0 }}>
+          {expanded ? "▾" : "▸"}
+        </div>
+      </Pressable>
+
+      {expanded && (
+        <div style={{
+          padding: "4px 14px 16px",
+          borderTop: "1px solid rgba(255,255,255,0.04)",
+          display: "flex", flexDirection: "column", gap: "16px",
+        }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Step3({ formData, onChange, attempted }) {
   const selected = new Set(formData.selectedBenefits ?? []);
   const isEmployerDHL    = formData.employerPreset === "DHL";
@@ -1236,7 +1288,16 @@ function Step3({ formData, onChange, attempted }) {
 
       {/* Attendance threshold sub-fields — only when answered Yes */}
       {isBaseUser && formData.attendanceBucketEnabled === true && (
-        <>
+        <DetailsDisclosure
+          title="Attendance Policy Details"
+          sub="Unit, thresholds, current balance — set these up once."
+          defaultExpanded={
+            formData.attendanceUnit != null ||
+            formData.attendanceWarnThreshold != null ||
+            formData.attendanceTerminateThreshold != null ||
+            formData.attendanceCurrentBalance != null
+          }
+        >
           <Field label="What unit does your policy use?">
             <input
               style={{ ...iS }}
@@ -1287,7 +1348,7 @@ function Step3({ formData, onChange, attempted }) {
               <div style={{ marginTop: "4px", fontSize: "10px", color: "var(--color-text-primary)" }}>Default 1 per absence</div>
             </Field>
           </div>
-        </>
+        </DetailsDisclosure>
       )}
 
       {/* ── PTO policy — standard users only ── */}
@@ -1304,7 +1365,16 @@ function Step3({ formData, onChange, attempted }) {
 
       {/* PTO sub-fields — only when answered Yes */}
       {isBaseUser && formData.ptoEnabled === true && (
-        <>
+        <DetailsDisclosure
+          title="PTO Policy Details"
+          sub="Accrual method, rate, current balance — set these up once."
+          defaultExpanded={
+            formData.ptoAccrualMethod != null ||
+            formData.ptoAccrualRate != null ||
+            formData.ptoCurrentBalance != null ||
+            formData.ptoCap != null
+          }
+        >
           <Field label="How does your PTO accrue?">
             <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
               <Pill label="Per Hour Worked" active={formData.ptoAccrualMethod === "per_hour"}
@@ -1352,7 +1422,7 @@ function Step3({ formData, onChange, attempted }) {
               />
             </Field>
           </div>
-        </>
+        </DetailsDisclosure>
       )}
     </div>
   );

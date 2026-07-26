@@ -4,7 +4,9 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent } from "./lib/db.js";
+import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
+import { PENDING_CONSENT_STORAGE_KEY } from "./components/LoginScreen.jsx";
 import { diffSensitiveFields } from "./lib/configHistory.js";
 import { getEntitlement } from "./lib/subscription.js";
 import { supabase, onAuthChange } from "./lib/supabase.js";
@@ -24,6 +26,8 @@ import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { TrialBanner } from "./components/TrialBanner.jsx";
 import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner.jsx";
+import { ChangelogModal } from "./components/ChangelogModal.jsx";
+import { ConsentGateModal } from "./components/ConsentGateModal.jsx";
 import { SaveFailedBanner } from "./components/SaveFailedBanner.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { Pressable, FoldSwitch } from "./components/ui.jsx";
@@ -346,6 +350,8 @@ export default function App() {
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
+  const [latestChangelogEntry, setLatestChangelogEntry] = useState(null);
+  const [showChangelogModal, setShowChangelogModal] = useState(false);
 
   // main.jsx dispatches this once the new service worker is installed and
   // waiting — reload only happens when the user taps Refresh in the banner
@@ -355,6 +361,34 @@ export default function App() {
     window.addEventListener("pwa-update-available", onUpdateAvailable);
     return () => window.removeEventListener("pwa-update-available", onUpdateAvailable);
   }, []);
+
+  // Deliberately checked only once the SW has already flagged a new build —
+  // not on every app mount. Tying "What's New" to the same moment as the
+  // update banner (rather than nagging independently) means an admin
+  // publishing a changelog entry never surfaces anything unless there's also
+  // a real deploy backing it — see UpdateAvailableBanner.jsx's comment for
+  // why the two signals stay decoupled from each other's *triggering* logic
+  // while sharing this one surfacing moment. "Seen" is tracked in
+  // localStorage (device-local, same as updateBannerDismissed today) rather
+  // than a synced account field — low-stakes UI state, not worth a migration.
+  useEffect(() => {
+    if (!updateAvailable) return;
+    let cancelled = false;
+    fetchLatestPublishedChangelog().then(entry => {
+      if (cancelled || !entry) return;
+      let lastSeenId = null;
+      try { lastSeenId = window.localStorage.getItem("lastSeenChangelogId"); } catch { /* private mode etc. */ }
+      if (entry.id !== lastSeenId) setLatestChangelogEntry(entry);
+    });
+    return () => { cancelled = true; };
+  }, [updateAvailable]);
+
+  function closeChangelogModal() {
+    if (latestChangelogEntry) {
+      try { window.localStorage.setItem("lastSeenChangelogId", latestChangelogEntry.id); } catch { /* private mode etc. */ }
+    }
+    setShowChangelogModal(false);
+  }
 
   const currentView = viewStack[viewStack.length - 1];
 
@@ -479,7 +513,7 @@ export default function App() {
       // The loadUserData() effect below fires in parallel off the same
       // authedUser?.id change, racing this chain's checkRevival→syncUserProfile
       // (which upserts trial_started_at/trial_ends_at/access_ends_at via
-      // /api/seed-trial). On a brand-new signup the row doesn't exist yet, so
+      // /api/seed, type: "trial"). On a brand-new signup the row doesn't exist yet, so
       // loadUserData() usually wins the race and reads DEFAULT_SUBSCRIPTION
       // (all-null trial fields) — getEntitlement() then permanently reports
       // state "none" ("No subscription required for this account") since
@@ -499,6 +533,19 @@ export default function App() {
       // chain; later ones for the same id are the visibility-recovery no-op.
       if (event === "SIGNED_IN" && user && signedInChainRanForRef.current !== user.id) {
         signedInChainRanForRef.current = user.id;
+        // OAuth signup consent handoff (LoginScreen.jsx sets this right
+        // before the full-page redirect, since there's no in-memory state
+        // that survives it) — independent of the revival/trial-seed chain
+        // below; consuming it here rather than nesting it inside that
+        // chain means it fires the same way whether or not this sign-in
+        // also turns out to be a revival.
+        try {
+          const pendingConsentVersion = window.sessionStorage.getItem(PENDING_CONSENT_STORAGE_KEY);
+          if (pendingConsentVersion) {
+            window.sessionStorage.removeItem(PENDING_CONSENT_STORAGE_KEY);
+            recordConsent(user.id, pendingConsentVersion);
+          }
+        } catch { /* private mode etc. */ }
         checkRevival()
           .then((revival) => {
             if (revival) {
@@ -920,6 +967,38 @@ export default function App() {
   const handleLocalSignOut = useCallback(async () => {
     await supabase.auth.signOut({ scope: "local" });
   }, []);
+
+  // ── Terms of Service / Privacy Policy re-consent (existing accounts) ───────
+  // Dormant by default — constants/legalDocuments.js's
+  // ENFORCE_EXISTING_USER_RECONSENT stays false until real, reviewed legal
+  // text replaces the placeholder copy; flipping it live before then would
+  // interrupt every current user with a mandatory "agree to continue" gate
+  // over draft text. New-signup consent (LoginScreen.jsx) is unaffected by
+  // this flag — it's always required, since it only affects brand-new
+  // accounts rather than surprising existing ones.
+  const [consentGateOpen, setConsentGateOpen] = useState(false);
+  const [consentGateSaving, setConsentGateSaving] = useState(false);
+
+  useEffect(() => {
+    if (!ENFORCE_EXISTING_USER_RECONSENT || !authedUser?.id) return;
+    let cancelled = false;
+    fetchLatestConsent(authedUser.id).then(consent => {
+      if (cancelled) return;
+      if (!consent || consent.policy_version !== CURRENT_LEGAL_VERSION) {
+        setConsentGateOpen(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [authedUser?.id]);
+
+  const handleAgreeToUpdatedTerms = useCallback(async () => {
+    if (!authedUser?.id) return;
+    setConsentGateSaving(true);
+    const result = await recordConsent(authedUser.id, CURRENT_LEGAL_VERSION);
+    setConsentGateSaving(false);
+    if (result.ok) setConsentGateOpen(false);
+    else console.warn("recordConsent (re-consent gate) failed:", result.error);
+  }, [authedUser?.id]);
 
   // ── today: reactive date string — ticks at midnight so everything auto-advances ──
   const [today, setToday] = useState(() => toLocalIso(new Date()));
@@ -2335,8 +2414,21 @@ export default function App() {
             <UpdateAvailableBanner
               onUpdate={() => window.__pwaUpdateSW?.()}
               onDismiss={() => setUpdateBannerDismissed(true)}
+              changelogEntry={latestChangelogEntry}
+              onShowChangelog={() => setShowChangelogModal(true)}
             />
           )}
+          <ChangelogModal
+            open={showChangelogModal}
+            entry={latestChangelogEntry}
+            onClose={closeChangelogModal}
+          />
+          <ConsentGateModal
+            open={consentGateOpen}
+            onAgree={handleAgreeToUpdatedTerms}
+            onSignOut={handleLocalSignOut}
+            agreeLoading={consentGateSaving}
+          />
           {saveError && <SaveFailedBanner message={saveError} onRetry={retryFailedSave} onDismiss={dismissSaveError} />}
           {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
           {config.jobLossMode && !jobLossBannerDismissed && (() => {

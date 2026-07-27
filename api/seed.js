@@ -70,10 +70,16 @@ async function seedBeta(req, res, adminClient, userId) {
   const code = typeof req.body?.code === "string" ? req.body.code.trim().toLowerCase() : "";
   if (!code) return res.status(400).json({ error: "Missing beta code" });
 
+  // Case-insensitive match: `code` is already lowercased above, but the
+  // stored beta_codes.code value isn't guaranteed to be — this table is
+  // dashboard-managed (migration 028's own comment), so nothing enforces
+  // lowercase on entry there. ilike (with no wildcard chars in `code`, since
+  // codes are plain letters/digits/hyphens) is an exact case-insensitive
+  // match, not a partial one.
   const { data: codeRow, error: codeError } = await adminClient
     .from("beta_codes")
     .select("id")
-    .eq("code", code)
+    .ilike("code", code)
     .eq("is_active", true)
     .maybeSingle();
   if (codeError || !codeRow) return res.status(403).json({ error: "Invalid or inactive beta code" });

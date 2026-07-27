@@ -81,7 +81,7 @@ describe("api/seed — type: beta", () => {
 
   it("403s an invalid or inactive code", async () => {
     const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-    mocks.adminClient.from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) });
+    mocks.adminClient.from.mockReturnValue({ select: vi.fn().mockReturnValue({ ilike: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) });
     const res = mkRes();
     await handler(authedReq({ type: "beta", code: "NOPE" }), res);
     expect(res.statusCode).toBe(403);
@@ -92,7 +92,7 @@ describe("api/seed — type: beta", () => {
     const updateEq = vi.fn().mockResolvedValue({ error: null });
     mocks.adminClient.from.mockImplementation(table => {
       if (table === "beta_codes") {
-        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) };
+        return { select: vi.fn().mockReturnValue({ ilike: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) };
       }
       return { update: vi.fn().mockReturnValue({ eq: updateEq }) };
     });
@@ -101,6 +101,21 @@ describe("api/seed — type: beta", () => {
     expect(updateEq).toHaveBeenCalledWith("user_id", "u1");
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ ok: true });
+  });
+
+  // Case-insensitivity — beta_codes is dashboard-managed (migration 028), so
+  // a code stored in any case must still match a lowercased URL/form submission.
+  it("matches a code regardless of the stored row's case", async () => {
+    const ilike = vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: { id: "c1" }, error: null }) }) });
+    const updateEq = vi.fn().mockResolvedValue({ error: null });
+    mocks.adminClient.from.mockImplementation(table => {
+      if (table === "beta_codes") return { select: vi.fn().mockReturnValue({ ilike }) };
+      return { update: vi.fn().mockReturnValue({ eq: updateEq }) };
+    });
+    const res = mkRes();
+    await handler(authedReq({ type: "beta", code: "CLARITY" }), res);
+    expect(ilike).toHaveBeenCalledWith("code", "clarity");
+    expect(res.statusCode).toBe(200);
   });
 
   // 40-seat cap (migration 034_beta_seat_cap.sql) — the trigger raises a
@@ -116,7 +131,7 @@ describe("api/seed — type: beta", () => {
     });
     mocks.adminClient.from.mockImplementation(table => {
       if (table === "beta_codes") {
-        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) };
+        return { select: vi.fn().mockReturnValue({ ilike: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) };
       }
       return { update: vi.fn().mockReturnValue({ eq: updateEq }) };
     });
@@ -131,7 +146,7 @@ describe("api/seed — type: beta", () => {
     const updateEq = vi.fn().mockResolvedValue({ error: { message: "connection reset" } });
     mocks.adminClient.from.mockImplementation(table => {
       if (table === "beta_codes") {
-        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) };
+        return { select: vi.fn().mockReturnValue({ ilike: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) };
       }
       return { update: vi.fn().mockReturnValue({ eq: updateEq }) };
     });

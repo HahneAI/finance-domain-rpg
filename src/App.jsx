@@ -30,6 +30,7 @@ import { TipsCommissionCheckIn } from "./components/TipsCommissionCheckIn.jsx";
 import { ChangelogModal } from "./components/ChangelogModal.jsx";
 import { ConsentGateModal } from "./components/ConsentGateModal.jsx";
 import { SaveFailedBanner } from "./components/SaveFailedBanner.jsx";
+import { BetaSignupNoticeBanner } from "./components/BetaSignupNoticeBanner.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
 import { Pressable, FoldSwitch, useFoldTransition } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
@@ -352,6 +353,11 @@ export default function App() {
   // its own copy via ProfilePanel's sub-view router) — tracked beta testers only.
   const [drawerFeedbackOpen, setDrawerFeedbackOpen] = useState(false);
   const drawerFeedbackFold = useFoldTransition(drawerFeedbackOpen, { ms: 340 });
+  // Result of the beta-code signup-link auto-apply (SIGNED_IN handler below) —
+  // { status: "success" | "error", message } | null. Shown once via
+  // BetaSignupNoticeBanner so a QR-code/website signup gets a visible answer
+  // instead of only a console warning on failure.
+  const [betaSignupNotice, setBetaSignupNotice] = useState(null);
   const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
   const [rateUpdateOpen, setRateUpdateOpen] = useState(false);
   // TODO §15 mode rebuild — the benefit-scenario toggle (unlike cash on hand,
@@ -538,7 +544,12 @@ export default function App() {
           if (pendingBetaCode) {
             window.localStorage.removeItem(PENDING_BETA_CODE_STORAGE_KEY);
             redeemBetaCode(pendingBetaCode).then((result) => {
-              if (!result.ok) console.warn("Beta signup-link code redemption failed:", result.error);
+              if (result.ok) {
+                setBetaSignupNotice({ status: "success" });
+              } else {
+                console.warn("Beta signup-link code redemption failed:", result.error);
+                setBetaSignupNotice({ status: "error", message: result.error });
+              }
             });
           }
         } catch { /* private mode etc. */ }
@@ -2526,6 +2537,13 @@ export default function App() {
             agreeLoading={consentGateSaving}
           />
           {saveError && <SaveFailedBanner message={saveError} onRetry={retryFailedSave} onDismiss={dismissSaveError} />}
+          {betaSignupNotice && (
+            <BetaSignupNoticeBanner
+              status={betaSignupNotice.status}
+              message={betaSignupNotice.message}
+              onDismiss={() => setBetaSignupNotice(null)}
+            />
+          )}
           {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
           {config.jobLossMode && !jobLossBannerDismissed && (() => {
             // Compute benefits-end date when duration is set, so the banner can

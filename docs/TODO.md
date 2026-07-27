@@ -4595,3 +4595,179 @@ collected is regulated/high-sensitivity data, and this workstream doesn't change
 - [ ] **`docs/drift-app-warden.md` T7/T8 (Auth/Login) coverage** — this workstream touches
   `LoginScreen.jsx` and `App.jsx`'s `SIGNED_IN` handler, both mapped surfaces; no drift-map entry
   was added for it in this pass — worth a look next time either section gets a surgical pass.
+## 42. Lint Audit — 41 errors + 12 warnings (technical debt snapshot 2026-07-25)
+
+*Baseline established 2026-07-25. All 1,231 tests pass; lint is pre-existing and non-blocking. Not
+a critical bug — linting errors don't prevent the app from running or tests from passing. But
+tracking here to prevent regression, consolidate cleanup work, and provide a priority guide for
+opportunistic fixes when touching these files.*
+
+**Current state:** `npm run lint` exits with code 1 on 41 errors (mostly unused imports/variables)
++ 12 warnings (React hooks, unused directives). See `src/` section below for per-file breakdown.
+Categorized by impact for triage.
+
+### A. Critical — must fix before deploying or accepting new PRs in these files
+
+These affect correctness or performance and can cause subtle bugs:
+
+#### 1. **Test setup broken — missing vitest global (`vi`)**
+   - File: `src/test/components/panels.test.jsx`
+   - Lines: 7–10
+   - Issue: `vi` is not defined (5 references)
+   - Impact: Test file likely cannot run; this is a vitest configuration or import issue
+   - Fix: Either import `{ vi } from 'vitest'` at top of file or ensure vitest's `globals: true`
+     is set in `vitest.config.js`
+   - Status: ⚠️ Highest priority — blocks tests from running
+
+#### 2. **React Compiler memoization skipped (`JobLossBudgetPanel.jsx:102`)**
+   - File: `src/components/JobLossBudgetPanel.jsx`
+   - Lines: 102–122
+   - Issue: React Compiler rejected manual memoization on `useMemo` block (3-variable `upcomingBills`)
+   - Impact: Memoization optimization was skipped; component may re-render unnecessarily
+   - Cause: Compiler failed to preserve the memoization due to the complexity of the callback
+   - Fix: Simplify the memoization callback or split into smaller memoized helpers
+   - Estimated effort: Medium
+
+#### 3. **Ref accessed during render (`SetupWizard.jsx:2556`)**
+   - File: `src/components/SetupWizard.jsx`
+   - Line: 2556
+   - Issue: `originalConfigRef.current` read during component render (only safe in effects/handlers)
+   - Impact: Component may not update as expected; ref access violates React invariants
+   - Fix: Move ref access outside render; pass ref value or derived state as prop instead
+   - Estimated effort: Medium
+
+#### 4. **setState called directly in effect — cascading renders (LoginScreen.jsx:40 + 138)**
+   - File: `src/components/LoginScreen.jsx`
+   - Lines: 40, 138
+   - Issue: `setCur()` called directly within `useEffect()` body (2 separate effects)
+   - Impact: Triggers cascading renders on every mount/mode change; performance issue
+   - Fix: Restructure to avoid setState in effect; use a layout effect or move logic to event handler
+   - Estimated effort: Medium
+
+#### 5. **React purity violation — `Date.now()` in render (`HomePanel.jsx:476`)**
+   - File: `src/components/HomePanel.jsx`
+   - Line: 476
+   - Issue: `Date.now()` (impure function) called inside render phase when creating new goal ID
+   - Impact: Produces different values on every render; component not idempotent
+   - Fix: Move `Date.now()` call into event handler (`handleAddGoal`) instead of inline in JSX
+   - Estimated effort: Low (simple move)
+
+### B. High Priority — affects rendering or hook behavior; should fix when touching these files
+
+React Hook dependency issues + unused imports in critical paths:
+
+#### 6. **Missing hook dependency (`App.jsx:993`)**
+   - File: `src/components/App.jsx`
+   - Line: 993
+   - Issue: `useMemo` missing `entitlement` in dependency array
+   - Impact: Memoized value could be stale; entitlement changes may not trigger recalculation
+   - Fix: Add `entitlement` to deps array or confirm it's intentionally omitted
+
+#### 7. **Unnecessary hook dependency (`App.jsx:1126`)**
+   - File: `src/components/App.jsx`
+   - Line: 1126
+   - Issue: `effectiveToday` listed but doesn't affect memo output
+   - Impact: Unnecessary re-memoization on every date change (minor)
+   - Fix: Remove `effectiveToday` from deps array
+
+#### 8. **Missing hook dependencies (`LoginScreen.jsx:44`)**
+   - File: `src/components/LoginScreen.jsx`
+   - Line: 44
+   - Issue: `useEffect` missing `cur.key` and `cur.node` dependencies
+   - Impact: Stale closure; could reference old state values
+   - Fix: Add both to dependency array or restructure effect
+
+#### 9. **Missing hook dependencies (`WeekConfirmModal.jsx:229`)**
+   - File: `src/components/WeekConfirmModal.jsx`
+   - Line: 229
+   - Issue: `useEffect` missing `otDays` and `requiredOtCount`
+   - Impact: Effect may not re-run when these values change
+   - Fix: Add to dependency array
+
+#### 10. **Conditional logic in memo deps (`ReemploymentTracker.jsx:97`)**
+   - File: `src/components/ReemploymentTracker.jsx`
+   - Line: 97
+   - Issue: The `apps` conditional could change on every render, breaking memo deps
+   - Impact: `useMemo` at line 117 loses cache on every render
+   - Fix: Wrap `apps` initialization in its own `useMemo()` before using as a dependency
+
+#### 11–14. **Unused imports in component files (low impact, easy fix)**
+   - `App.jsx:4, 6` — `getPayPeriodEndDate`, `formatFiscalWeekLabel` (2 imports)
+   - `BudgetPanel.jsx:5, 6` — `applyMonthEditForward`, `roundToQuarter`, `toMonthlyCost`, 
+     `fromMonthlyCost`, `formatFiscalWeekLabel` (5 imports)
+   - `HomePanel.jsx:9` — `formatFiscalWeekLabel` (1 import)
+   - `IncomePanel.jsx` — (no unused imports, only `isWeekly` variable)
+   - `LogPanel.jsx:5` — `formatFiscalWeekLabel` (1 import)
+   - `LoginScreen.jsx:28` — `useRef` (1 import)
+   - **Impact:** Bloats bundle; clutters code. Non-functional but sloppy.
+   - **Fix:** Delete the unused import lines. Safe; linting will confirm they're truly unused.
+
+### C. Medium Priority — cleanup, low runtime impact
+
+Dead code that should be removed but doesn't break anything:
+
+#### Unused variables (simple deletions)
+| File | Line | Variable | Type | Note |
+|------|------|----------|------|------|
+| `App.jsx` | 286 | `investorProfile` | assigned, never used | Delete assignment or use it |
+| `BudgetPanel.jsx` | 135 | `pendingDelete` | assigned, never used | Likely dead from refactor |
+| `BudgetPanel.jsx` | 268 | `shortMonth` | assigned, never used | Month formatting, no longer needed? |
+| `BudgetPanel.jsx` | 613, 757, 915 | `saveEditExp`, `deleteExp`, `executeUndo` | assigned, never used | Dead handlers from old UI |
+| `BudgetPanel.jsx` | 2181 | `fy` | assigned, never used | Fiscal year calc, unused |
+| `HomePanel.jsx` | 95 | `projectedWeeklyLeft` | assigned, never used | Goal projection, unused |
+| `HomePanel.jsx` | 141 | `weeksLeftCount` | assigned, never used | Same as above |
+| `IncomePanel.jsx` | 77 | `isWeekly` | assigned, never used | Pay period classification, unused |
+| `JobLossEntry.jsx` | 218 | `totalSteps` | assigned, never used | Step counter, unused |
+| `ProfilePanel.jsx` | 2084 | `isBaseUser` | assigned, never used | Employer type check, unused |
+| `SetupWizard.jsx` | 1565 | `isBaseUser` | assigned, never used | Same as above |
+| `expense.js` | 133, 136, 153 | `_cpm` (3 refs) | destructured, never used | Cost-per-mille calc, unused |
+| `finance.js` | 287 | `dhlTotalWeekendHours` | assigned, never used | DHL payroll calc, unused |
+| `fiscalWeek.js` | 115 | `checksPerYear` | assigned, never used | Pay frequency calc, unused |
+
+**Fix strategy:** Delete these in a single "cleanup" commit per file. Safe because they're truly
+unused (linting confirms it). Group by file to minimize PR review overhead:
+- [ ] App.jsx — 3 removals
+- [ ] BudgetPanel.jsx — 8 removals
+- [ ] HomePanel.jsx — 2 removals
+- [ ] IncomePanel.jsx — 1 removal
+- [ ] JobLossEntry.jsx — 1 removal
+- [ ] ProfilePanel.jsx — 1 removal
+- [ ] SetupWizard.jsx — 1 removal
+- [ ] finance.js — 1 removal
+- [ ] fiscalWeek.js — 1 removal
+- [ ] expense.js — 3 removals (same variable `_cpm` in different functions)
+
+### D. Low Priority — stale directives (cleanup only)
+
+Unused eslint-disable comments (no actual violation, just the suppression is obsolete):
+
+| File | Line | Directive | Status |
+|------|------|-----------|--------|
+| `App.jsx` | 558, 639, 1102 | `// eslint-disable-next-line react-hooks/set-state-in-effect` | No violation found; directive can be removed |
+| `App.jsx` | 656 | `// eslint-disable-next-line react-hooks/exhaustive-deps` | No violation found; directive can be removed |
+| `LoginScreen.jsx` | 40 | **ACTIVE** (not stale) | setState in effect IS happening here; directive is needed but rule should be fixed instead (see §A.4) |
+| `db.js` | 302 | `// eslint-disable-next-line no-console` | No violation found; directive can be removed |
+
+**Fix:** Delete the unused directives (not the rules they were suppressing—those don't exist).
+
+---
+
+### Summary & Regression Prevention
+
+**Test status:** ✅ All 1,231 tests pass (no regression). This lint audit is *not* a blocker for
+shipping or merging.
+
+**Recommended workflow:**
+1. **Fix §A (critical) immediately** if touching those components (test runner, SetupWizard, 
+   LoginScreen, HomePanel). These could cause bugs.
+2. **Fix §B (high) opportunistically** when landing refactors in those files (App.jsx, various
+   panels, hooks).
+3. **Fix §C (medium) in bulk** as a standalone "cleanup" PR when lint debt is prioritized (low
+   urgency; can wait weeks).
+4. **§D (directives)** delete when you're already in those files; don't land a PR just for this.
+
+**To prevent regressions:**
+- Before merging any PR, run `npm run lint` and reject new violations (or explicitly accept them
+  with a documented reason in the commit message).
+- Mark this section as "resolved" when the error count drops to ≤5 (acceptable technical debt).
+- Re-run this audit quarterly (or after major refactors) to track progress and catch new drift.

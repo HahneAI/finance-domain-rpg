@@ -111,9 +111,21 @@ gate without hitting Stripe on every load.*
 - [ ] **Configure the Customer Portal** (Billing → Customer portal) so users can cancel / update
   card / switch plan without custom UI. *(Not yet confirmed done.)*
 - [x] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
-- [ ] **Set Vercel env vars** (see env block at the bottom) — `STRIPE_SECRET_KEY`,
-  `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `APP_URL` still need to
-  be added in the Vercel dashboard.
+- [x] **Set Vercel env vars** (see env block at the bottom). **Resolved 2026-07-27** — production
+  Checkout was 500ing for every real user ("Server configuration is missing") because `STRIPE_SECRET_KEY`
+  (the live key) had never actually been added to Vercel; only the `_TEST` vars existed, so
+  `MODE === "live"` resolved `stripe` to `null` and `stripe-create-checkout.js`/`stripe-portal.js`
+  both hit their own missing-env guard. Fixed by generating a new **live-mode restricted key**
+  (`rk_live_...`, scoped to Checkout Sessions/Customers/Subscriptions/Customer Portal — all Write,
+  nothing broader) and setting it as `STRIPE_SECRET_KEY` in Vercel (Production scope). A real
+  Checkout session now opens successfully, which also confirms `STRIPE_PRICE_MONTHLY`,
+  `STRIPE_PRICE_ANNUAL`, and `APP_URL` are correctly live-mode/present (session creation would have
+  thrown on a bad price id or missing `APP_URL`). **Not yet independently confirmed:** whether
+  `STRIPE_WEBHOOK_SECRET` is the live-mode signing secret — that var is only exercised on webhook
+  delivery, not on Checkout Session creation, so a working "pay now" button doesn't prove it. Verify
+  via Stripe Dashboard → Webhooks → the live endpoint → "Send test webhook" (`customer.subscription.updated`
+  is a safe choice — its handler never calls back into Stripe, so a fabricated event can't fail on a
+  nonexistent object id) before treating live subscription-status sync as proven.
 
 ### C. Serverless API routes (`api/`, Vercel functions)
 

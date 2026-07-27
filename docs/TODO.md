@@ -757,6 +757,60 @@ finished first.*
   week at a time) into a banked balance on their account, purely as a voluntary buffer against a
   future missed payment — explicitly **not** "paying the bill early," and copy must make that
   distinction clear so it doesn't read as a coerced prepayment.
+  - **Resolved decision (2026-07-27): paid-plan users only, never trial users.** The eligibility
+    gate this needs already exists — it's exactly `getEntitlement()`'s `state === "active"` branch
+    (`src/lib/subscription.js:40-47`, the `isLiveSubscription` check), which is only true for a
+    real Stripe status (`active`, or `past_due`/`canceled` while still `withinPaidPeriod`) — as
+    opposed to `"trial"`/`"grace"`/`"none"`, which are the app-managed trial states with no real
+    Stripe subscription behind them. No new "has this user paid" concept needs inventing; reuse
+    the same check `ProfilePanel.jsx`'s `AccountDetail` already uses to decide Manage-Subscription
+    vs. Monthly/Annual buttons (`ProfilePanel.jsx:287`, `:374`). Must be enforced **server-side**
+    in the checkout route too, not just hidden in the UI — look up the row and reject with 403 if
+    `entitlement.state !== "active"` before creating any top-off Checkout Session.
+  - **Stripe side is a one-time payment, not a subscription change** — `mode: "payment"` (not
+    `"subscription"`) against a new one-time Price (e.g. "7-day buffer"), same
+    `stripe.checkout.sessions.create` call already used in `stripe-create-checkout.js`/
+    `stripe-revive-checkout.js`. Needs new price-id env vars following the existing per-mode
+    naming (`STRIPE_PRICE_TOPOFF_WEEK` / `_TEST`, same pattern as `_stripeClient.js`'s
+    `PRICE_ID_BY_PLAN`).
+  - **Vercel Hobby 12-function cap — this is the tight part.** `api/` currently has **11**
+    non-`_`-prefixed routes (verified 2026-07-27:
+    `admin-beta-report, admin-changelog, coach, cron-subscription-lifecycle, delete-account,
+    revival-lookup, seed, stripe-create-checkout, stripe-portal, stripe-revive-checkout,
+    stripe-webhook`). A new `api/stripe-topoff-checkout.js` file would land exactly on the 12-slot
+    ceiling with zero headroom left for anything else ever again. Given CLAUDE.md already flags
+    the three `stripe-*.js` checkout-creation routes as "the next most mergeable group," the
+    better move is extending `stripe-create-checkout.js` itself to accept a `topoff` plan value
+    (branching to `mode: "payment"` instead of `"subscription"` when it sees one) rather than
+    adding a fourth file — keeps the count at 11 instead of maxing it out.
+  - **Webhook handler already branches on `session.mode`** (`stripe-webhook.js:137`:
+    `if (userId && session.mode === "subscription" && ...)`), so a top-off purchase (`mode:
+    "payment"`) falls through that check today and is silently ignored — the fix is a sibling
+    `else if (session.mode === "payment" && session.metadata?.topoff)` branch that credits the
+    banked-days column instead of touching `subscription_status`/`plan`. The existing
+    `stripe_webhook_events` idempotency claim (migration `018`) already covers this new branch for
+    free — no new idempotency work needed.
+  - **The actual hard part — extending entitlement, not the Stripe plumbing.** The cleanest fit
+    found: `getEntitlement()`'s existing `withinPaidPeriod` check
+    (`src/lib/subscription.js:40`) already extends access past `current_period_end` for
+    `past_due`/`canceled`; a banked-days balance could plug into that exact line as
+    `currentPeriodEndMs + bankedDaysBalance * DAY_MS` rather than inventing a parallel mechanism.
+    **Open product question, not yet resolved:** does the balance decrement day-by-day as it's
+    actually consumed during a lapse (so partial use leaves a remainder for next time), or does
+    triggering the buffer at all consume the whole purchased block? This needs a decision before
+    writing the migration — `subscription.test.js`'s boundary tests and `_lifecycleEngine.js`'s
+    dunning-reset logic (`api/_lifecycleEngine.js:57-62`) both need to agree on which model before
+    either can be safely changed.
+  - **New column needed** — e.g. `banked_days_balance int not null default 0` on `user_data`.
+    Verify the actual next migration number against the `database/migrations/` folder before
+    filing it — CLAUDE.md's own running counter for this has already gone stale four times.
+  - **Admin visibility follow-on** — per the established convention (TODO.md §F "Admin
+    visibility" bullet), the Live State Inspector and DB Row Viewer drift check both gained a
+    field every time new subscription state was added; a banked-days balance should get the same
+    treatment rather than being invisible to the one diagnostic surface that catches drift.
+  - **Drift-app-warden note:** this touches the Account panel, persistence, and entitlements
+    spines — all mapped sections per `CLAUDE.md`. Consult `docs/drift-app-warden.md` before
+    building and update it in the same PR, per the doc's own mandatory-check rule.
 
 ---
 

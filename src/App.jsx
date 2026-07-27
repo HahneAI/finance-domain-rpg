@@ -56,7 +56,29 @@ import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from
 // survive a same-tab redirect, this needs to survive an email-confirmation
 // signup too, where the confirmation link can be opened in a different tab
 // (e.g. a phone's mail app), so a tab-scoped store isn't reliable here.
+//
+// Stored as JSON `{ code, attempts }`, not a bare string — a transient
+// failure (redeemBetaCode's retryable:true — no session yet, network blip,
+// 5xx) leaves the entry in place so the next real sign-in tries again,
+// instead of the old behavior of deleting it the instant it was read
+// regardless of outcome, which silently stranded anyone who hit a momentary
+// failure. Capped at MAX_PENDING_BETA_CODE_ATTEMPTS so a persistently-failing
+// retryable case doesn't hold the slot (and re-show the failure banner)
+// forever. A non-retryable failure (bad/expired/already-claimed code, seat
+// cap full) clears it immediately — retrying an invalid request changes
+// nothing. parsePendingBetaCode() also accepts the old plain-string format
+// for anyone with a pre-hardening value already sitting in localStorage.
 const PENDING_BETA_CODE_STORAGE_KEY = "pendingBetaCode";
+const MAX_PENDING_BETA_CODE_ATTEMPTS = 5;
+
+function parsePendingBetaCode(raw) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.code === "string") return { code: parsed.code, attempts: parsed.attempts ?? 0 };
+  } catch { /* pre-hardening plain-string format */ }
+  return { code: raw, attempts: 0 };
+}
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -537,19 +559,29 @@ export default function App() {
         } catch { /* private mode etc. */ }
         // Beta-code signup-link handoff (captured on mount above) — same
         // independent-of-revival reasoning as the consent handoff just above.
-        // One-shot: cleared here regardless of outcome, so an invalid/expired
-        // code from a stale link doesn't retry silently on every future login.
+        // Only cleared on success or a non-retryable failure; a retryable one
+        // (see MAX_PENDING_BETA_CODE_ATTEMPTS comment above) is written back
+        // with its attempt count bumped so the next real sign-in tries again.
         try {
-          const pendingBetaCode = window.localStorage.getItem(PENDING_BETA_CODE_STORAGE_KEY);
-          if (pendingBetaCode) {
-            window.localStorage.removeItem(PENDING_BETA_CODE_STORAGE_KEY);
-            redeemBetaCode(pendingBetaCode).then((result) => {
+          const pending = parsePendingBetaCode(window.localStorage.getItem(PENDING_BETA_CODE_STORAGE_KEY));
+          if (pending) {
+            redeemBetaCode(pending.code).then((result) => {
               if (result.ok) {
+                window.localStorage.removeItem(PENDING_BETA_CODE_STORAGE_KEY);
                 setBetaSignupNotice({ status: "success" });
-              } else {
-                console.warn("Beta signup-link code redemption failed:", result.error);
-                setBetaSignupNotice({ status: "error", message: result.error });
+                return;
               }
+              const attempts = pending.attempts + 1;
+              if (result.retryable && attempts < MAX_PENDING_BETA_CODE_ATTEMPTS) {
+                console.warn(`Beta signup-link code redemption failed (attempt ${attempts}/${MAX_PENDING_BETA_CODE_ATTEMPTS}), will retry on next sign-in:`, result.error);
+                try {
+                  window.localStorage.setItem(PENDING_BETA_CODE_STORAGE_KEY, JSON.stringify({ code: pending.code, attempts }));
+                } catch { /* private mode etc. */ }
+                return;
+              }
+              window.localStorage.removeItem(PENDING_BETA_CODE_STORAGE_KEY);
+              console.warn("Beta signup-link code redemption failed:", result.error);
+              setBetaSignupNotice({ status: "error", message: result.error });
             });
           }
         } catch { /* private mode etc. */ }

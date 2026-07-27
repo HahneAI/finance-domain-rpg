@@ -926,14 +926,21 @@ export async function checkRevival() {
  * (type: "beta" — consolidated from the former api/seed-beta.js, api/seed-investor.js,
  * and api/seed-trial.js into one route to stay under Vercel's Hobby-plan
  * 12-function-per-deployment cap). Returns { ok: true } on success,
- * { ok: false, error } otherwise — the caller (ProfilePanel) is responsible
- * for reloading state after success, since is_tester/beta_code_used are
- * read-only fields loadUserData maps in.
+ * { ok: false, error, retryable } otherwise — the caller (ProfilePanel) is
+ * responsible for reloading state after success, since is_tester/beta_code_used
+ * are read-only fields loadUserData maps in.
+ *
+ * `retryable` tells a caller that auto-retries (App.jsx's signup-link handoff)
+ * whether trying the same code again later could plausibly succeed: true for
+ * a missing session or a network/server (5xx) failure — neither says anything
+ * about the code itself — false for a 4xx rejection (missing code, invalid/
+ * inactive/already-claimed code, seat cap full), which will fail identically
+ * on every retry since it's the request itself that's wrong.
  */
 export async function redeemBetaCode(code) {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
-  if (!accessToken) return { ok: false, error: "Not signed in" };
+  if (!accessToken) return { ok: false, error: "Not signed in", retryable: true };
 
   try {
     const res = await fetch("/api/seed", {
@@ -942,10 +949,10 @@ export async function redeemBetaCode(code) {
       body: JSON.stringify({ type: "beta", code }),
     });
     const payload = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: payload?.error || "Invalid or inactive beta code" };
+    if (!res.ok) return { ok: false, error: payload?.error || "Invalid or inactive beta code", retryable: res.status >= 500 };
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err.message };
+    return { ok: false, error: err.message, retryable: true };
   }
 }
 

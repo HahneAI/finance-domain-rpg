@@ -56,6 +56,8 @@ export function LogPanel({
   const [cdel, setCdel] = useState(null);
   const [histOpen, setHistOpen] = useState(false);
   const histFold = useFoldTransition(histOpen, { ms: 280 });
+  const [tipsOpen, setTipsOpen] = useState(false);
+  const tipsFold = useFoldTransition(tipsOpen, { ms: 280 });
   const [addConfirming, setAddConfirming] = useState(false);
   const [editConfirming, setEditConfirming] = useState(false);
   const [expandedImpact, setExpandedImpact] = useState(new Set());
@@ -83,6 +85,22 @@ export function LogPanel({
     a.gL += i.grossLost; a.gG += i.grossGained; a.bucket += i.bucketHoursDeducted;
     return a;
   }, { gL: 0, gG: 0, bucket: 0 });
+
+  // ── Tips / Commission daily check-in entries ──
+  // Reuses calcEventImpact's own grossGained/netGained (the same tax-aware math
+  // every other event type's net impact runs through, DW-5) — the "extra tax
+  // owed if claimed" figure is just that gap, summed, never a parallel formula.
+  const tipsCommissionEntries = logs
+    .filter(e => e.type === "tips_commission")
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  const isTipsLabel = config.tipsOrCommissionLabel === "tips";
+  const tipsCommissionTotals = tipsCommissionEntries.reduce((a, e) => {
+    const { weekMeta } = resolveEventWeekMeta(e, allWeeks);
+    const i = calcEventImpact(e, config, weekMeta);
+    a.amount += i.grossGained;
+    a.extraTaxOwed += i.grossGained - i.netGained;
+    return a;
+  }, { amount: 0, extraTaxOwed: 0 });
 
   const adjWA   = baseWeeklyUnallocated - (logNetLost / weeksLeft) + (logNetGained / weeksLeft);
   const projS   = adjWA * weeksLeft - fundedGoalSpend;
@@ -522,7 +540,7 @@ export function LogPanel({
       </div>
     </>}
 
-    {(vals.type === "bonus" || vals.type === "other_loss") && (
+    {(vals.type === "bonus" || vals.type === "other_loss" || vals.type === "tips_commission") && (
       <div><label style={lS}>Amount ($)</label>
         <input type="number" min="0" value={vals.amount} onChange={e => set(v => ({ ...v, amount: e.target.value }))} style={iS} />
       </div>
@@ -647,11 +665,52 @@ export function LogPanel({
 
     {logs.length === 0 && !adding && <div style={{ textAlign: "center", padding: "40px", color: "var(--color-text-primary)", fontSize: "13px" }}>No events logged yet.</div>}
 
+    {/* ── Tips / Commission daily check-in log — only appears once at least one
+         day has actually been logged (mere wizard opt-in isn't enough). ── */}
+    {tipsCommissionEntries.length > 0 && (
+      <div style={{ marginBottom: "16px" }}>
+        <Pressable
+          onClick={() => setTipsOpen(o => !o)}
+          style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderRadius: tipsOpen ? "6px 6px 0 0" : "6px", padding: "10px 14px", cursor: "pointer" }}
+        >
+          <span style={{ fontSize: "10px", letterSpacing: "2px", color: "var(--color-text-disabled)", textTransform: "uppercase" }}>
+            {isTipsLabel ? "Tips" : "Commission"} Log ({tipsCommissionEntries.length})
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "11px", color: "var(--color-green)", fontWeight: "bold" }}>{f(tipsCommissionTotals.amount)}</span>
+            <span style={{ fontSize: "10px", color: "var(--color-text-primary)" }}>{tipsOpen ? "▲" : "▼"}</span>
+          </span>
+        </Pressable>
+        {tipsFold.mounted && (
+          <div className="fold-scale" data-fold={tipsFold.fold} style={{ background: "var(--color-bg-surface)", border: "1px solid #2a2a2a", borderTop: "none", borderRadius: "0 0 6px 6px", padding: "14px" }}>
+            {isTipsLabel && (
+              <div style={{ marginBottom: "14px", padding: "10px 12px", background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.22)", borderRadius: "8px" }}>
+                <div style={{ fontSize: "9px", letterSpacing: "2px", color: "var(--color-deduction)", textTransform: "uppercase", marginBottom: "4px" }}>If you claim all tips</div>
+                <div style={{ fontSize: "13px", color: "var(--color-text-primary)" }}>
+                  You'd owe <span style={{ color: "var(--color-deduction)", fontWeight: "bold" }}>{f(tipsCommissionTotals.extraTaxOwed)}</span> extra in tax on {f(tipsCommissionTotals.amount)} logged
+                </div>
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              {tipsCommissionEntries.map(e => (
+                <div key={e.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", padding: "4px 0", borderBottom: "1px solid #1a1a1a" }}>
+                  <span style={{ color: "var(--color-text-secondary)", fontFamily: "var(--font-mono)" }}>{fmtDate(e.date)}</span>
+                  <span style={{ color: e.amount > 0 ? "var(--color-green)" : "var(--color-text-disabled)", fontFamily: "var(--font-mono)" }}>
+                    {e.amount > 0 ? f(e.amount) : (isTipsLabel ? "No tips" : "No commission")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+
     {/* Log entries */}
     {logs.map(entry => {
       const imp  = calcEventImpact(entry, config, resolveEventWeekMeta(entry, allWeeks).weekMeta);
       const ev   = EVENT_TYPES[entry.type] ?? { label: entry.type, color: "var(--color-text-secondary)", icon: "?" };
-      const isB  = entry.type === "bonus";
+      const isB  = entry.type === "bonus" || entry.type === "tips_commission";
       const isUA = entry.type === "missed_unapproved" || entry.type === "pto_unapproved";
       const ak   = has401k && entry.weekEnd && new Date(entry.weekEnd) >= new Date(config.k401StartDate);
       const isEditing = editId === entry.id;
@@ -664,6 +723,7 @@ export function LogPanel({
         : entry.type === "pto_unapproved"    ? `${entry.hoursLost}h PTO (unapproved) @ $${config.baseRate}${entry.extraDay ? " · extra day" : ""}`
         : entry.type === "partial"           ? `${entry.hoursLost}h partial`
         : entry.type === "bonus"             ? `+${f(entry.amount)} bonus`
+        : entry.type === "tips_commission"   ? (entry.amount > 0 ? `+${f(entry.amount)} ${config.tipsOrCommissionLabel ?? "tips"}` : `no ${config.tipsOrCommissionLabel ?? "tips"}`)
         : entry.type === "other_loss"        ? `-${f(entry.amount)} other`
         : "";
 

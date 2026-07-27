@@ -50,6 +50,7 @@ src/
 │   ├── BudgetPanel.jsx      — expenses / goals / loans
 │   ├── LogPanel.jsx         — event log + Log Effect Summary
 │   ├── WeekConfirmModal.jsx — weekly schedule confirmation
+│   ├── TipsCommissionCheckIn.jsx — small daily check-in card (tips/commission opt-in, skinned bonus-log mechanism)
 │   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
 │   ├── LoginScreen.jsx      — auth shell
 │   └── ProfilePanel.jsx     — account + employment settings
@@ -85,7 +86,7 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 |---------|-------|-------------------|
 | 0 | Welcome | First-run: "Are you currently unemployed?" seed (§15.H) + intro; re-entry: life event picker or structure_change overview |
 | 10/11/12 | Jobless mini-flow | First-run + unemployed only: unemployment benefits → job-loss details → wrap up; skips steps 1–4 and 7 entirely |
-| 1 | Pay Structure | DHL employer gate → team/shift/rotation; base rate, OT threshold/multiplier, weekend diff, commission |
+| 1 | Pay Structure | DHL employer gate → team/shift/rotation; base rate, OT threshold/multiplier, weekend diff, commission; tips/commission daily check-in opt-in (No/Tips/Commission + commission-only follow-up, inert today) |
 | 2 | Schedule | Job start date → `firstActiveIdx` (via `dateToWeekIdx`); rotation week (DHL) or hours + pay period close day + biweekly parity |
 | 3 | Deductions | BenefitCard toggles (BENEFIT_OPTIONS), `otherDeductions` rows, attendance gate; `skippable: true` |
 | 4 | Tax Rates | State select, inline `PaystubCalc`, rate summary with FICA + std deduction; DHL MO preset |
@@ -93,7 +94,7 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 
 **Life event routing:** `lost_job` / `commission_job` → steps 0–4, **no WrapUp** (WrapUp-only fields must default in `handleComplete`); `null`(employed) / `"changed_jobs"` / `"structure_change"` → all steps including WrapUp (7); `null` + unemployed → steps 0, 10–12 only.
 
-**Internal helpers (file-private):** `Pill`, `Field`, `FieldRow`, `errBorder`, `BenefitCard`, `PaystubCalc`, `StepWrapUp`, `StructureChangeDiff`, `StepJobless*`, `dateToWeekIdx`, `isFirstRunJobless`.
+**Internal helpers (file-private):** `Pill`, `Field`, `FieldRow`, `errBorder`, `BenefitCard`, `PaystubCalc`, `StepWrapUp`, `StructureChangeDiff`, `StepJobless*`, `isFirstRunJobless`. (`dateToWeekIdx` was promoted to a shared `lib/fiscalWeek.js` export — App.jsx needs the same calendar-date → fiscal-week-idx conversion to tag Tips/Commission daily check-in log entries.)
 
 **State:** `formData` is flat; `update(patch)` merges via `setFormData(prev => ({ ...prev, ...patch }))`. `attempted` bool set on failed Next — triggers red borders/labels + shake; resets on step change.
 

@@ -83,6 +83,13 @@ async function seedBeta(req, res, adminClient, userId) {
     .update({ is_tester: true, beta_code_used: code })
     .eq("user_id", userId);
   if (updateError) {
+    // 40-seat cap (migration 034_beta_seat_cap.sql) — a real, expected outcome
+    // once the program fills, not a server failure. The trigger's raised
+    // message surfaces here verbatim; match on it so this returns a clean
+    // user-facing "full" message + 403, not a generic 500 that reads like a bug.
+    if (updateError.message?.includes("beta program is full")) {
+      return res.status(403).json({ error: "The beta program is full" });
+    }
     console.error("seed(beta) update failed:", updateError.message);
     return res.status(500).json({ error: "Failed to grant beta access" });
   }

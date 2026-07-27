@@ -102,6 +102,44 @@ describe("api/seed — type: beta", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ ok: true });
   });
+
+  // 40-seat cap (migration 034_beta_seat_cap.sql) — the trigger raises a
+  // Postgres exception, which lands here as an updateError. Must surface as
+  // a clean, distinct "full" message + 403, not the generic 500 every other
+  // update failure gets — a program-full response is an expected outcome,
+  // not a server bug, and the client (BetaRedeemDetail) shows error.message
+  // verbatim to the user.
+  it("403s with a clean message when the 40-seat cap trigger rejects the write", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: "c1" }, error: null });
+    const updateEq = vi.fn().mockResolvedValue({
+      error: { message: "beta program is full — 40 of 40 seats taken" },
+    });
+    mocks.adminClient.from.mockImplementation(table => {
+      if (table === "beta_codes") {
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) };
+      }
+      return { update: vi.fn().mockReturnValue({ eq: updateEq }) };
+    });
+    const res = mkRes();
+    await handler(authedReq({ type: "beta", code: "BETA1" }), res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({ error: "The beta program is full" });
+  });
+
+  it("500s with a generic message on an unrelated update failure", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: "c1" }, error: null });
+    const updateEq = vi.fn().mockResolvedValue({ error: { message: "connection reset" } });
+    mocks.adminClient.from.mockImplementation(table => {
+      if (table === "beta_codes") {
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) };
+      }
+      return { update: vi.fn().mockReturnValue({ eq: updateEq }) };
+    });
+    const res = mkRes();
+    await handler(authedReq({ type: "beta", code: "BETA1" }), res);
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: "Failed to grant beta access" });
+  });
 });
 
 describe("api/seed — type: investor", () => {

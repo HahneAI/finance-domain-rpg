@@ -120,12 +120,15 @@ gate without hitting Stripe on every load.*
   nothing broader) and setting it as `STRIPE_SECRET_KEY` in Vercel (Production scope). A real
   Checkout session now opens successfully, which also confirms `STRIPE_PRICE_MONTHLY`,
   `STRIPE_PRICE_ANNUAL`, and `APP_URL` are correctly live-mode/present (session creation would have
-  thrown on a bad price id or missing `APP_URL`). **Not yet independently confirmed:** whether
-  `STRIPE_WEBHOOK_SECRET` is the live-mode signing secret — that var is only exercised on webhook
-  delivery, not on Checkout Session creation, so a working "pay now" button doesn't prove it. Verify
-  via Stripe Dashboard → Webhooks → the live endpoint → "Send test webhook" (`customer.subscription.updated`
-  is a safe choice — its handler never calls back into Stripe, so a fabricated event can't fail on a
-  nonexistent object id) before treating live subscription-status sync as proven.
+  thrown on a bad price id or missing `APP_URL`). **`STRIPE_WEBHOOK_SECRET` also confirmed live and
+  correct** via a real end-to-end purchase (2026-07-27, Anthony's own account, Monthly plan,
+  intentionally not refunded): AccountDetail's Subscription card came back `ACTIVE` / "Monthly
+  plan — $14.99/mo" / correct renewal date immediately after checkout — since `subscription_status`,
+  `plan`, and `current_period_end` are written **only** by `stripe-webhook.js` (no other route
+  touches them), seeing the right values on screen proves the whole chain: signature verification
+  against the live secret → `stripe.subscriptions.retrieve` (restricted key's Subscriptions
+  permission) → the Supabase upsert → the frontend read. §17.B and §C's Stripe routes are now fully
+  verified in live mode, not just test mode.
 
 ### C. Serverless API routes (`api/`, Vercel functions)
 

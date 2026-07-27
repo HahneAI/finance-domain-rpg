@@ -111,9 +111,24 @@ gate without hitting Stripe on every load.*
 - [ ] **Configure the Customer Portal** (Billing → Customer portal) so users can cancel / update
   card / switch plan without custom UI. *(Not yet confirmed done.)*
 - [x] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
-- [ ] **Set Vercel env vars** (see env block at the bottom) — `STRIPE_SECRET_KEY`,
-  `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `APP_URL` still need to
-  be added in the Vercel dashboard.
+- [x] **Set Vercel env vars** (see env block at the bottom). **Resolved 2026-07-27** — production
+  Checkout was 500ing for every real user ("Server configuration is missing") because `STRIPE_SECRET_KEY`
+  (the live key) had never actually been added to Vercel; only the `_TEST` vars existed, so
+  `MODE === "live"` resolved `stripe` to `null` and `stripe-create-checkout.js`/`stripe-portal.js`
+  both hit their own missing-env guard. Fixed by generating a new **live-mode restricted key**
+  (`rk_live_...`, scoped to Checkout Sessions/Customers/Subscriptions/Customer Portal — all Write,
+  nothing broader) and setting it as `STRIPE_SECRET_KEY` in Vercel (Production scope). A real
+  Checkout session now opens successfully, which also confirms `STRIPE_PRICE_MONTHLY`,
+  `STRIPE_PRICE_ANNUAL`, and `APP_URL` are correctly live-mode/present (session creation would have
+  thrown on a bad price id or missing `APP_URL`). **`STRIPE_WEBHOOK_SECRET` also confirmed live and
+  correct** via a real end-to-end purchase (2026-07-27, Anthony's own account, Monthly plan,
+  intentionally not refunded): AccountDetail's Subscription card came back `ACTIVE` / "Monthly
+  plan — $14.99/mo" / correct renewal date immediately after checkout — since `subscription_status`,
+  `plan`, and `current_period_end` are written **only** by `stripe-webhook.js` (no other route
+  touches them), seeing the right values on screen proves the whole chain: signature verification
+  against the live secret → `stripe.subscriptions.retrieve` (restricted key's Subscriptions
+  permission) → the Supabase upsert → the frontend read. §17.B and §C's Stripe routes are now fully
+  verified in live mode, not just test mode.
 
 ### C. Serverless API routes (`api/`, Vercel functions)
 

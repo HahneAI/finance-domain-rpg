@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECK
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
 import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
-import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent } from "./lib/db.js";
+import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent, redeemBetaCode } from "./lib/db.js";
 import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
 import { PENDING_CONSENT_STORAGE_KEY } from "./components/LoginScreen.jsx";
 import { diffSensitiveFields } from "./lib/configHistory.js";
@@ -42,6 +42,20 @@ import { isStandaloneDisplayMode } from "./lib/pwa.js";
 import { AskCoachPanel } from "./components/AskCoachPanel.jsx";
 import { isTrackedBetaTester, canAccessAskCoachGeneral } from "./lib/entitlements.js";
 import { computeJobLossRunway, resolvePrimaryRunwayDays, sumJobHuntIncome } from "./lib/jobLossRunway.js";
+
+// Website/flyer-QR-code signup funnel — a link shaped like
+// "https://<app>/?beta=<code>" lands a NEW visitor here, often before they've
+// signed up at all. Captured on mount (below) into localStorage, then
+// consumed once a real session exists (App.jsx's SIGNED_IN handler) via
+// redeemBetaCode — the same call the account panel's manual "Redeem Beta
+// Code" row already uses (BetaRedeemDetail, ProfilePanel.jsx), so both paths
+// land on the identical is_tester=true + beta_code_used write
+// (api/seed.js's seedBeta). localStorage, not sessionStorage — unlike the
+// OAuth consent handoff (PENDING_CONSENT_STORAGE_KEY), which only needs to
+// survive a same-tab redirect, this needs to survive an email-confirmation
+// signup too, where the confirmation link can be opened in a different tab
+// (e.g. a phone's mail app), so a tab-scoped store isn't reliable here.
+const PENDING_BETA_CODE_STORAGE_KEY = "pendingBetaCode";
 
 const NAV_ITEMS = [
   { key: "income",   label: "Income" },
@@ -515,6 +529,19 @@ export default function App() {
             recordConsent(user.id, pendingConsentVersion);
           }
         } catch { /* private mode etc. */ }
+        // Beta-code signup-link handoff (captured on mount above) — same
+        // independent-of-revival reasoning as the consent handoff just above.
+        // One-shot: cleared here regardless of outcome, so an invalid/expired
+        // code from a stale link doesn't retry silently on every future login.
+        try {
+          const pendingBetaCode = window.localStorage.getItem(PENDING_BETA_CODE_STORAGE_KEY);
+          if (pendingBetaCode) {
+            window.localStorage.removeItem(PENDING_BETA_CODE_STORAGE_KEY);
+            redeemBetaCode(pendingBetaCode).then((result) => {
+              if (!result.ok) console.warn("Beta signup-link code redemption failed:", result.error);
+            });
+          }
+        } catch { /* private mode etc. */ }
         checkRevival()
           .then((revival) => {
             if (revival) {
@@ -543,6 +570,22 @@ export default function App() {
     }
     prevAuthedUserRef.current = authedUser;
   }, [authedUser]);
+
+  // ── Capture a beta-code signup link (website / flyer QR code) ──
+  // Runs once on mount, independent of auth state — a visitor can land here
+  // signed out (about to sign up) or, less commonly, already signed in.
+  // Stash-then-strip mirrors the OAuth-callback-failure cleanup just below;
+  // the value is consumed later in the SIGNED_IN handler, not here, since no
+  // session exists yet for most visitors hitting this link cold.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const betaCode = params.get("beta");
+    if (!betaCode) return;
+    try { window.localStorage.setItem(PENDING_BETA_CODE_STORAGE_KEY, betaCode.trim()); } catch { /* private mode etc. */ }
+    params.delete("beta");
+    const cleanUrl = window.location.pathname + (params.toString() ? `?${params}` : "") + window.location.hash;
+    window.history.replaceState(window.history.state, "", cleanUrl);
+  }, []);
 
   // ── Detect a Google OAuth callback that reached the app but produced no session ──
   // supabase-js only strips `?code=` from the URL after a *successful* PKCE exchange

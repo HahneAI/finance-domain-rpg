@@ -4,15 +4,18 @@
 
 ---
 
-## 17. Monetization — Stripe Subscriptions + 2-Week Free Trial
+## 17. Monetization — Stripe Subscriptions + 2-Week Free Trial (LIVE)
 
-*New workstream. Authority Finance is currently free with no billing layer (`CLAUDE.md`: "No
-backend server… no Stripe — yet"). This section adds a paid subscription gated behind a 14-day
-free trial. The app stays a Vite/React frontend; all Stripe secret-key work lives in Vercel
-serverless functions under `api/` (same pattern as `api/delete-account.js`: verify the caller
-with their Supabase Bearer token, then act with the service-role client). Subscription state is the
-source of truth in **Stripe**, mirrored into Supabase `user_data` via webhook so the frontend can
-gate without hitting Stripe on every load.*
+**✅ COMPLETE — all code shipped and verified in production. Optional items below are configuration/administrative tasks, not feature gaps.**
+
+*Stripe subscriptions are fully implemented and live. Authority Finance now charges $14.99/mo or $120/yr 
+behind a 14-day free trial (plus hidden 7-day grace for users who miss the deadline). The app stays a 
+Vite/React frontend; all Stripe secret-key work lives in Vercel serverless functions under `api/` 
+(same pattern as `api/delete-account.js`: verify the caller with their Supabase Bearer token, then 
+act with the service-role client). Subscription state is the source of truth in **Stripe**, mirrored 
+into Supabase `user_data` via webhook so the frontend can gate without hitting Stripe on every load. 
+Lifecycle emails are sent daily via Resend; entitlement is computed client-side via `getEntitlement()` 
+which never relies on Lock Date simulation — always real wall-clock time.*
 
 **Resolved decisions (2026-06-16, pricing tiers reaffirmed 2026-07-01, annual price locked in 2026-07-02):**
 - **Price:** **$14.99/mo.** Annual = **flat $120/yr — exactly $10.00/mo**, chosen over the earlier

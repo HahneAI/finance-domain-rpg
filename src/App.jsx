@@ -3,7 +3,7 @@ import { useScrollDirection } from "./hooks/useScrollDirection.js";
 import { DEFAULT_CONFIG, INITIAL_EXPENSES, INITIAL_GOALS, INITIAL_LOGS, PAYCHECKS_PER_YEAR, EVENT_TYPES } from "./constants/config.js";
 import { buildYear, computeNet, fedTax, stateTax, getStateConfig, calcEventImpact, resolveEventWeekMeta, computeRemainingSpend, computeBucketModel, toLocalIso, isFutureWeek, getPayPeriodEndDate, resolvePrevWeekNet } from "./lib/finance.js";
 import { getFundedGoalSpend } from "./lib/goalFunding.js";
-import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear } from "./lib/fiscalWeek.js";
+import { getCurrentFiscalWeek, getFiscalWeekInfo, formatFiscalWeekLabel, formatPayPeriodLabel, resolveActiveWeeksThisYear, dateToWeekIdx } from "./lib/fiscalWeek.js";
 import { loadUserData, saveUserData, syncUserProfile, createInvestorAccount, saveInvestorActiveAccount, saveConfigSnapshot, fetchConfigHistoryMeta, checkRevival, flushUserDataKeepalive, ensureInitialFoodExpense, logBetaEvent, loadCoachChats, fetchLatestPublishedChangelog, recordConsent, fetchLatestConsent } from "./lib/db.js";
 import { CURRENT_LEGAL_VERSION, ENFORCE_EXISTING_USER_RECONSENT } from "./constants/legalDocuments.js";
 import { PENDING_CONSENT_STORAGE_KEY } from "./components/LoginScreen.jsx";
@@ -26,6 +26,7 @@ import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { TrialBanner } from "./components/TrialBanner.jsx";
 import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner.jsx";
+import { TipsCommissionCheckIn } from "./components/TipsCommissionCheckIn.jsx";
 import { ChangelogModal } from "./components/ChangelogModal.jsx";
 import { ConsentGateModal } from "./components/ConsentGateModal.jsx";
 import { SaveFailedBanner } from "./components/SaveFailedBanner.jsx";
@@ -1097,6 +1098,23 @@ export default function App() {
     return payPeriodEndIso < effectiveToday;
   }, [config.employerPreset, effectiveToday, isAdmin, tempLockDate]);
 
+  // ── Tips/Commission daily check-in eligibility ──
+  // A given calendar day becomes askable at noon the day after it — mirrors the
+  // DHL Monday-6am gate above (trigger date = day+1, real wall-clock hour check
+  // only on the trigger date itself, admin Lock Date bypasses the hour check for
+  // testability). Any day further back than its own trigger date is unconditionally
+  // eligible any time — only the freshest ("yesterday") day waits on the noon gate.
+  const isTipsCommissionDayEligible = useCallback((dateIso) => {
+    const triggerDate = new Date(dateIso + "T00:00:00");
+    triggerDate.setDate(triggerDate.getDate() + 1);
+    const triggerIso = toLocalIso(triggerDate);
+    if (effectiveToday < triggerIso) return false;
+    if (effectiveToday === triggerIso && !(isAdmin && tempLockDate)) {
+      return new Date().getHours() >= 12;
+    }
+    return true;
+  }, [effectiveToday, isAdmin, tempLockDate]);
+
   // Weeks before this fiscal idx are auto-assumed worked and never prompt the
   // confirm modal; only weeks from account creation onward are confirmable.
   // null (legacy accounts predating the stamp) = no floor → prior behavior.
@@ -1171,6 +1189,75 @@ export default function App() {
     eligiblePastPayWeeks.filter(w => !weekConfirmations[w.idx]).length,
     [eligiblePastPayWeeks, weekConfirmations]
   );
+
+  // ── Tips/Commission daily check-in queue ──
+  // tipsCommissionSkippedToday: session-only (React state, resets on reload — same
+  // semantics as confirmDismissed above), NOT persisted. A skip only needs to hide
+  // that day for the rest of THIS sitting so the queue can chain to the next-older
+  // backlog day; the day must still be askable again next session (with weekday+date
+  // phrasing instead of "yesterday") until it's answered or ages out of the 10-day
+  // backlog window — persisting the skip would wrongly suppress that re-ask.
+  const [tipsCommissionSkippedToday, setTipsCommissionSkippedToday] = useState(() => new Set());
+
+  const tipsCommissionLoggedDates = useMemo(
+    () => new Set(logs.filter(e => e.type === "tips_commission").map(e => e.date)),
+    [logs]
+  );
+
+  // Newest-first walk over the last 10 days: the first unresolved (not logged,
+  // not skipped this session) + eligible (past its own noon gate) day found is
+  // always the one surfaced. Answering or skipping it removes it from
+  // consideration, so the next render immediately surfaces the next-older
+  // backlog day in the same sitting — no separate "advance" step needed.
+  const tipsCommissionTriggerDate = useMemo(() => {
+    if (!config.tipsOrCommissionEnabled) return null;
+    const enabledAt = config.tipsOrCommissionEnabledAt;
+    for (let back = 1; back <= 10; back++) {
+      const d = new Date(effectiveToday + "T00:00:00");
+      d.setDate(d.getDate() - back);
+      const dIso = toLocalIso(d);
+      if (enabledAt && dIso < enabledAt) return null; // dates only get older from here — nothing further qualifies either
+      if (tipsCommissionLoggedDates.has(dIso)) continue;
+      if (tipsCommissionSkippedToday.has(dIso)) continue;
+      if (!isTipsCommissionDayEligible(dIso)) continue;
+      return dIso;
+    }
+    return null;
+  }, [config.tipsOrCommissionEnabled, config.tipsOrCommissionEnabledAt, tipsCommissionLoggedDates, tipsCommissionSkippedToday, effectiveToday, isTipsCommissionDayEligible]);
+
+  const tipsCommissionTriggerIsYesterday = useMemo(() => {
+    if (!tipsCommissionTriggerDate) return false;
+    const y = new Date(effectiveToday + "T00:00:00");
+    y.setDate(y.getDate() - 1);
+    return tipsCommissionTriggerDate === toLocalIso(y);
+  }, [tipsCommissionTriggerDate, effectiveToday]);
+
+  // Logs a tips_commission entry for the given day — the same "log gained money"
+  // mechanism the bonus event type uses (calcEventImpact's tips_commission branch
+  // mirrors its bonus branch), just entered through the daily check-in card instead
+  // of the full Log Event form. amount 0 ("No" answer) still counts as resolved —
+  // it's a real answer, not a skip, so it must not be asked again.
+  const handleTipsCommissionLog = useCallback((dateIso, amount) => {
+    const weekIdx = dateToWeekIdx(dateIso);
+    const weekMeta = allWeeks.find(w => w.idx === weekIdx) ?? null;
+    const entry = {
+      id: Date.now(),
+      type: "tips_commission",
+      date: dateIso,
+      weekIdx,
+      weekEnd: weekMeta ? toLocalIso(weekMeta.weekEnd) : "",
+      weekRotation: weekMeta?.rotation ?? "6-Day",
+      amount,
+      note: "",
+    };
+    const nextLogs = [...logs, entry];
+    setLogs(nextLogs);
+    savePersistedStateNow({ logs: nextLogs });
+  }, [logs, allWeeks, savePersistedStateNow]);
+
+  const handleTipsCommissionSkip = useCallback((dateIso) => {
+    setTipsCommissionSkippedToday(prev => new Set(prev).add(dateIso));
+  }, []);
 
   // ── Admin: most-recent CONFIRMED eligible pay week (null when none) ──
   // The "Reopen Last Check-In" tool targets this week so admins can re-review
@@ -2366,6 +2453,18 @@ export default function App() {
               onDismiss={() => setUpdateBannerDismissed(true)}
               changelogEntry={latestChangelogEntry}
               onShowChangelog={() => setShowChangelogModal(true)}
+            />
+          )}
+          {/* readOnly gate: an expired/paywalled account must not be able to write a
+              new log entry through this path even though it's outside the Log panel's
+              own readOnly-swap render (see CLAUDE.md's "readOnly gate" persistence note). */}
+          {!isExpiredReadOnly && tipsCommissionTriggerDate && (
+            <TipsCommissionCheckIn
+              label={config.tipsOrCommissionLabel ?? "tips"}
+              dateIso={tipsCommissionTriggerDate}
+              isYesterday={tipsCommissionTriggerIsYesterday}
+              onLog={(amount) => handleTipsCommissionLog(tipsCommissionTriggerDate, amount)}
+              onSkip={() => handleTipsCommissionSkip(tipsCommissionTriggerDate)}
             />
           )}
           <ChangelogModal

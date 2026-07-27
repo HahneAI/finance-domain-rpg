@@ -1116,6 +1116,15 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 
 *Requires Job Loss Mode (§15.C) to be live first.*
 
+**AI-gating decision resolved, 2026-07-25 (user directive) — build tracked in a separate
+session, not here.** Ships behind the same narrow `canAccessAiFeatures` (`isAdmin`/`isTester`)
+gate every other AI surface uses today; the plan is to move it to a paid-tier gate once the
+feature is finished, mirroring the precedent Coach's own gate-flip already set
+(`canAccessAskCoachGeneral`, widened 2026-07-24 — admin/tester **or** a real trial/paid
+entitlement, never `isInvestor`; see `drift-app-warden.md` F24). Until that flip happens for
+Job Hunt Assistant specifically, treat the checklist below as informational — the actual build
+is happening in another session, so don't duplicate work here without checking in first.
+
 *Job Loss Mode's §15.H/H7-H9 rebuild (2026-07-18) already produces most of the outputs this
 feature will need to read — noting the exact files/functions now so whoever builds this doesn't
 have to re-derive them or, worse, write a fourth parallel runway calc:*
@@ -1221,9 +1230,9 @@ scope — documentation only, nothing below is implemented.*
   (already a jsonb column, already used for "statement insight keys" — no schema change needed
   beyond the chat_type enum value) alongside a written review in `messages`.
 - **Entitlement gating — same `canAccessAiFeatures` gate as every other Coach surface,** no new
-  gate needed. H14 bullet 5's finding still applies unchanged: real users can't reach this without
-  the broader AI-features rollout question being resolved first — worth noting again here, not a
-  blocker to scoping, but a real blocker to shipping this to anyone but admins/testers.
+  gate needed. **Resolved 2026-07-25 (§E header):** stays `canAccessAiFeatures`
+  (`isAdmin`/`isTester`) until Job Hunt Assistant ships, then moves to a paid-tier gate — same
+  plan as the parent feature, not a separate decision for the résumé piece.
 - **Recommended phasing:**
   - **v1** — `resume_profile` table + RLS; a "Resume" card in `ReemploymentTracker` (or its own
     section in the Job Loss Dashboard) with a paste-text textarea + "Get skill-gap review" button;
@@ -2564,6 +2573,12 @@ how directly each one touches "is the runway number on screen actually correct."
   `estimateRunwayDays` outright rather than retrofitting it (cleaner than either option this list
   proposed). `runwayDays` into Coach's context → wired the same pass. Only the AI-gating/business
   question (bullet above) and the résumé spec (already `[x]`) remain genuinely open.
+- **AI-gating question resolved, 2026-07-25 (user directive) — see §18.E header for the full
+  note.** Stays `canAccessAiFeatures` (`isAdmin`/`isTester`) until Job Hunt Assistant ships, then
+  moves to a paid-tier gate (mirrors Coach's own `canAccessAskCoachGeneral` gate-flip,
+  2026-07-24). The Job Hunt Assistant build itself is being tracked in a separate session —
+  checkbox above left unticked as the historical record of what was open at the time of this
+  birdseye pass, not because the question is still live.
 
 #### H15. Pending/final paycheck — the first H14 gap, built, 2026-07-22 — DONE
 
@@ -2729,22 +2744,29 @@ that decay into the runway instead of the number silently going stale between ma
 
 ---
 
-### I. Admin Toolkit updates for §15 work
+### I. Admin Toolkit updates for §15 work — BUILT 2026-07-25
 
-- [ ] **Live State Inspector — Job Loss Mode pill**
-  - [ ] Amber pill when `config.jobLossMode === true`
-  - [ ] Add three values: `jobLossDate`, `unemploymentWeekly`, `unemploymentRemainingWeeks`
-- [ ] **Week Inspector — unemployment income row**
-  - [ ] When `w.unemploymentIncome > 0`, show "Unemployment" line in Pay section
-  - [ ] When `inJobLoss && w.unemploymentIncome === 0`, surface "Job Loss Mode — outside benefit window"
-- [ ] **DB Row Viewer — expense triage summary**
-  - [ ] One-liner: "Triage: X active · Y paused · Z cancelled"
-  - [ ] Flag any expense where `autoReactivateOnIncome === false`
-- [ ] **Config Raw View — Life Events header**
-  - [ ] Short header above JSON listing only §15-relevant fields with values
-- [ ] **CLAUDE.md update**
-  - [ ] Append Job Loss state to "Diagnostic request templates"
-  - [ ] Document per-week `unemploymentIncome` annotation on `buildYear` output
+- [x] **Live State Inspector — Job Loss Mode pill**
+  - [x] Amber dot on the pill (top-right corner) when `config.jobLossMode === true`, visible without opening the card
+  - [x] Three amber-highlighted rows in the expanded card: `Job Loss Date`, `Unemployment Wkly`, `Unemployment Wks Left` (the last reads `computeJobLossRunway()`'s `benefitsRemainingWeeks` via a shared `jobLossDash` memo — same call Coach's `coachRunwayDays` uses, no second derivation, per F24)
+- [x] **Week Inspector — unemployment income row**
+  - [x] `w.unemploymentIncome > 0` → green "Unemployment" row in the Pay section
+  - [x] Job Loss window with no benefit paid that week → "Unemployment — Job Loss Mode — outside benefit window" (window boundary mirrors buildYear's `inJobLoss` check — `jobLossDate`/`returnToWorkDate` — diagnostic-only, never feeds math, same pattern as `resolveBaseRateForWeek`)
+- [x] **DB Row Viewer — expense triage summary**
+  - [x] "Triage: X active · Y paused · Z cancelled" line (only shown when something's actually paused/cancelled/flagged)
+  - [x] Flags expense count where `autoReactivateOnIncome === false`
+- [x] **Config Raw View — Life Events header**
+  - [x] "Life Events" header above the JSON dump, listing only §15 fields that currently carry a value
+- [x] **CLAUDE.md update**
+  - [x] Appended Job Loss state (§7 in Diagnostic request templates)
+  - [x] Documented per-week `unemploymentIncome` annotation on `buildYear` output (Week Inspector + template §7 entries)
+- All four admin surfaces are duplicated three times in `App.jsx` (desktop sidebar, mobile
+  hamburger drawer, mobile bottom sheet) — pre-existing architecture, not introduced by this
+  pass. Computed once via shared memos (`jobLossDash`, `expenseTriageLine`,
+  `lifeEventsConfigFields`) and rendered into all three so the triplication stays presentation-
+  only, not a fourth parallel calculation. 1231 tests passing (no new tests — pure admin-only
+  diagnostic surface, isAdmin-gated, no math path exercised); lint diff-clean vs. baseline;
+  production build green.
 
 ---
 

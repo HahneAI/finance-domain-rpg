@@ -1072,6 +1072,51 @@ export default function App() {
     return `Coach Chats: ${count} saved chat${count === 1 ? "" : "s"}${breakdown ? ` (${breakdown})` : ""}`;
   }, [coachChatsMeta]);
 
+  // §15.I — expense triage summary line for the DB Row viewer, shown next to
+  // historyLine/coachChatsLine so triage state (active/paused/cancelled) is
+  // visible without expanding the full expenses JSON. Reads exp.jobLossStatus/
+  // autoReactivateOnIncome directly (same fields JobLossBudgetPanel's triage
+  // UI writes — F44) rather than deriving a parallel status.
+  const expenseTriageLine = useMemo(() => {
+    if (!expenses?.length) return null;
+    let active = 0, paused = 0, cancelled = 0;
+    const noAutoReactivate = [];
+    for (const exp of expenses) {
+      const status = exp.jobLossStatus ?? "active";
+      if (status === "active") active++;
+      else if (status === "paused") paused++;
+      else if (status === "cancelled") cancelled++;
+      if ((exp.autoReactivateOnIncome ?? true) === false) noAutoReactivate.push(exp.name ?? exp.id);
+    }
+    if (paused === 0 && cancelled === 0 && noAutoReactivate.length === 0) return null;
+    const flag = noAutoReactivate.length > 0 ? ` · ${noAutoReactivate.length} won't auto-reactivate` : "";
+    return `Triage: ${active} active · ${paused} paused · ${cancelled} cancelled${flag}`;
+  }, [expenses]);
+
+  // §15.I — Config Raw View header: only the §15 Life Events fields that
+  // currently carry a value, so triaging a Job Loss account doesn't require
+  // eyeballing the full config JSON dump for these specific fields.
+  const lifeEventsConfigFields = useMemo(() => {
+    const fmt = v => Array.isArray(v) ? `${v.length} entr${v.length === 1 ? "y" : "ies"}` : String(v);
+    return [
+      ["jobLossMode", config.jobLossMode],
+      ["jobLossDate", config.jobLossDate],
+      ["jobLossCashOnHand", config.jobLossCashOnHand],
+      ["jobLossCashOnHandAsOf", config.jobLossCashOnHandAsOf],
+      ["jobLossPendingCheckAmount", config.jobLossPendingCheckAmount],
+      ["jobLossPendingCheckDate", config.jobLossPendingCheckDate],
+      ["unemploymentEnabled", config.unemploymentEnabled],
+      ["unemploymentWeekly", config.unemploymentWeekly],
+      ["unemploymentDurationWeeks", config.unemploymentDurationWeeks],
+      ["unemploymentWaitingWeek", config.unemploymentWaitingWeek],
+      ["returnToWorkDate", config.returnToWorkDate],
+      ["jobApplications", config.jobApplications?.length ? config.jobApplications : null],
+      ["jobHuntIncomeLog", config.jobHuntIncomeLog?.length ? config.jobHuntIncomeLog : null],
+    ]
+      .filter(([, v]) => v !== null && v !== undefined && v !== false && v !== "")
+      .map(([label, v]) => [label, fmt(v)]);
+  }, [config]);
+
   // ── Build year reactively from config ──
   const allWeeks = useMemo(() => buildYear(config, baseRateHistory), [config, baseRateHistory]);
 
@@ -1483,11 +1528,17 @@ export default function App() {
   // Ask Coach agrees with whatever the Job Loss panels are showing. Raw
   // jobLossCashOnHand is read internally by computeJobLossRunway (and
   // timeline-decayed per §15.H17) — extraCash is just the gig-income log.
-  const coachRunwayDays = useMemo(() => {
+  // §15.I — shared dash so the Live State Inspector's Job Loss rows read the
+  // same computeJobLossRunway() result Coach uses, instead of a third call
+  // site (drift-app-warden §21 F24: never a second/third runway derivation).
+  const jobLossDash = useMemo(() => {
     if (!config.jobLossMode) return null;
-    const dash = computeJobLossRunway({ config, expenses, effectiveToday, extraCash: sumJobHuntIncome(config) });
-    return resolvePrimaryRunwayDays(dash, config, jobLossIncludeBenefits);
-  }, [config, expenses, effectiveToday, jobLossIncludeBenefits]);
+    return computeJobLossRunway({ config, expenses, effectiveToday, extraCash: sumJobHuntIncome(config) });
+  }, [config, expenses, effectiveToday]);
+  const coachRunwayDays = useMemo(
+    () => resolvePrimaryRunwayDays(jobLossDash, config, jobLossIncludeBenefits),
+    [jobLossDash, config, jobLossIncludeBenefits],
+  );
 
   // ── Event log cascade ──
   const logTotals = useMemo(() => ({
@@ -2149,6 +2200,17 @@ export default function App() {
                 </div>
                 {configViewOpen && (
                   <div style={{ position: "relative" }}>
+                    {lifeEventsConfigFields.length > 0 && (
+                      <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "6px", lineHeight: "1.5" }}>
+                        <div style={{ letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "3px" }}>Life Events</div>
+                        {lifeEventsConfigFields.map(([k, v]) => (
+                          <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                            <span style={{ color: "var(--color-text-secondary)" }}>{k}</span>
+                            <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", wordBreak: "break-all", textAlign: "right" }}>{v}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "8px", fontSize: "9px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "180px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                       {JSON.stringify(config, null, 2)}
                     </pre>
@@ -2178,6 +2240,7 @@ export default function App() {
                           {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
                           {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
                           {historyLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
+                          {expenseTriageLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{expenseTriageLine}</div>}
                           {coachChatsLine && (
                             <div style={{ marginBottom: "4px" }}>
                               <Pressable
@@ -2861,6 +2924,17 @@ export default function App() {
               </div>
               {configViewOpen && (
                 <div>
+                  {lifeEventsConfigFields.length > 0 && (
+                    <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "8px", lineHeight: "1.6" }}>
+                      <div style={{ letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "4px" }}>Life Events</div>
+                      {lifeEventsConfigFields.map(([k, v]) => (
+                        <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                          <span style={{ color: "var(--color-text-secondary)" }}>{k}</span>
+                          <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", wordBreak: "break-all", textAlign: "right" }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <pre style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "10px", fontSize: "10px", fontFamily: "var(--font-mono)", color: "var(--color-text-primary)", maxHeight: "220px", overflowY: "auto", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                     {JSON.stringify(config, null, 2)}
                   </pre>
@@ -2890,6 +2964,7 @@ export default function App() {
                         {rowData.updated_at && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>updated: {new Date(rowData.updated_at).toLocaleString()}</div>}
                         {rowDiff.length > 0 && <div style={{ fontSize: "9px", color: "var(--color-warning)", marginBottom: "4px" }}>Drift: {rowDiff.join(", ")}</div>}
                         {historyLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{historyLine}</div>}
+                        {expenseTriageLine && <div style={{ fontSize: "9px", color: "var(--color-text-secondary)", marginBottom: "4px" }}>{expenseTriageLine}</div>}
                         {coachChatsLine && (
                           <div style={{ marginBottom: "4px" }}>
                             <Pressable
@@ -3153,6 +3228,14 @@ export default function App() {
                 ["Buffer / Wk", `$${Math.round(bufferPerWeek).toLocaleString()}`, null],
                 ["Weekly Income", `$${Math.round(weeklyIncome).toLocaleString()}`, null],
                 ["Annual Net", `$${Math.round(projectedAnnualNet).toLocaleString()}`, null],
+                // §15.I — Job Loss Mode rows, only when active. unemploymentRemainingWeeks
+                // reads jobLossDash.benefitsRemainingWeeks (computeJobLossRunway) rather
+                // than re-deriving the benefit window here (F24: one runway calc only).
+                ...(config.jobLossMode ? [
+                  ["Job Loss Date", config.jobLossDate ?? "—", null, true],
+                  ["Unemployment Wkly", config.unemploymentWeekly ? `$${config.unemploymentWeekly}` : "—", null, true],
+                  ["Unemployment Wks Left", jobLossDash?.benefitsRemainingWeeks ?? 0, null, true],
+                ] : []),
                 // §17.F admin visibility — resolved phase + the raw lifecycle
                 // fields a diagnostic session needs. Access Ends is the hidden
                 // day-21 cutoff (§D/§H disclosure rule) — this Inspector is
@@ -3162,11 +3245,11 @@ export default function App() {
                 ["Access Ends", subscription.accessEndsAt ? new Date(subscription.accessEndsAt).toLocaleDateString() : "—", "hidden cutoff"],
                 ["Period End", subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : "—", null],
                 ["Card / Dunning", subscription.cardOnFile ? "on file" : "none", subscription.dunningEmailCount ? `${subscription.dunningEmailCount} sent` : null],
-              ].map(([label, val, sub]) => (
+              ].map(([label, val, sub, amber]) => (
                 <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
                   <span style={{ fontSize: "9px", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-secondary)", flexShrink: 0 }}>{label}</span>
                   <div style={{ textAlign: "right" }}>
-                    <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: label === "Effective Today" && today !== effectiveToday ? "var(--color-warning)" : "var(--color-text-primary)" }}>{val}</span>
+                    <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: amber || (label === "Effective Today" && today !== effectiveToday) ? "var(--color-warning)" : "var(--color-text-primary)" }}>{val}</span>
                     {sub && <div style={{ fontSize: "8px", color: "var(--color-text-secondary)", letterSpacing: "0.5px" }}>{sub}</div>}
                   </div>
                 </div>
@@ -3177,6 +3260,7 @@ export default function App() {
           <Pressable
             onClick={() => setInspectorOpen(v => !v)}
             style={{
+              position: "relative",
               background: inspectorOpen ? "var(--color-warning)" : "rgba(245,158,11,0.18)",
               border: `1px solid ${inspectorOpen ? "var(--color-warning)" : "rgba(245,158,11,0.4)"}`,
               borderRadius: "20px",
@@ -3194,6 +3278,13 @@ export default function App() {
               transition: "all 0.15s ease",
             }}
           >
+            {/* §15.I — amber dot when the account is in Job Loss Mode, visible without opening the panel */}
+            {config.jobLossMode && (
+              <span
+                title="Job Loss Mode active"
+                style={{ position: "absolute", top: "-3px", right: "-3px", width: "9px", height: "9px", borderRadius: "50%", background: "var(--color-warning)", border: "1.5px solid var(--color-bg-base)" }}
+              />
+            )}
             <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
             </svg>
@@ -3209,6 +3300,14 @@ export default function App() {
         const wLookup = weekNetLookup[w.idx] ?? null;
         const netVal = computeNet(w, config, taxDerived.extraPerCheck, showExtra);
         const weekLogs = logs.filter(e => resolveEventWeekMeta(e, allWeeks).weekIdx === w.idx);
+        // §15.I — mirrors buildYear's inJobLoss window boundary (finance.js) so the
+        // "outside benefit window" note only fires for weeks actually inside Job
+        // Loss Mode, not every pre-firstActiveIdx week. Diagnostic-only (never feeds
+        // math), same "mirror the exact algorithm" pattern as resolveBaseRateForWeek.
+        const weekEndIso = toLocalIso(w.weekEnd);
+        const inJobLossWindow = config.jobLossMode && config.jobLossDate
+          && weekEndIso >= config.jobLossDate
+          && (!config.returnToWorkDate || weekEndIso < config.returnToWorkDate);
         const fC = n => (n ?? 0).toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const fN = n => n != null ? fC(n) : "—";
         const Row = ({ label, val, mono = true, color }) => (
@@ -3274,6 +3373,12 @@ export default function App() {
               <SH>Pay</SH>
               <Row label="Gross Pay" val={fN(w.grossPay)} />
               <Row label="Taxable Gross" val={fN(w.taxableGross)} />
+              {w.unemploymentIncome > 0 && (
+                <Row label="Unemployment" val={fN(w.unemploymentIncome)} color="var(--color-green)" />
+              )}
+              {inJobLossWindow && w.unemploymentIncome === 0 && (
+                <Row label="Unemployment" val="Job Loss Mode — outside benefit window" mono={false} color="var(--color-text-disabled)" />
+              )}
               <Row label="Benefits Deduction" val={fN(w.benefitsDeduction)} color="var(--color-deduction)" />
               <Row label="401k (Employee)" val={fN(w.k401kEmployee)} color="var(--color-deduction)" />
               <Row label="401k (Employer)" val={fN(w.k401kEmployer)} color="var(--color-green)" />

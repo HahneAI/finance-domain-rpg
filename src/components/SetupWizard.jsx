@@ -17,8 +17,8 @@
 import { useState, useEffect, useRef } from "react";
 import { buildYear, dhlEmployerMatchRate, estimateWeeklyNet } from "../lib/finance.js";
 import { iS, lS, Pressable, StepSlide } from "./ui.jsx";
-import { FISCAL_YEAR_START, DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { FISCAL_WEEKS_PER_YEAR } from "../lib/fiscalWeek.js";
+import { DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { FISCAL_WEEKS_PER_YEAR, dateToWeekIdx } from "../lib/fiscalWeek.js";
 
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 
@@ -752,6 +752,41 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
               )}
             </Field>
           )}
+
+          {/* ── Tips / Commission daily check-in opt-in ── */}
+          <Field label="Do you earn tips or commission?">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+              <Pill
+                label="No"
+                active={!formData.tipsOrCommissionEnabled}
+                onClick={() => onChange({ tipsOrCommissionEnabled: false, tipsOrCommissionLabel: null, tipsCommissionOnlyPosition: null })}
+              />
+              <Pill
+                label="Tips"
+                active={formData.tipsOrCommissionEnabled && formData.tipsOrCommissionLabel === "tips"}
+                onClick={() => onChange({ tipsOrCommissionEnabled: true, tipsOrCommissionLabel: "tips", tipsCommissionOnlyPosition: null })}
+              />
+              <Pill
+                label="Commission"
+                active={formData.tipsOrCommissionEnabled && formData.tipsOrCommissionLabel === "commission"}
+                onClick={() => onChange({ tipsOrCommissionEnabled: true, tipsOrCommissionLabel: "commission" })}
+              />
+            </div>
+            {formData.tipsOrCommissionEnabled && (
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
+                We'll ask a quick daily check-in — did you make any {formData.tipsOrCommissionLabel} that day?
+              </div>
+            )}
+            {formData.tipsOrCommissionEnabled && formData.tipsOrCommissionLabel === "commission" && (
+              <div style={{ marginTop: "10px" }}>
+                <label style={lSp}>Is this a commission-only position?</label>
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                  <Pill label="Yes" active={formData.tipsCommissionOnlyPosition === true}  onClick={() => onChange({ tipsCommissionOnlyPosition: true })} />
+                  <Pill label="No"  active={formData.tipsCommissionOnlyPosition === false} onClick={() => onChange({ tipsCommissionOnlyPosition: false })} />
+                </div>
+              </div>
+            )}
+          </Field>
         </>
       )}
     </div>
@@ -762,16 +797,6 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
 // STEP 2 — Schedule
 // ─────────────────────────────────────────────────────────────────────────────
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-// Derives the fiscal week index for a given date string "YYYY-MM-DD".
-// Week 0 ends on FISCAL_YEAR_START; each subsequent week is 7 days.
-// Returns the smallest idx such that that week's end >= the given date.
-function dateToWeekIdx(dateStr) {
-  const weekZeroEnd = new Date(FISCAL_YEAR_START + "T00:00:00");
-  const target      = new Date(dateStr       + "T00:00:00");
-  const diffDays    = (target - weekZeroEnd) / 86400000;
-  return Math.max(0, Math.min(Math.ceil(diffDays / 7), FISCAL_WEEKS_PER_YEAR - 1));
-}
 
 function Step2({ formData, onChange, attempted }) {
   const isEmployerDHL = formData.employerPreset === "DHL";
@@ -2458,6 +2483,8 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   }
 
   function handleComplete() {
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     const finalData = formData.employerPreset === "DHL"
       ? { ...formData, payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5 }
       : { ...formData };
@@ -2467,6 +2494,16 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
     if (finalData.bufferEnabled !== false) {
       finalData.paycheckBuffer = finalData.paycheckBuffer ?? 50;
     }
+    // Stamp/clear tipsOrCommissionEnabledAt on the false→true / true→false transitions
+    // only — bounds the daily check-in backlog to dates on/after opt-in (see
+    // constants/config.js) without disturbing the stamp while staying enabled across
+    // wizard re-entries (structure_change, etc.).
+    const wasTipsEnabled = config?.tipsOrCommissionEnabled === true;
+    if (finalData.tipsOrCommissionEnabled && !wasTipsEnabled) {
+      finalData.tipsOrCommissionEnabledAt = todayIso;
+    } else if (!finalData.tipsOrCommissionEnabled) {
+      finalData.tipsOrCommissionEnabledAt = null;
+    }
     const allWeeks   = buildYear(finalData);
     // taxExemptOptIn: true = user filed W-4 as exempt from federal/state withholding.
     // Only FICA applies; income tax withholding is $0.
@@ -2475,8 +2512,6 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
       : allWeeks.filter(w => w.idx >= (finalData.firstActiveIdx ?? 0)).map(w => w.idx);
     // Stamp the account-creation week so weeks before today are auto-assumed worked
     // and the weekly confirm modal only surfaces weeks from account creation onward.
-    const today = new Date();
-    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     const accountCreatedIdx = finalData.accountCreatedIdx ?? dateToWeekIdx(todayIso);
     onComplete({ ...finalData, taxedWeeks, accountCreatedIdx, setupComplete: true });
   }

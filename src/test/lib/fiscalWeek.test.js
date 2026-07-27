@@ -7,7 +7,9 @@ import {
   formatFiscalWeekLabel,
   getPayPeriodBounds,
   resolveActiveWeeksThisYear,
+  dateToWeekIdx,
 } from '../../lib/fiscalWeek.js'
+import { FISCAL_YEAR_START } from '../../constants/config.js'
 
 const makeWeek = (idx, dateIso, active = true) => ({
   idx,
@@ -129,5 +131,34 @@ describe('getPayPeriodBounds', () => {
   it('returns null when the week is not found', () => {
     expect(getPayPeriodBounds(99, [makePeriodWeek(0, '2026-05-04', '2026-05-10', true)])).toBeNull()
     expect(getPayPeriodBounds(0, [])).toBeNull()
+  })
+})
+
+// Promoted from a SetupWizard-local helper (TODO: Tips/Commission daily
+// check-in) — App.jsx needs the same calendar-date → fiscal-week-idx
+// conversion to tag daily log entries with the correct weekIdx.
+describe('dateToWeekIdx', () => {
+  it('maps FISCAL_YEAR_START itself to week 0', () => {
+    expect(dateToWeekIdx(FISCAL_YEAR_START)).toBe(0)
+  })
+
+  it('clamps any date before FISCAL_YEAR_START to week 0', () => {
+    expect(dateToWeekIdx('2025-12-25')).toBe(0)
+  })
+
+  it('maps the day after FISCAL_YEAR_START to week 1', () => {
+    expect(dateToWeekIdx('2026-01-06')).toBe(1)
+  })
+
+  it('maps exactly 7 days after FISCAL_YEAR_START to week 1 (end of week 1)', () => {
+    expect(dateToWeekIdx('2026-01-12')).toBe(1)
+  })
+
+  it('maps 8 days after FISCAL_YEAR_START to week 2 (start of week 2)', () => {
+    expect(dateToWeekIdx('2026-01-13')).toBe(2)
+  })
+
+  it('clamps a far-future date to the last week index (51)', () => {
+    expect(dateToWeekIdx('2030-01-01')).toBe(FISCAL_WEEKS_PER_YEAR - 1)
   })
 })

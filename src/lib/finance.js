@@ -1351,6 +1351,8 @@ export function calcEventImpact(event, cfg, weekMeta = null) {
     grossLost = (event.hoursLost || 0) * (cfg.baseRate + nightDiffPerHour); hoursLostForPTO = event.hoursLost || 0;
   } else if (event.type === "bonus") {
     grossGained = event.amount || 0;
+  } else if (event.type === "tips_commission") {
+    grossGained = event.amount || 0;
   } else if (event.type === "other_loss") { grossLost = event.amount || 0; }
   // Net impact accounts for FICA always, plus withholding on taxed weeks.
   // Past-week overrides (pastWeekTaxStatusOverrides) take precedence over the

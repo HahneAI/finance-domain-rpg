@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
-import { redeemBetaCode, logBetaFeedback } from "../lib/db.js";
+import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry } from "../lib/db.js";
+import { ChangelogBody } from "./ChangelogModal.jsx";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH } from "./ui.jsx";
@@ -34,7 +35,7 @@ function fmt(dateStr) {
 // ── Shared layout atoms ─────────────────────────────────────────────────────
 
 // Back nav header used by all sub-views
-function BackBar({ onBack, title }) {
+function BackBar({ onBack, title, backLabel = "Profile" }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
       <Pressable
@@ -42,7 +43,7 @@ function BackBar({ onBack, title }) {
         style={{ background: "transparent", border: "none", color: "var(--color-teal)", cursor: "pointer", fontSize: "13px", padding: "4px 0", display: "flex", alignItems: "center", gap: "5px" }}
       >
         <span style={{ fontSize: "16px", lineHeight: 1 }}>‹</span>
-        <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>Profile</span>
+        <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>{backLabel}</span>
       </Pressable>
       <div style={{ flex: 1, fontSize: "13px", fontWeight: "bold", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>
         {title}
@@ -2005,7 +2006,12 @@ function BetaRedeemDetail({ onBack }) {
 // ("specificity"), which a mailto link can never supply — this logs the
 // actual text via logBetaFeedback (migration 030_add_beta_feedback.sql)
 // instead of handing it off to the user's mail client.
-function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack }) {
+// Exported so App.jsx can reuse it directly for the mobile-drawer entry
+// point — same component, two launch sites (Account panel's sub-view router,
+// and a standalone modal from the drawer). `backLabel` lets each site's
+// BackBar say the right thing ("Profile" inside the Account flow, "Close"
+// when launched as a standalone drawer modal with nothing to navigate back to).
+export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }) {
   const [note, setNote] = useState("");
   const [status, setStatus] = useState({ loading: false, error: null, success: false });
 
@@ -2023,7 +2029,7 @@ function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack }) {
 
   return (
     <>
-      <BackBar onBack={onBack} title="Send Feedback" />
+      <BackBar onBack={onBack} title="Send Feedback" backLabel={backLabel} />
       <DetailCard>
         <div style={{ padding: "13px 16px" }}>
           {status.success ? (
@@ -2063,6 +2069,227 @@ function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack }) {
           )}
         </div>
       </DetailCard>
+    </>
+  );
+}
+
+// Admin authoring surface for changelog_entries (database/migrations/032) —
+// the write side of the "What's New" feature. UpdateAvailableBanner +
+// ChangelogModal (App.jsx) are the read side: a published entry here is what
+// makes the "What's New" tap target appear alongside the next update banner
+// a user sees. Writes go through api/admin-changelog.js (db.js's
+// saveChangelogEntry/deleteChangelogEntry) — never a direct client write, per
+// the RLS posture the migration sets up.
+function ChangelogAdminDetail({ onBack }) {
+  // null = initial load in progress (distinct from [] = loaded, zero entries) —
+  // avoids a synchronous setState(true) at the top of load(), which is what
+  // react-hooks/set-state-in-effect flags when load() is invoked directly
+  // from the mount effect below (same shape InvestorAdminPanel's load uses).
+  const [entries, setEntries] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [editingId, setEditingId] = useState(null); // null = list view, "new" = new entry, else entry.id
+  const [draft, setDraft] = useState(null);
+  const [saveError, setSaveError] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  // Mount-only fetch, same inline-async-function-inside-the-effect shape
+  // InvestorAdminPanel's load() uses — react-hooks/set-state-in-effect flags
+  // an effect that calls an *externally defined* function containing
+  // setState, so the load logic lives here rather than as a reusable
+  // top-level function. Post-mutation UI updates (below) are optimistic
+  // local state edits from the API's own response instead of a re-fetch.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const result = await fetchAllChangelogEntries();
+      if (cancelled) return;
+      if (!result.ok) setLoadError(result.error);
+      else { setLoadError(null); setEntries(result.entries); }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  function startNew() {
+    setDraft({ id: null, versionLabel: "", title: "", body: "", published: false });
+    setSaveError(null);
+    setShowPreview(false);
+    setEditingId("new");
+  }
+
+  function startEdit(entry) {
+    setDraft({
+      id: entry.id,
+      versionLabel: entry.version_label ?? "",
+      title: entry.title,
+      body: entry.body,
+      published: entry.published_at != null,
+    });
+    setSaveError(null);
+    setShowPreview(false);
+    setEditingId(entry.id);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setDraft(null);
+    setSaveError(null);
+  }
+
+  async function handleSave() {
+    if (!draft.title.trim()) { setSaveError("Title is required."); return; }
+    if (!draft.body.trim()) { setSaveError("Body is required."); return; }
+    setSaveError(null);
+    const result = await saveChangelogEntry({
+      id: draft.id,
+      versionLabel: draft.versionLabel || null,
+      title: draft.title,
+      body: draft.body,
+      published: draft.published,
+    });
+    if (!result.ok) { setSaveError(result.error); return; }
+    // Optimistic local update from the API's own response, rather than a
+    // re-fetch — same InvestorAdminPanel-established pattern as the mount
+    // effect above. New entries are id-less until the server assigns one, so
+    // this branches on whether we were editing (id already known) vs. creating.
+    setEntries(prev => {
+      const list = prev ?? [];
+      return draft.id
+        ? list.map(e => e.id === draft.id ? result.entry : e)
+        : [result.entry, ...list];
+    });
+    setEditingId(null);
+    setDraft(null);
+  }
+
+  async function handleDelete(id) {
+    setConfirmDeleteId(null);
+    const result = await deleteChangelogEntry(id);
+    if (result.ok) setEntries(prev => (prev ?? []).filter(e => e.id !== id));
+  }
+
+  if (editingId !== null) {
+    return (
+      <>
+        <BackBar onBack={cancelEdit} title={editingId === "new" ? "New Entry" : "Edit Entry"} />
+        <DetailCard>
+          <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div>
+              <label style={lSp}>Version Label (optional)</label>
+              <input
+                type="text" value={draft.versionLabel}
+                onChange={e => setDraft(d => ({ ...d, versionLabel: e.target.value }))}
+                placeholder="e.g. 2026.07.26" style={iS}
+              />
+            </div>
+            <div>
+              <label style={lSp}>Title</label>
+              <input
+                type="text" value={draft.title}
+                onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
+                placeholder="e.g. Faster goal tracking" style={iS}
+              />
+            </div>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <label style={{ ...lSp, marginBottom: 0 }}>Body (Markdown)</label>
+                <Pressable
+                  onClick={() => setShowPreview(v => !v)}
+                  style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "3px 9px", cursor: "pointer" }}
+                >
+                  {showPreview ? "Edit" : "Preview"}
+                </Pressable>
+              </div>
+              {showPreview ? (
+                <div style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "14px", minHeight: "160px" }}>
+                  {draft.body.trim()
+                    ? <ChangelogBody markdown={draft.body} />
+                    : <div style={{ fontSize: "12px", color: "var(--color-text-disabled)" }}>Nothing to preview yet.</div>}
+                </div>
+              ) : (
+                <textarea
+                  value={draft.body}
+                  onChange={e => setDraft(d => ({ ...d, body: e.target.value }))}
+                  placeholder="Supports **bold**, *italic*, lists, links, and headers."
+                  rows={10}
+                  style={{ ...iS, height: "auto", fontFamily: "var(--font-mono)", resize: "vertical", lineHeight: 1.5 }}
+                />
+              )}
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+              <input
+                type="checkbox" checked={draft.published}
+                onChange={e => setDraft(d => ({ ...d, published: e.target.checked }))}
+                style={{ width: "16px", height: "16px", accentColor: "var(--color-teal)", cursor: "pointer" }}
+              />
+              <span style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+                Published — visible to users via the update banner{draft.published ? "" : " (currently a draft)"}
+              </span>
+            </label>
+            {saveError && (
+              <div style={{ fontSize: "11px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
+            )}
+            <PaySectionActions error={null} onSave={handleSave} onCancel={cancelEdit} />
+          </div>
+        </DetailCard>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <BackBar onBack={onBack} title="Changelog" />
+      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
+        Published entries appear as a "What's New" prompt alongside the update-available
+        banner, the next time a user's app detects a new deploy.
+      </div>
+      <Pressable
+        onClick={startNew}
+        style={{ width: "100%", padding: "12px 0", marginBottom: "16px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+      >
+        + New Entry
+      </Pressable>
+
+      {entries === null && <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Loading…</div>}
+      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>{loadError}</div>}
+      {entries !== null && !loadError && entries.length === 0 && (
+        <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>No entries yet.</div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {(entries ?? []).map(entry => {
+          const isPublished = entry.published_at != null;
+          const confirming = confirmDeleteId === entry.id;
+          return (
+            <DetailCard key={entry.id} style={{ marginBottom: 0 }}>
+              <div style={{ padding: "13px 16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: "4px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.title}</div>
+                  <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", flexShrink: 0, background: isPublished ? "rgba(34,197,94,0.12)" : "var(--color-bg-raised)", color: isPublished ? "var(--color-green)" : "var(--color-text-disabled)", border: `1px solid ${isPublished ? "rgba(34,197,94,0.3)" : "var(--color-border-subtle)"}` }}>
+                    {isPublished ? "Published" : "Draft"}
+                  </span>
+                </div>
+                {entry.version_label && (
+                  <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "8px" }}>{entry.version_label}</div>
+                )}
+                {confirming ? (
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <span style={{ fontSize: "11px", color: "var(--color-deduction)" }}>Delete this entry?</span>
+                    <Pressable onClick={() => handleDelete(entry.id)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "4px 10px", cursor: "pointer", fontWeight: "bold" }}>Confirm</Pressable>
+                    <Pressable onClick={() => setConfirmDeleteId(null)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Cancel</Pressable>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <Pressable onClick={() => startEdit(entry)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
+                    <Pressable onClick={() => setConfirmDeleteId(entry.id)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-deduction)", border: "1px solid rgba(224,92,92,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Delete</Pressable>
+                  </div>
+                )}
+              </div>
+            </DetailCard>
+          );
+        })}
+      </div>
     </>
   );
 }
@@ -2120,6 +2347,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   }
   if (activeSection === "investorcodes") {
     return <InvestorAdminPanel onBack={() => setActiveSection(null)} />;
+  }
+  if (activeSection === "changelog") {
+    return <ChangelogAdminDetail onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "betaredeem") {
     return <BetaRedeemDetail onBack={() => setActiveSection(null)} />;
@@ -2204,6 +2434,13 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
             label="Investor Codes"
             summary="Manage access codes and view registrations"
             onPress={() => setActiveSection("investorcodes")}
+          />
+        )}
+        {isAdmin && (
+          <ListRow
+            label="Changelog"
+            summary="Author the What's New entries paired with the update banner"
+            onPress={() => setActiveSection("changelog")}
             last
           />
         )}

@@ -4,15 +4,18 @@
 
 ---
 
-## 17. Monetization — Stripe Subscriptions + 2-Week Free Trial
+## 17. Monetization — Stripe Subscriptions + 2-Week Free Trial (LIVE)
 
-*New workstream. Authority Finance is currently free with no billing layer (`CLAUDE.md`: "No
-backend server… no Stripe — yet"). This section adds a paid subscription gated behind a 14-day
-free trial. The app stays a Vite/React frontend; all Stripe secret-key work lives in Vercel
-serverless functions under `api/` (same pattern as `api/delete-account.js`: verify the caller
-with their Supabase Bearer token, then act with the service-role client). Subscription state is the
-source of truth in **Stripe**, mirrored into Supabase `user_data` via webhook so the frontend can
-gate without hitting Stripe on every load.*
+**✅ COMPLETE — all code shipped and verified in production. Optional items below are configuration/administrative tasks, not feature gaps.**
+
+*Stripe subscriptions are fully implemented and live. Authority Finance now charges $14.99/mo or $120/yr 
+behind a 14-day free trial (plus hidden 7-day grace for users who miss the deadline). The app stays a 
+Vite/React frontend; all Stripe secret-key work lives in Vercel serverless functions under `api/` 
+(same pattern as `api/delete-account.js`: verify the caller with their Supabase Bearer token, then 
+act with the service-role client). Subscription state is the source of truth in **Stripe**, mirrored 
+into Supabase `user_data` via webhook so the frontend can gate without hitting Stripe on every load. 
+Lifecycle emails are sent daily via Resend; entitlement is computed client-side via `getEntitlement()` 
+which never relies on Lock Date simulation — always real wall-clock time.*
 
 **Resolved decisions (2026-06-16, pricing tiers reaffirmed 2026-07-01, annual price locked in 2026-07-02):**
 - **Price:** **$14.99/mo.** Annual = **flat $120/yr — exactly $10.00/mo**, chosen over the earlier
@@ -111,9 +114,24 @@ gate without hitting Stripe on every load.*
 - [ ] **Configure the Customer Portal** (Billing → Customer portal) so users can cancel / update
   card / switch plan without custom UI. *(Not yet confirmed done.)*
 - [x] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
-- [ ] **Set Vercel env vars** (see env block at the bottom) — `STRIPE_SECRET_KEY`,
-  `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `APP_URL` still need to
-  be added in the Vercel dashboard.
+- [x] **Set Vercel env vars** (see env block at the bottom). **Resolved 2026-07-27** — production
+  Checkout was 500ing for every real user ("Server configuration is missing") because `STRIPE_SECRET_KEY`
+  (the live key) had never actually been added to Vercel; only the `_TEST` vars existed, so
+  `MODE === "live"` resolved `stripe` to `null` and `stripe-create-checkout.js`/`stripe-portal.js`
+  both hit their own missing-env guard. Fixed by generating a new **live-mode restricted key**
+  (`rk_live_...`, scoped to Checkout Sessions/Customers/Subscriptions/Customer Portal — all Write,
+  nothing broader) and setting it as `STRIPE_SECRET_KEY` in Vercel (Production scope). A real
+  Checkout session now opens successfully, which also confirms `STRIPE_PRICE_MONTHLY`,
+  `STRIPE_PRICE_ANNUAL`, and `APP_URL` are correctly live-mode/present (session creation would have
+  thrown on a bad price id or missing `APP_URL`). **`STRIPE_WEBHOOK_SECRET` also confirmed live and
+  correct** via a real end-to-end purchase (2026-07-27, Anthony's own account, Monthly plan,
+  intentionally not refunded): AccountDetail's Subscription card came back `ACTIVE` / "Monthly
+  plan — $14.99/mo" / correct renewal date immediately after checkout — since `subscription_status`,
+  `plan`, and `current_period_end` are written **only** by `stripe-webhook.js` (no other route
+  touches them), seeing the right values on screen proves the whole chain: signature verification
+  against the live secret → `stripe.subscriptions.retrieve` (restricted key's Subscriptions
+  permission) → the Supabase upsert → the frontend read. §17.B and §C's Stripe routes are now fully
+  verified in live mode, not just test mode.
 
 ### C. Serverless API routes (`api/`, Vercel functions)
 
@@ -742,6 +760,60 @@ finished first.*
   week at a time) into a banked balance on their account, purely as a voluntary buffer against a
   future missed payment — explicitly **not** "paying the bill early," and copy must make that
   distinction clear so it doesn't read as a coerced prepayment.
+  - **Resolved decision (2026-07-27): paid-plan users only, never trial users.** The eligibility
+    gate this needs already exists — it's exactly `getEntitlement()`'s `state === "active"` branch
+    (`src/lib/subscription.js:40-47`, the `isLiveSubscription` check), which is only true for a
+    real Stripe status (`active`, or `past_due`/`canceled` while still `withinPaidPeriod`) — as
+    opposed to `"trial"`/`"grace"`/`"none"`, which are the app-managed trial states with no real
+    Stripe subscription behind them. No new "has this user paid" concept needs inventing; reuse
+    the same check `ProfilePanel.jsx`'s `AccountDetail` already uses to decide Manage-Subscription
+    vs. Monthly/Annual buttons (`ProfilePanel.jsx:287`, `:374`). Must be enforced **server-side**
+    in the checkout route too, not just hidden in the UI — look up the row and reject with 403 if
+    `entitlement.state !== "active"` before creating any top-off Checkout Session.
+  - **Stripe side is a one-time payment, not a subscription change** — `mode: "payment"` (not
+    `"subscription"`) against a new one-time Price (e.g. "7-day buffer"), same
+    `stripe.checkout.sessions.create` call already used in `stripe-create-checkout.js`/
+    `stripe-revive-checkout.js`. Needs new price-id env vars following the existing per-mode
+    naming (`STRIPE_PRICE_TOPOFF_WEEK` / `_TEST`, same pattern as `_stripeClient.js`'s
+    `PRICE_ID_BY_PLAN`).
+  - **Vercel Hobby 12-function cap — this is the tight part.** `api/` currently has **11**
+    non-`_`-prefixed routes (verified 2026-07-27:
+    `admin-beta-report, admin-changelog, coach, cron-subscription-lifecycle, delete-account,
+    revival-lookup, seed, stripe-create-checkout, stripe-portal, stripe-revive-checkout,
+    stripe-webhook`). A new `api/stripe-topoff-checkout.js` file would land exactly on the 12-slot
+    ceiling with zero headroom left for anything else ever again. Given CLAUDE.md already flags
+    the three `stripe-*.js` checkout-creation routes as "the next most mergeable group," the
+    better move is extending `stripe-create-checkout.js` itself to accept a `topoff` plan value
+    (branching to `mode: "payment"` instead of `"subscription"` when it sees one) rather than
+    adding a fourth file — keeps the count at 11 instead of maxing it out.
+  - **Webhook handler already branches on `session.mode`** (`stripe-webhook.js:137`:
+    `if (userId && session.mode === "subscription" && ...)`), so a top-off purchase (`mode:
+    "payment"`) falls through that check today and is silently ignored — the fix is a sibling
+    `else if (session.mode === "payment" && session.metadata?.topoff)` branch that credits the
+    banked-days column instead of touching `subscription_status`/`plan`. The existing
+    `stripe_webhook_events` idempotency claim (migration `018`) already covers this new branch for
+    free — no new idempotency work needed.
+  - **The actual hard part — extending entitlement, not the Stripe plumbing.** The cleanest fit
+    found: `getEntitlement()`'s existing `withinPaidPeriod` check
+    (`src/lib/subscription.js:40`) already extends access past `current_period_end` for
+    `past_due`/`canceled`; a banked-days balance could plug into that exact line as
+    `currentPeriodEndMs + bankedDaysBalance * DAY_MS` rather than inventing a parallel mechanism.
+    **Open product question, not yet resolved:** does the balance decrement day-by-day as it's
+    actually consumed during a lapse (so partial use leaves a remainder for next time), or does
+    triggering the buffer at all consume the whole purchased block? This needs a decision before
+    writing the migration — `subscription.test.js`'s boundary tests and `_lifecycleEngine.js`'s
+    dunning-reset logic (`api/_lifecycleEngine.js:57-62`) both need to agree on which model before
+    either can be safely changed.
+  - **New column needed** — e.g. `banked_days_balance int not null default 0` on `user_data`.
+    Verify the actual next migration number against the `database/migrations/` folder before
+    filing it — CLAUDE.md's own running counter for this has already gone stale four times.
+  - **Admin visibility follow-on** — per the established convention (TODO.md §F "Admin
+    visibility" bullet), the Live State Inspector and DB Row Viewer drift check both gained a
+    field every time new subscription state was added; a banked-days balance should get the same
+    treatment rather than being invisible to the one diagnostic surface that catches drift.
+  - **Drift-app-warden note:** this touches the Account panel, persistence, and entitlements
+    spines — all mapped sections per `CLAUDE.md`. Consult `docs/drift-app-warden.md` before
+    building and update it in the same PR, per the doc's own mandatory-check rule.
 
 ---
 
@@ -4484,3 +4556,243 @@ headless-login driver script.*
 - [ ] **Test account should have Job Loss Mode data seeded** (or get it seeded once logged in) so a
   session can actually drive the §15.H15/H16 screens this hook was built to unblock testing for —
   worth doing as part of the same setup pass, not a separate task.
+
+---
+
+## 41. Terms of Service / Privacy Policy Consent Capture
+
+*Built 2026-07-26, scoped from a discussion about data encryption and an "industry standard"
+consent gate before signup. The mechanism is real and live for new signups; the legal content it
+records agreement to is not — see `constants/legalDocuments.js`'s header comment, which is the
+authoritative pointer for what's still outstanding. Ties into §27 (Data Encryption): that section's
+own conclusion stands — no field-level encryption is needed today because nothing currently
+collected is regulated/high-sensitivity data, and this workstream doesn't change that.*
+
+**What's live:**
+- `database/migrations/033_add_consent_records.sql` — `consent_records` table (`user_id`,
+  `policy_version`, `consented_at`). Append-only by design: RLS has no UPDATE/DELETE policy for any
+  client role, and a `BEFORE INSERT` trigger forces `consented_at` to the database's own clock
+  regardless of what the client sends, so a modified client can't backdate a consent record.
+- `LoginScreen.jsx` — a required checkbox ("I have read and agree to the Terms of Service and
+  Privacy Policy") gates **both** signup paths: the email/password form and the "Continue with
+  Google" OAuth button on the Create Account tab. Rejecting either without the box checked shows an
+  inline error and never calls `signUp`/`signInWithOAuth`. The two link spans open
+  `LegalDocumentModal` (reused from the changelog feature's `ChangelogBody` markdown renderer —
+  same token-styled treatment, one renderer for both features' content).
+- Consent recording: email/password path calls `recordConsent` directly (the handler already has
+  the new user's id in hand). The OAuth path can't do this synchronously — clicking "Continue with
+  Google" navigates the whole page away — so it hands the agreed-to version across the redirect via
+  `sessionStorage` (`LoginScreen.jsx`'s `PENDING_CONSENT_STORAGE_KEY`), which `App.jsx`'s
+  `SIGNED_IN` handler reads and clears once the session is confirmed.
+- `src/lib/db.js` — `recordConsent`/`fetchLatestConsent`. Direct client calls (not routed through a
+  service-role API route like the changelog admin writes) — safe because RLS restricts every
+  operation to the caller's own `user_id` and the DB trigger owns the timestamp, so a malicious
+  client can only ever write a truthful "I agreed" row for itself.
+
+**What's built but dormant:**
+- `App.jsx` + `ConsentGateModal.jsx` — a non-dismissible re-consent interstitial for *existing*
+  accounts, shown when the signed-in user's latest `consent_records` row doesn't match
+  `CURRENT_LEGAL_VERSION`. Only "Agree and Continue" (checkbox-gated) or "Sign out instead" — no
+  backdrop-click or ✕ close, matching the "give a real exit, never trap the user" posture
+  `ProfilePanel`'s delete-confirm dialog already follows.
+- Gated behind `constants/legalDocuments.js`'s `ENFORCE_EXISTING_USER_RECONSENT` (currently
+  `false`) — deliberately **not** wired live yet. Flipping it before real text ships would interrupt
+  every current user's next login with a mandatory agree-to-continue gate over placeholder copy.
+  New-signup consent is unaffected by this flag; it's always required regardless, since it only
+  affects brand-new accounts rather than surprising existing ones.
+
+- [ ] **Replace the placeholder legal text.** `constants/legalDocuments.js`'s
+  `TERMS_OF_SERVICE_MARKDOWN`/`PRIVACY_POLICY_MARKDOWN` are structural scaffolding only — every
+  section is marked `[PLACEHOLDER]` inline specifically so nobody mistakes a screenshot or a quick
+  read for the real thing. Needs lawyer-reviewed text before this should be treated as a real
+  compliance record, not just working code.
+- [ ] **Bump `CURRENT_LEGAL_VERSION`** once the real text lands (any string works — it's only ever
+  compared for equality, never parsed) — this alone re-gates brand-new signups against the real
+  text but does **not** retroactively affect existing accounts.
+- [ ] **Flip `ENFORCE_EXISTING_USER_RECONSENT` to `true`** in the same change (or a deliberate
+  follow-up) once the real text is live, so accounts created before it shipped are prompted to
+  (re-)agree on their next login via `ConsentGateModal`.
+- [ ] **Consider whether Terms of Service and Privacy Policy should version independently.** Today
+  both documents share one `CURRENT_LEGAL_VERSION` — simplest possible shape for a first cut, but a
+  real ToS/Policy pair often update on different schedules (e.g. a new payment processor vs. a data
+  retention change). Revisit only if that mismatch actually becomes a problem — don't build
+  independent versioning speculatively.
+- [ ] **`docs/drift-app-warden.md` T7/T8 (Auth/Login) coverage** — this workstream touches
+  `LoginScreen.jsx` and `App.jsx`'s `SIGNED_IN` handler, both mapped surfaces; no drift-map entry
+  was added for it in this pass — worth a look next time either section gets a surgical pass.
+## 42. Lint Audit — 41 errors + 12 warnings (technical debt snapshot 2026-07-25)
+
+*Baseline established 2026-07-25. All 1,231 tests pass; lint is pre-existing and non-blocking. Not
+a critical bug — linting errors don't prevent the app from running or tests from passing. But
+tracking here to prevent regression, consolidate cleanup work, and provide a priority guide for
+opportunistic fixes when touching these files.*
+
+**Current state:** `npm run lint` exits with code 1 on 41 errors (mostly unused imports/variables)
++ 12 warnings (React hooks, unused directives). See `src/` section below for per-file breakdown.
+Categorized by impact for triage.
+
+### A. Critical — must fix before deploying or accepting new PRs in these files
+
+These affect correctness or performance and can cause subtle bugs:
+
+#### 1. **Test setup broken — missing vitest global (`vi`)**
+   - File: `src/test/components/panels.test.jsx`
+   - Lines: 7–10
+   - Issue: `vi` is not defined (5 references)
+   - Impact: Test file likely cannot run; this is a vitest configuration or import issue
+   - Fix: Either import `{ vi } from 'vitest'` at top of file or ensure vitest's `globals: true`
+     is set in `vitest.config.js`
+   - Status: ⚠️ Highest priority — blocks tests from running
+
+#### 2. **React Compiler memoization skipped (`JobLossBudgetPanel.jsx:102`)**
+   - File: `src/components/JobLossBudgetPanel.jsx`
+   - Lines: 102–122
+   - Issue: React Compiler rejected manual memoization on `useMemo` block (3-variable `upcomingBills`)
+   - Impact: Memoization optimization was skipped; component may re-render unnecessarily
+   - Cause: Compiler failed to preserve the memoization due to the complexity of the callback
+   - Fix: Simplify the memoization callback or split into smaller memoized helpers
+   - Estimated effort: Medium
+
+#### 3. **Ref accessed during render (`SetupWizard.jsx:2556`)**
+   - File: `src/components/SetupWizard.jsx`
+   - Line: 2556
+   - Issue: `originalConfigRef.current` read during component render (only safe in effects/handlers)
+   - Impact: Component may not update as expected; ref access violates React invariants
+   - Fix: Move ref access outside render; pass ref value or derived state as prop instead
+   - Estimated effort: Medium
+
+#### 4. **setState called directly in effect — cascading renders (LoginScreen.jsx:40 + 138)**
+   - File: `src/components/LoginScreen.jsx`
+   - Lines: 40, 138
+   - Issue: `setCur()` called directly within `useEffect()` body (2 separate effects)
+   - Impact: Triggers cascading renders on every mount/mode change; performance issue
+   - Fix: Restructure to avoid setState in effect; use a layout effect or move logic to event handler
+   - Estimated effort: Medium
+
+#### 5. **React purity violation — `Date.now()` in render (`HomePanel.jsx:476`)**
+   - File: `src/components/HomePanel.jsx`
+   - Line: 476
+   - Issue: `Date.now()` (impure function) called inside render phase when creating new goal ID
+   - Impact: Produces different values on every render; component not idempotent
+   - Fix: Move `Date.now()` call into event handler (`handleAddGoal`) instead of inline in JSX
+   - Estimated effort: Low (simple move)
+
+### B. High Priority — affects rendering or hook behavior; should fix when touching these files
+
+React Hook dependency issues + unused imports in critical paths:
+
+#### 6. **Missing hook dependency (`App.jsx:993`)**
+   - File: `src/components/App.jsx`
+   - Line: 993
+   - Issue: `useMemo` missing `entitlement` in dependency array
+   - Impact: Memoized value could be stale; entitlement changes may not trigger recalculation
+   - Fix: Add `entitlement` to deps array or confirm it's intentionally omitted
+
+#### 7. **Unnecessary hook dependency (`App.jsx:1126`)**
+   - File: `src/components/App.jsx`
+   - Line: 1126
+   - Issue: `effectiveToday` listed but doesn't affect memo output
+   - Impact: Unnecessary re-memoization on every date change (minor)
+   - Fix: Remove `effectiveToday` from deps array
+
+#### 8. **Missing hook dependencies (`LoginScreen.jsx:44`)**
+   - File: `src/components/LoginScreen.jsx`
+   - Line: 44
+   - Issue: `useEffect` missing `cur.key` and `cur.node` dependencies
+   - Impact: Stale closure; could reference old state values
+   - Fix: Add both to dependency array or restructure effect
+
+#### 9. **Missing hook dependencies (`WeekConfirmModal.jsx:229`)**
+   - File: `src/components/WeekConfirmModal.jsx`
+   - Line: 229
+   - Issue: `useEffect` missing `otDays` and `requiredOtCount`
+   - Impact: Effect may not re-run when these values change
+   - Fix: Add to dependency array
+
+#### 10. **Conditional logic in memo deps (`ReemploymentTracker.jsx:97`)**
+   - File: `src/components/ReemploymentTracker.jsx`
+   - Line: 97
+   - Issue: The `apps` conditional could change on every render, breaking memo deps
+   - Impact: `useMemo` at line 117 loses cache on every render
+   - Fix: Wrap `apps` initialization in its own `useMemo()` before using as a dependency
+
+#### 11–14. **Unused imports in component files (low impact, easy fix)**
+   - `App.jsx:4, 6` — `getPayPeriodEndDate`, `formatFiscalWeekLabel` (2 imports)
+   - `BudgetPanel.jsx:5, 6` — `applyMonthEditForward`, `roundToQuarter`, `toMonthlyCost`, 
+     `fromMonthlyCost`, `formatFiscalWeekLabel` (5 imports)
+   - `HomePanel.jsx:9` — `formatFiscalWeekLabel` (1 import)
+   - `IncomePanel.jsx` — (no unused imports, only `isWeekly` variable)
+   - `LogPanel.jsx:5` — `formatFiscalWeekLabel` (1 import)
+   - `LoginScreen.jsx:28` — `useRef` (1 import)
+   - **Impact:** Bloats bundle; clutters code. Non-functional but sloppy.
+   - **Fix:** Delete the unused import lines. Safe; linting will confirm they're truly unused.
+
+### C. Medium Priority — cleanup, low runtime impact
+
+Dead code that should be removed but doesn't break anything:
+
+#### Unused variables (simple deletions)
+| File | Line | Variable | Type | Note |
+|------|------|----------|------|------|
+| `App.jsx` | 286 | `investorProfile` | assigned, never used | Delete assignment or use it |
+| `BudgetPanel.jsx` | 135 | `pendingDelete` | assigned, never used | Likely dead from refactor |
+| `BudgetPanel.jsx` | 268 | `shortMonth` | assigned, never used | Month formatting, no longer needed? |
+| `BudgetPanel.jsx` | 613, 757, 915 | `saveEditExp`, `deleteExp`, `executeUndo` | assigned, never used | Dead handlers from old UI |
+| `BudgetPanel.jsx` | 2181 | `fy` | assigned, never used | Fiscal year calc, unused |
+| `HomePanel.jsx` | 95 | `projectedWeeklyLeft` | assigned, never used | Goal projection, unused |
+| `HomePanel.jsx` | 141 | `weeksLeftCount` | assigned, never used | Same as above |
+| `IncomePanel.jsx` | 77 | `isWeekly` | assigned, never used | Pay period classification, unused |
+| `JobLossEntry.jsx` | 218 | `totalSteps` | assigned, never used | Step counter, unused |
+| `ProfilePanel.jsx` | 2084 | `isBaseUser` | assigned, never used | Employer type check, unused |
+| `SetupWizard.jsx` | 1565 | `isBaseUser` | assigned, never used | Same as above |
+| `expense.js` | 133, 136, 153 | `_cpm` (3 refs) | destructured, never used | Cost-per-mille calc, unused |
+| `finance.js` | 287 | `dhlTotalWeekendHours` | assigned, never used | DHL payroll calc, unused |
+| `fiscalWeek.js` | 115 | `checksPerYear` | assigned, never used | Pay frequency calc, unused |
+
+**Fix strategy:** Delete these in a single "cleanup" commit per file. Safe because they're truly
+unused (linting confirms it). Group by file to minimize PR review overhead:
+- [ ] App.jsx — 3 removals
+- [ ] BudgetPanel.jsx — 8 removals
+- [ ] HomePanel.jsx — 2 removals
+- [ ] IncomePanel.jsx — 1 removal
+- [ ] JobLossEntry.jsx — 1 removal
+- [ ] ProfilePanel.jsx — 1 removal
+- [ ] SetupWizard.jsx — 1 removal
+- [ ] finance.js — 1 removal
+- [ ] fiscalWeek.js — 1 removal
+- [ ] expense.js — 3 removals (same variable `_cpm` in different functions)
+
+### D. Low Priority — stale directives (cleanup only)
+
+Unused eslint-disable comments (no actual violation, just the suppression is obsolete):
+
+| File | Line | Directive | Status |
+|------|------|-----------|--------|
+| `App.jsx` | 558, 639, 1102 | `// eslint-disable-next-line react-hooks/set-state-in-effect` | No violation found; directive can be removed |
+| `App.jsx` | 656 | `// eslint-disable-next-line react-hooks/exhaustive-deps` | No violation found; directive can be removed |
+| `LoginScreen.jsx` | 40 | **ACTIVE** (not stale) | setState in effect IS happening here; directive is needed but rule should be fixed instead (see §A.4) |
+| `db.js` | 302 | `// eslint-disable-next-line no-console` | No violation found; directive can be removed |
+
+**Fix:** Delete the unused directives (not the rules they were suppressing—those don't exist).
+
+---
+
+### Summary & Regression Prevention
+
+**Test status:** ✅ All 1,231 tests pass (no regression). This lint audit is *not* a blocker for
+shipping or merging.
+
+**Recommended workflow:**
+1. **Fix §A (critical) immediately** if touching those components (test runner, SetupWizard, 
+   LoginScreen, HomePanel). These could cause bugs.
+2. **Fix §B (high) opportunistically** when landing refactors in those files (App.jsx, various
+   panels, hooks).
+3. **Fix §C (medium) in bulk** as a standalone "cleanup" PR when lint debt is prioritized (low
+   urgency; can wait weeks).
+4. **§D (directives)** delete when you're already in those files; don't land a PR just for this.
+
+**To prevent regressions:**
+- Before merging any PR, run `npm run lint` and reject new violations (or explicitly accept them
+  with a documented reason in the commit message).
+- Mark this section as "resolved" when the error count drops to ≤5 (acceptable technical debt).
+- Re-run this audit quarterly (or after major refactors) to track progress and catch new drift.

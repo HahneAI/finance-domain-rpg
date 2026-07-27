@@ -18,11 +18,23 @@
 | PWA | vite-plugin-pwa (manifest + service worker active) |
 | Hosting | Vercel |
 
-**No standalone backend server** — but no longer "pure frontend": `api/` holds 14 Vercel
+**No standalone backend server** — but no longer "pure frontend": `api/` holds 11 Vercel
 serverless functions (Stripe checkout/webhook/portal/revive, Coach streaming proxy, daily
-subscription-lifecycle cron + email engine, delete-account, revival-lookup, trial/investor
-seeding). All privileged writes (tier flags, subscription columns) go through these
-service-role routes — the client never writes them (RLS migration 019).
+subscription-lifecycle cron + email engine, delete-account, revival-lookup, admin-changelog for
+the "What's New" authoring surface, plus `api/seed.js` — a single route dispatched on
+`body.type` ("beta" | "investor" | "trial") that consolidates what used to be three separate
+seed-beta/seed-investor/seed-trial functions). All privileged writes (tier flags, subscription
+columns, changelog entries) go through these service-role routes — the client never writes them
+(RLS migration 019).
+
+**Vercel Hobby-plan function cap:** a deployment can include **at most 12 Serverless Functions**
+(one per non-`_`-prefixed file in `api/`) on the free Hobby plan — exceeding it fails the build
+outright ("No more than 12 Serverless Functions can be added to a Deployment on the Hobby plan").
+This repo hit 13 once (adding `admin-changelog.js` tipped it over) and was brought back under the
+cap by merging seed-beta/seed-investor/seed-trial into the one `api/seed.js` above — same fix to
+reach for again if a future route addition trips this same failure, rather than assuming it's a
+rate limit or a real Vercel outage. Consolidation candidates if it happens again: the three
+`stripe-*.js` routes are the next most mergeable group (same shape, different Stripe action).
 
 ---
 
@@ -38,6 +50,7 @@ src/
 │   ├── BudgetPanel.jsx      — expenses / goals / loans
 │   ├── LogPanel.jsx         — event log + Log Effect Summary
 │   ├── WeekConfirmModal.jsx — weekly schedule confirmation
+│   ├── TipsCommissionCheckIn.jsx — small daily check-in card (tips/commission opt-in, skinned bonus-log mechanism)
 │   ├── SetupWizard.jsx      — multi-step onboarding (see §SetupWizard below)
 │   ├── LoginScreen.jsx      — auth shell
 │   └── ProfilePanel.jsx     — account + employment settings
@@ -73,7 +86,7 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 |---------|-------|-------------------|
 | 0 | Welcome | First-run: "Are you currently unemployed?" seed (§15.H) + intro; re-entry: life event picker or structure_change overview |
 | 10/11/12 | Jobless mini-flow | First-run + unemployed only: unemployment benefits → job-loss details → wrap up; skips steps 1–4 and 7 entirely |
-| 1 | Pay Structure | DHL employer gate → team/shift/rotation; base rate, OT threshold/multiplier, weekend diff, commission |
+| 1 | Pay Structure | DHL employer gate → team/shift/rotation; base rate, OT threshold/multiplier, weekend diff, commission; tips/commission daily check-in opt-in (No/Tips/Commission + commission-only follow-up, inert today) |
 | 2 | Schedule | Job start date → `firstActiveIdx` (via `dateToWeekIdx`); rotation week (DHL) or hours + pay period close day + biweekly parity |
 | 3 | Deductions | BenefitCard toggles (BENEFIT_OPTIONS), `otherDeductions` rows, attendance gate; `skippable: true` |
 | 4 | Tax Rates | State select, inline `PaystubCalc`, rate summary with FICA + std deduction; DHL MO preset |
@@ -81,7 +94,7 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 
 **Life event routing:** `lost_job` / `commission_job` → steps 0–4, **no WrapUp** (WrapUp-only fields must default in `handleComplete`); `null`(employed) / `"changed_jobs"` / `"structure_change"` → all steps including WrapUp (7); `null` + unemployed → steps 0, 10–12 only.
 
-**Internal helpers (file-private):** `Pill`, `Field`, `FieldRow`, `errBorder`, `BenefitCard`, `PaystubCalc`, `StepWrapUp`, `StructureChangeDiff`, `StepJobless*`, `dateToWeekIdx`, `isFirstRunJobless`.
+**Internal helpers (file-private):** `Pill`, `Field`, `FieldRow`, `errBorder`, `BenefitCard`, `PaystubCalc`, `StepWrapUp`, `StructureChangeDiff`, `StepJobless*`, `isFirstRunJobless`. (`dateToWeekIdx` was promoted to a shared `lib/fiscalWeek.js` export — App.jsx needs the same calendar-date → fiscal-week-idx conversion to tag Tips/Commission daily check-in log entries.)
 
 **State:** `formData` is flat; `update(patch)` merges via `setFormData(prev => ({ ...prev, ...patch }))`. `attempted` bool set on failed Next — triggers red borders/labels + shake; resets on step change.
 
@@ -251,11 +264,14 @@ make them impossible to mistake for a pending migration. Latest bookmark:
 `022_BOOKMARK_schema_snapshot_2026-07-10.sql` (schema state through migration 021).
 Real migrations continue past it: 023 (coach_chats), 024 (user_data write-permission fix),
 025–030 (beta program — `beta_code_used`, `beta_started_at`, `beta_codes`,
-`beta_halfway_email_sent_at`, `beta_activity_events` + its `feedback` event type) exist —
-**the next real migration is 031.** Verify against the folder before numbering; this note
-has now gone stale twice (drift-app-warden §14, and again across the beta-program migrations
-until this fix — a fresh BOOKMARK compiling schema state through 030 is now overdue; the
-existing `022` snapshot is stale for the same reason).
+`beta_halfway_email_sent_at`, `beta_activity_events` + its `feedback` event type), 031
+(beta_activity_events eligibility trigger), 032 (`changelog_entries` — the admin-managed
+"What's New" table, `api/admin-changelog.js`), 033 (`consent_records` — Terms of Service /
+Privacy Policy consent capture, append-only, `LoginScreen.jsx`'s signup gate) exist —
+**the next real migration is 034.** Verify against the folder before numbering; this note
+has now gone stale four times (drift-app-warden §14, again across the beta-program migrations,
+again across 031/032, and again across 033 — a fresh BOOKMARK compiling schema state through
+033 is now overdue; the existing `022` snapshot is stale for the same reason).
 
 ---
 

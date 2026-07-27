@@ -5,6 +5,17 @@ One-liner per item — see git history for full implementation detail.*
 
 ---
 
+## §17 — Tips / Commission Daily Check-In (2026-07-27)
+
+- [x] **Setup Wizard opt-in** — Step 1 "Do you earn tips or commission?" (No/Tips/Commission), with a commission-only follow-up question captured for future use only (no income-math effect yet)
+- [x] **Daily check-in card** — Small, dismissible, non-full-screen card (`TipsCommissionCheckIn.jsx`), weekday/date-aware ("yesterday" vs. "Wednesday, the 8th"), noon-eligibility gate mirroring the DHL Monday-6am pattern
+- [x] **Backward-walking backlog queue** — Newest-unresolved-first, 10-day cutoff, same-sitting chaining after each answer or skip (session-only skip state, not persisted)
+- [x] **`tips_commission` event type** — New `EVENT_TYPES` entry + `calcEventImpact` branch mirroring `bonus`; reuses all existing tax/401(k) math
+- [x] **Log Panel dropdown** — New collapsible "Tips/Commission Log" section above the entry list, gated on at least one real logged day; tips-only "If you claim all tips" running extra-tax-owed total (`grossGained - netGained` per entry)
+- [x] **`dateToWeekIdx` promoted** — Moved from a SetupWizard-local helper to a shared `lib/fiscalWeek.js` export so App.jsx can tag daily entries with the correct fiscal week
+
+---
+
 ## §16 — Priority Sprint close-out (2026-07-06)
 
 *Final four items — section closed and removed from TODO.md.*

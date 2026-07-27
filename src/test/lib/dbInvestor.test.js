@@ -80,12 +80,13 @@ describe('createInvestorAccount', () => {
     expect(payload.is_investor).toBeUndefined()
     expect(payload.config).toMatchObject({ isInvestor: true, investorName: 'Ada', setupComplete: false })
     expect(opts).toEqual({ onConflict: 'user_id' })
-    // is_investor itself is granted via the service-role seed-investor route,
-    // not the client upsert above (migration 019 revokes that column grant).
-    expect(fetch).toHaveBeenCalledWith('/api/seed-investor', expect.objectContaining({
+    // is_investor itself is granted via the service-role seed route (type:
+    // "investor"), not the client upsert above (migration 019 revokes that
+    // column grant).
+    expect(fetch).toHaveBeenCalledWith('/api/seed', expect.objectContaining({
       method: 'POST',
       headers: expect.objectContaining({ Authorization: 'Bearer t' }),
-      body: JSON.stringify({ code: 'alpha' }),
+      body: JSON.stringify({ type: 'investor', code: 'alpha' }),
     }))
   })
 

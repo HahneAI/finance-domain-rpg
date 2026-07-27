@@ -21,7 +21,7 @@ import { ReviveScreen } from "./components/ReviveScreen.jsx";
 import { TrialExplainerScreen } from "./components/TrialExplainerScreen.jsx";
 import { InvestorRegister } from "./components/InvestorRegister.jsx";
 import { DemoAccountTree } from "./components/DemoAccountTree.jsx";
-import { ProfilePanel } from "./components/ProfilePanel.jsx";
+import { ProfilePanel, BetaFeedbackDetail } from "./components/ProfilePanel.jsx";
 import { UpgradeModal } from "./components/UpgradeModal.jsx";
 import { UpgradePanel } from "./components/UpgradePanel.jsx";
 import { TrialBanner } from "./components/TrialBanner.jsx";
@@ -30,7 +30,7 @@ import { ChangelogModal } from "./components/ChangelogModal.jsx";
 import { ConsentGateModal } from "./components/ConsentGateModal.jsx";
 import { SaveFailedBanner } from "./components/SaveFailedBanner.jsx";
 import { LiquidGlass } from "./components/LiquidGlass.jsx";
-import { Pressable, FoldSwitch } from "./components/ui.jsx";
+import { Pressable, FoldSwitch, useFoldTransition } from "./components/ui.jsx";
 import { LifeEventMenu } from "./components/LifeEventMenu.jsx";
 import { JobLossEntry } from "./components/JobLossEntry.jsx";
 import { RateUpdateModal } from "./components/RateUpdateModal.jsx";
@@ -333,6 +333,10 @@ export default function App() {
   // itself does until setupComplete flips true.
   const [trialExplainerAcknowledged, setTrialExplainerAcknowledged] = useState(false);
   const [lifeEventMenu, setLifeEventMenu] = useState(false);
+  // Mobile-drawer-only entry point for BetaFeedbackDetail (Account panel keeps
+  // its own copy via ProfilePanel's sub-view router) — tracked beta testers only.
+  const [drawerFeedbackOpen, setDrawerFeedbackOpen] = useState(false);
+  const drawerFeedbackFold = useFoldTransition(drawerFeedbackOpen, { ms: 340 });
   const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
   const [rateUpdateOpen, setRateUpdateOpen] = useState(false);
   // TODO §15 mode rebuild — the benefit-scenario toggle (unlike cash on hand,
@@ -2592,6 +2596,22 @@ export default function App() {
             >
               Life Events
             </Pressable>
+            {isTrackedBetaTester({ isTester, betaCodeUsed }) && (
+              <Pressable
+                onClick={() => { setDrawerFeedbackOpen(true); setDrawerOpen(false); }}
+                style={{
+                  display: "block", width: "100%", textAlign: "left",
+                  padding: "14px 20px", fontSize: "11px",
+                  letterSpacing: "2px", textTransform: "uppercase",
+                  background: "transparent",
+                  color: "var(--color-text-primary)",
+                  borderLeft: "3px solid transparent",
+                  border: "none", cursor: "pointer", transition: "all 0.15s",
+                }}
+              >
+                Send Feedback
+              </Pressable>
+            )}
             {!isStandalone && (
               <Pressable
                 type="button"
@@ -3317,6 +3337,42 @@ export default function App() {
           else setWizardEntry(route);
         }}
       />
+      {/* ── Mobile-drawer Send Feedback modal ── reuses BetaFeedbackDetail as-is;
+          its own BackBar (backLabel="Close") is the modal's only header, so no
+          separate header/close-X wrapper is added on top of it. Same
+          backdrop/card shell as LifeEventMenu for visual consistency. */}
+      {drawerFeedbackFold.mounted && (
+        <div
+          className="fold-backdrop" data-fold={drawerFeedbackFold.fold}
+          onClick={() => setDrawerFeedbackOpen(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 70,
+            background: "rgba(0,0,0,0.78)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            className="fold-modal" data-fold={drawerFeedbackFold.fold}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border-subtle)",
+              borderRadius: "14px",
+              width: "100%", maxWidth: "440px",
+              maxHeight: "90vh", overflowY: "auto",
+              padding: "18px 20px",
+            }}
+          >
+            <BetaFeedbackDetail
+              isTester={isTester}
+              betaCodeUsed={betaCodeUsed}
+              backLabel="Close"
+              onBack={() => setDrawerFeedbackOpen(false)}
+            />
+          </div>
+        </div>
+      )}
       {/* ── Job Loss Mode entry (TODO §15.C1) ── */}
       <JobLossEntry
         open={jobLossEntryOpen}

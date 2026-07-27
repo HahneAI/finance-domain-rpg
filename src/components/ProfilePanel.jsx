@@ -35,7 +35,7 @@ function fmt(dateStr) {
 // ── Shared layout atoms ─────────────────────────────────────────────────────
 
 // Back nav header used by all sub-views
-function BackBar({ onBack, title }) {
+function BackBar({ onBack, title, backLabel = "Profile" }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
       <Pressable
@@ -43,7 +43,7 @@ function BackBar({ onBack, title }) {
         style={{ background: "transparent", border: "none", color: "var(--color-teal)", cursor: "pointer", fontSize: "13px", padding: "4px 0", display: "flex", alignItems: "center", gap: "5px" }}
       >
         <span style={{ fontSize: "16px", lineHeight: 1 }}>‹</span>
-        <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>Profile</span>
+        <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>{backLabel}</span>
       </Pressable>
       <div style={{ flex: 1, fontSize: "13px", fontWeight: "bold", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>
         {title}
@@ -2006,7 +2006,12 @@ function BetaRedeemDetail({ onBack }) {
 // ("specificity"), which a mailto link can never supply — this logs the
 // actual text via logBetaFeedback (migration 030_add_beta_feedback.sql)
 // instead of handing it off to the user's mail client.
-function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack }) {
+// Exported so App.jsx can reuse it directly for the mobile-drawer entry
+// point — same component, two launch sites (Account panel's sub-view router,
+// and a standalone modal from the drawer). `backLabel` lets each site's
+// BackBar say the right thing ("Profile" inside the Account flow, "Close"
+// when launched as a standalone drawer modal with nothing to navigate back to).
+export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }) {
   const [note, setNote] = useState("");
   const [status, setStatus] = useState({ loading: false, error: null, success: false });
 
@@ -2024,7 +2029,7 @@ function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack }) {
 
   return (
     <>
-      <BackBar onBack={onBack} title="Send Feedback" />
+      <BackBar onBack={onBack} title="Send Feedback" backLabel={backLabel} />
       <DetailCard>
         <div style={{ padding: "13px 16px" }}>
           {status.success ? (

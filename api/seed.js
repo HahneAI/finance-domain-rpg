@@ -66,29 +66,50 @@ export default async function handler(req, res) {
 }
 
 // ── beta (was seed-beta.js) — docs/TODO.md §32 ──────────────────────────────
+// Single-use as of the batch-code rollout: each row in beta_codes is consumed
+// (is_active flipped false) on its first successful redemption, reusing the
+// existing "is_active" flag rather than adding a new column — a spent code
+// fails the exact same "Invalid or inactive beta code" check an admin-
+// retired code already did, so no new error surface was needed.
 async function seedBeta(req, res, adminClient, userId) {
   const code = typeof req.body?.code === "string" ? req.body.code.trim().toLowerCase() : "";
   if (!code) return res.status(400).json({ error: "Missing beta code" });
 
-  // Case-insensitive match: `code` is already lowercased above, but the
-  // stored beta_codes.code value isn't guaranteed to be — this table is
-  // dashboard-managed (migration 028's own comment), so nothing enforces
-  // lowercase on entry there. ilike (with no wildcard chars in `code`, since
-  // codes are plain letters/digits/hyphens) is an exact case-insensitive
-  // match, not a partial one.
-  const { data: codeRow, error: codeError } = await adminClient
+  // Claim (consume) the code FIRST, atomically, rather than check-then-write:
+  // this UPDATE only touches a row that is currently active, and only ONE
+  // concurrent request for the same code can ever find a matching row —
+  // Postgres serializes concurrent UPDATEs against the same row, so whichever
+  // commits second re-evaluates the WHERE clause against the now-inactive row
+  // and matches nothing. Same race-closing shape as the 40-seat cap trigger
+  // (034_beta_seat_cap.sql), just expressed as an atomic UPDATE...WHERE
+  // instead of a trigger, since this only needs to guard one row at a time
+  // rather than count across the whole table.
+  const { data: claimedCode, error: claimError } = await adminClient
     .from("beta_codes")
-    .select("id")
+    .update({ is_active: false })
     .ilike("code", code)
     .eq("is_active", true)
+    .select("id")
     .maybeSingle();
-  if (codeError || !codeRow) return res.status(403).json({ error: "Invalid or inactive beta code" });
+  if (claimError || !claimedCode) return res.status(403).json({ error: "Invalid or inactive beta code" });
 
   const { error: updateError } = await adminClient
     .from("user_data")
     .update({ is_tester: true, beta_code_used: code })
     .eq("user_id", userId);
   if (updateError) {
+    // The code is already consumed at this point — if granting access failed
+    // for any reason (most likely the 40-seat cap), un-consume it rather than
+    // silently burning a seat nobody actually got. Best-effort: if this
+    // reactivation itself fails, log it for manual dashboard cleanup rather
+    // than compounding the error into the response.
+    const { error: reactivateError } = await adminClient
+      .from("beta_codes")
+      .update({ is_active: true })
+      .eq("id", claimedCode.id);
+    if (reactivateError) {
+      console.error(`seed(beta) failed to reactivate code ${code} after a failed grant:`, reactivateError.message);
+    }
     // 40-seat cap (migration 034_beta_seat_cap.sql) — a real, expected outcome
     // once the program fills, not a server failure. The trigger's raised
     // message surfaces here verbatim; match on it so this returns a clean

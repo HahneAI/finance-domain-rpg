@@ -72,6 +72,25 @@ describe("api/seed — shared gate", () => {
   });
 });
 
+// beta_codes now gets claimed via UPDATE...WHERE (single-use consumption),
+// not a read-only SELECT — this mock distinguishes the "claim" call
+// (payload { is_active: false }) from the "reactivate on failure" call
+// (payload { is_active: true }), since seedBeta may issue either or both
+// against the same table in one request.
+function mockBetaCodesTable({ claim, reactivate } = {}) {
+  const claimResult = claim ?? { data: { id: "c1" }, error: null };
+  const reactivateResult = reactivate ?? { error: null };
+  const ilike = vi.fn().mockReturnValue({
+    eq: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue(claimResult) }) }),
+  });
+  const reactivateEq = vi.fn().mockResolvedValue(reactivateResult);
+  return {
+    update: vi.fn((payload) => (payload.is_active === false ? { ilike } : { eq: reactivateEq }) ),
+    __ilike: ilike,
+    __reactivateEq: reactivateEq,
+  };
+}
+
 describe("api/seed — type: beta", () => {
   it("400s on a missing code", async () => {
     const res = mkRes();
@@ -80,24 +99,22 @@ describe("api/seed — type: beta", () => {
   });
 
   it("403s an invalid or inactive code", async () => {
-    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
-    mocks.adminClient.from.mockReturnValue({ select: vi.fn().mockReturnValue({ ilike: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) });
+    mocks.adminClient.from.mockReturnValue(mockBetaCodesTable({ claim: { data: null, error: null } }));
     const res = mkRes();
     await handler(authedReq({ type: "beta", code: "NOPE" }), res);
     expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({ error: "Invalid or inactive beta code" });
   });
 
-  it("grants is_tester + beta_code_used on a valid code", async () => {
-    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: "c1" }, error: null });
+  it("grants is_tester + beta_code_used on a valid code, and consumes it", async () => {
+    const betaCodesTable = mockBetaCodesTable();
     const updateEq = vi.fn().mockResolvedValue({ error: null });
-    mocks.adminClient.from.mockImplementation(table => {
-      if (table === "beta_codes") {
-        return { select: vi.fn().mockReturnValue({ ilike: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) };
-      }
-      return { update: vi.fn().mockReturnValue({ eq: updateEq }) };
-    });
+    mocks.adminClient.from.mockImplementation(table =>
+      table === "beta_codes" ? betaCodesTable : { update: vi.fn().mockReturnValue({ eq: updateEq }) }
+    );
     const res = mkRes();
     await handler(authedReq({ type: "beta", code: "BETA1" }), res);
+    expect(betaCodesTable.update).toHaveBeenCalledWith({ is_active: false });
     expect(updateEq).toHaveBeenCalledWith("user_id", "u1");
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ ok: true });
@@ -106,16 +123,25 @@ describe("api/seed — type: beta", () => {
   // Case-insensitivity — beta_codes is dashboard-managed (migration 028), so
   // a code stored in any case must still match a lowercased URL/form submission.
   it("matches a code regardless of the stored row's case", async () => {
-    const ilike = vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: { id: "c1" }, error: null }) }) });
-    const updateEq = vi.fn().mockResolvedValue({ error: null });
-    mocks.adminClient.from.mockImplementation(table => {
-      if (table === "beta_codes") return { select: vi.fn().mockReturnValue({ ilike }) };
-      return { update: vi.fn().mockReturnValue({ eq: updateEq }) };
-    });
+    const betaCodesTable = mockBetaCodesTable();
+    mocks.adminClient.from.mockImplementation(table =>
+      table === "beta_codes" ? betaCodesTable : { update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }) }
+    );
     const res = mkRes();
     await handler(authedReq({ type: "beta", code: "CLARITY" }), res);
-    expect(ilike).toHaveBeenCalledWith("code", "clarity");
+    expect(betaCodesTable.__ilike).toHaveBeenCalledWith("code", "clarity");
     expect(res.statusCode).toBe(200);
+  });
+
+  // Single-use consumption (2026-07-25) — a code already claimed by someone
+  // else (is_active already false) must fail the exact same way an
+  // admin-retired code does; the atomic claim UPDATE naturally returns no row.
+  it("403s a code that's already been redeemed by someone else", async () => {
+    mocks.adminClient.from.mockReturnValue(mockBetaCodesTable({ claim: { data: null, error: null } }));
+    const res = mkRes();
+    await handler(authedReq({ type: "beta", code: "ALREADY-USED" }), res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({ error: "Invalid or inactive beta code" });
   });
 
   // 40-seat cap (migration 034_beta_seat_cap.sql) — the trigger raises a
@@ -123,37 +149,35 @@ describe("api/seed — type: beta", () => {
   // a clean, distinct "full" message + 403, not the generic 500 every other
   // update failure gets — a program-full response is an expected outcome,
   // not a server bug, and the client (BetaRedeemDetail) shows error.message
-  // verbatim to the user.
-  it("403s with a clean message when the 40-seat cap trigger rejects the write", async () => {
-    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: "c1" }, error: null });
+  // verbatim to the user. The already-consumed code must also be reactivated
+  // so a rejected grant doesn't waste a seat's code.
+  it("403s with a clean message when the 40-seat cap trigger rejects the write, and reactivates the code", async () => {
+    const betaCodesTable = mockBetaCodesTable();
     const updateEq = vi.fn().mockResolvedValue({
       error: { message: "beta program is full — 40 of 40 seats taken" },
     });
-    mocks.adminClient.from.mockImplementation(table => {
-      if (table === "beta_codes") {
-        return { select: vi.fn().mockReturnValue({ ilike: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) };
-      }
-      return { update: vi.fn().mockReturnValue({ eq: updateEq }) };
-    });
+    mocks.adminClient.from.mockImplementation(table =>
+      table === "beta_codes" ? betaCodesTable : { update: vi.fn().mockReturnValue({ eq: updateEq }) }
+    );
     const res = mkRes();
     await handler(authedReq({ type: "beta", code: "BETA1" }), res);
     expect(res.statusCode).toBe(403);
     expect(res.body).toEqual({ error: "The beta program is full" });
+    expect(betaCodesTable.update).toHaveBeenCalledWith({ is_active: true });
+    expect(betaCodesTable.__reactivateEq).toHaveBeenCalledWith("id", "c1");
   });
 
-  it("500s with a generic message on an unrelated update failure", async () => {
-    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: "c1" }, error: null });
+  it("500s with a generic message on an unrelated update failure, and reactivates the code", async () => {
+    const betaCodesTable = mockBetaCodesTable();
     const updateEq = vi.fn().mockResolvedValue({ error: { message: "connection reset" } });
-    mocks.adminClient.from.mockImplementation(table => {
-      if (table === "beta_codes") {
-        return { select: vi.fn().mockReturnValue({ ilike: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ maybeSingle }) }) }) };
-      }
-      return { update: vi.fn().mockReturnValue({ eq: updateEq }) };
-    });
+    mocks.adminClient.from.mockImplementation(table =>
+      table === "beta_codes" ? betaCodesTable : { update: vi.fn().mockReturnValue({ eq: updateEq }) }
+    );
     const res = mkRes();
     await handler(authedReq({ type: "beta", code: "BETA1" }), res);
     expect(res.statusCode).toBe(500);
     expect(res.body).toEqual({ error: "Failed to grant beta access" });
+    expect(betaCodesTable.update).toHaveBeenCalledWith({ is_active: true });
   });
 });
 

@@ -3175,7 +3175,120 @@ regulated/high-sensitivity data — but there's no infrastructure in place if th
 
 ---
 
-## 12. Irregular / Flexible Shift Hours Support
+## 12. Beta Testing Infrastructure & Monitoring — Account Creation, Feedback Flow & Telemetry Validation
+
+*New workstream (2026-07-28), scoped from active beta program (migrations 025–036, `beta_activity_events`,
+`beta_codes` channel pool). Focused on infrastructure and observability to validate that beta testers' actions
+are being tracked correctly and that we have full visibility into user behavior during the 10-week beta window.*
+
+**The goal.** Set up repeatable, automated test infrastructure to:
+1. Create synthetic beta tester accounts with controlled state (different pay structures, tax elections, expenses)
+2. Execute scripted user flows (income logging, expense entry, weekly confirmations, Coach interactions)
+3. Verify that `beta_activity_events` captures the intended granularity of user actions
+4. Validate the feedback channel (`beta_activity_events` with `event_type: 'feedback'`) accepts and stores submissions
+5. Establish baseline metrics (event frequency per action type, latency, storage footprint) for the beta report
+
+**The gap.** Today, beta-tester activity tracking exists (migrations 025–036 are live, `api/admin-beta-report.js`
+generates CSV exports) but there's no synthetic test harness to verify:
+- That new features automatically log `beta_activity_events` when a tester uses them
+- That the feedback channel flow (UI capture → DB insert) is wired end-to-end
+- That per-account window boundaries (`beta_started_at` → +10 weeks) filter correctly in the report
+- That concurrent, overlapping testers' data doesn't leak across accounts
+- What the normal event volume looks like (for quota/cost planning if events grow beyond migrations 025–036)
+
+### A. Test Account Factory
+
+- [ ] **Create `scripts/create-beta-test-account.js`** — a CLI tool that accepts parameters:
+  - Account name (display_name)
+  - Employer preset (`"DHL"` | `"base"`)
+  - Pay structure (hourly rate, OT threshold, commission Y/N)
+  - Tax state + filing status
+  - Goal setup (optional — auto-create 2–3 goals for variety)
+  - Outputs: newly created `user_id`, auth token, test credentials for headless login
+  - Uses the same `seed.js` function paths as the existing `POST /api/seed` (type: "beta") to keep
+    seeding logic in one place
+- [ ] **Optional: Seed multiple account variants** — e.g. "dhl-standard", "base-commission", "no-taxes"
+  so test flows can cover different config branches without re-running the script
+- [ ] **Document the account factory in `docs/beta-testing.md`** — how to invoke it, what state
+  it sets up, how to tear down accounts, any cleanup needed (Supabase RLS considerations)
+
+### B. Scripted User Flow Harness (Headless)
+
+- [ ] **Create `scripts/run-beta-user-flows.js`** — uses Playwright (already in `PLAYWRIGHT_BROWSERS_PATH`)
+  to execute repeatable flows as if a tester were using the app:
+  1. **Login flow** — accept test account email + password, verify auth token
+  2. **Income logging** — use LogPanel to submit 3–5 varied log entries (base pay, bonus, missed shift, PTO)
+  3. **Expense entry** — BudgetPanel: add/edit/delete expenses spanning categories
+  4. **Weekly confirm** — submit 2 confirmed weeks (missed shifts, OT adjustments)
+  5. **Coach interaction** (if access unlocked) — submit an Ask Coach question, verify response streams
+  6. **Feedback submission** — use the feedback channel UI to submit a test comment
+  - **Parametrized by account variant** — takes a config name ("dhl-standard", etc.) and runs the same
+    flow across multiple account types to catch variant-specific bugs
+  - **Logs each action's timestamp and expected `beta_activity_events` row** (server-side) for cross-check
+
+### C. Event Telemetry Validation
+
+- [ ] **Build `scripts/verify-beta-events.js`** — after a flow runs, query the `beta_activity_events` table
+  and verify:
+  - [ ] **Event count matches expected.** Flow submits N log entries → expect N `event_type: 'log'` rows
+  - [ ] **Event types are correct.** Expense add → `event_type: 'expense'` (or check naming convention against
+    `database/migrations/025_add_beta_activity_events.sql`)
+  - [ ] **Timestamps are reasonable.** Events within ±30s of script's action-submission timestamp (catches
+    clock-skew bugs, timezone mismatches)
+  - [ ] **User ID isolation.** Events for account A don't appear in account B's event list (RLS leakage test)
+  - [ ] **Beta window filtering.** `beta_started_at + 10 weeks` cutoff works correctly in the admin report
+  - [ ] **Feedback channel integrity.** Submitted feedback text is stored verbatim and retrievable
+  - [ ] **Null/optional fields handled.** Event rows with sparse data (e.g. a log entry with no `additional_info`)
+    don't cause schema mismatches or report generation crashes
+- [ ] **Generate a report showing event breakdown by type** — e.g.:
+  ```
+  Tester: dhl-standard | Events logged: 42 | Breakdown: {log: 8, expense: 12, confirm: 5, feedback: 2, ...}
+  Tester: base-commission | Events logged: 38 | ...
+  ```
+
+### D. Feedback Channel End-to-End
+
+- [ ] **Verify UI → DB path exists.** Locate feedback submission UI (likely in a "Beta Feedback" button/modal)
+  and confirm it calls a route (e.g. `POST /api/submit-beta-feedback` or a Supabase RLS insert on `beta_activity_events`)
+  - [ ] If no route exists yet, create one: `api/submit-beta-feedback.js` (or inline in Coach panel if feedback
+    is bundled with chat exit)
+  - [ ] Route validates `is_tester && beta_code_used` (or uses session user_id + RLS)
+  - [ ] Inserts a row into `beta_activity_events` with `event_type: 'feedback'`, `event_data: { text: "..." }`
+- [ ] **Test error cases.** What if feedback is empty? Too long? Submitted while not a beta tester?
+  - [ ] Should return sensible error (not 500), not create a partial event, not leak user state
+- [ ] **UI component library.** Document the feedback widget (modal, inline, toast, etc.) so testers
+  and internal users know where to find it
+  - [ ] Consider adding a subtle **"Send Feedback"** button to the admin tools section (visible only to `is_tester`)
+    for zero-friction, in-app submission during live testing
+
+### E. Event Volume & Cost Baseline
+
+- [ ] **Document expected event cardinality.** Once the script runs across 3–5 account variants, measure:
+  - Average events per account per day (for 10-week projection)
+  - Storage cost (rows × per-row size) for beta period + historical archive
+  - Query cost if telemetry dashboard eventually queries `beta_activity_events` in real time
+  - Recommend a migration `037_add_beta_activity_events_indexes.sql` if query perf becomes an issue
+- [ ] **Log the baseline in this section** (e.g. "typical tester: 8–12 events/day, 560–840 per 10-week window,
+  ~2KB per account across all events") for future reference
+- [ ] **Update `docs/drift-app-warden.md` F126** (if it exists — a new drift entry for beta telemetry)
+  to capture the observability contract: "every user action that affects `config`, `expenses`, `goals`, `logs`
+  must log a corresponding `beta_activity_events` row with (user_id, timestamp, event_type, event_data)"
+
+### F. Continuous Integration / Automated Testing
+
+- [ ] **Add a GitHub Actions workflow** (e.g. `.github/workflows/beta-test-harness.yml`) that:
+  - Runs the account factory script to create a test account
+  - Runs the flow harness
+  - Queries and verifies events
+  - Reports pass/fail + summary (for PR checks, nightly runs, or manual trigger)
+  - Cleans up test accounts after (Supabase cleanup hook or manual delete in the workflow)
+- [ ] **Gating:** Run on `Version-control` branch merges + nightly to catch regressions in beta telemetry
+- [ ] **No-op for now if secrets aren't available** (e.g., `TEST_ACCOUNT_EMAIL`/`TEST_ACCOUNT_PASSWORD`
+  not set in CI) — just log a warning, don't fail the build. Once CI credentials are set up, enable the gate.
+
+---
+
+## 13. Irregular / Flexible Shift Hours Support
 
 *New workstream (2026-07-22), scoped from a codebase status review — not yet started. Touches the
 core fiscal engine (`finance.js` `buildYear` and friends) — read `docs/drift-app-warden.md` §2
@@ -3223,7 +3336,7 @@ gig-style variable-hours pattern — doesn't fit the model today.
 
 ---
 
-## 13. Tip Income Tracking
+## 14. Tip Income Tracking
 
 *New workstream (2026-07-22), scoped from a codebase status review — not yet started.*
 
@@ -3261,7 +3374,7 @@ scoped to Job Loss Mode only.
 
 ---
 
-## 14. Beta Program — Per-User Beta Window (Report Scoping)
+## 15. Beta Program — Per-User Beta Window (Report Scoping)
 
 *New workstream (2026-07-24), scoped from a codebase status review. Builds directly on the
 already-shipped beta usage-tracking system (migrations `025_add_beta_code_used.sql`,
@@ -3296,7 +3409,7 @@ would quietly distort the actual scoring numbers, not just leave a nice-to-have 
 
 ---
 
-## 15. Beta Program — Pre-Launch Dry Run Checklist
+## 16. Beta Program — Pre-Launch Dry Run Checklist
 
 *New workstream (2026-07-24). Not a code change — a verification checklist to run once before
 handing out any of the 40 real beta codes, using the infrastructure already shipped in this session.*
@@ -3328,7 +3441,7 @@ same bug caught in five minutes before day 1.
 
 ---
 
-## 16. Beta Program — Code Redemption Flow
+## 17. Beta Program — Code Redemption Flow
 
 *New workstream (2026-07-24). This is the "orchestrated later" piece explicitly deferred during the
 usage-tracking build — `is_tester`/`beta_code_used` are manual-SQL-only today. Scoped here so it's
@@ -3360,7 +3473,7 @@ in `db.js`) — this app already has a working, tested pattern for "redeem a cod
 
 ---
 
-## 17. Beta Program — In-App Feedback Channel
+## 18. Beta Program — In-App Feedback Channel
 
 *Shipped 2026-07-24 (built as Option A, upgraded to Option B same day once the beta scoring rubric
 made it non-optional — "Feedback Submitted — 25 pts, frequency + specificity" can't be scored from a
@@ -3380,7 +3493,7 @@ mailto link, which produces zero queryable data).*
 
 ---
 
-## 18. Beta Program — Attrition Visibility Mid-Program
+## 19. Beta Program — Attrition Visibility Mid-Program
 
 *New workstream (2026-07-24). The smallest addition in this list — purely additive to
 `api/admin-beta-report.js`, no schema change, no new hook points.*
@@ -3402,7 +3515,7 @@ quiet requires eyeballing raw timestamps; nothing calls it out.
 
 ---
 
-## 19. Beta Program — Offboarding Decision (End of Week 10)
+## 20. Beta Program — Offboarding Decision (End of Week 10)
 
 *Resolved 2026-07-24 — superseded by an actual scoring rubric (100 pts: App Usage 50 w/ 30-pt floor,
 Feedback 25, Call Attendance 15, Longevity 10 → three outcome tiers), not the earlier three
@@ -3432,7 +3545,7 @@ human" premise — no auto-scoring formula was built.
 
 ---
 
-## 20. Beta Program — In-App "Beta Tester" Badge
+## 21. Beta Program — In-App "Beta Tester" Badge
 
 *New workstream (2026-07-24). Purely cosmetic/motivational — no data flow changes, fully isolated
 from the tracking system itself.*
@@ -3454,10 +3567,10 @@ exactly zero risk, since it touches no finance logic and no persisted data.
 
 ---
 
-## 21. Beta Program — Week-5 "Halfway" Nudge Email
+## 22. Beta Program — Week-5 "Halfway" Nudge Email
 
 *New workstream (2026-07-24). Reuses existing lifecycle-email infrastructure rather than standing up
-a new send pathway. Depends on §14 (`beta_started_at`) as the anchor date — build that first.*
+a new send pathway. Depends on §15 (`beta_started_at`) as the anchor date — build that first.*
 
 **The idea.** A single motivational touchpoint at the program's midpoint, reusing the same
 infrastructure that already sends trial/dunning emails (`api/_email.js`'s sender, the
@@ -3481,7 +3594,7 @@ not a new email system.
 
 ---
 
-## 22. Camera / Barcode / OCR Features — Mobile-First Income & Expense Capture
+## 23. Camera / Barcode / OCR Features — Mobile-First Income & Expense Capture
 
 *New workstream (2026-07-24), scoped from investigative pass — not yet started, no design decisions made. Pure greenfield. Six candidate features identified; all depend on shared infrastructure (BarcodeDetector API or OCR engine). This section is a parking lot for feasibility and grouping logic; buildout decisions to come.*
 
@@ -3665,7 +3778,7 @@ Feature #6 (Shelf-tag capture) — isolated, deferred
 
 ---
 
-## 23. UI Cohesion — Cross-Panel Header/Accent Consistency
+## 24. UI Cohesion — Cross-Panel Header/Accent Consistency
 
 *New workstream (2026-07-25), scoped from a design-system read + code audit requested to discuss
 making the app's sections "feel more cohesive and interlocked." `docs/authority-design-system`
@@ -3779,7 +3892,7 @@ audit only, no runtime/visual walkthrough performed):
 
 ---
 
-## 24. Dev Infrastructure — Claude Code on the web headless UI testing
+## 25. Dev Infrastructure — Claude Code on the web headless UI testing
 
 *Built 2026-07-22: `.claude/hooks/session-start.sh` + `.claude/hooks/drive-app.mjs` (see commit
 `90dc305`). Web sessions previously had no way to satisfy CLAUDE.md's "start the dev server and use
@@ -3810,7 +3923,7 @@ headless-login driver script.*
 
 ---
 
-## 25. Terms of Service / Privacy Policy Consent Capture
+## 26. Terms of Service / Privacy Policy Consent Capture
 
 *Built 2026-07-26, scoped from a discussion about data encryption and an "industry standard"
 consent gate before signup. The mechanism is real and live for new signups; the legal content it
@@ -3871,7 +3984,7 @@ collected is regulated/high-sensitivity data, and this workstream doesn't change
 - [ ] **`docs/drift-app-warden.md` T7/T8 (Auth/Login) coverage** — this workstream touches
   `LoginScreen.jsx` and `App.jsx`'s `SIGNED_IN` handler, both mapped surfaces; no drift-map entry
   was added for it in this pass — worth a look next time either section gets a surgical pass.
-## 26. Lint Audit — 41 errors + 12 warnings (technical debt snapshot 2026-07-25)
+## 27. Lint Audit — 41 errors + 12 warnings (technical debt snapshot 2026-07-25)
 
 *Baseline established 2026-07-25. All 1,231 tests pass; lint is pre-existing and non-blocking. Not
 a critical bug — linting errors don't prevent the app from running or tests from passing. But

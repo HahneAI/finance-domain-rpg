@@ -1518,14 +1518,14 @@ generic form to ask the right follow-up questions on its own.*
 
 ## 19. Master Timeline — Config History & Point-in-Time Computation Integrity
 
-**✅ WRITE PATH COMPLETE** — `account_history` table live in Supabase (migration 020 confirmed 2026-07-07),
-config-change capture wired in App.jsx, admin verification surface live in DB Row Viewer. 
-**READ PATH PARTIAL** — only `baseRate` point-in-time resolution implemented (2026-07-17 fix for Quick Rate Update);
-general resolver for all historically-sensitive fields still deferred. **LOAN HISTORY** — separate follow-up task.
+**STATUS: FOUNDATION COMPLETE · PROOF-OF-CONCEPT SHIPPED · 70 FIELDS REMAIN**
 
-*Original design workstream seeded 2026-07-01: write path has shipped, read path (remaining historical-field resolvers)
-and loan history are tracked below as open follow-up items. Once §18's Coach chat history (`coach_chats`) is
-live, evaluate folding it into `account_history` as `entity_type: 'coach_chat'` rather than keeping a separate table.*
+- ✅ **Write Path:** Complete. `account_history` table live in Supabase (migration 020 confirmed 2026-07-07). All config changes auto-captured with `effectiveFrom` dates. Admin verification live in DB Row Viewer.
+- ✅ **Read Path (1 of 71 fields):** `baseRate` point-in-time resolution implemented 2026-07-17 for Quick Rate Update. Proof that the pattern works; other 70 historically-sensitive fields still apply retroactively to all weeks.
+- ❌ **Remaining Read Path (70 of 71 fields):** Schedule, tax rates, benefits, employer preset, deductions, attendance/PTO — all still retroactively rewrite past weeks when changed mid-year.
+- ❌ **Related Bug Fixes:** Loan history (`buildLoanHistory` regenerates full payment trace on every edit), goals versioning (no history today).
+
+**The Gap in Impact:** The write path captures "what changed and when," but the engine doesn't consult it yet. When a user edits their `otThreshold` from 40 to 45 hours in June, `buildYear()` recalculates ALL 52 weeks using the new threshold. April weeks now incorrectly show no overtime they actually earned. Annual tax projections, goal timelines, and spending forecasts all get silently rewritten — the exact "annual estimation of the year doesn't change when a bill is updated" problem the feature was meant to solve.
 
 **Original brain-dump (verbatim, for provenance):**
 
@@ -1770,50 +1770,92 @@ license to train.
   instead of keeping its own table. Don't block this section on that decision — §18 needs to
   ship first.
 
-### F. Suggested first implementation slice
+### F. Implementation Status
 
-*Deliberately small — a proof of the write path, not the full system.*
+#### F1. Write Path — COMPLETE (2026-07-07)
 
-- [x] **Migration** — `database/migrations/020_add_account_history.sql`: table per §D's sketch
-  as revised by §D2 (new-value `snapshot` + `changed_fields TEXT[]`), RLS own-row
-  select/insert only — **append-only from the client**: no update/delete policies exist and
-  those privileges are revoked outright, so history can never be rewritten after the fact —
-  plus the per-account `rollout_seed` snapshot. **Run in Supabase (confirmed 2026-07-07)** —
-  the seed snapshot has landed for every existing account.
-- [x] **One integration point** — implemented as a **config-transition watcher** in `App.jsx`
-  (a `useEffect` diffing `prevConfigRef` vs. `config` via
-  `diffSensitiveFields` from the new `src/lib/configHistory.js`, inserting via
-  `saveConfigSnapshot` in `db.js`) rather than the literal `commitConfigChange` wrapper —
-  strictly stronger than call-site routing: **no** `setConfig` site or save path (immediate
-  or debounced) can bypass capture. Attributed flows tag `source`/`effectiveFrom` through
-  `configHistoryMetaRef` just before their `setConfig`: `setup_wizard` /
-  `life_event:<x>` (wizard, passes `startDate` as the explicit effective date),
-  `life_event:lost_job` (JobLossEntry, passes `jobLossDate`), `profile_edit`
-  (`saveConfigNow`), `force_pull` (admin pull, so drift re-adoption isn't logged as an edit);
-  everything untagged records as `config_edit` effective today (real wall clock, never the
-  admin Lock Date). Investor sandbox accounts are exempt, matching §17.G's precedent.
-- [x] **Admin verification surface** — DB Row Viewer (all three render spots) now shows
-  "config history: N snapshots · latest [date] ([source]) · [changed fields]" after Fetch.
-  Migration 020 is confirmed run (2026-07-07), so this should read real counts, not the
-  error string — worth a live Fetch to double-check on the next admin pass.
-- **§17.I interaction (noted on merge, 2026-07-06):** the non-payment deletion cron
-  hard-deletes the `user_data` row, and `account_history`'s FK cascades with it — the
-  `deleted_accounts` tombstone does **not** archive history rows, so a revived account
-  restarts with fresh history (its new floor entry is its first whitelisted edit, typically
-  the wizard-complete snapshot — same as any post-rollout signup, which never gets a
-  `rollout_seed` row either). Intentional: deleted account = deleted history is the right
-  privacy posture; revisit only if the future read path needs pre-deletion history restored.
-- [x] **Tests** — 26 new: `configHistory.test.js` (whitelist↔`DEFAULT_CONFIG` drift guard, no
-  duplicates, noise-field exclusions, scalar/array/object diffs, undefined≡null tolerance) +
-  `db.test.js` additions (insert shape, missing-table tolerance, meta fetch paths). 890 total
-  passing; lint diff-clean vs. baseline; production build green.
-- [ ] **Verify live once deployed** — run migration 020 in Supabase, then from the deployed
-  app: make a pay-rate edit in ProfilePanel and confirm DB Row → Fetch shows
-  "config history: 2 snapshots" (seed + edit) with `baseRate` in the changed fields.
-- [ ] **Explicitly defer** — the `buildYear`/`computeNet` read-path rewrite (§D's "read path")
-  is its own follow-up task once the write path has real data to test against, and the loan
-  `history[]` fix is its own separate follow-up (§D2). Don't try to land any of these in the
-  same PR as the write path.
+*The infrastructure that makes the timeline possible: capture every config change with a timestamp.*
+
+- [x] **Migration 020** — `database/migrations/020_add_account_history.sql` creates the table per §D2 design (full-value `snapshot` + `changed_fields TEXT[]`). RLS: append-only from client (no update/delete). Includes per-account `rollout_seed` snapshot so the resolver always has a floor entry. **Confirmed run in Supabase 2026-07-07** — seed snapshot landed for all existing accounts.
+- [x] **Config-transition watcher** — `App.jsx` uses `useEffect` with `prevConfigRef` to diff config changes, filters through `diffSensitiveFields()` (`lib/configHistory.js`), and calls `saveConfigSnapshot()` (`db.js`). **Critically:** this watches the app's one canonical `config` state — no `setConfig` call or save path (immediate or debounced) can bypass capture, because the watcher fires on every render where config differs.
+- [x] **Metadata tagging** — Life-event flows tag `source`/`effectiveFrom` through `configHistoryMetaRef` before mutating config:
+  - `setup_wizard`: tags `source: "setup_wizard"`, passes `startDate` as explicit effective date
+  - `life_event:lost_job`: tags `source: "life_event:lost_job"`, passes `jobLossDate`
+  - `life_event:rate_update`: tags `source: "life_event:rate_update"`, passes effective date from modal
+  - `profile_edit`: tags `source: "profile_edit"`, defaults effective date to today
+  - `force_pull` (admin): tags `source: "force_pull"`, so drift re-adoption isn't logged as an edit
+  - Untagged changes: default to `source: "config_edit"` effective today (wall-clock real date, never admin Lock Date)
+  - Investor sandbox accounts: exempt, matching §17.G precedent
+- [x] **Admin verification surface** — DB Row Viewer shows "config history: N snapshots · latest [date] ([source]) · [changed fields]" after Fetch. Live data, not stubbed — ready for live QA.
+- [x] **Tests** — 26 new tests: `configHistory.test.js` (whitelist→DEFAULT_CONFIG drift guard, no dupes, noise-field exclusions, scalar/array/object diffs, undefined≡null tolerance) + `db.test.js` additions (insert shape, missing-table tolerance, meta fetch). 890 tests total passing; lint clean; prod build green.
+- **Account deletion interaction:** non-payment deletion cron hard-deletes `user_data` row; `account_history` FK cascades. The `deleted_accounts` tombstone does NOT archive history rows — by design (privacy-first posture). Revived account restarts with fresh history.
+- [ ] **Verify live once deployed** — make a pay-rate edit in ProfilePanel, confirm DB Row → Fetch shows "config history: 2+ snapshots" with `baseRate` in changed fields.
+
+#### F2. Read Path Proof-of-Concept — COMPLETE (2026-07-17)
+
+*One field working correctly shows the pattern; baseRate was chosen because Quick Rate Update live-QA caught the bug.*
+
+The Problem: when you edit a field in June, `buildYear()` recalculates *all* weeks (past and future) using the new value. `baseRate: 22/hr` changes in week 26, but weeks 1–25 (already happened) retroactively recalculate gross pay as if you earned $22/hr there too — if you actually earned $20/hr, the damage is done.
+
+**The Fix (baseRate only):**
+- [x] **`resolveBaseRateForWeek(rateHistory, weekEnd, liveBaseRate)`** (`lib/finance.js:579–582`) — looks up the right rate for each week's end date. Mirrors `getEffectiveAmount` algorithm: latest history entry with `effectiveFrom ≤ weekEnd`, else fall back to current rate. Past April weeks keep the old rate until June change date; June forward uses the new rate.
+- [x] **`buildYear(cfg, baseRateHistory = null)`** — new optional parameter. Call sites that omit it (SetupWizard, DemoAccountTree, math audit) behave byte-identical to before; only `App.jsx`'s live call passes `baseRateHistory`.
+- [x] **`loadUserData()` fetch** — queries `account_history` filtered to `baseRate` changes, maps to `{ effectiveFrom, baseRate }` via `extractBaseRateHistory()` (same missing-table tolerance as `weekConfirmations`).
+- [x] **`App.jsx` state threading** — `baseRateHistory` state threaded through `applyLoadedData`/`handleForcePull`, passed into live `buildYear()` call. Optimistic local append when `saveConfigSnapshot` fires, closing the gap where future-dated effective dates would misapply the new rate too early before the DB row round-trips into memory.
+- [x] **Tests** — 13 new: `resolveBaseRateForWeek` point-in-time cases + `buildYear` past-week handling + `extractBaseRateHistory` fallback/null cases. 1063 tests passing; lint clean; prod build green.
+
+**Why only baseRate:** This was implemented as a narrow slice to fix Quick Rate Update's live QA finding. The pattern works. Treating this as proof-of-concept, not "read path done" — every other historically-sensitive field is still unbuilt.
+
+#### F3. Read Path — Remaining 70 Fields (NOT STARTED)
+
+*Generalize the baseRate pattern to all historically-sensitive config fields. This is the actual work to complete the feature.*
+
+**The 70 fields that still retroactively rewrite past weeks:**
+
+| Category | Fields | Count | Core Problem |
+|----------|--------|-------|--------------|
+| **Pay structure** | `annualSalary`, `shiftHours`, `diffRate`, `nightDiffRate`, `nightDiffEnabled`, `otThreshold`, `otMultiplier`, `commissionMonthly` | 8 | OT thresholds, differential rates apply to all 52 weeks; June change retroactively recalculates April earnings |
+| **Schedule** | `maxWeeklyHours`, `customWeeklyHours`, `customWeeklyHoursLong/Short`, `scheduleIsVariable`, `userPaySchedule`, `payPeriodEndDay`, `biweeklyPayWeekParity`, `startDate`/`firstActiveIdx` | 8 | Schedule changes alter rotation, hours/week, pay-period boundaries for all past weeks |
+| **Employer identity** | `employerPreset` (DHL↔base), `dhlNightShift`, `dhlCustomSchedule`, `startingWeekIsLong` + `dhl*` fields | 8+ | DHL↔base flip swaps entire `buildYear` branch for all 52 weeks — **single highest-blast-radius field** |
+| **Tax** | `fedRateLow/High`, `stateRateLow/High`, `taxRatesEstimated`, `ficaRate`, `fedStdDeduction`, `filingStatus`, `userState`, `targetOwedAtFiling`, `taxedWeeks`, `taxExemptOptIn` | 10 | Tax rates apply to all weeks; mid-year change retroactively rewrites annual tax liability |
+| **Deductions / benefits** | `selectedBenefits` + 9 per-check premiums (`healthPremium`, `dentalPremium`, `visionPremium`, `ltd`, `stdWeekly`, `lifePremium`, `hsaWeekly`, `fsaWeekly`) + `otherDeductions`, `k401Rate`, `k401MatchRate`, `k401StartDate`, `benefitsStartDate` | 16 | Benefit changes retroactively recalculate 401k/insurance deductions for all weeks |
+| **Attendance / PTO / bucket** | `attendanceBucketEnabled`, `attendanceWarnThreshold`, `attendanceTerminateThreshold`, `attendanceIncrement`, `ptoEnabled`, `ptoAccrualMethod`, `ptoAccrualRate`, `ptoCap`, `bucketStartBalance`, `bucketCap`, `bucketPayoutRate` | 11 | Accrual policy changes retroactively recalculate balances |
+| **Buffer / risk** | `bufferEnabled`, `paycheckBuffer` | 2 | Buffer changes affect all weeks' surplus calculations |
+| **Job loss** | `jobLossMode`, `jobLossDate`, `unemploymentEnabled/Weekly/DurationWeeks/WaitingWeek`, `returnToWorkDate`, `targetIncomeAnnual`, `startedUnemployed` | 7 | Already point-in-time-aware for earned-income zeroing (inJobLoss boolean); deductions/benefits within loss window not yet |
+
+**Implementation Pattern (generalize from baseRate):**
+
+For each field or field group (some are tightly coupled):
+1. Write a `resolve<FieldName>ForWeek(history, weekEnd, liveValue)` function in `lib/finance.js`, following `resolveBaseRateForWeek` exactly
+2. Thread the history array through `loadUserData()` via `account_history` query + extraction helper
+3. Update `buildYear()` and `computeNet()` call sites to pass the resolved values instead of `cfg.<field>`
+4. Add tests: past-week unchanged, change-date boundary, null/missing history fallback
+5. Do NOT try to land multiple fields in one PR — one or two per pass, test thoroughly, watch for side effects
+
+**Why it's not trivial:**
+- Some fields couple tightly (e.g., `employerPreset` changes the entire `buildYear` branch — test fixtures need a multi-job synthetic case)
+- Tax-rate resolution also affects `computeNet()`, which is called downstream by every week and every log entry
+- Benefits/deductions couple to 401k/FICA math — changes propagate through multiple functions
+- Some fields don't exist yet (§20 split tax: `taxedWeeksFed`/`taxedWeeksState` will replace `taxedWeeks`; that's a design gate before the resolver can be written)
+
+**Open design questions:**
+- **Employer preset (highest risk):** Should changing from DHL→base recalculate past weeks' rotation? User's DHL May, switch to base June — do May's rotation stay 6-day/4-day or recompute as flat 40hr? Answer depends on what "switching employer preset" semantically means (data correction vs. new rules going forward).
+- **Tax-exempt windows:** `taxedWeeks` is already a per-week array. Once split into `taxedWeeksFed`/`taxedWeeksState`, do the resolvers read the live array or account_history? (Likely hybrid: account_history for *when* the change happened, but `taxedWeeks` array for *which* weeks to actually exempt, since that's a per-week manual override that lives outside config.)
+- **Benefits mid-year cliffs:** If 401k match rate changes June 1, should May's 4 weeks keep the old rate? Or does "match rate" apply only going forward? (Likely the latter — match rates are annual/per-pay-period, not retrospective.)
+
+- [ ] **Implementation roadmap (suggested order):**
+  1. Schedule fields (`maxWeeklyHours`, `customWeeklyHours`, `userPaySchedule`) — couples to `totalHours` calculation; high-impact but contained
+  2. Deduction fields (`k401Rate`, `k401MatchRate`, benefits premiums) — already modular; each has its own resolver candidate
+  3. Tax fields (`fedRateLow/High`, `stateRateLow/High`, `ficaRate`) — feeds `computeNet()`; high stakes, test carefully
+  4. Employer preset (`employerPreset`, DHL fields) — highest blast radius; save for when you understand the others first
+  5. Attendance/PTO fields — lower priority; couple to accrual balance tracking that's still evolving
+
+#### F4. Related Bug Fixes (Deferred, Separate Follow-up)
+
+- [ ] **Loan history** — `buildLoanHistory(loan)` regenerates entire weekly-payment history from `loanMeta` on every load. Mid-year loan-term edit (payment amount, rate, payoff date) retroactively rewrites the whole trace, same bug as pay-structure edits. **Cheap fix:** give loans their own `history[]` field (expense-style), parallel to expense `history[]`. Defer this pending whether to fold loans into expense-history migration or keep them separate.
+- [ ] **Goal versioning** — goals carry no `history` field today. Goal timeline is forward-looking (mostly benign), but "what was my goal target on date X" has no answer. Lower priority than config fields; decide alongside §18 (Coach AI context — goal revisions are a personalization signal).
+
+- [ ] **Verify live once deployed** — with multiple fields wired, make edits on a deployed preview: change schedule in June, confirm May weeks stay old schedule. Change 401k rate mid-month, confirm old weeks' contributions unchanged. Watch for tax-total drift.
 
 ---
 

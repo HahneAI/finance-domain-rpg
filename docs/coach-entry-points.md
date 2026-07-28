@@ -234,7 +234,7 @@ Job Hunt Chat's dialed-down anchor).*
 
 **Technical reference:** Same shared route, `POST /api/coach` · Model: **Sonnet** · System
 prompt: `RESUME_REVIEW_SYSTEM_PROMPT` in `coachPrompts.js` · Storage: `resume_profile` table
-(migration `032_add_resume_profile.sql`, one row per user) via `loadResumeProfile`/
+(migration `036_add_resume_profile.sql`, one row per user) via `loadResumeProfile`/
 `saveResumeProfile` in `db.js`; the review conversation itself saves as a `coach_chats` row
 (`chat_type: 'resume_review'`, added to that table's check constraint by the same migration).
 Gate: `canAccessAiFeatures({isAdmin, isTester, isInvestor})`. Component: `ResumeReviewCard.jsx`.

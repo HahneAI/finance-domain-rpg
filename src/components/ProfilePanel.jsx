@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase.js";
-import { redeemBetaCode, logBetaFeedback } from "../lib/db.js";
+import { redeemBetaCode, logBetaFeedback, fetchAllChangelogEntries, saveChangelogEntry, deleteChangelogEntry } from "../lib/db.js";
+import { ChangelogBody } from "./ChangelogModal.jsx";
 import { dhlEmployerMatchRate, computeNet, toLocalIso } from "../lib/finance.js";
 import { BENEFIT_OPTIONS, DHL_PRESET, MONTH_FULL } from "../constants/config.js";
 import { iS, lS, Card, Pressable, useFoldTransition, PanelHero, SH } from "./ui.jsx";
@@ -34,7 +35,7 @@ function fmt(dateStr) {
 // ── Shared layout atoms ─────────────────────────────────────────────────────
 
 // Back nav header used by all sub-views
-function BackBar({ onBack, title }) {
+function BackBar({ onBack, title, backLabel = "Profile" }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
       <Pressable
@@ -42,7 +43,7 @@ function BackBar({ onBack, title }) {
         style={{ background: "transparent", border: "none", color: "var(--color-teal)", cursor: "pointer", fontSize: "13px", padding: "4px 0", display: "flex", alignItems: "center", gap: "5px" }}
       >
         <span style={{ fontSize: "16px", lineHeight: 1 }}>‹</span>
-        <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>Profile</span>
+        <span style={{ letterSpacing: "1.5px", textTransform: "uppercase", fontSize: "10px" }}>{backLabel}</span>
       </Pressable>
       <div style={{ flex: 1, fontSize: "13px", fontWeight: "bold", letterSpacing: "1px", textTransform: "uppercase", color: "var(--color-text-primary)" }}>
         {title}
@@ -437,6 +438,7 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
         </div>
       </DetailCard>
 
+      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Security</div>
       <DetailCard>
         {!showEmailForm ? (
           <Pressable
@@ -576,22 +578,37 @@ export function AccountDetail({ authedUser, config, subscription, onBack }) {
 // than a standalone destination.
 function EmploymentCard({ config, setConfig, onSaveConfig }) {
   const isEmployerDHL = config.employerPreset === "DHL";
-  const isBaseUser = !isEmployerDHL;
+  // The only fields this card can ever change: Job Start (one-time, only
+  // while unset) and DHL Team (DHL only). Once startDate is set on a base
+  // (non-DHL) account there's nothing left to edit — no Edit button in that
+  // case, same "editing" convention PaySectionHeader already uses elsewhere.
+  const hasEditableFields = !config.startDate || isEmployerDHL;
 
-  // Start date: only editable if not already set
+  const [editing, setEditing] = useState(false);
   const [startDate, setStartDate] = useState(config.startDate || "");
-  const [startDateDirty, setStartDateDirty] = useState(false);
-
-  // DHL team: always editable
   const [dhlTeam, setDhlTeam] = useState(config.dhlTeam || "");
-  const [teamDirty, setTeamDirty]   = useState(false);
+  const [teamDirty, setTeamDirty] = useState(false);
 
-  const canSave = (startDateDirty && startDate) || teamDirty;
+  const startDateDirty = !config.startDate && startDate !== "";
+  const canSave = startDateDirty || teamDirty;
+
+  function startEditing() {
+    setStartDate(config.startDate || "");
+    setDhlTeam(config.dhlTeam || "");
+    setTeamDirty(false);
+    setEditing(true);
+  }
+  function cancelEditing() {
+    setStartDate(config.startDate || "");
+    setDhlTeam(config.dhlTeam || "");
+    setTeamDirty(false);
+    setEditing(false);
+  }
 
   function handleSave() {
     if (!canSave) return;
     const newConfig = { ...config };
-    if (startDateDirty && startDate) {
+    if (startDateDirty) {
       newConfig.startDate = startDate;
     }
     if (teamDirty && dhlTeam) {
@@ -603,69 +620,73 @@ function EmploymentCard({ config, setConfig, onSaveConfig }) {
     }
     setConfig(newConfig);
     onSaveConfig?.(newConfig);
-    setStartDateDirty(false);
     setTeamDirty(false);
+    setEditing(false);
   }
 
   const employer = isEmployerDHL ? "DHL / P&G" : (config.employerPreset || "Independent");
 
   return (
     <>
-      <PaySectionHeader title="Employment" editing />
-      <DetailCard>
-        <DetailRow label="Employer" value={employer} />
-        <DetailRow label="State"    value={config.userState || "—"} last={isBaseUser && !!config.startDate} />
-        {/* Start date — read-only if already set, editable if not */}
-        {config.startDate ? (
-          <DetailRow label="Job Start" value={fmt(config.startDate)} last={isBaseUser} />
-        ) : (
-          <div style={{ padding: "13px 16px", borderTop: "1px solid #1e1e1e" }}>
-            <label style={lSp}>Job Start Date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={e => { setStartDate(e.target.value); setStartDateDirty(true); }}
-              style={iS}
-            />
-          </div>
-        )}
-        {/* DHL Team — always editable for DHL users */}
-        {isEmployerDHL && (
-          <div style={{ padding: "13px 16px", borderTop: "1px solid #1e1e1e" }}>
-            <label style={lSp}>DHL Team</label>
-            <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-              {["A", "B"].map(t => (
-                <Pressable
-                  key={t}
-                  onClick={() => { setDhlTeam(t); setTeamDirty(t !== config.dhlTeam); }}
-                  style={{
-                    flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid",
-                    borderColor: dhlTeam === t ? "var(--color-teal)" : "var(--color-border-subtle)",
-                    background: dhlTeam === t ? "rgba(0,200,150,0.10)" : "var(--color-bg-base)",
-                    color: dhlTeam === t ? "var(--color-teal)" : "var(--color-text-secondary)",
-                    fontWeight: "bold", fontSize: "14px", cursor: "pointer",
-                  }}
-                >
-                  Team {t}
-                </Pressable>
-              ))}
-            </div>
-            {teamDirty && (
-              <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "6px" }}>
-                Rotation will update — save to apply.
+      <PaySectionHeader title="Employment" editing={editing || !hasEditableFields} onEdit={startEditing} />
+      {!editing ? (
+        <DetailCard>
+          <DetailRow label="Employer" value={employer} />
+          <DetailRow label="State" value={config.userState || "—"} last={!config.startDate && !isEmployerDHL} />
+          {config.startDate && (
+            <DetailRow label="Job Start" value={fmt(config.startDate)} last={!isEmployerDHL} />
+          )}
+          {isEmployerDHL && (
+            <DetailRow label="DHL Team" value={config.dhlTeam ? `Team ${config.dhlTeam}` : "—"} last />
+          )}
+        </DetailCard>
+      ) : (
+        <DetailCard>
+          <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            {/* Start date — only ever editable while unset; a one-time action, not
+                a recurring edit, so it always shows here rather than behind a
+                second gate. */}
+            {!config.startDate && (
+              <div>
+                <label style={lSp}>Job Start Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  style={iS}
+                />
               </div>
             )}
+            {isEmployerDHL && (
+              <div>
+                <label style={lSp}>DHL Team</label>
+                <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                  {["A", "B"].map(t => (
+                    <Pressable
+                      key={t}
+                      onClick={() => { setDhlTeam(t); setTeamDirty(t !== config.dhlTeam); }}
+                      style={{
+                        flex: 1, padding: "10px", borderRadius: "8px", border: "1px solid",
+                        borderColor: dhlTeam === t ? "var(--color-teal)" : "var(--color-border-subtle)",
+                        background: dhlTeam === t ? "rgba(0,200,150,0.10)" : "var(--color-bg-base)",
+                        color: dhlTeam === t ? "var(--color-teal)" : "var(--color-text-secondary)",
+                        fontWeight: "bold", fontSize: "14px", cursor: "pointer",
+                      }}
+                    >
+                      Team {t}
+                    </Pressable>
+                  ))}
+                </div>
+                {teamDirty && (
+                  <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "6px" }}>
+                    Rotation will update — save to apply.
+                  </div>
+                )}
+              </div>
+            )}
+            <PaySectionActions error={null} onSave={handleSave} onCancel={cancelEditing} />
           </div>
-        )}
-      </DetailCard>
-
-      {canSave && (
-        <Pressable
-          onClick={handleSave}
-          style={{ width: "100%", padding: "13px 16px", marginBottom: "20px", background: "var(--color-green)", color: "var(--color-bg-base)", border: "none", borderRadius: "12px", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
-        >
-          Save
-        </Pressable>
+        </DetailCard>
       )}
     </>
   );
@@ -1306,7 +1327,9 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
   const k401StartColor = k401StartSource === "benefits" ? "var(--color-teal)" : undefined;
   const enrolledConfig = Array.isArray(config.selectedBenefits) ? config.selectedBenefits : [];
 
-  const [editing, setEditing]   = useState(true);
+  // Collapsed by default, same as every other Job & Pay / Retirement card —
+  // this used to default to true and open straight into the full edit form.
+  const [editing, setEditing]   = useState(false);
   const [selectedBenefits, setSelectedBenefits] = useState(new Set(enrolledConfig));
   const [k401Rate, setK401Rate] = useState(String(config.k401Rate ?? ""));
   const [k401Match, setK401Match] = useState(String(config.k401MatchRate ?? ""));
@@ -1317,6 +1340,23 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
       .filter(b => b.type === "weekly")
       .reduce((acc, b) => ({ ...acc, [b.field]: String(config[b.field] ?? "") }), {})
   );
+
+  // Re-sync the draft from the latest saved config each time Edit is opened —
+  // now that editing no longer starts true, a stale draft from a prior
+  // cancel-without-save would otherwise resurface on the next Edit tap.
+  function startEditing() {
+    setSelectedBenefits(new Set(enrolledConfig));
+    setK401Rate(String(config.k401Rate ?? ""));
+    setK401Match(String(config.k401MatchRate ?? ""));
+    setK401Start(config.k401StartDate ?? "");
+    setBenefitsStartDate(config.benefitsStartDate ?? "");
+    setWeeklyValues(
+      BENEFIT_OPTIONS
+        .filter(b => b.type === "weekly")
+        .reduce((acc, b) => ({ ...acc, [b.field]: String(config[b.field] ?? "") }), {})
+    );
+    setEditing(true);
+  }
 
   function handleSave() {
     const nextSelected = [...selectedBenefits];
@@ -1350,13 +1390,15 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
     <>
       <BackBar onBack={onBack} title="Retirement & Benefits" />
 
-      {/* 401k section */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-        <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", paddingLeft: "4px" }}>401k</div>
-        {!editing && (
-          <Pressable onClick={() => setEditing(true)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
-        )}
-      </div>
+      {/* 401k + benefits enrollment — one card, so the read-only summary and
+          the enrolled-plans chips aren't two separate stacked cards covering
+          overlapping ground. No repeated section label here — BackBar's
+          title already says "Retirement & Benefits" for this whole screen. */}
+      {!editing && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+          <Pressable onClick={startEditing} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
+        </div>
+      )}
 
       {!editing ? (
         <DetailCard>
@@ -1375,7 +1417,34 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
           {isEmployerDHL && has401k && (
             <DetailRow label="Employer Match" value="Tiered (DHL formula)" valueColor="var(--color-green)" />
           )}
-          <DetailRow label="Contribution Start" value={k401StartLabel} valueColor={k401StartColor} last />
+          <DetailRow label="Contribution Start" value={k401StartLabel} valueColor={k401StartColor} />
+          {config.benefitsStartDate && (
+            <DetailRow label="Benefits Start" value={fmt(config.benefitsStartDate)} />
+          )}
+          <DetailRow
+            label="Enrolled"
+            value={enrolledConfig.length > 0 ? `${enrolledConfig.length} plan${enrolledConfig.length !== 1 ? "s" : ""}` : "None enrolled"}
+            valueColor={enrolledConfig.length > 0 ? undefined : "var(--color-text-disabled)"}
+            last={enrolledConfig.length === 0 && !isEmployerDHL}
+          />
+          {(enrolledConfig.length > 0 || isEmployerDHL) && (
+            <div style={{ padding: "10px 16px 14px" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {enrolledConfig.map(id => (
+                  <span key={id} style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(76,175,125,0.08)", color: "var(--color-green)", border: "1px solid rgba(76,175,125,0.2)", borderRadius: "12px" }}>
+                    {BENEFIT_LABELS[id] ?? id}
+                  </span>
+                ))}
+                {isEmployerDHL && (
+                  <>
+                    <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>PTO Accrual ✦</span>
+                    <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>Attendance Bucket ✦</span>
+                  </>
+                )}
+              </div>
+              {isEmployerDHL && <div style={{ fontSize: "9px", color: "var(--color-text-primary)", marginTop: "6px" }}>✦ Auto-enabled for DHL employees</div>}
+            </div>
+          )}
         </DetailCard>
       ) : (
         <DetailCard>
@@ -1456,38 +1525,6 @@ function BenefitsDetail({ config, setConfig, onSaveConfig, onBack }) {
           </div>
         </DetailCard>
       )}
-
-      {/* Benefits enrollment (read-only) */}
-      <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px", marginTop: "20px" }}>Benefits Enrollment</div>
-      <DetailCard>
-        {config.benefitsStartDate && (
-          <DetailRow label="Benefits Start" value={fmt(config.benefitsStartDate)} />
-        )}
-        <DetailRow
-          label="Enrolled"
-          value={enrolledConfig.length > 0 ? `${enrolledConfig.length} plan${enrolledConfig.length !== 1 ? "s" : ""}` : "None enrolled"}
-          valueColor={enrolledConfig.length > 0 ? undefined : "var(--color-text-disabled)"}
-          last={enrolledConfig.length === 0}
-        />
-        {(enrolledConfig.length > 0 || isEmployerDHL) && (
-          <div style={{ padding: "10px 16px 14px" }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-              {enrolledConfig.map(id => (
-                <span key={id} style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(76,175,125,0.08)", color: "var(--color-green)", border: "1px solid rgba(76,175,125,0.2)", borderRadius: "12px" }}>
-                  {BENEFIT_LABELS[id] ?? id}
-                </span>
-              ))}
-              {isEmployerDHL && (
-                <>
-                  <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>PTO Accrual ✦</span>
-                  <span style={{ fontSize: "10px", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px", background: "rgba(0,200,150,0.06)", color: "var(--color-accent-primary)", border: "1px solid rgba(0,200,150,0.18)", borderRadius: "12px" }}>Attendance Bucket ✦</span>
-                </>
-              )}
-            </div>
-            {isEmployerDHL && <div style={{ fontSize: "9px", color: "var(--color-text-primary)", marginTop: "6px" }}>✦ Auto-enabled for DHL employees</div>}
-          </div>
-        )}
-      </DetailCard>
     </>
   );
 }
@@ -1969,7 +2006,12 @@ function BetaRedeemDetail({ onBack }) {
 // ("specificity"), which a mailto link can never supply — this logs the
 // actual text via logBetaFeedback (migration 030_add_beta_feedback.sql)
 // instead of handing it off to the user's mail client.
-function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack }) {
+// Exported so App.jsx can reuse it directly for the mobile-drawer entry
+// point — same component, two launch sites (Account panel's sub-view router,
+// and a standalone modal from the drawer). `backLabel` lets each site's
+// BackBar say the right thing ("Profile" inside the Account flow, "Close"
+// when launched as a standalone drawer modal with nothing to navigate back to).
+export function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack, backLabel }) {
   const [note, setNote] = useState("");
   const [status, setStatus] = useState({ loading: false, error: null, success: false });
 
@@ -1987,7 +2029,7 @@ function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack }) {
 
   return (
     <>
-      <BackBar onBack={onBack} title="Send Feedback" />
+      <BackBar onBack={onBack} title="Send Feedback" backLabel={backLabel} />
       <DetailCard>
         <div style={{ padding: "13px 16px" }}>
           {status.success ? (
@@ -2027,6 +2069,227 @@ function BetaFeedbackDetail({ isTester, betaCodeUsed, onBack }) {
           )}
         </div>
       </DetailCard>
+    </>
+  );
+}
+
+// Admin authoring surface for changelog_entries (database/migrations/032) —
+// the write side of the "What's New" feature. UpdateAvailableBanner +
+// ChangelogModal (App.jsx) are the read side: a published entry here is what
+// makes the "What's New" tap target appear alongside the next update banner
+// a user sees. Writes go through api/admin-changelog.js (db.js's
+// saveChangelogEntry/deleteChangelogEntry) — never a direct client write, per
+// the RLS posture the migration sets up.
+function ChangelogAdminDetail({ onBack }) {
+  // null = initial load in progress (distinct from [] = loaded, zero entries) —
+  // avoids a synchronous setState(true) at the top of load(), which is what
+  // react-hooks/set-state-in-effect flags when load() is invoked directly
+  // from the mount effect below (same shape InvestorAdminPanel's load uses).
+  const [entries, setEntries] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+  const [editingId, setEditingId] = useState(null); // null = list view, "new" = new entry, else entry.id
+  const [draft, setDraft] = useState(null);
+  const [saveError, setSaveError] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  // Mount-only fetch, same inline-async-function-inside-the-effect shape
+  // InvestorAdminPanel's load() uses — react-hooks/set-state-in-effect flags
+  // an effect that calls an *externally defined* function containing
+  // setState, so the load logic lives here rather than as a reusable
+  // top-level function. Post-mutation UI updates (below) are optimistic
+  // local state edits from the API's own response instead of a re-fetch.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const result = await fetchAllChangelogEntries();
+      if (cancelled) return;
+      if (!result.ok) setLoadError(result.error);
+      else { setLoadError(null); setEntries(result.entries); }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  function startNew() {
+    setDraft({ id: null, versionLabel: "", title: "", body: "", published: false });
+    setSaveError(null);
+    setShowPreview(false);
+    setEditingId("new");
+  }
+
+  function startEdit(entry) {
+    setDraft({
+      id: entry.id,
+      versionLabel: entry.version_label ?? "",
+      title: entry.title,
+      body: entry.body,
+      published: entry.published_at != null,
+    });
+    setSaveError(null);
+    setShowPreview(false);
+    setEditingId(entry.id);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setDraft(null);
+    setSaveError(null);
+  }
+
+  async function handleSave() {
+    if (!draft.title.trim()) { setSaveError("Title is required."); return; }
+    if (!draft.body.trim()) { setSaveError("Body is required."); return; }
+    setSaveError(null);
+    const result = await saveChangelogEntry({
+      id: draft.id,
+      versionLabel: draft.versionLabel || null,
+      title: draft.title,
+      body: draft.body,
+      published: draft.published,
+    });
+    if (!result.ok) { setSaveError(result.error); return; }
+    // Optimistic local update from the API's own response, rather than a
+    // re-fetch — same InvestorAdminPanel-established pattern as the mount
+    // effect above. New entries are id-less until the server assigns one, so
+    // this branches on whether we were editing (id already known) vs. creating.
+    setEntries(prev => {
+      const list = prev ?? [];
+      return draft.id
+        ? list.map(e => e.id === draft.id ? result.entry : e)
+        : [result.entry, ...list];
+    });
+    setEditingId(null);
+    setDraft(null);
+  }
+
+  async function handleDelete(id) {
+    setConfirmDeleteId(null);
+    const result = await deleteChangelogEntry(id);
+    if (result.ok) setEntries(prev => (prev ?? []).filter(e => e.id !== id));
+  }
+
+  if (editingId !== null) {
+    return (
+      <>
+        <BackBar onBack={cancelEdit} title={editingId === "new" ? "New Entry" : "Edit Entry"} />
+        <DetailCard>
+          <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div>
+              <label style={lSp}>Version Label (optional)</label>
+              <input
+                type="text" value={draft.versionLabel}
+                onChange={e => setDraft(d => ({ ...d, versionLabel: e.target.value }))}
+                placeholder="e.g. 2026.07.26" style={iS}
+              />
+            </div>
+            <div>
+              <label style={lSp}>Title</label>
+              <input
+                type="text" value={draft.title}
+                onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
+                placeholder="e.g. Faster goal tracking" style={iS}
+              />
+            </div>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <label style={{ ...lSp, marginBottom: 0 }}>Body (Markdown)</label>
+                <Pressable
+                  onClick={() => setShowPreview(v => !v)}
+                  style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "3px 9px", cursor: "pointer" }}
+                >
+                  {showPreview ? "Edit" : "Preview"}
+                </Pressable>
+              </div>
+              {showPreview ? (
+                <div style={{ background: "var(--color-bg-base)", border: "1px solid var(--color-border-subtle)", borderRadius: "10px", padding: "14px", minHeight: "160px" }}>
+                  {draft.body.trim()
+                    ? <ChangelogBody markdown={draft.body} />
+                    : <div style={{ fontSize: "12px", color: "var(--color-text-disabled)" }}>Nothing to preview yet.</div>}
+                </div>
+              ) : (
+                <textarea
+                  value={draft.body}
+                  onChange={e => setDraft(d => ({ ...d, body: e.target.value }))}
+                  placeholder="Supports **bold**, *italic*, lists, links, and headers."
+                  rows={10}
+                  style={{ ...iS, height: "auto", fontFamily: "var(--font-mono)", resize: "vertical", lineHeight: 1.5 }}
+                />
+              )}
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+              <input
+                type="checkbox" checked={draft.published}
+                onChange={e => setDraft(d => ({ ...d, published: e.target.checked }))}
+                style={{ width: "16px", height: "16px", accentColor: "var(--color-teal)", cursor: "pointer" }}
+              />
+              <span style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>
+                Published — visible to users via the update banner{draft.published ? "" : " (currently a draft)"}
+              </span>
+            </label>
+            {saveError && (
+              <div style={{ fontSize: "11px", color: "var(--color-deduction)", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: "6px", padding: "8px 12px" }}>{saveError}</div>
+            )}
+            <PaySectionActions error={null} onSave={handleSave} onCancel={cancelEdit} />
+          </div>
+        </DetailCard>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <BackBar onBack={onBack} title="Changelog" />
+      <div style={{ fontSize: "11px", color: "var(--color-text-primary)", lineHeight: "1.6", marginBottom: "14px" }}>
+        Published entries appear as a "What's New" prompt alongside the update-available
+        banner, the next time a user's app detects a new deploy.
+      </div>
+      <Pressable
+        onClick={startNew}
+        style={{ width: "100%", padding: "12px 0", marginBottom: "16px", background: "rgba(0,200,150,0.10)", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "12px", fontSize: "10px", letterSpacing: "2px", textTransform: "uppercase", fontWeight: "bold", cursor: "pointer" }}
+      >
+        + New Entry
+      </Pressable>
+
+      {entries === null && <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>Loading…</div>}
+      {loadError && <div style={{ fontSize: "12px", color: "var(--color-deduction)" }}>{loadError}</div>}
+      {entries !== null && !loadError && entries.length === 0 && (
+        <div style={{ fontSize: "12px", color: "var(--color-text-primary)" }}>No entries yet.</div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {(entries ?? []).map(entry => {
+          const isPublished = entry.published_at != null;
+          const confirming = confirmDeleteId === entry.id;
+          return (
+            <DetailCard key={entry.id} style={{ marginBottom: 0 }}>
+              <div style={{ padding: "13px 16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: "4px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>{entry.title}</div>
+                  <span style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", padding: "2px 8px", borderRadius: "10px", flexShrink: 0, background: isPublished ? "rgba(34,197,94,0.12)" : "var(--color-bg-raised)", color: isPublished ? "var(--color-green)" : "var(--color-text-disabled)", border: `1px solid ${isPublished ? "rgba(34,197,94,0.3)" : "var(--color-border-subtle)"}` }}>
+                    {isPublished ? "Published" : "Draft"}
+                  </span>
+                </div>
+                {entry.version_label && (
+                  <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginBottom: "8px" }}>{entry.version_label}</div>
+                )}
+                {confirming ? (
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <span style={{ fontSize: "11px", color: "var(--color-deduction)" }}>Delete this entry?</span>
+                    <Pressable onClick={() => handleDelete(entry.id)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "var(--color-deduction)", color: "var(--color-bg-base)", border: "none", borderRadius: "8px", padding: "4px 10px", cursor: "pointer", fontWeight: "bold" }}>Confirm</Pressable>
+                    <Pressable onClick={() => setConfirmDeleteId(null)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-text-primary)", border: "1px solid var(--color-border-subtle)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Cancel</Pressable>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <Pressable onClick={() => startEdit(entry)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-teal)", border: "1px solid rgba(0,200,150,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Edit</Pressable>
+                    <Pressable onClick={() => setConfirmDeleteId(entry.id)} style={{ fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", background: "transparent", color: "var(--color-deduction)", border: "1px solid rgba(224,92,92,0.28)", borderRadius: "8px", padding: "4px 10px", cursor: "pointer" }}>Delete</Pressable>
+                  </div>
+                )}
+              </div>
+            </DetailCard>
+          );
+        })}
+      </div>
     </>
   );
 }
@@ -2084,6 +2347,9 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   }
   if (activeSection === "investorcodes") {
     return <InvestorAdminPanel onBack={() => setActiveSection(null)} />;
+  }
+  if (activeSection === "changelog") {
+    return <ChangelogAdminDetail onBack={() => setActiveSection(null)} />;
   }
   if (activeSection === "betaredeem") {
     return <BetaRedeemDetail onBack={() => setActiveSection(null)} />;
@@ -2168,6 +2434,13 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
             label="Investor Codes"
             summary="Manage access codes and view registrations"
             onPress={() => setActiveSection("investorcodes")}
+          />
+        )}
+        {isAdmin && (
+          <ListRow
+            label="Changelog"
+            summary="Author the What's New entries paired with the update banner"
+            onPress={() => setActiveSection("changelog")}
             last
           />
         )}

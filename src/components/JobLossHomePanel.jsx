@@ -6,6 +6,7 @@ import { ResumeReviewCard } from "./ResumeReviewCard.jsx";
 import { JobHuntChatPanel } from "./JobHuntChatPanel.jsx";
 import { CoachNetWorthCard } from "./CoachNetWorthCard.jsx";
 import { canAccessAskCoachGeneral, canAccessAiFeatures } from "../lib/entitlements.js";
+import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 
 /**
  * JobLossHomePanel — Job Loss Mode's own Home view (TODO §15 mode rebuild).
@@ -15,14 +16,15 @@ import { canAccessAskCoachGeneral, canAccessAiFeatures } from "../lib/entitlemen
  * this is meant to read as a genuinely different mode the app enters, not the
  * regular dashboard with things moved around.
  *
- * Shows: runway headline (days / cliff date / weekly burn), the accessible
- * cash on hand input (persisted config.jobLossCashOnHand — mandatory at
- * JobLossEntry, editable here AND on JobLossBudgetPanel, both committing to
- * the same field so neither can drift), a small "log extra income" widget for
- * cash made while job hunting (gig work, odd jobs — folded straight into the
- * runway's savings side), and the Re-employment Tracker (target income +
- * application log). The benefit-scenario toggle still lives on
- * JobLossBudgetPanel only, passed in here read-only (see lib/jobLossRunway.js).
+ * Shows: a Cash On Hand card (persisted config.jobLossCashOnHand — mandatory
+ * at JobLossEntry, editable here AND on JobLossBudgetPanel via the shared
+ * CashOnHandSheet, both committing to the same field so neither can drift;
+ * timeline-aware per §15.H17 — see lib/jobLossRunway.js's effectiveCashOnHand),
+ * the runway headline (days / cliff date / weekly burn), a small "log extra
+ * income" widget for cash made while job hunting (gig work, odd jobs — folded
+ * straight into the runway's savings side), and the Re-employment Tracker
+ * (target income + application log). The benefit-scenario toggle still lives
+ * on JobLossBudgetPanel only, passed in here read-only.
  *
  * Also mounts CoachNetWorthCard (DW-8 fix, docs/BUG_FIX_TODO.md): the Red
  * tier ("Job Loss Mode, runway under 30 days") was structurally unreachable
@@ -49,6 +51,7 @@ export function JobLossHomePanel({
 
   const [amountDraft, setAmountDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
+  const [cashSheetOpen, setCashSheetOpen] = useState(false);
 
   // Job Hunt Assistant panel open/exit — same fold-lift-out timing/pattern as
   // App.jsx's askCoachExiting (180ms), kept local here rather than lifted to
@@ -63,38 +66,22 @@ export function JobLossHomePanel({
     }, 180);
   }, []);
 
-  // Numeric Input Standard (CLAUDE.md): string draft state, only parseFloat
-  // at commit. Re-synced from the persisted value via React's documented
-  // "adjust state during render" pattern (react.dev — not a useEffect, which
-  // would fire an extra render and trip react-hooks/set-state-in-effect) —
-  // only when the underlying number actually changes (e.g. edited on Budget
-  // then navigated back here), never clobbering in-progress typing.
-  const [lastSyncedCash, setLastSyncedCash] = useState(config.jobLossCashOnHand);
-  const [cashDraft, setCashDraft] = useState(() => (
-    config.jobLossCashOnHand != null ? String(config.jobLossCashOnHand) : ""
-  ));
-  if (config.jobLossCashOnHand !== lastSyncedCash) {
-    setLastSyncedCash(config.jobLossCashOnHand);
-    setCashDraft(config.jobLossCashOnHand != null ? String(config.jobLossCashOnHand) : "");
-  }
-
-  const manualSavings = cashDraft === "" ? 0 : Math.max(0, parseFloat(cashDraft) || 0);
   const huntIncome = sumJobHuntIncome(config);
 
-  // Eager-save on blur, not on every keystroke (docs/TODO.md "Persistence —
-  // Eager Save Pattern": plain typing stays on the debounce; this commits the
-  // discrete "done editing" moment instead of leaving it to the 800ms window).
-  const commitCashOnHand = () => {
-    const parsed = cashDraft === "" ? 0 : Math.max(0, parseFloat(cashDraft) || 0);
-    if (parsed === (config.jobLossCashOnHand ?? 0)) return;
-    const next = { ...config, jobLossCashOnHand: parsed };
+  const dash = useMemo(() => computeJobLossRunway({
+    config, expenses, effectiveToday, extraCash: huntIncome,
+  }), [config, expenses, effectiveToday, huntIncome]);
+
+  // Confirming a value in the sheet is the discrete "I checked my balance,
+  // this is true right now" moment — resets the decay clock by stamping
+  // jobLossCashOnHandAsOf alongside the new figure (TODO §15.H17). Eager-save
+  // pattern (docs/TODO.md): computed synchronously, passed to both setState
+  // and saveConfigNow.
+  const saveCashOnHand = (parsedValue) => {
+    const next = { ...config, jobLossCashOnHand: parsedValue, jobLossCashOnHandAsOf: effectiveToday };
     setConfig(next);
     saveConfigNow?.(next);
   };
-
-  const dash = useMemo(() => computeJobLossRunway({
-    config, expenses, effectiveToday, savings: manualSavings + huntIncome,
-  }), [config, expenses, effectiveToday, manualSavings, huntIncome]);
 
   const entries = useMemo(() => (
     [...(config.jobHuntIncomeLog ?? [])].sort((a, b) => (b.loggedAt ?? "").localeCompare(a.loggedAt ?? ""))
@@ -140,9 +127,63 @@ export function JobLossHomePanel({
     saveConfigNow?.(next);
   };
 
+  const billsCaptionValue = Math.round(dash.billsDueSinceAsOf);
+
   return (
     <div>
       <PanelHero eyebrow="Job Loss Mode">Home</PanelHero>
+
+      {/* ── Cash On Hand (TODO §15.H17) — its own card, above Runway; tap
+          anywhere (pencil badge signals it) to open the update sheet. ── */}
+      <Pressable
+        onClick={() => setCashSheetOpen(true)}
+        disabled={readOnly}
+        aria-label="Update cash on hand"
+        style={{
+          position: "relative",
+          display: "block", width: "100%", textAlign: "left",
+          background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)",
+          borderRadius: "16px", padding: "20px 18px", marginBottom: "12px",
+          boxShadow: "0 8px 26px rgba(0,0,0,0.32)",
+          cursor: readOnly ? "default" : "pointer",
+        }}
+        scale={0.97}
+      >
+        <div style={{
+          position: "absolute", top: "14px", right: "14px",
+          width: "30px", height: "30px", borderRadius: "50%",
+          background: "rgba(0,200,150,0.12)", border: "1px solid rgba(0,200,150,0.32)",
+          display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-teal)",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+          </svg>
+        </div>
+        <div style={{ fontSize: "10px", letterSpacing: "2.5px", color: "var(--color-text-secondary)", textTransform: "uppercase", marginBottom: "8px", fontFamily: "var(--font-sans)" }}>
+          Cash On Hand
+        </div>
+        <div style={{ fontSize: "32px", fontWeight: "bold", color: "var(--color-text-primary)", fontFamily: "var(--font-display)", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+          ${Math.round(dash.effectiveCashOnHand).toLocaleString()}
+        </div>
+        {billsCaptionValue > 0 && (
+          <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--color-text-secondary)" }}>
+            − ${billsCaptionValue.toLocaleString()} in bills since you last updated this
+          </div>
+        )}
+        {dash.pendingCheck && (
+          <div style={{ marginTop: "10px", fontSize: "11px", color: "var(--color-green)", lineHeight: 1.5 }}>
+            Pending check: ${Math.round(dash.pendingCheck.amount).toLocaleString()} arriving{" "}
+            {dash.pendingCheck.daysOut === 0 ? "today" : `in ${dash.pendingCheck.daysOut} ${dash.pendingCheck.daysOut === 1 ? "day" : "days"}`}
+            {" "}({new Date(dash.pendingCheck.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })})
+          </div>
+        )}
+      </Pressable>
+      <CashOnHandSheet
+        open={cashSheetOpen}
+        onClose={() => setCashSheetOpen(false)}
+        currentValue={dash.effectiveCashOnHand}
+        onSave={saveCashOnHand}
+      />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
         <MetricCard label="Runway" val={`${daysLabel} days`} sub={cliffLabel !== "—" ? `ends ${cliffLabel}` : null} status={cliffStatus} span={2} centered />
@@ -155,36 +196,6 @@ export function JobLossHomePanel({
         </div>
       )}
       <div style={{ marginBottom: "16px" }} />
-
-      <SectionHeader sub="Drives the Runway number above — also editable on Budget">
-        Cash On Hand
-      </SectionHeader>
-      <div style={{
-        background: "var(--color-bg-surface)", border: "1px solid var(--color-border-subtle)",
-        borderRadius: "14px", padding: "16px", marginBottom: "20px",
-      }}>
-        <label style={lS}>Accessible cash on hand</label>
-        <input
-          type="number" min="0" step="50" inputMode="decimal"
-          value={cashDraft}
-          onChange={(e) => setCashDraft(e.target.value)}
-          onBlur={commitCashOnHand}
-          disabled={readOnly}
-          placeholder="e.g. 1,023"
-          style={{ ...iS, marginTop: "6px" }}
-        />
-        <div style={{ marginTop: "6px", fontSize: "10px", color: "var(--color-text-disabled)", lineHeight: 1.5 }}>
-          Savings, checking — whatever you could draw on today. Extra income logged below
-          (${Math.round(huntIncome).toLocaleString()} so far) is added automatically.
-        </div>
-        {dash.pendingCheck && (
-          <div style={{ marginTop: "10px", fontSize: "11px", color: "var(--color-green)", lineHeight: 1.5 }}>
-            Pending check: ${Math.round(dash.pendingCheck.amount).toLocaleString()} arriving{" "}
-            {dash.pendingCheck.daysOut === 0 ? "today" : `in ${dash.pendingCheck.daysOut} ${dash.pendingCheck.daysOut === 1 ? "day" : "days"}`}
-            {" "}({new Date(dash.pendingCheck.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })})
-          </div>
-        )}
-      </div>
 
       <SectionHeader sub="Cash from gig work or odd jobs — goes straight into your runway savings">
         Log Extra Income

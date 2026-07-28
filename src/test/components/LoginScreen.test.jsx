@@ -170,10 +170,28 @@ describe('LoginScreen — sign up', () => {
     fireEvent.click(screen.getByText('Create one'))
     fireEvent.change(screen.getByPlaceholderText('you@example.com'), { target: { value: 'new@b.com' } })
     fireEvent.change(screen.getByPlaceholderText('At least 6 characters'), { target: { value: 'secret99' } })
+    fireEvent.click(screen.getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
     await waitFor(() =>
       expect(signUp).toHaveBeenCalledWith(expect.objectContaining({ email: 'new@b.com', password: 'secret99' }))
     )
+  })
+
+  it('blocks submission without agreeing to the Terms of Service / Privacy Policy', async () => {
+    render(<LoginScreen />)
+    fireEvent.click(screen.getByText('Create one'))
+    fireEvent.change(screen.getByPlaceholderText('you@example.com'), { target: { value: 'new@b.com' } })
+    fireEvent.change(screen.getByPlaceholderText('At least 6 characters'), { target: { value: 'secret99' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(screen.getByText(/must agree to the Terms of Service/i)).toBeTruthy()
+    expect(signUp).not.toHaveBeenCalled()
+  })
+
+  it('opens the Terms of Service / Privacy Policy document links', () => {
+    render(<LoginScreen />)
+    fireEvent.click(screen.getByText('Create one'))
+    fireEvent.click(screen.getByRole('button', { name: 'Terms of Service' }))
+    expect(screen.getAllByText(/PLACEHOLDER/i).length).toBeGreaterThan(0)
   })
 })
 
@@ -224,9 +242,18 @@ describe('LoginScreen — Google OAuth callback failure', () => {
   it('forces the Google account chooser on the Create Account tab', async () => {
     render(<LoginScreen />)
     fireEvent.click(screen.getByText('Create one'))
+    fireEvent.click(screen.getByRole('checkbox'))
     fireEvent.click(screen.getByRole('button', { name: /continue with google/i }))
     await waitFor(() => expect(signInWithOAuth).toHaveBeenCalled())
     expect(signInWithOAuth.mock.calls[0][0].options.queryParams).toEqual({ prompt: 'select_account' })
+  })
+
+  it('blocks Google sign-up without agreeing to the Terms of Service / Privacy Policy', () => {
+    render(<LoginScreen />)
+    fireEvent.click(screen.getByText('Create one'))
+    fireEvent.click(screen.getByRole('button', { name: /continue with google/i }))
+    expect(screen.getByText(/must agree to the Terms of Service/i)).toBeTruthy()
+    expect(signInWithOAuth).not.toHaveBeenCalled()
   })
 })
 

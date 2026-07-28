@@ -630,7 +630,7 @@ export async function deleteCoachChat(id) {
 }
 
 /**
- * §18.E1 — Résumé Review v1 storage (migration 032). One row per user
+ * §18.E1 — Résumé Review v1 storage (migration 036). One row per user
  * (`user_id` is the table's primary key, not a surrogate `id`), so this is a
  * load-one/upsert-one shape rather than coach_chats' list shape. Returns null
  * on no session, no saved profile yet, or a missing-table error — same
@@ -738,7 +738,9 @@ export async function createInvestorAccount({ name, email, password, company, ci
   // Step 3 — user_data row seeded with investor config. is_investor itself is
   // NOT written here — it's a privileged column (migration
   // 019_enable_user_data_rls.sql) the client can no longer set directly; it's
-  // granted below via the service-role api/seed-investor route instead.
+  // granted below via the service-role api/seed.js route instead (type: "investor" —
+  // consolidated from the former api/seed-investor.js to stay under Vercel's
+  // Hobby-plan 12-function-per-deployment cap).
   const investorConfig = {
     ...DEFAULT_CONFIG,
     isInvestor:      true,
@@ -771,13 +773,13 @@ export async function createInvestorAccount({ name, email, password, company, ci
   // this table that migration 019 introduces regardless of this function).
   if (authData.session?.access_token) {
     try {
-      const res = await fetch("/api/seed-investor", {
+      const res = await fetch("/api/seed", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${authData.session.access_token}`,
         },
-        body: JSON.stringify({ code: codeUsed }),
+        body: JSON.stringify({ type: "investor", code: codeUsed }),
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
@@ -911,12 +913,14 @@ export async function saveDemoAccount(accountNumber, { config, expenses, goals, 
  *      ProfilePanel can surface them without a separate API call. display_name/
  *      avatar_url are client-writable, so this stays a direct upsert.
  *   2. Seeds the trial window (trial_started_at/trial_ends_at/access_ends_at,
- *      subscription_status="trialing") via the service-role api/seed-trial
- *      route — those columns are privileged (migration
- *      019_enable_user_data_rls.sql revokes client write access to them), so
- *      the client can no longer set them directly. The route itself decides
- *      whether this is a brand-new user (keyed off trial_started_at IS NULL)
- *      and no-ops for returning users.
+ *      subscription_status="trialing") via the service-role api/seed.js
+ *      route (type: "trial" — consolidated from the former api/seed-trial.js
+ *      to stay under Vercel's Hobby-plan 12-function-per-deployment cap) —
+ *      those columns are privileged (migration 019_enable_user_data_rls.sql
+ *      revokes client write access to them), so the client can no longer set
+ *      them directly. The route itself decides whether this is a brand-new
+ *      user (keyed off trial_started_at IS NULL) and no-ops for returning
+ *      users.
  * Safe to call for email/password users — no-op if no metadata present.
  */
 export async function syncUserProfile(user) {
@@ -937,9 +941,10 @@ export async function syncUserProfile(user) {
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData?.session?.access_token;
     if (!accessToken) return;
-    const res = await fetch("/api/seed-trial", {
+    const res = await fetch("/api/seed", {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "trial" }),
     });
     if (!res.ok) console.warn("syncUserProfile trial seed failed:", res.status);
   } catch (err) {
@@ -978,28 +983,37 @@ export async function checkRevival() {
 /**
  * Redeems a beta program access code on the CALLER's own already-existing
  * account (docs/TODO.md §32) — unlike investor codes, this doesn't create a
- * new account, it upgrades one that's already signed in. POSTs to
- * api/seed-beta.js, same shape as syncUserProfile's call to api/seed-trial.
- * Returns { ok: true } on success, { ok: false, error } otherwise — the
- * caller (ProfilePanel) is responsible for reloading state after success,
- * since is_tester/beta_code_used are read-only fields loadUserData maps in.
+ * new account, it upgrades one that's already signed in. POSTs to api/seed.js
+ * (type: "beta" — consolidated from the former api/seed-beta.js, api/seed-investor.js,
+ * and api/seed-trial.js into one route to stay under Vercel's Hobby-plan
+ * 12-function-per-deployment cap). Returns { ok: true } on success,
+ * { ok: false, error, retryable } otherwise — the caller (ProfilePanel) is
+ * responsible for reloading state after success, since is_tester/beta_code_used
+ * are read-only fields loadUserData maps in.
+ *
+ * `retryable` tells a caller that auto-retries (App.jsx's signup-link handoff)
+ * whether trying the same code again later could plausibly succeed: true for
+ * a missing session or a network/server (5xx) failure — neither says anything
+ * about the code itself — false for a 4xx rejection (missing code, invalid/
+ * inactive/already-claimed code, seat cap full), which will fail identically
+ * on every retry since it's the request itself that's wrong.
  */
 export async function redeemBetaCode(code) {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
-  if (!accessToken) return { ok: false, error: "Not signed in" };
+  if (!accessToken) return { ok: false, error: "Not signed in", retryable: true };
 
   try {
-    const res = await fetch("/api/seed-beta", {
+    const res = await fetch("/api/seed", {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ type: "beta", code }),
     });
     const payload = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: payload?.error || "Invalid or inactive beta code" };
+    if (!res.ok) return { ok: false, error: payload?.error || "Invalid or inactive beta code", retryable: res.status >= 500 };
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err.message };
+    return { ok: false, error: err.message, retryable: true };
   }
 }
 
@@ -1054,4 +1068,127 @@ export async function logBetaFeedback({ isTester, betaCodeUsed, note }) {
 
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+/**
+ * Admin-managed "What's New" changelog (database/migrations/032_add_changelog_entries.sql).
+ * Paired with UpdateAvailableBanner — see App.jsx's changelog-fetch effect.
+ *
+ * Reads the single most recent PUBLISHED entry directly via the client (RLS
+ * policy on changelog_entries restricts this to published_at IS NOT NULL —
+ * no draft ever leaks through this path). Returns null on any error so a
+ * transient failure here degrades to "no changelog," never a crash — this is
+ * a nice-to-have banner enhancement, not core functionality.
+ */
+export async function fetchLatestPublishedChangelog() {
+  const { data, error } = await supabase
+    .from("changelog_entries")
+    .select("id, version_label, title, body, published_at")
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data;
+}
+
+async function changelogAuthHeaders() {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) return null;
+  return { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" };
+}
+
+/**
+ * Admin authoring list — every entry (drafts included), via api/admin-changelog.js's
+ * service-role GET. Never call this for the ordinary "is there something new"
+ * check; use fetchLatestPublishedChangelog for that (draft rows must never
+ * reach a non-admin surface).
+ */
+export async function fetchAllChangelogEntries() {
+  const headers = await changelogAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in", entries: [] };
+  try {
+    const res = await fetch("/api/admin-changelog", { method: "GET", headers });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to load entries", entries: [] };
+    return { ok: true, entries: payload.entries ?? [] };
+  } catch (err) {
+    return { ok: false, error: err.message, entries: [] };
+  }
+}
+
+/**
+ * Create (no id) or update (id present) a changelog entry. `published` toggles
+ * draft<->published — api/admin-changelog.js owns the published_at timestamp
+ * logic (preserves the original publish time on a stays-published re-save).
+ */
+export async function saveChangelogEntry({ id, versionLabel, title, body, published }) {
+  const headers = await changelogAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in" };
+  try {
+    const res = await fetch("/api/admin-changelog", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ id, versionLabel, title, body, published }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to save entry" };
+    return { ok: true, entry: payload.entry };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+export async function deleteChangelogEntry(id) {
+  const headers = await changelogAuthHeaders();
+  if (!headers) return { ok: false, error: "Not signed in" };
+  try {
+    const res = await fetch(`/api/admin-changelog?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers,
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: payload?.error || "Failed to delete entry" };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
+ * Terms of Service / Privacy Policy consent (database/migrations/033_add_consent_records.sql).
+ * Direct client insert (not routed through an API route like the changelog
+ * admin writes) — RLS restricts this to the caller's own user_id, and the
+ * DB-side trigger forces consented_at, so a raw client insert is safe here:
+ * a malicious client can only ever write a truthful "I agreed" row for
+ * itself, never spoof another user or a fabricated timestamp. Append-only —
+ * no update/delete path exists for this table, by design.
+ */
+export async function recordConsent(userId, policyVersion) {
+  if (!userId || !policyVersion) return { ok: false, error: "Missing userId or policyVersion" };
+  const { error } = await supabase
+    .from("consent_records")
+    .insert({ user_id: userId, policy_version: policyVersion });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Most recent consent record for the CALLER's own account (RLS-scoped, same
+ * as recordConsent). Used by App.jsx's re-consent check — currently only
+ * acted on when constants/legalDocuments.js's ENFORCE_EXISTING_USER_RECONSENT
+ * is true. Returns null (never throws) on any error or missing row, same
+ * "degrade quietly" posture as fetchLatestPublishedChangelog.
+ */
+export async function fetchLatestConsent(userId) {
+  const { data, error } = await supabase
+    .from("consent_records")
+    .select("policy_version, consented_at")
+    .eq("user_id", userId)
+    .order("consented_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data;
 }

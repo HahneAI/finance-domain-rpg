@@ -58,6 +58,15 @@ export const DEFAULT_CONFIG = {
   baseRate: 19.65, shiftHours: 12, diffRate: 1.75, nightDiffRate: 1.50, otThreshold: 40, otMultiplier: 1.5,
   commissionMonthly: 0,          // $ / month average; 0 = not a commission job
 
+  // ── Tips / Commission daily check-in ──────────────────────────
+  tipsOrCommissionEnabled: false,   // wizard opt-in: user earns tips or commission and wants daily check-ins
+  tipsOrCommissionLabel: null,      // "tips" | "commission" | null (not enabled)
+  tipsCommissionOnlyPosition: null, // captured for a future feature only — no functional/income-math effect today
+  // "YYYY-MM-DD" the opt-in first turned on — bounds the daily check-in backlog so a
+  // new opt-in isn't immediately asked about days before they were tracking anything.
+  // null = never enabled yet (or legacy account predating this field).
+  tipsOrCommissionEnabledAt: null,
+
   // ── Deductions / benefits ────────────────────────────────────
   // selectedBenefits: array of benefit IDs the user has enrolled in (wizard step 3)
   selectedBenefits: [],
@@ -119,6 +128,15 @@ export const DEFAULT_CONFIG = {
   // both JobLossHomePanel and JobLossBudgetPanel, persisted via eager save —
   // NOT session-only like the old draft-only version of this field.
   jobLossCashOnHand: null,
+  // Timestamp the cash-on-hand figure was last confirmed by the user (TODO
+  // §15.H17) — stamped alongside jobLossCashOnHand every time it's edited
+  // (JobLossEntry Activate, or either panel's CashOnHandSheet). From that
+  // date forward, computeJobLossRunway automatically subtracts every
+  // essential bill due date that passes, so the displayed figure decays on
+  // its own instead of going stale until the user re-checks their balance.
+  // null = never explicitly stamped (pre-§15.H17 accounts) — falls back to
+  // jobLossDate.
+  jobLossCashOnHandAsOf: null,  // "YYYY-MM-DD"
   // Pending/final paycheck still owed from the lost job (TODO §15.H15) —
   // optional, skippable in the wizard (unlike cash on hand). Resolved once at
   // Activate time from "days worked in your final week" + "which day checks
@@ -347,6 +365,7 @@ export const EVENT_TYPES = {
   pto_unapproved:    { label: "PTO Used (Unapproved)",          color: "#c8922a", icon: "⚠" },
   partial:           { label: "Partial Shift",                  color: "var(--color-teal)", icon: "◑" },
   bonus:             { label: "Bonus / Extra Pay",              color: "var(--color-green)", icon: "+" },
+  tips_commission:   { label: "Tips / Commission",              color: "var(--color-green)", icon: "$" },
   other_loss:        { label: "Other Income Loss",              color: "#888",    icon: "−" },
 };
 

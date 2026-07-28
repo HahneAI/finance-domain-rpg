@@ -256,7 +256,10 @@ describe('SetupWizard — DHL hidden defaults', () => {
     clickNext()
     fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
     expect(screen.getByText(/overtime threshold/i)).toBeTruthy()
-    expect(screen.getByText(/ot multiplier/i)).toBeTruthy()
+    // OT multiplier lives inside the collapsed "Advanced Pay Rules" disclosure.
+    expect(screen.queryByText(/^ot multiplier$/i)).toBeNull()
+    fireEvent.click(screen.getByText(/advanced pay rules/i))
+    expect(screen.getByText(/^ot multiplier$/i)).toBeTruthy()
   })
 
   it('hides pay-period selector for DHL users on Schedule step', () => {
@@ -528,5 +531,116 @@ describe('SetupWizard — Jobless Setup mini-flow (TODO §15.H)', () => {
     advanceSteps(5)
     expect(screen.getByText(/filling in a real pay structure for the first time/i)).toBeTruthy()
     expect(screen.queryByText(/base rate/i)).toBeNull() // no DIFF_FIELDS row rendered
+  })
+})
+
+describe('SetupWizard — tips/commission daily check-in opt-in (Step 1)', () => {
+  it('does not show the question until the DHL employer gate is answered', () => {
+    renderWizard({ config: { ...BASE_CONFIG, employerPreset: null } })
+    clickNext() // step 0 -> step 1
+    expect(screen.queryByText(/do you earn tips or commission/i)).toBeNull()
+  })
+
+  it('defaults to "No" once the gate is answered, with no follow-up shown', () => {
+    renderWizard({ config: { ...BASE_CONFIG, employerPreset: null } })
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i })) // DHL gate -> No
+    expect(screen.getByText(/do you earn tips or commission/i)).toBeTruthy()
+    expect(screen.queryByText(/is this a commission-only position/i)).toBeNull()
+  })
+
+  it('selecting "Tips" enables the check-in with no commission-only follow-up', async () => {
+    const { onComplete } = renderWizard({ config: { ...BASE_CONFIG, employerPreset: null } })
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i })) // DHL gate -> No (clears baseRate/shiftHours)
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 19\.65/i), { target: { value: '21.15' } })
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 10/i), { target: { value: '12' } })
+    fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^tips$/i }))
+    expect(screen.queryByText(/is this a commission-only position/i)).toBeNull()
+
+    advanceSteps(4)
+    fireEvent.click(screen.getByRole('button', { name: /finish/i }))
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const payload = onComplete.mock.calls[0][0]
+    expect(payload.tipsOrCommissionEnabled).toBe(true)
+    expect(payload.tipsOrCommissionLabel).toBe('tips')
+    expect(payload.tipsOrCommissionEnabledAt).toBeTruthy()
+  })
+
+  it('selecting "Commission" reveals the commission-only follow-up question', () => {
+    renderWizard({ config: { ...BASE_CONFIG, employerPreset: null } })
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^commission$/i }))
+    expect(screen.getByText(/is this a commission-only position/i)).toBeTruthy()
+  })
+
+  it('captures commission-only Yes/No with no functional effect beyond the field itself', async () => {
+    const { onComplete } = renderWizard({ config: { ...BASE_CONFIG, employerPreset: null } })
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i })) // DHL gate -> No (clears baseRate/shiftHours)
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 19\.65/i), { target: { value: '21.15' } })
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 10/i), { target: { value: '12' } })
+    fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^commission$/i }))
+    // Two "Yes" buttons now exist (DHL gate + commission-only follow-up) — the
+    // follow-up renders later in the same Step1 tree, so it's the last match.
+    fireEvent.click(screen.getAllByRole('button', { name: /^yes$/i }).at(-1))
+
+    advanceSteps(4)
+    fireEvent.click(screen.getByRole('button', { name: /finish/i }))
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const payload = onComplete.mock.calls[0][0]
+    expect(payload.tipsOrCommissionLabel).toBe('commission')
+    expect(payload.tipsCommissionOnlyPosition).toBe(true)
+  })
+
+  it('does not stamp tipsOrCommissionEnabledAt again on a re-entry where it was already enabled', async () => {
+    const config = {
+      ...BASE_CONFIG,
+      employerPreset: null,
+      tipsOrCommissionEnabled: true,
+      tipsOrCommissionLabel: 'tips',
+      tipsOrCommissionEnabledAt: '2026-01-01',
+    }
+    const { onComplete } = renderWizard({ lifeEvent: 'changed_jobs', config })
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i })) // DHL gate -> No (clears baseRate/shiftHours)
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 19\.65/i), { target: { value: '21.15' } })
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 10/i), { target: { value: '12' } })
+    fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
+
+    advanceSteps(4)
+    fireEvent.click(screen.getByRole('button', { name: /finish/i }))
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    expect(onComplete.mock.calls[0][0].tipsOrCommissionEnabledAt).toBe('2026-01-01')
+  })
+
+  it('clears tipsOrCommissionEnabledAt when turned back off', async () => {
+    const config = {
+      ...BASE_CONFIG,
+      employerPreset: null,
+      tipsOrCommissionEnabled: true,
+      tipsOrCommissionLabel: 'tips',
+      tipsOrCommissionEnabledAt: '2026-01-01',
+    }
+    const { onComplete } = renderWizard({ lifeEvent: 'changed_jobs', config })
+    clickNext()
+    fireEvent.click(screen.getByRole('button', { name: /^no$/i })) // DHL gate -> No (clears baseRate/shiftHours)
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 19\.65/i), { target: { value: '21.15' } })
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 10/i), { target: { value: '12' } })
+    fireEvent.click(screen.getByRole('button', { name: /^weekly$/i }))
+    // Two "No" pills now exist (DHL gate + tips/commission block) — the tips/commission
+    // one renders later in the same Step1 tree, so it's the last match.
+    fireEvent.click(screen.getAllByRole('button', { name: /^no$/i }).at(-1))
+
+    advanceSteps(4)
+    fireEvent.click(screen.getByRole('button', { name: /finish/i }))
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+    const payload = onComplete.mock.calls[0][0]
+    expect(payload.tipsOrCommissionEnabled).toBe(false)
+    expect(payload.tipsOrCommissionEnabledAt).toBeNull()
   })
 })

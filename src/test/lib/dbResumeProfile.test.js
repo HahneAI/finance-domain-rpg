@@ -1,4 +1,4 @@
-// §18.E1 — resume_profile persistence (migration 032_add_resume_profile.sql).
+// §18.E1 — resume_profile persistence (migration 036_add_resume_profile.sql).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../lib/supabase.js', () => ({

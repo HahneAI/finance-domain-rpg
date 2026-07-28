@@ -4,15 +4,18 @@
 
 ---
 
-## 17. Monetization — Stripe Subscriptions + 2-Week Free Trial
+## 17. Monetization — Stripe Subscriptions + 2-Week Free Trial (LIVE)
 
-*New workstream. Authority Finance is currently free with no billing layer (`CLAUDE.md`: "No
-backend server… no Stripe — yet"). This section adds a paid subscription gated behind a 14-day
-free trial. The app stays a Vite/React frontend; all Stripe secret-key work lives in Vercel
-serverless functions under `api/` (same pattern as `api/delete-account.js`: verify the caller
-with their Supabase Bearer token, then act with the service-role client). Subscription state is the
-source of truth in **Stripe**, mirrored into Supabase `user_data` via webhook so the frontend can
-gate without hitting Stripe on every load.*
+**✅ COMPLETE — all code shipped and verified in production. Optional items below are configuration/administrative tasks, not feature gaps.**
+
+*Stripe subscriptions are fully implemented and live. Authority Finance now charges $14.99/mo or $120/yr 
+behind a 14-day free trial (plus hidden 7-day grace for users who miss the deadline). The app stays a 
+Vite/React frontend; all Stripe secret-key work lives in Vercel serverless functions under `api/` 
+(same pattern as `api/delete-account.js`: verify the caller with their Supabase Bearer token, then 
+act with the service-role client). Subscription state is the source of truth in **Stripe**, mirrored 
+into Supabase `user_data` via webhook so the frontend can gate without hitting Stripe on every load. 
+Lifecycle emails are sent daily via Resend; entitlement is computed client-side via `getEntitlement()` 
+which never relies on Lock Date simulation — always real wall-clock time.*
 
 **Resolved decisions (2026-06-16, pricing tiers reaffirmed 2026-07-01, annual price locked in 2026-07-02):**
 - **Price:** **$14.99/mo.** Annual = **flat $120/yr — exactly $10.00/mo**, chosen over the earlier
@@ -111,9 +114,24 @@ gate without hitting Stripe on every load.*
 - [ ] **Configure the Customer Portal** (Billing → Customer portal) so users can cancel / update
   card / switch plan without custom UI. *(Not yet confirmed done.)*
 - [x] **Register the webhook endpoint** (`/api/stripe-webhook`) and capture the signing secret.
-- [ ] **Set Vercel env vars** (see env block at the bottom) — `STRIPE_SECRET_KEY`,
-  `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL`, `APP_URL` still need to
-  be added in the Vercel dashboard.
+- [x] **Set Vercel env vars** (see env block at the bottom). **Resolved 2026-07-27** — production
+  Checkout was 500ing for every real user ("Server configuration is missing") because `STRIPE_SECRET_KEY`
+  (the live key) had never actually been added to Vercel; only the `_TEST` vars existed, so
+  `MODE === "live"` resolved `stripe` to `null` and `stripe-create-checkout.js`/`stripe-portal.js`
+  both hit their own missing-env guard. Fixed by generating a new **live-mode restricted key**
+  (`rk_live_...`, scoped to Checkout Sessions/Customers/Subscriptions/Customer Portal — all Write,
+  nothing broader) and setting it as `STRIPE_SECRET_KEY` in Vercel (Production scope). A real
+  Checkout session now opens successfully, which also confirms `STRIPE_PRICE_MONTHLY`,
+  `STRIPE_PRICE_ANNUAL`, and `APP_URL` are correctly live-mode/present (session creation would have
+  thrown on a bad price id or missing `APP_URL`). **`STRIPE_WEBHOOK_SECRET` also confirmed live and
+  correct** via a real end-to-end purchase (2026-07-27, Anthony's own account, Monthly plan,
+  intentionally not refunded): AccountDetail's Subscription card came back `ACTIVE` / "Monthly
+  plan — $14.99/mo" / correct renewal date immediately after checkout — since `subscription_status`,
+  `plan`, and `current_period_end` are written **only** by `stripe-webhook.js` (no other route
+  touches them), seeing the right values on screen proves the whole chain: signature verification
+  against the live secret → `stripe.subscriptions.retrieve` (restricted key's Subscriptions
+  permission) → the Supabase upsert → the frontend read. §17.B and §C's Stripe routes are now fully
+  verified in live mode, not just test mode.
 
 ### C. Serverless API routes (`api/`, Vercel functions)
 
@@ -742,6 +760,60 @@ finished first.*
   week at a time) into a banked balance on their account, purely as a voluntary buffer against a
   future missed payment — explicitly **not** "paying the bill early," and copy must make that
   distinction clear so it doesn't read as a coerced prepayment.
+  - **Resolved decision (2026-07-27): paid-plan users only, never trial users.** The eligibility
+    gate this needs already exists — it's exactly `getEntitlement()`'s `state === "active"` branch
+    (`src/lib/subscription.js:40-47`, the `isLiveSubscription` check), which is only true for a
+    real Stripe status (`active`, or `past_due`/`canceled` while still `withinPaidPeriod`) — as
+    opposed to `"trial"`/`"grace"`/`"none"`, which are the app-managed trial states with no real
+    Stripe subscription behind them. No new "has this user paid" concept needs inventing; reuse
+    the same check `ProfilePanel.jsx`'s `AccountDetail` already uses to decide Manage-Subscription
+    vs. Monthly/Annual buttons (`ProfilePanel.jsx:287`, `:374`). Must be enforced **server-side**
+    in the checkout route too, not just hidden in the UI — look up the row and reject with 403 if
+    `entitlement.state !== "active"` before creating any top-off Checkout Session.
+  - **Stripe side is a one-time payment, not a subscription change** — `mode: "payment"` (not
+    `"subscription"`) against a new one-time Price (e.g. "7-day buffer"), same
+    `stripe.checkout.sessions.create` call already used in `stripe-create-checkout.js`/
+    `stripe-revive-checkout.js`. Needs new price-id env vars following the existing per-mode
+    naming (`STRIPE_PRICE_TOPOFF_WEEK` / `_TEST`, same pattern as `_stripeClient.js`'s
+    `PRICE_ID_BY_PLAN`).
+  - **Vercel Hobby 12-function cap — this is the tight part.** `api/` currently has **11**
+    non-`_`-prefixed routes (verified 2026-07-27:
+    `admin-beta-report, admin-changelog, coach, cron-subscription-lifecycle, delete-account,
+    revival-lookup, seed, stripe-create-checkout, stripe-portal, stripe-revive-checkout,
+    stripe-webhook`). A new `api/stripe-topoff-checkout.js` file would land exactly on the 12-slot
+    ceiling with zero headroom left for anything else ever again. Given CLAUDE.md already flags
+    the three `stripe-*.js` checkout-creation routes as "the next most mergeable group," the
+    better move is extending `stripe-create-checkout.js` itself to accept a `topoff` plan value
+    (branching to `mode: "payment"` instead of `"subscription"` when it sees one) rather than
+    adding a fourth file — keeps the count at 11 instead of maxing it out.
+  - **Webhook handler already branches on `session.mode`** (`stripe-webhook.js:137`:
+    `if (userId && session.mode === "subscription" && ...)`), so a top-off purchase (`mode:
+    "payment"`) falls through that check today and is silently ignored — the fix is a sibling
+    `else if (session.mode === "payment" && session.metadata?.topoff)` branch that credits the
+    banked-days column instead of touching `subscription_status`/`plan`. The existing
+    `stripe_webhook_events` idempotency claim (migration `018`) already covers this new branch for
+    free — no new idempotency work needed.
+  - **The actual hard part — extending entitlement, not the Stripe plumbing.** The cleanest fit
+    found: `getEntitlement()`'s existing `withinPaidPeriod` check
+    (`src/lib/subscription.js:40`) already extends access past `current_period_end` for
+    `past_due`/`canceled`; a banked-days balance could plug into that exact line as
+    `currentPeriodEndMs + bankedDaysBalance * DAY_MS` rather than inventing a parallel mechanism.
+    **Open product question, not yet resolved:** does the balance decrement day-by-day as it's
+    actually consumed during a lapse (so partial use leaves a remainder for next time), or does
+    triggering the buffer at all consume the whole purchased block? This needs a decision before
+    writing the migration — `subscription.test.js`'s boundary tests and `_lifecycleEngine.js`'s
+    dunning-reset logic (`api/_lifecycleEngine.js:57-62`) both need to agree on which model before
+    either can be safely changed.
+  - **New column needed** — e.g. `banked_days_balance int not null default 0` on `user_data`.
+    Verify the actual next migration number against the `database/migrations/` folder before
+    filing it — CLAUDE.md's own running counter for this has already gone stale four times.
+  - **Admin visibility follow-on** — per the established convention (TODO.md §F "Admin
+    visibility" bullet), the Live State Inspector and DB Row Viewer drift check both gained a
+    field every time new subscription state was added; a banked-days balance should get the same
+    treatment rather than being invisible to the one diagnostic surface that catches drift.
+  - **Drift-app-warden note:** this touches the Account panel, persistence, and entitlements
+    spines — all mapped sections per `CLAUDE.md`. Consult `docs/drift-app-warden.md` before
+    building and update it in the same PR, per the doc's own mandatory-check rule.
 
 ---
 
@@ -1044,6 +1116,15 @@ standing constraint. Ships live API calls to Haiku via `chatWithCoach`.*
 
 *Requires Job Loss Mode (§15.C) to be live first.*
 
+**AI-gating decision resolved, 2026-07-25 (user directive) — build tracked in a separate
+session, not here.** Ships behind the same narrow `canAccessAiFeatures` (`isAdmin`/`isTester`)
+gate every other AI surface uses today; the plan is to move it to a paid-tier gate once the
+feature is finished, mirroring the precedent Coach's own gate-flip already set
+(`canAccessAskCoachGeneral`, widened 2026-07-24 — admin/tester **or** a real trial/paid
+entitlement, never `isInvestor`; see `drift-app-warden.md` F24). Until that flip happens for
+Job Hunt Assistant specifically, treat the checklist below as informational — the actual build
+is happening in another session, so don't duplicate work here without checking in first.
+
 *Job Loss Mode's §15.H/H7-H9 rebuild (2026-07-18) already produces most of the outputs this
 feature will need to read — noting the exact files/functions now so whoever builds this doesn't
 have to re-derive them or, worse, write a fourth parallel runway calc:*
@@ -1164,7 +1245,7 @@ scope — documentation only, nothing below is implemented.*
   `canAccessAskCoachGeneral` when splitting this off; see `coach-entry-points.md` §5/§6 and
   `drift-app-warden.md` §21 F124.
 - **Recommended phasing:**
-  - [x] **v1 — built 2026-07-25.** `resume_profile` table + RLS (migration `032_add_resume_profile.sql`,
+  - [x] **v1 — built 2026-07-25.** `resume_profile` table + RLS (migration `036_add_resume_profile.sql`,
     `user_id` as the primary key, not a surrogate `id` — genuinely 1:1 per account, unlike
     `coach_chats`); `loadResumeProfile`/`saveResumeProfile` in `db.js`. `ResumeReviewCard.jsx` —
     its own section in `JobLossHomePanel` (the "or" option from the original phasing note; no
@@ -2506,6 +2587,18 @@ how directly each one touches "is the runway number on screen actually correct."
   (`runwayDays` into Coach, the Lifestyle-spend caption) since they're small and don't require a
   design decision, before touching the pending-paycheck field or the two-runway-calc unification,
   which both need the user's input on scope/design first.
+- **All four `[ ]` gaps above closed, 2026-07-22 (H15/H16/H17) — checkboxes left unticked
+  intentionally, as the historical record of what this birdseye pass actually found.** Pending
+  paycheck → H15. Lifestyle-spend invisibility → H16. The two-runway-calc drift → H17 deleted
+  `estimateRunwayDays` outright rather than retrofitting it (cleaner than either option this list
+  proposed). `runwayDays` into Coach's context → wired the same pass. Only the AI-gating/business
+  question (bullet above) and the résumé spec (already `[x]`) remain genuinely open.
+- **AI-gating question resolved, 2026-07-25 (user directive) — see §18.E header for the full
+  note.** Stays `canAccessAiFeatures` (`isAdmin`/`isTester`) until Job Hunt Assistant ships, then
+  moves to a paid-tier gate (mirrors Coach's own `canAccessAskCoachGeneral` gate-flip,
+  2026-07-24). The Job Hunt Assistant build itself is being tracked in a separate session —
+  checkbox above left unticked as the historical record of what was open at the time of this
+  birdseye pass, not because the question is still live.
 
 #### H15. Pending/final paycheck — the first H14 gap, built, 2026-07-22 — DONE
 
@@ -2595,24 +2688,105 @@ runway math itself.*
   scoping bullets — all explicitly out of scope per the user ("runway bugs are already being
   worked on").
 
+#### H17. Cash On Hand card + timeline-aware decay, 2026-07-22 — DONE
+
+*User ask, not from the H14 list: the plain Cash On Hand input "looks lame and crappy" — wanted
+its own prominent card above the Runway tile, a visible pencil icon signaling it's editable, a
+bottom-sheet editor matching the expense editor's up-from-bottom/slide-down animation, and —
+separately — for the displayed figure to decrease automatically as Needs bills come due, feeding
+that decay into the runway instead of the number silently going stale between manual updates.*
+
+- [x] **`components/CashOnHandSheet.jsx`** (new) — single-line bottom-sheet editor shared by both
+  panels. Uses the existing `useFoldTransition` hook + a new `.fold-sheet` CSS class (index.css)
+  rather than BudgetPanel's own expense-detail sheet, which only ever had an entrance animation
+  (`expSheetSlideUp`) and unmounted instantly on close — no matching exit. `.fold-sheet` gives this
+  the first bottom sheet in the app with a real symmetric enter (up-from-bottom, matching that
+  sheet's existing curve) / exit (slide back down, `--ease-fold-exit`, no bounce) pair.
+- [x] **`components/JobLossHomePanel.jsx`** — the plain input + `SectionHeader` replaced with a
+  full-width pressable card *above* the Runway/Weekly Burn/Extra Income grid: big tabular-nums
+  dollar figure, a visible circular pencil badge (top-right, same edit-icon glyph as
+  `ReemploymentTracker`'s Edit button), tap-anywhere-on-card to open the sheet (`scale(0.97)` press
+  feedback, `disabled` when `readOnly` — native `disabled` blocks the click entirely, no separate
+  guard needed). The pending-check line moved here from the old input's helper box (its natural
+  home now).
+- [x] **`components/JobLossBudgetPanel.jsx`** — same sheet, compact pressable row (value + pencil
+  badge) inside the existing "Savings & Benefits" card instead of the plain input — kept visually
+  smaller since Budget has no Runway-card layout context to match, but functionally identical
+  (same sheet, same fields, same decay-reset-on-save behavior). Removed the old
+  `cashDraft`/`lastSyncedCash` render-time resync entirely — no longer needed once cash is only
+  ever committed through the sheet's explicit Save.
+- [x] **`lib/jobLossRunway.js`** — timeline-aware decay, kept centralized (single source of truth,
+  not duplicated per-panel per drift-app-warden D1). New `jobLossCashOnHandAsOf` config field
+  (stamped by `JobLossEntry`'s Activate and both panels' `CashOnHandSheet` saves) anchors
+  `sumBillsDueSince(expenses, fromExclusive, throughInclusive)` — walks each essential bill's real
+  due-date occurrences one at a time via `getNextDueDate` (the underlying cycle math only exposes
+  "next due on/after a date," not a closed-form occurrence count) and sums their actual payment
+  amounts (`getExpenseDisplayAmount`), floored at 0 against `jobLossCashOnHand` to produce
+  `effectiveCashOnHand` — the figure both cards display and the number that now feeds the
+  runway/cliff math (`withBenefits`/`withoutBenefits.cash`). Falls back to `jobLossDate` as the
+  decay anchor for pre-§15.H17 accounts that never got a real `jobLossCashOnHandAsOf` stamp.
+  `computeJobLossRunway`'s `savings` param renamed to `extraCash` (now just gig income —
+  `sumJobHuntIncome()` — since raw cash is read from `config` internally instead of pre-summed by
+  the caller) — forced every call site to be touched deliberately rather than silently
+  reinterpreting the same param name. Also de-duplicated three copy-pasted
+  active+tracked+category filters (`essentialActive`, `lifestyleActive`, and the new bills-due
+  filter) into two shared predicates, `isTrackedActiveEssential`/`isTrackedActiveLifestyle`.
+- [x] **External consumers updated for the `extraCash` rename** (drift-app-warden Spine A / D1
+  check — `computeJobLossRunway` is a mapped LEDGER item, cross-checked against every call site,
+  not just the two panels): `components/CoachNetWorthCard.jsx`'s Red-tier runway trigger and
+  `App.jsx`'s Ask Coach `coachRunwayDays` memo (both closed drift-app-warden §21 quarantines from
+  earlier work) each used to pre-sum `jobLossCashOnHand + sumJobHuntIncome()` into a local
+  `savings` var — both now pass `extraCash: sumJobHuntIncome(config)` only, and both automatically
+  gained decay-awareness for free since `computeJobLossRunway` now reads cash internally.
+- [x] **`constants/config.js`** — `jobLossCashOnHandAsOf: null` added to `DEFAULT_CONFIG`
+  (snapshot updated, `npx vitest run -u`).
+- [x] **`docs/active-systems.md` §10** — updated in the same pass (drift-app-warden: doc/spec drift
+  is its own quarantined failure class, D5) — was still describing the pre-H15/H16 3-step wizard
+  and the raw-sum `savings` formula; now reflects the 4-step wizard, the pending-check/Lifestyle-
+  caption features, and the card/sheet + decay architecture.
+- [x] Tests — `src/test/lib/jobLossRunway.test.js`: new `describe('sumBillsDueSince')` (8 cases —
+  window boundaries, Lifestyle/paused/untracked exclusion, loan inclusion, multi-occurrence
+  summing, missing-boundary guard) and `describe('computeJobLossRunway — timeline-aware cash on
+  hand')` (5 cases — decay math, floor-at-0, `jobLossDate` fallback, no-decay-when-nothing-due,
+  `extraCash` still additive on top). `src/test/components/jobLossFlow.test.jsx`: both panels'
+  old plain-input describe blocks rewritten for the card/sheet interaction (prefill, save +
+  asOf-stamp, cancel-without-saving — the cancel case needed `waitFor` since the sheet stays
+  mounted through its animated exit, not an instant unmount), plus new dedicated decay describe
+  blocks per panel; `JobLossEntry`'s existing Activate test extended to assert
+  `jobLossCashOnHandAsOf === jobLossDate`. Full suite: 1175 tests, all green (including the
+  previously-flagged `LoginScreen.test.jsx` full-suite-ordering flake, which also passed clean this
+  run). Lint diffed against a `git stash` baseline: zero new errors/warnings (diff was pure
+  line-number drift on pre-existing unrelated errors from removed lines above them). Production
+  build green.
+- **Scope note:** `sumBillsDueSince` only decays against essential (Needs + loan) bills, matching
+  the same category gate `weeklyBurn` already uses — Lifestyle spend still isn't part of any cash
+  figure, consistent with §15.H16's deliberate exclusion, not an oversight.
+
 ---
 
-### I. Admin Toolkit updates for §15 work
+### I. Admin Toolkit updates for §15 work — BUILT 2026-07-25
 
-- [ ] **Live State Inspector — Job Loss Mode pill**
-  - [ ] Amber pill when `config.jobLossMode === true`
-  - [ ] Add three values: `jobLossDate`, `unemploymentWeekly`, `unemploymentRemainingWeeks`
-- [ ] **Week Inspector — unemployment income row**
-  - [ ] When `w.unemploymentIncome > 0`, show "Unemployment" line in Pay section
-  - [ ] When `inJobLoss && w.unemploymentIncome === 0`, surface "Job Loss Mode — outside benefit window"
-- [ ] **DB Row Viewer — expense triage summary**
-  - [ ] One-liner: "Triage: X active · Y paused · Z cancelled"
-  - [ ] Flag any expense where `autoReactivateOnIncome === false`
-- [ ] **Config Raw View — Life Events header**
-  - [ ] Short header above JSON listing only §15-relevant fields with values
-- [ ] **CLAUDE.md update**
-  - [ ] Append Job Loss state to "Diagnostic request templates"
-  - [ ] Document per-week `unemploymentIncome` annotation on `buildYear` output
+- [x] **Live State Inspector — Job Loss Mode pill**
+  - [x] Amber dot on the pill (top-right corner) when `config.jobLossMode === true`, visible without opening the card
+  - [x] Three amber-highlighted rows in the expanded card: `Job Loss Date`, `Unemployment Wkly`, `Unemployment Wks Left` (the last reads `computeJobLossRunway()`'s `benefitsRemainingWeeks` via a shared `jobLossDash` memo — same call Coach's `coachRunwayDays` uses, no second derivation, per F24)
+- [x] **Week Inspector — unemployment income row**
+  - [x] `w.unemploymentIncome > 0` → green "Unemployment" row in the Pay section
+  - [x] Job Loss window with no benefit paid that week → "Unemployment — Job Loss Mode — outside benefit window" (window boundary mirrors buildYear's `inJobLoss` check — `jobLossDate`/`returnToWorkDate` — diagnostic-only, never feeds math, same pattern as `resolveBaseRateForWeek`)
+- [x] **DB Row Viewer — expense triage summary**
+  - [x] "Triage: X active · Y paused · Z cancelled" line (only shown when something's actually paused/cancelled/flagged)
+  - [x] Flags expense count where `autoReactivateOnIncome === false`
+- [x] **Config Raw View — Life Events header**
+  - [x] "Life Events" header above the JSON dump, listing only §15 fields that currently carry a value
+- [x] **CLAUDE.md update**
+  - [x] Appended Job Loss state (§7 in Diagnostic request templates)
+  - [x] Documented per-week `unemploymentIncome` annotation on `buildYear` output (Week Inspector + template §7 entries)
+- All four admin surfaces are duplicated three times in `App.jsx` (desktop sidebar, mobile
+  hamburger drawer, mobile bottom sheet) — pre-existing architecture, not introduced by this
+  pass. Computed once via shared memos (`jobLossDash`, `expenseTriageLine`,
+  `lifeEventsConfigFields`) and rendered into all three so the triplication stays presentation-
+  only, not a fourth parallel calculation. 1231 tests passing (no new tests — pure admin-only
+  diagnostic surface, isAdmin-gated, no math path exercised); lint diff-clean vs. baseline;
+  production build green.
 
 ---
 
@@ -4258,3 +4432,387 @@ Feature #6 (Shelf-tag capture) — isolated, deferred
 
 **Next step:** Confirm OCR engine choice (Tesseract vs. cloud API) — this is the critical blocker. All feasibility estimates above assume this decision is made. Once that's settled, Phase A (barcode) can proceed in parallel with Phase B (OCR foundation).
 
+---
+
+## 39. UI Cohesion — Cross-Panel Header/Accent Consistency
+
+*New workstream (2026-07-25), scoped from a design-system read + code audit requested to discuss
+making the app's sections "feel more cohesive and interlocked." `docs/authority-design-system`
+already specifies one repeating page-header pattern (eyebrow + big title + underline, via the
+`PanelHero` component) and cites Chime/Cash App's "one primary number, everything else behind
+progressive disclosure" as the Flow reference model — but two of the five tabs don't actually
+follow either the component or the naming convention. Backed by UX research on why this class of
+drift specifically damages first-time orientation (see Sources below) — nothing here is subjective
+taste, each item is a concrete divergence from the app's own documented spec.*
+
+**Sources consulted for this pass:**
+- [What Is Progressive Disclosure in UX? (2026) — UXPin](https://www.uxpin.com/studio/blog/what-is-progressive-disclosure/) — "start simple, reveal complexity only as needed"; Chime cited as the reference pattern the app's own design doc already points to.
+- [Fintech UX Best Practices 2026 — Eleken](https://www.eleken.co/blog-posts/fintech-ux-best-practices) — first-value-first onboarding for financial apps.
+- [Design Consistency Guide — UXPin](https://www.uxpin.com/studio/blog/guide-design-consistency-best-practices-ui-ux-designers/) — visual/functional/verbal consistency as three distinct axes that must all hold for a product to feel "reliable."
+- [Why UX design consistency matters — uxstudio](https://www.uxstudioteam.com/ux-blog/ux-design-consistency) — nav labels and page identity mismatches specifically named as trust-eroding.
+
+### A. Home and Income don't identify themselves by their own nav label
+
+**The gap.** All five tabs are supposed to open with the shared `PanelHero` pattern
+(`src/components/ui.jsx:629` — eyebrow + big title + underline). Budget, Log, and Account do:
+their hero titles are "Budget," "Event Log," and "Account" respectively, matching (or closely
+matching) the `BOTTOM_NAV` label a user just tapped (`src/App.jsx:49-95`). Home and Income don't:
+
+- **Home** (`src/components/HomePanel.jsx:613`) opens with a hero titled **"Goals"** —
+  the first thing a user sees after tapping the "Home" nav icon is a page that says it's
+  something else. A second, differently-styled hero further down (`:1317`) says
+  **"Financial Health"** — nothing on the page ever says "Home."
+- **Income** (`src/components/IncomePanel.jsx:307-309`) opens with eyebrow "Income Overview"
+  and hero title **"Year Summary"** — not "Income."
+
+**Why it matters (research-backed).** This is exactly the "functional/verbal consistency"
+failure mode the UXPin/uxstudio pieces above call out as trust-damaging: the nav promises one
+identity, the destination delivers another. It costs almost nothing once a user has built a
+mental model of the app, but it's precisely the kind of signal that makes a *first* open feel
+disorienting — and Home/Income are the two most-visited tabs, so it's the most-seen instance
+of the problem, not the least.
+
+- [ ] Give Home and Income a page-identity heading that says "Home" / "Income" (either promote
+      a proper top-of-page hero above "Goals"/"Year Summary," or fold the nav-matching identity
+      into the existing hero's eyebrow line) — resolve alongside item B below since both panels
+      need their hero markup touched anyway.
+
+### B. `PanelHero` exists as a shared component but Home/Income hand-roll copies that have drifted
+
+**The gap.** `PanelHero` (`src/components/ui.jsx:629-637`) is the one component meant to render
+every panel's page title. Budget (`BudgetPanel.jsx:1307`), Log (`LogPanel.jsx:578`), and Account
+(`ProfilePanel.jsx:2134`) call it directly. Home and Income instead paste the same visual recipe
+inline as raw JSX, and the three copies no longer agree with each other or with the real
+component:
+
+| Location | Title size | Underline width / opacity | Eyebrow present? |
+|---|---|---|---|
+| `PanelHero` (the real component) | 32px | 28px / 0.45 | yes (required prop) |
+| Home "Goals" hero (`HomePanel.jsx:613-628`) | 52px | 40px / 0.55 | yes ("Authority Finance") |
+| Home "Financial Health" hero (`HomePanel.jsx:1317-1329`) | 32px | 28px / 0.45 | **no eyebrow at all** |
+| Income "Year Summary" hero (`IncomePanel.jsx:307-327`) | 32px | 28px / 0.45 | yes ("Income Overview") |
+
+Three different title sizes and an inconsistent eyebrow presence, for what is supposed to be one
+repeating pattern app-wide. This is the same class of issue `docs/drift-app-warden.md` §17
+(F88, T10 UI-UX) already tracks for untokenized hex — component-copy drift instead of
+raw-value drift, same root cause (a shared visual contract re-implemented by hand instead of
+reused), just not yet caught because F88's grep-for-hex procedure doesn't catch duplicated JSX.
+
+- [ ] Replace Home's and Income's hand-rolled hero markup with actual `PanelHero` calls (folding
+      in whatever eyebrow/title text item A above resolves on). Removes the drift permanently
+      instead of re-syncing the copies by hand.
+- [ ] Decide whether Home's "Goals" section legitimately warrants the larger 52px treatment (a
+      deliberate emphasis choice) or whether it should drop to the standard 32px `PanelHero` — if
+      the former, that's a second, intentional "large hero" variant that `PanelHero` should grow
+      a prop for (e.g. `size="lg"`) rather than staying as a one-off inline copy.
+
+### C. Untokenized gold accent (`#c8a84b`) used five times for "current/now" semantics, never declared
+
+**The gap.** `#c8a84b` (a gold, distinct from the design doc's teal `--color-accent-primary`
+`#00C896`) appears five times in `src/App.jsx`, consistently meaning "this is the current point
+in time" — not a random one-off, a real recurring semantic:
+- `App.jsx:112` — desktop sidebar's active-nav-item left border (`SidebarNavItem`)
+- `App.jsx:2041`, `:2694`, `:3323` — "current week" cell border in three different Tax Weeks Grid
+  renderings (mobile/tablet/admin sizes)
+- `App.jsx:3341` — the grid's own legend swatch for "current week"
+
+None of these five route through `src/index.css`'s `@theme` token block, and the design doc
+(`docs/authority-design-system:25-44`) doesn't list a gold token at all — `--color-gold` is
+defined only as "Legacy alias — maps to accent-primary" (i.e. teal, `#00C896`), which is a
+*different* color than the `#c8a84b` actually in use. This is a new instance of the same
+untokenized-hex debt class `docs/drift-app-warden.md` §17 F88 already tracks for
+`WeekConfirmModal.jsx`/`LoginScreen.jsx`/`ProfilePanel.jsx` (also `CLAUDE.md`'s "Known Cleanup"
+list) — just not yet added to that list, and in a file (`App.jsx`) none of those three cover.
+
+- [ ] Formalize `#c8a84b` as a real design token (e.g. `--color-time-anchor` or
+      `--color-signal-gold`) in `src/index.css`'s `@theme` block, replace all five `App.jsx`
+      call sites, and add it to `docs/authority-design-system`'s color table so "gold = current
+      point in time, teal = active/primary" is a documented rule instead of an implicit one five
+      hardcoded hex strings happen to agree on today.
+- [ ] Add `App.jsx`'s five `#c8a84b` sites to the untokenized-hex debt list in `CLAUDE.md`'s
+      "Known Cleanup" section and `docs/drift-app-warden.md` §17 F88 (currently lists only
+      `WeekConfirmModal.jsx`/`LoginScreen.jsx`/`ProfilePanel.jsx`) in the same commit that
+      resolves the token, so the drift map stays accurate per the doc's own "keep it current in
+      the same PR" rule.
+
+### D. Not yet investigated — parking lot for the next pass
+
+Raised in the original discussion but out of scope for this pass (design-doc read + static code
+audit only, no runtime/visual walkthrough performed):
+- The transition/motion *feel* between tabs specifically (as opposed to the fold-motion
+  *mechanics* §17 F90 already covers) — does switching Home → Income → Budget feel like moving
+  through one connected app, or five independently-built screens stitched together?
+- How the Setup Wizard visually hands off into Home on first completion (first-run-specific;
+  the wizard itself was already decluttered per items elsewhere in this doc, but the *landing*
+  moment right after "Finish" hasn't been looked at for continuity with what Home now looks like).
+
+---
+
+## 40. Dev Infrastructure — Claude Code on the web headless UI testing
+
+*Built 2026-07-22: `.claude/hooks/session-start.sh` + `.claude/hooks/drive-app.mjs` (see commit
+`90dc305`). Web sessions previously had no way to satisfy CLAUDE.md's "start the dev server and use
+the feature in a browser" rule — the dev server booted straight into a crash (`supabaseUrl is
+required`, no Supabase config anywhere in the container) and Playwright wasn't available. The hook
+now installs deps, and — only once the environment variables below are configured on the Claude
+Code on the web environment itself (never in this repo) — wires up a real login screen and a
+headless-login driver script.*
+
+- [ ] **Pending setup (blocks this from doing anything beyond "no crash") — configure on the
+  Claude Code on the web environment (Environment settings), not in this repo or any `.env` file:**
+  - [ ] `VITE_SUPABASE_URL` — same value as production. Safe to store here: it's public by design.
+  - [ ] `VITE_SUPABASE_ANON_KEY` — same value as production. Also safe to store: Supabase's anon
+    key is meant to be client-embedded (protected by RLS, not secrecy) — it's already sitting in
+    the deployed production JS bundle today.
+  - [ ] `TEST_ACCOUNT_EMAIL` / `TEST_ACCOUNT_PASSWORD` — a **dedicated test/dummy account**, not
+    anthonyhahne20@gmail.com or any real user. Deliberately not `VITE_`-prefixed so these can never
+    end up in the client bundle — only `drive-app.mjs` reads them, straight from `process.env`.
+  - [ ] Once all four are set, confirm with: `CLAUDE_CODE_REMOTE=true .claude/hooks/session-start.sh`
+    should log `.env.local` written + test account present (not the "not set" fallback lines), then
+    `npm run dev &` + `node .claude/hooks/drive-app.mjs` should log in and screenshot the post-login
+    shell instead of exiting with the missing-credentials error.
+- [ ] **Once merged to `master`,** every future Claude Code on the web session on this repo picks
+  the hook up automatically — no per-session setup beyond the one-time env vars above.
+- [ ] **Test account should have Job Loss Mode data seeded** (or get it seeded once logged in) so a
+  session can actually drive the §15.H15/H16 screens this hook was built to unblock testing for —
+  worth doing as part of the same setup pass, not a separate task.
+
+---
+
+## 41. Terms of Service / Privacy Policy Consent Capture
+
+*Built 2026-07-26, scoped from a discussion about data encryption and an "industry standard"
+consent gate before signup. The mechanism is real and live for new signups; the legal content it
+records agreement to is not — see `constants/legalDocuments.js`'s header comment, which is the
+authoritative pointer for what's still outstanding. Ties into §27 (Data Encryption): that section's
+own conclusion stands — no field-level encryption is needed today because nothing currently
+collected is regulated/high-sensitivity data, and this workstream doesn't change that.*
+
+**What's live:**
+- `database/migrations/033_add_consent_records.sql` — `consent_records` table (`user_id`,
+  `policy_version`, `consented_at`). Append-only by design: RLS has no UPDATE/DELETE policy for any
+  client role, and a `BEFORE INSERT` trigger forces `consented_at` to the database's own clock
+  regardless of what the client sends, so a modified client can't backdate a consent record.
+- `LoginScreen.jsx` — a required checkbox ("I have read and agree to the Terms of Service and
+  Privacy Policy") gates **both** signup paths: the email/password form and the "Continue with
+  Google" OAuth button on the Create Account tab. Rejecting either without the box checked shows an
+  inline error and never calls `signUp`/`signInWithOAuth`. The two link spans open
+  `LegalDocumentModal` (reused from the changelog feature's `ChangelogBody` markdown renderer —
+  same token-styled treatment, one renderer for both features' content).
+- Consent recording: email/password path calls `recordConsent` directly (the handler already has
+  the new user's id in hand). The OAuth path can't do this synchronously — clicking "Continue with
+  Google" navigates the whole page away — so it hands the agreed-to version across the redirect via
+  `sessionStorage` (`LoginScreen.jsx`'s `PENDING_CONSENT_STORAGE_KEY`), which `App.jsx`'s
+  `SIGNED_IN` handler reads and clears once the session is confirmed.
+- `src/lib/db.js` — `recordConsent`/`fetchLatestConsent`. Direct client calls (not routed through a
+  service-role API route like the changelog admin writes) — safe because RLS restricts every
+  operation to the caller's own `user_id` and the DB trigger owns the timestamp, so a malicious
+  client can only ever write a truthful "I agreed" row for itself.
+
+**What's built but dormant:**
+- `App.jsx` + `ConsentGateModal.jsx` — a non-dismissible re-consent interstitial for *existing*
+  accounts, shown when the signed-in user's latest `consent_records` row doesn't match
+  `CURRENT_LEGAL_VERSION`. Only "Agree and Continue" (checkbox-gated) or "Sign out instead" — no
+  backdrop-click or ✕ close, matching the "give a real exit, never trap the user" posture
+  `ProfilePanel`'s delete-confirm dialog already follows.
+- Gated behind `constants/legalDocuments.js`'s `ENFORCE_EXISTING_USER_RECONSENT` (currently
+  `false`) — deliberately **not** wired live yet. Flipping it before real text ships would interrupt
+  every current user's next login with a mandatory agree-to-continue gate over placeholder copy.
+  New-signup consent is unaffected by this flag; it's always required regardless, since it only
+  affects brand-new accounts rather than surprising existing ones.
+
+- [ ] **Replace the placeholder legal text.** `constants/legalDocuments.js`'s
+  `TERMS_OF_SERVICE_MARKDOWN`/`PRIVACY_POLICY_MARKDOWN` are structural scaffolding only — every
+  section is marked `[PLACEHOLDER]` inline specifically so nobody mistakes a screenshot or a quick
+  read for the real thing. Needs lawyer-reviewed text before this should be treated as a real
+  compliance record, not just working code.
+- [ ] **Bump `CURRENT_LEGAL_VERSION`** once the real text lands (any string works — it's only ever
+  compared for equality, never parsed) — this alone re-gates brand-new signups against the real
+  text but does **not** retroactively affect existing accounts.
+- [ ] **Flip `ENFORCE_EXISTING_USER_RECONSENT` to `true`** in the same change (or a deliberate
+  follow-up) once the real text is live, so accounts created before it shipped are prompted to
+  (re-)agree on their next login via `ConsentGateModal`.
+- [ ] **Consider whether Terms of Service and Privacy Policy should version independently.** Today
+  both documents share one `CURRENT_LEGAL_VERSION` — simplest possible shape for a first cut, but a
+  real ToS/Policy pair often update on different schedules (e.g. a new payment processor vs. a data
+  retention change). Revisit only if that mismatch actually becomes a problem — don't build
+  independent versioning speculatively.
+- [ ] **`docs/drift-app-warden.md` T7/T8 (Auth/Login) coverage** — this workstream touches
+  `LoginScreen.jsx` and `App.jsx`'s `SIGNED_IN` handler, both mapped surfaces; no drift-map entry
+  was added for it in this pass — worth a look next time either section gets a surgical pass.
+## 42. Lint Audit — 41 errors + 12 warnings (technical debt snapshot 2026-07-25)
+
+*Baseline established 2026-07-25. All 1,231 tests pass; lint is pre-existing and non-blocking. Not
+a critical bug — linting errors don't prevent the app from running or tests from passing. But
+tracking here to prevent regression, consolidate cleanup work, and provide a priority guide for
+opportunistic fixes when touching these files.*
+
+**Current state:** `npm run lint` exits with code 1 on 41 errors (mostly unused imports/variables)
++ 12 warnings (React hooks, unused directives). See `src/` section below for per-file breakdown.
+Categorized by impact for triage.
+
+### A. Critical — must fix before deploying or accepting new PRs in these files
+
+These affect correctness or performance and can cause subtle bugs:
+
+#### 1. **Test setup broken — missing vitest global (`vi`)**
+   - File: `src/test/components/panels.test.jsx`
+   - Lines: 7–10
+   - Issue: `vi` is not defined (5 references)
+   - Impact: Test file likely cannot run; this is a vitest configuration or import issue
+   - Fix: Either import `{ vi } from 'vitest'` at top of file or ensure vitest's `globals: true`
+     is set in `vitest.config.js`
+   - Status: ⚠️ Highest priority — blocks tests from running
+
+#### 2. **React Compiler memoization skipped (`JobLossBudgetPanel.jsx:102`)**
+   - File: `src/components/JobLossBudgetPanel.jsx`
+   - Lines: 102–122
+   - Issue: React Compiler rejected manual memoization on `useMemo` block (3-variable `upcomingBills`)
+   - Impact: Memoization optimization was skipped; component may re-render unnecessarily
+   - Cause: Compiler failed to preserve the memoization due to the complexity of the callback
+   - Fix: Simplify the memoization callback or split into smaller memoized helpers
+   - Estimated effort: Medium
+
+#### 3. **Ref accessed during render (`SetupWizard.jsx:2556`)**
+   - File: `src/components/SetupWizard.jsx`
+   - Line: 2556
+   - Issue: `originalConfigRef.current` read during component render (only safe in effects/handlers)
+   - Impact: Component may not update as expected; ref access violates React invariants
+   - Fix: Move ref access outside render; pass ref value or derived state as prop instead
+   - Estimated effort: Medium
+
+#### 4. **setState called directly in effect — cascading renders (LoginScreen.jsx:40 + 138)**
+   - File: `src/components/LoginScreen.jsx`
+   - Lines: 40, 138
+   - Issue: `setCur()` called directly within `useEffect()` body (2 separate effects)
+   - Impact: Triggers cascading renders on every mount/mode change; performance issue
+   - Fix: Restructure to avoid setState in effect; use a layout effect or move logic to event handler
+   - Estimated effort: Medium
+
+#### 5. **React purity violation — `Date.now()` in render (`HomePanel.jsx:476`)**
+   - File: `src/components/HomePanel.jsx`
+   - Line: 476
+   - Issue: `Date.now()` (impure function) called inside render phase when creating new goal ID
+   - Impact: Produces different values on every render; component not idempotent
+   - Fix: Move `Date.now()` call into event handler (`handleAddGoal`) instead of inline in JSX
+   - Estimated effort: Low (simple move)
+
+### B. High Priority — affects rendering or hook behavior; should fix when touching these files
+
+React Hook dependency issues + unused imports in critical paths:
+
+#### 6. **Missing hook dependency (`App.jsx:993`)**
+   - File: `src/components/App.jsx`
+   - Line: 993
+   - Issue: `useMemo` missing `entitlement` in dependency array
+   - Impact: Memoized value could be stale; entitlement changes may not trigger recalculation
+   - Fix: Add `entitlement` to deps array or confirm it's intentionally omitted
+
+#### 7. **Unnecessary hook dependency (`App.jsx:1126`)**
+   - File: `src/components/App.jsx`
+   - Line: 1126
+   - Issue: `effectiveToday` listed but doesn't affect memo output
+   - Impact: Unnecessary re-memoization on every date change (minor)
+   - Fix: Remove `effectiveToday` from deps array
+
+#### 8. **Missing hook dependencies (`LoginScreen.jsx:44`)**
+   - File: `src/components/LoginScreen.jsx`
+   - Line: 44
+   - Issue: `useEffect` missing `cur.key` and `cur.node` dependencies
+   - Impact: Stale closure; could reference old state values
+   - Fix: Add both to dependency array or restructure effect
+
+#### 9. **Missing hook dependencies (`WeekConfirmModal.jsx:229`)**
+   - File: `src/components/WeekConfirmModal.jsx`
+   - Line: 229
+   - Issue: `useEffect` missing `otDays` and `requiredOtCount`
+   - Impact: Effect may not re-run when these values change
+   - Fix: Add to dependency array
+
+#### 10. **Conditional logic in memo deps (`ReemploymentTracker.jsx:97`)**
+   - File: `src/components/ReemploymentTracker.jsx`
+   - Line: 97
+   - Issue: The `apps` conditional could change on every render, breaking memo deps
+   - Impact: `useMemo` at line 117 loses cache on every render
+   - Fix: Wrap `apps` initialization in its own `useMemo()` before using as a dependency
+
+#### 11–14. **Unused imports in component files (low impact, easy fix)**
+   - `App.jsx:4, 6` — `getPayPeriodEndDate`, `formatFiscalWeekLabel` (2 imports)
+   - `BudgetPanel.jsx:5, 6` — `applyMonthEditForward`, `roundToQuarter`, `toMonthlyCost`, 
+     `fromMonthlyCost`, `formatFiscalWeekLabel` (5 imports)
+   - `HomePanel.jsx:9` — `formatFiscalWeekLabel` (1 import)
+   - `IncomePanel.jsx` — (no unused imports, only `isWeekly` variable)
+   - `LogPanel.jsx:5` — `formatFiscalWeekLabel` (1 import)
+   - `LoginScreen.jsx:28` — `useRef` (1 import)
+   - **Impact:** Bloats bundle; clutters code. Non-functional but sloppy.
+   - **Fix:** Delete the unused import lines. Safe; linting will confirm they're truly unused.
+
+### C. Medium Priority — cleanup, low runtime impact
+
+Dead code that should be removed but doesn't break anything:
+
+#### Unused variables (simple deletions)
+| File | Line | Variable | Type | Note |
+|------|------|----------|------|------|
+| `App.jsx` | 286 | `investorProfile` | assigned, never used | Delete assignment or use it |
+| `BudgetPanel.jsx` | 135 | `pendingDelete` | assigned, never used | Likely dead from refactor |
+| `BudgetPanel.jsx` | 268 | `shortMonth` | assigned, never used | Month formatting, no longer needed? |
+| `BudgetPanel.jsx` | 613, 757, 915 | `saveEditExp`, `deleteExp`, `executeUndo` | assigned, never used | Dead handlers from old UI |
+| `BudgetPanel.jsx` | 2181 | `fy` | assigned, never used | Fiscal year calc, unused |
+| `HomePanel.jsx` | 95 | `projectedWeeklyLeft` | assigned, never used | Goal projection, unused |
+| `HomePanel.jsx` | 141 | `weeksLeftCount` | assigned, never used | Same as above |
+| `IncomePanel.jsx` | 77 | `isWeekly` | assigned, never used | Pay period classification, unused |
+| `JobLossEntry.jsx` | 218 | `totalSteps` | assigned, never used | Step counter, unused |
+| `ProfilePanel.jsx` | 2084 | `isBaseUser` | assigned, never used | Employer type check, unused |
+| `SetupWizard.jsx` | 1565 | `isBaseUser` | assigned, never used | Same as above |
+| `expense.js` | 133, 136, 153 | `_cpm` (3 refs) | destructured, never used | Cost-per-mille calc, unused |
+| `finance.js` | 287 | `dhlTotalWeekendHours` | assigned, never used | DHL payroll calc, unused |
+| `fiscalWeek.js` | 115 | `checksPerYear` | assigned, never used | Pay frequency calc, unused |
+
+**Fix strategy:** Delete these in a single "cleanup" commit per file. Safe because they're truly
+unused (linting confirms it). Group by file to minimize PR review overhead:
+- [ ] App.jsx — 3 removals
+- [ ] BudgetPanel.jsx — 8 removals
+- [ ] HomePanel.jsx — 2 removals
+- [ ] IncomePanel.jsx — 1 removal
+- [ ] JobLossEntry.jsx — 1 removal
+- [ ] ProfilePanel.jsx — 1 removal
+- [ ] SetupWizard.jsx — 1 removal
+- [ ] finance.js — 1 removal
+- [ ] fiscalWeek.js — 1 removal
+- [ ] expense.js — 3 removals (same variable `_cpm` in different functions)
+
+### D. Low Priority — stale directives (cleanup only)
+
+Unused eslint-disable comments (no actual violation, just the suppression is obsolete):
+
+| File | Line | Directive | Status |
+|------|------|-----------|--------|
+| `App.jsx` | 558, 639, 1102 | `// eslint-disable-next-line react-hooks/set-state-in-effect` | No violation found; directive can be removed |
+| `App.jsx` | 656 | `// eslint-disable-next-line react-hooks/exhaustive-deps` | No violation found; directive can be removed |
+| `LoginScreen.jsx` | 40 | **ACTIVE** (not stale) | setState in effect IS happening here; directive is needed but rule should be fixed instead (see §A.4) |
+| `db.js` | 302 | `// eslint-disable-next-line no-console` | No violation found; directive can be removed |
+
+**Fix:** Delete the unused directives (not the rules they were suppressing—those don't exist).
+
+---
+
+### Summary & Regression Prevention
+
+**Test status:** ✅ All 1,231 tests pass (no regression). This lint audit is *not* a blocker for
+shipping or merging.
+
+**Recommended workflow:**
+1. **Fix §A (critical) immediately** if touching those components (test runner, SetupWizard, 
+   LoginScreen, HomePanel). These could cause bugs.
+2. **Fix §B (high) opportunistically** when landing refactors in those files (App.jsx, various
+   panels, hooks).
+3. **Fix §C (medium) in bulk** as a standalone "cleanup" PR when lint debt is prioritized (low
+   urgency; can wait weeks).
+4. **§D (directives)** delete when you're already in those files; don't land a PR just for this.
+
+**To prevent regressions:**
+- Before merging any PR, run `npm run lint` and reject new violations (or explicitly accept them
+  with a documented reason in the commit message).
+- Mark this section as "resolved" when the error count drops to ≤5 (acceptable technical debt).
+- Re-run this audit quarterly (or after major refactors) to track progress and catch new drift.

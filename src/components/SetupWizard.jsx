@@ -17,8 +17,8 @@
 import { useState, useEffect, useRef } from "react";
 import { buildYear, dhlEmployerMatchRate, estimateWeeklyNet } from "../lib/finance.js";
 import { iS, lS, Pressable, StepSlide } from "./ui.jsx";
-import { FISCAL_YEAR_START, DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
-import { FISCAL_WEEKS_PER_YEAR } from "../lib/fiscalWeek.js";
+import { DHL_PRESET, BENEFIT_OPTIONS, PAYCHECKS_PER_YEAR } from "../constants/config.js";
+import { FISCAL_WEEKS_PER_YEAR, dateToWeekIdx } from "../lib/fiscalWeek.js";
 
 import { STATE_TAX_TABLE, STATE_NAMES } from "../constants/stateTaxTable.js";
 
@@ -233,6 +233,108 @@ function errBorder(show) {
 // ─────────────────────────────────────────────────────────────────────────────
 const OT_THRESHOLDS = [40, 48];
 const OT_MULTIPLIERS = [1.5, 2];
+
+// Collapsible group for base-user pay fields nobody needs to touch after initial
+// setup — none of these three are wizard-required (STEP_DEFS id:1 isValid never
+// checks otMultiplier/nightDiff*/diffRate), so no auto-expand-on-error is needed.
+// Always starts collapsed: DEFAULT_CONFIG.diffRate/otMultiplier carry non-empty
+// DHL-preset values even on base-user configs, so a "has this been customized"
+// check would false-positive on nearly every account and defeat the point.
+function AdvancedPayRules({ formData, onChange }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div style={{
+      border: "1px solid var(--color-border-subtle)",
+      borderRadius: "12px",
+      background: "var(--color-bg-raised)",
+      overflow: "hidden",
+    }}>
+      <Pressable
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center",
+          justifyContent: "space-between", gap: "12px",
+          padding: "12px 14px",
+          background: "transparent", border: "none",
+          cursor: "pointer", textAlign: "left",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+            Advanced Pay Rules
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "2px" }}>
+            OT multiplier, night differential, weekend rate — defaults work for most.
+          </div>
+        </div>
+        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", flexShrink: 0 }}>
+          {expanded ? "▾" : "▸"}
+        </div>
+      </Pressable>
+
+      {expanded && (
+        <div style={{
+          padding: "4px 14px 16px",
+          borderTop: "1px solid rgba(255,255,255,0.04)",
+          display: "flex", flexDirection: "column", gap: "16px",
+        }}>
+          {/* ── OT Multiplier ── */}
+          <Field label="OT Multiplier">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+              {OT_MULTIPLIERS.map(m => (
+                <Pill
+                  key={m} label={`${m}×`}
+                  active={formData.otMultiplier === m}
+                  onClick={() => onChange({ otMultiplier: m })}
+                />
+              ))}
+            </div>
+          </Field>
+
+          {/* ── Night Differential ── */}
+          <Field label="Do you receive a night differential?">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+              <Pill
+                label="Yes"
+                active={formData.nightDiffEnabled === true}
+                onClick={() => onChange({ nightDiffEnabled: true })}
+              />
+              <Pill
+                label="No"
+                active={formData.nightDiffEnabled === false}
+                onClick={() => onChange({ nightDiffEnabled: false, nightDiffRate: 0 })}
+              />
+            </div>
+            {formData.nightDiffEnabled === true && (
+              <div style={{ marginTop: "10px" }}>
+                <label style={{ ...lSp }}>Night Diff Rate ($/hr)</label>
+                <input
+                  style={{ ...iS }}
+                  type="number" min="0" step="0.25"
+                  value={formData.nightDiffRate ?? ""}
+                  onChange={e => onChange({ nightDiffRate: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                  placeholder="e.g. 1.50"
+                />
+              </div>
+            )}
+          </Field>
+
+          {/* ── Weekend Differential ── 0 = no differential ── */}
+          <Field label="Weekend Differential ($/hr)">
+            <input
+              style={{ ...iS }}
+              type="number" min="0" step="0.25"
+              value={formData.diffRate ?? ""}
+              onChange={e => onChange({ diffRate: e.target.value === "" ? null : parseFloat(e.target.value) })}
+              placeholder="0 = no differential"
+            />
+          </Field>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, originalConfig }) {
   // Gate: has the user answered "Do you work for DHL?" yet?
@@ -564,16 +666,19 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
           </FieldRow>
           )}
 
-          {/* ── Weekend Differential ── directly configurable; 0 = no differential ── */}
-          <Field label="Weekend Differential ($/hr)">
-            <input
-              style={{ ...iS }}
-              type="number" min="0" step="0.25"
-              value={formData.diffRate ?? ""}
-              onChange={e => onChange({ diffRate: e.target.value === "" ? null : parseFloat(e.target.value) })}
-              placeholder="0 = no differential"
-            />
-          </Field>
+          {/* ── Weekend Differential ── DHL only here; base users get it inside
+               Advanced Pay Rules below, alongside OT multiplier + night diff. ── */}
+          {isEmployerDHL && (
+            <Field label="Weekend Differential ($/hr)">
+              <input
+                style={{ ...iS }}
+                type="number" min="0" step="0.25"
+                value={formData.diffRate ?? ""}
+                onChange={e => onChange({ diffRate: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                placeholder="0 = no differential"
+              />
+            </Field>
+          )}
 
           {isBaseUser && (
             <>
@@ -615,46 +720,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
                 )}
               </Field>
 
-              {/* ── OT Multiplier ── */}
-              <Field label="OT Multiplier">
-                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-                  {OT_MULTIPLIERS.map(m => (
-                    <Pill
-                      key={m} label={`${m}×`}
-                      active={formData.otMultiplier === m}
-                      onClick={() => onChange({ otMultiplier: m })}
-                    />
-                  ))}
-                </div>
-              </Field>
-
-              {/* ── Night Differential ── */}
-              <Field label="Do you receive a night differential?">
-                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-                  <Pill
-                    label="Yes"
-                    active={formData.nightDiffEnabled === true}
-                    onClick={() => onChange({ nightDiffEnabled: true })}
-                  />
-                  <Pill
-                    label="No"
-                    active={formData.nightDiffEnabled === false}
-                    onClick={() => onChange({ nightDiffEnabled: false, nightDiffRate: 0 })}
-                  />
-                </div>
-                {formData.nightDiffEnabled === true && (
-                  <div style={{ marginTop: "10px" }}>
-                    <label style={{ ...lSp }}>Night Diff Rate ($/hr)</label>
-                    <input
-                      style={{ ...iS }}
-                      type="number" min="0" step="0.25"
-                      value={formData.nightDiffRate ?? ""}
-                      onChange={e => onChange({ nightDiffRate: e.target.value === "" ? null : parseFloat(e.target.value) })}
-                      placeholder="e.g. 1.50"
-                    />
-                  </div>
-                )}
-              </Field>
+              <AdvancedPayRules formData={formData} onChange={onChange} />
             </>
           )}
 
@@ -686,6 +752,41 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
               )}
             </Field>
           )}
+
+          {/* ── Tips / Commission daily check-in opt-in ── */}
+          <Field label="Do you earn tips or commission?">
+            <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+              <Pill
+                label="No"
+                active={!formData.tipsOrCommissionEnabled}
+                onClick={() => onChange({ tipsOrCommissionEnabled: false, tipsOrCommissionLabel: null, tipsCommissionOnlyPosition: null })}
+              />
+              <Pill
+                label="Tips"
+                active={formData.tipsOrCommissionEnabled && formData.tipsOrCommissionLabel === "tips"}
+                onClick={() => onChange({ tipsOrCommissionEnabled: true, tipsOrCommissionLabel: "tips", tipsCommissionOnlyPosition: null })}
+              />
+              <Pill
+                label="Commission"
+                active={formData.tipsOrCommissionEnabled && formData.tipsOrCommissionLabel === "commission"}
+                onClick={() => onChange({ tipsOrCommissionEnabled: true, tipsOrCommissionLabel: "commission" })}
+              />
+            </div>
+            {formData.tipsOrCommissionEnabled && (
+              <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--color-text-primary)", lineHeight: "1.5" }}>
+                We'll ask a quick daily check-in — did you make any {formData.tipsOrCommissionLabel} that day?
+              </div>
+            )}
+            {formData.tipsOrCommissionEnabled && formData.tipsOrCommissionLabel === "commission" && (
+              <div style={{ marginTop: "10px" }}>
+                <label style={lSp}>Is this a commission-only position?</label>
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                  <Pill label="Yes" active={formData.tipsCommissionOnlyPosition === true}  onClick={() => onChange({ tipsCommissionOnlyPosition: true })} />
+                  <Pill label="No"  active={formData.tipsCommissionOnlyPosition === false} onClick={() => onChange({ tipsCommissionOnlyPosition: false })} />
+                </div>
+              </div>
+            )}
+          </Field>
         </>
       )}
     </div>
@@ -696,16 +797,6 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
 // STEP 2 — Schedule
 // ─────────────────────────────────────────────────────────────────────────────
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-// Derives the fiscal week index for a given date string "YYYY-MM-DD".
-// Week 0 ends on FISCAL_YEAR_START; each subsequent week is 7 days.
-// Returns the smallest idx such that that week's end >= the given date.
-function dateToWeekIdx(dateStr) {
-  const weekZeroEnd = new Date(FISCAL_YEAR_START + "T00:00:00");
-  const target      = new Date(dateStr       + "T00:00:00");
-  const diffDays    = (target - weekZeroEnd) / 86400000;
-  return Math.max(0, Math.min(Math.ceil(diffDays / 7), FISCAL_WEEKS_PER_YEAR - 1));
-}
 
 function Step2({ formData, onChange, attempted }) {
   const isEmployerDHL = formData.employerPreset === "DHL";
@@ -797,22 +888,9 @@ function Step2({ formData, onChange, attempted }) {
               Before you continue
             </div>
             <div style={{ fontSize: "13px", color: "var(--color-text-primary)", lineHeight: "1.7", marginBottom: "14px" }}>
-              <div style={{ marginBottom: "10px" }}>
-                <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>1. Your whole year is built from this number.</span>
-                {" "}The app treats {formData.maxWeeklyHours}h as your expected weekly pay — every paycheck, every goal timeline, every budget health calculation starts here.
-              </div>
-              <div style={{ marginBottom: "10px" }}>
-                <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>2. Each week you'll confirm what you actually worked.</span>
-                {" "}A check-in will ask how many days you put in. If you came in short, that difference gets logged so your real income stays on track.
-              </div>
-              <div style={{ marginBottom: "10px" }}>
-                <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>3. Overtime is not guaranteed income.</span>
-                {" "}If your budget or goals depend on max-hour paychecks, you could come up short in lighter weeks. Set this to the hours you can reliably count on — you can always log extra when overtime actually happens.
-              </div>
-              <div>
-                <span style={{ color: "var(--color-teal)", fontWeight: "bold" }}>4. You can change this any time.</span>
-                {" "}Head to Account → Schedule to adjust your ceiling as your situation changes.
-              </div>
+              This hours estimate will dictate your entire app experience. You can change it in the
+              account settings anytime. Just make sure you are accurate with your most consistent
+              hours per paycheck.
             </div>
             <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
               <input
@@ -1013,12 +1091,73 @@ function BenefitCard({ def, selected, formData, onChange, onToggle, attempted })
   );
 }
 
+// Generic collapsible details group — header row (title + sub-label + chevron)
+// toggles a field cluster. None of the fields these two wrap (attendance unit/
+// thresholds/balance/increment; PTO accrual method/rate/balance/cap) are
+// checked by Step 3's isValid, so hiding them behind a click has no validation
+// impact. Starts expanded only when the account already has a real (non-null)
+// value in one of the wrapped fields — unlike Step 1's diffRate/otMultiplier,
+// none of these carry a DEFAULT_CONFIG preset value, so "has data" is a safe signal.
+function DetailsDisclosure({ title, sub, defaultExpanded, children }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  return (
+    <div style={{
+      border: "1px solid var(--color-border-subtle)",
+      borderRadius: "12px",
+      background: "var(--color-bg-raised)",
+      overflow: "hidden",
+    }}>
+      <Pressable
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center",
+          justifyContent: "space-between", gap: "12px",
+          padding: "12px 14px",
+          background: "transparent", border: "none",
+          cursor: "pointer", textAlign: "left",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-primary)" }}>
+            {title}
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--color-text-primary)", marginTop: "2px" }}>
+            {sub}
+          </div>
+        </div>
+        <div style={{ fontSize: "11px", color: "var(--color-text-primary)", flexShrink: 0 }}>
+          {expanded ? "▾" : "▸"}
+        </div>
+      </Pressable>
+
+      {expanded && (
+        <div style={{
+          padding: "4px 14px 16px",
+          borderTop: "1px solid rgba(255,255,255,0.04)",
+          display: "flex", flexDirection: "column", gap: "16px",
+        }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Step3({ formData, onChange, attempted }) {
   const selected = new Set(formData.selectedBenefits ?? []);
   const isEmployerDHL    = formData.employerPreset === "DHL";
   const isBaseUser = !isEmployerDHL;
   const others   = formData.otherDeductions ?? [];
   const attendErr = attempted && isBaseUser && formData.attendanceBucketEnabled === null;
+
+  // Gate for the benefits/other-deductions section (visual only — Step 3 is
+  // skippable and neither BENEFIT_DEFS selection nor otherDeductions is
+  // required, so this never enters isValid). Defaults to "answered Yes" when
+  // the account already has data here (re-entry), so existing selections
+  // aren't hidden behind an unanswered toggle.
+  const [benefitsGate, setBenefitsGate] = useState(
+    (selected.size > 0 || others.length > 0) ? true : null
+  );
 
   function toggle(id) {
     const next = new Set(selected);
@@ -1049,6 +1188,16 @@ function Step3({ formData, onChange, attempted }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
 
+      {/* ── Benefits gate ── */}
+      <Field label="Does your job offer benefits or any other paycheck deduction systems?">
+        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+          <Pill label="Yes" active={benefitsGate === true} onClick={() => setBenefitsGate(true)} />
+          <Pill label="No" active={benefitsGate === false} onClick={() => setBenefitsGate(false)} />
+        </div>
+      </Field>
+
+      {benefitsGate === true && (
+        <>
       {/* ── Benefits ── */}
       <div>
         <p style={{
@@ -1138,6 +1287,8 @@ function Step3({ formData, onChange, attempted }) {
           </Pressable>
         </div>
       </div>
+        </>
+      )}
 
       {/* ── Attendance policy gate — standard users only ── */}
       {isBaseUser && (
@@ -1162,7 +1313,16 @@ function Step3({ formData, onChange, attempted }) {
 
       {/* Attendance threshold sub-fields — only when answered Yes */}
       {isBaseUser && formData.attendanceBucketEnabled === true && (
-        <>
+        <DetailsDisclosure
+          title="Attendance Policy Details"
+          sub="Unit, thresholds, current balance — set these up once."
+          defaultExpanded={
+            formData.attendanceUnit != null ||
+            formData.attendanceWarnThreshold != null ||
+            formData.attendanceTerminateThreshold != null ||
+            formData.attendanceCurrentBalance != null
+          }
+        >
           <Field label="What unit does your policy use?">
             <input
               style={{ ...iS }}
@@ -1213,7 +1373,7 @@ function Step3({ formData, onChange, attempted }) {
               <div style={{ marginTop: "4px", fontSize: "10px", color: "var(--color-text-primary)" }}>Default 1 per absence</div>
             </Field>
           </div>
-        </>
+        </DetailsDisclosure>
       )}
 
       {/* ── PTO policy — standard users only ── */}
@@ -1230,7 +1390,16 @@ function Step3({ formData, onChange, attempted }) {
 
       {/* PTO sub-fields — only when answered Yes */}
       {isBaseUser && formData.ptoEnabled === true && (
-        <>
+        <DetailsDisclosure
+          title="PTO Policy Details"
+          sub="Accrual method, rate, current balance — set these up once."
+          defaultExpanded={
+            formData.ptoAccrualMethod != null ||
+            formData.ptoAccrualRate != null ||
+            formData.ptoCurrentBalance != null ||
+            formData.ptoCap != null
+          }
+        >
           <Field label="How does your PTO accrue?">
             <div style={{ display: "flex", gap: "8px", marginTop: "6px", flexWrap: "wrap" }}>
               <Pill label="Per Hour Worked" active={formData.ptoAccrualMethod === "per_hour"}
@@ -1278,7 +1447,7 @@ function Step3({ formData, onChange, attempted }) {
               />
             </Field>
           </div>
-        </>
+        </DetailsDisclosure>
       )}
     </div>
   );
@@ -2314,6 +2483,8 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
   }
 
   function handleComplete() {
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     const finalData = formData.employerPreset === "DHL"
       ? { ...formData, payPeriodEndDay: 0, otThreshold: 40, otMultiplier: 1.5 }
       : { ...formData };
@@ -2323,6 +2494,16 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
     if (finalData.bufferEnabled !== false) {
       finalData.paycheckBuffer = finalData.paycheckBuffer ?? 50;
     }
+    // Stamp/clear tipsOrCommissionEnabledAt on the false→true / true→false transitions
+    // only — bounds the daily check-in backlog to dates on/after opt-in (see
+    // constants/config.js) without disturbing the stamp while staying enabled across
+    // wizard re-entries (structure_change, etc.).
+    const wasTipsEnabled = config?.tipsOrCommissionEnabled === true;
+    if (finalData.tipsOrCommissionEnabled && !wasTipsEnabled) {
+      finalData.tipsOrCommissionEnabledAt = todayIso;
+    } else if (!finalData.tipsOrCommissionEnabled) {
+      finalData.tipsOrCommissionEnabledAt = null;
+    }
     const allWeeks   = buildYear(finalData);
     // taxExemptOptIn: true = user filed W-4 as exempt from federal/state withholding.
     // Only FICA applies; income tax withholding is $0.
@@ -2331,8 +2512,6 @@ export function SetupWizard({ config, onComplete, onCancel, lifeEvent: initialLi
       : allWeeks.filter(w => w.idx >= (finalData.firstActiveIdx ?? 0)).map(w => w.idx);
     // Stamp the account-creation week so weeks before today are auto-assumed worked
     // and the weekly confirm modal only surfaces weeks from account creation onward.
-    const today = new Date();
-    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     const accountCreatedIdx = finalData.accountCreatedIdx ?? dateToWeekIdx(todayIso);
     onComplete({ ...finalData, taxedWeeks, accountCreatedIdx, setupComplete: true });
   }

@@ -501,3 +501,113 @@ describe('Total Gross Lost — resolves the real week from allWeeks', () => {
     expect(screen.queryByText(fmt2(withoutWeekMeta.grossLost))).not.toBeInTheDocument()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tips / Commission daily check-in log — a new collapsible dropdown positioned
+// above the entry list, only appearing once at least one real day is logged
+// (mere wizard opt-in isn't enough — see App.jsx's tipsOrCommissionEnabled gate,
+// which is a separate concern from this dropdown's own logs-based gate).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const mkTips = (weekEnd, amount, date, weekIdx = 1) => ({
+  id: Date.now() + Math.random(),
+  weekEnd,
+  weekIdx,
+  weekRotation: '6-Day',
+  type: 'tips_commission',
+  date,
+  amount,
+  note: '',
+})
+
+describe('Tips/Commission Log — visibility', () => {
+  it('does not render when logs array is empty', () => {
+    renderPanel([])
+    expect(screen.queryByText(/tips log|commission log/i)).toBeNull()
+  })
+
+  it('does not render when only other event types exist', () => {
+    renderPanel([mkBonus('2026-03-16', 500)])
+    expect(screen.queryByText(/tips log|commission log/i)).toBeNull()
+  })
+
+  it('renders "Tips Log" once at least one tips_commission entry exists with tipsOrCommissionLabel: "tips"', () => {
+    const config = { ...BASE_CONFIG, tipsOrCommissionLabel: 'tips' }
+    render(<LogPanel {...BASE_PROPS} config={config} logs={[mkTips('2026-02-02', 20, '2026-01-28')]} />)
+    expect(screen.getByText(/tips log \(1\)/i)).toBeTruthy()
+  })
+
+  it('renders "Commission Log" when tipsOrCommissionLabel is "commission"', () => {
+    const config = { ...BASE_CONFIG, tipsOrCommissionLabel: 'commission' }
+    render(<LogPanel {...BASE_PROPS} config={config} logs={[mkTips('2026-02-02', 20, '2026-01-28')]} />)
+    expect(screen.getByText(/commission log \(1\)/i)).toBeTruthy()
+  })
+})
+
+describe('Tips/Commission Log — collapse/expand and entries', () => {
+  it('is collapsed by default (logged days not visible)', () => {
+    const config = { ...BASE_CONFIG, tipsOrCommissionLabel: 'tips' }
+    render(<LogPanel {...BASE_PROPS} config={config} logs={[mkTips('2026-02-02', 20, '2026-01-28')]} />)
+    expect(screen.queryByText('Jan 28')).toBeNull()
+  })
+
+  it('expands to show each logged day and its amount', () => {
+    const config = { ...BASE_CONFIG, tipsOrCommissionLabel: 'tips' }
+    render(<LogPanel {...BASE_PROPS} config={config} logs={[
+      mkTips('2026-02-02', 20, '2026-01-28'),
+      mkTips('2026-02-02', 0, '2026-01-29'),
+    ]} />)
+    fireEvent.click(screen.getByText(/tips log/i).closest('button'))
+    expect(screen.getByText('Jan 28')).toBeTruthy()
+    expect(screen.getAllByText(fmt2(20)).length).toBeGreaterThan(0) // header total + row both show $20.00
+    expect(screen.getByText('Jan 29')).toBeTruthy()
+    expect(screen.getByText('No tips')).toBeTruthy() // $0 "No" answer — a real resolved entry, not blank
+  })
+
+  it('shows "No commission" (not "No tips") for a $0 entry when the label is commission', () => {
+    const config = { ...BASE_CONFIG, tipsOrCommissionLabel: 'commission' }
+    render(<LogPanel {...BASE_PROPS} config={config} logs={[mkTips('2026-02-02', 0, '2026-01-28')]} />)
+    fireEvent.click(screen.getByText(/commission log/i).closest('button'))
+    expect(screen.getByText('No commission')).toBeTruthy()
+  })
+})
+
+describe('Tips/Commission Log — "If you claim all tips" tax formula (tips label only)', () => {
+  it('shows the extra-tax-owed formula when the label is "tips"', () => {
+    const config = { ...BASE_CONFIG, tipsOrCommissionLabel: 'tips' }
+    const event = mkTips('2026-02-02', 20, '2026-01-28')
+    const { netGained, grossGained } = calcEventImpact(event, config)
+    render(<LogPanel {...BASE_PROPS} config={config} logs={[event]} />)
+    fireEvent.click(screen.getByText(/tips log/i).closest('button'))
+    expect(screen.getByText(/if you claim all tips/i)).toBeTruthy()
+    expect(screen.getByText(fmt2(grossGained - netGained))).toBeTruthy()
+  })
+
+  it('hides the extra-tax-owed formula when the label is "commission"', () => {
+    const config = { ...BASE_CONFIG, tipsOrCommissionLabel: 'commission' }
+    render(<LogPanel {...BASE_PROPS} config={config} logs={[mkTips('2026-02-02', 20, '2026-01-28')]} />)
+    fireEvent.click(screen.getByText(/commission log/i).closest('button'))
+    expect(screen.queryByText(/if you claim all/i)).toBeNull()
+  })
+
+  it('the running total sums extra tax owed across every logged entry', () => {
+    const config = { ...BASE_CONFIG, tipsOrCommissionLabel: 'tips' }
+    const events = [mkTips('2026-02-02', 20, '2026-01-28'), mkTips('2026-02-02', 30, '2026-01-29')]
+    const expectedExtraTax = events.reduce((sum, e) => {
+      const { grossGained, netGained } = calcEventImpact(e, config)
+      return sum + (grossGained - netGained)
+    }, 0)
+    render(<LogPanel {...BASE_PROPS} config={config} logs={events} />)
+    fireEvent.click(screen.getByText(/tips log/i).closest('button'))
+    expect(screen.getByText(fmt2(expectedExtraTax))).toBeTruthy()
+  })
+})
+
+describe('Tips/Commission entries in the general entry list', () => {
+  it('labels a positive-amount entry "Gained Money", not "Missed Money"', () => {
+    const config = { ...BASE_CONFIG, tipsOrCommissionLabel: 'tips' }
+    render(<LogPanel {...BASE_PROPS} config={config} logs={[mkTips('2026-02-02', 20, '2026-01-28')]} />)
+    expect(screen.getByText('Gained Money')).toBeTruthy()
+    expect(screen.queryByText('Missed Money')).toBeNull()
+  })
+})

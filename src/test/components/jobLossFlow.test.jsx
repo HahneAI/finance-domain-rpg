@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { JobLossEntry } from '../../components/JobLossEntry.jsx'
 import { LifeEventMenu } from '../../components/LifeEventMenu.jsx'
 import { RateUpdateModal } from '../../components/RateUpdateModal.jsx'
@@ -132,6 +132,9 @@ describe('JobLossEntry', () => {
       unemploymentDurationWeeks: null,
       unemploymentWaitingWeek: false,
     }))
+    // TODO §15.H17 — the decay clock starts at the job-loss effective date.
+    const activatedPatch = onActivate.mock.calls[0][0]
+    expect(activatedPatch.jobLossCashOnHandAsOf).toBe(activatedPatch.jobLossDate)
     expect(onClose).toHaveBeenCalled()
   })
 
@@ -539,42 +542,82 @@ describe('JobLossHomePanel', () => {
     expect(screen.getByText('Target annual')).toBeTruthy()
   })
 
-  // TODO §15.H13 — cash on hand is now a persisted config field, editable
-  // from Home (this describe block) AND Budget, not a session-only draft.
-  describe('Cash On Hand (persisted, TODO §15.H13)', () => {
-    it('pre-fills the input from config.jobLossCashOnHand', () => {
+  // TODO §15.H17 — cash on hand is now a pencil-badged card (not a plain
+  // input), edited through CashOnHandSheet's bottom sheet. expenses: [] in
+  // these tests isolates "does the field wire up correctly" from decay
+  // behavior, which gets its own describe block below.
+  describe('Cash On Hand card + sheet (TODO §15.H17)', () => {
+    it('shows the current cash-on-hand figure on the card', () => {
       const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }
-      render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits />)
+      render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
+      expect(screen.getByText('$1,500')).toBeTruthy()
+    })
+
+    it('opens the sheet prefilled with the current value when the card is tapped', () => {
+      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }
+      render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
+      fireEvent.click(screen.getByLabelText('Update cash on hand'))
+      expect(screen.getByText('Update Cash On Hand')).toBeTruthy()
       expect(screen.getByPlaceholderText('e.g. 1,023').value).toBe('1500')
     })
 
-    it('eager-saves the new value on blur, not on every keystroke', () => {
+    it('saves the new value and stamps jobLossCashOnHandAsOf on Save', () => {
       const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }
       const setConfig = vi.fn()
       const saveConfigNow = vi.fn()
-      render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits />)
-      const cashInput = screen.getByPlaceholderText('e.g. 1,023')
-      fireEvent.change(cashInput, { target: { value: '3000' } })
-      expect(setConfig).not.toHaveBeenCalled() // typing alone doesn't save
-      fireEvent.blur(cashInput)
-      expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000 }))
-      expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000 }))
+      render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
+      fireEvent.click(screen.getByLabelText('Update cash on hand'))
+      fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '3000' } })
+      fireEvent.click(screen.getByText('Save'))
+      expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000, jobLossCashOnHandAsOf: '2026-06-15' }))
+      expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000, jobLossCashOnHandAsOf: '2026-06-15' }))
     })
 
-    it('does not save on blur when the value is unchanged', () => {
+    it('closes without saving on Cancel', async () => {
       const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }
       const setConfig = vi.fn()
-      const saveConfigNow = vi.fn()
-      render(<JobLossHomePanel config={cfg} setConfig={setConfig} saveConfigNow={saveConfigNow} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits />)
-      fireEvent.blur(screen.getByPlaceholderText('e.g. 1,023'))
+      render(<JobLossHomePanel config={cfg} setConfig={setConfig} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
+      fireEvent.click(screen.getByLabelText('Update cash on hand'))
+      fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '9999' } })
+      fireEvent.click(screen.getByText('Cancel'))
       expect(setConfig).not.toHaveBeenCalled()
-      expect(saveConfigNow).not.toHaveBeenCalled()
+      // The sheet stays mounted through its animated slide-down exit (TODO
+      // §15.H17 — matches the "up-from-bottom entry, slide-down exit" ask),
+      // so it's still in the DOM immediately after the click; only gone once
+      // the exit tween finishes.
+      await waitFor(() => expect(screen.queryByText('Update Cash On Hand')).toBeNull())
     })
 
-    it('is disabled when readOnly', () => {
+    it('does not open the sheet when readOnly', () => {
       const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }
-      render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={INITIAL_EXPENSES} effectiveToday="2026-06-15" includeBenefits readOnly />)
-      expect(screen.getByPlaceholderText('e.g. 1,023')).toBeDisabled()
+      render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits readOnly />)
+      fireEvent.click(screen.getByLabelText('Update cash on hand'))
+      expect(screen.queryByText('Update Cash On Hand')).toBeNull()
+    })
+  })
+
+  // TODO §15.H17 — the headline figure decreases automatically as tracked
+  // essential bills come due since jobLossCashOnHandAsOf (falls back to
+  // jobLossDate when unset), instead of silently going stale.
+  describe('Cash On Hand — timeline-aware decay (§15.H17)', () => {
+    const RENT = {
+      id: 'exp_rent', category: 'Needs', label: 'Rent', jobLossStatus: 'active',
+      dueDateAnchor: '2026-06-04',
+      billingMeta: { amount: 400, cycle: 'every30days', effectiveFrom: '2026-01-01' },
+    }
+
+    it('shows the decayed figure and a caption once a bill has come due since jobLossDate', () => {
+      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 } // no asOf -> falls back to jobLossDate (2026-06-01)
+      render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={[RENT]} effectiveToday="2026-06-15" includeBenefits />)
+      expect(screen.getByText('$1,100')).toBeTruthy() // 1500 - 400
+      expect(screen.getByText(/\$400 in bills since you last updated this/)).toBeTruthy()
+    })
+
+    it('does not decay before the bill has actually come due', () => {
+      const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }
+      render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={[RENT]} effectiveToday="2026-06-03" includeBenefits />)
+      expect(screen.getByText('$1,500')).toBeTruthy()
+      expect(screen.queryByText(/in bills since you last updated this/)).toBeNull()
     })
   })
 
@@ -827,36 +870,55 @@ describe('JobLossBudgetPanel', () => {
     expect(screen.queryByText('Paused')).toBeNull()
   })
 
-  // TODO §15.H13 — same persisted field as JobLossHomePanel's Cash On Hand
-  // input, editable from both places, neither one "owning" it.
-  describe('Cash on hand / current savings (persisted, TODO §15.H13)', () => {
-    it('pre-fills the input from config.jobLossCashOnHand', () => {
-      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 } })
+  // TODO §15.H17 — same shared CashOnHandSheet as JobLossHomePanel's card,
+  // triggered from a compact pencil-badged row instead of a plain input.
+  // expenses: [] avoids decay noise (own describe block below covers that).
+  describe('Cash on hand / current savings (persisted, TODO §15.H17)', () => {
+    it('shows the current cash-on-hand figure in the row', () => {
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }, expenses: [] })
+      expect(screen.getByText('$1,500')).toBeTruthy()
+    })
+
+    it('opens the sheet prefilled with the current value when the row is tapped', () => {
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }, expenses: [] })
+      fireEvent.click(screen.getByLabelText('Update cash on hand'))
+      expect(screen.getByText('Update Cash On Hand')).toBeTruthy()
       expect(screen.getByPlaceholderText('e.g. 1,023').value).toBe('1500')
     })
 
-    it('eager-saves the new value on blur, not on every keystroke', () => {
+    it('saves the new value and stamps jobLossCashOnHandAsOf on Save', () => {
       const setConfig = vi.fn()
       const saveConfigNow = vi.fn()
-      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }, setConfig, saveConfigNow })
-      const cashInput = screen.getByPlaceholderText('e.g. 1,023')
-      fireEvent.change(cashInput, { target: { value: '3000' } })
-      expect(setConfig).not.toHaveBeenCalled()
-      fireEvent.blur(cashInput)
-      expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000 }))
-      expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000 }))
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }, expenses: [], setConfig, saveConfigNow })
+      fireEvent.click(screen.getByLabelText('Update cash on hand'))
+      fireEvent.change(screen.getByPlaceholderText('e.g. 1,023'), { target: { value: '3000' } })
+      fireEvent.click(screen.getByText('Save'))
+      expect(setConfig).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000, jobLossCashOnHandAsOf: '2026-06-15' }))
+      expect(saveConfigNow).toHaveBeenCalledWith(expect.objectContaining({ jobLossCashOnHand: 3000, jobLossCashOnHandAsOf: '2026-06-15' }))
     })
 
-    it('shadows setConfig/saveConfigNow and disables the input when readOnly', () => {
+    it('shadows setConfig/saveConfigNow and does not open the sheet when readOnly', () => {
       const setConfig = vi.fn()
       const saveConfigNow = vi.fn()
-      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }, setConfig, saveConfigNow, readOnly: true })
-      const cashInput = screen.getByPlaceholderText('e.g. 1,023')
-      expect(cashInput).toBeDisabled()
-      fireEvent.change(cashInput, { target: { value: '3000' } })
-      fireEvent.blur(cashInput)
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 500 }, expenses: [], setConfig, saveConfigNow, readOnly: true })
+      fireEvent.click(screen.getByLabelText('Update cash on hand'))
+      expect(screen.queryByText('Update Cash On Hand')).toBeNull()
       expect(setConfig).not.toHaveBeenCalled()
       expect(saveConfigNow).not.toHaveBeenCalled()
+    })
+  })
+
+  // TODO §15.H17 — same decay math as Home, same describe convention.
+  describe('Cash on hand — timeline-aware decay (§15.H17)', () => {
+    const RENT = {
+      id: 'exp_rent', category: 'Needs', label: 'Rent', jobLossStatus: 'active',
+      dueDateAnchor: '2026-06-04',
+      billingMeta: { amount: 400, cycle: 'every30days', effectiveFrom: '2026-01-01' },
+    }
+
+    it('shows the decayed figure once a bill has come due since jobLossDate', () => {
+      renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }, expenses: [RENT] })
+      expect(screen.getByText('$1,100')).toBeTruthy() // 1500 - 400
     })
   })
 })

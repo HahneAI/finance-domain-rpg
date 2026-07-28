@@ -27,7 +27,18 @@
  */
 import { useEffect, useState, useRef } from "react";
 import { supabase, validateInvestorCode } from "../lib/supabase.js";
+import { recordConsent } from "../lib/db.js";
+import { CURRENT_LEGAL_VERSION, TERMS_OF_SERVICE_MARKDOWN, PRIVACY_POLICY_MARKDOWN } from "../constants/legalDocuments.js";
 import { iS, lS } from "./ui.jsx";
+import { LegalDocumentModal } from "./LegalDocumentModal.jsx";
+
+// Key used to hand the "I agreed" intent across the OAuth redirect boundary —
+// clicking "Continue with Google" on the signup tab navigates the whole page
+// away, so there's no in-memory state to carry the checkbox's value forward.
+// App.jsx's SIGNED_IN handler consumes and clears this once the account is
+// confirmed to exist; sessionStorage (not localStorage) so it can't outlive
+// the tab that set it.
+export const PENDING_CONSENT_STORAGE_KEY = "pendingConsentVersion";
 
 // ── Mode crossfade wrapper — smooth opacity transitions between login modes ───
 // For form modes (signin/signup/forgot/revive/info/recovery), fade new mode in
@@ -132,6 +143,10 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
   const [error, setError]       = useState(null);
   const [info, setInfo]         = useState(null); // success / info messages
 
+  // ── Terms of Service / Privacy Policy consent (signup only) ────────────────
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [legalModalDoc, setLegalModalDoc] = useState(null); // null | "terms" | "privacy"
+
   // Google sign-in redirected back here without completing — explain it instead of
   // silently showing a blank form (see App.jsx's oauthCallbackFailed detection).
   useEffect(() => {
@@ -150,6 +165,15 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
 
   async function handleOAuth(provider) {
     setError(null);
+
+    // Consent gate — signup tab only, same requirement as the email/password
+    // path below. Checked before onOauthRetry/the redirect itself so a
+    // rejected attempt doesn't clear oauthCallbackFailed or navigate away.
+    if (isSignUp && !agreedToTerms) {
+      setError("You must agree to the Terms of Service and Privacy Policy to continue.");
+      return;
+    }
+
     onOauthRetry?.();
 
     const options = { redirectTo: window.location.origin };
@@ -157,6 +181,13 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
       // Force the Google account chooser when we're on the Create Account tab,
       // otherwise Google silently reuses whatever account already has access.
       options.queryParams = { prompt: "select_account" };
+    }
+
+    if (isSignUp) {
+      // Hand the agreed-to version across the full-page OAuth redirect —
+      // App.jsx's SIGNED_IN handler reads and clears this once the session
+      // is confirmed. See PENDING_CONSENT_STORAGE_KEY's comment above.
+      try { window.sessionStorage.setItem(PENDING_CONSENT_STORAGE_KEY, CURRENT_LEGAL_VERSION); } catch { /* private mode etc. */ }
     }
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
@@ -211,6 +242,12 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
+
+    if (isSignUp && !agreedToTerms) {
+      setError("You must agree to the Terms of Service and Privacy Policy to continue.");
+      return;
+    }
+
     setLoading(true);
 
     if (isSignUp) {
@@ -222,6 +259,11 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
       if (signUpError) { setError(signUpError.message); setLoading(false); return; }
       if (data.user) {
         await supabase.from("user_data").insert({ user_id: data.user.id });
+        // Direct write, not the OAuth path's sessionStorage handoff — this
+        // handler already has the user id in hand, no redirect boundary to
+        // cross. See recordConsent's own comment for why a raw client insert
+        // is safe here (RLS + server-forced timestamp).
+        await recordConsent(data.user.id, CURRENT_LEGAL_VERSION);
       }
       if (!data.session) {
         setInfo(`Confirmation sent to ${email}. Click the link to activate your account.`);
@@ -425,6 +467,23 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder={isSignUp ? "At least 6 characters" : "Your password"} required autoComplete={isSignUp ? "new-password" : "current-password"} style={{ ...iS, borderRadius: "8px" }} />
         </div>
 
+        {isSignUp && (
+          <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={agreedToTerms}
+              onChange={e => setAgreedToTerms(e.target.checked)}
+              style={{ marginTop: "2px", width: "16px", height: "16px", accentColor: "var(--color-teal)", cursor: "pointer", flexShrink: 0 }}
+            />
+            <span style={{ fontSize: "11px", color: "var(--color-text-secondary)", lineHeight: "1.6" }}>
+              I have read and agree to the{" "}
+              <button type="button" onClick={() => setLegalModalDoc("terms")} style={linkBtnStyle}>Terms of Service</button>
+              {" "}and{" "}
+              <button type="button" onClick={() => setLegalModalDoc("privacy")} style={linkBtnStyle}>Privacy Policy</button>.
+            </span>
+          </label>
+        )}
+
         {error && <ErrorBox>{error}</ErrorBox>}
 
         <SubmitBtn loading={loading}>{loading ? "..." : isSignUp ? "Create account" : "Sign in"}</SubmitBtn>
@@ -505,11 +564,25 @@ export function LoginScreen({ recoveryMode = false, onRecoveryDone, onInvestorVe
 
   // Wrap all screen content in ModeFade and Shell
   return (
-    <Shell title={screenTitle} subtitle={screenSubtitle}>
-      <ModeFade modeKey={screenKey}>
-        {screenContent}
-      </ModeFade>
-    </Shell>
+    <>
+      <Shell title={screenTitle} subtitle={screenSubtitle}>
+        <ModeFade modeKey={screenKey}>
+          {screenContent}
+        </ModeFade>
+      </Shell>
+      <LegalDocumentModal
+        open={legalModalDoc === "terms"}
+        title="Terms of Service"
+        markdown={TERMS_OF_SERVICE_MARKDOWN}
+        onClose={() => setLegalModalDoc(null)}
+      />
+      <LegalDocumentModal
+        open={legalModalDoc === "privacy"}
+        title="Privacy Policy"
+        markdown={PRIVACY_POLICY_MARKDOWN}
+        onClose={() => setLegalModalDoc(null)}
+      />
+    </>
   );
 }
 

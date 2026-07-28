@@ -58,7 +58,7 @@ const DAY_TO_DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
  * On confirm, `onActivate(configPatch, updatedExpenses?)` is called —
  * `updatedExpenses` is only passed when there were expenses to review.
  *   configPatch: {
- *     jobLossMode: true, jobLossDate, jobLossCashOnHand,
+ *     jobLossMode: true, jobLossDate, jobLossCashOnHand, jobLossCashOnHandAsOf,
  *     jobLossPendingCheckAmount, jobLossPendingCheckDate,
  *     unemploymentEnabled, unemploymentWeekly, unemploymentDurationWeeks,
  *     unemploymentWaitingWeek,
@@ -163,6 +163,7 @@ export function JobLossEntry({ open, onClose, onActivate, expenses = [], config 
     jobLossMode: true,
     jobLossDate: date,
     jobLossCashOnHand: cashOnHandVal ?? 0,
+    jobLossCashOnHandAsOf: date,
     jobLossPendingCheckAmount: hasPendingCheck ? Math.round(pendingAmountEstimate) : null,
     jobLossPendingCheckDate: hasPendingCheck && pendingArrivalDate ? toLocalIso(pendingArrivalDate) : null,
     unemploymentEnabled: hasUnemployment,

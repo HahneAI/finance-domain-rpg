@@ -38,7 +38,7 @@ One-liner per item — see git history for full implementation detail.*
 *Final four items — section closed and removed from TODO.md.*
 
 - [x] **Mobile PWA install tutorial** — Hamburger-menu install tutorial shown only in the mobile browser (hidden in installed PWA), reusing the website's iOS flow
-- [x] **Financial alert copy pass** — Net Worth Health "Financial Breakthrough" tips copy revisited; the AI/Coach-generated upgrade remains tracked in TODO §18.C (not part of this close-out)
+- [x] **Financial alert copy pass** — Net Worth Health "Financial Breakthrough" tips copy revisited; the AI/Coach-generated upgrade remains tracked in TODO §2.C (not part of this close-out)
 - [x] **Purge grey text** — Final app-wide verification pass; remaining dark-grey text replaced with standard white/primary
 - [x] **Verify change email + password (live round-trip)** — Live Supabase + real inbox test completed: email change dual-confirm link, password change with old-password rejection, wrong-current-password path
 

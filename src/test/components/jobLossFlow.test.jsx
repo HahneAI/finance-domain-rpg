@@ -63,7 +63,7 @@ describe('LifeEventMenu', () => {
     expect(onSelect).toHaveBeenCalledWith('structure_change')
   })
 
-  it('routes "Quick Rate Update" to the rate_update modal (TODO §15.D, no longer Coming Soon)', () => {
+  it('routes "Quick Rate Update" to the rate_update modal (TODO §1.D, no longer Coming Soon)', () => {
     const onSelect = vi.fn()
     const onClose = vi.fn()
     render(<LifeEventMenu open onClose={onClose} onSelect={onSelect} />)
@@ -117,7 +117,7 @@ describe('JobLossEntry', () => {
       unemploymentDurationWeeks: null,
       unemploymentWaitingWeek: false,
     }))
-    // TODO §15.H17 — the decay clock starts at the job-loss effective date.
+    // TODO §1.H17 — the decay clock starts at the job-loss effective date.
     const activatedPatch = onActivate.mock.calls[0][0]
     expect(activatedPatch.jobLossCashOnHandAsOf).toBe(activatedPatch.jobLossDate)
     expect(onClose).toHaveBeenCalled()
@@ -156,7 +156,7 @@ describe('JobLossEntry', () => {
     expect(onActivate).not.toHaveBeenCalled()
   })
 
-  // TODO §15.H13 — cash on hand is mandatory: blocks Next/Activate while
+  // TODO §1.H13 — cash on hand is mandatory: blocks Next/Activate while
   // empty, accepts 0 as a real answer, shows the red-border/required state
   // only after a failed attempt (not on first render).
   it('blocks Next until cash on hand is entered, with no red border before the first attempt', () => {
@@ -193,10 +193,10 @@ describe('JobLossEntry', () => {
     expect(screen.queryByText(/Required — 0 is a fine answer/i)).toBeNull()
   })
 
-  // TODO §15.H15 — pending/final paycheck: skippable Y/N gate; Yes reveals a
+  // TODO §1.H15 — pending/final paycheck: skippable Y/N gate; Yes reveals a
   // worked-days grid + a single-select arrival-day picker; resolved once at
   // Activate time into a concrete amount + date (raw picks aren't stored).
-  describe('Pending/final paycheck (§15.H15)', () => {
+  describe('Pending/final paycheck (§1.H15)', () => {
     const PAY_CONFIG = {
       payPeriodEndDay: 0, userPaySchedule: 'weekly', baseRate: 20, shiftHours: 8,
       fedRateLow: 0.08, stateRateLow: 0.03, ficaRate: 0.0765, k401Rate: 0,
@@ -374,7 +374,7 @@ describe('JobLossEntry', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// RateUpdateModal (TODO §15.D)
+// RateUpdateModal (TODO §1.D)
 // ─────────────────────────────────────────────────────────────
 
 describe('RateUpdateModal', () => {
@@ -428,7 +428,7 @@ describe('RateUpdateModal', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// JobLossHomePanel + JobLossBudgetPanel (TODO §15 mode rebuild, 2026-07-18)
+// JobLossHomePanel + JobLossBudgetPanel (TODO §1 mode rebuild, 2026-07-18)
 // — replace JobLossDashboard/ExpenseTriage as Job Loss Mode's own dedicated
 // Home/Budget views instead of a pinned card layered over the normal panels.
 // ─────────────────────────────────────────────────────────────
@@ -454,11 +454,11 @@ describe('JobLossHomePanel', () => {
     expect(screen.getByText('Runway')).toBeTruthy()
   })
 
-  // TODO §15.H14 bullet 2 / §15.H16 — Lifestyle spend is excluded from
+  // TODO §1.H14 bullet 2 / §1.H16 — Lifestyle spend is excluded from
   // weeklyBurn on purpose (survival-spend focus), but a user who keeps those
   // bills tracked is still paying for them; this caption is the transparency
   // fix so the headline number doesn't silently omit real spend.
-  describe('Lifestyle spend caption (§15.H16)', () => {
+  describe('Lifestyle spend caption (§1.H16)', () => {
     const GYM = {
       id: 'exp_gym', category: 'Lifestyle', label: 'Gym',
       billingMeta: { amount: 40, cycle: 'every7days', effectiveFrom: '2026-01-01' },
@@ -527,11 +527,11 @@ describe('JobLossHomePanel', () => {
     expect(screen.getByText('Target annual')).toBeTruthy()
   })
 
-  // TODO §15.H17 — cash on hand is now a pencil-badged card (not a plain
+  // TODO §1.H17 — cash on hand is now a pencil-badged card (not a plain
   // input), edited through CashOnHandSheet's bottom sheet. expenses: [] in
   // these tests isolates "does the field wire up correctly" from decay
   // behavior, which gets its own describe block below.
-  describe('Cash On Hand card + sheet (TODO §15.H17)', () => {
+  describe('Cash On Hand card + sheet (TODO §1.H17)', () => {
     it('shows the current cash-on-hand figure on the card', () => {
       const cfg = { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }
       render(<JobLossHomePanel config={cfg} setConfig={() => {}} expenses={[]} effectiveToday="2026-06-15" includeBenefits />)
@@ -567,7 +567,7 @@ describe('JobLossHomePanel', () => {
       fireEvent.click(screen.getByText('Cancel'))
       expect(setConfig).not.toHaveBeenCalled()
       // The sheet stays mounted through its animated slide-down exit (TODO
-      // §15.H17 — matches the "up-from-bottom entry, slide-down exit" ask),
+      // §1.H17 — matches the "up-from-bottom entry, slide-down exit" ask),
       // so it's still in the DOM immediately after the click; only gone once
       // the exit tween finishes.
       await waitFor(() => expect(screen.queryByText('Update Cash On Hand')).toBeNull())
@@ -581,10 +581,10 @@ describe('JobLossHomePanel', () => {
     })
   })
 
-  // TODO §15.H17 — the headline figure decreases automatically as tracked
+  // TODO §1.H17 — the headline figure decreases automatically as tracked
   // essential bills come due since jobLossCashOnHandAsOf (falls back to
   // jobLossDate when unset), instead of silently going stale.
-  describe('Cash On Hand — timeline-aware decay (§15.H17)', () => {
+  describe('Cash On Hand — timeline-aware decay (§1.H17)', () => {
     const RENT = {
       id: 'exp_rent', category: 'Needs', label: 'Rent', jobLossStatus: 'active',
       dueDateAnchor: '2026-06-04',
@@ -765,10 +765,10 @@ describe('JobLossBudgetPanel', () => {
     expect(screen.queryByText('Paused')).toBeNull()
   })
 
-  // TODO §15.H17 — same shared CashOnHandSheet as JobLossHomePanel's card,
+  // TODO §1.H17 — same shared CashOnHandSheet as JobLossHomePanel's card,
   // triggered from a compact pencil-badged row instead of a plain input.
   // expenses: [] avoids decay noise (own describe block below covers that).
-  describe('Cash on hand / current savings (persisted, TODO §15.H17)', () => {
+  describe('Cash on hand / current savings (persisted, TODO §1.H17)', () => {
     it('shows the current cash-on-hand figure in the row', () => {
       renderBudget({ config: { ...JOB_LOSS_CONFIG, jobLossCashOnHand: 1500 }, expenses: [] })
       expect(screen.getByText('$1,500')).toBeTruthy()
@@ -803,8 +803,8 @@ describe('JobLossBudgetPanel', () => {
     })
   })
 
-  // TODO §15.H17 — same decay math as Home, same describe convention.
-  describe('Cash on hand — timeline-aware decay (§15.H17)', () => {
+  // TODO §1.H17 — same decay math as Home, same describe convention.
+  describe('Cash on hand — timeline-aware decay (§1.H17)', () => {
     const RENT = {
       id: 'exp_rent', category: 'Needs', label: 'Rent', jobLossStatus: 'active',
       dueDateAnchor: '2026-06-04',

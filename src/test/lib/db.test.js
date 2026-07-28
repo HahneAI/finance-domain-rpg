@@ -26,7 +26,7 @@ import { loadUserData, saveUserData, syncUserProfile, saveConfigSnapshot, fetchC
 /** account_history's query chain (.select().eq().order()) — distinct shape from
  * the .single()-based user_data/investor_users chains below, so every
  * setupLoad* helper must branch on table name rather than using one blanket
- * mockReturnValue (added for TODO §15.D / §19's baseRate-history fetch). */
+ * mockReturnValue (added for TODO §1.D / §3's baseRate-history fetch). */
 function historyChain(historyRows) {
   return {
     select: vi.fn().mockReturnValue({
@@ -505,7 +505,7 @@ describe('loadUserData — misc fields', () => {
   })
 })
 
-describe('loadUserData — baseRate history (TODO §15.D / §19 narrow slice)', () => {
+describe('loadUserData — baseRate history (TODO §1.D / §3 narrow slice)', () => {
   it('defaults baseRateHistory to [] when account_history has no rows', async () => {
     setupLoadMock(makeRow())
     const result = await loadUserData()
@@ -854,7 +854,7 @@ describe('syncUserProfile — profile metadata + trial seeding (migration 017/01
 })
 
 // ─────────────────────────────────────────────────────────────
-// TODO §19 phase 1 — account_history write path (migration 020)
+// TODO §3 phase 1 — account_history write path (migration 020)
 // ─────────────────────────────────────────────────────────────
 
 describe('saveConfigSnapshot', () => {

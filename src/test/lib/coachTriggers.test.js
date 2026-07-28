@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { resolveNetWorthSignalTier, shouldFireForTier } from "../../lib/coachTriggers.js";
 
-// estimateRunwayDays was removed 2026-07-21 (drift-app-warden §21 F24
+// estimateRunwayDays was removed 2026-07-21 (drift-app-warden §8 F24
 // quarantine, closed) — callers now compute runwayDays via
 // computeJobLossRunway()/resolvePrimaryRunwayDays() (jobLossRunway.js,
 // see jobLossRunway.test.js) so every Coach surface quotes the same

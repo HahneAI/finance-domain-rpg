@@ -1931,7 +1931,7 @@ function ListRow({ label, summary, onPress, last }) {
 
 // ── ProfilePanel ────────────────────────────────────────────────────────────
 
-// docs/TODO.md §32 — self-serve redemption for an already-signed-in account.
+// docs/TODO.md §16 — self-serve redemption for an already-signed-in account.
 // Mirrors the investor code flow's client-side validate-then-redeem shape
 // (LoginScreen.jsx's investorCode handling), but simpler: this upgrades an
 // existing account in place rather than routing into a separate registration
@@ -2001,7 +2001,7 @@ function BetaRedeemDetail({ onBack }) {
   );
 }
 
-// docs/TODO.md §33 — replaces the earlier mailto: link. The beta scoring
+// docs/TODO.md §17 — replaces the earlier mailto: link. The beta scoring
 // rubric needs feedback to be both countable ("frequency") and readable
 // ("specificity"), which a mailto link can never supply — this logs the
 // actual text via logBetaFeedback (migration 030_add_beta_feedback.sql)
@@ -2299,7 +2299,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
   // tax_projections_enabled flag). The setup wizard's "Unlock projections" choice
   // intentionally does NOT reveal it — see canAccessTaxPlan for why.
   const canSeeTaxPlan = canAccessTaxPlan({ isAdmin, taxProjectionsEnabled, isTester });
-  // docs/TODO.md §33/§36 — the real 10-week cohort only (isAdmin does NOT count,
+  // docs/TODO.md §17/§20 — the real 10-week cohort only (isAdmin does NOT count,
   // same distinction isTrackedBetaTester enforces everywhere else).
   const isBetaTester = isTrackedBetaTester({ isTester, betaCodeUsed });
   const [activeSection, setActiveSection] = useState(null);
@@ -2363,12 +2363,12 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
     <div style={{ maxWidth: "520px" }}>
       <PanelHero eyebrow="Authority Finance">Account</PanelHero>
 
-      {/* TODO §15 nav/panel restructuring — Job & Pay and Retirement & Benefits
+      {/* TODO §1 nav/panel restructuring — Job & Pay and Retirement & Benefits
           both show figures (rate, 401k contribution/match) that are either
           stale or actively misleading while there's no real income to speak
           of. Swapped for a single "Back to Work" entry point instead — the
           same structure_change flow the Job Loss banner's button already
-          uses (§15.H4) — as a second route to it beyond the banner. */}
+          uses (§1.H4) — as a second route to it beyond the banner. */}
       {config?.jobLossMode ? (
         <>
           <div style={{ fontSize: "10px", letterSpacing: "2.5px", textTransform: "uppercase", color: "var(--color-text-primary)", marginBottom: "8px", paddingLeft: "4px" }}>Job Search</div>
@@ -2446,7 +2446,7 @@ export function ProfilePanel({ authedUser, config, setConfig, saveConfigNow, onL
         )}
       </div>
 
-      {/* Beta Program group (docs/TODO.md §32/§33/§36) — one section that adapts
+      {/* Beta Program group (docs/TODO.md §16/§17/§20) — one section that adapts
           to redemption state instead of two near-duplicate UI elements. Before
           redemption: a "Redeem Beta Code" entry point visible to every user,
           same always-visible-regardless-of-invite pattern LoginScreen already

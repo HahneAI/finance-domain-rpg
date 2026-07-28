@@ -4,7 +4,7 @@ import { WEEK_OF_MONTH_OPTIONS } from "../lib/expense.js";
 /**
  * DueDatePicker — quick "week of month" pills plus a manual date fallback.
  * Shared between JobLossEntry's payment-date step and JobLossBudgetPanel's
- * add-expense form so both stay in sync (TODO §15 expense due-date work) and
+ * add-expense form so both stay in sync (TODO §1 expense due-date work) and
  * neither silently defaults a bill's due date to its creation date.
  *
  * `value`: { mode: "week" | "custom", week?: string, date?: string } | null

@@ -273,7 +273,7 @@ export function DemoAccountTree({ accountNumber = 1, isAdmin = false, onExit, ac
   );
 
   const bufferPerWeek = config.bufferEnabled ? (config.paycheckBuffer ?? 50) : 0;
-  // Mirrors App.jsx's weeklyIncome fix (TODO §15, 2026-07-19) — divide by the
+  // Mirrors App.jsx's weeklyIncome fix (TODO §1, 2026-07-19) — divide by the
   // weeks actually active this fiscal year, not a flat 52, so a mid-year-start
   // demo config doesn't dilute "a typical week" down to a fraction of itself.
   const activeWeeksThisYear = resolveActiveWeeksThisYear(config.firstActiveIdx);

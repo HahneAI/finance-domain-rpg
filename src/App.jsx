@@ -99,7 +99,7 @@ const BOTTOM_NAV = [
   },
 ];
 
-// §18.H4 — shapes loadCoachChats() output into the DB Row Viewer's "Coach Chats" line.
+// §2.H4 — shapes loadCoachChats() output into the DB Row Viewer's "Coach Chats" line.
 // Pure function (not inline in handleFetchRow) so the count/label logic is testable without
 // touching Supabase. Type breakdown only lists types that actually have rows — today that's
 // always just ask_coach (job_scout/job_hunt/statement_summary have no UI caller yet), but this
@@ -308,8 +308,8 @@ export default function App() {
   const [rowViewOpen, setRowViewOpen] = useState(false);
   const [rowData, setRowData] = useState(null);
   const [rowFetching, setRowFetching] = useState(false);
-  const [historyMeta, setHistoryMeta] = useState(null); // §19 config-history line in DB Row viewer
-  const [coachChatsMeta, setCoachChatsMeta] = useState(null); // §18.H4 Coach Chats line in DB Row viewer
+  const [historyMeta, setHistoryMeta] = useState(null); // §3 config-history line in DB Row viewer
+  const [coachChatsMeta, setCoachChatsMeta] = useState(null); // §2.H4 Coach Chats line in DB Row viewer
   const [coachChatsListOpen, setCoachChatsListOpen] = useState(false);
   const [taxGridOpen, setTaxGridOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -319,7 +319,7 @@ export default function App() {
   //                        pickupDays, netShiftDelta, eventId } }
   // Keyed by weekIdx (number) so lookup is O(1) in confirmTriggerWeek.
   const [weekConfirmations, setWeekConfirmations] = useState({});
-  // Point-in-time baseRate lookup (TODO §15.D / §19 narrow slice) — sorted-or-not
+  // Point-in-time baseRate lookup (TODO §1.D / §3 narrow slice) — sorted-or-not
   // list of { effectiveFrom, baseRate } fed to buildYear() so a rate change only
   // recomputes weeks from its effective date forward. See resolveBaseRateForWeek
   // in lib/finance.js for the resolution algorithm.
@@ -340,14 +340,14 @@ export default function App() {
   const drawerFeedbackFold = useFoldTransition(drawerFeedbackOpen, { ms: 340 });
   const [jobLossEntryOpen, setJobLossEntryOpen] = useState(false);
   const [rateUpdateOpen, setRateUpdateOpen] = useState(false);
-  // TODO §15 mode rebuild — the benefit-scenario toggle (unlike cash on hand,
+  // TODO §1 mode rebuild — the benefit-scenario toggle (unlike cash on hand,
   // which is now a real persisted config.jobLossCashOnHand field edited
   // directly by JobLossHomePanel/JobLossBudgetPanel) stays session-only by
   // design — lifted here so both panels agree without either owning the
   // other's state.
   const [jobLossIncludeBenefits, setJobLossIncludeBenefits] = useState(true);
   // Session-only dismissal so the banner re-appears on every page load,
-  // matching the §15.C1 spec ("dismissible but re-shows on reload").
+  // matching the §1.C1 spec ("dismissible but re-shows on reload").
   const [jobLossBannerDismissed, setJobLossBannerDismissed] = useState(false);
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -394,7 +394,7 @@ export default function App() {
 
   const currentView = viewStack[viewStack.length - 1];
 
-  // TODO §15 nav restructuring — Income/Log are dropped from the nav entirely
+  // TODO §1 nav restructuring — Income/Log are dropped from the nav entirely
   // in Job Loss Mode (effectiveBottomNav/effectiveNavItems above), but a user
   // could already be sitting on one of those tabs the instant jobLossMode
   // flips true (Back to Work's counterpart already reuses whatever tab was
@@ -714,7 +714,7 @@ export default function App() {
     return () => clearTimeout(saveTimer.current);
   }, [config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal, loading]);
 
-  // ── Config history write path (TODO §19 phase 1) ──
+  // ── Config history write path (TODO §3 phase 1) ──
   // Watches every config transition rather than wrapping individual save calls,
   // so no whitelisted change can bypass capture regardless of which setConfig
   // site or save path (immediate vs. debounced) it flows through. Attributed
@@ -741,7 +741,7 @@ export default function App() {
       source: meta?.source ?? "config_edit",
       effectiveFrom,
     });
-    // Optimistic local append (TODO §15.D / §19 narrow slice) — the DB insert above
+    // Optimistic local append (TODO §1.D / §3 narrow slice) — the DB insert above
     // is fire-and-forget, so without this the just-made change wouldn't affect
     // buildYear()'s point-in-time resolution until the next full reload. Matters
     // most for a future-dated effective date: without the local entry, weeks
@@ -863,7 +863,7 @@ export default function App() {
     setSyncStatus({ op: "pull", pending: true });
     try {
       const data = await loadUserData();
-      // §19: a pull re-adopts what the DB already holds — if it diffs against
+      // §3: a pull re-adopts what the DB already holds — if it diffs against
       // in-memory state (drift), attribute the snapshot honestly, not as an edit.
       configHistoryMetaRef.current = { source: "force_pull" };
       setConfig(data.config);
@@ -925,8 +925,8 @@ export default function App() {
         .eq("user_id", user.id)
         .single();
       setRowData(error ? { __error: error.message } : data);
-      setHistoryMeta(await fetchConfigHistoryMeta()); // §19 snapshot count + latest
-      setCoachChatsMeta(deriveCoachChatsMeta(await loadCoachChats())); // §18.H4 Coach Chats line
+      setHistoryMeta(await fetchConfigHistoryMeta()); // §3 snapshot count + latest
+      setCoachChatsMeta(deriveCoachChatsMeta(await loadCoachChats())); // §2.H4 Coach Chats line
     } catch (e) {
       setRowData({ __error: e.message });
     }
@@ -1004,7 +1004,7 @@ export default function App() {
   const entitlement = getEntitlement(subscription, new Date());
 
   const effectiveBottomNav = useMemo(() => {
-    // TODO §15 nav restructuring — Income and Log both assume an active pay
+    // TODO §1 nav restructuring — Income and Log both assume an active pay
     // structure (projected income, per-paycheck event log) that a Job Loss
     // Mode account doesn't have. Drop to Home/Budget/Account so nothing in the
     // nav points at a screen that's misleading or meaningless right now.
@@ -1014,7 +1014,7 @@ export default function App() {
     // Ask Coach general chat left the admin/tester-only standing constraint
     // (docs/coach-entry-points.md §1) — now also opens for a real trial/paid
     // entitlement, not just isAdmin/isTester. Every OTHER Coach surface stays
-    // on canAccessAiFeatures (docs/TODO.md §18.0 build order).
+    // on canAccessAiFeatures (docs/TODO.md §2.0 build order).
     if (canAccessAskCoachGeneral({ isAdmin, isTester, entitlement })) {
       items.push({
         key: "__coach__",
@@ -1052,7 +1052,7 @@ export default function App() {
     return pairs.filter(([, a, b]) => a !== b).map(([col]) => col);
   }, [rowData, config, expenses, goals, logs, showExtra, weekConfirmations, ptoGoal]);
 
-  // §19.F verification surface — one line summarizing account_history capture,
+  // §3.F verification surface — one line summarizing account_history capture,
   // shown in every DB Row viewer block alongside updated_at/drift.
   const historyLine = useMemo(() => {
     if (!historyMeta) return null;
@@ -1064,7 +1064,7 @@ export default function App() {
     return `config history: ${count} snapshot${count === 1 ? "" : "s"} · latest ${latest?.effective_from ?? "?"}${src}${fields}`;
   }, [historyMeta]);
 
-  // §18.H4 — "Coach Chats" line in the DB Row viewer.
+  // §2.H4 — "Coach Chats" line in the DB Row viewer.
   const coachChatsLine = useMemo(() => {
     if (!coachChatsMeta) return null;
     const { count, breakdown } = coachChatsMeta;
@@ -1417,7 +1417,7 @@ export default function App() {
   // year silently diluted it by every inactive week before firstActiveIdx.
   // For a brand-new or just-reactivated (Back to Work) account that's most
   // of the year, so the "typical week" figure came out a fraction of a real
-  // paycheck (TODO §15 Job Loss Mode investigation, 2026-07-19). For a
+  // paycheck (TODO §1 Job Loss Mode investigation, 2026-07-19). For a
   // full-year account (firstActiveIdx 0) this is byte-identical to /52.
   const activeWeeksThisYear = resolveActiveWeeksThisYear(config.firstActiveIdx);
   const weeklyIncome = (activeWeeksThisYear > 0 ? projectedAnnualNet / activeWeeksThisYear : 0) - bufferPerWeek;
@@ -1461,7 +1461,7 @@ export default function App() {
     [futureWeeks, weekNetLookup, futureWeekNetsRaw]
   );
 
-  // ── Job Loss Mode expense triage (TODO §15.C3) ──
+  // ── Job Loss Mode expense triage (TODO §1.C3) ──
   // Paused/cancelled expenses drop out of forward projections while jobLossMode
   // is active. Missing jobLossStatus is treated as "active" so existing rows
   // need no migration.
@@ -1475,14 +1475,14 @@ export default function App() {
   const fundedGoalSpend = useMemo(() => getFundedGoalSpend(goals, effectiveToday), [goals, effectiveToday]);
   const baseWeeklyUnallocated = weeklyIncome - remainingSpend.avgWeeklySpend;
 
-  // Real runway for Ask Coach (drift-app-warden §21 quarantine-2 fix) — was
+  // Real runway for Ask Coach (drift-app-warden §8 quarantine-2 fix) — was
   // never wired at all before, so a Job Loss Mode user asking Coach about
   // runway got a bare "Job Loss Mode: active" with no number. Same
   // computeJobLossRunway()/resolvePrimaryRunwayDays() pair CoachNetWorthCard
   // now uses, and the real (not defaulted) jobLossIncludeBenefits toggle, so
   // Ask Coach agrees with whatever the Job Loss panels are showing. Raw
   // jobLossCashOnHand is read internally by computeJobLossRunway (and
-  // timeline-decayed per §15.H17) — extraCash is just the gig-income log.
+  // timeline-decayed per §1.H17) — extraCash is just the gig-income log.
   const coachRunwayDays = useMemo(() => {
     if (!config.jobLossMode) return null;
     const dash = computeJobLossRunway({ config, expenses, effectiveToday, extraCash: sumJobHuntIncome(config) });
@@ -1557,15 +1557,15 @@ export default function App() {
   }
 
   function handleWizardComplete(mergedConfig) {
-    // §19: wizard flows are the one path that passes an explicit effective date
+    // §3: wizard flows are the one path that passes an explicit effective date
     // (the job start / change date anchor); plain edits default to today.
     configHistoryMetaRef.current = {
       source: wizardEntry === false ? "setup_wizard" : `life_event:${wizardEntry}`,
       effectiveFrom: mergedConfig.startDate ?? undefined,
     };
-    // §15.H4: Back to Work's structure_change flow is how a jobless-started user
+    // §1.H4: Back to Work's structure_change flow is how a jobless-started user
     // first fills in real pay structure. Clear the flag on success so future Life
-    // Events (and the §15.H5 banner copy) stop treating this as a no-prior-history
+    // Events (and the §1.H5 banner copy) stop treating this as a no-prior-history
     // account — otherwise a later job loss would incorrectly show the "no prior pay
     // history" banner even though real pay data exists now.
     const finalConfig = (wizardEntry === "structure_change" && mergedConfig.startedUnemployed === true)
@@ -1573,7 +1573,7 @@ export default function App() {
       : mergedConfig;
     setConfig(finalConfig);
     closeWizardWithAnimation();
-    // §15.H3: a first-run signup that ended in Job Loss Mode skipped the Deductions/
+    // §1.H3: a first-run signup that ended in Job Loss Mode skipped the Deductions/
     // Tax steps entirely and has no real income yet — defer the pinned Food default
     // to the user's first expense-triage pass instead of seeding it unseen. Passed
     // into the save overrides directly (not a separate setExpenses call) so the
@@ -1581,9 +1581,9 @@ export default function App() {
     // savePersistedStateNow's own doc comment calls out.
     const skipFoodSeed = wizardEntry === false && finalConfig.jobLossMode === true;
     if (skipFoodSeed) setExpenses([]);
-    // §15.H4: the reverse of the skip above — Back to Work is exactly when a
+    // §1.H4: the reverse of the skip above — Back to Work is exactly when a
     // jobless-started account gets real income again, so the mandatory Food
-    // expense (the only real mandatory expense that exists today — §25's planned
+    // expense (the only real mandatory expense that exists today — §7's planned
     // Rent expense isn't built yet) needs to come back. ensureInitialFoodExpense
     // is a no-op if the user already has one (e.g. added manually via Triage).
     const restoredExpenses = (wizardEntry === "structure_change" && mergedConfig.startedUnemployed === true)
@@ -1600,11 +1600,11 @@ export default function App() {
     });
   }
 
-  // TODO §15 nav/panel restructuring — shared by the Job Loss banner's "Back to
+  // TODO §1 nav/panel restructuring — shared by the Job Loss banner's "Back to
   // Work" button and the new Account panel entry point (setup wizard rewrite,
   // 2026-07-18), so there's exactly one place that resets the job-loss fields.
   function handleBackToWork() {
-    // Auto-reactivate flagged expenses on exit (§15.C3).
+    // Auto-reactivate flagged expenses on exit (§1.C3).
     setExpenses(prev => prev.map(exp => {
       const status = exp.jobLossStatus ?? "active";
       const auto = exp.autoReactivateOnIncome ?? true;
@@ -1621,7 +1621,7 @@ export default function App() {
       unemploymentWeekly: null,
       unemploymentDurationWeeks: null,
       unemploymentWaitingWeek: false,
-      // §15.C6: projected return date is moot once they're actually
+      // §1.C6: projected return date is moot once they're actually
       // re-employed via the wizard. Job application log stays as
       // user history.
       returnToWorkDate: null,
@@ -2483,7 +2483,7 @@ export default function App() {
             agreeLoading={consentGateSaving}
           />
           {saveError && <SaveFailedBanner message={saveError} onRetry={retryFailedSave} onDismiss={dismissSaveError} />}
-          {/* ── Job Loss Mode banner (TODO §15.C1 + C2) ── */}
+          {/* ── Job Loss Mode banner (TODO §1.C1 + C2) ── */}
           {config.jobLossMode && !jobLossBannerDismissed && (() => {
             // Compute benefits-end date when duration is set, so the banner can
             // show a "runs out on" cliff warning. Waiting week shifts the start.
@@ -2517,7 +2517,7 @@ export default function App() {
                   Job Loss Mode
                 </div>
                 <div style={{ fontSize: "11px", color: "var(--color-text-secondary)", marginTop: "2px" }}>
-                  {/* §15.H5: users who started jobless have no real pay history to compare
+                  {/* §1.H5: users who started jobless have no real pay history to compare
                       against — say so plainly instead of implying a job was actually lost. */}
                   {config.startedUnemployed === true ? (
                     "Started in Job Loss Mode — no prior pay history."
@@ -2542,7 +2542,7 @@ export default function App() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                {/* TODO §15 mode rebuild — triage now lives inline on Budget
+                {/* TODO §1 mode rebuild — triage now lives inline on Budget
                     itself (JobLossBudgetPanel), not a separate modal, so this
                     button just jumps there instead of opening one. */}
                 <Pressable
@@ -2593,7 +2593,7 @@ export default function App() {
             </div>
             );
           })()}
-          {/* TODO §15 mode rebuild (2026-07-18) — the standalone pinned dashboard
+          {/* TODO §1 mode rebuild (2026-07-18) — the standalone pinned dashboard
               card is gone; its content now lives in JobLossHomePanel/
               JobLossBudgetPanel, which render in place of the normal Home/Budget
               panels above instead of being layered on top of them. */}
@@ -3399,7 +3399,7 @@ export default function App() {
       {/* ── PWA install instructions (§16) — single instance, opened from drawer + Account panel ── */}
       <PwaInstallModal ref={pwaModalRef} />
 
-      {/* ── Ask Coach (§18.B) — left admin/tester-only; now also open to a real
+      {/* ── Ask Coach (§2.B) — left admin/tester-only; now also open to a real
           trial/paid entitlement (docs/coach-entry-points.md §1) ── */}
       {(askCoachOpen || askCoachExiting) && canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
         <AskCoachPanel
@@ -3426,7 +3426,7 @@ export default function App() {
         />
       )}
 
-      {/* ── Life Events menu (entry point modal — TODO §15.A) ── */}
+      {/* ── Life Events menu (entry point modal — TODO §1.A) ── */}
       <LifeEventMenu
         open={lifeEventMenu}
         onClose={() => setLifeEventMenu(false)}
@@ -3472,7 +3472,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {/* ── Job Loss Mode entry (TODO §15.C1) ── */}
+      {/* ── Job Loss Mode entry (TODO §1.C1) ── */}
       <JobLossEntry
         open={jobLossEntryOpen}
         onClose={() => setJobLossEntryOpen(false)}
@@ -3489,7 +3489,7 @@ export default function App() {
           savePersistedStateNow(updatedExpenses ? { config: nextConfig, expenses: updatedExpenses } : { config: nextConfig });
         }}
       />
-      {/* ── Quick Rate Update (TODO §15.D) ── */}
+      {/* ── Quick Rate Update (TODO §1.D) ── */}
       <RateUpdateModal
         open={rateUpdateOpen}
         onClose={() => setRateUpdateOpen(false)}

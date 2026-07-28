@@ -35,7 +35,7 @@ export function canAccessTaxPlan({ isAdmin = false, taxProjectionsEnabled = fals
 }
 
 /**
- * AI feature visibility (docs/TODO.md §18 standing constraint — every AI
+ * AI feature visibility (docs/TODO.md §2 standing constraint — every AI
  * feature stays gated until Coach is ready for general rollout).
  *
  * CRUCIAL — beta testers are NOT investors. Do not fold isInvestor into this
@@ -72,7 +72,7 @@ export function isTrackedBetaTester({ isTester = false, betaCodeUsed = null } = 
  * Ask Coach general chat + Net Worth Check-In card visibility
  * (docs/coach-entry-points.md sections 1–2 — the first two Coach surfaces to
  * leave the admin/tester-only standing constraint). Ships with the regular
- * paid subscription, trial included, per docs/TODO.md §18.0's free-vs-paid
+ * paid subscription, trial included, per docs/TODO.md §2.0's free-vs-paid
  * note — so a real trial/grace/active entitlement grants access exactly like
  * an admin or manually-flagged tester does.
  *

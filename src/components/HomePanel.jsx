@@ -39,7 +39,7 @@ export function HomePanel({
   // Every real caller (App.jsx, DemoAccountTree.jsx) computes and passes this —
   // it's the correct full-year net (projectedAnnualNet + event adjustments -
   // fundedGoalSpend). Do NOT default this to weeklyIncome*FISCAL_WEEKS_PER_YEAR
-  // if a new caller omits it — that reintroduces the §15.H11 dilution bug
+  // if a new caller omits it — that reintroduces the §1.H11 dilution bug
   // (weeklyIncome is a per-ACTIVE-week average; multiplying it back out by a
   // flat 52 overstates the year for any account that wasn't active all 52).
   adjustedTakeHome,
@@ -102,7 +102,7 @@ export function HomePanel({
   // continues through Dec 31. activeWeeksThisYear is the same shared helper
   // App.jsx's weeklyIncome and aiContext.js's annualSavings key off, so the
   // Home tile, weeklyIncome, and the Coach's stated figures can't drift
-  // apart on how many weeks of the year are actually active (TODO §15,
+  // apart on how many weeks of the year are actually active (TODO §1,
   // 2026-07-19).
   const activeWeeksThisYear = resolveActiveWeeksThisYear(config?.firstActiveIdx);
   const annualSavings = avgWeeklySurplus * activeWeeksThisYear - fundedGoalSpend;
@@ -1355,7 +1355,7 @@ export function HomePanel({
         <NetWorthHealthTips seed={weekNumber ?? 0} />
       )}
 
-      {/* §18.C — left the admin/tester-only standing constraint; now also
+      {/* §2.C — left the admin/tester-only standing constraint; now also
           open to a real trial/paid entitlement (docs/coach-entry-points.md
           §2). Beta testers are NOT investors — canAccessAskCoachGeneral must
           never fold in isInvestor. See docs/active-systems.md "Beta Tester

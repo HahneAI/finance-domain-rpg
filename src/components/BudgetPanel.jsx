@@ -362,7 +362,7 @@ export function BudgetPanel({ expenses, setExpenses: setExpensesProp, onSaveExpe
   const incomingWeekNet = futureWeekNets?.[0] ?? prevWeekNet ?? weeklyIncome;
   const finalizedWeekNet = prevWeekNet ?? weeklyIncome;
   const wr = weeklyIncome - ts;
-  // §15.C3: drop paused/cancelled expenses from forward projections while
+  // §1.C3: drop paused/cancelled expenses from forward projections while
   // Job Loss Mode is active. Display lists still show every expense — only
   // the projected weekly-spend figure is filtered.
   const projectableExpenses = useMemo(() => {

@@ -2,13 +2,13 @@ import { useEffect } from "react";
 import { Pressable, useFoldTransition } from "./ui.jsx";
 
 /**
- * LifeEventMenu — modal launcher for the Life Events flow (TODO §15.A).
+ * LifeEventMenu — modal launcher for the Life Events flow (TODO §1.A).
  *
  * Replaces the inline dropdown that lived in the desktop sidebar and mobile
  * drawer. Three icon-forward tiles route to the appropriate flow:
- *  - Pay Structure Changed → SetupWizard re-entry (`structure_change`, §15.B)
- *  - Lost My Job          → JobLossEntry modal (§15.C1)
- *  - Quick Rate Update    → RateUpdateModal (§15.D)
+ *  - Pay Structure Changed → SetupWizard re-entry (`structure_change`, §1.B)
+ *  - Lost My Job          → JobLossEntry modal (§1.C1)
+ *  - Quick Rate Update    → RateUpdateModal (§1.D)
  *
  * `onSelect(route)` is called with either a SetupWizard life-event string or
  * the sentinel `"job_loss"`, which the parent interprets as "open the

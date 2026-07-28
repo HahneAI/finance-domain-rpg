@@ -54,7 +54,7 @@ function Step0({ lifeEvent, onLifeEventChange, formData, onChange, isInvestor = 
           </p>
         )}
 
-        {/* ── First question: employment status (TODO §15.H) ── */}
+        {/* ── First question: employment status (TODO §1.H) ── */}
         <div>
           <label style={lSp}>Are you currently unemployed?</label>
           <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
@@ -426,7 +426,7 @@ function Step1({ formData, onChange, lifeEvent, attempted, isInvestor = false, o
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
-      {/* ── Employer preset switch callout (TODO §15.B) ── */}
+      {/* ── Employer preset switch callout (TODO §1.B) ── */}
       {lifeEvent === "structure_change"
         && originalConfig
         && originalConfig.employerPreset !== formData.employerPreset && (
@@ -1899,7 +1899,7 @@ const DIFF_FIELDS = [
 ];
 
 function StructureChangeDiff({ originalConfig, formData }) {
-  // TODO §15.H4: a user who started jobless (never filled in real pay structure)
+  // TODO §1.H4: a user who started jobless (never filled in real pay structure)
   // running Back to Work hits this same structure_change flow, but originalConfig's
   // pay fields are still DEFAULT_CONFIG placeholders (e.g. baseRate: 19.65) — not a
   // real prior rate. Diffing those would misleadingly show "before: $19.65/hr" as if
@@ -2016,7 +2016,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "22px" }}>
 
-      {/* ── Structure-change diff (TODO §15.B) — shown only on the structure_change flow ── */}
+      {/* ── Structure-change diff (TODO §1.B) — shown only on the structure_change flow ── */}
       {lifeEvent === "structure_change" && (
         <StructureChangeDiff originalConfig={originalConfig} formData={formData} />
       )}
@@ -2116,7 +2116,7 @@ function StepWrapUp({ formData, onChange, lifeEvent, originalConfig }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// JOBLESS SETUP MINI-FLOW (TODO §15.H2) — only shown on first-run when the
+// JOBLESS SETUP MINI-FLOW (TODO §1.H2) — only shown on first-run when the
 // user answered "Yes" to Step 0's employment-status question. Consolidates
 // H2's five conceptual sub-steps (0a-0e) into three actual wizard screens:
 // unemployment benefits (0a+0b, same fields as JobLossEntry.jsx's existing
@@ -2278,7 +2278,7 @@ function StepJoblessWrapUp({ formData }) {
 //   "commission_job"    → steps 0–5 only; steps 6–8 skipped
 //   "structure_change"  → steps 0–4 + Wrap Up (7); pre-filled from current config; the Wrap Up
 //                          step gains a "What's Changing" diff section in this mode
-//   null + startedUnemployed===true (TODO §15.H) → steps 0, 10-12 only (Jobless Setup mini-flow);
+//   null + startedUnemployed===true (TODO §1.H) → steps 0, 10-12 only (Jobless Setup mini-flow);
 //                          steps 1-4 and 7 are skipped entirely, not just hidden
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2292,7 +2292,7 @@ const STEP_DEFS = [
   {
     id: 0, title: "Welcome",
     showIf: () => true,
-    // First-run: require an answer to the §15.H employment-status seed.
+    // First-run: require an answer to the §1.H employment-status seed.
     // Re-entry life events have no Step 0 question, so always valid.
     isValid: (d, ev) => ev !== null || d.startedUnemployed === true || d.startedUnemployed === false,
     component: Step0,

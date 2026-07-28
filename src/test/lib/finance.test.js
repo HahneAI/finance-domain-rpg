@@ -337,7 +337,7 @@ describe('buildYear', () => {
 })
 
 // ─────────────────────────────────────────────────────────────
-// resolveBaseRateForWeek + buildYear point-in-time baseRate (TODO §15.D / §19 slice)
+// resolveBaseRateForWeek + buildYear point-in-time baseRate (TODO §1.D / §3 slice)
 // ─────────────────────────────────────────────────────────────
 
 describe('resolveBaseRateForWeek', () => {
@@ -370,7 +370,7 @@ describe('resolveBaseRateForWeek', () => {
   })
 })
 
-describe('resolvePrevWeekNet (TODO §15 — "This Week\'s Check" annual-average dilution fix, 2026-07-19)', () => {
+describe('resolvePrevWeekNet (TODO §1 — "This Week\'s Check" annual-average dilution fix, 2026-07-19)', () => {
   const BASE_CONFIG = {
     ...DEFAULT_CONFIG,
     employerPreset: null,
@@ -453,7 +453,7 @@ describe('resolvePrevWeekNet (TODO §15 — "This Week\'s Check" annual-average 
   })
 })
 
-describe('buildYear — point-in-time baseRate (TODO §15.D)', () => {
+describe('buildYear — point-in-time baseRate (TODO §1.D)', () => {
   const BASE_CONFIG = {
     ...DEFAULT_CONFIG,
     employerPreset: null,

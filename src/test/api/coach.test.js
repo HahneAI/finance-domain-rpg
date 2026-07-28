@@ -1,4 +1,4 @@
-// §18.G — api/coach.js proxies Claude API calls so ANTHROPIC_API_KEY never
+// §2.G — api/coach.js proxies Claude API calls so ANTHROPIC_API_KEY never
 // reaches the client. Auth guard mirrors delete-account.js; the Anthropic
 // call itself is mocked via a stubbed global fetch.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";

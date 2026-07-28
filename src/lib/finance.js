@@ -132,7 +132,7 @@ function parseIsoDate(value) {
 // Estimate a typical weekly gross from a config-shaped object — does not
 // require a built week object. Used by SetupWizard's live net preview (before
 // buildYear() has anything to read) and the Quick Rate Update modal's
-// before/after diff (TODO §15.D).
+// before/after diff (TODO §1.D).
 export function estimateWeeklyGross(d) {
   const isEmployerDHL = d.employerPreset === "DHL";
   if (isEmployerDHL) {
@@ -170,7 +170,7 @@ export function estimateWeeklyGross(d) {
 
 // Estimate a typical weekly net (+ the deduction breakdown) from a config-shaped
 // object. Shared by SetupWizard's StepWrapUp live preview and the Quick Rate
-// Update modal's before/after diff (TODO §15.D) — keep both callers reading
+// Update modal's before/after diff (TODO §1.D) — keep both callers reading
 // the same formula rather than letting two independent "estimated net"
 // implementations drift.
 export function estimateWeeklyNet(cfg) {
@@ -461,11 +461,11 @@ export function getPayPeriodEndDate(weekStart, payPeriodEndDay) {
 // after a fresh edit, before its own history row has round-tripped into memory
 // (the live config IS the newest truth at that point).
 //
-// TODO §15.D / §19: a deliberately narrow slice of the deferred Master Timeline
+// TODO §1.D / §3: a deliberately narrow slice of the deferred Master Timeline
 // read-path — scoped to baseRate only, not a general point-in-time config
 // resolver. Every other historically-sensitive field (schedule, tax rates,
 // benefits, ...) still applies uniformly to every week, past and future, exactly
-// as before. Don't read this as §19 being "done" — only this one field's gap
+// as before. Don't read this as §3 being "done" — only this one field's gap
 // (the one Quick Rate Update surfaced) is closed.
 export function resolveBaseRateForWeek(rateHistory, weekEnd, liveBaseRate) {
   if (!rateHistory?.length) return liveBaseRate;
@@ -482,10 +482,10 @@ export function buildYear(cfg, baseRateHistory = null) {
   const weeks = [], k401Start = cfg.k401StartDate ? new Date(cfg.k401StartDate) : null, taxedSet = new Set(cfg.taxedWeeks);
   const isEmployerDHL = cfg.employerPreset === "DHL";
   const benefitsStart = parseIsoDate(cfg.benefitsStartDate);
-  // Job Loss Mode (TODO §15.C): when active, weeks on/after jobLossDate have
+  // Job Loss Mode (TODO §1.C): when active, weeks on/after jobLossDate have
   // earned income forced to $0. Benefits/401k naturally fall to $0 too because
   // grossPay drives them. Historical weeks before jobLossDate are untouched.
-  // §15.C6: returnToWorkDate, when set, ends Job Loss Mode at that boundary —
+  // §1.C6: returnToWorkDate, when set, ends Job Loss Mode at that boundary —
   // weeks on/after returnToWorkDate resume normal earned-income math.
   const jobLossStart = cfg.jobLossMode ? parseIsoDate(cfg.jobLossDate) : null;
   const returnToWork = cfg.jobLossMode ? parseIsoDate(cfg.returnToWorkDate) : null;
@@ -576,7 +576,7 @@ export function buildYear(cfg, baseRateHistory = null) {
     const otWkndH  = weekendHours - regWkndH;
     const nightDiffEnabled = isEmployerDHL ? cfg.dhlNightShift !== false : cfg.nightDiffEnabled === true;
     const nightDiffHr = nightDiffEnabled ? (cfg.nightDiffRate ?? 0) : 0;
-    // Point-in-time baseRate (TODO §15.D / §19 narrow slice — see resolveBaseRateForWeek):
+    // Point-in-time baseRate (TODO §1.D / §3 narrow slice — see resolveBaseRateForWeek):
     // a rate change only recomputes weeks from its effective date forward; weeks before it
     // keep resolving to whatever baseRate was actually in effect at the time.
     const weekBaseRate = resolveBaseRateForWeek(baseRateHistory, weekEnd, cfg.baseRate);
@@ -587,7 +587,7 @@ export function buildYear(cfg, baseRateHistory = null) {
 
     // Job Loss Mode boundary: collapse earned-income inputs to zero from the
     // loss date forward so all downstream math (taxable gross, 401k, benefits
-    // deduction, net) cascades naturally. Closes at returnToWorkDate (§15.C6)
+    // deduction, net) cascades naturally. Closes at returnToWorkDate (§1.C6)
     // so projected income resumes from that week onward.
     const inJobLoss = jobLossStart
       && weekEnd >= jobLossStart
@@ -601,7 +601,7 @@ export function buildYear(cfg, baseRateHistory = null) {
       worked = [];
     }
 
-    // Unemployment benefits (§15.C2): paid weekly during the eligibility
+    // Unemployment benefits (§1.C2): paid weekly during the eligibility
     // window. Treated as non-taxed income — added to net by computeNet.
     let unemploymentIncome = 0;
     if (
@@ -669,7 +669,7 @@ export function buildYear(cfg, baseRateHistory = null) {
 }
 
 export function computeNet(w, cfg, extraPerCheck, showExtra) {
-  // Unemployment benefits (§15.C2) are non-taxed at the engine layer — withholding
+  // Unemployment benefits (§1.C2) are non-taxed at the engine layer — withholding
   // is optional and out of scope for v1. Surfaces on every week regardless of
   // active state so the user sees benefit income even though the job-loss week
   // isn't "active" in the employment sense.
@@ -875,7 +875,7 @@ export function traceExpenseCalculationSteps({
   const weeklyNets = activeWeeks.map(w => computeNet(w, safeCfg, extraPerCheck, showExtra));
   const spendableNets = weeklyNets.map(n => n - bufferPerWeek);
   const projectedAnnualNet = weeklyNets.reduce((sum, n) => sum + n, 0);
-  // Divide by the weeks actually active, not a flat 52 (TODO §15, 2026-07-19)
+  // Divide by the weeks actually active, not a flat 52 (TODO §1, 2026-07-19)
   // — same fix as App.jsx's weeklyIncome, mirrored here so this trace explains
   // the real production formula instead of the diluted one it replaced.
   const weeklyIncome = activeWeeks.length > 0 ? projectedAnnualNet / activeWeeks.length - bufferPerWeek : -bufferPerWeek;
@@ -1401,7 +1401,7 @@ function weekNetWithLogAdjustments(week, cfg, extraPerCheck, showExtra, bufferPe
 }
 
 // Resolves the "last finalized paycheck" figure that "This Week's Check" /
-// "Left This Week" style tiles read (TODO §15 Job Loss Mode investigation,
+// "Left This Week" style tiles read (TODO §1 Job Loss Mode investigation,
 // 2026-07-19). Prefers the most recent past active week; when there isn't
 // one yet (a brand-new account, or the very first week after Back to Work —
 // firstActiveIdx pointing at the current week), falls back to the CURRENT

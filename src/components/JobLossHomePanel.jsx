@@ -7,7 +7,7 @@ import { canAccessAskCoachGeneral } from "../lib/entitlements.js";
 import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
 
 /**
- * JobLossHomePanel — Job Loss Mode's own Home view (TODO §15 mode rebuild).
+ * JobLossHomePanel — Job Loss Mode's own Home view (TODO §1 mode rebuild).
  *
  * Replaces HomePanel entirely while `config.jobLossMode` is true, rather than
  * layering job-loss content on top of (or hiding tiles from) the normal Home —
@@ -17,7 +17,7 @@ import { CashOnHandSheet } from "./CashOnHandSheet.jsx";
  * Shows: a Cash On Hand card (persisted config.jobLossCashOnHand — mandatory
  * at JobLossEntry, editable here AND on JobLossBudgetPanel via the shared
  * CashOnHandSheet, both committing to the same field so neither can drift;
- * timeline-aware per §15.H17 — see lib/jobLossRunway.js's effectiveCashOnHand),
+ * timeline-aware per §1.H17 — see lib/jobLossRunway.js's effectiveCashOnHand),
  * the runway headline (days / cliff date / weekly burn), a small "log extra
  * income" widget for cash made while job hunting (gig work, odd jobs — folded
  * straight into the runway's savings side), and the Re-employment Tracker
@@ -59,7 +59,7 @@ export function JobLossHomePanel({
 
   // Confirming a value in the sheet is the discrete "I checked my balance,
   // this is true right now" moment — resets the decay clock by stamping
-  // jobLossCashOnHandAsOf alongside the new figure (TODO §15.H17). Eager-save
+  // jobLossCashOnHandAsOf alongside the new figure (TODO §1.H17). Eager-save
   // pattern (docs/TODO.md): computed synchronously, passed to both setState
   // and saveConfigNow.
   const saveCashOnHand = (parsedValue) => {
@@ -118,7 +118,7 @@ export function JobLossHomePanel({
     <div>
       <PanelHero eyebrow="Job Loss Mode">Home</PanelHero>
 
-      {/* ── Cash On Hand (TODO §15.H17) — its own card, above Runway; tap
+      {/* ── Cash On Hand (TODO §1.H17) — its own card, above Runway; tap
           anywhere (pencil badge signals it) to open the update sheet. ── */}
       <Pressable
         onClick={() => setCashSheetOpen(true)}

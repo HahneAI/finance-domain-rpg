@@ -3,7 +3,7 @@ import { HISTORY_SENSITIVE_FIELDS, diffSensitiveFields } from '../../lib/configH
 import { DEFAULT_CONFIG } from '../../constants/config.js'
 
 // ─────────────────────────────────────────────────────────────
-// TODO §19 phase 1 — whitelist diff that gates account_history capture
+// TODO §3 phase 1 — whitelist diff that gates account_history capture
 // ─────────────────────────────────────────────────────────────
 
 describe('HISTORY_SENSITIVE_FIELDS', () => {

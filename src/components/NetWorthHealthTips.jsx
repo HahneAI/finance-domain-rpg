@@ -13,7 +13,7 @@ import { Pressable, useFoldTransition } from "./ui.jsx";
 // thin cushion can weigh on mental health over the long run. No shame, no
 // percentages shoved in the user's face, no "you're doing it wrong."
 //
-// Copy rewritten 2026-07-25 (docs/TODO.md §18.C's copy-audit note) to sound like
+// Copy rewritten 2026-07-25 (docs/TODO.md §2.C's copy-audit note) to sound like
 // Coach instead of a generic self-help placeholder: first person, direct, and —
 // per the rewrite's own instruction — every tip below names a real lever inside
 // the app (Budget, Home's goal order, Account's paycheck buffer, Log, Income),

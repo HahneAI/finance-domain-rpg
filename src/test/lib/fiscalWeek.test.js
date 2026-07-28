@@ -37,7 +37,7 @@ describe('getCurrentFiscalWeek', () => {
   })
 })
 
-describe('resolveActiveWeeksThisYear (TODO §15 — weeklyIncome/annualSavings dilution fix, 2026-07-19)', () => {
+describe('resolveActiveWeeksThisYear (TODO §1 — weeklyIncome/annualSavings dilution fix, 2026-07-19)', () => {
   it('returns the full 52 weeks for a firstActiveIdx of 0', () => {
     expect(resolveActiveWeeksThisYear(0)).toBe(52)
   })

@@ -7,10 +7,10 @@ export const PAYCHECKS_PER_YEAR = { weekly: 52, biweekly: 26, monthly: 12, salar
 export const DEFAULT_CONFIG = {
   // ── Wizard gate fields ──────────────────────────────────────
   setupComplete: false,        // true once setup wizard completes; gates first-run flow
-  // First-run Step 0 question (TODO §15.H — seed). null = unanswered;
+  // First-run Step 0 question (TODO §1.H — seed). null = unanswered;
   // true = user is unemployed at signup; false = currently working.
   // For now both answers route through the standard pay-structure steps;
-  // the full branched onboarding path is parked in TODO §15.H.
+  // the full branched onboarding path is parked in TODO §1.H.
   startedUnemployed: null,
   taxExemptOptIn: false,       // true once user accepts tax exempt disclaimer (Step 8)
   bufferEnabled: true,         // when true, paycheckBuffer is excluded from all spendable math
@@ -114,7 +114,7 @@ export const DEFAULT_CONFIG = {
   // surfaces weeks from account creation onward. null = legacy account (no floor).
   accountCreatedIdx: null,
 
-  // ── Job Loss Mode (TODO §15.C) ───────────────────────────────
+  // ── Job Loss Mode (TODO §1.C) ───────────────────────────────
   // When jobLossMode is true, buildYear zeros out earned income for every
   // week on/after jobLossDate. Toggled on by the "Lost My Job" entry flow
   // and cleared by the "Back to Work" exit (which routes into the
@@ -129,15 +129,15 @@ export const DEFAULT_CONFIG = {
   // NOT session-only like the old draft-only version of this field.
   jobLossCashOnHand: null,
   // Timestamp the cash-on-hand figure was last confirmed by the user (TODO
-  // §15.H17) — stamped alongside jobLossCashOnHand every time it's edited
+  // §1.H17) — stamped alongside jobLossCashOnHand every time it's edited
   // (JobLossEntry Activate, or either panel's CashOnHandSheet). From that
   // date forward, computeJobLossRunway automatically subtracts every
   // essential bill due date that passes, so the displayed figure decays on
   // its own instead of going stale until the user re-checks their balance.
-  // null = never explicitly stamped (pre-§15.H17 accounts) — falls back to
+  // null = never explicitly stamped (pre-§1.H17 accounts) — falls back to
   // jobLossDate.
   jobLossCashOnHandAsOf: null,  // "YYYY-MM-DD"
-  // Pending/final paycheck still owed from the lost job (TODO §15.H15) —
+  // Pending/final paycheck still owed from the lost job (TODO §1.H15) —
   // optional, skippable in the wizard (unlike cash on hand). Resolved once at
   // Activate time from "days worked in your final week" + "which day checks
   // normally arrive" into a concrete estimated amount + date, not re-derived
@@ -146,14 +146,14 @@ export const DEFAULT_CONFIG = {
   jobLossPendingCheckAmount: null,
   jobLossPendingCheckDate: null,  // "YYYY-MM-DD"
 
-  // Unemployment benefits (TODO §15.C2) — captured in the Job Loss entry flow.
+  // Unemployment benefits (TODO §1.C2) — captured in the Job Loss entry flow.
   // null = unanswered (pre-entry); true/false once the user has set them.
   unemploymentEnabled: null,
   unemploymentWeekly: null,    // $ paid per benefit week
   unemploymentDurationWeeks: null, // number of payable weeks granted
   unemploymentWaitingWeek: false,  // true = first benefit week is unpaid (most states)
 
-  // Re-employment tracker (TODO §15.C6) — null defaults; the dashboard
+  // Re-employment tracker (TODO §1.C6) — null defaults; the dashboard
   // pre-fills targetIncomeAnnual from baseRate × maxWeeklyHours × 52 when
   // unset. returnToWorkDate, when set, ends Job Loss Mode in buildYear at
   // that week boundary so forward projections resume earned income.
@@ -162,7 +162,7 @@ export const DEFAULT_CONFIG = {
   targetIncomeAnnual: null,
   returnToWorkDate: null,
   jobApplications: [],
-  // Job Loss Home's "log extra income" widget (TODO §15 mode rebuild) — cash
+  // Job Loss Home's "log extra income" widget (TODO §1 mode rebuild) — cash
   // made while job hunting (gig work, odd jobs), stored inline on config same
   // as jobApplications above. Summed into the runway calc's savings side.
   // Each entry: { id, amount, note, loggedAt }.

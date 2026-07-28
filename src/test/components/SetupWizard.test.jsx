@@ -6,7 +6,7 @@ import { DEFAULT_CONFIG } from '../../constants/config.js'
 const BASE_CONFIG = {
   ...DEFAULT_CONFIG,
   setupComplete: false,
-  startedUnemployed: false, // satisfies Step 0 first-run gate (§15.H seed)
+  startedUnemployed: false, // satisfies Step 0 first-run gate (§1.H seed)
   baseRate: 21.15,
   shiftHours: 12,
   fedRateLow: 0.0784,
@@ -423,7 +423,7 @@ describe('SetupWizard — step titles', () => {
   })
 })
 
-describe('SetupWizard — Jobless Setup mini-flow (TODO §15.H)', () => {
+describe('SetupWizard — Jobless Setup mini-flow (TODO §1.H)', () => {
   it('pre-answering startedUnemployed=true on first-run shows only 4 steps (Welcome + 3 jobless steps)', () => {
     renderWizard({ config: { ...BASE_CONFIG, startedUnemployed: true } })
     expect(getStepCounter()).toContain('of 4')

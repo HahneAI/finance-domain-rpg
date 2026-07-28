@@ -58,8 +58,8 @@ saved chats shipped 2026-07-25 (DB Row Viewer → "Coach Chats" line, tap to exp
 recent titles). Still open: if a second `chat_type` (Job Scout, statement insights, etc.) ever
 gets a UI caller, that type needs its own retention/summary decision, since today's 3-chat
 retention cap and end-of-session summary are `ask_coach`-specific.
-*Reference: `docs/TODO.md` §18.H (Chat & Search History Persistence), subsections H3–H4;
-`docs/drift-app-warden.md` §21 F123.*
+*Reference: `docs/TODO.md` §2.H (Chat & Search History Persistence), subsections H3–H4;
+`docs/drift-app-warden.md` §8 F123.*
 
 **Technical reference:** API route `POST /api/coach` · Model: **Haiku** (`claude-haiku-4-5`,
 hardcoded — the Haiku/Sonnet split described in the plan isn't actually wired up yet) · System
@@ -104,7 +104,7 @@ been formally scored against the personality rubric — only the critical warnin
 bigger lift than the static-copy pass was: the rubric's axes 2+ (directness, warmth, sentence
 economy, urgency escalation) are still undefined skeleton, and real tuning needs live-testing
 per mode, not a one-shot rewrite — see the can-of-worms discussion in this session's history.
-*Reference: `docs/TODO.md` §18.C and `docs/coach-personality-rubric.md` (axes 2 and onward,
+*Reference: `docs/TODO.md` §2.C and `docs/coach-personality-rubric.md` (axes 2 and onward,
 still blank).*
 
 **Technical reference:** API route `POST /api/coach` (same route as the chat above) · Model:
@@ -131,7 +131,7 @@ own; it's the voice every gated feature above speaks in, trial or paid.
 **Next up:** Design a small icon Coach can use everywhere he speaks, and finish scoring the
 rest of the voice rulebook so every future feature inherits one consistent personality instead
 of each one inventing its own.
-*Reference: `docs/TODO.md` §18.A (Coach — Character Identity).*
+*Reference: `docs/TODO.md` §2.A (Coach — Character Identity).*
 
 **Technical reference:** No API call of its own — this isn't a feature a user opens, it's the
 voice specification every system prompt above is built from (`docs/coach-personality-rubric.md`,
@@ -151,7 +151,7 @@ sections 4–9 as a paid-conversion upsell, not a trial perk — someone would n
 a paying subscriber to reach any of these, once built.
 
 **Next up:** This is first in line among the "not started" features.
-*Reference: `docs/TODO.md` §18.D (Statements AI Insights) and §18.0's free-vs-paid note.*
+*Reference: `docs/TODO.md` §2.D (Statements AI Insights) and §2.0's free-vs-paid note.*
 
 **Technical reference:** None yet — no route, model, or prompt exists in code.
 
@@ -167,7 +167,7 @@ search itself, not just the household numbers.
 **Free trial access: ❌ No (planned).** Paid-conversion upsell, same as section 4 above —
 not a trial-included feature once built.
 
-**Next up:** *Reference: `docs/TODO.md` §18.E (Job Hunt AI Assistant).*
+**Next up:** *Reference: `docs/TODO.md` §2.E (Job Hunt AI Assistant).*
 
 **Technical reference:** None yet.
 
@@ -183,7 +183,7 @@ others, but literally nothing has been built.
 
 **Free trial access: ❌ No (planned).** Paid-conversion upsell — not trial-included once built.
 
-**Next up:** *Reference: `docs/TODO.md` §18.E1 (Résumé upload / skill-gap analysis).*
+**Next up:** *Reference: `docs/TODO.md` §2.E1 (Résumé upload / skill-gap analysis).*
 
 **Technical reference:** None yet.
 
@@ -199,7 +199,7 @@ app (job board integrations) before it can even begin.
 
 **Free trial access: ❌ No (planned).** Paid-conversion upsell — not trial-included once built.
 
-**Next up:** *Reference: `docs/TODO.md` §18.F (Application Assistant).*
+**Next up:** *Reference: `docs/TODO.md` §2.F (Application Assistant).*
 
 **Technical reference:** None yet.
 
@@ -213,7 +213,7 @@ app (job board integrations) before it can even begin.
 
 **Free trial access: ❌ No (planned).** Paid-conversion upsell — not trial-included once built.
 
-**Next up:** *Reference: `docs/TODO.md` §18.I (Job Scout — Location-Based Employer Search).*
+**Next up:** *Reference: `docs/TODO.md` §2.I (Job Scout — Location-Based Employer Search).*
 
 **Technical reference:** None yet.
 
@@ -229,7 +229,7 @@ app's tax math before it can be built, regardless of the AI piece.
 
 **Free trial access: ❌ No (planned).** Paid-conversion upsell — not trial-included once built.
 
-**Next up:** *Reference: `docs/TODO.md` §18.J (Tax Onboarding Interview).*
+**Next up:** *Reference: `docs/TODO.md` §2.J (Tax Onboarding Interview).*
 
 **Technical reference:** None yet.
 
@@ -242,14 +242,14 @@ written up as a numbered plan; these are still loose ideas from an open brainsto
 None of it should be read as "coming soon." It's listed here so the full picture of where
 Coach could go is in one place, not scattered across a brainstorm document nobody re-reads.
 
-**Coach showing up in more everyday moments** *(`docs/TODO.md` §21.C):*
+**Coach showing up in more everyday moments** *(`docs/TODO.md` §8.C):*
 - A Monday morning heads-up on the week ahead, sent as a phone notification
 - A "what if" conversation mode — asking Coach to run a hypothetical without changing anything real
 - Coach helping someone prep talking points for a raise conversation, from their own real work history
 - An end-of-year recap story, shareable like a "wrapped" summary
 - Long-press any number in the app to have Coach explain, in plain English, exactly how it was calculated
 
-**Bigger, further-out ideas** *(`docs/TODO.md` §21.F, "Horizon Tier — Fable-Class Features"
+**Bigger, further-out ideas** *(`docs/TODO.md` §8.F, "Horizon Tier — Fable-Class Features"
 — explicitly labeled in that doc as moonshots, not commitments):*
 - Coach deliberately talking *less* over time as someone's finances stabilize, and telling them so
 - A guided conversation with "yourself a year from now," based on real projected numbers, not fiction
@@ -281,5 +281,5 @@ Coach's tone or safety rules in one spot fixes it everywhere he shows up, instea
 copies quietly drifting apart from each other. It also means the gate-splitting work mentioned
 at the top of this document happens at the level of *who's allowed to call that one shared
 connection for which purpose* — not by copying the connection itself.
-*Reference: `docs/TODO.md` §18.G (Shared Infrastructure); `docs/active-systems.md` §24 (AI
+*Reference: `docs/TODO.md` §2.G (Shared Infrastructure); `docs/active-systems.md` §6 (AI
 Layer — Coach).*

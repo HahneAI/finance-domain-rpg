@@ -4,11 +4,11 @@ import { estimateWeeklyNet } from "../lib/finance.js";
 
 /**
  * RateUpdateModal — modal launched from the LifeEventMenu "Quick Rate Update" tile
- * (TODO §15.D). For a raise/rate change with no structural change — no wizard, just
+ * (TODO §1.D). For a raise/rate change with no structural change — no wizard, just
  * a new `baseRate` + an effective date shown against a before/after net preview.
  *
  * `onActivate({ baseRate, effectiveFrom })` — App.jsx applies `baseRate` to config
- * and tags the account_history snapshot (TODO §19) with `effectiveFrom` as the
+ * and tags the account_history snapshot (TODO §3) with `effectiveFrom` as the
  * change's `source: "life_event:rate_update"` date, the same pattern JobLossEntry
  * uses for `jobLossDate`.
  */

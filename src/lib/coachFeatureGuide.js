@@ -1,4 +1,4 @@
-// §18.B — static feature reference for Coach's "Ask Coach" FAQ scope.
+// §2.B — static feature reference for Coach's "Ask Coach" FAQ scope.
 // Hand-maintained, not retrieved: the app's feature surface is small enough
 // to hand Coach the whole thing every call rather than build a RAG/vector
 // pipeline, and a static block is what actually prompt-caches (a retrieval

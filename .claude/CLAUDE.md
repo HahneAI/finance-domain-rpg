@@ -4,7 +4,7 @@
 **Company:** Authority | **Product:** Authority OS | **Tagline:** *"You are missing out… on you."*
 **This app:** Authority Finance (A:Fin) — personal finance dashboard: income modeling, budgeting, goals, event logging.
 **Design system:** Flow shell (live) + Pulse overlay (Phase 2). See `docs/authority-design-system`.
-**Liquid Glass UI:** `src/components/LiquidGlass.jsx` — frosted glass for nav, pills, modals. Recipe in `docs/active-systems.md` §15.
+**Liquid Glass UI:** `src/components/LiquidGlass.jsx` — frosted glass for nav, pills, modals. Recipe in `docs/active-systems.md` §1.
 
 ---
 
@@ -62,7 +62,7 @@ src/
 │   ├── finance.js           — buildYear, computeNet, computeGoalTimeline, calcEventImpact
 │   ├── rollingTimeline.js   — deriveRollingIncomeWeeks, deriveRollingTimelineMonths
 │   ├── fiscalWeek.js        — FISCAL_WEEKS_PER_YEAR, week index helpers
-│   ├── configHistory.js     — §19 sensitive-field whitelist + diff gating account_history capture
+│   ├── configHistory.js     — §3 sensitive-field whitelist + diff gating account_history capture
 │   ├── db.js                — localStorage persistence
 │   └── supabase.js          — Supabase client
 └── test/                    — Vitest tests
@@ -84,7 +84,7 @@ database/migrations/         — Supabase SQL migrations (see BOOKMARK note belo
 **Steps (controlled by `STEP_DEFS` — each has `showIf(formData, lifeEvent)` + `isValid(formData)`):**
 | Step ID | Title | Key fields / notes |
 |---------|-------|-------------------|
-| 0 | Welcome | First-run: "Are you currently unemployed?" seed (§15.H) + intro; re-entry: life event picker or structure_change overview |
+| 0 | Welcome | First-run: "Are you currently unemployed?" seed (§1.H) + intro; re-entry: life event picker or structure_change overview |
 | 10/11/12 | Jobless mini-flow | First-run + unemployed only: unemployment benefits → job-loss details → wrap up; skips steps 1–4 and 7 entirely |
 | 1 | Pay Structure | DHL employer gate → team/shift/rotation; base rate, OT threshold/multiplier, weekend diff, commission; tips/commission daily check-in opt-in (No/Tips/Commission + commission-only follow-up, inert today) |
 | 2 | Schedule | Job start date → `firstActiveIdx` (via `dateToWeekIdx`); rotation week (DHL) or hours + pay period close day + biweekly parity |
@@ -214,7 +214,7 @@ For a file with many call sites mutating the same field (see `BudgetPanel.jsx`'s
 
 **readOnly gate:** `HomePanel`/`BudgetPanel` shadow their setters (and now their eager-save callbacks) with no-ops when `readOnly` (paywall-expired) is true — see the `noop` pattern near the top of each. Any new eager-save prop threaded into a component with this gate must be shadowed the same way, or a read-only account could bypass the paywall via the eager-save path even though the local `setState` is a no-op.
 
-**Encryption at rest:** no persisted field has field-level encryption today — protection is TLS + RLS only (migration 019). That's fine for everything currently collected, but a future field carrying regulated/high-sensitivity data (SSN, DOB, bank/routing, government ID) must NOT just ride the ordinary four-site persisted-field procedure — see `docs/drift-app-warden.md` §19 F120 for the required trigger check, and `docs/TODO.md` §27 for the open tracking item.
+**Encryption at rest:** no persisted field has field-level encryption today — protection is TLS + RLS only (migration 019). That's fine for everything currently collected, but a future field carrying regulated/high-sensitivity data (SSN, DOB, bank/routing, government ID) must NOT just ride the ordinary four-site persisted-field procedure — see `docs/drift-app-warden.md` §3 F120 for the required trigger check, and `docs/TODO.md` §11 (Data Encryption) for the open tracking item.
 
 ---
 
@@ -248,7 +248,7 @@ formulas, retroactive recompute, lost saves, gate bypass, stale docs).
 ## Development Workflow
 **30-min sprints, 4×/week.** Before: state the task clearly. After: commit + one-sentence summary.
 - `docs/active-systems.md` — how every live system works. **Working on Coach/AI context?** Read
-  §24 first — it documents the grounding pattern (every context field must resolve through the
+  §6 first — it documents the grounding pattern (every context field must resolve through the
   same authoritative function the UI itself uses, e.g. `computeGoalTimeline()`,
   `getEffectiveAmountForMonth()` — never a parallel approximation) that live testing had to
   rediscover through several real bugs. Skipping it reintroduces those bugs.
@@ -303,7 +303,7 @@ Reporter is `verbose` — Vitest 4's default misreports suite failures as "no te
 ```
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
-ANTHROPIC_API_KEY=...       # server-side only — api/coach.js (§18.G Coach infra)
+ANTHROPIC_API_KEY=...       # server-side only — api/coach.js (§2.G Coach infra)
 ANTHROPIC_API_KEY_TEST=...  # optional — preview/dev builds use this if set, same MODE
                             # split pattern as STRIPE_SECRET_KEY_TEST in _stripeClient.js
 ```
@@ -329,7 +329,7 @@ never treat one as implying another:
 
 **Beta testers are NOT investors — this is a crucial, deliberate division.** `is_tester` must
 never grant Demo Account Tree access or the investor code path, and `is_investor` must never
-grant AI features. Full detail: `docs/active-systems.md` §23 (Beta Tester Accounts) and §18
+grant AI features. Full detail: `docs/active-systems.md` §9 (Beta Tester Accounts) and §2
 (Investor & Demo Accounts).
 
 **Two populations both carry `is_tester = true`** — `user_data.beta_code_used` (migration
@@ -358,11 +358,11 @@ the friends/family case. Gate: `entitlements.js` `isTrackedBetaTester({ isTester
 | **Reopen Last Check-In** | Tools sheet → Weekly Check-In | Resets the most recent confirmed pay period and reopens the weekly confirm modal as if it was never finished — a safe way to re-review the modal on demand. Drops that week's `weekConfirmations` record (and any log entry it created); income projections are independent of confirmations, so the model is unaffected. Disabled when no confirmed week is eligible. |
 | **Force Sync** | Tools sheet → Sync | **Push ↑** flushes in-memory state to Supabase immediately (bypasses 800ms debounce). **Pull ↓** reloads from DB into memory. Use before/after a save-related bug. |
 | **Config Raw View** | Tools sheet → Config JSON → View ↓ | Paste the full JSON here to audit any config field. Copy button puts it on clipboard. **Session insight:** Revealed the full tax strategy (`taxExemptOptIn`, `targetOwedAtFiling`, `pastWeekTaxStatusOverrides`) and deduction setup in one shot — ask for this first whenever the issue could involve pay structure, tax elections, or benefit configuration. |
-| **DB Row Viewer** | Tools sheet → DB Row → Fetch | Shows raw `user_data` row + `updated_at`. **Drift** badge lists any column where in-memory value ≠ DB value (`config`, `expenses`, `goals`, `logs`, `show_extra`, `week_confirmations`, `pto_goal`). Ask: "run Fetch and paste the drift line and updated_at." **Session insight:** Provided the full expense list and all 5 goals with targets/due dates — the only tool that exposes spending profile and goal inventory, making it essential any time the issue involves budget health, goal timelines, or whether saved data matches what's in memory. Fetch also surfaces the §19 config-history line: "config history: N snapshots · latest [date] ([source]) · [changed fields]" — ask for it when verifying that a pay/tax/schedule edit was captured in `account_history`. Fetch also surfaces a §18.H4 "Coach Chats" line: "N saved chats (breakdown by type)" — tap it to expand the 5 most recent titles; ask for it when verifying Ask Coach conversation persistence. |
+| **DB Row Viewer** | Tools sheet → DB Row → Fetch | Shows raw `user_data` row + `updated_at`. **Drift** badge lists any column where in-memory value ≠ DB value (`config`, `expenses`, `goals`, `logs`, `show_extra`, `week_confirmations`, `pto_goal`). Ask: "run Fetch and paste the drift line and updated_at." **Session insight:** Provided the full expense list and all 5 goals with targets/due dates — the only tool that exposes spending profile and goal inventory, making it essential any time the issue involves budget health, goal timelines, or whether saved data matches what's in memory. Fetch also surfaces the §3 config-history line: "config history: N snapshots · latest [date] ([source]) · [changed fields]" — ask for it when verifying that a pay/tax/schedule edit was captured in `account_history`. Fetch also surfaces a §2.H4 "Coach Chats" line: "N saved chats (breakdown by type)" — tap it to expand the 5 most recent titles; ask for it when verifying Ask Coach conversation persistence. |
 | **Tax Weeks Grid** | Tools sheet → Tax Weeks → View ↓ | 52-cell grid. Teal = taxed/future · dark = untaxed/future · gray = past · teal border = current week · red dot = `pastWeekTaxStatusOverride`. Ask: "open Tax Weeks and describe any red dots or unexpected cell colors." |
-| **Live State Inspector** | Amber "Live" pill fixed bottom-right corner | Tap to expand a real-time card showing: `effectiveToday` (amber if lock-offset), week idx + label, futureWeeks.length, unconfirmedCount, extraPerCheck, totalGap, taxedWeekCount, fundedGoalSpend, bufferPerWeek, weeklyIncome, projectedAnnualNet, plus (§17.F) the resolved subscription phase (`Sub Phase` — trial/grace/active/expired/none, with the raw Stripe status as its sub-label), `Trial Ends`, `Access Ends` (the hidden day-21 cutoff — admin-only, never shown elsewhere), `Period End`, and `Card / Dunning`. Ask: "open Live and paste all 16 values." **Session insight:** Surfaced the $3,690 tax gap, $65/wk surplus, and $0 goal funding in a single read — ask for this early in any diagnostic where the complaint is about a number shown on screen, since it reflects exactly what the app is computing right now. |
+| **Live State Inspector** | Amber "Live" pill fixed bottom-right corner | Tap to expand a real-time card showing: `effectiveToday` (amber if lock-offset), week idx + label, futureWeeks.length, unconfirmedCount, extraPerCheck, totalGap, taxedWeekCount, fundedGoalSpend, bufferPerWeek, weeklyIncome, projectedAnnualNet, plus (archived Stripe Monetization section) the resolved subscription phase (`Sub Phase` — trial/grace/active/expired/none, with the raw Stripe status as its sub-label), `Trial Ends`, `Access Ends` (the hidden day-21 cutoff — admin-only, never shown elsewhere), `Period End`, and `Card / Dunning`. Ask: "open Live and paste all 16 values." **Session insight:** Surfaced the $3,690 tax gap, $65/wk surplus, and $0 goal funding in a single read — ask for this early in any diagnostic where the complaint is about a number shown on screen, since it reflects exactly what the app is computing right now. |
 | **Week Inspector** | Tap any week row in Income panel | Full-screen modal. Shows every field on the week object: schedule (workedDayNames, hours, OT, weekend), pay (grossPay, taxableGross, deductions, 401k, live computeNet), net lookup (baseNet, adjustment, spendable), confirmation record, and all log entries touching this week with net impact. Ask: "tap week [N] and describe the Pay and Net Lookup sections." **Session insight:** Confirmed per-week income math was correct and isolated a 401k employer match display bug ($14.96 shown despite `k401MatchRate: 0`) — use this when the issue is a specific wrong number on a paycheck or week, or to rule out income math as the cause of a broader trend problem. |
-| **Beta Report** | Tools sheet → Beta Report → Usage CSV / Feedback CSV | Downloads `api/admin-beta-report.js`'s two exports (per-user usage summary; raw feedback submissions) with the current admin session's token. The only in-app trigger for that endpoint — same data as hitting it directly with a Bearer token, just without crafting the request by hand. Ask for this when scoring the beta program against the rubric (`docs/TODO.md` §35, `database/beta-offboarding-day71.sql`). |
+| **Beta Report** | Tools sheet → Beta Report → Usage CSV / Feedback CSV | Downloads `api/admin-beta-report.js`'s two exports (per-user usage summary; raw feedback submissions) with the current admin session's token. The only in-app trigger for that endpoint — same data as hitting it directly with a Bearer token, just without crafting the request by hand. Ask for this when scoring the beta program against the rubric (`docs/TODO.md` §14+, `database/beta-offboarding-day71.sql`). |
 
 **Per-entry impact breakdown** (Log panel): tap the ▼ chevron on any log entry (admin-only) to expand an inline breakdown of that entry's exact impact — gross, net, 401k employee + match, PTO hours, bucket deduction, fiscal week idx, past/future classification.
 

@@ -20,7 +20,7 @@ export function getCurrentFiscalWeek(allWeeks, todayIso = toLocalIso(new Date())
 // Weeks remaining from firstActiveIdx through fiscal year-end — the divisor
 // "typical weekly income"/annual-savings math should scale by instead of a
 // flat 52, so a mid-year-start (or Back to Work) account isn't diluted by
-// the inactive weeks before it (TODO §15, 2026-07-19). One shared source so
+// the inactive weeks before it (TODO §1, 2026-07-19). One shared source so
 // App.jsx, DemoAccountTree.jsx, aiContext.js and HomePanel.jsx can't drift
 // from each other on this — they all key off the same config.firstActiveIdx.
 export function resolveActiveWeeksThisYear(firstActiveIdx) {

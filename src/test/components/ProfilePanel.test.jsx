@@ -58,7 +58,7 @@ describe('ProfilePanel — main Account list renders', () => {
   })
 })
 
-// TODO §15 nav/panel restructuring — Job & Pay/Retirement & Benefits/Tax Plan
+// TODO §1 nav/panel restructuring — Job & Pay/Retirement & Benefits/Tax Plan
 // all show figures that don't apply without real income; a "Back to Work" row
 // replaces them as a second route into the same structure_change flow the Job
 // Loss banner's button already uses.

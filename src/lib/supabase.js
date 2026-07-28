@@ -120,7 +120,7 @@ export async function validateInvestorCode(code) {
 
 /**
  * Validates a beta program access code against the beta_codes table
- * (docs/TODO.md §32, database/migrations/028_add_beta_codes.sql). Same shape
+ * (docs/TODO.md §16, database/migrations/028_add_beta_codes.sql). Same shape
  * as validateInvestorCode — client-side check for instant UI feedback only;
  * api/seed.js (type: "beta") re-validates server-side before granting anything.
  */

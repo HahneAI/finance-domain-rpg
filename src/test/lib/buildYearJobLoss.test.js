@@ -54,7 +54,7 @@ describe('buildYear — Job Loss Mode', () => {
     expect(weeks[FIRST_LOSS_IDX].active).toBe(true)
   })
 
-  it('resumes earned income at returnToWorkDate (§15.C6)', () => {
+  it('resumes earned income at returnToWorkDate (§1.C6)', () => {
     // 2026-06-04 (Thu) → first resumed weekEnd is Mon 2026-06-08
     const weeks = buildYear({ ...JOB_LOSS_CFG, returnToWorkDate: '2026-06-04' })
     const resumed = weeks.find(w => toLocalIso(w.weekEnd) === '2026-06-08')
@@ -67,7 +67,7 @@ describe('buildYear — Job Loss Mode', () => {
   })
 })
 
-describe('buildYear — unemployment benefits window (§15.C2)', () => {
+describe('buildYear — unemployment benefits window (§1.C2)', () => {
   const UI_CFG = {
     ...JOB_LOSS_CFG,
     unemploymentEnabled: true,

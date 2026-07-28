@@ -53,7 +53,7 @@ describe("buildCoachContext", () => {
     expect(block).toContain(`Today: ${fmtFullDate("2026-07-07")}`);
   });
 
-  // Regression (TODO §15, 2026-07-19): buildCoachContext used to scale
+  // Regression (TODO §1, 2026-07-19): buildCoachContext used to scale
   // annualSavings/netWorthHealth by a hardcoded 52 regardless of config —
   // drifting from HomePanel.jsx's own activeWeeksThisYear-scaled figure any
   // time firstActiveIdx wasn't 0 (e.g. a mid-year signup or Back to Work

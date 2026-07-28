@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- 032_add_resume_profile.sql
+-- 036_add_resume_profile.sql
 --
 -- §18.E1 — Résumé Review v1. Storage decision per docs/TODO.md §18.E1 (scoped
 -- 2026-07-22): plain pasted text, not a file upload — a pasted résumé and a

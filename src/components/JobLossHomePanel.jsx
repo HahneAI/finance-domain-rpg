@@ -28,7 +28,7 @@ import { canAccessAskCoachGeneral, canAccessAiFeatures } from "../lib/entitlemen
  * tier ("Job Loss Mode, runway under 30 days") was structurally unreachable
  * because this panel replaces HomePanel entirely and never rendered the card
  * — same canAccessAskCoachGeneral gate as HomePanel's own mount (isAdmin/
- * isTester or a real trial/paid entitlement — docs/coach-entry-points.md §2),
+ * isTester/isInvestor or a real trial/paid entitlement — docs/coach-entry-points.md §2),
  * same config-backed rate-limit state (DW-9 fix — shared across both mount
  * sites by design, one message per fiscal week per tier per account, durable
  * per-account rather than per-device). Amber/Green tiers still won't fire
@@ -268,8 +268,9 @@ export function JobLossHomePanel({
       {setConfig && <ReemploymentTracker config={config} setConfig={setConfig} saveConfigNow={saveConfigNow} />}
 
       {/* §18 sections 4+ standing constraint — narrow canAccessAiFeatures gate
-          (admin/tester only), unlike Ask Coach's wider trial/paid gate above. */}
-      {canAccessAiFeatures({ isAdmin, isTester }) && (
+          (admin/tester/investor — hasPrivilegedAccess, 2026-07-25), unlike
+          Ask Coach's wider trial/paid gate above. */}
+      {canAccessAiFeatures({ isAdmin, isTester, isInvestor: config?.isInvestor }) && (
         <>
           <SectionHeader sub="Coach-guided help with the search itself — application strategy, interview prep, salary negotiation, or how long your runway lets you hold out">
             Job Hunt Assistant
@@ -307,7 +308,7 @@ export function JobLossHomePanel({
         </>
       )}
 
-      {canAccessAskCoachGeneral({ isAdmin, isTester, entitlement }) && (
+      {canAccessAskCoachGeneral({ isAdmin, isTester, isInvestor: config?.isInvestor, entitlement }) && (
         <CoachNetWorthCard
           config={config}
           setConfig={setConfig}

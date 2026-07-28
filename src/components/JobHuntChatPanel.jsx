@@ -15,7 +15,9 @@ import { JOB_HUNT_SYSTEM_PROMPT } from "../lib/coachPrompts.js";
  * Uses Sonnet, not Haiku, per §18.G's cost-control split (Haiku for chat/
  * FAQ/triggers; Sonnet for statement summaries and job-hunt drafts).
  * Gated at the call site on canAccessAiFeatures (§18 sections 4+ standing
- * constraint — admin/tester only, unlike Ask Coach's wider trial/paid gate).
+ * constraint — admin/tester/investor, unlike Ask Coach's wider trial/paid
+ * gate; locked decision 2026-07-25 is that this feature is paid-only once
+ * split off, not trial-included like sections 1-2 — see coach-entry-points.md).
  */
 export function JobHuntChatPanel({
   onClose,

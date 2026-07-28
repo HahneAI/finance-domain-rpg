@@ -346,10 +346,13 @@ Real, but no active roadmap item — dormant/developer-facing. `DemoAccountTree.
 (admin-editable mock accounts), `InvestorRegister.jsx` (signup path), `InvestorAdminPanel.jsx`
 + `createInvestorAccount()` (`db.js`) seed `investor_users` + `user_data` rows.
 
-**Crucial division from §23 Beta Tester Accounts:** these are two separate account tiers
-with zero overlap. `is_investor` unlocks the Demo Account Tree and the investor code
-signup path; `is_tester` unlocks in-progress AI features and nothing else. Neither flag
-should ever imply the other — see §23.
+**Still two separate account tiers for account-tier purposes — see §23.** `is_investor`
+unlocks the Demo Account Tree and the investor code signup path; `is_tester` unlocks the
+beta-tester-specific surfaces (usage tracking, the beta report). Neither flag implies the
+other for *those* surfaces. **One deliberate overlap as of 2026-07-25:** both flags (plus
+`is_admin`) now bypass every paid wall, AI features included — see §23's note and
+`entitlements.js`'s `hasPrivilegedAccess`. That's a shared "paid wall" exemption, not a
+merging of the two account tiers.
 
 ---
 
@@ -465,22 +468,30 @@ Anthony via the Supabase SQL editor on an already-existing account. No signup fl
 self-service opt-in, no client write path (locked the same way as `is_admin`/`is_investor`
 since migration 019's RLS column grants).
 
-- **What it grants:** `canAccessAiFeatures({ isAdmin, isTester })` (`entitlements.js`) —
-  the single gate every AI feature (`api/coach.js` server-side, `HomePanel.jsx` client-side)
+- **What it grants:** `canAccessAiFeatures({ isAdmin, isTester, isInvestor })` (`entitlements.js`)
+  — the single gate every AI feature (`api/coach.js` server-side, `HomePanel.jsx` client-side)
   checks — and, via the shared `hasTesterAccess` base, `canAccessTaxPlan({ isAdmin,
   taxProjectionsEnabled, isTester })` (`BudgetPanel.jsx`, `ProfilePanel.jsx`). Nothing else —
-  no Admin Diagnostic Toolkit, no other admin-only surface. Every per-feature gate in
-  `entitlements.js` builds on `hasTesterAccess` so `isAdmin` stays a strict superset of
-  `isTester` by construction as new gates are added.
+  no Admin Diagnostic Toolkit, no other admin-only surface. `hasTesterAccess` (admin/tester
+  only, no `isInvestor` param) still backs `canAccessTaxPlan`; `canAccessAiFeatures` and
+  `canAccessAskCoachGeneral` build on the wider `hasPrivilegedAccess` (admin/tester/investor)
+  instead, per the paid-wall decision below — the two bases are deliberately different sizes,
+  not a drift.
 - **Auto trial window:** a Postgres trigger on `user_data` seeds `trial_started_at` /
   `trial_ends_at` / `access_ends_at` to a 6-month window the moment `is_tester` flips
   false→true — one-time, not renewed on subsequent saves. This routes the account through
   the real app-side trial state machine (`getEntitlement`, §17's Monetization system, §21)
   instead of a hardcoded bypass, so it "behaves like a free trial account" per spec, just on
   a 6-month clock with no Stripe billing behind it.
-- **Crucial division:** beta testers are NOT investors — see §18. `is_tester` must never
-  grant Demo Account Tree access or the investor code path, and this gate must never fold
-  in `isInvestor`.
+- **Still a crucial division, narrowed 2026-07-25:** beta testers are still NOT investors for
+  account-tier purposes — see §18. `is_tester` must never grant Demo Account Tree access or
+  the investor code path, and `is_investor` must never grant the beta-tester-specific surfaces
+  (`isTrackedBetaTester` usage tracking, the beta report, etc.). What changed: **every paid-wall
+  gate** (`canAccessAiFeatures`, `canAccessAskCoachGeneral` — AI features specifically, not the
+  account-tier features just listed) now treats admin/tester/investor as one "bypasses the paid
+  wall" tier (`hasPrivilegedAccess`, `entitlements.js`) — investor/demo accounts need the full
+  feature set for pitch/demo purposes, same reasoning as admin. `canAccessTaxPlan` was
+  deliberately left out of this widening; see its own docstring.
 - **Lifecycle cron:** bypassed the same as admin/investor (§20) — testers are never dunned
   or auto-deleted if the 6-month window lapses before renewal.
 

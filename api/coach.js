@@ -63,16 +63,33 @@ export default async function handler(req, res) {
   // Ask Coach chat + Net Worth Check-In card (docs/coach-entry-points.md
   // §§1–2) left the isAdmin/isTester-only standing constraint — this is the
   // server-side half of that gate, re-verified independently of anything the
-  // client claims (never trust a client-supplied entitlement flag). Beta
-  // testers (user_data.is_tester) are NOT investors — this check must never
-  // expand to include is_investor. See docs/active-systems.md "Beta Tester
-  // Accounts". Every OTHER Coach surface (none built yet) must stay on the
-  // narrower canAccessAiFeatures — do not widen this route's gate further
-  // without also giving that future surface its own admin/tester-only check.
+  // client claims (never trust a client-supplied entitlement flag).
+  //
+  // Locked decision, 2026-07-25 (entitlements.js's hasPrivilegedAccess):
+  // is_investor now passes this gate too, same as is_admin/is_tester — any
+  // feature behind a paid wall is free for all three privileged tiers. This
+  // supersedes the older "must never expand to include is_investor" note
+  // this comment used to carry; the separate, still-true rule that beta
+  // testers and investors are distinct account tiers for account-tier
+  // surfaces (Demo Tree, investor code path, beta-cohort tracking) is
+  // unaffected — see docs/active-systems.md "Beta Tester Accounts".
+  //
+  // Known gap, not fixed here: Job Hunt Assistant (§18.E) and Résumé Review
+  // (§18.E1) are gated client-side on the narrower canAccessAiFeatures
+  // (admin/tester/investor only, no trial/paid path), but reuse this same
+  // route and this same wider canAccessAskCoachGeneral check server-side —
+  // the request body carries no "which surface" field for the server to gate
+  // narrower on. In practice this doesn't currently expand who can reach the
+  // model beyond what was already true: this endpoint has never validated
+  // systemPrompt/contextBlock content against an allowlist, so any
+  // canAccessAskCoachGeneral-entitled caller could already send an arbitrary
+  // prompt through it. Still worth closing properly (a `surface` field in the
+  // request body + a per-surface server gate) before Job Hunt/Résumé Review
+  // ship to real trial/paid users who aren't meant to reach them yet.
   const { data: userRow, error: userRowError } = await userClient
     .from("user_data")
     .select(
-      "is_admin, is_tester, subscription_status, trial_ends_at, access_ends_at, " +
+      "is_admin, is_tester, is_investor, subscription_status, trial_ends_at, access_ends_at, " +
       "current_period_end, stripe_subscription_id"
     )
     .eq("user_id", authData.user.id)
@@ -90,7 +107,7 @@ export default async function handler(req, res) {
     },
     new Date()
   );
-  if (userRowError || !canAccessAskCoachGeneral({ isAdmin: userRow?.is_admin, isTester: userRow?.is_tester, entitlement })) {
+  if (userRowError || !canAccessAskCoachGeneral({ isAdmin: userRow?.is_admin, isTester: userRow?.is_tester, isInvestor: userRow?.is_investor, entitlement })) {
     return res.status(403).json({ error: "Coach requires an active trial or subscription" });
   }
 

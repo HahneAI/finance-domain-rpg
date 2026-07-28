@@ -38,6 +38,14 @@ describe('canAccessTaxPlan', () => {
     expect(canAccessTaxPlan({ isAdmin: 1 })).toBe(true)
     expect(canAccessTaxPlan({ isTester: 1 })).toBe(true)
   })
+
+  // Deliberately untouched by the 2026-07-25 "admin/tester/investor bypass
+  // every paid wall" decision (entitlements.js's hasPrivilegedAccess) — that
+  // decision was scoped to AI features specifically; Tax Plan stays on the
+  // narrower hasTesterAccess (no isInvestor param, doesn't even exist here).
+  it('does not grant access via isInvestor — Tax Plan was not part of the paid-wall decision', () => {
+    expect(canAccessTaxPlan({ isInvestor: true })).toBe(false)
+  })
 })
 
 describe('canAccessAiFeatures', () => {
@@ -55,16 +63,20 @@ describe('canAccessAiFeatures', () => {
     expect(canAccessAiFeatures({ isTester: true })).toBe(true)
   })
 
-  // Crucial division (docs/active-systems.md "Beta Tester Accounts"): a beta
-  // tester is not an investor. Passing isInvestor must never grant this on
-  // its own — the function doesn't even accept that param.
-  it('does not grant access via isInvestor — beta testers are not investors', () => {
-    expect(canAccessAiFeatures({ isInvestor: true })).toBe(false)
+  // Locked decision 2026-07-25 (entitlements.js's hasPrivilegedAccess):
+  // investor/demo accounts also bypass every paid wall, AI features included
+  // — this supersedes the older "beta testers are not investors, isInvestor
+  // must never grant AI features" rule for this specific gate. The beta-
+  // tester/investor account-tier separation itself is untouched elsewhere
+  // (isTrackedBetaTester, Demo Account Tree access, the investor code path).
+  it('grants access via isInvestor too, per the 2026-07-25 paid-wall decision', () => {
+    expect(canAccessAiFeatures({ isInvestor: true })).toBe(true)
   })
 
   it('coerces truthy/falsy inputs to a real boolean', () => {
     expect(canAccessAiFeatures({ isTester: undefined })).toBe(false)
     expect(canAccessAiFeatures({ isAdmin: 1 })).toBe(true)
+    expect(canAccessAiFeatures({ isInvestor: 1 })).toBe(true)
   })
 })
 
@@ -137,7 +149,8 @@ describe('canAccessAskCoachGeneral', () => {
     expect(canAccessAskCoachGeneral({ isAdmin: false, isTester: false, entitlement: undefined })).toBe(false)
   })
 
-  it('does not grant access via isInvestor — same crucial division as canAccessAiFeatures', () => {
-    expect(canAccessAskCoachGeneral({ isInvestor: true, entitlement: { isEntitled: false } })).toBe(false)
+  it('grants access via isInvestor too, even with no real subscription state (2026-07-25 decision)', () => {
+    expect(canAccessAskCoachGeneral({ isInvestor: true, entitlement: { isEntitled: false } })).toBe(true)
+    expect(canAccessAskCoachGeneral({ isInvestor: true })).toBe(true)
   })
 })

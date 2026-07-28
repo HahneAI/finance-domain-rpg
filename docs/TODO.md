@@ -1148,13 +1148,19 @@ scope — documentation only, nothing below is implemented.*
   (already a jsonb column, already used for "statement insight keys" — no schema change needed
   beyond the chat_type enum value) alongside a written review in `messages`.
 - **Entitlement gating — same `canAccessAiFeatures` gate as every other Coach surface,** no new
-  gate needed. H14 bullet 5's finding still applies unchanged: real users can't reach this without
-  the broader AI-features rollout question being resolved first — worth noting again here, not a
-  blocker to scoping, but a real blocker to shipping this to anyone but admins/testers.
-- **Locked decision (2026-07-25) for when this leaves the admin/tester gate: paid-only, not
-  trial-included.** Both this feature and §18.E (Job Hunt Assistant) are a real, post-card-charge
-  subscription only (`entitlement.state === "active"`) — deliberately narrower than
-  `canAccessAskCoachGeneral`'s trial/grace/active check that sections 1–2 use. Do not reuse
+  gate needed. `canAccessAiFeatures` itself widened 2026-07-25 to admin/tester/investor
+  (`hasPrivilegedAccess`, entitlements.js) — see the locked decision below. H14 bullet 5's
+  finding still applies to everyone outside those three tiers: real (non-privileged) users
+  can't reach this without the broader AI-features rollout question being resolved first —
+  worth noting again here, not a blocker to scoping, but a real blocker to shipping this to
+  anyone but admins/testers/investors.
+- **Locked decision (2026-07-25) for when this leaves the admin/tester/investor gate: paid-only
+  for everyone else, not trial-included.** Both this feature and §18.E (Job Hunt Assistant) are
+  a real, post-card-charge subscription only (`entitlement.state === "active"`) for accounts
+  outside the privileged tier — deliberately narrower than `canAccessAskCoachGeneral`'s trial/
+  grace/active check that sections 1–2 use. Admin, tester, and investor accounts keep bypassing
+  unconditionally regardless (same `hasPrivilegedAccess` decision — this doesn't change when the
+  feature splits off, only the requirement for everyone else does). Do not reuse
   `canAccessAskCoachGeneral` when splitting this off; see `coach-entry-points.md` §5/§6 and
   `drift-app-warden.md` §21 F124.
 - **Recommended phasing:**

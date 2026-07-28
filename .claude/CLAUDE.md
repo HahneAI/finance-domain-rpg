@@ -304,19 +304,34 @@ Files: kebab-case · Components: PascalCase · Utilities/hooks: camelCase · Dat
 
 ## Account Tiers
 
-Three independent flags on `user_data`, each unlocking a distinct, non-overlapping surface —
-never treat one as implying another:
+Three flags on `user_data`. Each unlocks its own distinct account-tier surface — never treat
+one as implying another for *those* — but as of 2026-07-25 all three share one deliberate
+overlap: none of them ever hits a paid wall.
 
 | Flag | Unlocks | Set via |
 |------|---------|---------|
-| `is_admin` | Full Admin Diagnostic Toolkit (below) + all AI features + Tax Plan | Manual SQL |
-| `is_tester` | AI features (`canAccessAiFeatures`) + Tax Plan (`canAccessTaxPlan`), both in `entitlements.js` — no toolkit, no other admin surface | Manual SQL only, on an already-existing account (migration `021_add_is_tester_beta_flag.sql`); auto-seeds a 6-month app-side trial window on the false→true transition |
-| `is_investor` | Demo Account Tree + investor code signup path | `createInvestorAccount()` via the investor code flow |
+| `is_admin` | Full Admin Diagnostic Toolkit (below) + all AI features + Tax Plan + bypasses every paid wall | Manual SQL |
+| `is_tester` | AI features (`canAccessAiFeatures`) + Tax Plan (`canAccessTaxPlan`), both in `entitlements.js` + bypasses every paid wall — no toolkit, no other admin surface | Manual SQL only, on an already-existing account (migration `021_add_is_tester_beta_flag.sql`); auto-seeds a 6-month app-side trial window on the false→true transition |
+| `is_investor` | Demo Account Tree + investor code signup path + AI features + bypasses every paid wall | `createInvestorAccount()` via the investor code flow |
 
-**Beta testers are NOT investors — this is a crucial, deliberate division.** `is_tester` must
-never grant Demo Account Tree access or the investor code path, and `is_investor` must never
-grant AI features. Full detail: `docs/active-systems.md` §23 (Beta Tester Accounts) and §18
-(Investor & Demo Accounts).
+**Beta testers are NOT investors for account-tier purposes — still a crucial, deliberate
+division.** `is_tester` must never grant Demo Account Tree access or the investor code path,
+and `is_investor` must never grant the beta-tester-specific surfaces (usage tracking, the beta
+report). Full detail: `docs/active-systems.md` §23 (Beta Tester Accounts) and §18 (Investor &
+Demo Accounts).
+
+**Locked decision, 2026-07-25 — supersedes this file's older "is_investor must never grant AI
+features" language:** any feature behind a paid wall (AI features today; any future paid-only
+surface) is free for `is_admin`, `is_tester` (beta-cohort or friends/family — `beta_code_used`
+present or not, doesn't matter here), and `is_investor` — none of the three should ever need a
+real subscription/payment to reach a paid-gated feature. Implemented as
+`hasPrivilegedAccess({ isAdmin, isTester, isInvestor })` in `entitlements.js`, which
+`canAccessAiFeatures` and `canAccessAskCoachGeneral` now build on instead of the narrower
+`hasTesterAccess` (admin/tester only, no investor) that `canAccessTaxPlan` still uses —
+Tax Plan was deliberately left out of this widening. The core app paywall
+(`paywallBypassed` in `App.jsx`) closed the matching gap the same day: it now bypasses for
+`isAdmin || isTester || config.isInvestor`, where testers previously relied only on their long
+trial window rather than an unconditional bypass.
 
 **Two populations both carry `is_tester = true`** — `user_data.beta_code_used` (migration
 `025_add_beta_code_used.sql`, manual SQL, never client-writable) tells them apart: a non-null

@@ -1518,11 +1518,14 @@ generic form to ask the right follow-up questions on its own.*
 
 ## 19. Master Timeline — Config History & Point-in-Time Computation Integrity
 
-*Structural/data-model workstream, not yet scoped to a sprint. Seeded 2026-07-01 — placed
-right after the AI section deliberately: once §18's Coach chat history (`coach_chats`) is
-live, we may fold it into the same history table this section builds rather than giving it a
-permanent table of its own. Still fuzzy on exact mechanics below — this section is the
-structural map to de-fuzz it before implementation, not a locked spec.*
+**✅ WRITE PATH COMPLETE** — `account_history` table live in Supabase (migration 020 confirmed 2026-07-07),
+config-change capture wired in App.jsx, admin verification surface live in DB Row Viewer. 
+**READ PATH PARTIAL** — only `baseRate` point-in-time resolution implemented (2026-07-17 fix for Quick Rate Update);
+general resolver for all historically-sensitive fields still deferred. **LOAN HISTORY** — separate follow-up task.
+
+*Original design workstream seeded 2026-07-01: write path has shipped, read path (remaining historical-field resolvers)
+and loan history are tracked below as open follow-up items. Once §18's Coach chat history (`coach_chats`) is
+live, evaluate folding it into `account_history` as `entity_type: 'coach_chat'` rather than keeping a separate table.*
 
 **Original brain-dump (verbatim, for provenance):**
 
@@ -1820,11 +1823,9 @@ license to train.
 meet users there — not just re-run the setup wizard, but offer purpose-built flows that understand
 the emotional and practical weight of what just happened.*
 
-**Resynced 2026-07-17 — §A/§B/§C were stale.** This whole section sat unchecked while the actual
-feature shipped; verified against source and against `docs/active-systems.md` §10 (which already
-correctly flags itself as "more built than TODO.md §15's checkbox state suggests"). Real gaps are
-§D, the back half of §H, and §I — see those sections below. §A/§B/§C are collapsed to a status
-note rather than re-listed here to avoid two competing specs for the same shipped code.
+**✅ FOUNDATION + JOBLESS MODE COMPLETE** — §A/§B/§C (Entry Point, Structure Wizard, Job Loss Mode) LIVE; 
+§D (Quick Rate Update) DONE 2026-07-17; §H1–H13 (Jobless Onboarding Path) DONE through 2026-07-19 with H12 scoped but not started. 
+**OPEN:** §I (Admin Toolkit updates for Job Loss UI), §H12 (mid-year gaps in annual pace), §F/§G (future Phase 3+/4).
 
 ---
 
